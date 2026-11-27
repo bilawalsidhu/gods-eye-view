@@ -234,7 +234,7 @@ test('the selected train’s line is its trip’s shape, else its route’s long
   ]) {
     const key = railTrainKey('mbta-rail', id);
     app.parts().selection.selectTrain(key);
-    const { route } = app.layer.getRouteDisplayStats();
+    const route = app.state()._route;
     assert.equal(
       route?.id,
       `${key}
@@ -242,7 +242,7 @@ mbta-rail
 ${shapeIndex}`,
       id,
     );
-    assert.equal(route.vertices, vertices, id);
+    assert.equal(route.path.n, vertices, id);
     // Each route is drawn in a set made for it, on top of every line set
     // made before it, as its primitive was added when it was drawn.
     const lines = [...app.draw.sets.values()].filter(

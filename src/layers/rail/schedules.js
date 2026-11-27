@@ -474,35 +474,6 @@ export function createRailSchedules({
       if (key.startsWith(prefix)) matches.delete(key);
   }
 
-  /** Counts for QA probes and tests. */
-  function stats() {
-    return {
-      schedules: Object.fromEntries(
-        [...schedules].map(([feedId, slot]) => [
-          feedId,
-          slot.status === 'ready'
-            ? {
-                status: 'ready',
-                trips: slot.schedule.trips.size,
-                runs: slot.schedule.instances.length,
-              }
-            : { status: slot.status },
-        ]),
-      ),
-      updates: Object.fromEntries(
-        [...updates].map(([feedId, slot]) => [
-          feedId,
-          {
-            polling: slot.timer !== null,
-            reasons: [...slot.reasons],
-            trips: slot.delays ? Object.keys(slot.delays).length : 0,
-            ageMs: Number.isFinite(slot.at) ? now() - slot.at : null,
-          },
-        ]),
-      ),
-    };
-  }
-
   return {
     stopsFor,
     onSelect,
@@ -513,6 +484,5 @@ export function createRailSchedules({
     delaysFor,
     stop,
     forget,
-    stats,
   };
 }

@@ -249,7 +249,6 @@ test('the filter hides the weaker copy and the selection follows its train', () 
   layer.state._trains.delete(operator.key);
   filter.scheduleRefresh();
   assert.equal(unbound.duplicate, false);
-  assert.deepEqual(filter.stats(), { groups: 0, hidden: 0 });
 });
 
 test('a copy a first-person view holds stays drawn, with the selection', () => {

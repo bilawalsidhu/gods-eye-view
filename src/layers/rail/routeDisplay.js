@@ -140,7 +140,6 @@ export function createRouteDisplay({
       steps: railNetworkLineSteps(raw, categoryOf),
       timer: null,
       layers: new Map(),
-      stats: null,
     };
     state._networks.set(feedId, network);
     const slice = () => {
@@ -163,12 +162,6 @@ export function createRouteDisplay({
 
   function finishNetwork(network, result) {
     network.status = 'ready';
-    network.stats = {
-      shapes: result.shapesIn,
-      pointsIn: result.pointsIn,
-      lines: result.lines.length,
-      points: result.pointsOut,
-    };
     if (!draw()) return;
     const byCategory = new Map();
     for (const line of result.lines) {
@@ -714,36 +707,6 @@ export function createRouteDisplay({
     state._overlayHost.clearSource(RAIL_STOP_OVERLAY_SOURCE_ID);
   }
 
-  /** Counts for QA and the testing surface. */
-  function stats() {
-    const feeds = {};
-    for (const [feedId, network] of state._networks) {
-      feeds[feedId] = {
-        status: network.status,
-        primitives: network.layers.size,
-        shown: [...network.layers.values()].filter((l) => l.set.show).length,
-        ...(network.stats || {}),
-      };
-    }
-    return {
-      fade: state._networkFade,
-      feeds,
-      route: state._route
-        ? {
-            id: state._route.id,
-            vertices: state._route.path.n,
-            fraction: state._route.fraction,
-            direction: state._route.direction,
-            ground: state._route.ground,
-          }
-        : null,
-      stops: {
-        points: stopItems.length,
-        trip: state._trip ? state._trip.stops?.length || 0 : 0,
-      },
-    };
-  }
-
   return {
     buildNetwork,
     dropNetwork,
@@ -757,6 +720,5 @@ export function createRouteDisplay({
     hideAll,
     releaseIdleFeeds,
     destroy,
-    stats,
   };
 }

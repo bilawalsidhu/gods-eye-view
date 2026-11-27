@@ -18,7 +18,7 @@ import {
  * @param {object} context
  * @returns {object}
  */
-export function createControls({ state, parts, timetable }) {
+export function createControls({ state, parts }) {
   function notify() {
     state._panel?.invalidate();
   }
@@ -127,14 +127,6 @@ export function createControls({ state, parts, timetable }) {
         count: counts.get(category),
       }));
       return { chips, legend };
-    },
-    /** Route-line, stop and schedule state, for QA probes. */
-    getRouteDisplayStats() {
-      return {
-        ...parts.routes.stats(),
-        timetable: timetable.stats(),
-        heldFeed: state._heldFeedId,
-      };
     },
     /**
      * The trains the layer holds, as plain records for the analyst and the

@@ -336,7 +336,6 @@ export function createDuplicateFilter({
 }) {
   let previous = new Map();
   let pending = false;
-  let lastStats = { groups: 0, hidden: 0 };
 
   /** The comparable view of one drawn train. */
   function copyOf(entry) {
@@ -378,11 +377,7 @@ export function createDuplicateFilter({
       const drawn = winners.get(selected);
       if (drawn && state._trains.has(drawn)) parts.selection.selectTrain(drawn);
     }
-    lastStats = {
-      groups: new Set(winners.values()).size,
-      hidden: hidden.size,
-    };
-    return lastStats;
+    return { groups: new Set(winners.values()).size, hidden: hidden.size };
   }
 
   /** Coalesce the refreshes of several feeds' polls into one. */
@@ -397,6 +392,5 @@ export function createDuplicateFilter({
   return {
     refresh,
     scheduleRefresh,
-    stats: () => ({ ...lastStats }),
   };
 }
