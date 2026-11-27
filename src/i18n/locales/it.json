@@ -2444,6 +2444,7 @@
   "voice|CONNECTING": "CONNESSIONE",
   "voice|LISTENING": "IN ASCOLTO",
   "voice|EXECUTING": "ESECUZIONE",
+  "voice|SPEAKING": "PARLA",
   "voice|ERROR": "ERRORE",
   "Voice provider": "Provider vocale",
   "Changing provider reconnects voice if it is on.": "Cambiare provider riconnette la voce se è attiva.",

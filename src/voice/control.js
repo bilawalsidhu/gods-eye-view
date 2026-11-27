@@ -32,6 +32,29 @@ export function voiceStatusLabel(status) {
   }
 }
 
+/**
+ * The assistant phase for an active voice turn, from
+ * resolveVoicePresentationState(). Without a projection (a provider that
+ * does not report one), and for the user's own or interrupting turn, it
+ * stays LISTENING.
+ * @param {?string} state presentation state
+ * @returns {string}
+ */
+export function voicePresentationLabel(state) {
+  switch (state) {
+    case 'ready':
+      return t('READY');
+    case 'working':
+      return t('WORKING');
+    case 'executing':
+      return t('EXECUTING', { context: 'voice' });
+    case 'speaking':
+      return t('SPEAKING', { context: 'voice' });
+    default:
+      return t('LISTENING', { context: 'voice' });
+  }
+}
+
 /** The card before its first render: hidden, with its default labels. */
 function initialCard() {
   return {

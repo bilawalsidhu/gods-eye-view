@@ -774,6 +774,8 @@
   "src/voice/control.js",
   "src/voice/realtimeBackend.js",
   "src/voice/realtimeBackend.test.mjs",
+  "src/voice/realtimeInputPolicy.test.mjs",
+  "src/voice/realtimePresentation.test.mjs",
   "src/voice/realtimeViewportPolicy.test.mjs",
   "src/agent/worldPacket.test.mjs",
   "src/voice/layerSummary.js",

@@ -749,6 +749,7 @@
   "DETECT": "DETEKT.",
   "voice|LISTENING": "LYSSNAR",
   "voice|EXECUTING": "UTFÖR",
+  "voice|SPEAKING": "TALAR",
   "AI AGENT": "AI-AGENT",
   "Voice model tier — applies next session": "Röstmodellens nivå – gäller från nästa session",
   "Estimated session cost": "Uppskattad sessionskostnad",

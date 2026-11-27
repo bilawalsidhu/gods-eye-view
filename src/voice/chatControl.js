@@ -1,6 +1,7 @@
 import { bindChatAttachments } from './chatAttachments.js';
 import { bindChatPreferences } from './chatPreferences.js';
 import { readStoredCloudVoiceAuthMode } from './cloudVoiceAuth.js';
+import { voicePresentationLabel } from './control.js';
 import { isStoppable } from './session.js';
 import { t } from '../i18n/index.js';
 
@@ -29,6 +30,8 @@ export function bindChatControl({ ui, session, onOpen, dataManager }) {
   let lastTypingTime = 0;
   // Set by Stop until the cancelled turn reports its end or the next send.
   let stopping = false;
+  // The voice turn's presentation state, when the provider reports one.
+  let voiceTurnState = null;
   const isTyped = () => Boolean(session.adapter.getStartOptions?.().textOnly);
   const chat = () => ui.state.chat;
   // Chat Settings are still chat: the dock keeps its chat state.
@@ -61,7 +64,7 @@ export function bindChatControl({ ui, session, onOpen, dataManager }) {
           : active
             ? session.state === 'connecting'
               ? t('Connecting…')
-              : t('LISTENING', { context: 'voice' })
+              : voicePresentationLabel(voiceTurnState)
             : '',
     });
     ui.update('error', { typed });
@@ -178,7 +181,10 @@ export function bindChatControl({ ui, session, onOpen, dataManager }) {
   const unsubscribe = session.subscribe((event) => {
     if (disposed) return;
     const typed = isTyped();
-    if (event.type === 'state') sync();
+    if (event.type === 'state' && ['idle', 'error'].includes(event.state))
+      voiceTurnState = null;
+    if (event.type === 'presentation') voiceTurnState = event.state;
+    if (event.type === 'state' || event.type === 'presentation') sync();
     if (
       event.type === 'transcript' &&
       event.role === 'assistant' &&

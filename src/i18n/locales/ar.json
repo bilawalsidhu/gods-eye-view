@@ -2851,6 +2851,7 @@
   "voice|CONNECTING": "جارٍ الاتصال",
   "voice|LISTENING": "جارٍ الاستماع",
   "voice|EXECUTING": "جارٍ التنفيذ",
+  "voice|SPEAKING": "جارٍ التحدث",
   "voice|ERROR": "خطأ",
   "Voice provider": "مزوّد الصوت",
   "Changing provider reconnects voice if it is on.": "تغيير المزوّد يعيد اتصال الصوت إن كان مفعّلًا.",

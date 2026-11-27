@@ -2301,6 +2301,7 @@
   "voice|CONNECTING": "連接中",
   "voice|LISTENING": "聆聽中",
   "voice|EXECUTING": "執行中",
+  "voice|SPEAKING": "說話中",
   "voice|ERROR": "錯誤",
   "AI AGENT": "AI 智能體",
   "Voice model tier — applies next session": "語音模型檔位——下次會話生效",

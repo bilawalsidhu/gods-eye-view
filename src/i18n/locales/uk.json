@@ -2497,6 +2497,7 @@
   "voice|CONNECTING": "ЗʼЄДНАННЯ",
   "voice|LISTENING": "СЛУХАЮ",
   "voice|EXECUTING": "ВИКОНАННЯ",
+  "voice|SPEAKING": "ГОВОРЮ",
   "voice|ERROR": "ПОМИЛКА",
   "Voice provider": "Постачальник голосового сервісу",
   "Changing provider reconnects voice if it is on.": "Зміна постачальника перепідключає голосовий режим, якщо його ввімкнено.",

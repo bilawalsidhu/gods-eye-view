@@ -905,6 +905,7 @@ export class RealtimeTurns {
         progress.playing = true;
       }
       this.narration?.audible();
+      this.refreshPresentation?.();
       return;
     }
     if (
@@ -919,6 +920,7 @@ export class RealtimeTurns {
         if (!progress.generating) this.progressResponse = null;
       }
       this.narration?.quiet();
+      this.refreshPresentation?.();
     }
   }
 

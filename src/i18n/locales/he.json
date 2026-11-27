@@ -2772,6 +2772,7 @@
   "voice|OFF": "כבוי",
   "voice|CONNECTING": "מתחבר",
   "voice|EXECUTING": "מבצע",
+  "voice|SPEAKING": "מדבר",
   "THIS": "זה",
   "Changing provider reconnects voice if it is on.": "החלפת הספק מחברת מחדש את הקול אם הוא פעיל.",
   "STD": "רגיל",

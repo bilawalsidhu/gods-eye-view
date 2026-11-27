@@ -2064,6 +2064,7 @@
   "voice|CONNECTING": "CONEX…",
   "voice|LISTENING": "OYENDO",
   "voice|EXECUTING": "ACCIÓN",
+  "voice|SPEAKING": "HABLANDO",
   "voice|ERROR": "ERROR",
   "MIC": "MIC",
   "WORKING": "EN CURSO",
