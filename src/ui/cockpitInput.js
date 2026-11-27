@@ -46,8 +46,9 @@ function subjectWorldPosition(kind) {
   const info = this.readVesselInfo();
   if (!Number.isFinite(info?.latitude) || !Number.isFinite(info?.longitude))
     return null;
-  // The sprite floats on the geoid, not on the ellipsoid (tens of metres
-  // apart): project the height it is drawn at.
+  // The sprite floats on the water (the geoid at sea, a lake's or river's
+  // own level inland), not on the ellipsoid (tens of metres apart): project
+  // the height it is drawn at.
   const heightM = Number.isFinite(info.markHeightM)
     ? info.markHeightM
     : Number.isFinite(info.seaSurfaceHeightM)
