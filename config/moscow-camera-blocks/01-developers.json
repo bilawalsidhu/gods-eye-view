@@ -1,0 +1,881 @@
+{
+  "order": 1,
+  "id": "developers",
+  "title": "Residential complexes & developers",
+  "file": "01-developers.json",
+  "description": "Outdoor views of residential developments and construction sites. RC means residential complex.",
+  "active": true,
+  "count": 87,
+  "cameras": [
+    {
+      "id": "moscow-ac839d1be033",
+      "name": "RC City Bay · 2",
+      "provider": "rtsp2.videocam.online",
+      "lat": 55.830574,
+      "lon": 37.399905,
+      "sourceUrl": "https://www.geocam.ru/online/citybay/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:01:12.836Z"
+    },
+    {
+      "id": "moscow-aa420b864ba8",
+      "name": "RC City Bay · 3",
+      "provider": "rtsp2.videocam.online",
+      "lat": 55.831272,
+      "lon": 37.397939,
+      "sourceUrl": "https://www.geocam.ru/online/atlantik/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:01:12.837Z"
+    },
+    {
+      "id": "moscow-seliger-city",
+      "name": "RC Seliger City",
+      "provider": "rtsp2.videocam.online",
+      "lat": 55.862643,
+      "lon": 37.543684,
+      "sourceUrl": "https://www.geocam.ru/online/seliger-city/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:01:12.837Z"
+    },
+    {
+      "id": "moscow-51f935a3ec3e",
+      "name": "RC Filatov Lug · 5/6",
+      "provider": "cam.indikom.ru",
+      "lat": 55.612107,
+      "lon": 37.385884,
+      "sourceUrl": "https://www.geocam.ru/online/filatovlug/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:01:12.837Z"
+    },
+    {
+      "id": "moscow-c13e86292b30",
+      "name": "RC Filatov Lug · 6",
+      "provider": "cam.indikom.ru",
+      "lat": 55.611715,
+      "lon": 37.391829,
+      "sourceUrl": "https://www.geocam.ru/online/filatov-lug/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:01:12.837Z"
+    },
+    {
+      "id": "moscow-ce5792bff132",
+      "name": "RC Paveletskaya City · 3",
+      "provider": "rtsp2.videocam.online",
+      "lat": 55.719472294277,
+      "lon": 37.6364710834086,
+      "sourceUrl": "https://youwebcams.org/moskva/zhk-paveleckaya-siti-tretya-ochered/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:01:12.837Z"
+    },
+    {
+      "id": "moscow-861669c80358",
+      "name": "RC JOIS",
+      "provider": "rtsp2.videocam.online",
+      "lat": 55.77382647056323,
+      "lon": 37.507913959597474,
+      "sourceUrl": "https://youwebcams.org/moskva/zhk-jois/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:01:12.837Z"
+    },
+    {
+      "id": "moscow-1f51a2f820ea",
+      "name": "SLAVA Apartments",
+      "provider": "rtsp2.videocam.online",
+      "lat": 55.77975800504466,
+      "lon": 37.5810148064997,
+      "sourceUrl": "https://youwebcams.org/moskva/kompleks-apartamentov-slava/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:01:14.145Z"
+    },
+    {
+      "id": "moscow-daf71b67c197",
+      "name": "RC Symphony 34",
+      "provider": "rtsp2.videocam.online",
+      "lat": 55.80663998371249,
+      "lon": 37.569704912491815,
+      "sourceUrl": "https://youwebcams.org/moskva/zhk-symphony-34/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:01:14.145Z"
+    },
+    {
+      "id": "moscow-38744aa6fefb",
+      "name": "RC MOD · 2",
+      "provider": "rtsp2.videocam.online",
+      "lat": 55.79712901065079,
+      "lon": 37.6246260092946,
+      "sourceUrl": "https://youwebcams.org/moskva/zhk-mod/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:01:14.145Z"
+    },
+    {
+      "id": "moscow-41f34b56b107",
+      "name": "RC Five Towers",
+      "provider": "stream3.exdesign.ru",
+      "lat": 55.70338583658595,
+      "lon": 37.59219982639298,
+      "sourceUrl": "https://youwebcams.org/moskva/zhk-fajv-tauers/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:01:14.145Z"
+    },
+    {
+      "id": "moscow-5a6812688873",
+      "name": "RC Symphony 34 · Silver",
+      "provider": "rtsp2.videocam.online",
+      "lat": 55.805798455639945,
+      "lon": 37.568487982391204,
+      "sourceUrl": "https://youwebcams.org/moskva/zhk-symphony-34-bashnya-silver/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:01:14.145Z"
+    },
+    {
+      "id": "moscow-cd10c8853e0e",
+      "name": "RC INJOY",
+      "provider": "cam.indikom.ru",
+      "lat": 55.83121057386366,
+      "lon": 37.496946989503655,
+      "sourceUrl": "https://youwebcams.org/moskva/zhk-injoy/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:01:14.145Z"
+    },
+    {
+      "id": "moscow-9814dd3dc5a0",
+      "name": "RC City Bay · 4",
+      "provider": "rtsp2.videocam.online",
+      "lat": 55.83013950958359,
+      "lon": 37.40176360403234,
+      "sourceUrl": "https://youwebcams.org/moskva/zhk-city-bay/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:01:14.145Z"
+    },
+    {
+      "id": "moscow-82e311f6911f",
+      "name": "RC CityZEN",
+      "provider": "rtsp2.videocam.online",
+      "lat": 55.8297396,
+      "lon": 37.446041,
+      "sourceUrl": "https://cam-world.ru/cams/veb-kamera-tushino-00021558",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:01:18.412Z"
+    },
+    {
+      "id": "moscow-3a48a4748f10",
+      "name": "RC Metropolia · 2",
+      "provider": "rtsp2.videocam.online",
+      "lat": 55.7202642,
+      "lon": 37.6909555,
+      "sourceUrl": "https://cam-world.ru/cams/veb-kamera-metropoliya-00021556",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:01:18.412Z"
+    },
+    {
+      "id": "moscow-2cdded3bbd2d",
+      "name": "RC Salaryevo Park",
+      "provider": "hls-pik.cdnvideo.ru",
+      "lat": 55.6165571,
+      "lon": 37.4136153,
+      "sourceUrl": "https://cam-world.ru/cams/zhk-salarevo-park-00021375",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:01:18.412Z"
+    },
+    {
+      "id": "moscow-bf5c2a55b1db",
+      "name": "RC Nikolskie Luga",
+      "provider": "hls-pik.cdnvideo.ru",
+      "lat": 55.5219225,
+      "lon": 37.5724107,
+      "sourceUrl": "https://cam-world.ru/cams/veb-kamera-v-moskve-3-00021374",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:01:18.412Z"
+    },
+    {
+      "id": "moscow-69eef6fe189d",
+      "name": "Mashinostroeniya St · 2",
+      "provider": "rtsp2.videocam.online",
+      "lat": 55.7202642,
+      "lon": 37.6909555,
+      "sourceUrl": "https://cam-world.ru/cams/veb-kamera-na-2-y-ulitse-mashinostroeniya-00018296",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:01:18.412Z"
+    },
+    {
+      "id": "moscow-ec5885fa445e",
+      "name": "BELL Business Center",
+      "provider": "rtsp2.videocam.online",
+      "lat": 55.77975800504466,
+      "lon": 37.5810148064997,
+      "sourceUrl": "https://cam-world.ru/cams/veb-kamera-1-ya-ulitsa-yamskogo-polya-00018295",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:01:29.036Z"
+    },
+    {
+      "id": "moscow-221b3630dd5a",
+      "name": "Selskokhozyaystvennaya 35",
+      "provider": "hls-pik.cdnvideo.ru",
+      "lat": 55.8519469,
+      "lon": 37.6229768,
+      "sourceUrl": "https://cam-world.ru/cams/selskohozyaystvennaya-ulitsa-35-00018293",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:01:29.036Z"
+    },
+    {
+      "id": "moscow-30c74a4f034c",
+      "name": "RC Parkside",
+      "provider": "Exdesign",
+      "lat": 55.60710710082777,
+      "lon": 37.57680257960174,
+      "sourceUrl": "https://youwebcams.org/moskva/zhk-parkside/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:01:29.036Z"
+    },
+    {
+      "id": "moscow-3bb1ccc16a9c",
+      "name": "RC Ostrov · Block 8",
+      "provider": "Exdesign",
+      "lat": 55.75269415658597,
+      "lon": 37.45438920058996,
+      "sourceUrl": "https://youwebcams.org/moskva/zhk-ostrov/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:01:29.037Z"
+    },
+    {
+      "id": "moscow-8fa5a79e99cd",
+      "name": "RC ZIL-Yug · Phase 1",
+      "provider": "Exdesign",
+      "lat": 55.687101469851136,
+      "lon": 37.63966673948336,
+      "sourceUrl": "https://youwebcams.org/moskva/zhk-shagal/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:01:29.038Z"
+    },
+    {
+      "id": "moscow-exdesign-fotievoy-2",
+      "name": "RC Fotievoy 5 · 2",
+      "provider": "Exdesign",
+      "lat": 55.700192,
+      "lon": 37.561927,
+      "sourceUrl": "https://webcam.exdesign.ru/fotievoy-2/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:01:29.038Z"
+    },
+    {
+      "id": "moscow-exdesign-fotievoy-1",
+      "name": "RC Fotievoy 5 · 1",
+      "provider": "Exdesign",
+      "lat": 55.699464,
+      "lon": 37.561682,
+      "sourceUrl": "https://webcam.exdesign.ru/fotievoy-1/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:01:33.795Z"
+    },
+    {
+      "id": "moscow-exdesign-lsr-mig-1",
+      "name": "RC MiG",
+      "provider": "Exdesign",
+      "lat": 55.782977,
+      "lon": 37.556981,
+      "sourceUrl": "https://webcam.exdesign.ru/lsr-mig-1/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:01:33.796Z"
+    },
+    {
+      "id": "moscow-015696fcd3ec",
+      "name": "RC AFI Park Vorontsovsky",
+      "provider": "open.ivideon.com",
+      "lat": 55.662371448416,
+      "lon": 37.535725284983286,
+      "sourceUrl": "https://youwebcams.org/moskva/zhk-afi-park-voroncovskij/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:01:54.979Z"
+    },
+    {
+      "id": "moscow-ebfefb8250f1",
+      "name": "RC Level Nizhegorodskaya · 2",
+      "provider": "video.enforta.ru",
+      "lat": 55.736267885811216,
+      "lon": 37.744134692838706,
+      "sourceUrl": "https://youwebcams.org/moskva/zhk-level-nizhegorodskaya/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:01:54.980Z"
+    },
+    {
+      "id": "moscow-129d56fc87ea",
+      "name": "RC Dom Dau · 1",
+      "provider": "rtsp.ru",
+      "lat": 55.75243087226866,
+      "lon": 37.543602783671844,
+      "sourceUrl": "https://youwebcams.org/moskva/zhk-dom-dau/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:01:54.980Z"
+    },
+    {
+      "id": "moscow-4cca1fea6133",
+      "name": "RC Dom Dau · 2",
+      "provider": "rtsp.ru",
+      "lat": 55.75243087226866,
+      "lon": 37.543602783671844,
+      "sourceUrl": "https://youwebcams.org/moskva/zhk-dom-dau/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:01:54.981Z"
+    },
+    {
+      "id": "moscow-a75f70fa1c6b",
+      "name": "RC Dom Dau · 3",
+      "provider": "rtsp.ru",
+      "lat": 55.75243087226866,
+      "lon": 37.543602783671844,
+      "sourceUrl": "https://youwebcams.org/moskva/zhk-dom-dau/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:01:54.981Z"
+    },
+    {
+      "id": "moscow-357aeec30927",
+      "name": "RC Preobrazhenskaya Sq",
+      "provider": "rtsp.me",
+      "lat": 55.79757054635553,
+      "lon": 37.71168025311249,
+      "sourceUrl": "https://youwebcams.org/moskva/zhk-preobrazhenskaya-ploshhad/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:10:21.197Z"
+    },
+    {
+      "id": "moscow-1f33f2ce344e",
+      "name": "RC Sirenevy Park",
+      "provider": "open.ivideon.com",
+      "lat": 55.8174180449229,
+      "lon": 37.7519017301961,
+      "sourceUrl": "https://youwebcams.org/moskva/zhk-sirenevyj-park/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:01.961Z"
+    },
+    {
+      "id": "moscow-610550105f21",
+      "name": "RC SILVER",
+      "provider": "open.ivideon.com",
+      "lat": 55.84889651618529,
+      "lon": 37.651535847243196,
+      "sourceUrl": "https://youwebcams.org/moskva/zhk-silver/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:01.962Z"
+    },
+    {
+      "id": "moscow-4522235d711a",
+      "name": "RC Stories",
+      "provider": "open.ivideon.com",
+      "lat": 55.6978249651743,
+      "lon": 37.471566053637396,
+      "sourceUrl": "https://youwebcams.org/moskva/zhk-stories-na-mosfilmovskoj/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:13.934Z"
+    },
+    {
+      "id": "moscow-02da1148ba38",
+      "name": "RC Level Michurinsky · 1/2",
+      "provider": "video.enforta.ru",
+      "lat": 55.68624632585568,
+      "lon": 37.46591898430913,
+      "sourceUrl": "https://youwebcams.org/moskva/zhk-level-michurinskij-kamera-2/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:13.935Z"
+    },
+    {
+      "id": "moscow-92e09a6acaff",
+      "name": "RC VERY · Botanicheskaya 1",
+      "provider": "rtsp.ru",
+      "lat": 55.833899159204094,
+      "lon": 37.59265528704933,
+      "sourceUrl": "https://youwebcams.org/moskva/zhk-very/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:13.935Z"
+    },
+    {
+      "id": "moscow-donstroy-34478",
+      "name": "RC Reka · 3",
+      "provider": "Donstroy / Exdesign",
+      "lat": 55.692265,
+      "lon": 37.484032,
+      "sourceUrl": "https://donstroy.com/objects/reka/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:13.936Z"
+    },
+    {
+      "id": "moscow-donstroy-43167",
+      "name": "RC Reka · 4",
+      "provider": "Donstroy / Exdesign",
+      "lat": 55.692265,
+      "lon": 37.484032,
+      "sourceUrl": "https://donstroy.com/objects/reka/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:13.936Z"
+    },
+    {
+      "id": "moscow-donstroy-39856",
+      "name": "RC Tatarskaya 35 · 1",
+      "provider": "Donstroy / Exdesign",
+      "lat": 55.738989,
+      "lon": 37.634943,
+      "sourceUrl": "https://donstroy.com/objects/tatarskaya-35/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:13.937Z"
+    },
+    {
+      "id": "moscow-donstroy-39857",
+      "name": "RC Tatarskaya 35 · 2",
+      "provider": "Donstroy / Exdesign",
+      "lat": 55.738989,
+      "lon": 37.634943,
+      "sourceUrl": "https://donstroy.com/objects/tatarskaya-35/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:13.937Z"
+    },
+    {
+      "id": "moscow-donstroy-39858",
+      "name": "RC Tatarskaya 35 · 3",
+      "provider": "Donstroy / Exdesign",
+      "lat": 55.738989,
+      "lon": 37.634943,
+      "sourceUrl": "https://donstroy.com/objects/tatarskaya-35/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:13.937Z"
+    },
+    {
+      "id": "moscow-donstroy-39412",
+      "name": "RC Ostrov · Block 7",
+      "provider": "Donstroy / Exdesign",
+      "lat": 55.751933,
+      "lon": 37.45389,
+      "sourceUrl": "https://donstroy.com/objects/ostrov/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:19.090Z"
+    },
+    {
+      "id": "moscow-donstroy-42618",
+      "name": "RC Ostrov · Block 12/1",
+      "provider": "Donstroy / Exdesign",
+      "lat": 55.751933,
+      "lon": 37.45389,
+      "sourceUrl": "https://donstroy.com/objects/ostrov/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:19.091Z"
+    },
+    {
+      "id": "moscow-donstroy-42619",
+      "name": "RC Ostrov · Block 12/2",
+      "provider": "Donstroy / Exdesign",
+      "lat": 55.751933,
+      "lon": 37.45389,
+      "sourceUrl": "https://donstroy.com/objects/ostrov/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:19.091Z"
+    },
+    {
+      "id": "moscow-donstroy-43174",
+      "name": "RC Ostrov · Block 14",
+      "provider": "Donstroy / Exdesign",
+      "lat": 55.751933,
+      "lon": 37.45389,
+      "sourceUrl": "https://donstroy.com/objects/ostrov/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:19.092Z"
+    },
+    {
+      "id": "moscow-donstroy-14458",
+      "name": "RC Simvol · Vdokhnovenie",
+      "provider": "Donstroy / Exdesign",
+      "lat": 55.75097,
+      "lon": 37.690701,
+      "sourceUrl": "https://donstroy.com/objects/simvol/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:19.092Z"
+    },
+    {
+      "id": "moscow-donstroy-38315",
+      "name": "RC Simvol · Blocks 32/35",
+      "provider": "Donstroy / Exdesign",
+      "lat": 55.75097,
+      "lon": 37.690701,
+      "sourceUrl": "https://donstroy.com/objects/simvol/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:19.092Z"
+    },
+    {
+      "id": "moscow-donstroy-43153",
+      "name": "RC Simvol · Gordost",
+      "provider": "Donstroy / Exdesign",
+      "lat": 55.75097,
+      "lon": 37.690701,
+      "sourceUrl": "https://donstroy.com/objects/simvol/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:19.093Z"
+    },
+    {
+      "id": "moscow-donstroy-43130",
+      "name": "RC Sobytie · 6",
+      "provider": "Donstroy / Exdesign",
+      "lat": 55.695708,
+      "lon": 37.474362,
+      "sourceUrl": "https://donstroy.com/objects/sobytie/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:24.039Z"
+    },
+    {
+      "id": "moscow-donstroy-33341",
+      "name": "RC Ogni · 3",
+      "provider": "Donstroy / Exdesign",
+      "lat": 55.69839,
+      "lon": 37.476024,
+      "sourceUrl": "https://donstroy.com/objects/ogni/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:24.040Z"
+    },
+    {
+      "id": "moscow-level-southport-1",
+      "name": "RC Level Southport · 1",
+      "provider": "Level Group / Ivideon",
+      "lat": 55.705727,
+      "lon": 37.696445,
+      "sourceUrl": "https://level.ru/projects/southport/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:24.041Z"
+    },
+    {
+      "id": "moscow-level-southport-2",
+      "name": "RC Level Southport · 2",
+      "provider": "Level Group / Ivideon",
+      "lat": 55.705727,
+      "lon": 37.696445,
+      "sourceUrl": "https://level.ru/projects/southport/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:24.041Z"
+    },
+    {
+      "id": "moscow-level-southport-3",
+      "name": "RC Level Southport · 3",
+      "provider": "Level Group / Ivideon",
+      "lat": 55.705727,
+      "lon": 37.696445,
+      "sourceUrl": "https://level.ru/projects/southport/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:24.042Z"
+    },
+    {
+      "id": "moscow-level-zvenigorodskaya-1",
+      "name": "RC Level Zvenigorodskaya · 1",
+      "provider": "Level Group / Ivideon",
+      "lat": 55.769129,
+      "lon": 37.499372,
+      "sourceUrl": "https://level.ru/projects/zvenigorodskaya/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:24.042Z"
+    },
+    {
+      "id": "moscow-level-zvenigorodskaya-2",
+      "name": "RC Level Zvenigorodskaya · 2",
+      "provider": "Level Group / Ivideon",
+      "lat": 55.769129,
+      "lon": 37.499372,
+      "sourceUrl": "https://level.ru/projects/zvenigorodskaya/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:24.043Z"
+    },
+    {
+      "id": "moscow-level-seligerskaya-1",
+      "name": "RC Level Seligerskaya · 1",
+      "provider": "Level Group / Ivideon",
+      "lat": 55.859526,
+      "lon": 37.545821,
+      "sourceUrl": "https://level.ru/projects/seligerskaya/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:24.043Z"
+    },
+    {
+      "id": "moscow-level-seligerskaya-2",
+      "name": "RC Level Seligerskaya · 2",
+      "provider": "Level Group / Ivideon",
+      "lat": 55.859526,
+      "lon": 37.545821,
+      "sourceUrl": "https://level.ru/projects/seligerskaya/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:31.366Z"
+    },
+    {
+      "id": "moscow-level-seligerskaya-3",
+      "name": "RC Level Seligerskaya · 3",
+      "provider": "Level Group / Ivideon",
+      "lat": 55.859526,
+      "lon": 37.545821,
+      "sourceUrl": "https://level.ru/projects/seligerskaya/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:31.367Z"
+    },
+    {
+      "id": "moscow-level-nizhegorodskaya-1",
+      "name": "RC Level Nizhegorodskaya · 1",
+      "provider": "Level Group / Ivideon",
+      "lat": 55.736077,
+      "lon": 37.744998,
+      "sourceUrl": "https://level.ru/projects/nizhegorodskaya/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:31.368Z"
+    },
+    {
+      "id": "moscow-level-michurinskij-komfort-2",
+      "name": "RC Level Michurinsky · 3/2",
+      "provider": "Level Group / Ivideon",
+      "lat": 55.686549,
+      "lon": 37.46671,
+      "sourceUrl": "https://level.ru/projects/michurinskij-komfort/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:31.368Z"
+    },
+    {
+      "id": "moscow-level-michurinskij-komfort-3",
+      "name": "RC Level Michurinsky · 3/3",
+      "provider": "Level Group / Ivideon",
+      "lat": 55.686549,
+      "lon": 37.46671,
+      "sourceUrl": "https://level.ru/projects/michurinskij-komfort/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:31.368Z"
+    },
+    {
+      "id": "moscow-level-michurinskij-komfort-4",
+      "name": "RC Level Michurinsky · 3/4",
+      "provider": "Level Group / Ivideon",
+      "lat": 55.686549,
+      "lon": 37.46671,
+      "sourceUrl": "https://level.ru/projects/michurinskij-komfort/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:31.369Z"
+    },
+    {
+      "id": "moscow-level-paveletskaya-city-1",
+      "name": "RC Level Paveletskaya · 1",
+      "provider": "Level Group / Ivideon",
+      "lat": 55.71962004653103,
+      "lon": 37.63727228350035,
+      "sourceUrl": "https://level.ru/projects/paveletskaya-city/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:31.369Z"
+    },
+    {
+      "id": "moscow-level-vojkovskaya-1",
+      "name": "RC Level Voykovskaya · 1",
+      "provider": "Level Group / Ivideon",
+      "lat": 55.825538,
+      "lon": 37.503414,
+      "sourceUrl": "https://level.ru/projects/vojkovskaya/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:31.369Z"
+    },
+    {
+      "id": "moscow-level-vojkovskaya-2",
+      "name": "RC Level Voykovskaya · 2",
+      "provider": "Level Group / Ivideon",
+      "lat": 55.825538,
+      "lon": 37.503414,
+      "sourceUrl": "https://level.ru/projects/vojkovskaya/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:43.324Z"
+    },
+    {
+      "id": "moscow-wowza-mod1",
+      "name": "RC MOD · 1",
+      "provider": "rtsp2.videocam.online",
+      "lat": 55.79712901065079,
+      "lon": 37.6246260092946,
+      "sourceUrl": "https://youwebcams.org/moskva/zhk-mod/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:43.325Z"
+    },
+    {
+      "id": "moscow-wowza-mod3",
+      "name": "RC MOD · 3",
+      "provider": "rtsp2.videocam.online",
+      "lat": 55.79712901065079,
+      "lon": 37.6246260092946,
+      "sourceUrl": "https://youwebcams.org/moskva/zhk-mod/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:43.325Z"
+    },
+    {
+      "id": "moscow-wowza-citybay5",
+      "name": "RC City Bay · 5",
+      "provider": "rtsp2.videocam.online",
+      "lat": 55.83013950958359,
+      "lon": 37.40176360403234,
+      "sourceUrl": "https://youwebcams.org/moskva/zhk-city-bay/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:43.325Z"
+    },
+    {
+      "id": "moscow-wowza-citybay6",
+      "name": "RC City Bay · 6",
+      "provider": "rtsp2.videocam.online",
+      "lat": 55.83013950958359,
+      "lon": 37.40176360403234,
+      "sourceUrl": "https://youwebcams.org/moskva/zhk-city-bay/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:43.325Z"
+    },
+    {
+      "id": "moscow-exdesign-zilart-13",
+      "name": "RC ZILART · House 9",
+      "provider": "Exdesign",
+      "lat": 55.6970882,
+      "lon": 37.6393601,
+      "sourceUrl": "https://webcam.exdesign.ru/zilart-13/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:43.325Z"
+    },
+    {
+      "id": "moscow-exdesign-zilart-29",
+      "name": "RC ZILART Spark · 2",
+      "provider": "Exdesign",
+      "lat": 55.6970882,
+      "lon": 37.6393601,
+      "sourceUrl": "https://webcam.exdesign.ru/zilart-29/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:43.326Z"
+    },
+    {
+      "id": "moscow-exdesign-zilart-31",
+      "name": "RC ZILART Mark · 1",
+      "provider": "Exdesign",
+      "lat": 55.6970882,
+      "lon": 37.6393601,
+      "sourceUrl": "https://webcam.exdesign.ru/zilart-31/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:43.326Z"
+    },
+    {
+      "id": "moscow-exdesign-ogorodnyj-2",
+      "name": "RC Upside Towers · 2",
+      "provider": "Exdesign",
+      "lat": 55.8119669,
+      "lon": 37.6085113,
+      "sourceUrl": "https://webcam.exdesign.ru/ogorodnyj-2/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:48.025Z"
+    },
+    {
+      "id": "moscow-exdesign-ogorodnyj-3",
+      "name": "RC Upside Towers · 3",
+      "provider": "Exdesign",
+      "lat": 55.8119669,
+      "lon": 37.6085113,
+      "sourceUrl": "https://webcam.exdesign.ru/ogorodnyj-3/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:48.025Z"
+    },
+    {
+      "id": "moscow-exdesign-ogorodnyj-4",
+      "name": "RC Upside Towers · 4",
+      "provider": "Exdesign",
+      "lat": 55.8119669,
+      "lon": 37.6085113,
+      "sourceUrl": "https://webcam.exdesign.ru/ogorodnyj-4/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:48.026Z"
+    },
+    {
+      "id": "moscow-exdesign-ogorodnyj-5",
+      "name": "RC Upside Towers · 5",
+      "provider": "Exdesign",
+      "lat": 55.8119669,
+      "lon": 37.6085113,
+      "sourceUrl": "https://webcam.exdesign.ru/ogorodnyj-5/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:48.026Z"
+    },
+    {
+      "id": "moscow-exdesign-ilmenskij-3",
+      "name": "RC Dmitrovskoe Nebo · 2.5",
+      "provider": "Exdesign",
+      "lat": 55.8573367,
+      "lon": 37.5519877,
+      "sourceUrl": "https://webcam.exdesign.ru/ilmenskij-3/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:48.027Z"
+    },
+    {
+      "id": "moscow-exdesign-borisovskie-1",
+      "name": "RC Wave · 1",
+      "provider": "Exdesign",
+      "lat": 55.63626,
+      "lon": 37.70658,
+      "sourceUrl": "https://webcam.exdesign.ru/borisovskie-1/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:48.027Z"
+    },
+    {
+      "id": "moscow-exdesign-borisovskie-5",
+      "name": "RC Wave · Panorama",
+      "provider": "Exdesign",
+      "lat": 55.63626,
+      "lon": 37.70658,
+      "sourceUrl": "https://webcam.exdesign.ru/borisovskie-5/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:48.027Z"
+    },
+    {
+      "id": "moscow-rtsp-3ae5F8y3",
+      "name": "RC Nametkin Tower",
+      "provider": "RTSP.me",
+      "lat": 55.662076,
+      "lon": 37.553235,
+      "sourceUrl": "https://nametkin-tower.ru/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:02:54.837Z"
+    },
+    {
+      "id": "moscow-rtsp-24E5hSTk",
+      "name": "RC N'ICE LOFT",
+      "provider": "RTSP.me",
+      "lat": 55.7297693,
+      "lon": 37.6971048,
+      "sourceUrl": "https://nice-loft.ru/",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:09:42.278Z"
+    },
+    {
+      "id": "moscow-rtsp-HeG4b638",
+      "name": "RC Strana Ozernaya · Baikal",
+      "provider": "RTSP.me",
+      "lat": 55.6710042,
+      "lon": 37.4438569,
+      "sourceUrl": "https://hodstroitelstva.ru/spb/index.php/construction-photos",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:09:42.279Z"
+    },
+    {
+      "id": "moscow-rtsp-Gzkd9Tyd",
+      "name": "RC VERY · Botanicheskaya 2",
+      "provider": "RTSP.me",
+      "lat": 55.833899159204094,
+      "lon": 37.59265528704933,
+      "sourceUrl": "https://hodstroitelstva.ru/spb/index.php/webcams/300-zk-very-webcams-online-the-official-web-camera-broadcast-eco-kvartal-very-in-moscow-osnova",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:09:42.280Z"
+    },
+    {
+      "id": "moscow-polar-1",
+      "name": "RC Polar · 1",
+      "provider": "PIK",
+      "lat": 55.88,
+      "lon": 37.654,
+      "sourceUrl": "https://hodstroitelstva.ru/spb/index.php/webcams/83-jk-more-ocean-setl-city-webcam-spb-moreocean",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:18:56.721Z"
+    },
+    {
+      "id": "moscow-polar-2",
+      "name": "RC Polar · 2",
+      "provider": "PIK",
+      "lat": 55.88,
+      "lon": 37.654,
+      "sourceUrl": "https://hodstroitelstva.ru/spb/index.php/webcams/83-jk-more-ocean-setl-city-webcam-spb-moreocean",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:18:56.721Z"
+    }
+  ]
+}

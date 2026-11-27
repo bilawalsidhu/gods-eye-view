@@ -652,6 +652,8 @@ export function normalizeSourceItem(item) {
     snapshotUrl: typeof item.snapshotUrl === 'string' ? item.snapshotUrl : '',
     frameRefreshMs: toFiniteNumber(item.frameRefreshMs),
     sourceUrl: typeof item.sourceUrl === 'string' ? item.sourceUrl : '',
+    streamPageUrl:
+      typeof item.streamPageUrl === 'string' ? item.streamPageUrl : '',
     accuracyM: toFiniteNumber(item.accuracyM),
     positionSource: String(item.positionSource || ''),
     license: String(item.license || item.licenseNote || ''),
