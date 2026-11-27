@@ -3,11 +3,7 @@ import assert from 'node:assert/strict';
 import { createProjection } from './projection.js';
 import { createFrames } from './frames.js';
 
-/**
- * The real projection loop and frames on a hand-cranked 60 Hz clock, the
- * active camera's runtime already made; what reaches the plane and every
- * render call are recorded.
- */
+/** Real projection loop and frames on a hand-cranked 60 Hz clock; records plane writes and render calls. */
 function harness(t, runtime) {
   let clock = 1_000_000;
   const queue = [];
@@ -22,13 +18,17 @@ function harness(t, runtime) {
   Date.now = () => clock;
   globalThis.requestAnimationFrame = (step) => queue.push(step);
   globalThis.cancelAnimationFrame = () => queue.splice(0);
+  // The pixels a decoded still hashes to (frames.js projectionFrameSignature).
+  let picture = new Uint8ClampedArray([0, 0, 0, 255]);
   const ctx = new Proxy(
     {},
     {
       get: (_, key) =>
         key === 'createLinearGradient'
           ? () => ({ addColorStop() {} })
-          : () => {},
+          : key === 'getImageData'
+            ? () => ({ data: picture })
+            : () => {},
       set: () => true,
     },
   );
@@ -67,6 +67,7 @@ function harness(t, runtime) {
       imageLoading: true,
       imageReady: false,
       drawnImageStamp: -1,
+      lastImageRefreshAt: clock,
       canvasStamp: 0,
       plane: { id: 'p', show: true },
       ...runtime,
@@ -83,7 +84,12 @@ function harness(t, runtime) {
     selection: { getActiveRecord: () => record },
     drawSets: { writePlane: (plane) => written.push(plane.source) },
   };
-  parts.frames = createFrames({ state, services: {}, parts, source: {} });
+  parts.frames = createFrames({
+    state,
+    services: {},
+    parts,
+    source: { getFrameUrl: () => '/frame' },
+  });
   parts.projection = createProjection({
     state,
     services: {
@@ -101,6 +107,13 @@ function harness(t, runtime) {
     runtime: record.projection,
     written,
     renders,
+    /** A still decoded with `pixels`, as the image's onload in projection.js. */
+    decode(pixels) {
+      picture = Uint8ClampedArray.from(pixels);
+      record.projection.imageLoading = false;
+      record.projection.imageReady = true;
+      record.projection.imageStamp = Date.now();
+    },
     /** Run `seconds` of 60 Hz animation frames. */
     run(seconds) {
       for (let i = 0; i < 60 * seconds; i++) {
@@ -116,10 +129,27 @@ test('stills reach the plane with no render asked by the projection loop', (t) =
   // swapped onto the plane about once a second.
   const h = harness(t);
   h.projection.startProjectionLoop();
-  h.run(10);
-  assert.ok(h.written.length >= 5, 'the placeholder reaches the plane');
+  h.run(5);
+  assert.ok(h.written.length >= 3, 'the placeholder reaches the plane');
   assert.ok(h.written.every((source) => source.canvas));
-  // The plane's set asks for the frames a new canvas needs (draw.test.mjs).
+  h.decode([10, 20, 30, 255]);
+  h.written.length = 0;
+  h.run(2);
+  assert.equal(h.written.length, 1, 'the decoded still replaces it once');
+  // The next fetch starts at 10 s; the still stays as it is meanwhile.
+  h.written.length = 0;
+  h.run(4);
+  assert.deepEqual(h.written, [], 'an unchanged still is not written again');
+  h.decode([10, 20, 30, 255]);
+  h.run(2);
+  assert.deepEqual(h.written, [], 'nor the same picture decoded anew');
+  h.decode([40, 50, 60, 255]);
+  h.run(2);
+  assert.equal(h.written.length, 1, 'a new picture is written once');
+  assert.ok(h.written[0].canvas);
+  // The plane's set asks for the frames a new canvas needs: 'a quad given
+  // another canvas asks for the frames that bind it, then none' in
+  // src/render/cesium/draw.test.mjs.
   assert.deepEqual(h.renders, []);
 });
 
@@ -145,5 +175,12 @@ test('a video feed is left to the renderer; failing over, the still reaches the 
       (source) => source.canvas && source.canvas !== h.runtime.canvas,
     ),
   );
+  h.decode([10, 20, 30, 255]);
+  h.written.length = 0;
+  h.run(2);
+  assert.equal(h.written.length, 1, 'the decoded still replaces it once');
+  h.written.length = 0;
+  h.run(2);
+  assert.deepEqual(h.written, [], 'and stays');
   assert.deepEqual(h.renders, []);
 });

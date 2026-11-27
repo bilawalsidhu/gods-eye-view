@@ -7807,12 +7807,13 @@ test('a video quad keeps frames coming while it plays, read anew at a new size',
       const first = fill.appearance.material;
       assert.equal(first.uniforms.image, video);
       part.beforeRender();
+      // Past the frames a new image needs, a playing video still asks for
+      // the next one, and a paused one for none.
+      part.afterRender();
+      part.afterRender();
       renders = 0;
       part.afterRender();
       assert.ok(renders > 0, 'a playing video asks for the next frame');
-      // Past the frames a new image needs, a paused video asks for none.
-      part.afterRender();
-      part.afterRender();
       video.paused = true;
       renders = 0;
       part.afterRender();
@@ -7864,8 +7865,9 @@ test('a video quad keeps frames coming while it plays, read anew at a new size',
 test('a quad given another canvas asks for the frames that bind it, then none', () =>
   withImageClasses(() => {
     const scene = fakeScene();
-    let renders = 0;
-    scene.requestRender = () => (renders += 1);
+    // Requests made before a frame draws are one frame, as in Cesium.
+    let pending = false;
+    scene.requestRender = () => (pending = true);
     const part = createCesiumDraw({
       scene,
       report: (error) => assert.fail(error),
@@ -7885,12 +7887,11 @@ test('a quad given another canvas asks for the frames that bind it, then none', 
       part.afterRender();
     }
     const next = { width: 4, height: 4 };
-    renders = 0;
+    pending = false;
     set.upsert([quad(next)]);
-    // Each frame asked for draws once, as the render loop would.
     let drawn = 0;
-    while (renders > 0 && drawn < 100) {
-      renders -= 1;
+    while (pending && drawn < 100) {
+      pending = false;
       drawn += 1;
       part.beforeRender();
       part.afterRender();
@@ -7900,7 +7901,7 @@ test('a quad given another canvas asks for the frames that bind it, then none', 
       next,
     );
     assert.ok(drawn >= 2 && drawn <= 4, `${drawn} frames drawn`);
-    assert.equal(renders, 0, 'and then it is idle');
+    assert.equal(pending, false, 'and then it is idle');
     set.dispose();
   }));
 

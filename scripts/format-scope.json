@@ -687,6 +687,7 @@
   "src/layers/cctv/ground.test.mjs",
   "src/layers/cctv/rendering.test.mjs",
   "src/layers/cctv/projectionLoop.test.mjs",
+  "src/layers/cctv/videoRate.test.mjs",
   "src/data/alprCameras.js",
   "src/data/alprCameras.test.mjs",
   "src/data/dataCredits.test.mjs",

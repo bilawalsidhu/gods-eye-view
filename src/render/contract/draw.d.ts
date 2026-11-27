@@ -650,7 +650,12 @@ export interface PartPose {
   highlight?: boolean | Color;
 }
 
-/** A plane showing an image, a video or a canvas. */
+/**
+ * A plane showing an image, a video or a canvas. Its set asks for the
+ * frames that draw a new source and, while a shown video plays, for each
+ * next frame, waking on the video's play, playing, canplay, loadeddata and
+ * seeked.
+ */
 export interface QuadItem {
   id: string;
   center: Position;
