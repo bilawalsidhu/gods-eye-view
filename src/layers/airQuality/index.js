@@ -331,7 +331,8 @@ export function createAirQualityLayer({
   let _readings = [];
   let _lastUpdate = null;
   let _enabled = false;
-  let rowControlsListener = null;
+  /** @type {{ invalidate: () => void } | null} the panels' handle, from init */
+  let _panel = null;
   /** Views this source can answer, the default first. */
   const views = Object.freeze([
     'aqi',
@@ -562,7 +563,7 @@ export function createAirQualityLayer({
     return list.length > 0 && list.every((item) => item.stale === true);
   };
 
-  const notify = () => rowControlsListener?.();
+  const notify = () => _panel?.invalidate();
   /**
    * Whether the page is hidden (a background tab): the retry loop, OpenAQ's
    * discovery every few seconds among it, waits until it is shown again.
@@ -2297,8 +2298,9 @@ export function createAirQualityLayer({
     },
     updateInterval: 60_000,
 
-    init(viewer) {
+    init(viewer, { panel = null } = {}) {
       if (_viewer) throw new Error('Air quality layer is already initialized');
+      _panel = panel;
       _points = drawOf(viewer).points({
         id: `${AIR_QUALITY_MARKER_SET_ID}:points:${++instances}`,
         show: false,
@@ -2599,7 +2601,7 @@ export function createAirQualityLayer({
       _readings = [];
       replacedBy = new Map();
       _lastUpdate = null;
-      rowControlsListener = null;
+      _panel = null;
     },
 
     /**
@@ -2936,10 +2938,6 @@ export function createAirQualityLayer({
           }),
         },
       };
-    },
-
-    setRowControlsListener(listener) {
-      rowControlsListener = typeof listener === 'function' ? listener : null;
     },
 
     /**

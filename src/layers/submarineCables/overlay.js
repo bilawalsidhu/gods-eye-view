@@ -1,5 +1,6 @@
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { clone, distance } from '../../geo/vector.js';
+import { t } from '../../i18n/index.js';
 import {
   CABLE_REFERENCE_LABEL_WINNER_CAP,
   CABLE_REFERENCE_LABEL_MAX_DISTANCE_M,
@@ -96,6 +97,38 @@ export function createCableOverlayEntry(record) {
       far: 9000000,
       farValue: 0.62,
     },
+    edgeFade: 'keyhole',
+    horizonCull: true,
+    terrainOcclusion: false,
+    gapPx: 14,
+    verticalOnly: true,
+    placement: 'above',
+  };
+}
+
+/**
+ * The name card of the cable or landing point a click named, standing where
+ * the click met it: always shown (past the label cap and at any distance)
+ * and ahead of every label, until a click lands elsewhere. `selected` picks
+ * the paint lane and collision protection.
+ * @param {{id: string, kind: string, label: string, position: object}} named
+ *   `id` names this selection; `position` is ECEF.
+ * @returns {object}
+ */
+
+export function createCableNameCard({ id, kind, label, position }) {
+  const landing = kind === 'landing-point';
+  const name = String(label || '');
+  return {
+    id: `selected:${id}`,
+    position,
+    selected: true,
+    interactive: false,
+    title: landing
+      ? t('LANDING POINT · {name}', { name })
+      : t('CABLE · {name}', { name }),
+    accent: landing ? BASE_LANDING_COLOR : BASE_CABLE_COLOR,
+    priority: Number.MAX_SAFE_INTEGER,
     edgeFade: 'keyhole',
     horizonCull: true,
     terrainOcclusion: false,

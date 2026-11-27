@@ -1236,9 +1236,14 @@ export class LabelArbiter {
    * The grouped layer/source representation lets the render lane test live
    * membership without allocating composite keys for every losing source.
    */
-  liveIdentities({ includeFading = true, now = Date.now() } = {}) {
-    const grouped = new Map();
-    for (const state of this.states.values()) {
+  liveIdentities({ includeFading = true, now = Date.now() } = {}, out = null) {
+    // A caller-owned `out` is refilled in place (its sets kept, emptied ones
+    // dropped), so asking on every paint allocates nothing.
+    const grouped = out || new Map();
+    if (out) out.forEach(clearSet);
+    const states = this._refreshStateList();
+    for (let i = 0; i < states.length; i++) {
+      const state = states[i];
       if (!state.selected) {
         if (!includeFading) continue;
         if (
@@ -1249,16 +1254,25 @@ export class LabelArbiter {
       }
       const candidate = state.lastCandidate;
       if (!candidate?.layerId || candidate.sourceId == null) continue;
-      if (!grouped.has(candidate.layerId))
-        grouped.set(candidate.layerId, new Set());
-      grouped.get(candidate.layerId).add(candidate.sourceId);
+      let sources = grouped.get(candidate.layerId);
+      if (!sources) grouped.set(candidate.layerId, (sources = new Set()));
+      sources.add(candidate.sourceId);
     }
+    if (out) out.forEach(dropEmptySet);
     return grouped;
   }
 
   diagnostics() {
     return this.lastDiagnostics ? { ...this.lastDiagnostics } : null;
   }
+}
+
+function clearSet(set) {
+  set.clear();
+}
+
+function dropEmptySet(set, key, map) {
+  if (set.size === 0) map.delete(key);
 }
 
 export const LABEL_ARBITER_TIMING = Object.freeze({

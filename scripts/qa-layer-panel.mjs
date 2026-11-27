@@ -35,7 +35,7 @@ try {
     const { presentation } = application.getComponents().data;
     const container = presentation.panel._toggleContainer;
     const id = 'qa-panel-lifecycle';
-    let listener = null;
+    let handle = null;
     let enabled = 0;
     window.__gevQaRegisterLayer(manager, {
       id,
@@ -43,7 +43,9 @@ try {
       icon: '◌',
       source: 'Local fixture',
       updateInterval: -1,
-      init() {},
+      init(_viewer, { panel }) {
+        handle = panel;
+      },
       enable() {
         enabled++;
       },
@@ -52,11 +54,12 @@ try {
       destroy() {},
       getStats: () => ({ count: 1250, lastUpdate: Date.now(), stale: true }),
       getRowControls: () => ({ chips: [] }),
-      setRowControlsListener: (callback) => {
-        listener = callback;
-      },
     });
     const result = [];
+    // Rows repaint while Data Layers is displayed; it starts collapsed.
+    const dataPanel = document.getElementById('data-panel');
+    if (dataPanel?.classList.contains('collapsed'))
+      dataPanel.querySelector('[data-collapse-target="data-panel"]')?.click();
     try {
       presentation.mount(container);
       const row = () => container.querySelector(`[data-layer-id="${id}"]`);
@@ -66,10 +69,6 @@ try {
         row().querySelector('.data-name').textContent ===
           '<b>Literal layer</b>' && !row().querySelector('b'),
       ]);
-      result.push([
-        'row subscription is installed',
-        typeof listener === 'function',
-      ]);
       presentation.mount(container);
       first.click();
       await Promise.resolve();
@@ -78,6 +77,12 @@ try {
         enabled === 0 && !manager.isEnabled(id),
       ]);
       await manager.setEnabled(id, true);
+      // The row paints on the next frame.
+      await new Promise((resolve) => requestAnimationFrame(() => resolve()));
+      result.push([
+        'init hands the layer its panel handle',
+        typeof handle?.invalidate === 'function',
+      ]);
       result.push([
         'count is presented from the supplied snapshot',
         row().querySelector('.data-count').textContent === '1.3K',
@@ -108,9 +113,15 @@ try {
       presentation._panel.destroy();
       final.click();
       await Promise.resolve();
+      let invalidatedAfterDestroy = true;
+      try {
+        handle.invalidate();
+      } catch {
+        invalidatedAfterDestroy = false;
+      }
       result.push([
-        'destroyed panel releases row subscriptions',
-        listener === null,
+        'a destroyed panel ignores invalidation',
+        invalidatedAfterDestroy && !row(),
       ]);
       result.push([
         'destroyed controls cannot change the layer',

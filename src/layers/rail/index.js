@@ -103,8 +103,8 @@ function createState({ services }) {
      */
     _cockpitLostFeedId: null,
     _revision: 0,
-    _controlsListener: null,
-    _dataManager: null,
+    /** @type {{ invalidate: () => void } | null} the panels' handle, from init */
+    _panel: null,
     _lastUpdate: null,
     _error: null,
     /** Whether the train cap (MAX_TRAINS_TOTAL) was reported once. */

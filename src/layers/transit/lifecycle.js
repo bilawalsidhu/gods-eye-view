@@ -87,8 +87,9 @@ export function createLifecycle({ state, services, parts }) {
      * Create the point collection. Called once at bootstrap.
      * @param {object} viewer
      */
-    init(viewer) {
+    init(viewer, { panel = null } = {}) {
       state._viewer = viewer;
+      state._panel = panel;
       parts.rendering.createMarkers(viewer);
       state._enabled = false;
       state._activeFeeds.clear();
@@ -228,7 +229,7 @@ export function createLifecycle({ state, services, parts }) {
       state._overlayHost.clearSource(TRANSIT_SELECTED_OVERLAY_SOURCE_ID);
       parts.height.clear();
       unbindStyleEvents();
-      state._dataManager = null;
+      state._panel = null;
       state._viewer = null;
     },
   };

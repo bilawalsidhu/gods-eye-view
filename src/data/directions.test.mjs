@@ -119,8 +119,6 @@ test('layer module declares the manager contract, params, and row controls', () 
     'setParams',
     'getParams',
     'getRowControls',
-    'setRowControlsListener',
-    'attachDataManager',
   ]) {
     assert.equal(
       typeof directionsLayer[method],
@@ -128,6 +126,8 @@ test('layer module declares the manager contract, params, and row controls', () 
       `${method} is implemented`,
     );
   }
+  for (const removed of ['setRowControlsListener', 'attachDataManager'])
+    assert.equal(directionsLayer[removed], undefined, `${removed} is gone`);
   assert.deepEqual(directionsLayer.getParams(), {
     mode: DEFAULT_DIRECTIONS_MODE,
   });
@@ -585,8 +585,11 @@ test('arming takes the pointer from another tool, which is told', (t) => {
 test('a newer tool taking the pointer disarms, as Escape would', (t) => {
   ownershipFixture(t);
   let told = 0;
-  directionsLayer.setRowControlsListener(() => (told += 1));
-  t.after(() => directionsLayer.setRowControlsListener(null));
+  const viewer = { isDestroyed: () => false, scene: { requestRender() {} } };
+  const { unbind } = bindFakeDraw(viewer);
+  t.after(unbind);
+  directionsLayer.init(viewer, { panel: { invalidate: () => (told += 1) } });
+  t.after(() => directionsLayer.destroy(viewer));
   directionsLayer.setParams({ arm: 'b' });
   told = 0;
   const releaseDraw = claimAs('draw');

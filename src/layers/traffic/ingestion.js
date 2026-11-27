@@ -1,5 +1,6 @@
 import { requestWithDeadline } from '../../sources/requestDeadline.js';
 import {
+  defaultRoadSource,
   normalizeRoadMode,
   resolveRoadMode,
   roadModesSimulate,
@@ -167,7 +168,8 @@ export function createIngestion({
       signal?.throwIfAborted();
       if (!Array.isArray(data?.roads))
         throw new Error('Malformed road snapshot');
-      layerState._roadSource = data.roadSource || 'OpenStreetMap';
+      layerState._roadSource =
+        data.roadSource || defaultRoadSource(layerState._roadModes);
       layerState._roadWarning = data.roadWarning || null;
       layerState._roadPartial = Boolean(data.partial);
       return data;
@@ -214,7 +216,8 @@ export function createIngestion({
         },
       );
     }
-    layerState._roadSource = data.roadSource || 'OpenStreetMap';
+    layerState._roadSource =
+      data.roadSource || defaultRoadSource(layerState._roadModes);
     layerState._roadWarning = data.roadWarning || null;
     layerState._roadPartial = Boolean(data.partial);
     return data;
@@ -350,7 +353,8 @@ export function createIngestion({
       if (data.replace) streamed = parsed;
       else streamed.push(...parsed);
       const revision = ++paintRevision;
-      layerState._roadSource = data.roadSource || 'OpenStreetMap';
+      layerState._roadSource =
+        data.roadSource || defaultRoadSource(layerState._roadModes);
       const snapshot = streamed.slice();
       tilePaint = tilePaint.then(async () => {
         if (
