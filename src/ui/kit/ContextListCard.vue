@@ -295,6 +295,9 @@ function back() {
 function onDetailKey(event) {
   if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing)
     return;
+  // On a phone, Esc (back) closes the sheet first, as for every card; the
+  // detail is still open when the sheet comes back.
+  if (globalThis.document?.body?.classList.contains('mobile-shell')) return;
   event.preventDefault();
   back();
 }

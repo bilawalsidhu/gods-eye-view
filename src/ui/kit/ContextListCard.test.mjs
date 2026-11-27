@@ -308,6 +308,23 @@ test('a pick made elsewhere leaves focus where it is; a click in the card moves 
   assert.equal(focused($('[data-list-key="f3"]')), true, 'and back to the row');
 });
 
+test('on a phone Esc in the detail is the sheet’s: the detail stays open', async (t) => {
+  document.body.classList.add('mobile-shell');
+  t.after(() => document.body.classList.remove('mobile-shell'));
+  const { $, events, state } = mount(t, { selected: 'f2' });
+  await settle();
+  const event = new KeyboardEvent('keydown', {
+    key: 'Escape',
+    bubbles: true,
+    cancelable: true,
+  });
+  $('[data-list-back]').dispatchEvent(event);
+  await settle();
+  assert.equal(event.defaultPrevented, false, 'left for the sheet');
+  assert.equal(events.filter(([name]) => name === 'back').length, 0);
+  assert.equal(state.selected, 'f2');
+});
+
 test('Back restores the original row when detail advances beyond its page', async (t) => {
   const { $, state, range } = mount(t, {
     headerClose: true,
