@@ -1,4 +1,4 @@
-import { reactive, ref } from 'vue';
+import { computed, reactive, ref } from 'vue';
 import { msg } from '../i18n/index.js';
 
 // The providers of Lists in Context. With two or more on, Lists has a
@@ -117,18 +117,19 @@ export function shownList(lists, choice) {
   return lists.find((list) => list.id === choice)?.id ?? lists[0]?.id ?? '';
 }
 
+/** The list Context's list tab shows, '' while another tab shows. */
+export const shownContextList = computed(() =>
+  contextListsActive.value
+    ? shownList(listsOn(contextListPresence), contextListChoice.value)
+    : '',
+);
+
 /**
  * Whether Context's list tab shows list `id`; Context itself may be folded.
- * A readout in that list's body paints when Context is presented open only
- * while this holds: otherwise its body stays hidden behind another tab or
- * list.
  * @param {string} id A CONTEXT_LISTS id.
  */
 export function contextListShown(id) {
-  return (
-    contextListsActive.value &&
-    shownList(listsOn(contextListPresence), contextListChoice.value) === id
-  );
+  return shownContextList.value === id;
 }
 
 /** For tests: forget every list and choice. */

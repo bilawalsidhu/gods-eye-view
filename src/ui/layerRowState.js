@@ -22,6 +22,20 @@ export function inspectorFeedLabel(tone) {
   return label.charAt(0).toLocaleUpperCase(locale) + label.slice(1);
 }
 
+/**
+ * Why Flights lists no aircraft, when its feed says so: Unavailable, Loading
+ * (also before its first update), or Stale or Degraded; '' when the feed is
+ * fine and the answer is that none is near.
+ */
+export function flightsFeedStatus({ readFailed, loading, tone, updatedAt }) {
+  if (readFailed || tone === 'unavailable')
+    return inspectorFeedLabel('unavailable');
+  if (loading || tone === 'loading' || updatedAt === null)
+    return inspectorFeedLabel('loading');
+  if (tone === 'stale' || tone === 'degraded') return inspectorFeedLabel(tone);
+  return '';
+}
+
 export const CONTEXT_EXEMPT = Object.freeze(['radio', 'directions']);
 export const MISSIONS_LAYER = 'rocket-launches';
 

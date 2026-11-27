@@ -9875,6 +9875,21 @@ const acceptedStreetLevel = (
   getAll: () => [],
 });
 
+/**
+ * A street photo event listener that shows the photo's card, as the bridge
+ * does (entityContextBridge.js onStreetPhoto), and keeps each event's detail.
+ */
+function showsStreetPhotoCard(cards, photos = []) {
+  return (event) => {
+    photos.push(event.detail);
+    cards.card = {
+      key: `street-level:${event.detail.id}`,
+      layerId: 'street-level',
+      identity: { layerId: 'street-level', id: event.detail.id },
+    };
+  };
+}
+
 test("the retired Street Level panel opens the open photo's card, or its Data Layers row", async () => {
   globalThis.window = globalThis.window || {
     clearTimeout,
@@ -9934,15 +9949,7 @@ test("the retired Street Level panel opens the open photo's card, or its Data La
       },
     };
     const photos = [];
-    const onPhoto = (event) => {
-      photos.push(event.detail);
-      // The bridge shows the photo's card (entityContextBridge.js onStreetPhoto).
-      cards.card = {
-        key: `street-level:${event.detail.id}`,
-        layerId: 'street-level',
-        identity: { layerId: 'street-level', id: event.detail.id },
-      };
-    };
+    const onPhoto = showsStreetPhotoCard(cards, photos);
     globalThis.document?.addEventListener?.(STREET_LEVEL_PHOTO_EVENT, onPhoto);
     // The viewer has accepted that photo.
     const shown = await runnerWith(acceptedStreetLevel())('set_panel_open', {
@@ -10950,14 +10957,7 @@ test('the retired Street Level panel opens a shown photo while an unrelated look
   const streetLevel = useStreetLevelStore(applicationPinia());
   const cards = useEntityCardStore(applicationPinia());
   const saved = streetLevel.view;
-  // The bridge shows the photo's card (entityContextBridge.js onStreetPhoto).
-  const onPhoto = (event) => {
-    cards.card = {
-      key: `street-level:${event.detail.id}`,
-      layerId: 'street-level',
-      identity: { layerId: 'street-level', id: event.detail.id },
-    };
-  };
+  const onPhoto = showsStreetPhotoCard(cards);
   globalThis.document?.addEventListener?.(STREET_LEVEL_PHOTO_EVENT, onPhoto);
   try {
     streetLevel.view = {

@@ -15,6 +15,7 @@ import {
   linePointInCap,
   linePointInRect,
   linePointWithinRadius,
+  skyFrustumTest,
 } from './contextGeometry.js';
 import { pointInPreparedArea, prepareArea } from './areaGeometry.js';
 import { msg } from '../i18n/marker.js';
@@ -950,13 +951,6 @@ function readLayerPoints(dataManager, layerId, module, options, summarize) {
       // A lazy snapshot can fail during iteration or retained-row conversion.
       if (points != null) return summarize({ source, points });
       if (options.viewRecords && typeof module?.getViewRecords === 'function') {
-        if (options.radiusArea && typeof module.getRecordsNear === 'function') {
-          const { center, radius } = options.radiusArea;
-          const nearby = summarize({
-            points: module.getRecordsNear(center, radius) || [],
-          });
-          if (nearby?.scope === 'nearby' && nearby.count) return nearby;
-        }
         return summarize({
           points: module.getViewRecords(ALL_RECORDS, options.viewArea) || [],
         });
@@ -2371,12 +2365,25 @@ function cameraGroundPoint(eye, center) {
   return Number.isFinite(eye?.lat) && Number.isFinite(eye?.lon) ? eye : center;
 }
 
-/** Test a position against the settled view used for Context counts and rows. */
+/**
+ * Test a position against the settled view used for Context counts and rows.
+ * `skyFrustum` (a view with only sky in it, see `skyFrustumTest`) counts only
+ * airborne points inside the camera's frame.
+ */
 export function inViewTest(
   rect,
   center,
-  { hemisphere, clipViewport, heightM, eye, corners } = {},
+  { hemisphere, clipViewport, heightM, eye, corners, skyFrustum } = {},
 ) {
+  if (skyFrustum) {
+    const test = skyFrustumTest(skyFrustum);
+    return (at, altitudeM) =>
+      Boolean(test) &&
+      Number.isFinite(altitudeM) &&
+      altitudeM > 0 &&
+      Boolean(at) &&
+      test(at, altitudeM);
+  }
   const seenFrom = cameraGroundPoint(eye, center);
   const { x: ex, y: ey, z: ez } = unitVector(seenFrom.lat, seenFrom.lon);
   const horizon = groundHorizon(heightM);
@@ -2393,9 +2400,13 @@ export function inViewTest(
       : null;
   const vector = { x: 0, y: 0, z: 0 };
   return (at, altitudeM) => {
+    // An airborne point on screen can lie over ground short of the
+    // footprint: the screen planes decide it.
+    const aloft = footprint && Number.isFinite(altitudeM) && altitudeM > 0;
     if (
       !at ||
-      ((!hemisphere || (clipViewport && rect)) &&
+      (!aloft &&
+        (!hemisphere || (clipViewport && rect)) &&
         !at.lineAnchor &&
         (!rect || !insideRect(at, rect)))
     )
@@ -2425,17 +2436,15 @@ export function inViewTest(
 
 /**
  * Optional inputs supplied by the Inspector store. With nothing selected,
- * every layer reads In view. With a selection, local scopes are read around
- * its coordinates only. Each result carries the count, breakdown and rows from one scope. Search and
+ * every layer reads In view. With a selection, the radius is read around the
+ * selected item only. Each result carries the count, breakdown and rows from one scope. Search and
  * Omnibar omit these inputs and use the in-view membership alone.
  * @typedef {object} InspectorSummaryOptions
  * @property {number} radius Radius in kilometres.
  * @property {object[]} bounds Index bounds covering the viewport and radius.
  * @property {object} [index] Point index used for eligible dense radius reads.
  * @property {?{source?: object, points: Iterable<object>}} [snapshot] Indexed candidates for this read.
- * @property {?{anchor: {lat: number, lon: number}, selected: boolean, excludeKey?: string, noGround?: boolean}} [localScopes] Compare local scope counts around the selected item or view centre.
- * @property {boolean} [nearby] Use only the radius for a view without ground.
- * @property {boolean} [nearbyFirst] Prefer the radius when it has results.
+ * @property {?{anchor: {lat: number, lon: number}, excludeKey?: string}} [localScopes] Read the radius around the selected item.
  * @property {boolean} [nearestOnly] Rank from the camera ground point and count retained rows.
  * @property {(point: object) => boolean} [isPoint] Identify ordinary point records.
  * @property {number} [sampleRadiusKm] Limit a globe sample without changing its provider total.
@@ -2468,6 +2477,7 @@ export function inViewTest(
  * @param {InspectorSummaryOptions} [options.inspector] Enable the Inspector's scoped result.
  * @param {number} [options.heightM] Camera height, for the globe view's cap.
  * @param {{lat: number, lon: number}} [options.eye] The ground under the camera.
+ * @param {?object} [options.skyFrustum] A view with only sky in it: the camera's frame (see `inViewTest`).
  * @param {boolean} [options.throwOnReadError] Let a caller with a retry policy handle a reader error.
  * @param {() => void} [options.onSnapshotFallback] Use ordinary records and report an optional reader failure.
  * @returns {?{layerId: string, layerName: string, icon: string, count: number, items: Array<object>}}
@@ -2488,6 +2498,7 @@ export function viewSummaryForLayer(
     heightM,
     eye,
     corners,
+    skyFrustum = null,
     shownLayerName,
     throwOnReadError = false,
     onSnapshotFallback,
@@ -2514,6 +2525,7 @@ export function viewSummaryForLayer(
     heightM,
     eye,
     corners,
+    skyFrustum,
   });
   const lineVisible =
     hemisphere || clipViewport
@@ -2536,14 +2548,10 @@ export function viewSummaryForLayer(
     ? Math.cos(inspector.sampleRadiusKm / EARTH_RADIUS_KM)
     : -Infinity;
   const dual = inspector?.localScopes;
-  // The Inspector sets only dual (nothing selected reads In view).
-  const useRadius = dual || inspector?.nearby || inspector?.nearbyFirst;
+  // Only a selected item has a radius; nothing selected reads In view.
+  const useRadius = Boolean(dual);
   const radiusVector = useRadius
-    ? dual
-      ? unitVector(dual.anchor.lat, dual.anchor.lon)
-      : inspector.nearestOnly
-        ? unitVector(center.lat, center.lon)
-        : { x: cx, y: cy, z: cz }
+    ? unitVector(dual.anchor.lat, dual.anchor.lon)
     : null;
   const radiusScore = useRadius
     ? Math.cos(inspector.radius / EARTH_RADIUS_KM)
@@ -2561,7 +2569,6 @@ export function viewSummaryForLayer(
     const classified = breakdown && BREAKDOWN_KINDS.has(kind.kind) ? [] : null;
     const nearbyClassified = dual && classified ? [] : null;
     let count = 0;
-    let nearbyChosen = Boolean(inspector?.nearby);
     // Most points in a dense city radius need a count and one dot product.
     // Use the cached positions directly when no query, provider groups or
     // breakdown needs to read each record. The viewport remains the fallback.
@@ -2577,35 +2584,19 @@ export function viewSummaryForLayer(
       !aircraft;
     if (fastRadius) {
       const { x, y, z } = radiusVector;
-      const radiusBest = dual ? nearbyBest : best;
       let cutoff = keep > 0 ? -Infinity : Infinity;
       for (const cell of inspector.index.positionCells(inspector.bounds)) {
         for (const at of cell) {
-          if (dual && !dual.noGround) {
-            const score = scoreInView(at);
-            if (score > -Infinity) {
-              count++;
-              keepBest(
-                best,
-                inspector.nearestOnly ? Math.min(3, keep) : keep,
-                score,
-                at.point,
-                at,
-              );
-            }
-          }
           const score = x * at.x + y * at.y + z * at.z;
           if (score < radiusScore) continue;
-          if (dual) nearbyCount++;
-          else count++;
+          nearbyCount++;
           if (score <= cutoff) continue;
-          keepBest(radiusBest, keep, score, at.point, at);
-          if (radiusBest.length === keep) cutoff = radiusBest.at(-1).score;
+          keepBest(nearbyBest, keep, score, at.point, at);
+          if (nearbyBest.length === keep) cutoff = nearbyBest.at(-1).score;
         }
       }
-      if (!dual && count) nearbyChosen = true;
     }
-    const remainingPoints = fastRadius && (dual || nearbyChosen) ? [] : points;
+    const remainingPoints = fastRadius ? [] : points;
     for (const point of remainingPoints) {
       const indexed = inspector?.index?.positionOf(point);
       const position = indexed ?? recordPosition(point);
@@ -2627,13 +2618,11 @@ export function viewSummaryForLayer(
             score =
               radiusVector.x * x + radiusVector.y * y + radiusVector.z * z;
           }
-        } else if (
-          areaContains(point?.[CONTEXT_AREA], dual?.anchor ?? center)
-        ) {
-          at = { ...(dual?.anchor ?? center), lineAnchor: true };
+        } else if (areaContains(point?.[CONTEXT_AREA], dual.anchor)) {
+          at = { ...dual.anchor, lineAnchor: true };
           score = 1;
         } else {
-          const near = nearestPart(dual?.anchor ?? center, point, {
+          const near = nearestPart(dual.anchor, point, {
             radiusKm: inspector.radius,
           });
           if (near.at && near.km <= inspector.radius) {
@@ -2642,73 +2631,65 @@ export function viewSummaryForLayer(
           }
         }
       }
-      const within = !fastRadius && score >= radiusScore;
-      if (dual && within) {
-        nearbyCount++;
-        keepBest(nearbyBest, keep, score, point, at);
-        nearbyClassified?.push(
-          hasPointReader ? source.recordForPoint(point, false) : point,
-        );
-        nearbyPopulation?.push(point);
-      }
-      const inRadius = !dual && within;
       if (dual) {
-        if (dual.noGround) continue;
-        at = position;
+        // A selected item's Nearby never counts the view beside it.
+        if (!fastRadius && score >= radiusScore) {
+          nearbyCount++;
+          keepBest(nearbyBest, keep, score, point, at);
+          nearbyClassified?.push(
+            hasPointReader ? source.recordForPoint(point, false) : point,
+          );
+          nearbyPopulation?.push(point);
+        }
+        continue;
       }
-      if (!inRadius) {
-        if (nearbyChosen) continue;
-        const elevated =
-          isSatelliteLayer || (aircraft && point?.onGround === false);
-        score = scoreInView(at, elevated ? point?.altitudeM : null);
-        if (Array.isArray(point?.parts)) {
-          for (const part of point.parts) {
-            const position = recordPosition(part);
-            const partScore = scoreInView(position);
-            if (partScore > score) {
-              at = position;
-              score = partScore;
-            }
+      const elevated =
+        isSatelliteLayer || (aircraft && point?.onGround === false);
+      score = scoreInView(at, elevated ? point?.altitudeM : null);
+      if (Array.isArray(point?.parts)) {
+        for (const part of point.parts) {
+          const position = recordPosition(part);
+          const partScore = scoreInView(position);
+          if (partScore > score) {
+            at = position;
+            score = partScore;
           }
         }
-        const paths = point?.[CONTEXT_LINES];
-        const geojson = paths && isGeoJsonKey(point.key);
-        const line = !paths
-          ? null
-          : geojson && hemisphere
-            ? linePointInCap(
+      }
+      const paths = point?.[CONTEXT_LINES];
+      const geojson = paths && isGeoJsonKey(point.key);
+      const line = !paths
+        ? null
+        : geojson && hemisphere
+          ? linePointInCap(
+              paths,
+              center,
+              seenFrom,
+              groundHorizonKm,
+              scoreInView,
+              clipViewport ? rect : null,
+            )
+          : !hemisphere || (clipViewport && rect)
+            ? linePointInRect(
                 paths,
+                rect,
                 center,
-                seenFrom,
-                groundHorizonKm,
-                scoreInView,
-                clipViewport ? rect : null,
+                geojson,
+                lineVisible,
+                crossing,
               )
-            : !hemisphere || (clipViewport && rect)
-              ? linePointInRect(
-                  paths,
-                  rect,
-                  center,
-                  geojson,
-                  lineVisible,
-                  crossing,
-                )
-              : null;
-        if (line) {
-          const location = { ...line, lineAnchor: true };
-          const lineScore = scoreInView(location);
-          if (lineScore > score) {
-            at = location;
-            score = lineScore;
-          }
+            : null;
+      if (line) {
+        const location = { ...line, lineAnchor: true };
+        const lineScore = scoreInView(location);
+        if (lineScore > score) {
+          at = location;
+          score = lineScore;
         }
-        if (
-          score === -Infinity &&
-          areaContains(point?.[CONTEXT_AREA], center)
-        ) {
-          at = { lat: center.lat, lon: center.lon, lineAnchor: true };
-          score = scoreInView(at);
-        }
+      }
+      if (score === -Infinity && areaContains(point?.[CONTEXT_AREA], center)) {
+        at = { lat: center.lat, lon: center.lon, lineAnchor: true };
+        score = scoreInView(at);
       }
       if (score === -Infinity || score < minimumScore) continue;
       const record = matchRecord
@@ -2717,15 +2698,7 @@ export function viewSummaryForLayer(
           : point
         : null;
       if (matchRecord && !recordMatches(record, needle, '', layerId)) continue;
-      if (inRadius && !nearbyChosen) {
-        nearbyChosen = true;
-        count = 0;
-        best.length = 0;
-        if (population) population.length = 0;
-        groups?.clear();
-        if (classified) classified.length = 0;
-      }
-      const nearestOnly = inspector?.nearestOnly && !nearbyChosen;
+      const nearestOnly = inspector?.nearestOnly;
       if (classified && !nearestOnly)
         classified.push(
           record ??
@@ -2784,7 +2757,7 @@ export function viewSummaryForLayer(
       }
     }
     const closest = !count && outside.length > 0;
-    const nearestOnly = inspector?.nearestOnly && !nearbyChosen;
+    const nearestOnly = inspector?.nearestOnly;
     const truncated = nearestOnly && count > best.length;
     if (!count && !closest && !includeEmpty) return null;
     const read = (point) =>
@@ -2798,15 +2771,13 @@ export function viewSummaryForLayer(
       icon: kind.icon,
       count: closest ? outside.length : truncated ? best.length : count,
       ...(inspector && {
-        scope: nearbyChosen
-          ? 'nearby'
-          : closest
-            ? 'closest'
-            : count
-              ? nearestOnly
-                ? 'nearest'
-                : 'view'
-              : 'none',
+        scope: closest
+          ? 'closest'
+          : count
+            ? nearestOnly
+              ? 'nearest'
+              : 'view'
+            : 'none',
       }),
       ...(population && {
         population:
@@ -2883,10 +2854,6 @@ export function viewSummaryForLayer(
                 : '',
             }
           : undefined,
-      radiusArea:
-        includeDrawnCoverage && (inspector?.nearbyFirst || inspector?.nearby)
-          ? { center, radius: inspector.radius }
-          : null,
       throwOnReadError,
       onSnapshotFallback,
     },

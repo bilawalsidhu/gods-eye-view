@@ -26,7 +26,7 @@ function fixture() {
     source: {},
   });
   const repaints = [];
-  state.rowControlsListener = () => repaints.push(state.nearbySearchBusy);
+  state.panel = { invalidate: () => repaints.push(state.nearbySearchBusy) };
   return { state, methods, loads, repaints, settle: () => release(true) };
 }
 

@@ -1422,7 +1422,7 @@ test('a visible aircraft reads In view at city scale', (t) => {
   );
 });
 
-test('the moving Inspector reuses its scope only while the range and query match', (t) => {
+test('the moving Inspector reuses its scope only while the query matches', (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const id = 'earthquakes';
   const { store, scans } = harness([
@@ -1451,9 +1451,11 @@ test('the moving Inspector reuses its scope only while the range and query match
     { settled: false },
   );
   assert.equal(read(250), settled, 'movement alone keeps the settled rows');
-  const narrower = read(25);
-  assert.notEqual(narrower, settled, 'a changed range reads again');
-  assert.equal(narrower.scope, 'closest');
+  assert.equal(
+    read(25),
+    settled,
+    'with nothing selected the range is not read',
+  );
   assert.deepEqual(read(25, { query: 'different event' }).items, []);
   assert.equal(
     scans(),
@@ -1539,7 +1541,6 @@ test('the indexed fire radius and the per-record reader agree across the date li
   const filtered = read(2, { excludeKey: 'local-firms:none' });
   assert.equal(result.scope, 'nearby');
   assert.equal(result.count, 3);
-  assert.equal(result.alternate, undefined, 'no view scope beside it');
   assert.deepEqual(
     result.items.map(({ identity }) => identity.lon),
     [179.99, -179.96],
@@ -1596,7 +1597,6 @@ test('a selected item’s local scope is measured from the item, never the view'
     near.items.map((row) => row.identity.id),
     ['by-item'],
   );
-  assert.equal(near.alternate, undefined);
   // 11 km from the item: outside 1 km. The quake in view is not offered.
   const far = read(1);
   assert.equal(far.scope, 'closest');

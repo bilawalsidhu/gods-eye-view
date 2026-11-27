@@ -1004,11 +1004,6 @@ test('changing the radius leaves visible flights and their counts in place', asy
   ]);
   cards.setView(localView());
   await settleInspectorIndex();
-  assert.equal(
-    $('.view-context__radius input'),
-    null,
-    'no slider without Satellites',
-  );
   const previousRadius = contextRadiusKm.value;
   t.after(() => setContextRadiusKm(previousRadius));
   assert.match($('.view-context__tile[data-layer="flights"]').textContent, /1/);
@@ -1844,40 +1839,49 @@ test('reselecting the same aircraft by voice brings its card back from Pinned', 
   assert.ok($('#entity-card'));
 });
 
-test('a keyboard-picked coverage line keeps its feed, details and return focus when its photo arrives', async (t) => {
-  const line = {
-    id: 'near:mapillary:30.300000,-97.740000:line',
-    name: 'Mapillary',
-    providerId: 'mapillary',
-    sequenceId: 'line',
-    ...HERE,
-  };
-  let viewLine = line;
-  const photo = { id: 'mapillary:photo', name: 'Congress Avenue', ...HERE };
-  const { $, cards } = fixture(t, [
+// A Mapillary coverage line over Austin and the photo it opens, in a view
+// that holds both; `viewLine` is the line the view reads.
+const COVERAGE_LINE = {
+  id: 'near:mapillary:30.300000,-97.740000:line',
+  name: 'Mapillary',
+  providerId: 'mapillary',
+  sequenceId: 'line',
+  ...HERE,
+};
+const COVERAGE_PHOTO = {
+  id: 'mapillary:photo',
+  name: 'Congress Avenue',
+  ...HERE,
+};
+async function coverageLineScene(t, viewLine = () => COVERAGE_LINE) {
+  const scene = fixture(t, [
     {
       id: 'street-level',
       name: 'Street Level',
       enabled: true,
       stats: { count: 0 },
       module: {
-        getAnalystRecords: () => [photo],
-        getRecordsNear: () => [line],
-        getViewRecords: (_, area) => (area?.rect ? [viewLine, photo] : [photo]),
+        getAnalystRecords: () => [COVERAGE_PHOTO],
+        getRecordsNear: () => [COVERAGE_LINE],
+        getViewRecords: (_, area) =>
+          area?.rect ? [viewLine(), COVERAGE_PHOTO] : [COVERAGE_PHOTO],
       },
     },
   ]);
-  cards.setView({
+  scene.cards.setView({
     center: HERE,
     heightM: 200_000,
-    rect: {
-      west: -98,
-      south: 29,
-      east: -97,
-      north: 31,
-    },
+    rect: { west: -98, south: 29, east: -97, north: 31 },
   });
   await settleInspectorIndex();
+  return scene;
+}
+
+test('a keyboard-picked coverage line keeps its feed, details and return focus when its photo arrives', async (t) => {
+  const line = COVERAGE_LINE;
+  let viewLine = line;
+  const photo = COVERAGE_PHOTO;
+  const { $, cards } = await coverageLineScene(t, () => viewLine);
   const row = $(
     '.nearby-lists[aria-label="In view"] [data-row-key*="near:mapillary:"]',
   );
@@ -1920,33 +1924,8 @@ test('a keyboard-picked coverage line keeps its feed, details and return focus w
 });
 
 test('a coverage line’s card can be pinned once its photo has loaded, under the photo’s key', async (t) => {
-  const line = {
-    id: 'near:mapillary:30.300000,-97.740000:line',
-    name: 'Mapillary',
-    providerId: 'mapillary',
-    sequenceId: 'line',
-    ...HERE,
-  };
-  const photo = { id: 'mapillary:photo', name: 'Congress Avenue', ...HERE };
-  const { $, cards, pinia } = fixture(t, [
-    {
-      id: 'street-level',
-      name: 'Street Level',
-      enabled: true,
-      stats: { count: 0 },
-      module: {
-        getAnalystRecords: () => [photo],
-        getRecordsNear: () => [line],
-        getViewRecords: (_, area) => (area?.rect ? [line, photo] : [photo]),
-      },
-    },
-  ]);
-  cards.setView({
-    center: HERE,
-    heightM: 200_000,
-    rect: { west: -98, south: 29, east: -97, north: 31 },
-  });
-  await settleInspectorIndex();
+  const photo = COVERAGE_PHOTO;
+  const { $, cards, pinia } = await coverageLineScene(t);
   $(
     '.nearby-lists[aria-label="In view"] [data-row-key*="near:mapillary:"]',
   ).click();
@@ -2130,11 +2109,6 @@ test('the nearby lists follow the Context search', async (t) => {
   await nextTick();
   assert.match($(NEAREST).textContent, /NEAR01/);
   assert.equal(getComputedStyle($('.view-context__tiles')).display, 'none');
-  assert.equal(
-    $('.view-context__radius input'),
-    null,
-    'no slider without Satellites',
-  );
   assert.notEqual(getComputedStyle($('.nearby-lists')).display, 'none');
 });
 
@@ -5786,7 +5760,6 @@ test("a camera's row of figures fills a missing city, field of view or range fro
     cameraId: 'cam1',
     src: '/api/cctv/frame/cam1?ts=1',
     hasFrame: true,
-    settledAt: Date.now() - 120000,
   };
   cameraStore.setFrame(settled);
   await nextTick();
@@ -5795,7 +5768,6 @@ test("a camera's row of figures fills a missing city, field of view or range fro
   cameraStore.setFrame({
     ...settled,
     src: '/api/cctv/frame/cam1?ts=2',
-    settledAt: Date.now(),
   });
   await nextTick();
   assert.equal(line.textContent, 'TxDOT');
@@ -12414,7 +12386,6 @@ test('with nothing selected every item layer reads In view at city scale, Flight
   for (const id of ['flights', 'ais-live-vessels', 'earthquakes']) {
     const tile = $(`.view-context__tile[data-layer="${id}"]`);
     assert.match(tile.getAttribute('aria-label'), /In view · 2$/, id);
-    assert.equal(tile.querySelector('button[data-scope-layer]'), null, id);
   }
   assert.doesNotMatch(
     $('.view-context').textContent,
@@ -13131,7 +13102,6 @@ test('a quake layer reads In view with nothing selected and only around the sele
   await settleInspectorIndex();
   const tile = () => $('.view-context__tile[data-layer="earthquakes"]');
   assert.match(tile().getAttribute('aria-label'), /In view · 1/);
-  assert.equal(tile().querySelector('button[data-scope-layer]'), null);
 
   cards.select({ layerId: 'earthquakes', id: 'anchor' }, { fly: false });
   await settleInspectorIndex();
@@ -13141,11 +13111,6 @@ test('a quake layer reads In view with nothing selected and only around the sele
   assert.equal(
     selected().querySelector('[data-row-key="earthquakes:anchor"]'),
     null,
-  );
-  assert.equal(
-    selected().querySelector('button[data-scope-layer]'),
-    null,
-    'no scope switch',
   );
   setContextRadiusKm(25);
   await settleInspectorIndex();
@@ -13183,7 +13148,6 @@ test('a scoped quake layer separates a real empty result, loading and failed rea
   notifyLayers();
   await settleInspectorIndex();
   assert.match(tile().getAttribute('aria-label'), /Unavailable/);
-  assert.equal(tile().querySelector('[data-scope-layer]'), null);
   cards.select(placeIdentity({ ...HERE, name: 'Austin', from: 'spot' }), {
     fly: false,
   });
@@ -13317,7 +13281,6 @@ test('wrecks, incident evidence and place results read In view with source-speci
     'bhote-koshi-locator',
   ]) {
     assert.match(tile(id).getAttribute('aria-label'), /In view · 1/);
-    assert.equal(tile(id).querySelector('button[data-scope-layer]'), null);
   }
   setContextRadiusKm(25);
   cards.setView({
@@ -13661,4 +13624,87 @@ test('a docked Google panorama suppresses card and pin maps until it leaves view
   open('panoramax');
   await nextTick();
   assert.ok(tile().querySelector('canvas.card-map'));
+});
+
+for (const mode of ['moves into the radius', 'leaves the feed']) {
+  test(`focus on a closest aircraft row survives when it ${mode}`, async (t) => {
+    const row = flightsOn([flight('far01', HERE.lat + 1, HERE.lon)]);
+    const { $, cards, notifyLayers } = fixture(t, [
+      {
+        id: 'earthquakes',
+        name: 'Earthquakes',
+        enabled: true,
+        records: [{ id: 'q1', title: 'Local quake', ...HERE }],
+      },
+      row,
+    ]);
+    setContextRadiusKm(25);
+    cards.setView(localView());
+    cards.select({ layerId: 'earthquakes', id: 'q1' }, { fly: false });
+    await settleInspectorIndex();
+    const button =
+      $(
+        '#entity-card [data-spatial-layer="flights"] [data-row-key="flights:far01"] button',
+      ) || $('#entity-card [data-spatial-layer="flights"] button');
+    button.focus();
+    assert.equal(document.activeElement, button);
+    if (mode === 'moves into the radius') {
+      row.records = [flight('far01', HERE.lat + 0.05, HERE.lon)];
+      row.stats = { count: 1, lastUpdate: Date.now() + 5 };
+    } else {
+      row.records = [];
+      row.stats = { count: 0, lastUpdate: Date.now() + 5 };
+    }
+    notifyLayers();
+    await settleInspectorIndex();
+    await nextTick();
+    assert.notEqual(
+      document.activeElement,
+      document.body,
+      'focus is not dropped to the page',
+    );
+    assert.ok(
+      $('#entity-card').contains(document.activeElement),
+      'focus stays in the card',
+    );
+  });
+}
+
+test('Context search matches a card description', async (t) => {
+  const record = {
+    id: 'pier1',
+    name: 'Pier One',
+    latitude: 30,
+    longitude: -97,
+    description: 'Old ferry pier, rebuilt 1990',
+  };
+  const { cards, $ } = fixture(t, [
+    {
+      id: 'cables',
+      enabled: true,
+      records: [record],
+      module: { findByQuery: () => record },
+    },
+  ]);
+  cards.select({ layerId: 'cables', id: 'pier1' }, { fly: false });
+  await nextTick();
+  assert.equal(
+    $('.entity-card__description')?.textContent,
+    'Old ferry pier, rebuilt 1990',
+  );
+  contextSearchOpen.value = true;
+  contextSearchText.value = 'rebuilt 1990';
+  await nextTick();
+  assert.equal(
+    $('.entity-card__description')?.textContent,
+    'Old ferry pier, rebuilt 1990',
+    'a matching description stays',
+  );
+  assert.equal($('.entity-card__no-match'), null, 'and no empty state');
+  contextSearchText.value = 'absent phrase xyz';
+  await nextTick();
+  assert.ok(
+    $('.entity-card__no-match'),
+    'an unrelated phrase still shows the empty state',
+  );
 });

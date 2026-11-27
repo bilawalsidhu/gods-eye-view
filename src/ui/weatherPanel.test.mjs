@@ -985,3 +985,32 @@ test('only a newly selected station opens the Air Quality detail in Context', ()
   assert.ok(detail(f).querySelector('[data-card-id="air-quality"]'));
   panel.destroy();
 });
+
+test('a pointer pick without focus moves focus to Back, and Back to the row', async () => {
+  const f = fixture();
+  const view = createWeatherPanel({ ...f });
+  view.update([lightning, radar, wind, cyclone, satellite]);
+  try {
+    document.activeElement?.blur?.();
+    row(f, satellite.id).click();
+    await nextTick();
+    await nextTick();
+    const back = f.container.querySelector('[data-list-back]');
+    assert.ok(back, 'the detail opens');
+    assert.ok(
+      document.activeElement === back,
+      'pointer pick moves focus to Back',
+    );
+    document.activeElement?.blur?.();
+    back.click();
+    await nextTick();
+    await nextTick();
+    assert.equal(
+      document.activeElement?.dataset?.listKey,
+      satellite.id,
+      'Back returns focus to the row',
+    );
+  } finally {
+    view.destroy();
+  }
+});

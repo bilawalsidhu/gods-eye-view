@@ -1,11 +1,11 @@
 <script setup>
-import { computed, inject, unref, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, inject, nextTick, unref, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { formatNumber, onLocaleChange, t } from '../../../i18n/index.js';
 import { contextAgeText } from '../../contextTime.js';
 import { hazardReadNear } from '../../spotConditions.js';
 import { useOmnibarStore } from '../../stores/omnibar.js';
 import { shownLayerName } from '../../layerNames.js';
-import { CONTEXT_EXEMPT, inspectorFeedLabel, presentLayerRow, splitBar } from '../../layerRowState.js';
+import { CONTEXT_EXEMPT, flightsFeedStatus, inspectorFeedLabel, presentLayerRow, splitBar } from '../../layerRowState.js';
 import { FIELD_ICONS, fieldReading } from '../../fieldReading.js';
 import { entityKind } from '../../../data/entityContext.js';
 import { greatCircleKm } from '../../../geoDistance.js';
@@ -18,7 +18,7 @@ import NearbyLists from './NearbyLists.vue';
 import ContextBreakdownBar from './ContextBreakdownBar.vue';
 import { inspectorScopeLabel } from '../../inspectorSpatialIndex.js';
 import ContextRadius from './ContextRadius.vue';
-import { focusCardTitle } from '../../cardFocus.js';
+import { focusCardTitle, focusedRow, replacementRow } from '../../cardFocus.js';
 
 // Conditions here, then Nearby, at the foot of every card. Conditions here
 // reads each field layer that is on (wind, GNSS integrity, air quality,
@@ -110,6 +110,8 @@ const fields = computed(() => {
 
 // The Context search narrows every list below to what holds its text.
 const searching = computed(() => Boolean(contextNeedle.value));
+// Flights answers with its closest aircraft only outside a search or a swath.
+const closestFlights = computed(() => !(searching.value || inSwath.value));
 const shownFields = computed(() =>
   fields.value.filter((field) => matchesContextSearch(field.name, field.value, field.detail)),
 );
@@ -123,7 +125,7 @@ const lists = computed(() => {
     excludeKey: props.excludeKey,
     query: contextNeedle.value,
     excludeLayers: ['radio', ...spatialLayers.value.map(row => row.id)],
-    closestLayers: searching.value || inSwath.value ? [] : ['flights'],
+    closestFlights: closestFlights.value,
   });
   if (!props.ownLayer) return found;
   return [...found.filter((list) => list.layerId === props.ownLayer), ...found.filter((list) => list.layerId !== props.ownLayer)];
@@ -137,7 +139,7 @@ const flightsBlock = computed(() => {
   void tick.value;
   void store.managerVersion;
   void store.layerRevision;
-  if (searching.value || inSwath.value || !scopeOwner()) return null;
+  if (!closestFlights.value || !scopeOwner()) return null;
   const row = store.allLayers().find((layer) => layer.id === FLIGHTS && layer.enabled);
   if (!row) return null;
   const group = lists.value.find((list) => list.layerId === FLIGHTS);
@@ -145,14 +147,31 @@ const flightsBlock = computed(() => {
   const name = shownLayerName(row.name, row.id);
   if (group?.scope === 'closest') return { name, group, status: '' };
   const { tone, updatedAt } = presentLayerRow(row);
-  const status = group?.readFailed || tone === 'unavailable'
-    ? inspectorFeedLabel('unavailable')
-    : tone === 'loading' || (updatedAt === null && !row.stats?.count)
-      ? inspectorFeedLabel('loading')
-      : t('No nearby aircraft');
+  const status = flightsFeedStatus({
+    readFailed: group?.readFailed,
+    tone,
+    updatedAt: updatedAt ?? (row.stats?.count ? 0 : null),
+  }) || t('No nearby aircraft');
   return { name, group: null, status };
 });
 const shownLists = computed(() => lists.value.filter((list) => list !== flightsBlock.value?.group));
+// The closest aircraft go with their list, which then cannot hand focus on:
+// a focused row moves to the same row now listed in Nearby, or one of the
+// same layer, else to the card's title. Focus that moved elsewhere stays.
+const root = ref(null);
+const flightsSection = ref(null);
+watch(flightsBlock, (next) => {
+  const doc = globalThis.document;
+  if (next?.group || !flightsSection.value?.contains(doc?.activeElement)) return;
+  const was = focusedRow(flightsSection.value, doc.activeElement);
+  void nextTick(() => {
+    const active = doc.activeElement;
+    if (active && active !== doc.body && active.isConnected) return;
+    const row = was && root.value && replacementRow(root.value, was, 'button[data-via-key]');
+    if (row) row.focus();
+    else focusCardTitle();
+  });
+}, { flush: 'pre' });
 
 const alerts = computed(() => {
   void tick.value;
@@ -295,7 +314,7 @@ const distance = (n) => {
 </script>
 
 <template>
-  <section class="spot-conditions" :aria-label="title">
+  <section ref="root" class="spot-conditions" :aria-label="title">
     <div v-if="shownFields.length" class="spot-conditions__block spot-conditions__fields">
       <h4>
         <UiIcon name="location_on" :size="null" />
@@ -340,7 +359,7 @@ const distance = (n) => {
       </template>
     </section>
     <NearbyLists :lists="shownLists" :title="title" :approximate="approximate" @focus-lost="focusCardTitle()" />
-    <section v-if="flightsBlock" class="spot-conditions__block" data-spatial-layer="flights">
+    <section v-if="flightsBlock" ref="flightsSection" class="spot-conditions__block" data-spatial-layer="flights">
       <h4>{{ flightsBlock.name }} · {{ flightsBlock.group ? formatNumber(flightsBlock.group.count) : flightsBlock.status }}</h4>
       <template v-if="flightsBlock.group">
         <p>{{ groupLabel('closest') }}</p>

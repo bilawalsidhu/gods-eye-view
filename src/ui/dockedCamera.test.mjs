@@ -179,6 +179,14 @@ const $ = (selector) => document.querySelector(selector);
 const tag = () => $('.docked-view__tag')?.textContent || '';
 const dot = () => $('.docked-view .feed-dot')?.dataset.state;
 const wait = () => $('.docked-view .docked-view__wait')?.textContent || '';
+// The page shown or hidden, as a browser tab says it.
+function setHidden(hidden) {
+  Object.defineProperty(document, 'hidden', {
+    value: hidden,
+    configurable: true,
+  });
+  document.dispatchEvent(new Event('visibilitychange'));
+}
 async function settle() {
   await nextTick();
   await frames();
@@ -307,13 +315,6 @@ test('a docked stream that cannot go on shows only its own last frame, paused', 
 });
 
 test('a docked stream that failed tries again: after a growing wait, and at once when the page shows again', async (t) => {
-  const setHidden = (hidden) => {
-    Object.defineProperty(document, 'hidden', {
-      value: hidden,
-      configurable: true,
-    });
-    document.dispatchEvent(new Event('visibilitychange'));
-  };
   t.after(() => setHidden(false));
   const scene = dock(t);
   scene.camerasOn(true);
@@ -345,6 +346,30 @@ test('a docked stream that failed tries again: after a growing wait, and at once
   setHidden(false);
   await nextTick();
   assert.equal(scene.attached.length, 3, 'a page shown again tries at once');
+});
+
+test('a docked stream that keeps failing waits 5 s, 15 s, 45 s, then every 2 min', async (t) => {
+  const scene = dock(t);
+  scene.camerasOn(true);
+  scene.open();
+  decoded(scene.mapVideo);
+  await settle();
+  await settle();
+  scene.camerasOn(false);
+  await settle();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  for (const [i, waitMs] of [
+    5_000, 15_000, 45_000, 120_000, 120_000,
+  ].entries()) {
+    scene.attached.at(-1).onFailure();
+    await nextTick();
+    t.mock.timers.tick(waitMs - 1);
+    await nextTick();
+    assert.equal(scene.attached.length, i + 1, `not before ${waitMs} ms`);
+    t.mock.timers.tick(1);
+    await nextTick();
+    assert.equal(scene.attached.length, i + 2, `one try after ${waitMs} ms`);
+  }
 });
 
 test('a first failed dock hold retains the settled card image after the card releases it', async (t) => {
@@ -604,13 +629,6 @@ test('a still camera docked from its card shows the card’s frame first, then r
 
 test('a docked still camera reads no frame while the page is hidden, and reads one on return', async (t) => {
   const poll = pollClock(t);
-  const setHidden = (hidden) => {
-    Object.defineProperty(document, 'hidden', {
-      value: hidden,
-      configurable: true,
-    });
-    document.dispatchEvent(new Event('visibilitychange'));
-  };
   t.after(() => setHidden(false));
   const scene = dock(t, { stream: null });
   scene.camerasOn(false, { video: false });
@@ -761,3 +779,110 @@ test('closing the dock while Context is folded moves focus to Context’s fold b
   await settle();
   assertSameNode(document.activeElement, body);
 });
+
+test('a dock stream retry keeps the last frame until the new stream draws', async (t) => {
+  const scene = dock(t);
+  scene.camerasOn(true);
+  scene.open();
+  decoded(scene.mapVideo);
+  await settle();
+  await settle();
+  scene.camerasOn(false);
+  await settle();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  scene.attached[0].onFailure();
+  await nextTick();
+  await nextTick();
+  assert.equal(
+    $('.docked-view img')?.getAttribute('src'),
+    'data:image/jpeg;base64,KEPT1',
+  );
+  t.mock.timers.tick(5_000);
+  await nextTick();
+  await nextTick();
+  assert.equal(scene.attached.length, 2, 'the retry attaches');
+  assert.equal(
+    $('.docked-view img')?.getAttribute('src'),
+    'data:image/jpeg;base64,KEPT1',
+    'the saved picture stays during the retry',
+  );
+  assert.equal(wait(), '', 'no wait text over the kept frame');
+  assert.equal(tag(), 'Docked · paused');
+});
+
+test('a dock retry does not attach a stream the layer no longer offers', async (t) => {
+  let available = true;
+  const scene = dock(t, { stream: (id) => (available ? streamFor(id) : null) });
+  scene.camerasOn(true);
+  scene.open();
+  decoded(scene.mapVideo);
+  await settle();
+  await settle();
+  scene.camerasOn(false);
+  await settle();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  available = false;
+  scene.attached[0].onFailure();
+  await nextTick();
+  t.mock.timers.tick(5_000);
+  await nextTick();
+  await nextTick();
+  assert.equal(
+    scene.attached.length,
+    1,
+    'no retry while the layer offers no stream',
+  );
+  assert.equal(
+    $('.docked-view img')?.getAttribute('src'),
+    'data:image/jpeg;base64,KEPT1',
+    'the paused last frame stays',
+  );
+});
+
+for (const change of ['replaced', 'cleared']) {
+  test(`dock retains pictured capture time when the card frame is ${change}`, async (t) => {
+    t.mock.timers.enable({ apis: ['setInterval', 'Date'], now: 100_000 });
+    const scene = dock(t, { stream: null, refreshMs: 10_000 });
+    scene.cctv.setFrame({
+      cameraId: camera.id,
+      src: 'blob:frameA',
+      hasFrame: true,
+      timeLabel: '12:00:00',
+      timeIso: '2026-11-27T12:00:00Z',
+    });
+    scene.camerasOn(true, { video: false });
+    scene.open();
+    await nextTick();
+    await nextTick();
+    _setBlankFrameCheckForTest(() => false);
+    $('.docked-view img').dispatchEvent(new Event('load'));
+    await nextTick();
+    await nextTick();
+    assert.equal($('.docked-view__time')?.textContent.trim(), '12:00:00');
+    if (change === 'replaced')
+      scene.cctv.setFrame({
+        cameraId: camera.id,
+        src: 'blob:frameB',
+        hasFrame: true,
+        timeLabel: '12:00:10',
+        timeIso: '2026-11-27T12:00:10Z',
+      });
+    else scene.cctv.setFrame({ cameraId: '', src: '' });
+    await nextTick();
+    await nextTick();
+    assert.equal(
+      $('.docked-view img')?.getAttribute('src'),
+      'blob:frameA',
+      'the dock still shows frame A',
+    );
+    assert.equal(
+      $('.docked-view__time')?.textContent.trim(),
+      '12:00:00',
+      "and keeps A's capture time",
+    );
+    assert.equal(
+      $('.docked-view__time')?.getAttribute('datetime'),
+      '2026-11-27T12:00:00Z',
+    );
+  });
+}

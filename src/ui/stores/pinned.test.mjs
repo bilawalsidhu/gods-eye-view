@@ -5,6 +5,7 @@ import { createPinia } from 'pinia';
 import { createApp, nextTick } from 'vue';
 import PinUndoNotice from '../views/panels/PinUndoNotice.vue';
 import { usePinnedStore } from './pinned.js';
+import { savedPhotoCredit, streetPhotoCredit } from '../streetPhotoCredit.js';
 
 function mount(t) {
   const pinia = createPinia();
@@ -102,4 +103,45 @@ test('Undo lets go of the focus it had, so the next notice still goes', (t) => {
     null,
     'no focusout came, and the notice still went',
   );
+});
+
+test('re-pinning a street photo without a still keeps its creator and licence with the layer off', () => {
+  const pinned = usePinnedStore(createPinia());
+  const key = 'street-level:mly:42';
+  const record = {
+    providerId: 'mly',
+    provider: 'Mapillary',
+    creator: 'Ana',
+    license: 'CC BY-SA 4.0',
+    capturedAt: '2026-01-01',
+  };
+  // Layer on: the record is in history, no still.
+  const on = { photo: () => record, providerCredit: () => 'Mapillary' };
+  pinned.pin({
+    key,
+    kind: 'street',
+    title: 'Photo',
+    still: '',
+    photoCredit: savedPhotoCredit(on, 'mly:42'),
+    photo: record,
+  });
+  const first = streetPhotoCredit(on, 'mly:42', pinned.pinFor(key).photoCredit);
+  // Layer off: photo(id) is null; the provider credit text is still known.
+  const off = { photo: () => null, providerCredit: () => 'Mapillary' };
+  pinned.unpin(key);
+  pinned.pin({
+    key,
+    kind: 'street',
+    title: 'Photo',
+    still: '',
+    photoCredit: savedPhotoCredit(off, 'mly:42'),
+    photo: off.photo() || null,
+  });
+  const again = streetPhotoCredit(
+    off,
+    'mly:42',
+    pinned.pinFor(key).photoCredit,
+  );
+  assert.equal(again, first);
+  assert.equal(pinned.pinFor(key).photo, record, 'the record is restored');
 });

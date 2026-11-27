@@ -13,7 +13,7 @@ import { PANEL_LABEL_KEYS, layerSourceText, shownLayerName } from '../../layerNa
 import { translateFeedError, translateStatusMessage } from '../../statusText.js';
 import { entityKind, recordRow } from '../../../data/entityContext.js';
 import { missionSitePin, placeIdentity, viewPin, viewPlaceName } from '../../placeCard.js';
-import { DEFAULT_CONTEXT_RADIUS_KM, overheadRangeKm } from '../../contextRadius.js';
+import { overheadRangeKm } from '../../contextRadius.js';
 import { weatherFacts, weatherLook } from '../../spotConditions.js';
 import { clockLine, contextAgeText, dayLengthMinutes, utcClock } from '../../contextTime.js';
 import { approximatePosition, distanceText } from '../../distanceText.js';
@@ -31,7 +31,7 @@ import FieldPill from './FieldPill.vue';
 import NearbyMissions from './NearbyMissions.vue';
 import AltitudeGraph from './AltitudeGraph.vue';
 import SuggestedLayers from './SuggestedLayers.vue';
-import { CONTEXT_EXEMPT, MISSIONS_LAYER, inspectorFeedLabel, inspectorHasLayers, inspectorLayerRows, presentLayerRow, splitBar, shownApart } from '../../layerRowState.js';
+import { CONTEXT_EXEMPT, MISSIONS_LAYER, flightsFeedStatus, inspectorFeedLabel, inspectorHasLayers, inspectorLayerRows, presentLayerRow, splitBar, shownApart } from '../../layerRowState.js';
 import { inspectorScopeLabel } from '../../inspectorSpatialIndex.js';
 import { COUNT_TILE_LAYERS, LAYER_COUNTS_REFETCH_MS } from '../../layerCounts.js';
 import { formatCockpitCoordinatePair } from '../../cockpitPresentation.js';
@@ -50,9 +50,6 @@ const { view, viewWeather } = storeToRefs(store);
 const counts = useLayerCountsStore();
 const missions = useSpaceMissionsStore();
 const props = defineProps({ listSearchMatches: Boolean, inlineCamera: Boolean, inlineSpatialCard: Boolean });
-// With nothing selected the radius only bounds how far Closest to view
-// looks; it is fixed, since no slider controls it here.
-const VIEW_REACH_KM = DEFAULT_CONTEXT_RADIUS_KM;
 const emit = defineEmits(['keyboardSelection']);
 const tick = ref(0);
 // Resample when Context becomes visible, before the next periodic tick.
@@ -287,7 +284,7 @@ const summaries = computed(() => {
         const module = store.layerModule(layer.id);
         if (typeof module?.getContextPopulation === 'function') {
           const group = displayedByLayer.value.get(layer.id)
-            ?? store.inspectorGroup(layer.id, VIEW_REACH_KM);
+            ?? store.inspectorGroup(layer.id);
           summary = group?.summary ?? null;
           if (summary && layer.id === 'air-quality' && group.scope !== 'view') {
             const scope = scopeLabel(group.scope);
@@ -353,7 +350,7 @@ function readGroups(query) {
   // Search uses the viewport; browsing uses the enabled layers’ local scopes.
   const groups = query
     ? store.inView({ perLayer: 12, query, breakdown: true, includeEmpty: true, includeDrawnCoverage: true, viewport: true, excludeLayers: excluded })
-    : store.inspectorGroups(ids, VIEW_REACH_KM);
+    : store.inspectorGroups(ids);
   const center = view.value?.center;
   const satellites = !query && !globeView.value && satellitesOn.value && center
     ? store.nearbyLayers(center.lat, center.lon, {
@@ -380,7 +377,7 @@ const scopeLabel = (scope) => inspectorScopeLabel(scope, overheadRangeKm.value);
 function tileScopeLabel(tile) {
   if (tile.scope !== 'total' && (tile.readFailed || tile.loading || (!tile.count && ['unavailable', 'loading'].includes(tile.tone)))) return '';
   if (tile.id === 'flights' && !tile.count && countStatus(tile)) return '';
-  if (tile.id === 'flights' && !contextNeedle.value && tile.scope === 'none' && tile.count === 0 && Number.isFinite(tile.updatedAt) && ['nominal', 'fallback'].includes(tile.tone)) return t('No nearby aircraft');
+  if (tile.id === 'flights' && !contextNeedle.value && tile.scope === 'none' && !tile.count && !flightsFeedStatus(tile)) return t('No nearby aircraft');
   const scope = scopeLabel(tile.scope);
   if (tile.scope === 'total' && Number.isFinite(tile.totalAt)) {
     const age = inspectorNow.value - tile.totalAt;
@@ -393,7 +390,7 @@ const localTileGroups = computed(() => {
   const closest = [];
   const empty = [];
   for (const tile of localTiles.value) {
-    if (tile.scope === 'closest' && tile.id === 'satellites') closest.push(tile);
+    if (tile.scope === 'closest') closest.push(tile);
     else if (tile.scope === 'none' && tile.count === 0 && !tile.reading && !countStatus(tile)) empty.push(tile);
     else items.push(tile);
   }
@@ -468,13 +465,11 @@ const tiles = computed(() => {
 });
 const countStatus = (tile) => {
   if (tile.scope === 'total') return '';
+  if (tile.id === 'flights' && !tile.count) return flightsFeedStatus(tile) || tile.statusText || '';
   if (tile.readFailed) return inspectorFeedLabel('unavailable');
-  if (tile.loading || (tile.id === 'flights' && tile.tone === 'loading' && !tile.count)) return inspectorFeedLabel('loading');
+  if (tile.loading) return inspectorFeedLabel('loading');
   if (tile.count) return '';
   if (['unavailable', 'degraded', 'stale'].includes(tile.tone)) return tile.toneText;
-  // Before its first update a feed is still loading, not failed: a real
-  // failure carries an error and reads Unavailable above.
-  if (tile.id === 'flights' && tile.count === 0 && tile.updatedAt === null) return inspectorFeedLabel('loading');
   return tile.statusText || '';
 };
 const countText = (tile) => countStatus(tile) || (tile.count === null ? '…' : formatNumber(tile.count));

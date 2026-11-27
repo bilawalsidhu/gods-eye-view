@@ -8,6 +8,8 @@ import {
   sub,
 } from '../geo/vector.js';
 import { EARTH_RADIUS_KM, greatCircleKm, isGeoPoint } from '../geoDistance.js';
+import { fromDegrees } from '../geo/ellipsoid.js';
+import { horizonFrom } from '../geo/horizon.js';
 
 // Non-enumerable feature data keeps the analyst record's public shape.
 export const CONTEXT_AREA = Symbol('Context area');
@@ -120,6 +122,39 @@ export function groundLineCrossing(corners, eye, heightM) {
       if (lo === 0 && hi === 1) return null;
     }
     return null;
+  };
+}
+
+const finiteVector = (v) =>
+  Number.isFinite(v?.x) && Number.isFinite(v?.y) && Number.isFinite(v?.z);
+
+/**
+ * Whether a point at an altitude lies inside a camera's frame and above its
+ * horizon, for a view with no ground to bound it. `frustum` holds the camera's
+ * ECEF `position` (metres), unit `direction`, `right` and `up`, and the tangents
+ * of half its vertical (`tanY`) and horizontal (`tanX`) field of view. Null for
+ * an incomplete frustum.
+ * @returns {((at: {lat: number, lon: number}, altitudeM: number) => boolean) | null}
+ */
+export function skyFrustumTest(frustum) {
+  const { position, direction, right, up, tanX, tanY } = frustum ?? {};
+  if (
+    ![position, direction, right, up].every(finiteVector) ||
+    !(tanX > 0) ||
+    !(tanY > 0)
+  )
+    return null;
+  const horizon = horizonFrom(position);
+  return (at, altitudeM) => {
+    const point = fromDegrees(at.lon, at.lat, altitudeM);
+    const ray = sub(point, position);
+    const d = dot(ray, direction);
+    return (
+      d > 0 &&
+      Math.abs(dot(ray, right)) <= tanX * d &&
+      Math.abs(dot(ray, up)) <= tanY * d &&
+      horizon.isPointVisible(point)
+    );
   };
 }
 

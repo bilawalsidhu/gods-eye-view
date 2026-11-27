@@ -631,6 +631,34 @@ export function installEntityContext({
     }
     return corners.every(Boolean) ? corners : null;
   }
+  const vector = (v) =>
+    [v?.x, v?.y, v?.z].every(Number.isFinite)
+      ? { x: v.x, y: v.y, z: v.z }
+      : null;
+  function viewFrustum(pose) {
+    if (
+      pose.frameIsIdentity === false ||
+      !Number.isFinite(pose.fovy) ||
+      !Number.isFinite(pose.aspectRatio)
+    )
+      return null;
+    const [position, direction, right, up] = [
+      pose.position,
+      pose.direction,
+      pose.right,
+      pose.up,
+    ].map(vector);
+    if (!position || !direction || !right || !up) return null;
+    const tanY = Math.tan(pose.fovy / 2);
+    return {
+      position,
+      direction,
+      right,
+      up,
+      tanY,
+      tanX: tanY * pose.aspectRatio,
+    };
+  }
   const readView = ({ settled = !moving && quiet === null } = {}) => {
     const port = camera();
     const inspect = inspectOpen();
@@ -662,6 +690,8 @@ export function installEntityContext({
         groundM: readGround(settled),
         // Horizon tests use the camera position even when the view is tilted.
         eye: { lat: pose.lat, lon: pose.lon },
+        // The camera's frame, for aircraft in a view with only sky in it.
+        frustum: inspect ? viewFrustum(pose) : null,
         manualInputCount: manualCameraInputCount?.() ?? 0,
         // Keep the camera's orientation so the view can be pinned.
         pose: {

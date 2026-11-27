@@ -1233,7 +1233,7 @@ export function createGevActionRunner({
           !isContextSurfaceVisible()
         )
           return refusePanel(
-            "Context opened, but the street-level photo's card is not showing. Pick the photo in Context's Nearby list.",
+            "Context opened, but the street-level photo's card is not showing. Pick the photo in Context's Street Level list.",
           );
         // A later request that did not open leaves its error beside the
         // photo still shown: say which one this is.

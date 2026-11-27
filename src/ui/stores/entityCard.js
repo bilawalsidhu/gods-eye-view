@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { computed, markRaw, ref, shallowRef, triggerRef } from 'vue';
 import { layerFeedState } from '../../data/feedState.js';
-import { greatCircleKm } from '../../geoDistance.js';
+import { EARTH_RADIUS_KM, greatCircleKm } from '../../geoDistance.js';
 import { isAircraftLayer } from '../../data/aircraftLayerIds.js';
 import {
   createInspectorIndexCache,
@@ -14,6 +14,7 @@ import {
   inspectorViewTier,
 } from '../inspectorSpatialIndex.js';
 import { STREET_LEVEL_LAYER } from '../streetLevelEvents.js';
+import { DEFAULT_CONTEXT_RADIUS_KM } from '../contextRadius.js';
 import { shownLayerName, layerSourceText } from '../layerNames.js';
 import {
   alertsNear,
@@ -142,6 +143,38 @@ const GLOBE_HEIGHT_M = 5_000_000;
 /** Whether a view is the globe view, where "in view" is what the camera's height can see. */
 export const isGlobeView = (where) =>
   Boolean(where?.center) && (where.heightM ?? 0) >= GLOBE_HEIGHT_M;
+/**
+ * How the Inspector reads a view: `noGround` for a view with only sky in it,
+ * `hemisphere` when what the camera's height can see stands in for the view.
+ */
+export function inspectorScope(where) {
+  const rect = where.rect;
+  // Whole-world bounds stand in when too few viewport corners hit Earth.
+  const wholeGround =
+    rect?.west === -180 &&
+    rect.east === 180 &&
+    rect.south === -90 &&
+    rect.north === 90;
+  return {
+    noGround: where.groundFootprint === false,
+    hemisphere: isGlobeView(where) || wholeGround,
+  };
+}
+
+/**
+ * How high an aircraft can fly, metres: in a sky-only view the candidates
+ * are those within the camera's horizon plus the horizon from this height.
+ */
+const AIRCRAFT_CEILING_M = 20_000;
+/** How far, km, the horizon lies from a height in metres. */
+const horizonKm = (heightM) =>
+  EARTH_RADIUS_KM *
+  Math.acos(EARTH_RADIUS_KM / (EARTH_RADIUS_KM + Math.max(0, heightM) / 1000));
+
+/** Whether a card is a drawn Street Level line's point, not a photo. */
+export const isCoverageLineCard = (card) =>
+  card?.layerId === STREET_LEVEL_LAYER &&
+  String(card.identity?.id ?? '').startsWith('near:');
 
 /** How often an open card re-reads its item, so moving things stay current. */
 const REFRESH_MS = 2000;
@@ -554,7 +587,15 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
             `${exactNumber(lat)},${exactNumber(lon)}${edge ? 'e' : ''}`,
         )
         .join('|') ?? '';
-    return `${exactNumber(where.center.lat)},${exactNumber(where.center.lon)},${exactNumber(where.heightM)}|${rect}|${eye}|${footprint}`;
+    // A sky-only view counts aircraft in the camera's frame, so turning
+    // the camera reads again.
+    const frame =
+      where.groundFootprint === false && where.frustum
+        ? [where.frustum.direction, where.frustum.up]
+            .map((v) => [v?.x, v?.y, v?.z].map(exactNumber).join(','))
+            .join('|')
+        : '';
+    return `${exactNumber(where.center.lat)},${exactNumber(where.center.lon)},${exactNumber(where.heightM)}|${rect}|${eye}|${footprint}|${frame}`;
   }
   /** How long a moving layer's rows are kept, from what its last read cost. */
   const movingWait = (costMs) =>
@@ -650,20 +691,6 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
   const inspectorLayers = new Map();
   const inViewSearchLayers = new Map();
   const inViewMemo = new Map();
-  function inspectorScope(where) {
-    const rect = where.rect;
-    // Whole-world bounds stand in when too few viewport corners hit Earth.
-    const wholeGround =
-      rect?.west === -180 &&
-      rect.east === 180 &&
-      rect.south === -90 &&
-      rect.north === 90;
-    return {
-      noGround: where.groundFootprint === false,
-      hemisphere: isGlobeView(where) || wholeGround,
-    };
-  }
-
   // These sources fetch a view-sized window, so points outside the view
   // cannot be interpreted as the nearest available results farther away.
   const viewLoaded = new Set([
@@ -679,7 +706,11 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
   ]);
   const worldBounds = { west: -180, east: 180, south: -90, north: 90 };
 
-  function inspectorGroup(id, radius, options = {}) {
+  function inspectorGroup(
+    id,
+    radius = DEFAULT_CONTEXT_RADIUS_KM,
+    options = {},
+  ) {
     void indexedRevision.value;
     void layerRevision.value;
     const version = managerVersion.value;
@@ -717,11 +748,15 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     const scale = inspectorViewScale(where);
     const rect = where.rect ?? worldBounds;
     const aircraft = isAircraftLayer(id);
-    // Aircraft keep the unbounded Closest to view they had under the
-    // overhead range; other layers look as far as before.
+    // Closest to: aircraft at any distance; other layers within 250 km or
+    // three times the card radius (a selected item) or the view scale,
+    // whichever is greater.
     const closestLimit = aircraft
       ? 20_000
-      : Math.min(20_000, Math.max(radius, scale * 3));
+      : Math.min(
+          20_000,
+          Math.max(DEFAULT_CONTEXT_RADIUS_KM, 3 * (selected ? radius : scale)),
+        );
     const closest =
       !globe &&
       (!sky || selected) &&
@@ -739,7 +774,7 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
       options.revision,
     ]);
     const optionsKey = JSON.stringify([
-      radius,
+      selected ? radius : null,
       globe,
       sky,
       nearestOnly,
@@ -800,9 +835,43 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     }
 
     try {
-      // A selected item's Nearby is read around the item only.
+      // A selected item's Nearby is read around the item only. A sky-only
+      // view has no ground in view, only aircraft in the camera's frame.
+      const skyAircraft =
+        sky && !selected && aircraft && where.frustum ? where.frustum : null;
+      const eye = where.eye ?? where.center;
       const bounds = sky || dual ? [] : [rect];
       if (dual) bounds.push(inspectorPointBounds(anchor, radius));
+      if (skyAircraft)
+        bounds.push(
+          inspectorPointBounds(
+            eye,
+            horizonKm(where.heightM) + horizonKm(AIRCRAFT_CEILING_M),
+          ),
+        );
+      // An airborne aircraft on screen can lie over the ground between the
+      // eye and the footprint.
+      if (
+        aircraft &&
+        !sky &&
+        !globe &&
+        !dual &&
+        where.corners?.length === 4 &&
+        where.corners.every(
+          (corner) =>
+            Number.isFinite(corner?.lat) && Number.isFinite(corner?.lon),
+        ) &&
+        Number.isFinite(eye?.lat) &&
+        Number.isFinite(eye?.lon)
+      )
+        bounds.push(
+          inspectorPointBounds(
+            eye,
+            Math.max(
+              ...where.corners.map((corner) => greatCircleKm(eye, corner)),
+            ),
+          ),
+        );
       const closestKm = closest
         ? selected
           ? (at) => greatCircleKm(anchor, at)
@@ -817,15 +886,7 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
         bounds,
         page: options.page,
         index: source?.index,
-        localScopes: dual
-          ? {
-              anchor,
-              selected,
-              excludeKey: options.excludeKey,
-              // Never count the view beside a selected item.
-              noGround: true,
-            }
-          : null,
+        localScopes: dual ? { anchor, excludeKey: options.excludeKey } : null,
         collectPopulation: summarizePopulation && !globe,
         nearestOnly,
         isPoint: inspectorPointRecord,
@@ -848,6 +909,11 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
             points: source.index.points(bounds),
           },
         }),
+        // An area reader has no index to empty: a sky-only view has no
+        // ground items in view.
+        ...(!source &&
+          sky &&
+          !selected && { snapshot: { source: null, points: [] } }),
       };
       const summarize = (optionsForScope) =>
         viewSummaryForLayer(dataManager(), row, rect, center, {
@@ -862,6 +928,7 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
           heightM: where.heightM,
           eye: where.eye,
           corners: where.corners,
+          skyFrustum: skyAircraft,
           throwOnReadError: true,
           inspector: optionsForScope,
         });
@@ -936,14 +1003,14 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     return value;
   }
 
-  function inspectorGroups(ids, radius) {
+  function inspectorGroups(ids) {
     const enabled = new Map(liveLayers().map((row) => [row.id, row]));
     scopeIndex.retain(enabled);
     for (const id of scopedAnswers.keys())
       if (!enabled.has(id)) scopedAnswers.delete(id);
     return ids.flatMap((id) => {
       const row = enabled.get(id);
-      const group = row && inspectorGroup(id, radius, { row });
+      const group = row && inspectorGroup(id, undefined, { row });
       return group ? [group] : [];
     });
   }
@@ -1159,7 +1226,8 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
    * revision. A failed radius read has no count and no selectable items.
    * @param {number} lat
    * @param {number} lon
-   * @param {{radiusKm?: number, limit?: number, query?: string, excludeKey?: string, excludeLayers?: string[], onlyLayers?: string[], breakdown?: boolean, overheadRange?: boolean, closestLayers?: string[]}} [options]
+   * @param {{radiusKm?: number, limit?: number, query?: string, excludeKey?: string, excludeLayers?: string[], onlyLayers?: string[], breakdown?: boolean, overheadRange?: boolean, closestFlights?: boolean}} [options]
+   *   `closestFlights` lists Flights' closest three when its radius is empty.
    */
   function nearbyLayers(lat, lon, options = {}) {
     void managerVersion.value;
@@ -1185,7 +1253,7 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
         asked.excludeKey || '',
         asked.breakdown === true,
         asked.overheadRange === true,
-        asked.closestLayers?.join('|') ?? '',
+        asked.closestFlights === true,
         getLocale(),
       ]),
       (row, onSnapshotFallback) =>
@@ -1195,7 +1263,8 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
           { lat, lon },
           {
             ...asked,
-            closestFallback: asked.closestLayers?.includes(row.id) === true,
+            closestFallback:
+              asked.closestFlights === true && row.id === 'flights',
             shownLayerName,
             throwOnReadError: true,
             onSnapshotFallback,
@@ -1253,11 +1322,7 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     openedWhileOff = false;
     // Places and selected coverage points keep their selected coordinates.
     // A drawn street line is not a photo-history entry to poll for loss.
-    if (
-      current.layerId === PLACE_LAYER ||
-      (current.layerId === STREET_LEVEL_LAYER &&
-        current.identity.id.startsWith('near:'))
-    ) {
+    if (current.layerId === PLACE_LAYER || isCoverageLineCard(current)) {
       tick.value++;
       return;
     }

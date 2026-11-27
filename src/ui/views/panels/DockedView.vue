@@ -89,7 +89,7 @@ const layerOff = computed(() => {
 // real frame.
 const pinned = usePinnedStore();
 const { frame: activeFrame, live: cctvLive, view: cctvView } = storeToRefs(useCctvStore());
-const { canvas: streamCanvas, streamOn, still, stillAttempt, stillLoaded, stillFailed: fail, feed: cameraFeed, pictured: cameraPictured } = useDockedCamera({
+const { canvas: streamCanvas, streamOn, still, stillAttempt, stillLoaded, stillFailed: fail, feed: cameraFeed, pictured: cameraPictured, retryStill, stillTime } = useDockedCamera({
   view,
   tick,
   cards,
@@ -103,11 +103,8 @@ const { canvas: streamCanvas, streamOn, still, stillAttempt, stillLoaded, stillF
 // The frame's time, as its camera source gives it, while the dock shows
 // the frame the camera's card read; the dock's own reads carry no time.
 const cameraTime = computed(() => {
-  const current = view.value;
-  const frame = activeFrame.value;
-  if (current?.kind !== 'camera' || streamOn.value || !still.value || !cameraPictured.value) return '';
-  if (frame?.cameraId !== String(current.identity?.id) || frame.src !== still.value) return '';
-  return frame.timeLabel || '';
+  if (view.value?.kind !== 'camera' || streamOn.value || !still.value || !cameraPictured.value) return '';
+  return stillTime.value?.src === still.value ? stillTime.value.label : '';
 });
 
 // A docked flight's live position, for its cockpit view. A read that misses
@@ -388,7 +385,8 @@ watch(
     </header>
     <span class="docked-view__status" role="status">{{ streetStatus }}</span>
     <div ref="frameElement" class="docked-view__frame" :aria-busy="streetLoading ? 'true' : undefined" :tabindex="streetRestoring ? -1 : undefined">
-      <canvas v-if="view.kind === 'camera' && streamOn" ref="streamCanvas" class="docked-view__stream" role="img" :aria-label="view.title"></canvas>
+      <img v-if="view.kind === 'camera' && streamOn && retryStill" :src="retryStill" :alt="view.title" />
+      <canvas v-if="view.kind === 'camera' && streamOn" v-show="!retryStill" ref="streamCanvas" class="docked-view__stream" role="img" :aria-label="view.title"></canvas>
       <img v-else-if="view.kind === 'camera' && still" v-show="cameraPictured" :key="view.key + ':' + stillAttempt" :src="still" :alt="view.title" @load="stillLoaded" @error="fail" />
       <div v-else-if="streetSlot" id="sl-docked-slot" ref="streetSlotElement" class="docked-view__street" :inert="streetLoading"></div>
       <span v-else-if="streetError" class="docked-view__wait" role="alert">{{ t('Image could not be opened') }}</span>
@@ -422,7 +420,7 @@ watch(
       <p v-if="streetStatus && !streetLoading" class="docked-view__notice" aria-hidden="true">{{ streetStatus }}</p>
       <p v-else-if="reopenFailed" class="docked-view__notice" role="status">{{ t('Could not open this in Context') }}</p>
     </div>
-    <time v-if="cameraTime" class="docked-view__time" :datetime="activeFrame.timeIso">{{ cameraTime }}</time>
+    <time v-if="cameraTime" class="docked-view__time" :datetime="stillTime?.iso">{{ cameraTime }}</time>
     <p v-if="credit" class="docked-view__credit">{{ credit }}</p>
   </section>
 </template>

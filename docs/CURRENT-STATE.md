@@ -1123,8 +1123,11 @@ items **Closest to view**, with distances measured to the view edge, within
 250 km or three times the view scale, whichever is greater; aircraft are
 looked for at any distance. A layer that loads by viewport shows
 **None in view** when empty. In a tilted low view that reaches much farther
-than the view scale, the Inspector shows three nearest visible items. A view
-with only sky in it has no ground in view and shows **None in view**.
+than the view scale, the Inspector shows three nearest visible items, and an
+airborne aircraft on screen counts also when the ground under it lies short of
+the visible ground. A view with only sky in it has no ground in view and shows
+**None in view**; airborne aircraft inside the frame still count (the camera's
+frustum, `skyFrustumTest` in `src/data/contextGeometry.js`).
 Satellites are the one range-based layer: below globe height they use
 **Overhead range**, measured from the view centre to their ground position,
 and an empty range shows up to three loaded satellites under
@@ -1134,10 +1137,13 @@ radius independently, from 25 to 1,000 km, defaulting to 250 km.
 
 Selecting an item uses the card's radius for **Nearby**, measured from the
 item only: what lies within the radius, else up to three items
-**Closest to** the item with their distance, else **None nearby**; the view
-never stands in. Flights always answers on a card: aircraft within the
-radius, else the closest three with distance, else **No nearby aircraft**,
-**Loading** or **Unavailable**. A camera shown inline in Inspect has the
+**Closest to** the item with their distance, within 250 km or three times the
+radius, whichever is greater (the camera's height plays no part), else
+**None nearby**; the view never stands in. Flights always answers on a card:
+aircraft within the radius, else the closest three with distance, else
+**No nearby aircraft**, or why there is none: **Loading**, **Unavailable**,
+**Stale** or **Degraded**, as its Inspector tile says
+(`flightsFeedStatus`, `src/ui/layerRowState.js`). A camera shown inline in Inspect has the
 panel's only Nearby and its only radius slider. A saved 2,500 km radius is
 read as 1,000 km. GeoJSON line distance uses the nearest mapped part. Cable distance uses samples along the line and can miss a
 segment near the radius boundary.
@@ -1268,7 +1274,14 @@ Missions, Radio, News and Cameras have ‹ Prev · Next › on their Data Layers
 rows while they are on (`getRowControls`): Missions and News open each item's
 card, Radio selects stations silently unless one is already playing,
 and Cameras flies to each camera in Context's Cameras list and opens its
-card. Visible camera walks follow the filtered catalog in list order.
+card. Visible camera walks follow the Cameras list in its order. Below globe
+height the list holds the cameras in view, nearest the view's centre first,
+each with its distance ("In view · N loaded"), else the three closest of the
+chosen city, measured to the view's edge as the Inspector measures **Closest
+to view**; a search reads the whole loaded catalog, nearest the centre first;
+at globe height it pages the loaded catalog in source order
+(`CameraList.vue`). A new search, the list showing or hiding, Context opening
+or closing, or a manual camera move starts a new walk; a fly-to does not.
 With Context closed, the camera walk uses the cameras nearest the view.
 Voice next and previous take the same camera walk
 (`stepNearbyCamera`, `src/layers/cctv/navigation.js`).
@@ -1276,7 +1289,13 @@ Voice next and previous take the same camera walk
 A docked view pauses (no stream of its own, no painting, no frame reads) while
 Context is expanded, while the page is hidden, and while Cockpit, clean view
 or recording hide the corner (`dockedCamera.js`, `DockedView.vue`); it reads
-again at once when shown. Items in Context carry the map's own per-kind sprite
+again at once when shown. A camera stream the dock holds itself (once Cameras
+lets it go) that fails tries again after 5 s, 15 s, 45 s, then every 2 min,
+and at once when the page shows again; it asks the layer for the stream anew
+and tries nothing while the layer offers none. The dock keeps that camera's
+last frame, paused, until the new stream draws, and a stream that played a
+minute starts again at 5 s. While it shows the frame the camera's card read,
+the dock shows that frame's time. Items in Context carry the map's own per-kind sprite
 as their mark (`EntityMark.vue`, `src/ui/entityMark.js`): the aircraft class
 sprites (`aircraftIcon`), helicopters, airport vehicles and ground stations,
 and the vessel type hulls and aids to navigation, drawn as a CSS mask tinted
@@ -1297,7 +1316,7 @@ about the view). On a selected card, the slider above Nearby adjusts the
 shared Context radius. A satellite card with a known swath width uses that
 width for Nearby and omits the slider. Fly to is offered only for what cannot be followed;
 the weather and local time show only for things that stay put, under More
-details; a camera's "More info" button became the Camera settings tab; and with nothing within the radius, Nearby is simply absent. The
+details; a camera's "More info" button became the Camera settings tab; and with nothing within the radius, Nearby shows up to three closest items, or says there is none nearby (Flights: its status). The
 swath is searched as a disc of the swath's width round the point under the
 satellite, not as a strip along its track.
 
@@ -3962,9 +3981,10 @@ listeners and row subscriptions; obsolete completions do not repaint old rows.
 A refresh (a layer's status or row controls, such as every step of a scene
 whose time advances) skips a row list whose panel is not displayed (collapsed
 or hidden) and repaints it once, with its current rows, when it is displayed
-again; the Weather and News lists in Context do the same for their bodies (a
-body counts as displayed only while its list is the one Context shows), while
-the lists still appear and count as before. Whatever shows a panel
+again; the Weather, News and Recent Imagery lists in Context do the same for
+their bodies (a body counts as displayed only while its list is the one Context
+shows; `src/ui/contextListBody.js`), while their tabs and counts still update.
+Whatever shows a panel
 repaints what it owes at once, through `src/ui/rail/panelContent.js`, before
 anything measures the panel or reads its rows: the panel chrome opening a panel
 (a click, voice or any other caller), a phone sheet (every panel of its rail,
@@ -7036,7 +7056,16 @@ alone keeps its saved still and withdraws its pending load. The new item's
 card shows in Context, also on a phone, where the
 Context sheet stays. Another photo's card, a click on open ground or Escape
 on the map cancels only a photo still loading for that card; a photo
-already showing stays open in its dock or goes back to the offscreen home.
+already showing stays open in its dock or goes back to the offscreen home,
+where its sequence stops playing (PLAY). PLAY also stops at each new lookup,
+and when the photo's card goes out of sight still selected (Context folded,
+another tab, a phone sheet closed), unless the photo is expanded, in the embed
+overlay or docked. Pin is disabled on a coverage line's card until the photo
+it opens has loaded, then pins that photo under its own key. A pinned photo keeps its credit
+(provider, creator, licence) and record with the layer off, also when it is
+pinned again then. With Street Level or the photo's source off (**Source
+off**) its card shows only a local copy of the still, never asking the
+provider again.
 Street Level remembers up to 12 photos opened this session. With no
 selection, In view lists remembered photos from enabled providers on the
 current map and drawn sequences that cross the viewport. The sequence row
@@ -8419,8 +8448,8 @@ silently demoting every later lookup for the session.
 - The satellites row in DATA LAYERS carries per-layer sub-controls (the first consumer of the optional `getRowControls()` layer hook, which the layer panel reads in `src/ui/layerPanel.js`): one chip per class (the STARLINK chip exposes the existing `catalog` param); a class that is on shows its point colour, its name and its live count in its chip (`swatch` and `count`, drawn by `src/ui/rail/RailChips.vue`), and a class that is off shows only its name; and an info line while SATCAT is stale or unavailable (`Classes may lag: SATCAT is a cached copy` / `Classes may lag: SATCAT unavailable`). Default is the sparse core catalog. The chips are stateless — each declares the params to apply and the manager owns the write — so the Space Missions capture/restore path over the same param stays authoritative. Controls stay hidden while the layer is off. An explicit CORE or DENSE choice participates in versioned local and share-link state; temporary Space Missions overrides do not.
 - **Class toggles** (`src/layers/satellites/classes.js`): the layer row carries one chip per class — STATIONS, IMAGING, TELECOM (communications and navigation), PROBES (science, technology development and demonstration, unknown purpose) and DEBRIS (rocket bodies, fragments, unknown objects launched before last year and dead payloads) on by default, so the layer shows what it did before classes; STARLINK off, as DENSE was. Points of a hidden class stay built and are only hidden, so a toggle needs no reload; hidden classes are left out of the detection overlay, the voice/framing position lists and analyst answers (the tracked satellite still answers), and only the chips of classes on screen carry a colour and a count; an on class with nothing loaded shows its colour without a count. The class comes, strongest evidence first, from CelesTrak SATCAT (object type and operational status, fetched per group through `/api/celestrak-satcat/<group>`, cached a day by the proxy; the layer keeps a current read six hours rather than asking on every five-minute update), the bundled UCS Satellite Database pack (UCS-Satellite-Database 5-1-2023: operator, owner country and purpose; `src/data/local_data/ucs_satellites/`), name patterns for satellites launched after May 2023, and finally the CelesTrak groups the TLE came in (a mission group such as `weather` before the orbit group `geo`; a UCS purpose of "Unknown" counts as none). Only crewed stations and the craft that visit them, by name, are STATIONS: the CubeSats CelesTrak's stations group also carries after their deployment from the ISS are classed like any other satellite. A payload whose SATCAT record gives no status, with no UCS record and no recognisable name, that launched 20 or more years ago (SATCAT's launch date, else the TLE designator's year) is presumed dead and filed as debris; without a SATCAT record (a failed read) nothing is presumed. To cover imaging launched after the UCS snapshot the core catalog also reads CelesTrak's `resource`, `weather`, `planet`, `sar` and `science` groups. Debris can be tracked but is never ridden: the orbital entry gate (`orbitEntryAllowed`) refuses it, so no ORBIT entry is offered and double-click does nothing for it. Retired stations and the shuttles have re-entered and have no orbit to show. An explicit class choice is kept in local and share-link state as the `classes` option, one letter per class shown (`sitpd`: stations, imaging, telecom, probes, debris; `0`: none; `src/data/satelliteClassMask.js`), and the layer takes those letters back through `setParams({classes})`; STARLINK maps to the existing `catalog: 'dense'` param instead.
 - The satellite Cockpit subject (`getCockpitSubject()`) also carries `satelliteClass`, `cosparId` (from SATCAT, else TLE line 1), `tle` (`{line1, line2, epochMs}`), `owner` (`{countryCode, label}`: ISO 3166-1 alpha-2 for a single country, `null` code for organisations such as ESA, EUMETSAT or Intelsat and for joint owners) and `operator` (UCS; SpaceX for Starlink). UCS names the operator's country and wins over the SATCAT owner code; CelesTrak's CIS (former USSR) is filed under Russia.
-- **The STARLINK chip (formerly DENSE) reports the dense LOAD, not the catalog param.** The param flips synchronously while the Starlink shell takes seconds to arrive over a chunked load, and CelesTrak 502s that feed regularly. So the chip reads `STARLINK ···` (busy, disabled) while loading, ACTIVE only once dense points are actually on screen, and `STARLINK ✕` with the reason on hover when the load fails — a failure also reverts `catalog` to `core`, drops any partial chunk, and leaves the chip clickable to retry. A load is judged by points added, not by HTTP status: a 200 carrying an empty body, a passed-through HTML error page, or only TLEs the core catalog already owns fails with the same revert semantics as a 502. Any explicit request for `core` clears a latched error even when the mode does not change, so a restore of an already-core snapshot never leaves the user with a failure they did not cause. Because the load settles asynchronously, the layer calls `panel.invalidate()` (the handle `init` receives); nothing else would repaint that row before the 5-minute catalog refresh, so the count and legend would otherwise sit stale.
-- **A dependency owner takes the row with it.** When Space Missions switches this layer on itself for TLE lookup, it sets `showPoints:false`; while points are hidden the layer returns empty row controls, so the legend never describes an empty sky and the chip cannot accept a write that the owner's restore would silently revert.
+- **The STARLINK chip (formerly DENSE) reports the dense LOAD, not the catalog param.** The param flips synchronously while the Starlink shell takes seconds to arrive over a chunked load, and CelesTrak 502s that feed regularly. So the chip reads `STARLINK ···` (busy, disabled) while loading, ACTIVE only once dense points are actually on screen, and `STARLINK ✕` with the reason on hover when the load fails — a failure also reverts `catalog` to `core`, drops any partial chunk, and leaves the chip clickable to retry. A load is judged by points added, not by HTTP status: a 200 carrying an empty body, a passed-through HTML error page, or only TLEs the core catalog already owns fails with the same revert semantics as a 502. Any explicit request for `core` clears a latched error even when the mode does not change, so a Space Missions restore of an already-core snapshot never leaves the user with a failure they did not cause. Because the load settles asynchronously, the layer calls `panel.invalidate()` (the handle `init` receives); nothing else would repaint that row before the 5-minute catalog refresh, so the counts would otherwise sit stale.
+- **A dependency owner takes the row with it.** Space Missions borrows this layer for TLE lookup with `showPoints:false`; while points are hidden the layer returns empty row controls, so no count describes an empty sky and the chip cannot accept a write that the owner's restore would silently revert.
 - The detection-overlay record cache (`_detectionObjects`) is cleared with the catalog on every rebuild: it stamps id/class at creation only, and a rebuild can re-tag a satellite when a partial CelesTrak outage changes which group wins dedupe.
 - **Catalog numbers above 99999** can be written in a TLE as Alpha-5: a letter A–Z, skipping I and O, for the first two digits, so `A0000` is 100000 and `Z9999` is 339999. CelesTrak's TLE feed carries no satellite above 99999 (that needs the OMM feed, #1191), so this is compatibility with Alpha-5 TLEs. `src/sources/tle.js` decodes the field through one shared helper: `noradIdFromSatnum()` for the satellites layer, which keys and deduplicates its catalog by that number, and `tleCatalogNumber()` for the satellite tools. Plain digits read as before (`noradIdFromSatnum()` accepts any length, as an OMM satrec carries the number unpadded); a malformed field — a sign, decimal point, hex, exponent, embedded space, stray or lowercase letter, or blank — is rejected rather than partly read, as `NaN` in the layer and `null` in the tools.
 - **CCTV estimated bearings:** a camera whose pack marks `headingConfidence: 'low'` (the id-hash

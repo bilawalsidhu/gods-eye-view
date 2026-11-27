@@ -8,6 +8,11 @@ import {
 
 // A refresh interval is how often to poll, not a deadline for the image download.
 const STILL_REQUEST_TIMEOUT_MS = 30_000;
+// A failed hold tries again on its own after a wait that grows (5 s, 15 s,
+// 45 s, then every 2 min), and at once when the page shows again. A stream
+// that played a minute starts again at 5 s.
+const OWN_RETRY_MS = [5_000, 15_000, 45_000, 120_000];
+const OWN_STEADY_MS = 60_000;
 
 /**
  * A docked camera's picture, and whether it is live.
@@ -52,7 +57,6 @@ export function useDockedCamera({
   const pageHidden = ref(Boolean(document?.hidden));
   const onVisibility = () => {
     pageHidden.value = Boolean(document?.hidden);
-    // A stream that failed tries once more when the page shows again.
     if (!pageHidden.value) retryOwnStream();
   };
   document?.addEventListener?.('visibilitychange', onVisibility);
@@ -61,25 +65,41 @@ export function useDockedCamera({
   // carries a time stamp, so reading it again would restart a playing hold.
   const stream = shallowRef(null);
   const ownFailed = ref(false);
-  // A failed hold tries again on its own after a wait that grows (5 s,
-  // 15 s, 45 s, then every 2 min), and at once when the page shows again.
-  const OWN_RETRY_MS = [5_000, 15_000, 45_000, 120_000];
+  // True from a retry until its stream draws: the last frame stays meanwhile.
+  const retrying = ref(false);
   let ownRetries = 0;
   let ownRetryTimer = 0;
+  let steadyTimer = 0;
   function cancelOwnRetry() {
     clearTimeout(ownRetryTimer);
     ownRetryTimer = 0;
   }
+  function cancelSteady() {
+    clearTimeout(steadyTimer);
+    steadyTimer = 0;
+  }
+  function resetOwnRetry() {
+    ownFailed.value = false;
+    ownRetries = 0;
+    retrying.value = false;
+    cancelOwnRetry();
+    cancelSteady();
+  }
   function retryOwnStream() {
     cancelOwnRetry();
     if (!ownFailed.value || !cameraId.value) return;
-    // The failed URL's time stamp may be why it failed: read it again.
-    stream.value =
-      layer()?.streamSourceForCamera?.(cameraId.value) || stream.value;
+    // The failed URL's time stamp may be why it failed: read it again. A
+    // stream the layer no longer offers is not tried.
+    const fresh = layer()?.streamSourceForCamera?.(cameraId.value);
+    if (!fresh) return ownStreamFailed();
+    stream.value = fresh;
+    retrying.value = true;
     ownFailed.value = false;
   }
   function ownStreamFailed() {
     ownFailed.value = true;
+    retrying.value = false;
+    cancelSteady();
     cancelOwnRetry();
     const wait = OWN_RETRY_MS[Math.min(ownRetries, OWN_RETRY_MS.length - 1)];
     ownRetries += 1;
@@ -90,9 +110,7 @@ export function useDockedCamera({
     ([, next], [, was]) => {
       if (next !== was) {
         stream.value = null;
-        ownFailed.value = false;
-        ownRetries = 0;
-        cancelOwnRetry();
+        resetOwnRetry();
       }
       if (!cameraId.value || stream.value) return;
       stream.value = layer()?.streamSourceForCamera?.(cameraId.value) || null;
@@ -121,10 +139,7 @@ export function useDockedCamera({
   );
   // The map has the stream again: the dock's own hold may try again later.
   watch(shared, (isShared) => {
-    if (!isShared) return;
-    ownFailed.value = false;
-    ownRetries = 0;
-    cancelOwnRetry();
+    if (isShared) resetOwnRetry();
   });
   const streamMode = computed(() => {
     if (!cameraId.value) return '';
@@ -229,9 +244,16 @@ export function useDockedCamera({
     streamStillAt = Date.now();
     void keepFrom(canvas.value);
   }
-  watch(streamDrawn, (isDrawn) => isDrawn && keepStreamStill(true));
   watch(streamDrawn, (isDrawn) => {
-    if (isDrawn && streamMode.value === 'own') ownRetries = 0;
+    if (!isDrawn) return;
+    keepStreamStill(true);
+    retrying.value = false;
+    if (streamMode.value !== 'own') return;
+    cancelSteady();
+    steadyTimer = setTimeout(() => {
+      steadyTimer = 0;
+      ownRetries = 0;
+    }, OWN_STEADY_MS);
   });
 
   // A still camera's frame, read again once its refresh interval has
@@ -240,6 +262,8 @@ export function useDockedCamera({
   // dock reads its own from then on. A video camera that is not playing
   // shows only its own last frame.
   const still = ref('');
+  // The time of the card's frame while the dock shows it.
+  const stillTime = shallowRef(null);
   const stillState = ref('');
   let descriptor = null;
   let cardFallback = '';
@@ -255,6 +279,7 @@ export function useDockedCamera({
           : '';
       if (next !== was) {
         stillState.value = '';
+        stillTime.value = null;
         pendingUntil = 0;
         // A card URL may be a live-only proxy fallback. Keep it only for this
         // open dock; an object URL (a frame read for its time) is the card's
@@ -287,6 +312,11 @@ export function useDockedCamera({
       if (next !== was) {
         still.value = fromCard || docked.lastStillOf(next);
         if (fromCard) {
+          stillTime.value = {
+            src: fromCard,
+            label: activeFrame.value.timeLabel || '',
+            iso: activeFrame.value.timeIso || '',
+          };
           stillAt = Date.now();
           return;
         }
@@ -332,6 +362,7 @@ export function useDockedCamera({
   // A new frame is loading until it loads; one already shown stays live
   // while the next one loads in its place.
   watch(still, (src) => {
+    if (stillTime.value?.src !== src) stillTime.value = null;
     if (!src) stillState.value = '';
     else if (stillState.value !== 'ok') stillState.value = 'loading';
   });
@@ -405,11 +436,18 @@ export function useDockedCamera({
     stillState.value = 'failed';
   }
 
+  // While a retried stream has drawn nothing, the last frame it left.
+  const retryStill = computed(() =>
+    retrying.value && streamMode.value === 'own' && !everDrawn.value
+      ? docked.lastStillOf(key.value) || cardFallback
+      : '',
+  );
   const feed = computed(() => {
     if (!cameraId.value) return '';
     if (suspended.value) return 'paused';
     if (streamOn.value) {
       if (streamState.value === 'playing') return 'live';
+      if (retryStill.value) return 'paused';
       return streamState.value === 'stalled' ? 'stalled' : 'loading';
     }
     if (stream.value) return still.value ? 'paused' : 'lost';
@@ -419,13 +457,14 @@ export function useDockedCamera({
   });
   /** Whether a picture is drawn under the dock's label. */
   const pictured = computed(() => {
-    if (streamOn.value) return everDrawn.value;
+    if (streamOn.value) return everDrawn.value || Boolean(retryStill.value);
     if (stream.value) return Boolean(still.value);
     return Boolean(still.value) && stillState.value === 'ok';
   });
 
   onBeforeUnmount(() => {
     cancelOwnRetry();
+    cancelSteady();
     showImage(null);
     stopPainter();
     release();
@@ -441,5 +480,7 @@ export function useDockedCamera({
     stillFailed,
     feed,
     pictured,
+    retryStill,
+    stillTime,
   };
 }

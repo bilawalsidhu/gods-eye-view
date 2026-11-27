@@ -48,8 +48,9 @@ const still = computed(() => {
   const url = layerOn.value
     ? cards.layerModule(STREET_LEVEL_LAYER)?.photo?.(photoId.value)?.still || pinned.stillOf(props.card.key)
     : pinned.stillOf(props.card.key);
-  // The Pinned tile's rule: with Street Level off a remote still would ask its provider again.
-  return url && url !== brokenStill.value && savedStillShown(url, !layerOn.value) ? url : '';
+  // The Pinned tile's rule: with Street Level or its source off a remote
+  // still would ask its provider again.
+  return url !== brokenStill.value && savedStillShown(url, !layerOn.value || !providerOn.value) ? url : '';
 });
 
 // The still carries the photo's credit (its provider's, who took it, its
@@ -62,7 +63,7 @@ const pausedReason = computed(() =>
       : pinned.isPinned(props.card.key)
         ? t('{layer} off', { layer: t('Street Level') })
         : ''
-    : layerOn.value && !providerOn.value
+    : !providerOn.value
       ? t('Source off')
       : '',
 );

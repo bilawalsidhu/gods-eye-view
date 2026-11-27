@@ -399,6 +399,38 @@ test('Prev and Next follow the order the News list card reports', async (t) => {
   assert.equal(layer.getRowControls().feed.selected.id, 'far');
 });
 
+test('Prev and Next ignore a list order reported before the feed changed', async (t) => {
+  const reports = [report('A')];
+  const { layer } = fixture(t, {
+    reduced: true,
+    source: {
+      getFeed: async () => ({ reports: [...reports], nextBefore: null }),
+    },
+  });
+  layer.enable();
+  await layer.update();
+  await settle();
+  layer.setParams({ listOrder: ['A'] });
+  // A new report arrives while the list's body is not painted, so the card
+  // reports no new order.
+  reports.unshift(report('B'));
+  await layer.update();
+  await settle();
+  assert.deepEqual(
+    layer.getRowControls().feed.items.map((item) => item.id),
+    ['B', 'A'],
+  );
+  layer
+    .getRowControls()
+    .chips.find((one) => one.id === 'next-report')
+    .onClick();
+  assert.equal(
+    layer.getRowControls().feed.selected.id,
+    'B',
+    'the first of the new list, not the old order',
+  );
+});
+
 test('a selected report carries the point voice projects to find what is in view', async (t) => {
   const { layer } = fixture(t);
   layer.enable();

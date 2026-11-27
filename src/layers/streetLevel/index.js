@@ -100,9 +100,9 @@ export function createStreetLevelLayer({
     isAvailable: (entry) => providerAvailable(entry),
   });
 
-  /** Who presents the layer row's filters (the UI), and the panels' row invalidation. */
+  /** Who presents the layer row's filters (the UI), and the panels' handle. */
   let rowControlsPresenter = null;
-  let rowControlsListener = null;
+  let rowPanel = null;
 
   let notifyQueued = false;
   function notify() {
@@ -123,7 +123,7 @@ export function createStreetLevelLayer({
       const row = rowSignature(snapshot);
       if (row === lastRowSignature) return;
       lastRowSignature = row;
-      rowControlsListener?.();
+      rowPanel?.invalidate();
     });
   }
   let lastRowSignature = '';
@@ -159,10 +159,7 @@ export function createStreetLevelLayer({
             if (!replacement.restore) layer.cancelDockedPhoto();
             return;
           }
-          releaseCardPhotoOwner(undefined, KEEP_OPEN_PHOTO);
-          abortNearest();
-          parts.viewerHost.cancelPending();
-          if (state.street.open) parts.viewerHost.stopPlayback();
+          endLookup();
           state.street.loading = false;
           notify();
         },
@@ -589,6 +586,13 @@ export function createStreetLevelLayer({
     nearestLookup?.abort();
     nearestLookup = null;
   }
+  /** End a lookup under way and the sequence playing in the open photo. */
+  function endLookup(callerSignal) {
+    releaseCardPhotoOwner(callerSignal, KEEP_OPEN_PHOTO);
+    abortNearest();
+    parts.viewerHost.cancelPending();
+    if (state.street.open) parts.viewerHost.stopPlayback();
+  }
 
   /** Close the image and deselect its sequence on the map. */
   function closeViewer() {
@@ -753,12 +757,9 @@ export function createStreetLevelLayer({
     view ||= viewCentre(state.viewer);
     if (!Number.isFinite(view?.lat) || !Number.isFinite(view?.lon))
       return false;
-    releaseCardPhotoOwner(callerSignal, KEEP_OPEN_PHOTO);
-    abortNearest();
-    parts.viewerHost.cancelPending();
     // A new lookup is the person's next step: a sequence playing in the open
     // photo stops now, whether or not this lookup finds a photo.
-    if (state.street.open) parts.viewerHost.stopPlayback();
+    endLookup(callerSignal);
     // The lookup is the request; the photo it opens is not a second one.
     const requestId = ++state.photoRequests;
     const lookup = new AbortController();
@@ -1119,8 +1120,7 @@ export function createStreetLevelLayer({
     },
 
     init(viewer, { panel = null } = {}) {
-      // The panels' handle: the row repaints through it.
-      rowControlsListener = panel ? () => panel.invalidate() : null;
+      rowPanel = panel;
       state.viewer = viewer;
       parts.marker.ensure(viewer);
       parts.marker.setVisible(false);
@@ -1165,7 +1165,7 @@ export function createStreetLevelLayer({
     },
 
     destroy(viewer = state.viewer) {
-      rowControlsListener = null;
+      rowPanel = null;
       layer.disable();
       for (const entry of state.providers.values())
         entry.instance.destroy(viewer);
@@ -1600,7 +1600,7 @@ export function createStreetLevelLayer({
     presentRowControls(presenter) {
       rowControlsPresenter = typeof presenter === 'function' ? presenter : null;
       lastRowSignature = '';
-      rowControlsListener?.();
+      rowPanel?.invalidate();
     },
     getRowControls() {
       return rowControlsPresenter?.() ?? null;

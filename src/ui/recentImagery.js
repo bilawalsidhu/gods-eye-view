@@ -17,7 +17,7 @@ import {
 import { createImagerySplit, globeSplitTarget } from './imagerySplit.js';
 import RecentImageryReadout from './recentImagery/RecentImageryReadout.vue';
 import { listCardMemory } from './kit/ContextListCard.vue';
-import { contextListShown, setContextListPresence } from './contextLists.js';
+import { setContextListPresence } from './contextLists.js';
 import {
   PRODUCTS,
   boxKey,
@@ -28,8 +28,7 @@ import {
 import { displayDay, displayMetres } from '../layers/recentImagery/display.js';
 import { formatQuantity } from './unitLabels.js';
 import { canvasOf, findFrame, findGlobe } from '../render/rendererOf.js';
-import { watchDisplayed } from './displayWatch.js';
-import { onPanelOpening } from './rail/panelContent.js';
+import { watchContextListBody } from './contextListBody.js';
 
 /** Layer reads, which change nothing for the readout to show. */
 const LAYER_READS = new Set([
@@ -270,38 +269,15 @@ export function createRecentImageryPanel({
   // Days whose thumbnail has been shown: their image stays, hidden when gone.
   const imaged = new Set();
 
-  // The body is not painted while it is not displayed (Context folded,
-  // another tab or another list shown); it is painted once when it is
-  // displayed again: at once when Context is presented open on the Imagery
-  // list, otherwise when a ResizeObserver reports it.
-  let owed = false;
-  const body = watchDisplayed(container, () => {
-    if (owed) render();
-  });
-  const offOpening = onPanelOpening(
-    container.closest?.('[data-panel-id]'),
-    ({ displayedOnly = false } = {}) => {
-      if (!owed) return;
-      if (
-        displayedOnly
-          ? !(container.getClientRects?.().length > 0)
-          : !contextListShown('recent-imagery')
-      )
-        return;
-      body.assumeShown();
-      render();
-    },
+  // Painted only while displayed (contextListBody.js); either way a full render.
+  const body = watchContextListBody(container, 'recent-imagery', () =>
+    render(),
   );
 
   // The readout patches synchronously, so it can be measured at once. Once
   // destroyed nothing paints: a late export would mount it again.
   const paint = ({ force = false } = {}) => {
-    if (destroyed) return;
-    if (!force && !body.shown()) {
-      owed = true;
-      return;
-    }
-    owed = false;
+    if (destroyed || body.defer(force)) return;
     renderVue(
       h(RecentImageryReadout, {
         view: buildView(),
@@ -1039,7 +1015,6 @@ export function createRecentImageryPanel({
       destroyed = true;
       stopPaging();
       body.disconnect();
-      offOpening();
       offLocale();
       layer.setToolHandler?.(null);
       split?.destroy();

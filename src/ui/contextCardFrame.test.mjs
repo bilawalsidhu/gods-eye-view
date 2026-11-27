@@ -338,7 +338,7 @@ test('desktop: the Context card keeps refreshing while the Camera settings tab i
   assert.equal(toolsEl.closest('#cctv-tools-slot')?.id, 'cctv-tools-slot');
   controls._renderCctvState(stillState('a1.jpg'));
   assert.equal(requests.length, 1);
-  assert.equal(store.frame.settledAt, null);
+  assert.equal(store.frame.hasFrame, false);
   requests[0].onload();
   await settle();
   await nextTick();
@@ -349,8 +349,7 @@ test('desktop: the Context card keeps refreshing while the Camera settings tab i
   await settle();
   controls._renderCctvState(stillState('a2.jpg'));
   assert.equal(requests.length, 2);
-  const firstTime = store.frame.settledAt;
-  assert.ok(Number.isFinite(firstTime));
+  assert.equal(store.frame.hasFrame, true);
   assert.equal(requests[1].src, 'a2.jpg');
   requests[1].onload();
   controls._renderCctvState(stillState('a3.jpg'));

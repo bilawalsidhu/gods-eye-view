@@ -25,14 +25,14 @@ export function createControls({
     )
       return;
     layerState.nearbySearchBusy = true;
-    layerState.rowControlsListener?.();
+    layerState.panel?.invalidate();
     try {
       await methods.searchNearby();
     } catch (error) {
       console.warn('[Installations] nearby search failed:', error);
     } finally {
       layerState.nearbySearchBusy = false;
-      layerState.rowControlsListener?.();
+      layerState.panel?.invalidate();
     }
   }
 
@@ -119,7 +119,7 @@ export function createControls({
       if (!next) {
         if (!previous) return false;
         layerState.contextAnchor = null;
-        layerState.rowControlsListener?.();
+        layerState.panel?.invalidate();
         parts.viewport.scheduleLoad();
         return true;
       }
@@ -134,7 +134,7 @@ export function createControls({
       )
         return false;
       layerState.contextAnchor = next;
-      if (!previous) layerState.rowControlsListener?.();
+      if (!previous) layerState.panel?.invalidate();
       parts.viewport.scheduleLoad();
       return true;
     },

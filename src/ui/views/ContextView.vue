@@ -38,11 +38,11 @@ import {
   CONTEXT_LISTS,
   contextListChoice,
   contextListPresence,
-  contextListsActive,
   leaveContextLists,
   listForLayer,
   listsOn,
   showContextList,
+  shownContextList,
   shownList,
 } from '../contextLists.js';
 import RadioFold from './panels/RadioFold.vue';
@@ -118,9 +118,7 @@ const { pins, tab: pinnedTab } = storeToRefs(pinned);
 // Their bodies stay mounted while another tab shows. Space Missions
 // has its roster in Inspect.
 const lists = computed(() => listsOn(contextListPresence));
-const listShown = computed(() =>
-  contextListsActive.value ? shownList(lists.value, contextListChoice.value) : '',
-);
+const listShown = shownContextList;
 // A camera card adds a Camera settings tab while the Cameras layer is on.
 const cameraSettingsAvailable = computed(() =>
   entityCard.value?.layerId === 'cctv' && Boolean(entityCard.value.identity?.id) && !entityCards.layerOff('cctv'),
@@ -558,7 +556,6 @@ watch(cctvToolsSlotShown, (shown) => {
   if (shown) return;
   const doc = globalThis.document;
   const restore = contextOnScreen.value && tab.value !== 'camera' && doc?.activeElement?.closest('#cctv-tools-slot');
-  returnCctvToolsHome();
   if (restore) void nextTick(() =>
     (doc.getElementById(`context-tab-${tab.value}`) ?? contextScroller.value)?.focus({ preventScroll: true }),
   );
@@ -629,6 +626,13 @@ watch(entityCard, (next, previous) => {
   // or a street dock (the one viewer is the dock's) plays on; × already closed it.
   if (!next && !dismissed && !streetLevel.expanded && !streetLevel.embedOverlay &&
       dockedViews.view?.kind !== 'street') streetLevel.act('stopPlayback');
+});
+// The same when its card goes out of sight with it still selected: Context
+// folded, another tab, or a phone sheet closed. A hidden browser tab does not.
+watch(() => contextOpen.value && contextOnScreen.value && showInspect.value, (shown) => {
+  if (shown || entityCard.value?.layerId !== STREET_LEVEL_LAYER) return;
+  if (!streetLevel.expanded && !streetLevel.embedOverlay && dockedViews.view?.kind !== 'street')
+    streetLevel.act('stopPlayback');
 });
 // The docked view and the radio mini player are part of the right column:
 // at its foot under an open Context, with the panel's edges and width; the

@@ -234,8 +234,11 @@ export function createNewsLayer({
     pulseTimer = null,
     pulseFrameOff = null,
     removeCameraListener = null;
-  // The ids of the reports the News list shows, in its order, as it reports them.
+  // The ids of the reports the News list shows, in its order, as it reports
+  // them, and the reports it was reported for: a feed that changed since
+  // holds a list the card has not ordered yet.
   let listOrder = null;
+  let listOrderFor = '';
   let enabled = false,
     destroyed = false,
     loading = false,
@@ -1428,14 +1431,20 @@ export function createNewsLayer({
     clickOff = null;
   }
 
-  /** The reports Prev and Next step through: those the News list shows, in
-   * the order its card lists them (`listOrder`) when it has said. */
-  function newsStepList() {
+  /** The reports the News list shows, in the feed's order. */
+  function stepBase() {
     const at = now();
-    const list = local()
+    return local()
       ? localReports(NEWS_LOCAL_LIMIT)
       : feed.items.filter((r) => passesFilters(r, filters, at, windowMs));
-    if (!listOrder) return list;
+  }
+  const listKey = (list) => list.map((r) => r.id).join('\u0000');
+  /** The reports Prev and Next step through: those the News list shows, in
+   * the order its card lists them (`listOrder`) when it has said for these
+   * reports. */
+  function newsStepList() {
+    const list = stepBase();
+    if (!listOrder || listKey(list) !== listOrderFor) return list;
     const byId = new Map(list.map((r) => [r.id, r]));
     const ordered = listOrder.map((id) => byId.get(id)).filter(Boolean);
     return ordered.length ? ordered : list;
@@ -1597,6 +1606,7 @@ export function createNewsLayer({
     disable() {
       enabled = false;
       listOrder = null;
+      listOrderFor = '';
       unavailable = false;
       noAreaRoute = false;
       error = null;
@@ -1753,7 +1763,10 @@ export function createNewsLayer({
         notify();
       }
       if (params.loadMore === true) void loadFeed('append');
-      if (Array.isArray(params.listOrder)) listOrder = params.listOrder;
+      if (Array.isArray(params.listOrder)) {
+        listOrder = params.listOrder;
+        listOrderFor = listKey(stepBase());
+      }
       if (typeof params.hotspotId === 'string')
         layer.setParams({ filters: { hotspot: params.hotspotId } });
       if (typeof params.reportId === 'string' && findReport(params.reportId)) {

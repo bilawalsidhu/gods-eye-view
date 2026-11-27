@@ -4,7 +4,6 @@ import { getEventListeners } from 'node:events';
 import * as Cesium from 'cesium';
 import { bindFakeCesiumCamera } from '../../testSupport/fakeCameraPort.mjs';
 import { createStreetLevelLayer } from './index.js';
-import { viewSummaryForLayer } from '../../data/entityContext.js';
 import { MAPILLARY_CREDIT_HTML } from './providers/mapillary/policy.js';
 import { creditFromMarkup } from '../../render/creditMarkup.js';
 import { createMapillaryProvider } from './providers/mapillary/index.js';
@@ -1214,59 +1213,6 @@ test('a provider’s openNearest (a line click) asks only that provider and leav
   await lit.context().actions.openNearest(point);
   assert.deepEqual(lit.calls.open, ['lit-near']);
   assert.equal(viewer.flights.started, 0, 'the user picked the spot');
-});
-
-test('Inspect searches the chosen Street Level radius before clipping coverage to the viewport', async (t) => {
-  const provider = posingProvider();
-  const create = provider.create;
-  const reads = [];
-  provider.create = (context) => ({
-    ...create(context),
-    coverageNear(_point, km, rect) {
-      reads.push({ km, rect });
-      const visible = { sequenceId: 'visible', lat: 0, lon: 0.008 };
-      if (rect) return [visible];
-      return km >= 3
-        ? [visible, { sequenceId: 'nearby', lat: 0, lon: 0.027 }]
-        : [];
-    },
-  });
-  const { layer } = await enabledLayer(t, [provider]);
-  const row = {
-    id: 'street-level',
-    name: 'Street Level',
-    enabled: true,
-    module: layer,
-  };
-  const dm = { layers: new Map([[row.id, row]]) };
-  const rect = { west: -0.01, east: 0.01, south: -0.01, north: 0.01 };
-  const read = (radius) =>
-    viewSummaryForLayer(
-      dm,
-      row,
-      rect,
-      { lat: 0, lon: 0 },
-      {
-        includeDrawnCoverage: true,
-        includeEmpty: true,
-        inspector: { nearbyFirst: true, radius, isPoint: () => true },
-      },
-    );
-  const nearby = read(25);
-  assert.deepEqual(
-    nearby.items.map(({ identity }) => identity.record.sequenceId),
-    ['visible', 'nearby'],
-  );
-  assert.equal(nearby.scope, 'nearby');
-  assert.deepEqual(reads, [{ km: 25, rect: null }]);
-  reads.length = 0;
-  const visible = read(0.5);
-  assert.equal(visible.items[0].identity.record.sequenceId, 'visible');
-  assert.equal(visible.scope, 'view');
-  assert.deepEqual(reads, [
-    { km: 0.5, rect: null },
-    { km: Infinity, rect },
-  ]);
 });
 
 test('Context reads the drawn lines near a point, and a line opens the photo nearest it', async (t) => {

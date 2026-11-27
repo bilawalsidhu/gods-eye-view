@@ -118,7 +118,6 @@ function frameTime(ms) {
 export const EMPTY_CCTV_FRAME = Object.freeze({
   cameraId: '',
   currentSrc: '',
-  settledAt: null,
   src: '',
   loading: false,
   error: false,
@@ -194,7 +193,7 @@ export function _queueCctvFrame(
   // prior camera's pixels under the newly selected metadata.
   const hasFrame = cameraChanged ? false : this._frame.hasFrame;
   this._setCctvFrame({
-    ...(cameraChanged ? { src: '', settledAt: null, ...frameTime(null) } : {}),
+    ...(cameraChanged ? { src: '', ...frameTime(null) } : {}),
     hasFrame,
     cameraId,
     currentSrc: src,
@@ -287,7 +286,6 @@ export function _settleCctvFrame(token, src, ok, timeMs = null) {
           error: false,
           src,
           hasFrame: true,
-          settledAt: Date.now(),
           ...frameTime(timeMs),
         }
       : { loading: false, wrapLoading: false, error: true },

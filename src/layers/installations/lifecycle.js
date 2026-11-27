@@ -12,8 +12,7 @@ export function createLifecycle({
 
   const methods = {
     init(viewer, { panel = null } = {}) {
-      // The panels' handle: the row repaints through it.
-      layerState.rowControlsListener = panel ? () => panel.invalidate() : null;
+      layerState.panel = panel;
       layerState.viewer = viewer;
       parts.rendering.attach(viewer);
       const cameraChanged = () => {
@@ -80,7 +79,7 @@ export function createLifecycle({
     },
 
     destroy(viewer) {
-      layerState.rowControlsListener = null;
+      layerState.panel = null;
       source.destroy?.();
       this.disable();
       layerState.contextAnchor = null;

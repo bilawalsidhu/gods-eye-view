@@ -1589,7 +1589,7 @@ test('a local park radius includes enclosing grounds, excluding holes and outsid
       includeEmpty: true,
       inspector: {
         radius: 5,
-        localScopes: { anchor, selected: true },
+        localScopes: { anchor },
         isPoint: (r) => !r[CONTEXT_AREA],
       },
     });

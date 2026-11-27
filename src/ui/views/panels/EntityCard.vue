@@ -7,7 +7,7 @@ import { formatCockpitCoordinatePair } from '../../cockpitPresentation.js';
 import { formatDate, formatNumber, getLocale, msg, t, translateKnown } from '../../../i18n/index.js';
 import { contextAgeText, durationText } from '../../contextTime.js';
 import { approximatePosition } from '../../distanceText.js';
-import { factFigure, factLabel, factValue, sayWords, useEntityCardStore } from '../../stores/entityCard.js';
+import { factFigure, factLabel, factValue, isCoverageLineCard, sayWords, useEntityCardStore } from '../../stores/entityCard.js';
 import EntityPreview from './EntityPreview.vue';
 import AltitudeGraph from './AltitudeGraph.vue';
 import RouteProfile from './RouteProfile.vue';
@@ -164,7 +164,7 @@ const sourceLine = computed(() => {
   const current = card.value;
   if (!current) return null;
   // A street-level photo: whose imagery it is and its known date.
-  if (current.layerId === STREET_LEVEL_LAYER && current.identity?.id.startsWith('near:'))
+  if (isCoverageLineCard(current))
     return { tone: 'aged', text: translateKnown(current.title) };
   if (streetPhoto.value) {
     const text = [streetPhoto.value.provider, streetPhoto.value.sourceDate].filter(Boolean).join(' · ');
@@ -326,6 +326,11 @@ const cameraFields = computed(() => {
   };
 });
 const cameraTiles = computed(() => cameraFields.value.tiles);
+// A search keeps the description when it holds the text.
+const descriptionShown = computed(() =>
+  Boolean(card.value?.description) &&
+  (!contextNeedle.value || matchesContextSearch(card.value.description)),
+);
 const extraFacts = computed(() => {
   const facts = [...streetFacts.value, ...launchFacts.value, ...cameraFields.value.facts];
   if (!contextNeedle.value) return facts;
@@ -377,12 +382,10 @@ function toggleCameraDock() {
 const isPinned = computed(() => Boolean(card.value && pinned.isPinned(card.value.key)));
 // A drawn line's card names a point, not a photo: Pin waits for the photo it
 // opens, which moves the card on to that photo (entityContextBridge advance).
-const pinWaits = computed(() =>
-  !isPinned.value && card.value?.layerId === STREET_LEVEL_LAYER &&
-  Boolean(card.value.identity?.id?.startsWith('near:')));
-function pinImage(current) {
+const pinWaits = computed(() => !isPinned.value && isCoverageLineCard(card.value));
+function pinImage(current, photo) {
   if (current.layerId === 'wildlife-sightings' || locationWithheld.value || current.obscured || current.layerId === 'cctv') return {};
-  if (current.layerId === 'street-level') return { still: store.layerModule('street-level')?.photo?.(current.identity?.id)?.still || '' };
+  if (current.layerId === STREET_LEVEL_LAYER) return { still: photo?.still || '' };
   return { map: pinMap(current.lat, current.lon) };
 }
 function togglePin() {
@@ -390,6 +393,8 @@ function togglePin() {
   if (!current || pinWaits.value) return;
   if (pinned.isPinned(current.key)) return pinned.unpin(current.key);
   if (current.layerId === PLACE_LAYER) return pinned.pin(placePin(current.identity, shownTitle.value));
+  const streetLevel = current.layerId === STREET_LEVEL_LAYER ? store.layerModule(STREET_LEVEL_LAYER) : null;
+  const photo = streetLevel?.photo?.(current.identity?.id) ?? null;
   pinned.pin({
     key: current.key,
     kind: DOCK_KINDS[current.layerId] || 'item',
@@ -397,11 +402,11 @@ function togglePin() {
     icon: current.icon,
     // The sprite its tile wears (EntityMark.vue), as the map draws it now.
     mark: markKind(current.layerId, current),
-    ...pinImage(current),
+    ...pinImage(current, photo),
     ...(current.layerId === STREET_LEVEL_LAYER && {
-      photoCredit: savedPhotoCredit(store.layerModule(STREET_LEVEL_LAYER), current.identity.id),
+      photoCredit: savedPhotoCredit(streetLevel, current.identity.id, photo),
       // Its record (provider, capture date, heading, credit), for the card while the layer is off.
-      photo: store.layerModule(STREET_LEVEL_LAYER)?.photo?.(current.identity.id) || null,
+      photo: photo || null,
     }),
     // Keep the credit and browser-only capability when the feed record is gone.
     ...(current.layerId === 'cctv' && {
@@ -704,7 +709,7 @@ watch(
 
           <ReadingHero v-if="card.reading && !contextNeedle" :reading="card.reading" />
 
-          <p v-if="card.description && !contextNeedle" class="entity-card__description">{{ card.description }}</p>
+          <p v-if="descriptionShown" class="entity-card__description">{{ card.description }}</p>
 
           <div v-if="tiles.length && !contextNeedle" class="entity-card__tiles" :style="{ gridTemplateColumns: `repeat(${tiles.length}, minmax(0, 1fr))` }">
             <div v-for="tile in tiles" :key="tile.field" class="entity-card__tile" :title="[tile.number, tile.unit].filter(Boolean).join(' ')">
@@ -770,7 +775,7 @@ watch(
 
           <!-- Facts only, folded; a search opens it to show what matches.
                Keyed by the item, so every new pick starts folded. -->
-          <UiEmpty v-if="contextNeedle && !gridFacts.length && !extraFacts.length" class="entity-card__no-match" :title="t('Nothing in this item’s details matches “{text}”.', { text: contextSearchText.trim() })" />
+          <UiEmpty v-if="contextNeedle && !gridFacts.length && !extraFacts.length && !descriptionShown" class="entity-card__no-match" :title="t('Nothing in this item’s details matches “{text}”.', { text: contextSearchText.trim() })" />
           <details v-if="contextNeedle ? gridFacts.length || extraFacts.length : hasMore" :key="`more:${detailsKey}`" class="entity-card__section entity-card__more" :open="!!contextNeedle">
             <summary class="entity-card__more-title">{{ contextNeedle ? t('Matching details') : t('More details') }}</summary>
             <dl class="entity-card__facts">

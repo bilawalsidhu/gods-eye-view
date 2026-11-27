@@ -4,8 +4,8 @@ import { formatNumber, getLocale, t, tn } from '../../../i18n/index.js';
 import { inViewTest, recordMatches } from '../../../data/entityContext.js';
 import { greatCircleKm } from '../../../geoDistance.js';
 import { distanceText } from '../../distanceText.js';
-import { inspectorScopeLabel } from '../../inspectorSpatialIndex.js';
-import { useEntityCardStore } from '../../stores/entityCard.js';
+import { inspectorGroundDistance, inspectorScopeLabel } from '../../inspectorSpatialIndex.js';
+import { inspectorScope, useEntityCardStore } from '../../stores/entityCard.js';
 import { usePanelChromeStore } from '../../stores/panelChrome.js';
 import { useCctvStore } from '../../stores/cctv.js';
 import { inspectorFeedLabel } from '../../layerRowState.js';
@@ -79,9 +79,11 @@ const catalogState = computed(() => {
 const catalogTone = computed(() => ({ ready: 'nominal', failed: 'unavailable', loading: 'loading' })[catalogState.value]);
 // Below globe height the list is the cameras in view (the Inspector's own
 // test, inViewTest), nearest the centre of the view first, each with its
-// distance; with none in view, the closest three. A search reads the whole
-// loaded catalog, nearest first. At globe height, the catalog in source
-// order. Only a settled view ranks it again, as the tiles wait for one.
+// distance; with none in view, the three closest of the chosen city, measured
+// to the view as the Inspector measures its Closest to view. A search reads
+// the whole loaded catalog, nearest the centre first. At globe height, the
+// catalog in source order. Only a settled view ranks it again, as the tiles
+// wait for one.
 const CLOSEST_SHOWN = 3;
 const settledView = computed((previous) =>
   store.viewMoving && previous ? previous : store.view,
@@ -90,32 +92,59 @@ const localView = computed(() => {
   const where = settledView.value;
   return where?.center && store.scopeTier && !store.scopeTier.globe ? where : null;
 });
-const wholeWorld = (rect) =>
-  rect?.west === -180 && rect.east === 180 && rect.south === -90 && rect.north === 90;
+const ranked = (cameras, distanceKm) =>
+  cameras
+    .map((camera) => ({ ...camera, distanceKm: distanceKm(camera) }))
+    .sort((a, b) => a.distanceKm - b.distanceKm);
+const fromCentre = (where) => {
+  const from = inspectorScope(where).noGround ? (where.eye ?? where.center) : where.center;
+  return (camera) => greatCircleKm(from, camera);
+};
+// The search ranks the catalog once per view, not once per keystroke.
+const rankedCatalog = computed(() => {
+  const where = localView.value;
+  return where ? ranked(catalog.value.items, fromCentre(where)) : [];
+});
+const selectedCity = ref('');
+const cameraCity = (camera) => camera.city?.trim() ?? '';
+const cityChoices = (cameras) => new Set(
+  cameras.map(cameraCity).filter((city) => city && city.toLowerCase() !== 'global'),
+);
+const matchesCity = computed(() => {
+  const city = selectedCity.value;
+  return city ? (camera) => cameraCity(camera) === city : null;
+});
+const searching = computed(() => Boolean(contextNeedle.value));
 const scoped = computed(() => {
   const items = catalog.value.items;
   const where = localView.value;
   if (!where) return { scope: 'loaded', items };
-  const sky = where.groundFootprint === false;
-  const from = sky ? (where.eye ?? where.center) : where.center;
-  const ranked = (cameras) =>
-    cameras
-      .map((camera) => ({ ...camera, distanceKm: greatCircleKm(from, camera) }))
-      .sort((a, b) => a.distanceKm - b.distanceKm);
-  if (contextNeedle.value) return { scope: 'search', items: ranked(items) };
-  const member = sky
+  if (searching.value) return { scope: 'search', items: rankedCatalog.value };
+  const scope = inspectorScope(where);
+  const member = scope.noGround
     ? () => false
     : inViewTest(where.rect, where.center, {
-        hemisphere: wholeWorld(where.rect),
+        hemisphere: scope.hemisphere,
         clipViewport: true,
         heightM: where.heightM,
         eye: where.eye,
         corners: where.corners,
       });
   const inView = items.filter((camera) => member(camera));
-  return inView.length
-    ? { scope: 'view', items: ranked(inView) }
-    : { scope: 'closest', items: ranked(items).slice(0, CLOSEST_SHOWN) };
+  if (inView.length) return { scope: 'view', items: ranked(inView, fromCentre(where)) };
+  const closest = ranked(
+    items,
+    scope.noGround || !where.rect
+      ? fromCentre(where)
+      : inspectorGroundDistance(where, where.rect, scope.hemisphere),
+  );
+  const city = matchesCity.value;
+  return {
+    scope: 'closest',
+    items: (city ? closest.filter(city) : closest).slice(0, CLOSEST_SHOWN),
+    // The chips offer the cities of the three closest of any city.
+    cityItems: closest.slice(0, CLOSEST_SHOWN),
+  };
 });
 // The head counts what the list holds; this line says what that is of, and
 // how many are loaded.
@@ -128,11 +157,6 @@ const scopeText = computed(() => {
   });
   return scope === 'search' ? loaded : [inspectorScopeLabel(scope), loaded].join(' · ');
 });
-const selectedCity = ref('');
-const cameraCity = (camera) => camera.city?.trim() ?? '';
-const cityChoices = (cameras) => new Set(
-  cameras.map(cameraCity).filter((city) => city && city.toLowerCase() !== 'global'),
-);
 const catalogCities = computed(() => cityChoices(catalog.value.items));
 watch(catalogCities, (choices) => {
   if (selectedCity.value && catalogState.value === 'ready' && !choices.has(selectedCity.value))
@@ -147,15 +171,11 @@ const searchedCameras = computed(() => {
   return name.includes(needle) ? items : items.filter((camera) => recordMatches(camera, needle, title, 'cctv'));
 });
 const cities = computed(() => {
-  const choices = new Set(cityChoices(searchedCameras.value));
+  const choices = cityChoices(scoped.value.cityItems ?? searchedCameras.value);
   if (selectedCity.value) choices.add(selectedCity.value);
   return [...choices].sort(new Intl.Collator(getLocale()).compare);
 });
 const listQuery = computed(() => JSON.stringify([contextNeedle.value, selectedCity.value]));
-const matchesCity = computed(() => {
-  const city = selectedCity.value;
-  return city ? (camera) => cameraCity(camera) === city : null;
-});
 const noMatches = () => t('Nothing matches “{text}”.', { text: contextSearchText.value.trim() });
 const providerOf = (camera) => camera.provider || t('Other');
 const order = shallowRef([]);
@@ -168,17 +188,28 @@ watch(
 // Prev/Next walk this list while Context is open; with Context closed its
 // centre is not kept up to date, so they walk the cameras nearest the view.
 // The list's own order counts only while it shows. A new search, the list
-// showing or hiding, or Context opening or closing starts a new walk; a
-// recentre does not.
+// showing or hiding, Context opening or closing, or a manual camera move
+// starts a new walk; a fly-to does not.
 const HIDDEN = Symbol('hidden list');
 let walkedFor;
+let walkedInput;
 watch(
-  [catalogKey, walkCenter, contextRadiusKm, contextOpen, order, () => props.shown, listQuery],
-  ([key, at, radiusKm, open, ids, shown, query]) => {
+  [
+    catalogKey,
+    walkCenter,
+    contextRadiusKm,
+    contextOpen,
+    order,
+    () => props.shown,
+    listQuery,
+    () => store.view?.manualInputCount ?? 0,
+  ],
+  ([key, at, radiusKm, open, ids, shown, query, input]) => {
     const listed = key !== null && open && at;
     const listedFor = listed ? (shown ? query : HIDDEN) : null;
-    const restart = walkedFor !== undefined && listedFor !== walkedFor;
+    const restart = walkedFor !== undefined && (listedFor !== walkedFor || input !== walkedInput);
     walkedFor = listedFor;
+    walkedInput = input;
     try {
       cctv()?.setNearbyArea?.(listed ? { ...at, radiusKm, order: shown ? ids : null, restart } : restart ? { restart } : null);
     } catch {
@@ -243,8 +274,8 @@ function openCamera(camera) {
       </span>
       <span v-if="Number.isFinite(camera.distanceKm)" class="nearby-lists__meta">{{ distanceText(camera.distanceKm) }}</span>
     </template>
-    <template #empty>{{ contextNeedle && catalog.items.length ? noMatches() : tn(0, '{n} results', '{n} results', { n: formatNumber(0) }) }}</template>
-    <template #no-matches>{{ noMatches() }}</template>
+    <template #empty>{{ tn(0, '{n} results', '{n} results', { n: formatNumber(0) }) }}</template>
+    <template #no-matches>{{ contextNeedle ? noMatches() : inspectorScopeLabel('none') }}</template>
   </ContextListCard>
 </template>
 

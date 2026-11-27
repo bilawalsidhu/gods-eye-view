@@ -463,3 +463,37 @@ test('a card whose source is switched off stays with “Source off”, and opens
   await nextTick();
   assert.deepEqual(asked, [id], 'with its source back the photo opens again');
 });
+
+test('a Source off card shows no remote still of its disabled provider', async (t) => {
+  const id = 'kartaview:A';
+  const remote = 'https://storage.kartaview.org/files/photo/A_lth.jpg';
+  const { host, street, asked, cards } = mountHero(t, id, {
+    alreadyOpen: true,
+    recordStill: remote,
+  });
+  cards.card = {
+    key: `street-level:${id}`,
+    layerId: 'street-level',
+    identity: { layerId: 'street-level', id },
+  };
+  street.publish({
+    enabled: true,
+    error: null,
+    providers: [{ id: 'kartaview', active: false }],
+    viewer: { open: false, photo: null },
+  });
+  await nextTick();
+  await nextTick();
+  assert.match(
+    host.querySelector('.paused-chip')?.getAttribute('aria-label') ?? '',
+    /Source off/,
+  );
+  assert.deepEqual(asked, []);
+  const sources = [...host.querySelectorAll('img')].map((img) =>
+    img.getAttribute('src'),
+  );
+  assert.ok(
+    !sources.includes(remote),
+    `no image asks the disabled provider: ${sources}`,
+  );
+});

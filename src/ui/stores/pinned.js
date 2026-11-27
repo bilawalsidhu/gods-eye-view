@@ -75,7 +75,11 @@ export const usePinnedStore = defineStore('gev-pinned', () => {
       : last?.all?.find(({ pin }) => pin.key === entry.key);
     if (!still && previous?.still && previous.pin.photoCredit)
       kept.photoCredit = previous.pin.photoCredit;
-    if (!kept.photo && previous?.pin.photo) kept.photo = previous.pin.photo;
+    if (!kept.photo && previous?.pin.photo) {
+      kept.photo = previous.pin.photo;
+      // The record is gone: the credit saved with it is the only one.
+      if (previous.pin.photoCredit) kept.photoCredit = previous.pin.photoCredit;
+    }
     pins.value = [...pins.value, markRaw(kept)];
     setStill(kept, still || previous?.still);
     if (repinned) clearNotice();

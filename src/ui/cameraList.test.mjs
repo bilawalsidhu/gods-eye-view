@@ -289,7 +289,7 @@ test('the list searches the complete catalog and reports no matches', async (t) 
   assert.equal(list.hasMatches, false);
   assert.match(
     document.querySelector('.context-list-card__state').textContent,
-    /Nothing matches “zzz”/,
+    /0 results/,
   );
 });
 
@@ -714,4 +714,106 @@ test('closing Context drops a walk of its hidden list', async (t) => {
   await nextTick();
   assert.equal(cctv.state._nearbyArea, null);
   assert.equal(cctv.state._cameraWalk, null);
+});
+
+const DALLAS = { lat: 32.78, lon: -96.8 };
+const dal = (i) => ({
+  id: `dal${i}`,
+  name: `Dallas ${i}`,
+  city: 'Dallas',
+  provider: 'TxDOT',
+  lat: DALLAS.lat + i * 0.01,
+  lon: DALLAS.lon,
+});
+const aus = (i) => ({
+  id: `aus${i}`,
+  name: `Austin ${i}`,
+  city: 'Austin',
+  provider: 'TxDOT',
+  lat: HERE.lat + i * 0.01,
+  lon: HERE.lon,
+});
+const cityChip = (name) =>
+  [
+    ...document.querySelectorAll(
+      '[data-list-card="cctv"] button[aria-pressed]',
+    ),
+  ].find((b) => b.textContent.trim() === name);
+
+for (const direction of [1, -1]) {
+  test(`manual pan changes camera walk (direction ${direction})`, async (t) => {
+    const { store, cctv } = fixture(t, [
+      aus(1),
+      aus(2),
+      aus(3),
+      dal(1),
+      dal(2),
+      dal(3),
+    ]);
+    await indexReady();
+    const step = () =>
+      cctv.methods.stepNearbyCamera(direction, { focus: false })?.cameraId;
+    assert.match(step(), /^aus/);
+    // The user pans by hand to Dallas while the Austin camera stays open.
+    store.setView(cameraView(DALLAS, 1));
+    await nextTick();
+    await nextTick();
+    const order = cctv.state._nearbyArea.order;
+    assert.deepEqual(order, ['dal1', 'dal2', 'dal3']);
+    assert.ok(
+      order.includes(step()),
+      'the first step after a manual pan walks the list it shows',
+    );
+  });
+}
+
+test('city closest fallback: the selected city camera shows under Closest to view', async (t) => {
+  const { store, names, cctv } = fixture(t, [aus(1), dal(1), dal(2), dal(3)]);
+  await indexReady();
+  cityChip('Austin').click();
+  await nextTick();
+  assert.deepEqual(names(), ['Austin 1']);
+  // An empty view nearer the three Dallas cameras than the Austin one.
+  store.setView(cameraView({ lat: 32.0, lon: -96.8 }, 1));
+  await nextTick();
+  await nextTick();
+  assert.equal(cityChip('Austin').getAttribute('aria-pressed'), 'true');
+  assert.deepEqual(
+    names(),
+    ['Austin 1'],
+    'the Austin camera is listed as the closest one',
+  );
+  assert.deepEqual(cctv.state._nearbyArea.order, ['aus1']);
+});
+
+test('camera search ranking: typing does not re-rank the whole catalog per character', async (t) => {
+  const many = Array.from({ length: 7350 }, (_, i) => ({
+    id: `c${i}`,
+    name: i === 4321 ? 'Zebra Crossing' : `Camera ${i}`,
+    city: `City${i % 50}`,
+    provider: 'P',
+    lat: HERE.lat + ((i * 37) % 1000) / 100 - 5,
+    lon: HERE.lon + ((i * 91) % 1000) / 100 - 5,
+  }));
+  const { names } = fixture(t, many);
+  await indexReady();
+  contextSearchOpen.value = true;
+  const sort = Array.prototype.sort;
+  let fullSorts = 0;
+  Array.prototype.sort = function (...args) {
+    if (this.length === many.length) fullSorts += 1;
+    return sort.apply(this, args);
+  };
+  t.after(() => {
+    Array.prototype.sort = sort;
+  });
+  for (const text of ['z', 'ze', 'zeb', 'zebr', 'zebra']) {
+    contextSearchText.value = text;
+    await nextTick();
+    assert.deepEqual(names(), ['Zebra Crossing']);
+  }
+  assert.ok(
+    fullSorts <= 1,
+    `at most one full ranking for five prefixes, got ${fullSorts}`,
+  );
 });
