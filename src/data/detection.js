@@ -414,6 +414,20 @@ export function initDetection(viewer, layers, onModeChange) {
   console.log('[Detection] Initialized');
 }
 
+/**
+ * Empty the containers kept between paints. They hold the last paint's
+ * contacts (the layers' own objects and the candidates made from them), so
+ * whenever no paint will refill them — detection off, torn down, or a paint
+ * that found nothing — they are emptied rather than keeping those alive.
+ */
+function _releaseKeptPaintState() {
+  _collected.length = 0;
+  _candidateMap.clear();
+  _renderEntries.length = 0;
+  _selectedIdentities.clear();
+  _renderIdentities.clear();
+}
+
 /** Release the host lane and all retained detection runtime state. */
 export function destroyDetection() {
   _clearCyberSonarRenderTimer();
@@ -444,12 +458,7 @@ export function destroyDetection() {
   _labelArbiter.clear();
   _surfaceOcclusion.clear();
   _surfaceSuppressedKeys.clear();
-  // Holding the layers' objects past teardown would keep them alive.
-  _collected.length = 0;
-  _candidateMap.clear();
-  _renderEntries.length = 0;
-  _selectedIdentities.clear();
-  _renderIdentities.clear();
+  _releaseKeptPaintState();
   _useOcclusionProbe(null);
   _lastLabelSolveAt = 0;
   _labelSolveDirty = true;
@@ -778,6 +787,7 @@ function _applyModeState() {
     _labelArbiter.clear();
     _surfaceOcclusion.clear();
     _surfaceSuppressedKeys.clear();
+    _releaseKeptPaintState();
     _occlusionProbe.reset();
     _lastLabelSolveAt = 0;
     _labelSolveDirty = true;
@@ -1394,8 +1404,10 @@ function _drawOverlay(frame) {
     // rebuilds the buffer, but this one returns early — and because the
     // callout lane repaints the last solve on frames the sensor lane skips,
     // leaving rows here would strand the final callsigns on screen after the
-    // last data layer is switched off.
+    // last data layer is switched off. The kept containers go with it: no
+    // paint refills them while nothing is detectable.
     _calloutCount = 0;
+    _releaseKeptPaintState();
     _ctx.font = FONT;
     _drawScanlines(width, height, now);
     _drawSparseFocusRing(width, height);

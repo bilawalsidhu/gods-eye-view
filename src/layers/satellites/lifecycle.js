@@ -52,6 +52,7 @@ export function createLifecycle({
       layerState._catalog = new Map();
       layerState._points = new Map();
       layerState._detectionObjects = new Map();
+      layerState._detectionResult.length = 0;
       layerState._orbitPaths = new Map();
       layerState._count = 0;
       layerState._lastUpdate = null;
@@ -190,6 +191,7 @@ export function createLifecycle({
       parts.rendering._detach(viewer);
       layerState._points.clear();
       layerState._detectionObjects.clear();
+      layerState._detectionResult.length = 0;
       layerState._orbitPaths.clear();
       layerState._catalog.clear();
       layerState._denseIds = [];

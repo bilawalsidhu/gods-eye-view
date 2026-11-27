@@ -1,4 +1,6 @@
 import { bindOverlayPorts } from '../testSupport/fakeOverlayPorts.mjs';
+import { setFlagsFromString } from 'node:v8';
+import { runInNewContext } from 'node:vm';
 import { readShellSource } from '../testSupport/readShellSource.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -1795,3 +1797,77 @@ test('each paint asks each layer once, with one kept query, and brackets follow 
     env.cleanup();
   }
 });
+
+/** A full collection, for proving what detection no longer keeps alive. */
+function collectGarbage() {
+  setFlagsFromString('--expose-gc');
+  runInNewContext('gc')();
+}
+
+/**
+ * Paint one contact through detection, keeping only a weak reference to it,
+ * then hand back that reference once the frame's job has ended (a WeakRef
+ * holds its target until then).
+ */
+async function paintOneContact(env, layer) {
+  let contact = {
+    position: new Cesium.Cartesian3(0, 0, 6_356_752),
+    sourceId: 'weak-1',
+    id: 'WEAK1',
+    metric: 'FL300',
+    type: 'AIR',
+  };
+  layer.objects = [contact];
+  const held = new WeakRef(contact);
+  contact = null;
+  env.advance(250);
+  env.postRender.raise();
+  env.advance(250);
+  env.postRender.raise();
+  assert.ok(
+    env.ctx.calls.some(([name, text]) => name === 'fillText' && text === 'WEAK1'),
+    'the contact was painted and labelled',
+  );
+  await new Promise((resolve) => setImmediate(resolve));
+  return held;
+}
+
+for (const [name, release] of [
+  ['detection is switched off', (layer) => setMode('OFF')],
+  [
+    'its layer is disabled and the next paint finds nothing',
+    (layer, env) => {
+      layer.objects = [];
+      env.advance(250);
+      env.postRender.raise();
+    },
+  ],
+]) {
+  test(`nothing from the last paint stays reachable once ${name}`, async () => {
+    const env = installEnvironment();
+    const layer = {
+      id: 'flights',
+      objects: [],
+      getDetectableObjects() {
+        return this.objects;
+      },
+    };
+    try {
+      initWorldOverlay(env.viewer);
+      initDetection(env.viewer, [layer], () => {});
+      setMode('DENSE');
+      const held = await paintOneContact(env, layer);
+      // The layer lets go of it; detection alone would keep it alive.
+      layer.objects = [];
+      release(layer, env);
+      env.ctx.calls.length = 0;
+      env.detectionCtx.calls.length = 0;
+      await new Promise((resolve) => setImmediate(resolve));
+      collectGarbage();
+      assert.equal(held.deref(), undefined, 'the contact was collected');
+    } finally {
+      env.cleanup();
+    }
+  });
+}
+
