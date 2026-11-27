@@ -914,6 +914,110 @@ test('perimeter age follows the snapshot time of the remembered rows', async () 
   assert.equal(followUp.items[0].ageHours, 24);
 });
 
+// A source that carries only some of the manifest's perimeter fields.
+const ARCHIVE_FIELDS = ['name', 'acres', 'containedPct', 'discoveredTime', 'lastGrowthTime'];
+function perimeterEngine(fields, rows) {
+  return createAnalystEngine({
+    getRecords: (key) => (key === 'fire-perimeters' ? rows : []),
+    getRecordFields: (key) => (key === 'fire-perimeters' ? fields : null),
+    getViewContext: () => ({ lat: 0, lon: 0, viewRadiusKm: 25 }),
+  });
+}
+const ARCHIVE_ROWS = [
+  { id: 'Pine', lat: 36, lon: -119, name: 'Pine', acres: 1200, discoveredTime: Date.UTC(2026, 6, 1) },
+  { id: 'Oak', lat: 37, lon: -120, name: 'Oak', acres: 80, discoveredTime: Date.UTC(2026, 6, 2) },
+];
+
+test('a filter on a field the source lacks is refused, not answered with zero', async () => {
+  const engine = perimeterEngine(ARCHIVE_FIELDS, ARCHIVE_ROWS);
+  const refused = await engine.query({
+    layers: ['fire-perimeters'],
+    scope: { kind: 'anywhere' },
+    filters: [{ field: 'state', op: 'eq', value: 'CA' }],
+  });
+  assert.equal(refused.ok, false);
+  assert.equal(refused.code, 'FIELD_UNAVAILABLE');
+  assert.equal(refused.field, 'state');
+  assert.deepEqual(refused.layers, ['fire-perimeters']);
+  assert.ok(!refused.allowed.includes('state'));
+  assert.ok(refused.allowed.includes('acres') && refused.allowed.includes('ageHours'));
+  assert.equal('count' in refused, false, 'no count to read as zero');
+  // A carried field that matches nothing is an honest zero.
+  const zero = await engine.query({
+    layers: ['fire-perimeters'],
+    scope: { kind: 'anywhere' },
+    filters: [{ field: 'acres', op: 'gt', value: 1e9 }],
+  });
+  assert.equal(zero.ok, true);
+  assert.equal(zero.count, 0);
+  const some = await engine.query({
+    layers: ['fire-perimeters'],
+    scope: { kind: 'anywhere' },
+    filters: [{ field: 'acres', op: 'gt', value: 100 }],
+  });
+  assert.deepEqual(some.items.map((item) => item.id), ['Pine']);
+});
+
+test('sorting by a field the source lacks is refused; follow-ups are checked too', async () => {
+  const engine = perimeterEngine(ARCHIVE_FIELDS, ARCHIVE_ROWS);
+  const sorted = await engine.query({
+    layers: ['fire-perimeters'],
+    scope: { kind: 'anywhere' },
+    sortBy: 'personnel',
+  });
+  assert.equal(sorted.code, 'FIELD_UNAVAILABLE');
+  assert.equal(sorted.field, 'personnel');
+  assert.equal((await engine.query({ layers: ['fire-perimeters'], scope: { kind: 'anywhere' } })).count, 2);
+  const followUp = await engine.query({
+    followUp: true,
+    filters: [{ field: 'county', op: 'eq', value: 'Fresno' }],
+  });
+  assert.equal(followUp.code, 'FIELD_UNAVAILABLE');
+  assert.equal(followUp.field, 'county');
+  // The refusal leaves the remembered answer in place.
+  assert.equal((await engine.query({ followUp: true })).count, 2);
+});
+
+test('ageHours needs the time field it counts from', async () => {
+  const without = perimeterEngine(['name', 'acres'], ARCHIVE_ROWS);
+  const refused = await without.query({
+    layers: ['fire-perimeters'],
+    scope: { kind: 'anywhere' },
+    filters: [{ field: 'ageHours', op: 'lte', value: 24 }],
+  });
+  assert.equal(refused.code, 'FIELD_UNAVAILABLE');
+  assert.equal(refused.field, 'ageHours');
+});
+
+test('a source that declares no fields keeps every manifest field', async () => {
+  const engine = perimeterEngine(null, [{ ...ARCHIVE_ROWS[0], state: 'US-CA' }, ARCHIVE_ROWS[1]]);
+  const result = await engine.query({
+    layers: ['fire-perimeters'],
+    scope: { kind: 'anywhere' },
+    filters: [{ field: 'state', op: 'eq', value: 'US-CA' }],
+  });
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.items.map((item) => item.id), ['Pine']);
+});
+
+test("a field of another queried layer is not checked against this layer's source", async () => {
+  // frp belongs to FIRMS only: perimeter rows fail it as before, and the
+  // perimeter source's list does not refuse it.
+  const engine = createAnalystEngine({
+    getRecords: (key) =>
+      key === 'local-firms' ? [{ id: 'hot', lat: 0, lon: 0, frp: 50 }] : ARCHIVE_ROWS,
+    getRecordFields: (key) => (key === 'fire-perimeters' ? ARCHIVE_FIELDS : null),
+    getViewContext: () => ({ lat: 0, lon: 0, viewRadiusKm: 25 }),
+  });
+  const result = await engine.query({
+    layers: ['local-firms', 'fire-perimeters'],
+    scope: { kind: 'anywhere' },
+    filters: [{ field: 'frp', op: 'gt', value: 10 }],
+  });
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.items.map((item) => item.id), ['hot']);
+});
+
 test('follow-up provenance stays attached to old rows after a feed recovers', async () => {
   let state = 'stale';
   const engine = createAnalystEngine({
