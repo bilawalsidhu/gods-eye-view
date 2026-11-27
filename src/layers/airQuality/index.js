@@ -2967,8 +2967,6 @@ export function createAirQualityLayer({
       let nearest = null;
       let nearestKm = Infinity;
       for (const reading of _readings) {
-        if (!Number.isFinite(reading?.lat) || !Number.isFinite(reading?.lon))
-          continue;
         const km = greatCircleKm({ lat, lon }, reading);
         if (km < nearestKm) {
           nearest = reading;
