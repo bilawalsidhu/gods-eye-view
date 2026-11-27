@@ -1174,6 +1174,8 @@ export function createStubRenderer(options = {}) {
               position: p,
               depth: magnitude(sub(p, eye().position)),
               blocked: blockedItem(item),
+              ground: item.mode === 'draped',
+              order: set.spec.drawOrder ?? 0,
             });
         }
         continue;
@@ -1199,6 +1201,8 @@ export function createStubRenderer(options = {}) {
               position,
               depth: magnitude(sub(position, eye().position)),
               blocked: blockedItem(item),
+              ground: item.height === 'clampGround',
+              order: set.spec.drawOrder ?? 0,
             });
           const ring =
             item.outline && item.height === 'clampGround'
@@ -1359,6 +1363,14 @@ export function createStubRenderer(options = {}) {
         (a.over ? b.order - a.order || a.seq - b.seq : 0) ||
         a.depth - b.depth,
     );
+    // Ground items (draped lines, clamped shapes) where ground items are in
+    // that order: the highest draw order first, of one order nearest first.
+    const at = [];
+    hits.forEach((hit, i) => hit.ground && at.push(i));
+    const ground = at
+      .map((i) => hits[i])
+      .sort((a, b) => b.order - a.order || a.depth - b.depth);
+    at.forEach((i, k) => (hits[i] = ground[k]));
     const looked = depth === undefined ? hits : hits.slice(0, depth);
     const out = looked.filter((hit) => !hit.blocked);
     for (const hit of out) {
@@ -1367,6 +1379,7 @@ export function createStubRenderer(options = {}) {
       delete hit.over;
       delete hit.order;
       delete hit.seq;
+      delete hit.ground;
     }
     return out;
   }

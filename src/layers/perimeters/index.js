@@ -76,6 +76,8 @@ let instances = 0;
  */
 const PERIMETER_SET_SIZES = Object.freeze({ fills: 8000, lines: 2000 });
 const KINDS = ['fills', 'lines'];
+// Fire lines over fills (draw.d.ts `SetSpec.drawOrder`).
+const PERIMETER_DRAW_ORDER = Object.freeze({ fills: 0, lines: 1 });
 // A piece id with a lone UTF-16 surrogate cannot be URI-encoded into its
 // items' ids: such a piece counts as one without an id.
 const LONE_SURROGATE = /\p{Surrogate}/u;
@@ -405,12 +407,16 @@ export function createFirePerimetersLayer({
     });
   }
 
-  /** A new draw set of `kind`, drawn over those made before it. */
+  /**
+   * A new draw set of `kind`. Lines are at a higher draw order, so every
+   * fire line draws over every fill, whenever their sets are made.
+   */
   function makeSet(kind) {
     const spec = {
       id: `${_setPrefix}:${_setCount++}:${kind}`,
       clampTo: 'both',
       show: _enabled,
+      drawOrder: PERIMETER_DRAW_ORDER[kind],
     };
     return kind === 'fills' ? _draw.shapes(spec) : _draw.lines(spec);
   }
@@ -630,21 +636,10 @@ export function createFirePerimetersLayer({
         _chunks[chunk.kind].splice(_chunks[chunk.kind].indexOf(chunk), 1);
         edits.delete(chunk);
       }
-    // New sets: fills before lines, so every line is drawn over every fill.
-    // A new set of fills is drawn over the line sets made before it, so
-    // those are made again, in their order, after it.
-    const newFills = _chunks.fills.filter((chunk) => !chunk.set);
-    for (const chunk of newFills) chunk.set = makeSet('fills');
-    if (newFills.length)
-      for (const chunk of _chunks.lines)
-        if (chunk.set) {
-          chunk.set.dispose();
-          chunk.set = null;
-          editOf(chunk).whole = true;
-        }
-    for (const chunk of _chunks.lines) chunk.set ??= makeSet('lines');
-    // Fills written first, each kind in its sets' order: on Cesium a set
-    // takes its place among the scene's primitives at its first write.
+    // New sets, each kind in its sets' order: of one draw order, a set first
+    // drawn later is drawn over those before it (draw.d.ts `drawOrder`).
+    for (const kind of KINDS)
+      for (const chunk of _chunks[kind]) chunk.set ??= makeSet(kind);
     for (const kind of KINDS)
       for (const chunk of _chunks[kind]) {
         const edit = edits.get(chunk);

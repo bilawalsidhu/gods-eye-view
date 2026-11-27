@@ -1175,7 +1175,7 @@ export function createCesiumDraw({
         showHosts(record);
         // No longer culled: what the cull hid comes back.
         if (culled && !spec.horizonCull) uncull(record);
-        if ((spec.drawOrder ?? 0) !== drawOrder) orderHosts(true);
+        if ((spec.drawOrder ?? 0) !== drawOrder) orderHosts(record);
         requestRender();
       },
       size: () => items.size,
@@ -1401,6 +1401,7 @@ export function createCesiumDraw({
   ) {
     const old = record.host;
     const waiting = ground?.length ? ground : null;
+    const wasGround = !!record.ground?.length;
     // The set keeps its place among the scene's primitives: a rebuild draws
     // where it drew, so stacking (and picks among overlapping items) does
     // not change with each update. Its place is under whatever was above
@@ -1444,8 +1445,9 @@ export function createCesiumDraw({
     if (at >= 0) scene.primitives.add(host, at);
     else scene.primitives.add(host);
     showHosts(record);
-    // A new set's host comes in last; it takes its place by draw order.
-    if (!old) orderHosts();
+    // A new set's host comes in last, and one that starts or stops holding
+    // ground moves to the other group: it takes its place by draw order.
+    if (!old || wasGround !== !!waiting) orderHosts();
   }
 
   /** A set's host drawn in the set's `blend`, as it is each frame. */
@@ -1455,40 +1457,60 @@ export function createCesiumDraw({
 
   /**
    * `SetSpec.drawOrder`: the sets' hosts stacked in the scene's primitives
-   * by their draw order. Of opaque billboards and points that skip the
-   * depth test, Cesium draws the one in the earlier primitive on top (both
-   * at the near plane, the later fails the depth test) and picks it, so a
-   * higher order goes earlier; of one order, in the order they were made.
-   * The hosts trade places among the slots they hold, so nothing else in
-   * the scene moves. Nothing moves while every set is at 0 (unless an order
-   * just changed, `changed`), so sets at 0 stack as they were first drawn;
-   * nor while the hosts are already in order.
-   * Translucent ones blend order-independently, whatever their order, and
-   * items in different view frustums stack nearer frustum first.
-   * @param {boolean} [changed]
+   * by their draw order, in two groups, each among the slots it holds so
+   * nothing else in the scene moves.
+   * - Hosts with ground primitives (clamped fills, draped lines): Cesium
+   *   draws the one later among the scene's primitives on top and picks it,
+   *   so a lower order goes earlier. Of one order they keep their places,
+   *   so the set first drawn later stays on top. A host still retiring
+   *   moves with the set's host, under it.
+   * - The rest: of opaque billboards and points that skip the depth test,
+   *   Cesium draws the one in the earlier primitive on top (both at the
+   *   near plane, the later fails the depth test) and picks it, so a higher
+   *   order goes earlier; of one order, in the order they were made.
+   *   Translucent ones blend order-independently, whatever their order, and
+   *   items in different view frustums stack nearer frustum first.
+   * A group moves only while one of its sets is at an order other than 0,
+   * or `changed`'s set (whose order just changed) is in it, and only when
+   * its hosts are out of order.
+   * @param {object} [changed] the record whose order changed
    */
-  function orderHosts(changed = false) {
+  function orderHosts(changed = null) {
     if (!live()) return;
-    let ordered = changed;
-    for (const record of sets.values())
-      if ((record.spec.drawOrder ?? 0) !== 0) ordered = true;
-    if (!ordered) return;
-    const placed = [];
+    const primitives = scene.primitives;
+    const slots = new Map();
+    for (let i = 0; i < primitives.length; i++) slots.set(primitives.get(i), i);
+    const groups = { ground: [], sprites: [] };
+    const ordered = { ground: false, sprites: false };
     for (const record of sets.values()) {
       if (!record.host || record.host.isDestroyed?.()) continue;
-      const slot = slotOf(record.host);
-      if (slot >= 0) placed.push({ record, slot });
+      const slot = slots.get(record.host);
+      if (slot === undefined) continue;
+      const kind = record.ground?.length ? 'ground' : 'sprites';
+      groups[kind].push({ record, slot });
+      if ((record.spec.drawOrder ?? 0) !== 0 || record === changed)
+        ordered[kind] = true;
     }
+    const order = (record) => record.spec.drawOrder ?? 0;
+    if (ordered.sprites)
+      tradeSlots(
+        groups.sprites,
+        (a, b) =>
+          order(b.record) - order(a.record) || a.record.seq - b.record.seq,
+      );
+    if (ordered.ground) placeGround(groups.ground, slots);
+  }
+
+  /**
+   * Each slot of `placed`, lowest first, takes its host in `compare`'s order
+   * by trading places with the host in it (taken out and put back, not
+   * destroyed): what lies between them, and every slot already filled,
+   * stays where it is.
+   */
+  function tradeSlots(placed, compare) {
     const slots = placed.map(({ slot }) => slot).sort((a, b) => a - b);
-    const wanted = [...placed].sort(
-      (a, b) =>
-        (b.record.spec.drawOrder ?? 0) - (a.record.spec.drawOrder ?? 0) ||
-        a.record.seq - b.record.seq,
-    );
+    const wanted = [...placed].sort(compare);
     if (wanted.every(({ slot }, i) => slot === slots[i])) return;
-    // Each slot, lowest first, takes its host by trading places with the
-    // host in it (taken out and put back, not destroyed): what lies between
-    // them, and every slot already filled, stays where it is.
     const primitives = scene.primitives;
     const destroys = primitives.destroyPrimitives;
     primitives.destroyPrimitives = false;
@@ -1504,6 +1526,42 @@ export function createCesiumDraw({
         primitives.remove(other);
         primitives.add(other, from);
       });
+    } finally {
+      primitives.destroyPrimitives = destroys;
+    }
+  }
+
+  /**
+   * Ground hosts, each with the host it still retires just under it, put
+   * in the slots they all hold by draw order, lowest first; of one order
+   * as they are now. Ready ground primitives moved so draw from the next
+   * frame on, without building again.
+   */
+  function placeGround(placed, slots) {
+    const order = (record) => record.spec.drawOrder ?? 0;
+    const units = placed.map(({ record, slot }) => ({
+      record,
+      slot,
+      hosts:
+        record.retiring && slots.has(record.retiring)
+          ? [record.retiring, record.host]
+          : [record.host],
+    }));
+    const taken = units
+      .flatMap(({ hosts }) => hosts.map((host) => slots.get(host)))
+      .sort((a, b) => a - b);
+    const wanted = [...units]
+      .sort((a, b) => order(a.record) - order(b.record) || a.slot - b.slot)
+      .flatMap(({ hosts }) => hosts);
+    if (wanted.every((host, i) => slots.get(host) === taken[i])) return;
+    // Taken out, then put back lowest slot first: the slots below each are
+    // final by then, and everything else keeps its order.
+    const primitives = scene.primitives;
+    const destroys = primitives.destroyPrimitives;
+    primitives.destroyPrimitives = false;
+    try {
+      for (const host of wanted) primitives.remove(host);
+      wanted.forEach((host, i) => primitives.add(host, taken[i]));
     } finally {
       primitives.destroyPrimitives = destroys;
     }

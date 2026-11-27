@@ -184,7 +184,7 @@ test('new pieces start a new set once the newest is full, drawn over the older',
   h.layer.destroy();
 });
 
-test('every line set is drawn over every fill set, made again after a new one', async () => {
+test('a new fill set leaves the line sets alone: lines are at a higher draw order', async () => {
   const fires = [fireAt('a', -120, 38)];
   const full = SET_SIZES.fills;
   let pieces = [piece('a', 'p1', AT - HOUR, { count: full })];
@@ -198,19 +198,19 @@ test('every line set is drawn over every fill set, made again after a new one', 
   h.writes.length = 0;
   pieces = [...pieces, piece('a', 'p2', AT, { lon: -110 })];
   await h.layer.update();
-  assert.deepEqual(kinds(), ['fills', 'fills', 'lines', 'lines']);
-  const [, newFills, relaid, newLines] = ours();
-  assert.equal(ours().includes(firstLines), false, 'made again');
+  // Both kinds full: a set of each is made, the first line set untouched.
+  assert.deepEqual(kinds(), ['fills', 'lines', 'fills', 'lines']);
+  const [, lines, newFills, newLines] = ours();
+  assert.equal(lines, firstLines, 'not made again');
   assert.deepEqual(
     h.writes.map(({ set, call, ids }) => [set, call, ids.length]),
     [
       [newFills, 'upsert', 1],
-      [relaid, 'set', full],
       [newLines, 'upsert', 1],
     ],
   );
-  // Its lines are in the re-made set.
-  assert.equal(h.items('lines').get('fire-perimeter:a:p1:line:0').set, relaid);
+  const order = (id) => h.renderer.testing.setRecord(id).spec.drawOrder;
+  assert.deepEqual(ours().map(order), [0, 1, 0, 1]);
   h.layer.destroy();
 });
 

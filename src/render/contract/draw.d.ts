@@ -125,8 +125,12 @@ export interface SetSpec {
   /**
    * Among sets that do not depth-test against each other (items drawn with
    * `disableDepthTest`), a higher one draws over a lower one whatever order
-   * they were made in; equal ones keep that order. `pick` and `drillPick`
-   * name them topmost first. Default 0.
+   * they were made in; equal ones keep that order. Among sets of ground
+   * items (clamped shapes, draped lines), a higher one draws over a lower
+   * one whatever order they were made or first drawn in; equal ones stack
+   * as the renderer stacks them. A set that holds any ground item stacks
+   * as ground, the rest of its items with it. `pick` and `drillPick` name
+   * them topmost first. Default 0.
    */
   drawOrder?: number;
   /** `false`: the set never takes part in picks. */

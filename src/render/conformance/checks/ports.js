@@ -1247,6 +1247,99 @@ export function portChecks() {
       },
     ),
     check(
+      'draw.drawOrder.ground',
+      'of ground sets, the higher draw order is on top and picked, whatever order they were made or first drawn in',
+      async (h, r) => {
+        await overAustin(h, r, 3000);
+        const d = 0.002;
+        const fill = (id, color) => ({
+          id,
+          geometry: {
+            kind: 'rectangle',
+            rect: {
+              west: AUSTIN.lon - d,
+              south: AUSTIN.lat - d,
+              east: AUSTIN.lon + d,
+              north: AUSTIN.lat + d,
+            },
+          },
+          fill: color,
+          height: 'clampGround',
+        });
+        const line = (id) => ({
+          id,
+          positions: [
+            h.toEcef({ lon: AUSTIN.lon - d, lat: AUSTIN.lat }),
+            h.toEcef({ lon: AUSTIN.lon + d, lat: AUSTIN.lat }),
+          ],
+          widthPx: 16,
+          mode: 'draped',
+          style: { kind: 'solid', color: '#ffffff' },
+        });
+        const s = r.query.project(h.toEcef({ ...AUSTIN, height: 0 }));
+        ok(s, 'the centre projects');
+        const top = () => r.query.pick(s.x, s.y)?.set;
+        const sets = () =>
+          r.query
+            .drillPick(s.x, s.y)
+            .map((x) => x.set)
+            .filter((set) => set.startsWith('conf:ground-order-'));
+        const ready = async () => {
+          await drawn(h, r);
+          await settled(r);
+          await drawn(h, r);
+        };
+        // Made first and drawn first, but higher: on top.
+        const high = r.draw.shapes({
+          id: 'conf:ground-order-high',
+          drawOrder: 2,
+        });
+        high.set([fill('a', '#ff0000')]);
+        const low = r.draw.shapes({ id: 'conf:ground-order-low' });
+        low.set([fill('b', '#0000ff')]);
+        await ready();
+        equal(top(), 'conf:ground-order-high', 'the higher fill');
+        deepEqual(
+          sets(),
+          ['conf:ground-order-high', 'conf:ground-order-low'],
+          'topmost first',
+        );
+        low.setOptions({ drawOrder: 3 });
+        await drawn(h, r);
+        equal(top(), 'conf:ground-order-low', 'raised, the pick flips');
+        deepEqual(
+          sets(),
+          ['conf:ground-order-low', 'conf:ground-order-high'],
+          'and the drill',
+        );
+        // A line set over the fills; a fill set made before it but first
+        // drawn after it, lower, stays under it.
+        const lines = r.draw.lines({
+          id: 'conf:ground-order-lines',
+          drawOrder: 5,
+        });
+        const late = r.draw.shapes({
+          id: 'conf:ground-order-late',
+          drawOrder: 4,
+        });
+        lines.set([line('l')]);
+        await ready();
+        late.set([fill('c', '#00ff00')]);
+        await ready();
+        deepEqual(
+          sets(),
+          [
+            'conf:ground-order-lines',
+            'conf:ground-order-late',
+            'conf:ground-order-low',
+            'conf:ground-order-high',
+          ],
+          'the line on top of a fill set first drawn after it',
+        );
+        for (const set of [high, low, lines, late]) set.dispose();
+      },
+    ),
+    check(
       'query.pickBeforeStyles',
       'picks answer against the scene as drawn before styles',
       async (h, r) => {
