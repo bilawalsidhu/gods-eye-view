@@ -1,0 +1,34 @@
+# syntax=docker/dockerfile:1
+#
+# Production image for shared deployments (k8s). It builds the client once and
+# serves the static output with `vite preview`, which also registers the same
+# API middleware as the dev server (see build/vite.js configurePreviewServer).
+# The dev image (Dockerfile + compose.yaml) is unchanged: it keeps hot reload.
+#
+# Why: `vite` dev serves hundreds of unbundled modules, uncompressed. Every
+# extra connection pays the full TLS handshake, so the page is slow over any
+# real network. The build collapses that into a small set of cacheable files.
+FROM node:24.22.2-slim@sha256:c86ecead9e55a5210ac1727de38a4ca840bf03dcaf34dc9749addbf383b1920c
+
+ENV PUPPETEER_SKIP_DOWNLOAD=1
+
+WORKDIR /app
+RUN chown node:node /app
+USER node
+
+COPY --chown=node:node package.json package-lock.json ./
+RUN npm ci
+
+COPY --chown=node:node . .
+
+# Client bundle first, then the MCP panel, which build:panel writes into
+# dist/panel (building the panel first would be wiped by the client build).
+RUN npm run build && npm run build:panel
+
+ENV HOST=0.0.0.0
+ENV PORT=4173
+EXPOSE 4173
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+  CMD ["node", "-e", "fetch('http://127.0.0.1:'+(Number.parseInt(process.env.PORT,10)||4173)+'/').then((r)=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+
+CMD ["npx", "vite", "preview", "--host", "0.0.0.0", "--port", "4173", "--strictPort"]
