@@ -30,6 +30,7 @@ import {
   getKeyholeFadeTuning,
   getKeyholeGeometry,
   keyholeLabelAlphaFromGeometry,
+  setKeyholeFadeTuning,
 } from '../celestialRing.js';
 import { DETECTION_THEME_MAP } from '../overlays/worldOverlayTokens.js';
 import {
@@ -840,35 +841,44 @@ test('surveillance military tier reaches the dedicated render target as shipped 
   }
 });
 
+/** Sonar on, at its lowest sweep floor, with its HUD open: the contact sonar runs. */
+function enableSonar(env) {
+  env.document.documentElement = {
+    dataset: { cyberSonar: 'on', cyberSonarOpacity: '35' },
+    style: { setProperty() {}, removeProperty() {} },
+  };
+  const hud = env.document.createElement('div');
+  hud.id = 'intel-hud';
+  hud.classList = { contains: (name) => name === 'active' };
+  env.document.body.appendChild(hud);
+}
+
+/** An echo field whose fronts light `layerIds` on every frame; its 3.25 px width picks the echo stroke out. */
+function echoField(layerIds) {
+  return {
+    center: Cesium.Cartesian3.fromDegrees(0, 89, 0),
+    radiusM: 250_000,
+    pulse: { count: 1000, periodMs: 1000, startFraction: 0 },
+    echo: { layerIds, fadeMs: 60_000, color: 'rgb(1, 2, 3)', spreadPx: 8, lineWidth: 3.25 },
+  };
+}
+
 test('Global Context echo brackets reach the canvas in the detection style colour', () => {
   const env = installEnvironment();
-  // Fronts every millisecond with a long fade, so the contact is lit on
-  // whatever frame paints; a distinctive width picks the echo stroke out.
-  const echo = {
-    layerIds: ['military'],
-    fadeMs: 60_000,
-    color: 'rgb(1, 2, 3)',
-    spreadPx: 8,
-    lineWidth: 3.25,
-  };
+  const field = echoField(['military']);
   const echoStrokes = () =>
     env.detectionCtx.calls
-      .filter(([name, , , width]) => name === 'stroke' && width === echo.lineWidth)
+      .filter(([name, , , width]) => name === 'stroke' && width === field.echo.lineWidth)
       .map(([, , style]) => style);
   try {
-    setAwarenessEchoField({
-      center: Cesium.Cartesian3.fromDegrees(0, 89, 0),
-      radiusM: 250_000,
-      pulse: { count: 1000, periodMs: 1000, startFraction: 0 },
-      echo,
-    });
+    setAwarenessEchoField(field);
     initWorldOverlay(env.viewer);
     initDetection(env.viewer, [militaryLayer()], () => {});
     setMode('DENSE');
     setDetectionStyle('normal');
     settleFrame(env);
     assert.ok(echoStrokes().length > 0, 'the echo bracket is painted');
-    assert.ok(echoStrokes().every((style) => style === echo.color));
+    assert.ok(echoStrokes().every((style) => style === field.echo.color));
 
     // CRT, NVG and FLIR keep their own palettes.
     for (const style of ['retro', 'surveillance', 'thermal']) {
@@ -943,17 +953,8 @@ test('a Global Context echo bracket is drawn outside its contact bracket and dim
 
 test('under the sonar sweep an echo is never brighter than its own bracket', () => {
   const env = installEnvironment();
-  // Sonar on with its HUD open turns the contact sonar on; its sweep dims
-  // brackets it is not passing over.
-  env.document.documentElement = {
-    // The lowest sweep floor, so dimmed brackets drop a whole alpha band.
-    dataset: { cyberSonar: 'on', cyberSonarOpacity: '35' },
-    style: { setProperty() {}, removeProperty() {} },
-  };
-  const hud = env.document.createElement('div');
-  hud.id = 'intel-hud';
-  hud.classList = { contains: (name) => name === 'active' };
-  env.document.body.appendChild(hud);
+  // The lowest sweep floor, so dimmed brackets drop a whole alpha band.
+  enableSonar(env);
   const echo = {
     layerIds: ['military'],
     fadeMs: 60_000,
@@ -1772,13 +1773,35 @@ test('a paint with the same view and the same contacts reuses the last sweep, an
   const frames = (fresh) => {
     const env = installEnvironment();
     const contacts = steadyContacts({ fresh });
+    contacts.objects.push({
+      position: new Cesium.Cartesian3(0.3, -0.4, 6_356_752),
+      sourceId: 'bus-1',
+      id: 'BUSONE',
+      metric: 'BUS 34 KM/H',
+      type: 'VEH',
+      tier: 'transit_bus',
+      bracketHalfWidth: 12,
+      bracketHalfHeight: 8,
+      skipLabel: true,
+    });
     const painted = [];
+    const counts = [];
+    const pick = () => {
+      const d = getDetectionDiagnostics();
+      return {
+        visibleCount: d.visibleCount,
+        bracketOpacityCounts: { ...d.bracketOpacityCounts },
+        aircraftBracketSectors: { ...d.aircraftBracketSectors },
+        protectedVisibleCount: d.protectedVisibleCount,
+      };
+    };
     try {
       initWorldOverlay(env.viewer);
       initDetection(env.viewer, [contacts.layer], () => {});
       setMode('DENSE');
       settleFrame(env);
       painted.push(takePainted(env));
+      counts.push(pick());
       for (let frame = 1; frame <= 40; frame++) {
         // Through the run: a contact moves, one is relabelled, one changes
         // tier, and the camera turns.
@@ -1788,8 +1811,9 @@ test('a paint with the same view and the same contacts reuses the last sweep, an
         if (frame === 31) env.viewer.camera.viewMatrix[12] = 0.03;
         nextFrame(env);
         painted.push(takePainted(env));
+        counts.push(pick());
       }
-      return { painted, reused: getDetectionDiagnostics().paintReuseCount };
+      return { painted, counts, reused: getDetectionDiagnostics().paintReuseCount };
     } finally {
       env.cleanup();
     }
@@ -1804,7 +1828,10 @@ test('a paint with the same view and the same contacts reuses the last sweep, an
   reusing.painted.forEach((frame, index) => {
     assert.ok(frame.some(([target, name]) => target === 'detection' && name === 'stroke'), `frame ${index} strokes brackets`);
     assert.deepEqual(frame, sweeping.painted[index], `frame ${index}`);
+    assert.ok(frame.some(([target, name, , color]) => target === 'shared' && name === 'stroke' && color === '#5EF08A'),
+      `frame ${index} strokes the transit bracket`);
   });
+  assert.deepEqual(reusing.counts, sweeping.counts, 'restored counts equal a full sweep, frame for frame');
   assert.ok(
     reusing.painted.some((frame) => frame.some(([, name, text]) => name === 'fillText' && text === 'AIRONE')),
     'callouts were painted during the run',
@@ -1865,7 +1892,14 @@ test('any change to a contact or to the view is swept on the very next paint', (
     },
     'the style changes': () => { setDetectionStyle('thermal'); },
     'the profile changes': () => { setMode('SPARSE'); },
+    'the keyhole feather widens': () => { setKeyholeFadeTuning({ fadeRatio: 0.2 }); },
+    'the OUTSIDE opacity changes': () => { setKeyholeFadeTuning({ outsideOpacity: 0.5 }); },
+    'the Cyber map theme comes on without the sonar sweep': (contacts, env) => {
+      enableSonar(env);
+      globalThis.matchMedia = (query) => ({ matches: query.includes('reduce') });
+    },
   };
+  const keyholeTuning = getKeyholeFadeTuning();
   for (const [name, change] of Object.entries(changes)) {
     const env = installEnvironment();
     const contacts = steadyContacts();
@@ -1883,6 +1917,8 @@ test('any change to a contact or to the view is swept on the very next paint', (
       assert.equal(getDetectionDiagnostics().paintReuseCount, 1, `${name}: swept again`);
       assert.equal(getDetectionDiagnostics().observationCount, contacts.objects.length, name);
     } finally {
+      setKeyholeFadeTuning(keyholeTuning);
+      delete globalThis.matchMedia;
       env.cleanup();
     }
   }
@@ -1896,24 +1932,9 @@ test('a depth-tested contact, the sonar sweep and echoes are swept on every pain
       contacts.objects[0].type = 'VEH';
       contacts.objects[0].depthTested = true;
     }
-    if (sonar) {
-      env.document.documentElement = {
-        dataset: { uiTheme: 'cyber', cyberSonar: 'on', cyberSonarOpacity: '35' },
-        style: { setProperty() {}, removeProperty() {} },
-      };
-      const hud = env.document.createElement('div');
-      hud.id = 'intel-hud';
-      hud.classList = { contains: (className) => className === 'active' };
-      env.document.body.appendChild(hud);
-    }
+    if (sonar) enableSonar(env);
     try {
-      if (echo)
-        setAwarenessEchoField({
-          center: Cesium.Cartesian3.fromDegrees(0, 89, 0),
-          radiusM: 250_000,
-          pulse: { count: 1000, periodMs: 1000, startFraction: 0 },
-          echo: { layerIds: ['flights'], fadeMs: 60_000, color: 'rgb(1, 2, 3)', spreadPx: 8, lineWidth: 3.25 },
-        });
+      if (echo) setAwarenessEchoField(echoField(['flights']));
       initWorldOverlay(env.viewer);
       initDetection(env.viewer, [contacts.layer], () => {});
       setMode('DENSE');
@@ -1933,7 +1954,7 @@ test('a depth-tested contact, the sonar sweep and echoes are swept on every pain
   assert.equal(run({ echo: true }), 0, 'echo');
 });
 
-test('turning detection off lets go of the kept sweep', () => {
+test('after detection is turned off and on, the first paint sweeps and the one after reuses it', () => {
   const env = installEnvironment();
   const contacts = steadyContacts();
   try {
@@ -1953,4 +1974,33 @@ test('turning detection off lets go of the kept sweep', () => {
   } finally {
     env.cleanup();
   }
+});
+
+test('reuse resumes after the camera stops, whatever the phase of the label solves', () => {
+  // 16 ms paints put a solve on every eighth paint, the same period as the
+  // recording stride. Moving the camera right after a solve aligns the two, so
+  // every recorded sweep lands just before a solve, which drops it.
+  const stalled = [];
+  for (let offset = 0; offset < 8; offset++) {
+    const env = installEnvironment();
+    const contacts = steadyContacts();
+    try {
+      initWorldOverlay(env.viewer);
+      initDetection(env.viewer, [contacts.layer], () => {});
+      setMode('DENSE');
+      settleFrame(env);
+      for (let i = 0; i < offset; i++) nextFrame(env);
+      for (let i = 0; i < 12; i++) {
+        env.viewer.camera.viewMatrix[12] = 0.001 * (i + 1);
+        nextFrame(env);
+      }
+      const before = getDetectionDiagnostics().paintReuseCount;
+      for (let i = 0; i < 40; i++) nextFrame(env);
+      const reused = getDetectionDiagnostics().paintReuseCount - before;
+      if (reused < 20) stalled.push(`offset ${offset}: ${reused} of 40`);
+    } finally {
+      env.cleanup();
+    }
+  }
+  assert.deepEqual(stalled, [], 'still paints after a camera move reuse a sweep');
 });

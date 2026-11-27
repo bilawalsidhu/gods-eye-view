@@ -252,13 +252,7 @@ let _hostLane = null;
 let _calloutLane = null;
 let _transitBracketPaths = new Map();
 let _transitBracketAlpha = 1;
-/**
- * What the last full sweep of the objects built, kept for the paints that
- * follow it with the same view and the same objects. See `_drawOverlay`.
- */
 const _paintCache = createDetectionPaintCache();
-/** Scratch for `_paintViewOf`; the cache copies it when it keeps a paint. */
-const _paintView = [];
 /** Paints since `initDetection` that reused a kept sweep (diagnostics). */
 let _paintReuseCount = 0;
 /**
@@ -1321,39 +1315,36 @@ function _materializeCandidate(
 }
 
 /**
- * Every value of the view that the object sweep in `_drawOverlay` and the
- * callout candidates it builds read, in a fixed order, for
- * `detectionPaintCache`. A value the sweep starts to read belongs here.
+ * Every view value the object sweep and its callout candidates read, in a
+ * fixed order, for `detectionPaintCache`; a value the sweep starts to read
+ * belongs here.
  */
 function _paintViewOf(frame, keyholeOutsideOpacity, cyberMapActive) {
-  const view = _paintView;
+  const view = [];
   const { keyhole, cameraPosition, viewProjectionMatrix, uiRects } = frame;
   let n = 0;
   view[n++] = _mode;
   view[n++] = _theme;
-  view[n++] = _charWidth;
   view[n++] = frame.width;
   view[n++] = frame.height;
   view[n++] = keyholeOutsideOpacity;
   view[n++] = cyberMapActive;
-  view[n++] = keyhole?.centerX;
-  view[n++] = keyhole?.centerY;
-  view[n++] = keyhole?.radius;
-  view[n++] = keyhole?.featherPx;
-  view[n++] = cameraPosition?.x;
-  view[n++] = cameraPosition?.y;
-  view[n++] = cameraPosition?.z;
+  view[n++] = keyhole.centerX;
+  view[n++] = keyhole.centerY;
+  view[n++] = keyhole.radius;
+  view[n++] = keyhole.featherPx;
+  view[n++] = cameraPosition.x;
+  view[n++] = cameraPosition.y;
+  view[n++] = cameraPosition.z;
   for (let i = 0; i < 16; i++) view[n++] = viewProjectionMatrix[i];
-  const rectCount = Array.isArray(uiRects) ? uiRects.length : -1;
-  view[n++] = rectCount;
-  for (let i = 0; i < rectCount; i++) {
+  view[n++] = uiRects.length;
+  for (let i = 0; i < uiRects.length; i++) {
     const rect = uiRects[i];
-    view[n++] = rect?.x;
-    view[n++] = rect?.y;
-    view[n++] = rect?.w;
-    view[n++] = rect?.h;
+    view[n++] = rect.x;
+    view[n++] = rect.y;
+    view[n++] = rect.w;
+    view[n++] = rect.h;
   }
-  view.length = n;
   return view;
 }
 
@@ -1435,6 +1426,7 @@ function _drawOverlay(frame) {
       selectedCount: 0,
       fadingCount: 0,
       didSolve: false,
+      paintReuseCount: _paintReuseCount,
     };
     // With nothing detectable there is nothing to place, so the solve is
     // VACUOUSLY complete — settle it here rather than carrying the dirty flag
@@ -1525,18 +1517,15 @@ function _drawOverlay(frame) {
   const demandByLayer = shouldSolve ? new Map() : null;
   let placementBuildCount = 0;
 
-  // The sweep below is the cost of this paint: every object projected, faded
-  // and given its bracket. What it builds depends only on the view and on the
-  // objects, so when both are exactly what the last sweep had, that sweep's
-  // paths, counts and callout candidates are used again and only the strokes
-  // and the callouts are repainted. Three things keep a paint from being
-  // reused or kept:
-  // - the Cyber sonar sweep and Global Context echoes change brackets with the
-  //   clock alone;
-  // - a solve needs the sweep to gather its cohort;
-  // - a depth-tested contact gets its answer from the scene, not from here.
-  // A kept solve paint holds the solve's own candidates too, so the callouts a
-  // solve has just chosen are placed from the same map either way.
+  // When the view and the objects are exactly what the last kept sweep read,
+  // its paths, counts and callout candidates are used again and only the
+  // strokes and callouts are repainted (see detectionPaintCache). The sweep
+  // also reads the render identities, but between solves they only shrink and
+  // callouts are placed from the arbiter's own rows, so a kept candidate map
+  // stays valid. A solve always sweeps, to gather its cohort, and is kept.
+  // Never reused or kept: paints with the Cyber sonar sweep or a Global
+  // Context echo live (brackets change with the clock), and sweeps that reach
+  // a depth-tested contact (the answer comes from the scene).
   const paintKeepable = !sonarActive && !echoField;
   const paintView = paintKeepable
     ? _paintViewOf(frame, keyholeOutsideOpacity, cyberMapActive)
@@ -1757,15 +1746,22 @@ function _drawOverlay(frame) {
       candidateMap,
     } = kept);
   } else if (paintKeepable && !depthTestedSwept) {
+    // A solve is always recorded, or a recording stride in step with the solves
+    // leaves the paints between them nothing to reuse.
     // `candidateMap` is kept by reference: a solve below adds to it.
-    _paintCache.keep(paintView, objects, {
-      bracketPaths,
-      visibleCount,
-      bracketOpacityCounts,
-      aircraftBracketSectors,
-      protectedVisibleCount,
-      candidateMap,
-    });
+    _paintCache.keep(
+      paintView,
+      objects,
+      {
+        bracketPaths,
+        visibleCount,
+        bracketOpacityCounts,
+        aircraftBracketSectors,
+        protectedVisibleCount,
+        candidateMap,
+      },
+      shouldSolve,
+    );
   } else {
     _paintCache.forget();
   }

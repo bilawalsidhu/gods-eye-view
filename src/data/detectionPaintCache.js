@@ -1,25 +1,19 @@
 /**
  * @module detectionPaintCache
- * @description Lets the detection overlay keep what one paint built (bracket
- * paths, counts, callout candidates) and use it again on the next paint when
- * that paint would build exactly the same thing.
- *
- * Nothing announces a change to this cache. Each paint hands over the values
- * the sweep reads from the view and the objects the layers returned, and the
- * cache compares them, value by value, with what the kept paint was built
- * from. A layer therefore cannot leave a stale picture behind by forgetting to
- * say it changed: an object that moved, appeared, left or was relabelled is
- * seen here, and the sweep runs again.
- *
- * Pure: no Cesium, no DOM.
+ * @description Lets the detection overlay use what one sweep built (bracket
+ * paths, counts, callout candidates) again on a later paint whose view and
+ * objects are exactly the ones that sweep read. Nothing announces a change:
+ * each paint hands over its view values and objects, and the cache compares
+ * them value by value, so an object that moved, appeared, left or was
+ * relabelled is always swept again. Pure: no Cesium, no DOM.
  */
 
 /**
- * The object fields the detection sweep and its callout candidates read.
- * Position is compared separately, by coordinate. `sameFields` and
- * `recordFields` below name each of these outright, in this order, because a
- * field read by a name held in a variable costs several times as much, and
- * this runs for every object on every paint.
+ * The object fields the detection sweep and its callout candidates read;
+ * position is compared separately, by coordinate. `sameFields` and
+ * `recordFields` name each of them outright, in this order (a field read by a
+ * name held in a variable costs several times as much on every object of
+ * every paint), so a field added here must be added to both.
  */
 export const PAINTED_OBJECT_FIELDS = Object.freeze([
   '_layerId',
@@ -37,13 +31,11 @@ export const PAINTED_OBJECT_FIELDS = Object.freeze([
 ]);
 
 /**
- * After this many sweeps in a row with no reuse between them, the objects are
- * only recorded on every RECORD_STRIDE-th sweep. A scene whose objects move on
- * every paint can never reuse one, so recording each of them would be work
- * with no return; a scene that settles is picked up again within RECORD_STRIDE
- * paints.
+ * After RECORD_STRIDE sweeps in a row without a reuse, a sweep is recorded
+ * only on every RECORD_STRIDE-th one or when `keep` is told it always must,
+ * since objects that move on every paint are never reused. A scene that
+ * settles is picked up again within RECORD_STRIDE paints.
  */
-export const SWEEPS_BEFORE_BACKOFF = 8;
 export const RECORD_STRIDE = 8;
 
 const FIELD_COUNT = PAINTED_OBJECT_FIELDS.length;
@@ -65,29 +57,25 @@ function sameFields(object, fields, f) {
   );
 }
 
-/** Most fields are what they were at the last sweep; only the others are written. */
 function recordFields(object, fields, f) {
-  let value;
-  if ((value = object._layerId) !== fields[f]) fields[f] = value;
-  if ((value = object.type) !== fields[f + 1]) fields[f + 1] = value;
-  if ((value = object.tier) !== fields[f + 2]) fields[f + 2] = value;
-  if ((value = object.skipLabel) !== fields[f + 3]) fields[f + 3] = value;
-  if ((value = object.id) !== fields[f + 4]) fields[f + 4] = value;
-  if ((value = object.metric) !== fields[f + 5]) fields[f + 5] = value;
-  if ((value = object.sourceId) !== fields[f + 6]) fields[f + 6] = value;
-  if ((value = object.bracketHalfWidth) !== fields[f + 7])
-    fields[f + 7] = value;
-  if ((value = object.bracketHalfHeight) !== fields[f + 8])
-    fields[f + 8] = value;
-  if ((value = object.depthTested) !== fields[f + 9]) fields[f + 9] = value;
-  if ((value = object.cardSourceId) !== fields[f + 10]) fields[f + 10] = value;
-  if ((value = object.cardEntryId) !== fields[f + 11]) fields[f + 11] = value;
+  fields[f] = object._layerId;
+  fields[f + 1] = object.type;
+  fields[f + 2] = object.tier;
+  fields[f + 3] = object.skipLabel;
+  fields[f + 4] = object.id;
+  fields[f + 5] = object.metric;
+  fields[f + 6] = object.sourceId;
+  fields[f + 7] = object.bracketHalfWidth;
+  fields[f + 8] = object.bracketHalfHeight;
+  fields[f + 9] = object.depthTested;
+  fields[f + 10] = object.cardSourceId;
+  fields[f + 11] = object.cardEntryId;
 }
 
 /**
  * @returns {{
  *   reuse: (view: Array, objects: Array<object>) => (object|null),
- *   keep: (view: Array, objects: Array<object>, built: object) => boolean,
+ *   keep: (view: Array, objects: Array<object>, result: object, always?: boolean) => boolean,
  *   forget: () => void,
  *   clear: () => void,
  * }}
@@ -101,6 +89,18 @@ export function createDetectionPaintCache() {
   let coordinates = new Float64Array(0);
   let positioned = new Uint8Array(0);
   let sweepsSinceReuse = 0;
+
+  /** Let go of the recorded objects from index `from` on. */
+  function release(from) {
+    references.fill(undefined, from, count);
+    fields.fill(undefined, from * FIELD_COUNT, count * FIELD_COUNT);
+  }
+
+  function forget() {
+    built = null;
+    release(0);
+    count = 0;
+  }
 
   function sameView(view) {
     if (view.length !== viewKept.length) return false;
@@ -135,10 +135,8 @@ export function createDetectionPaintCache() {
 
   return {
     /**
-     * What the kept paint built, when `view` and `objects` are what it was
-     * built from; otherwise null.
-     * @param {Array} view - Every value of the view the sweep reads, in a fixed order.
-     * @param {Array<object>} objects - The objects the layers returned this paint.
+     * What the kept paint built, when `view` (every view value the sweep reads,
+     * in a fixed order) and `objects` are what it was built from; otherwise null.
      */
     reuse(view, objects) {
       if (!built || !sameView(view) || !sameObjects(objects)) return null;
@@ -147,19 +145,23 @@ export function createDetectionPaintCache() {
     },
 
     /**
-     * Keep `result` as the result of sweeping `objects` under `view`.
-     * @returns {boolean} False when recording was skipped (see RECORD_STRIDE).
+     * Keep `result` as the result of sweeping `objects` under `view`. `view` is
+     * kept as it is, so the caller hands over a new array on each paint.
+     * `always` records even while recording backs off (see RECORD_STRIDE).
+     * @returns {boolean} False when recording was skipped.
      */
-    keep(view, objects, result) {
+    keep(view, objects, result, always = false) {
       sweepsSinceReuse++;
       if (
-        sweepsSinceReuse > SWEEPS_BEFORE_BACKOFF &&
-        (sweepsSinceReuse - SWEEPS_BEFORE_BACKOFF) % RECORD_STRIDE !== 0
+        !always &&
+        sweepsSinceReuse > RECORD_STRIDE &&
+        sweepsSinceReuse % RECORD_STRIDE !== 0
       ) {
-        built = null;
+        forget();
         return false;
       }
-      viewKept = view.slice();
+      viewKept = view;
+      if (objects.length < count) release(objects.length);
       count = objects.length;
       if (positioned.length < count) {
         // Room to spare, so a feed that grows by a few contacts a poll does
@@ -172,7 +174,7 @@ export function createDetectionPaintCache() {
       }
       for (let i = 0, c = 0, f = 0; i < count; i++, c += 3, f += FIELD_COUNT) {
         const object = objects[i];
-        if (references[i] !== object) references[i] = object;
+        references[i] = object;
         const position = object.position;
         positioned[i] = position ? 1 : 0;
         if (position) {
@@ -187,9 +189,7 @@ export function createDetectionPaintCache() {
     },
 
     /** Reuse nothing until the next `keep`. */
-    forget() {
-      built = null;
-    },
+    forget,
 
     /** Forget the kept paint and let go of its objects. */
     clear() {

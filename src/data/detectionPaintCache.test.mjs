@@ -4,7 +4,6 @@ import {
   createDetectionPaintCache,
   PAINTED_OBJECT_FIELDS,
   RECORD_STRIDE,
-  SWEEPS_BEFORE_BACKOFF,
 } from './detectionPaintCache.js';
 
 const contacts = () => [
@@ -78,18 +77,6 @@ test('a view value that is not a number never matches itself', () => {
   assert.equal(cache.reuse([NaN], objects), null);
 });
 
-test('the view is copied when kept, so the caller may write the next one over it', () => {
-  const cache = createDetectionPaintCache();
-  const objects = contacts();
-  const scratch = view();
-  const built = {};
-  cache.keep(scratch, objects, built);
-  scratch[1] = 1024;
-  assert.equal(cache.reuse(scratch, objects), null);
-  scratch[1] = 800;
-  assert.equal(cache.reuse(scratch, objects), built);
-});
-
 test('a coordinate changed in place is a miss, however small', () => {
   for (const axis of ['x', 'y', 'z']) {
     const { cache, objects } = kept();
@@ -128,6 +115,10 @@ test('every field the sweep reads is compared', () => {
     assert.equal(cache.reuse(view(), objects), null, field);
     objects[0][field] = before;
     assert.equal(cache.reuse(view(), objects), built, `${field} put back`);
+    objects[0][field] = 'changed';
+    const rebuilt = {};
+    cache.keep(view(), objects, rebuilt);
+    assert.equal(cache.reuse(view(), objects), rebuilt, `${field} is recorded`);
   }
 });
 
@@ -175,7 +166,7 @@ test('objects that change on every paint are recorded only now and then', () => 
     assert.equal(cache.reuse(view(), objects), null);
     recorded.push(cache.keep(view(), objects, {}));
   };
-  for (let i = 0; i < SWEEPS_BEFORE_BACKOFF; i++) sweep();
+  for (let i = 0; i < RECORD_STRIDE; i++) sweep();
   assert.ok(recorded.every(Boolean), 'the first sweeps are all recorded');
 
   recorded.length = 0;
@@ -190,8 +181,22 @@ test('objects that change on every paint are recorded only now and then', () => 
 
   // Once the objects hold still, the next recorded sweep is reused, and
   // every sweep after a reuse is recorded again.
-  while (!wasRecorded) wasRecorded = cache.keep(view(), objects, built);
+  for (let i = 0; i < RECORD_STRIDE && !wasRecorded; i++)
+    wasRecorded = cache.keep(view(), objects, built);
+  assert.ok(wasRecorded, 'a still scene is recorded within one stride');
   assert.equal(cache.reuse(view(), objects), built);
-  for (let i = 0; i < SWEEPS_BEFORE_BACKOFF; i++)
+  for (let i = 0; i < RECORD_STRIDE; i++)
     assert.equal(cache.keep(view(), objects, built), true);
+});
+
+test('a sweep kept with always is recorded even while recording backs off', () => {
+  const cache = createDetectionPaintCache();
+  const objects = contacts();
+  for (let i = 0; i < RECORD_STRIDE + 1; i++) {
+    objects[0].position.x += 1;
+    cache.keep(view(), objects, {});
+  }
+  const built = {};
+  assert.equal(cache.keep(view(), objects, built, true), true);
+  assert.equal(cache.reuse(view(), objects), built);
 });
