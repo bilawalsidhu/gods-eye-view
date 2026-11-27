@@ -19,6 +19,7 @@ export { localizeLayerName } from './layerNames.js';
 import { createWeatherPanel } from './weatherPanel.js';
 import { createNewsPanel } from './newsPanel.js';
 import { watchDisplayed } from './displayWatch.js';
+import { onPanelOpening } from './rail/panelContent.js';
 import {
   translateFeedError,
   translateStatusLine,
@@ -312,6 +313,8 @@ export class LayerPanel {
     this._pending = new Set();
     /** @type {Map<HTMLElement, ReturnType<typeof watchDisplayed>>} */
     this._displayWatches = new Map();
+    /** @type {Array<() => void>} releases the panels' opening flushes */
+    this._openingRemovers = [];
     /** @type {Map<HTMLElement, string | null>} the rows each list shows */
     this._paintedRows = new Map();
     this._rowsOwed = false;
@@ -375,10 +378,13 @@ export class LayerPanel {
   }
   /**
    * A refresh skips a row list its panel does not display (collapsed or
-   * hidden) and repaints it once when it is displayed again.
+   * hidden) and repaints it once when it is displayed again: at once when the
+   * panel chrome presents its panel open, so nothing lays out, measures or
+   * reads old rows, and otherwise when a ResizeObserver reports it displayed.
    */
   _watchRowLists() {
     this._unwatchRowLists();
+    const panels = new Set();
     for (const element of [
       this._toggleContainer,
       ...this._groupContainers.values(),
@@ -391,11 +397,27 @@ export class LayerPanel {
             this._paint({ whileShown: true });
         }),
       );
+      const panel = element.closest?.('[data-panel-id]');
+      if (panel && !panels.has(panel)) {
+        panels.add(panel);
+        this._openingRemovers.push(
+          onPanelOpening(panel, () => this.flushOwedRows()),
+        );
+      }
     }
   }
   _unwatchRowLists() {
     for (const watch of this._displayWatches.values()) watch.disconnect();
     this._displayWatches = new Map();
+    for (const remove of this._openingRemovers.splice(0)) remove();
+  }
+  /**
+   * Paint now the rows a refresh skipped while their panel was not displayed.
+   * The panel chrome calls this as it opens a panel; a no-op when nothing is
+   * owed.
+   */
+  flushOwedRows() {
+    if (this._rowsOwed && !this._destroyed) this._paint();
   }
   _isDisplayed(element) {
     return this._displayWatches.get(element)?.shown() ?? true;

@@ -57,6 +57,10 @@ try {
       },
     });
     const result = [];
+    // Rows repaint while Data Layers is displayed; it starts collapsed.
+    const dataPanel = document.getElementById('data-panel');
+    if (dataPanel?.classList.contains('collapsed'))
+      dataPanel.querySelector('[data-collapse-target="data-panel"]')?.click();
     try {
       presentation.mount(container);
       const row = () => container.querySelector(`[data-layer-id="${id}"]`);

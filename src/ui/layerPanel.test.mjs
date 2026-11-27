@@ -368,10 +368,14 @@ test('the Weather readout receives enabled air-quality alongside weather layers'
 });
 
 // Directions renders in the Utilities panel's list; Data Layers keeps the rest.
-async function utilitiesFixture({ withUtilities = true } = {}) {
+async function utilitiesFixture({
+  withUtilities = true,
+  prepare = (list) => document.body.append(list),
+} = {}) {
   const { LayerPanel } = await import('./layerPanel.js');
   document.body.replaceChildren();
-  const container = document.body.appendChild(document.createElement('div'));
+  const container = document.createElement('div');
+  prepare(container);
   container.id = 'data-toggles';
   const utilities = document.createElement('div');
   utilities.id = 'utilities-toggles';
@@ -523,6 +527,71 @@ test('filtering a list a refresh skipped filters its latest rows', async () => {
   } finally {
     restore();
     sizes.restore();
+  }
+});
+
+test('a row read right after its panel is presented open sees current rows', async () => {
+  const sizes = installFakeResizeObserver();
+  const { flushPanelContent } = await import('./rail/panelContent.js');
+  // Data Layers' list inside its panel, as LayerPanelsView renders it.
+  const panelEl = document.createElement('div');
+  panelEl.id = 'data-panel';
+  panelEl.dataset.panelId = 'data-panel';
+  const { container, utilities, panel, layers, restore } =
+    await utilitiesFixture({
+      prepare: (list) => {
+        panelEl.append(list);
+        document.body.append(panelEl);
+      },
+    });
+  try {
+    const renders = countRenders(panel);
+    sizes.report(container, 0, 0);
+    sizes.report(utilities, 0, 0);
+    layers.find(({ id }) => id === 'flights').enabled = true;
+    panel._refreshTogglePanel();
+    assert.deepEqual(renders, []);
+    // What the panel chrome does as it opens Data Layers, before the
+    // ResizeObserver reports it displayed.
+    flushPanelContent(panelEl);
+    assert.ok(
+      container
+        .querySelector('[data-layer-id="flights"] .data-toggle-btn')
+        .classList.contains('active'),
+    );
+    const flushed = renders.length;
+    assert.ok(flushed >= 1);
+    flushPanelContent(panelEl);
+    sizes.report(container, 240, 600);
+    assert.equal(renders.length, flushed, 'nothing owed, nothing rendered');
+    panel.destroy();
+    flushPanelContent(panelEl);
+    assert.equal(renders.length, flushed, 'destroy releases the flush');
+  } finally {
+    restore();
+    sizes.restore();
+  }
+});
+
+test('a language change renders rows the equality check would otherwise skip', async () => {
+  const { setLocale } = await import('../i18n/index.js');
+  const { container, panel, restore } = await utilitiesFixture();
+  try {
+    const renders = countRenders(panel);
+    panel._refreshTogglePanel();
+    assert.deepEqual(renders, [], 'unchanged rows are skipped');
+    const heading = () =>
+      container.querySelector('.data-layer-group-heading').textContent.trim();
+    assert.equal(heading(), 'Movement');
+    await setLocale('fr');
+    assert.ok(renders.length >= 1, 'the new language renders');
+    assert.notEqual(heading(), 'Movement');
+    const after = renders.length;
+    panel._refreshTogglePanel();
+    assert.equal(renders.length, after, 'and is then the rows shown');
+  } finally {
+    await setLocale('en');
+    restore();
   }
 });
 

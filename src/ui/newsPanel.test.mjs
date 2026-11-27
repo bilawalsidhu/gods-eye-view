@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { setLocale } from '../i18n/index.js';
 import { createNewsPanel } from './newsPanel.js';
 import { installFakeResizeObserver } from '../testSupport/fakeResizeObserver.mjs';
+import { flushPanelContent } from './rail/panelContent.js';
 import {
   NEWS_CATEGORIES,
   NEWS_SEVERITY,
@@ -183,6 +184,23 @@ test('a feed body that is not displayed is not repainted, and repaints once, cur
     const [observer] = sizes.watching(body);
     news.destroy();
     assert.equal(observer.disconnected, true);
+  } finally {
+    sizes.restore();
+  }
+});
+
+test('presenting the panel open paints the owed feed at once', () => {
+  const sizes = installFakeResizeObserver();
+  try {
+    const { news, panel } = fixture();
+    const body = document.getElementById('news-panel-body');
+    const cards = () => panel.querySelectorAll('.news-readout__feed .news-card');
+    sizes.report(body, 0, 0);
+    news.update(view());
+    assert.equal(cards().length, 0);
+    flushPanelContent(panel);
+    assert.equal(cards().length, 2);
+    news.destroy();
   } finally {
     sizes.restore();
   }

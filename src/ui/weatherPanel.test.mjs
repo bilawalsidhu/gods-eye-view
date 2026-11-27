@@ -9,6 +9,7 @@ import { createAirQualityLayer } from '../layers/airQuality/index.js';
 import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
 import { onAqiPeriods } from '../testSupport/airQualityViewer.mjs';
 import { installFakeResizeObserver } from '../testSupport/fakeResizeObserver.mjs';
+import { flushPanelContent } from './rail/panelContent.js';
 const ticks = ['2026-09-22T01:00:00Z', '2026-09-22T01:05:00Z'];
 const wind = {
   id: 'wind',
@@ -305,6 +306,29 @@ test('a body that is not displayed is not repainted, and repaints once, current,
     const [observer] = sizes.watching(f.container);
     view.destroy();
     assert.equal(observer.disconnected, true);
+  } finally {
+    sizes.restore();
+  }
+});
+
+test('presenting the panel open paints the owed readout at once', () => {
+  const sizes = installFakeResizeObserver();
+  try {
+    const f = fixture();
+    const view = createWeatherPanel(f);
+    sizes.report(f.container, 0, 0);
+    view.update([wind]);
+    view.update([wind, radar]);
+    assert.equal(card(f, 'weather-radar'), null);
+    // The panel chrome presents it open before any size report.
+    flushPanelContent(f.panel);
+    assert.ok(card(f, 'wind'));
+    assert.ok(card(f, 'weather-radar'), 'with the latest products');
+    f.writes();
+    flushPanelContent(f.panel);
+    sizes.report(f.container, 280, 400);
+    assert.equal(f.writes(), 0, 'nothing owed, nothing painted');
+    view.destroy();
   } finally {
     sizes.restore();
   }

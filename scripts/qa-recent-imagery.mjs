@@ -393,6 +393,13 @@ try {
 
   // ── enable: the panel in the rail, per the rail readout pattern ─────────
   const layerToggle = '[data-layer-id="recent-imagery"] .data-toggle-btn';
+  // The Data Layers rows repaint while the panel is displayed; it starts
+  // collapsed.
+  await page.evaluate(() => {
+    const panel = document.getElementById('data-panel');
+    if (panel?.classList.contains('collapsed'))
+      panel.querySelector('[data-collapse-target="data-panel"]')?.click();
+  });
   check(
     'the data panel carries a Recent Imagery toggle',
     await click(layerToggle),

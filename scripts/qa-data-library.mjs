@@ -156,8 +156,20 @@ async function open(page, hash = '') {
   );
 }
 
-const libraryRows = (page) =>
-  page.evaluate(() =>
+/**
+ * Open Data Layers before reading its rows: they repaint while it is
+ * displayed, and it starts collapsed.
+ */
+const openDataLayers = (page) =>
+  page.evaluate(() => {
+    const panel = document.getElementById('data-panel');
+    if (panel?.classList.contains('collapsed'))
+      panel.querySelector('[data-collapse-target="data-panel"]')?.click();
+  });
+
+const libraryRows = async (page) => {
+  await openDataLayers(page);
+  return page.evaluate(() =>
     [...document.querySelectorAll('#data-toggles [data-library-entry]')].map(
       (row) => ({
         id: row.dataset.libraryEntry,
@@ -166,6 +178,7 @@ const libraryRows = (page) =>
       }),
     ),
   );
+};
 
 try {
   const page = await browser.newPage();
