@@ -44,19 +44,9 @@ export const CABLE_SWEEP_MOTION_PROBE_INTERVAL_MS = 2000;
 
 export const CABLE_SWEEP_MOTION_EPSILON_M = 250;
 
-/**
- * Cable reference text uses the shared world-overlay host with horizon culling and
- * keyhole fade, like dams and datacenters. The host skips per-label tile depth tests.
- * Anchor points and stems remain renderer-drawn and depth-tested. Native labels cost
- * about 9.5 ms/frame during camera motion.
- */
-
-export const CABLE_LABEL_DEPTH_DECISION = Object.freeze({
-  option: 2,
-  decidedAt: '2026-08-18',
-  supersedes: '2026-08-02',
-  depthTested: false,
-});
+// Cable reference labels are composited by the shared world-overlay host, with
+// no per-label depth test; anchor points and stems stay renderer-drawn and
+// depth-tested.
 
 /**
  * `MAP_STACKS` ids that render imagery on the SHOWN Cesium globe (the ion

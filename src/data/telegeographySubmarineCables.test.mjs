@@ -16,7 +16,6 @@ import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
 import { fakeCameraPort } from '../testSupport/fakeCameraPort.mjs';
 import { fakeSceneFrame } from '../testSupport/fakeCesiumScene.mjs';
 import {
-  CABLE_LABEL_DEPTH_DECISION,
   CABLE_OVERLAY_COLLISION_CAPACITY,
   CABLE_OVERLAY_SOURCE_ID,
   CABLE_REFERENCE_LABEL_WINNER_CAP,
@@ -420,15 +419,6 @@ test('stems re-size only on real tip changes, moving the tip in place', () => {
   // Stem height honors the shipped 700 m..85 km clamp.
   const { height } = toLonLatH(record.tip);
   assert.ok(height >= 700 && height <= 85_000);
-});
-
-test('the depth decision is the dated Option-2 host migration, superseding Option 1', () => {
-  assert.deepEqual(CABLE_LABEL_DEPTH_DECISION, {
-    option: 2,
-    decidedAt: '2026-08-18',
-    supersedes: '2026-08-02',
-    depthTested: false,
-  });
 });
 
 test('cables create no native labels and reach no renderer but through its ports', () => {
