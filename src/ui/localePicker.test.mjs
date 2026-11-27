@@ -5,7 +5,6 @@ import assert from 'node:assert/strict';
 import {
   LOCALE_SEARCH_THRESHOLD,
   TYPEAHEAD_RESET_MS,
-  applyLocaleChoice,
   buildLocaleOptions,
   createLocalNameReader,
   createLocalePickerModel,
@@ -262,18 +261,6 @@ test('the search field appears only above the threshold', () => {
     }).searchable,
     true,
   );
-});
-
-test('choosing the current language changes nothing; another switches', () => {
-  const calls = [];
-  const actions = {
-    current: 'ru',
-    switchLocale: (locale) => calls.push(`switch:${locale}`),
-  };
-  assert.equal(applyLocaleChoice('ru', actions), 'unchanged');
-  assert.deepEqual(calls, []);
-  assert.equal(applyLocaleChoice('es', actions), 'switched');
-  assert.deepEqual(calls, ['switch:es']);
 });
 
 test('navigation keys move without wrapping', () => {

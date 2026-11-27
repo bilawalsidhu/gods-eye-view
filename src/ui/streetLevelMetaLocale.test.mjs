@@ -5,11 +5,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const target = path.join(here, 'streetLevelPresentation.test.mjs');
+// The catalogs load first, as `npm test` loads them.
+const catalogs = path.join(here, '..', 'testSupport', 'loadCatalogs.mjs');
 
 for (const locale of ['de_DE.UTF-8', 'es_ES.UTF-8', 'C.UTF-8']) {
   test(`streetLevelPresentation tests pass under LC_ALL=${locale}`, () => {
@@ -17,10 +19,14 @@ for (const locale of ['de_DE.UTF-8', 'es_ES.UTF-8', 'C.UTF-8']) {
     const env = { ...process.env, LC_ALL: locale, LANG: locale };
     delete env.NODE_TEST_CONTEXT;
     delete env.NODE_TEST_WORKER_ID;
-    const result = spawnSync(process.execPath, ['--test', target], {
-      encoding: 'utf8',
-      env,
-    });
+    const result = spawnSync(
+      process.execPath,
+      ['--import', pathToFileURL(catalogs).href, '--test', target],
+      {
+        encoding: 'utf8',
+        env,
+      },
+    );
     const failed = result.stdout.match(/^ℹ fail (\d+)/m)?.[1] ?? '?';
     assert.equal(
       result.status,

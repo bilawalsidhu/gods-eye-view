@@ -50,16 +50,24 @@ export {
 
 /**
  * Start the page in its language: `?lang=`, then the stored choice, then the
- * browser's languages, then English. Call it before any view renders, so
- * every lookup and `<html lang>`/`<html dir>` agree from the first frame; the
- * page's static `data-i18n` markup (a loading screen) is translated now.
+ * browser's languages, then English. Await it before any view renders, so
+ * every lookup and `<html lang>`/`<html dir>` agree from the first frame: it
+ * loads that language's catalog, then applies it and translates the page's
+ * static `data-i18n` markup (a loading screen). A catalog that fails to load
+ * leaves the page in English.
  * @param {Document} [doc]
  * @param {Parameters<typeof resolveLocale>[0]} [inputs] Location, storage
  *   and languages, for tests.
- * @returns {string} The active locale.
+ * @returns {Promise<string>} The active locale.
  */
-export function startPageLocale(doc = globalThis.document, inputs) {
-  const locale = setLocale(resolveLocale(inputs));
+export async function startPageLocale(doc = globalThis.document, inputs) {
+  let locale;
+  try {
+    locale = await setLocale(resolveLocale(inputs));
+  } catch (error) {
+    console.error('[i18n] the page language failed to load', error);
+    locale = await setLocale(DEFAULT_LOCALE);
+  }
   applyDocumentLanguage(doc, locale);
   applyDocumentTranslations(doc);
   return locale;
@@ -78,18 +86,36 @@ export function followPageLocale(doc = globalThis.document) {
   });
 }
 
+// The latest switchLocale call, and whether one is waiting for its catalog.
+let latestSwitch = 0;
+let switching = false;
+
 /**
- * Switch the page to `locale` in place and keep it for the next visit. The
- * active language, or an unknown code that would fall back to it, changes
- * nothing.
+ * Switch the page to `locale` in place and keep it for the next visit, once
+ * its catalog is loaded. The active language, or an unknown code that would
+ * fall back to it, changes nothing. When choices follow one another faster
+ * than their catalogs load, the last one wins: an earlier one resolves
+ * `'superseded'` and is neither applied nor stored. A catalog that fails to
+ * load keeps the current language and stored choice, and rejects.
  * @param {string} locale One of LOCALES.
  * @param {Parameters<typeof persistLocale>[1]} [options] Location, history
  *   and storage, for tests.
- * @returns {'unchanged'|'switched'}
+ * @returns {Promise<'unchanged'|'switched'|'superseded'>}
  */
-export function switchLocale(locale, options) {
+export async function switchLocale(locale, options) {
   const next = normalizeLocale(locale) || DEFAULT_LOCALE;
-  if (next === getLocale()) return 'unchanged';
-  setLocale(persistLocale(next, options));
-  return 'switched';
+  const active = next === getLocale();
+  // Choosing the active language again while another one loads cancels that.
+  if (active && !switching) return 'unchanged';
+  const choice = ++latestSwitch;
+  switching = true;
+  try {
+    const applied = await setLocale(next);
+    if (choice !== latestSwitch || applied !== next) return 'superseded';
+    if (active) return 'unchanged';
+    persistLocale(next, options);
+    return 'switched';
+  } finally {
+    if (choice === latestSwitch) switching = false;
+  }
 }

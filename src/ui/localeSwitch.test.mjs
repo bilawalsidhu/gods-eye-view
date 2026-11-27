@@ -65,32 +65,39 @@ test('another language applies in place, is stored and leaves the address', asyn
   const view = renderSwitch();
   const heard = [];
   const off = onLocaleChange(() => heard.push(getLocale()));
+  const published = [];
+  const stopWatching = useLocaleStore(applicationPinia()).$onAction(
+    ({ name, args }) => {
+      if (name === 'publishPicker') published.push(args[0]);
+    },
+  );
   try {
-    assert.equal(view.choose('es'), 'switched');
+    assert.equal(await view.choose('es'), 'switched');
     assert.equal(getLocale(), 'es');
     assert.deepEqual(heard, ['es'], 'owners word their text again');
     assert.deepEqual(view.reloads, [], 'no reload');
     assert.equal(view.stored.at(-1)[1], 'es');
     assert.deepEqual(view.addresses, ['https://gev.example/#v=2']);
-    const picker = useLocaleStore(applicationPinia()).picker;
-    assert.equal(picker.current, 'es');
-    assert.equal(picker.focus, true, 'the redrawn picker keeps focus');
     await nextTick();
-    assert.equal(
-      useLocaleStore(applicationPinia()).picker.focus,
-      false,
-      'only as it mounts',
+    assert.deepEqual(
+      published.map(({ current, focus }) => ({ current, focus })),
+      [
+        { current: 'es', focus: true },
+        { current: 'es', focus: false },
+      ],
+      'the redrawn picker keeps focus, only as it mounts',
     );
   } finally {
+    stopWatching();
     off();
     view.restore();
   }
 });
 
-test('the language already active changes nothing', () => {
+test('the language already active changes nothing', async () => {
   const view = renderSwitch();
   try {
-    assert.equal(view.choose('en'), 'unchanged');
+    assert.equal(await view.choose('en'), 'unchanged');
     assert.deepEqual(view.stored, []);
     assert.deepEqual(view.addresses, []);
     assert.deepEqual(view.reloads, []);

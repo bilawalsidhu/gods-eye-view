@@ -52,14 +52,8 @@ import {
   readShareFollowSubject,
 } from './shareFollow.js';
 
-import {
-  getLocale,
-  onLocaleChange,
-  persistLocale,
-  setLocale,
-  t,
-} from '../i18n/index.js';
-import { applyLocaleChoice } from './localePicker.js';
+import { getLocale, onLocaleChange, t } from '../i18n/index.js';
+import { switchLocale } from '../i18n/page.js';
 import { PanelNavigation } from './panelNavigation.js';
 import { applicationPinia, createUiRuntime } from './vueRuntime.js';
 import { useContextStore } from './stores/context.js';
@@ -894,22 +888,28 @@ export class StyleManager extends ShellFacade {
   }
 
   /**
-   * Switch to `locale`: nothing for the active language, otherwise store it
-   * and apply it to the page.
+   * Switch to `locale` once its catalog is loaded: nothing for the active
+   * language, otherwise store it and apply it to the page. Choices made
+   * while a catalog loads replace it: the last one wins. A catalog that
+   * fails to load keeps the current language.
    * @param {string} locale
-   * @returns {'unchanged'|'switched'}
+   * @returns {Promise<'unchanged'|'switched'|'superseded'|'failed'>}
    */
-  _chooseLocale(locale) {
-    return applyLocaleChoice(locale, {
-      current: getLocale(),
-      switchLocale: (next) => {
-        setLocale(persistLocale(next));
-        // Focus once, as the redrawn picker mounts; a later remount leaves
-        // focus where it is.
-        this._publishLocalePicker({ focus: true });
-        void nextTick(() => this._publishLocalePicker());
-      },
-    });
+  async _chooseLocale(locale) {
+    let result;
+    try {
+      result = await switchLocale(locale);
+    } catch (error) {
+      console.error(`[i18n] the ${locale} catalog failed to load`, error);
+      return 'failed';
+    }
+    if (result === 'switched') {
+      // Focus once, as the redrawn picker mounts; a later remount leaves
+      // focus where it is.
+      this._publishLocalePicker({ focus: true });
+      void nextTick(() => this._publishLocalePicker());
+    }
+    return result;
   }
 
   /**

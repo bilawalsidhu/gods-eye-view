@@ -401,7 +401,8 @@ the Space Missions and Bhote Koshi reconstruction panels. Omitting `intel-hud`
 removes the Intel HUD overlay (`#intel-hud`), whose readouts the HUD
 implementation publishes to the `gev-hud` store. An unknown view name is an
 error. An application that offers its own language choice starts and switches
-the language with the `./i18n` entry (`startPageLocale`, `followPageLocale`,
+the language with the `./i18n` entry (`await startPageLocale(document)`
+before `createApplication`, which renders the views; `followPageLocale`,
 `switchLocale`; see [I18N.md](./I18N.md)) and passes `localePicker: false` to
 `createApplicationControls` instead of editing the markup. Node tests that
 import application modules register the component loader with
