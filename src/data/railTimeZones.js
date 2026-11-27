@@ -67,7 +67,7 @@ export function zonedParts(epochMs, zone) {
 }
 
 /** UTC offset of a zone at an instant, in ms (east positive). */
-export function zoneOffsetMs(epochMs, zone) {
+function zoneOffsetMs(epochMs, zone) {
   const p = zonedParts(epochMs, zone);
   const wall = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second);
   return wall - Math.floor(epochMs / 1000) * 1000;

@@ -24,7 +24,7 @@ export const VESSEL_OVERLAY_MAX_COHORT = VESSEL_DEFAULT_LABEL_LIMIT;
 /** Existing ambient vessel-card distance fade reaches zero at 5000 km. */
 export const VESSEL_CARD_FADE_DISTANCE_M = 5_000_000;
 /** Share of VESSEL_CARD_FADE_DISTANCE_M at which ambient cards begin to fade. */
-export const VESSEL_CARD_FADE_START_RATIO = 0.7;
+const VESSEL_CARD_FADE_START_RATIO = 0.7;
 
 /**
  * An aid to navigation's buoy and card accent: a bone white apart from every

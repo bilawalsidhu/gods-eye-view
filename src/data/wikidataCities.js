@@ -56,7 +56,7 @@ export function indexCities(rows) {
 }
 
 /** Rows by folded name, each list in the rows' own order (largest first). */
-export function indexNames(rows) {
+function indexNames(rows) {
   const names = new Map();
   for (const row of rows) {
     const key = foldName(row[0]);
@@ -133,7 +133,7 @@ function countryNames(rows) {
 
 let loading = null;
 /** The indexed pack; a failed load is retried on the next call. */
-export function loadCities(fetchImpl = (...args) => globalThis.fetch(...args)) {
+function loadCities(fetchImpl = (...args) => globalThis.fetch(...args)) {
   loading ??= fetchImpl(
     new URL('./local_data/wikidata_cities/cities.json', import.meta.url),
   )

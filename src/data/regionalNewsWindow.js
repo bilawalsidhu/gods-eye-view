@@ -1,7 +1,7 @@
 /** The regional-news freshness window, shared by the servers and the Cockpit. */
 
 /** At most this many articles answer a regional brief. */
-export const REGIONAL_NEWS_ROWS = 5;
+const REGIONAL_NEWS_ROWS = 5;
 
 /**
  * The regional-news freshness window, in hours. The servers ask upstream for

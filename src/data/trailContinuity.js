@@ -27,26 +27,26 @@ import { cross, distance, dot, magnitude, normalize } from '../geo/vector.js';
 import { curvePoints, fixCurveCached } from './fixCurve.js';
 
 /** @constant {number} A gap longer than this is a coverage hole or a separate flight. */
-export const TRAIL_CONTINUITY_MAX_GAP_MS = 48 * 60_000;
+const TRAIL_CONTINUITY_MAX_GAP_MS = 48 * 60_000;
 
 /** @constant {number} A pair implying more than this great-circle speed is not one path. */
 export const TRAIL_CONTINUITY_MAX_SPEED_KT = 1_500;
 
 /** @constant {number} A parked aircraft may stop reporting this long and stay one path. */
-export const TRAIL_STATIONARY_HOLD_MAX_GAP_MS = 3 * 60 * 60_000;
+const TRAIL_STATIONARY_HOLD_MAX_GAP_MS = 3 * 60 * 60_000;
 
 /** @constant {number} How close (nautical miles) two points must be to count as parked. */
-export const TRAIL_STATIONARY_HOLD_MAX_DISTANCE_NM = 0.1;
+const TRAIL_STATIONARY_HOLD_MAX_DISTANCE_NM = 0.1;
 
 /**
  * @constant {number} An airborne point and a ground point more than this far
  *   apart in time do not join: the landing or take-off between them was not
  *   seen. A last waypoint on short final is a few minutes from the runway.
  */
-export const TRAIL_UNSEEN_TRANSITION_MAX_GAP_MS = 5 * 60_000;
+const TRAIL_UNSEEN_TRANSITION_MAX_GAP_MS = 5 * 60_000;
 
 /** @constant {number} The head never joins a body point farther than this from the aircraft. */
-export const TRAIL_HEAD_JOIN_MAX_M = 150_000;
+const TRAIL_HEAD_JOIN_MAX_M = 150_000;
 
 const METRES_PER_NM = 1852;
 
@@ -95,7 +95,7 @@ export function trailHeadJoins(deltaMs, distanceM) {
  * @param {{x: number, y: number, z: number}} b
  * @returns {number}
  */
-export function trailDistanceM(a, b) {
+function trailDistanceM(a, b) {
   const unitA = normalize(a);
   const unitB = normalize(b);
   const angle = Math.atan2(magnitude(cross(unitA, unitB)), dot(unitA, unitB));
@@ -108,7 +108,7 @@ export function trailDistanceM(a, b) {
  * @param {object} next - Later fix.
  * @returns {boolean}
  */
-export function trailFixBreaks(prev, next) {
+function trailFixBreaks(prev, next) {
   if (!prev || prev.nullAltitude || next.nullAltitude) return true;
   return trailPairBreaks(
     next.timeMs - prev.timeMs,
@@ -262,7 +262,7 @@ export function trailBodySegments(fixes, count) {
 }
 
 /** The curve between two consecutive trail reports, or null for a straight line. */
-export function trailPairCurve(prev, next) {
+function trailPairCurve(prev, next) {
   return fixCurveCached(
     prev.position,
     prev.timeMs,
@@ -294,7 +294,7 @@ export function trailHeadCurvePoints(fixes, count, displayMs) {
 }
 
 /** @constant {number} How far back from the newest report `trailTimeAt` looks for the aircraft (ms). */
-export const TRAIL_TIME_AT_SEARCH_MS = 15 * 60_000;
+const TRAIL_TIME_AT_SEARCH_MS = 15 * 60_000;
 
 /**
  * The time on the trail at which `position` lies: the pair of consecutive

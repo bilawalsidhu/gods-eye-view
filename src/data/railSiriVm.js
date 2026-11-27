@@ -25,11 +25,11 @@ import { isPlausibleVehiclePosition } from './gtfsRealtime.js';
 import { decodeXmlText } from './irishRail.js';
 
 /** Longest document read (characters). SJ Nord's is about 7 KB. */
-export const SIRI_VM_MAX_TEXT_CHARS = 2 * 1024 * 1024;
+const SIRI_VM_MAX_TEXT_CHARS = 2 * 1024 * 1024;
 /** Most activities read from one document. */
 export const SIRI_VM_MAX_ACTIVITIES = 5000;
 /** Longest accepted field (characters). */
-export const SIRI_VM_MAX_FIELD_CHARS = 256;
+const SIRI_VM_MAX_FIELD_CHARS = 256;
 
 /** Error for a document this adapter will not read. */
 export class SiriVmFormatError extends Error {
