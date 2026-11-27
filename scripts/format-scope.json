@@ -1722,7 +1722,6 @@
   "scripts/qa-openaq.mjs",
   "src/layers/airQuality/interpretation.js",
   "src/layers/airQuality/interpretation.test.mjs",
-  "server/providers/common/snapshotCache.js",
   "server/providers/openAqBudget.test.mjs",
   "server/providers/openAqViewShare.test.mjs",
   "src/testSupport/airQualityViewer.mjs",
