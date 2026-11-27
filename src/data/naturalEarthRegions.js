@@ -301,9 +301,6 @@ export async function listRegions() {
   }));
 }
 
-// exported for tests
-export { normalizeName as _normalizeName };
-
 /**
  * Resolve a natural-region OUTLINE ring for the annotation resolver's first
  * rung. Stricter than `findNaturalRegion`: walks ALL entries sharing the

@@ -1,7 +1,7 @@
 // src/data/trafficQueue.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { queueDistances, queuePlatoons, locateAlongRoad } from './trafficQueue.js';
+import { queuePlatoons, locateAlongRoad } from './trafficQueue.js';
 
 // ── queuePlatoons ───────────────────────────────────────────
 
@@ -19,38 +19,38 @@ test('queuePlatoons: degenerate input yields no platoons', () => {
   assert.deepEqual(queuePlatoons(1000, 0), []);
 });
 
-// ── queueDistances ──────────────────────────────────────────
+// ── flattened platoons ──────────────────────────────────────
 
-test('queueDistances: returns exactly count positions within [0, totalLen)', () => {
-  const out = queueDistances(1000, 25);
+test('flattened platoons: returns exactly count positions within [0, totalLen)', () => {
+  const out = queuePlatoons(1000, 25).flat();
   assert.equal(out.length, 25);
   for (const s of out) {
     assert.ok(s >= 0 && s < 1000, `position ${s} outside [0, 1000)`);
   }
 });
 
-test('queueDistances: platoon dots queue bumper-to-bumper behind the anchor', () => {
+test('flattened platoons: platoon dots queue bumper-to-bumper behind the anchor', () => {
   // rng always 0.5 → platoonSize 4+floor(0.5*5)=6, anchor 500, gap 6+0.5*6=9
-  const out = queueDistances(1000, 6, () => 0.5);
+  const out = queuePlatoons(1000, 6, () => 0.5).flat();
   assert.deepEqual(out, [500, 491, 482, 473, 464, 455]);
 });
 
-test('queueDistances: queue wraps around the road start', () => {
+test('flattened platoons: queue wraps around the road start', () => {
   // rng always 0 → platoonSize 4, anchor 0, gap 6 → trail wraps to road end
-  const out = queueDistances(1000, 4, () => 0);
+  const out = queuePlatoons(1000, 4, () => 0).flat();
   assert.deepEqual(out, [0, 994, 988, 982]);
 });
 
-test('queueDistances: a platoon never exceeds the remaining count', () => {
-  const out = queueDistances(1000, 3, () => 0.5); // platoonSize would be 6
+test('flattened platoons: a platoon never exceeds the remaining count', () => {
+  const out = queuePlatoons(1000, 3, () => 0.5).flat(); // platoonSize would be 6
   assert.equal(out.length, 3);
 });
 
-test('queueDistances: degenerate input yields no positions', () => {
-  assert.deepEqual(queueDistances(0, 10), []);
-  assert.deepEqual(queueDistances(-5, 10), []);
-  assert.deepEqual(queueDistances(NaN, 10), []);
-  assert.deepEqual(queueDistances(1000, 0), []);
+test('flattened platoons: degenerate input yields no positions', () => {
+  assert.deepEqual(queuePlatoons(0, 10).flat(), []);
+  assert.deepEqual(queuePlatoons(-5, 10).flat(), []);
+  assert.deepEqual(queuePlatoons(NaN, 10).flat(), []);
+  assert.deepEqual(queuePlatoons(1000, 0).flat(), []);
 });
 
 // ── locateAlongRoad ─────────────────────────────────────────

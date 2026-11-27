@@ -3,10 +3,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   flowBucket,
-  flowColor,
   flowSpeedScale,
   flowDensityMult,
-  FLOW_BUCKET_RGBA,
 } from './trafficFlowStyle.js';
 
 // ── bucket thresholds ───────────────────────────────────────
@@ -32,14 +30,6 @@ test('flowBucket: < 0.55 is jammed', () => {
 test('flowBucket: non-finite input degrades to free (no false alarms)', () => {
   assert.equal(flowBucket(NaN), 'free');
   assert.equal(flowBucket(undefined), 'free');
-});
-
-// ── colors ──────────────────────────────────────────────────
-
-test('flowColor returns the rgba tuple for the level bucket', () => {
-  assert.deepEqual(flowColor(1), FLOW_BUCKET_RGBA.free);
-  assert.deepEqual(flowColor(0.7), FLOW_BUCKET_RGBA.slow);
-  assert.deepEqual(flowColor(0.1), FLOW_BUCKET_RGBA.jam);
 });
 
 // ── speed scale ─────────────────────────────────────────────

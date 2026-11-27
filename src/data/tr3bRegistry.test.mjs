@@ -14,7 +14,6 @@ import {
   setTr3b,
   toggleTr3b,
   tr3bConvertedIds,
-  tr3bCount,
   tr3bAircraftClass,
   tr3bIconKind,
   tr3bTypeLabel,
@@ -49,11 +48,11 @@ test('tr3b registry: toggle round-trips and normalizes the contact id', () => {
   assert.equal(isTr3b('a1b2c3'), true, 'ICAO hex is case-insensitive');
   assert.equal(isTr3b(' a1b2c3 '), true, 'surrounding whitespace is trimmed');
   assert.deepEqual(tr3bConvertedIds(), ['a1b2c3']);
-  assert.equal(tr3bCount(), 1);
+  assert.equal(tr3bConvertedIds().length, 1);
 
   assert.equal(toggleTr3b('a1b2c3'), false, 'a second toggle restores the contact');
   assert.equal(isTr3b('A1B2C3'), false);
-  assert.equal(tr3bCount(), 0);
+  assert.equal(tr3bConvertedIds().length, 0);
 
   clearTr3bRegistry();
 });
@@ -70,7 +69,7 @@ test('tr3b registry: setTr3b is explicit and idempotent; unusable ids are inert'
     assert.equal(toggleTr3b(bad), false);
     assert.equal(isTr3b(bad), false);
   }
-  assert.equal(tr3bCount(), 0, 'no unusable id ever entered the registry');
+  assert.equal(tr3bConvertedIds().length, 0, 'no unusable id ever entered the registry');
   clearTr3bRegistry();
 });
 

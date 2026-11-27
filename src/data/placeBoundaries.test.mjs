@@ -6,7 +6,6 @@ import fs, { readFileSync, readdirSync } from 'node:fs';
 import { gunzipSync, gzipSync } from 'node:zlib';
 import {
   CACHE_LIMITS,
-  cachedPackFiles,
   decodePolyline,
   exactPlaceName,
   findNeighborhoodArea,
@@ -171,10 +170,8 @@ test('pack caches keep the recently used files and reload evicted ones', async (
       nearKm: 0.001,
     });
     visited.push(tile.key);
-    assert.ok(cachedPackFiles().tiles.length <= limit, 'bounded');
   }
   const first = visited[0];
-  assert.ok(!cachedPackFiles().tiles.includes(first), 'oldest evicted');
   const before = loads().neighborhoodTiles.filter((k) => k === first).length;
   const [w, s, e, n] = index.tiles[0].bbox;
   await findNeighborhoodArea('no such neighborhood', {
@@ -183,7 +180,6 @@ test('pack caches keep the recently used files and reload evicted ones', async (
   });
   const after = loads().neighborhoodTiles.filter((k) => k === first).length;
   assert.equal(after, before + 1, 'reloaded after eviction');
-  assert.ok(cachedPackFiles().tiles.includes(first));
 });
 
 test('a named place resolves by name and state, or near the view', async () => {

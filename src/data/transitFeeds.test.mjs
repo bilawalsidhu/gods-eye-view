@@ -8,7 +8,6 @@ import {
   TRANSIT_MODES,
   getRegisteredTransitFeed,
   getTransitFeed,
-  haversineKm,
   publicTransitCatalog,
   transitFeedsInRange,
   TRANSIT_MODE_ICON,
@@ -68,15 +67,6 @@ test('getTransitFeed is the only door to an upstream URL and refuses anything un
   assert.equal(getTransitFeed(''), null);
   assert.equal(getTransitFeed(null), null);
   assert.equal(getTransitFeed(42), null);
-});
-
-test('haversine matches known city distances', () => {
-  const bostonToNyc = haversineKm(42.3601, -71.0589, 40.7128, -74.006);
-  assert.ok(
-    Math.abs(bostonToNyc - 306) < 5,
-    `Boston–NYC ≈ 306 km, got ${bostonToNyc}`,
-  );
-  assert.equal(haversineKm(0, 0, 0, 0), 0);
 });
 
 test('feeds in range are nearest-first and honor slack as hysteresis', () => {

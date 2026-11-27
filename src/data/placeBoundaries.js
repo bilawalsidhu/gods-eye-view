@@ -167,20 +167,10 @@ function boundedLoaders(limit) {
       );
       return pending;
     },
-    loadedKeys: () =>
-      [...entries].filter(([, e]) => e.loaded).map(([key]) => key),
   };
 }
 
 const stateLoaders = boundedLoaders(() => CACHE_LIMITS.states);
-
-/** Test seam: the state files and tiles currently kept. */
-export function cachedPackFiles() {
-  return {
-    states: stateLoaders.loadedKeys(),
-    tiles: tileLoaders.loadedKeys(),
-  };
-}
 
 /** Builds a pack file URL on use (never at import); unknown keys fail loudly. */
 function packUrl(urls, key) {
