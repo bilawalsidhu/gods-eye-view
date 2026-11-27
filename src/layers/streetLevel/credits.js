@@ -2,10 +2,11 @@ import { creditFromMarkup } from '../../render/creditMarkup.js';
 import { findCredits } from '../../render/rendererOf.js';
 
 /**
- * One on-map credit per active provider, through the renderer's credits
- * port: CC BY-SA imagery needs visible attribution that goes away with the
- * imagery. A provider's credit is markup with one link, read as the
- * port's plain data.
+ * One credit per active provider, through the renderer's credits port,
+ * that goes away with the imagery: on the map for a credit that asks for
+ * it (`credit.onMap`, Google's), in the "Data attribution" list for every
+ * other. A provider's credit is markup with one link, read as the port's
+ * plain data.
  */
 export function createCredits() {
   /** @type {Map<string, () => void>} provider id → the credit's Off */
@@ -17,7 +18,10 @@ export function createCredits() {
     if (!credits) return;
     shown.set(
       def.id,
-      credits.addStatic({ ...creditFromMarkup(def.credit.html), inline: true }),
+      credits.addStatic({
+        ...creditFromMarkup(def.credit.html),
+        inline: Boolean(def.credit.onMap),
+      }),
     );
   }
 

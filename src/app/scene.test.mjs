@@ -70,11 +70,15 @@ test('the scene runs on a renderer with only the required members', async (t) =>
     'Esri imagery through the port',
   );
   assert.equal(scene.mapStackController.getDrapeSurface(), 'globe');
-  // The credits show in the application's own line: the Esri base's on it,
-  // the data credits in the list it opens.
+  // The credits show in the application's own line: nothing of Esri's on
+  // it, the Esri base's and the data credits in the list it opens.
   const line = document.getElementById('gev-credits');
   assert.ok(line, 'a credits line');
-  assert.match(line.textContent, /Esri/);
+  assert.doesNotMatch(line.textContent, /Esri/);
+  assert.match(
+    document.getElementById('gev-credits-panel').textContent,
+    /Esri/,
+  );
   assert.ok(
     document.querySelectorAll('#gev-credits-panel li').length > 10,
     'the data credits',

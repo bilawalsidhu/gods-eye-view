@@ -6,8 +6,7 @@ import { markRaw, shallowRef } from 'vue';
  * the omnibar offers: `layers()` lists the data layers as `{id, name,
  * enabled}`, and `setLayer(id, enabled)` turns one on or off as a user click
  * would. `creditPlaces()`, optional, credits the bundled Wikidata place
- * packs once a name from them is shown, and `creditSuggestions(shown)`,
- * optional, shows the OpenStreetMap credit while Photon's suggestions are.
+ * packs once a name from them is shown.
  * `lookupEntities({text, signal})`, or null, asks the host's entity lookup
  * (src/app/controls.js) for the typed line, and `findLookedUp(match,
  * {signal})` finds one of its answers in its layer (src/ui/entityLookup.js).

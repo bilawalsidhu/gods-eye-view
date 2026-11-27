@@ -345,7 +345,7 @@ test('an overlay with NO class to watch still disarms the launcher', () => {
   const overlay = css.slice(css.indexOf('.cesium-credit-lightbox-overlay {'));
   assert.match(
     overlay.slice(0, overlay.indexOf('}')),
-    /z-index: 200 !important/,
+    /z-index: 9000 !important/,
   );
   const launcher = css.slice(css.indexOf('#first-run-launcher {'));
   assert.match(launcher.slice(0, launcher.indexOf('}')), /z-index: 175/);

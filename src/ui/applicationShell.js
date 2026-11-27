@@ -88,9 +88,7 @@ import { useGlobeActionsStore } from './stores/globeActions.js';
 import { useRecordingStore } from './stores/recording.js';
 import { onPlacePacksLoadingChange } from '../data/placeBelow.js';
 import {
-  hideOsmCredit,
   registerDynamicCredit,
-  showOsmCredit,
   WIKIDATA_PLACES_CREDIT,
 } from '../data/dataCredits.js';
 import { withPlacePacks } from './placePacksLoading.js';
@@ -208,11 +206,6 @@ export class StyleManager extends ShellFacade {
       // The Omnibar shows names from the bundled Wikidata packs.
       creditPlaces: () =>
         registerDynamicCredit(this.viewer, WIKIDATA_PLACES_CREDIT),
-      // Photon's suggestions are OpenStreetMap data: credited while shown.
-      creditSuggestions: (shown) =>
-        shown
-          ? showOsmCredit(this.viewer, 'omnibar')
-          : hideOsmCredit(this.viewer, 'omnibar'),
       // Things anywhere, from the host's lookup when it gives one.
       lookupEntities:
         typeof entityLookup === 'function'

@@ -111,69 +111,16 @@ test('OpenStreetMap has one generic data credit with separate tile and names dis
   );
 });
 
-test('inline OSM attribution persists until its last display owner leaves', async (t) => {
-  const { showOsmCredit, hideOsmCredit } = await import('./dataCredits.js');
-  t.mock.timers.enable({ apis: ['setTimeout'] });
-  const visible = new Set();
-  const viewer = bindFakeCesiumCredits({
-    creditDisplay: {
-      addStaticCredit: (c) => visible.add(c),
-      removeStaticCredit: (c) => visible.delete(c),
-    },
-    scene: { requestRender() {} },
-  });
-  assert.equal(showOsmCredit(viewer, 'alpr'), true);
-  assert.equal(showOsmCredit(viewer, 'alpr'), false);
-  assert.equal(visible.size, 1);
+test('the Data attribution list holds the OpenStreetMap and OpenMapTiles credits, never on the map line', () => {
+  for (const key of ['openstreetmap', 'openfreemap']) {
+    const entry = DATA_CREDITS.find((credit) => credit.key === key);
+    assert.ok(entry, `${key} is in the static list`);
+    assert.notEqual(entry.inline, true);
+  }
   assert.match(
-    [...visible][0].html,
-    /href="https:\/\/www.openstreetmap.org\/copyright"/,
+    DATA_CREDITS.find((credit) => credit.key === 'openfreemap').html,
+    /openmaptiles\.org/,
   );
-  assert.match([...visible][0].html, />© OpenStreetMap</);
-  assert.ok([...visible][0].showOnScreen);
-  t.mock.timers.tick(60000);
-  assert.equal(visible.size, 1);
-  showOsmCredit(viewer, 'traffic', { openMapTiles: true });
-  assert.equal(visible.size, 2);
-  hideOsmCredit(viewer, 'alpr');
-  assert.equal(visible.size, 2, 'traffic still owns both credits');
-  showOsmCredit(viewer, 'datacenters');
-  hideOsmCredit(viewer, 'traffic');
-  assert.equal(
-    visible.size,
-    1,
-    'bundled data does not retain the tile distributor',
-  );
-  hideOsmCredit(viewer, 'datacenters');
-  assert.equal(visible.size, 0);
-  assert.equal(hideOsmCredit(viewer, 'datacenters'), false);
-  showOsmCredit(viewer, 'alpr');
-  assert.equal(visible.size, 1, 'reenabling restores the short credit');
-});
-
-test('tile attribution follows source changes and viewers have independent ownership', async () => {
-  const { showOsmCredit, hideOsmCredit } = await import('./dataCredits.js');
-  const create = () => {
-    const credits = new Set();
-    return bindFakeCesiumCredits({
-      credits,
-      creditDisplay: {
-        addStaticCredit: (c) => credits.add(c),
-        removeStaticCredit: (c) => credits.delete(c),
-      },
-    });
-  };
-  const a = create(),
-    b = create();
-  showOsmCredit(a, 'installations', { openMapTiles: true });
-  showOsmCredit(b, 'installations');
-  assert.equal(a.credits.size, 2);
-  assert.equal(b.credits.size, 1);
-  showOsmCredit(a, 'installations');
-  assert.equal(a.credits.size, 1, 'wide names no longer use tiles');
-  hideOsmCredit(a, 'installations');
-  assert.equal(a.credits.size, 0);
-  assert.equal(b.credits.size, 1);
 });
 
 test('the NYC camera credit carries NYC DOT’s requested disclaimer', () => {
@@ -293,7 +240,8 @@ test('data credits go through the renderer to the attribution list', async () =>
   const shown = [];
   const viewer = bindFakeCesiumCredits({
     creditDisplay: {
-      addStaticCredit: (c) => shown.push(c),
+      // The renderer's own CesiumJS credit aside.
+      addStaticCredit: (c) => c.html.includes('CesiumJS') || shown.push(c),
       removeStaticCredit() {},
     },
   });

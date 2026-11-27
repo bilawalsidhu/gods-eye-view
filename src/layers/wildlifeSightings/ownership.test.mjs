@@ -110,7 +110,9 @@ function harness(
         ),
     },
     creditDisplay: {
-      addStaticCredit: (credit) => credits.add(credit),
+      // The renderer's own CesiumJS credit aside.
+      addStaticCredit: (credit) =>
+        credit.html.includes('CesiumJS') || credits.add(credit),
       removeStaticCredit: (credit) => credits.delete(credit),
     },
   };

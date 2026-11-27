@@ -75,6 +75,3 @@ export const SURFACE_BELOW_FLOOR_M = 30;
 /** Rendered-surface refinements per paint while the camera is still. */
 export const SURFACE_SAMPLES_PER_PAINT = 2;
 export const SURFACE_ABOVE_FLOOR_M = 40;
-
-/** OSM attribution may collapse after five seconds; full credit stays in Data attribution. */
-export const CREDIT_DISPLAY_MS = 5000;

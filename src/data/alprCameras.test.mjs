@@ -422,24 +422,23 @@ function cameraHarness(layer = alprCamerasLayer) {
   };
 }
 
-test('OSM attribution stays inline while ALPR displays and follows toggles', async (t) => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
+test('ALPR adds nothing to the map credit line; its source is credited in Data attribution while on', async () => {
   const h = cameraHarness();
+  const alpr = () =>
+    [...h.credits].filter((credit) => credit.html.includes('ALPR:'));
   try {
-    assert.equal(h.credits.size, 0);
     await alprCamerasLayer.update();
-    assert.equal(h.credits.size, 1);
-    const [credit] = h.credits;
-    assert.equal(credit.showOnScreen, true);
-    assert.match(credit.html, />© OpenStreetMap</);
-    assert.doesNotMatch(credit.html, /OpenMapTiles|Map and place data/);
-    t.mock.timers.tick(6000);
-    assert.equal(h.credits.size, 1);
+    assert.equal(alpr().length, 1);
+    assert.match(alpr()[0].html, /ALPR: © OpenStreetMap contributors/);
+    assert.ok(
+      [...h.credits].every((credit) => !credit.showOnScreen),
+      'nothing on the map',
+    );
     alprCamerasLayer.disable();
-    assert.equal(h.credits.size, 0);
+    assert.equal(alpr().length, 0, 'goes with the layer');
     alprCamerasLayer.enable();
     await alprCamerasLayer.update();
-    assert.equal(h.credits.size, 1);
+    assert.equal(alpr().length, 1);
     assert.match(
       DATA_CREDITS.find((entry) => entry.key === 'openstreetmap').html,
       /OpenStreetMap contributors.*ODbL/,
@@ -738,7 +737,6 @@ test('state, country and dateline views never request data; returning to the cit
       await alprCamerasLayer.update();
       assert.equal(h.requests.length, 0, 'fresh wide view must not query');
       assert.equal(alprCamerasLayer.getStats().status, 'zoom-in');
-      assert.equal(h.credits.size, 0, 'no data presentation has occurred');
     }
     h.setBox(city);
     await alprCamerasLayer.update();
