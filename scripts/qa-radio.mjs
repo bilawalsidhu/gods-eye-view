@@ -432,7 +432,7 @@ async function main() {
         enabled: true,
         uncertain: true,
       });
-      gev.dataManager._publishActivity({ type: 'status' });
+      entry.panel.invalidate();
       const staticResult = module.setTuningStatic(true);
       const filterBefore = module.getUIState().filter;
       const filterControl = document.getElementById('radio-filter');
@@ -505,7 +505,7 @@ async function main() {
         enabled: true,
         uncertain: false,
       });
-      gev.dataManager._publishActivity({ type: 'status' });
+      entry.panel.invalidate();
       module.cancelTuning();
       camera.flyTo = originalFlyTo;
       return result;

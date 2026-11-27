@@ -167,17 +167,21 @@ const openDataLayers = (page) =>
       panel.querySelector('[data-collapse-target="data-panel"]')?.click();
   });
 
+// The rows paint on the frame after a layer changes: read them after one.
 const libraryRows = async (page) => {
   await openDataLayers(page);
-  return page.evaluate(() =>
-    [...document.querySelectorAll('#data-toggles [data-library-entry]')].map(
-      (row) => ({
-        id: row.dataset.libraryEntry,
-        on: row.querySelector('.data-toggle-btn')?.classList.contains('active'),
-        count: row.querySelector('.data-count')?.textContent,
-      }),
-    ),
-  );
+  return page.evaluate(async () => {
+    await new Promise((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(resolve)),
+    );
+    return [
+      ...document.querySelectorAll('#data-toggles [data-library-entry]'),
+    ].map((row) => ({
+      id: row.dataset.libraryEntry,
+      on: row.querySelector('.data-toggle-btn')?.classList.contains('active'),
+      count: row.querySelector('.data-count')?.textContent,
+    }));
+  });
 };
 
 try {
