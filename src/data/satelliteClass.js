@@ -121,6 +121,14 @@ const FALLBACK = Object.freeze({ klass: 'visual', subtype: null });
  */
 const ISS_CLASS = Object.freeze({ klass: 'station', subtype: 'ISS' });
 
+// Options made once: the overlay asks for every satellite's class per paint.
+const IS_ISS = Object.freeze({ isIss: true });
+const NOT_ISS = Object.freeze({ isIss: false });
+const ISS_LOCALIZED = Object.freeze({ isIss: true, localize: true });
+const ISS_RAW = Object.freeze({ isIss: true, localize: false });
+const OTHER_LOCALIZED = Object.freeze({ isIss: false, localize: true });
+const OTHER_RAW = Object.freeze({ isIss: false, localize: false });
+
 /**
  * Resolve a satellite to its class key and constellation subtype. This is the
  * ONLY place the ISS special case lives; the label and the legend tally both
@@ -160,10 +168,24 @@ export function satelliteClassLabel(
   group,
   { isIss = false, localize = true } = {},
 ) {
-  const { klass, subtype } = satelliteClassOf(group, { isIss });
+  const { klass, subtype } = satelliteClassOf(group, isIss ? IS_ISS : NOT_ISS);
   const label = CLASS_DISPLAY_KEYS[klass].label;
   const base = localize ? t(label) : label;
-  return subtype ? `${base} · ${subtype}` : base;
+  return subtype ? joinedClassText(base, subtype) : base;
+}
+
+/**
+ * `${base} · ${subtype}`, built once per pair: the detection overlay asks for
+ * every satellite's class on every paint, and the pairs are few.
+ */
+const _joinedClassText = new Map();
+function joinedClassText(base, subtype) {
+  let bySubtype = _joinedClassText.get(base);
+  if (!bySubtype) _joinedClassText.set(base, (bySubtype = new Map()));
+  let text = bySubtype.get(subtype);
+  if (text === undefined)
+    bySubtype.set(subtype, (text = `${base} · ${subtype}`));
+  return text;
 }
 
 /**
@@ -184,8 +206,20 @@ export function satelliteClassText(
   { isIss = false, localize = true } = {},
 ) {
   const display = SATELLITE_CLASS_DISPLAY[satelliteClass];
-  if (!display) return satelliteClassLabel(group, { isIss, localize });
+  if (!display)
+    return satelliteClassLabel(
+      group,
+      isIss
+        ? localize
+          ? ISS_LOCALIZED
+          : ISS_RAW
+        : localize
+          ? OTHER_LOCALIZED
+          : OTHER_RAW,
+    );
   const base = localize ? t(display.label) : display.label;
-  const { subtype } = satelliteClassOf(group, { isIss });
-  return subtype && subtype !== display.label ? `${base} · ${subtype}` : base;
+  const { subtype } = satelliteClassOf(group, isIss ? IS_ISS : NOT_ISS);
+  return subtype && subtype !== display.label
+    ? joinedClassText(base, subtype)
+    : base;
 }

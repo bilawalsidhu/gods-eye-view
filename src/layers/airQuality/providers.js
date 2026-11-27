@@ -19,7 +19,9 @@ function withQuery(endpoint, fields) {
  * `getSnapshot` answers one pollutant (`parameter`), interpreted on the EEA
  * hourly bands when `hourly`, or with `mode: 'aqi'` every pollutant the
  * snapshot holds: the layer folds them into one reading per station. A
- * national snapshot is reused for `reuseMs` across views.
+ * national snapshot is reused for `reuseMs` across views. `atMs` asks a past
+ * time instead of now (the route's `at`): a route that answers it says so
+ * with that time as `at` in its answer, and the coverage then carries `atMs`.
  * A snapshot holds at most 50,000 readings. Requests reject redirects.
  * Set keyed to false for a keyless route to report authorization failures as unavailable.
  * Account changes require a new source so cached answers and coverage belong to that account.
@@ -139,15 +141,20 @@ export function createAirQualitySnapshotSource({
   }
   return {
     getCoverage: () => coverage,
-    async getSnapshot({ parameter = 'PM2.5', mode, signal, view } = {}) {
+    async getSnapshot({ parameter = 'PM2.5', mode, signal, view, atMs } = {}) {
       const allPollutants = mode === 'aqi';
       signal?.throwIfAborted();
+      const past = Number.isSafeInteger(atMs);
+      const at = past ? { at: String(atMs) } : {};
       const url = view
         ? withQuery(endpoint, {
             view: view.join(','),
             ...(allPollutants ? { mode: 'aqi' } : hourly ? { parameter } : {}),
+            ...at,
           })
-        : endpoint;
+        : past
+          ? withQuery(endpoint, at)
+          : endpoint;
       // A national snapshot (no view) serves every view and pollutant: a
       // view switch within `reuseMs` filters the same payload again. One the
       // server marks stale is not kept, so a recovery shows on the next ask.
@@ -159,13 +166,16 @@ export function createAirQualitySnapshotSource({
       if (reusable && reused?.payload !== payload && payload.stale !== true)
         reused = { url, payload, at: now() };
       signal?.throwIfAborted();
+      // Rows are aged at the time asked: no later than it, at most six hours
+      // before it.
+      const asOf = past ? atMs : now();
       const readings = payload.readings
         .filter(
           (row) =>
             (allPollutants || row.parameter === parameter) &&
             Number.isFinite(row.observedMs) &&
-            row.observedMs <= now() + 300_000 &&
-            now() - row.observedMs <= 6 * 3600_000,
+            row.observedMs <= asOf + (past ? 0 : 300_000) &&
+            asOf - row.observedMs <= 6 * 3600_000,
         )
         .map((row) => (hourly && !allPollutants ? interpretHourly(row) : row))
         .sort(
@@ -179,6 +189,9 @@ export function createAirQualitySnapshotSource({
         eligible: count(payload.eligible),
         failureStatus: count(payload.failureStatus),
         retryAt: count(payload.retryAt),
+        // The time answered for: the one asked, when the route says it
+        // answered for that time; null for now.
+        atMs: past && payload.at === atMs ? atMs : null,
       };
       return readings;
     },
@@ -223,8 +236,8 @@ export function createDefaultAirQualityProviders({ fetchImpl, now } = {}) {
  *
  * `options.providers` replaces the defaults: each definition has `id`,
  * `title`, `label`, `network`, `parameters` and a `source` whose
- * `getSnapshot({parameter, mode, signal, view})` returns readings, one row
- * per station and pollutant:
+ * `getSnapshot({parameter, mode, signal, view, atMs})` returns readings, one
+ * row per station and pollutant:
  *
  * `{id, provider, stationId, name, lat, lon, observedMs, parameter, units,
  * value, kind: 'observation', averagingMinutes, coveragePercent?,
@@ -255,7 +268,16 @@ export function createDefaultAirQualityProviders({ fetchImpl, now } = {}) {
  *   one leaves the pollutant unrated.
  * - A row with `monitor: false` (a low-cost sensor) gets no US AQI; the
  *   pollutant views keep it, marked as a sensor.
- * Rows older than six hours are not shown. A reading that already carries
+ * Rows older than six hours are not shown.
+ *
+ * Following the timeline, the layer asks with `atMs` (ms) away from now: the
+ * start of the hour the timeline is in, for the readings of then, each no
+ * later than `atMs` and aged against it. A source that answered for that
+ * time reports it as `atMs` in `getCoverage()`; one that reports none
+ * answered for now, and the layer draws no stations away from now from it.
+ * Without `atMs` a source answers now.
+ *
+ * A reading that already carries
  * `values` passes through as one station, its values taken as on their
  * tables' periods.
  */

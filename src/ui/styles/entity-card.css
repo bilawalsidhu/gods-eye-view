@@ -583,6 +583,14 @@
   margin: 0.55rem 0 0.15rem;
 }
 
+/* What the item is, in its data's own words. */
+.entity-card__description {
+  margin: 0.45rem 0 0.6rem;
+  color: rgba(225, 236, 242, 0.82);
+  font-size: 0.66rem;
+  line-height: 1.45;
+}
+
 #entity-card .entity-card__where {
   margin: 0;
   font-size: 0.6rem;
@@ -839,6 +847,15 @@
   background: rgba(5, 8, 11, 0.8);
   border: 1px solid rgba(75, 227, 160, 0.45);
   border-radius: 999px;
+}
+
+/* The frame's time, under the picture. */
+.cctv-preview__time {
+  margin-top: -0.25rem;
+  color: rgba(199, 214, 222, 0.6);
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.06rem;
 }
 
 .cctv-preview__name {

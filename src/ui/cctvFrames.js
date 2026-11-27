@@ -80,6 +80,40 @@ export function cctvSourceLabelText(label) {
 /** Longest wait for a loaded frame's decode before it is shown anyway. */
 export const CCTV_FRAME_DECODE_WAIT_MS = 1000;
 
+/**
+ * The response header in which a camera source that sets `framesCarryTime`
+ * gives each frame's capture time, in milliseconds since the epoch.
+ */
+export const CCTV_FRAME_TIME_HEADER = 'X-CCTV-Frame-Time';
+
+/** The latest time a Date can hold. */
+const MAX_TIME_MS = 8.64e15;
+
+/** A frame-time header's value as epoch ms, or null when absent or malformed. */
+export function cctvFrameTimeMs(value) {
+  const text = String(value ?? '').trim();
+  if (!/^\d{1,16}$/.test(text)) return null;
+  const ms = Number(text);
+  return ms > 0 && ms <= MAX_TIME_MS ? ms : null;
+}
+
+/** "2026-11-26 18:04:31Z", or '' for no time. */
+export function cctvFrameTimeLabel(ms) {
+  if (!Number.isFinite(ms) || ms <= 0 || ms > MAX_TIME_MS) return '';
+  return `${new Date(ms).toISOString().slice(0, 19).replace('T', ' ')}Z`;
+}
+
+/**
+ * A frame's time as the preview publishes it: epoch ms, its text and its ISO
+ * form for a `<time datetime>`, or none.
+ */
+function frameTime(ms) {
+  const timeLabel = cctvFrameTimeLabel(ms);
+  return timeLabel
+    ? { timeMs: ms, timeLabel, timeIso: new Date(ms).toISOString() }
+    : { timeMs: null, timeLabel: '', timeIso: '' };
+}
+
 /** The preview before any frame: nothing requested, nothing shown. */
 export const EMPTY_CCTV_FRAME = Object.freeze({
   cameraId: '',
@@ -89,6 +123,7 @@ export const EMPTY_CCTV_FRAME = Object.freeze({
   error: false,
   hasFrame: false,
   wrapLoading: false,
+  ...frameTime(null),
 });
 
 /** Apply a change to the preview and publish it to the panel view. */
@@ -97,29 +132,68 @@ export function _setCctvFrame(change) {
   this.store.setFrame(this._frame);
 }
 
+/** Forget a frame read into an object URL; a shown image keeps its pixels. */
+function revoke(url) {
+  if (url) URL.revokeObjectURL(url);
+}
+
+/** Stop the frame request in flight, its image and any frame it read. */
+function dropPendingFrame(controls) {
+  controls._cctvFrameFetch?.abort();
+  controls._cctvFrameFetch = null;
+  if (controls._cctvFramePreloader) {
+    controls._cctvFramePreloader.onload = null;
+    controls._cctvFramePreloader.onerror = null;
+  }
+  controls._cctvFramePreloader = null;
+  revoke(controls._cctvFramePendingUrl);
+  controls._cctvFramePendingUrl = null;
+}
+
 export function _clearCctvFrame() {
   this._cctvFrameRequestToken += 1;
-  if (this._cctvFramePreloader) {
-    this._cctvFramePreloader.onload = null;
-    this._cctvFramePreloader.onerror = null;
-  }
-  this._cctvFramePreloader = null;
+  dropPendingFrame(this);
+  revoke(this._cctvFrameShownUrl);
+  this._cctvFrameShownUrl = null;
   if (this._cctvFrame) this._setCctvFrame(EMPTY_CCTV_FRAME);
 }
 
-export function _queueCctvFrame(src, cameraId, cameraChanged) {
+/**
+ * Read a frame and the time its source gives it: the bytes become an object
+ * URL, so the picture shown is the one the time belongs to.
+ */
+async function fetchCctvFrame(src, signal) {
+  const response = await globalThis.fetch(src, { signal });
+  if (!response.ok) throw new Error('Camera frame HTTP ' + response.status);
+  const timeMs = cctvFrameTimeMs(response.headers.get(CCTV_FRAME_TIME_HEADER));
+  const blob = await response.blob();
+  return { url: URL.createObjectURL(blob), timeMs };
+}
+
+/**
+ * Show the frame for `src`. A camera whose source sets `framesCarryTime`
+ * (`readTime`) has its frame fetched, so the time in its response header can
+ * be shown with it; any other frame loads as an image, with no time.
+ */
+export function _queueCctvFrame(
+  src,
+  cameraId,
+  cameraChanged,
+  { readTime = false } = {},
+) {
   if (this.destroyed || !this._cctvFrame || !src) return;
 
-  if (this._cctvFramePreloader) {
-    this._cctvFramePreloader.onload = null;
-    this._cctvFramePreloader.onerror = null;
-  }
+  dropPendingFrame(this);
   const token = ++this._cctvFrameRequestToken;
+  if (cameraChanged) {
+    revoke(this._cctvFrameShownUrl);
+    this._cctvFrameShownUrl = null;
+  }
   // A different camera gets an honest acquisition state. Never retain the
   // prior camera's pixels under the newly selected metadata.
   const hasFrame = cameraChanged ? false : this._frame.hasFrame;
   this._setCctvFrame({
-    ...(cameraChanged ? { src: '' } : {}),
+    ...(cameraChanged ? { src: '', ...frameTime(null) } : {}),
     hasFrame,
     cameraId,
     currentSrc: src,
@@ -128,8 +202,33 @@ export function _queueCctvFrame(src, cameraId, cameraChanged) {
     wrapLoading: !hasFrame,
   });
 
+  if (!readTime || typeof globalThis.fetch !== 'function') {
+    loadCctvFrameImage(this, token, src, null);
+    return;
+  }
+  const request = new AbortController();
+  this._cctvFrameFetch = request;
+  fetchCctvFrame(src, request.signal).then(
+    ({ url, timeMs }) => {
+      if (this.destroyed || token !== this._cctvFrameRequestToken) {
+        revoke(url);
+        return;
+      }
+      this._cctvFrameFetch = null;
+      this._cctvFramePendingUrl = url;
+      loadCctvFrameImage(this, token, url, timeMs);
+    },
+    () => {
+      if (token !== this._cctvFrameRequestToken) return;
+      this._cctvFrameFetch = null;
+      this._settleCctvFrame(token, src, false);
+    },
+  );
+}
+
+function loadCctvFrameImage(controls, token, src, timeMs) {
   const preloader = new Image();
-  this._cctvFramePreloader = preloader;
+  controls._cctvFramePreloader = preloader;
   // Settle once the image is decoded, not merely loaded: the panel's <img>
   // then paints the frame the moment it takes the src, instead of showing
   // its empty box for the decode.
@@ -139,7 +238,7 @@ export function _queueCctvFrame(src, cameraId, cameraChanged) {
   // CCTV_FRAME_DECODE_WAIT_MS rather than leaving the preview loading.
   preloader.onload = () => {
     if (typeof preloader.decode !== 'function') {
-      this._settleCctvFrame(token, src, true);
+      controls._settleCctvFrame(token, src, true, timeMs);
       return;
     }
     let settled = false;
@@ -147,16 +246,20 @@ export function _queueCctvFrame(src, cameraId, cameraChanged) {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      this._settleCctvFrame(token, src, true);
+      controls._settleCctvFrame(token, src, true, timeMs);
     };
     const timer = setTimeout(settle, CCTV_FRAME_DECODE_WAIT_MS);
     preloader.decode().then(settle, settle);
   };
-  preloader.onerror = () => this._settleCctvFrame(token, src, false);
+  preloader.onerror = () => controls._settleCctvFrame(token, src, false);
   preloader.src = src;
 }
 
-export function _settleCctvFrame(token, src, ok) {
+/**
+ * Settle the request `token`: `src` is the picture to show (an object URL for
+ * a fetched frame) and `timeMs` the time its source gave it, or null.
+ */
+export function _settleCctvFrame(token, src, ok, timeMs = null) {
   if (
     this.destroyed ||
     !this._cctvFrame ||
@@ -168,7 +271,13 @@ export function _settleCctvFrame(token, src, ok) {
     this._cctvFramePreloader.onerror = null;
   }
   this._cctvFramePreloader = null;
-  // A failure leaves a settled frame on screen.
+  if (ok) {
+    if (this._cctvFrameShownUrl !== this._cctvFramePendingUrl)
+      revoke(this._cctvFrameShownUrl);
+    this._cctvFrameShownUrl = this._cctvFramePendingUrl;
+  } else revoke(this._cctvFramePendingUrl);
+  this._cctvFramePendingUrl = null;
+  // A failure leaves a settled frame, and its time, on screen.
   this._setCctvFrame(
     ok
       ? {
@@ -177,6 +286,7 @@ export function _settleCctvFrame(token, src, ok) {
           error: false,
           src,
           hasFrame: true,
+          ...frameTime(timeMs),
         }
       : { loading: false, wrapLoading: false, error: true },
   );

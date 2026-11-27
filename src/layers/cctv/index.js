@@ -20,7 +20,17 @@ import { createIngestion } from './ingestion.js';
 import { createState } from './state.js';
 import { createDrawSets } from './drawSets.js';
 
-/** Construct one layer with its own scene state and supplied application services. */
+/**
+ * Construct one layer with its own scene state and supplied application services.
+ *
+ * The camera source supplies `getCatalog`, `getHealth`, `getFrameUrl` and
+ * `getMediaUrl`. A source may also set `framesCarryTime: true` when each
+ * response from its frame URLs carries the frame's capture time, in
+ * milliseconds since the epoch, in the `X-CCTV-Frame-Time` header: the CCTV
+ * panel, the camera's card and its bigger view then fetch the frame and show
+ * that time with it. Frames from another origin need the header listed in
+ * `Access-Control-Expose-Headers`. A frame without the header shows no time.
+ */
 export function createCctvLayer({ services, source }) {
   if (
     !['getCatalog', 'getHealth', 'getFrameUrl', 'getMediaUrl'].every(

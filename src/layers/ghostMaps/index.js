@@ -197,7 +197,8 @@ export function createGhostMapsLayer({
   let _stream = 'closed';
   let _queue = Promise.resolve();
   let _clickSubscription = null;
-  let _rowListener = null;
+  /** @type {{ invalidate: () => void } | null} the panels' handle, from init */
+  let _panel = null;
   let _selectedKey = null;
   let _selectedCardId = null;
   let _selectedLink = null;
@@ -212,7 +213,7 @@ export function createGhostMapsLayer({
   /** productId → error text */
   const _failed = new Map();
 
-  const notifyRow = () => _rowListener?.();
+  const notifyRow = () => _panel?.invalidate();
   const render = () =>
     _viewer && findFrame(_viewer)?.requestRender?.('ghostmaps');
   /** This layer's draw sets' ids start with this; one set per edition. */
@@ -763,9 +764,10 @@ export function createGhostMapsLayer({
     // the backstop if the stream is down.
     updateInterval: 300000,
 
-    init(viewer) {
+    init(viewer, { panel = null } = {}) {
       if (_viewer) throw new Error('GhostMaps layer is already initialized');
       _viewer = viewer;
+      _panel = panel;
     },
 
     enable() {
@@ -826,11 +828,7 @@ export function createGhostMapsLayer({
       layer.disable();
       _viewer = null;
       _catalog = null;
-      _rowListener = null;
-    },
-
-    setRowControlsListener(listener) {
-      _rowListener = listener;
+      _panel = null;
     },
 
     getRowControls() {

@@ -211,10 +211,9 @@ test('selection copy reads like a transit card and never leaks nulls', () => {
   assert.equal(transitVehicleKey('mbta', '17'), 'mbta:17');
 });
 
-test('the layer accepts a manager handle for out-of-tick panel repaints', () => {
-  assert.equal(typeof transitLayer.attachDataManager, 'function');
-  transitLayer.attachDataManager({ refreshLayerStats() {} });
-  transitLayer.attachDataManager(null);
+test('the layer takes its panel handle from init, not a manager handle', () => {
+  assert.equal(transitLayer.attachDataManager, undefined);
+  assert.equal(transitLayer.setRowControlsListener, undefined);
 });
 
 test('stats before enable are an honest zero, not a fake feed state', () => {

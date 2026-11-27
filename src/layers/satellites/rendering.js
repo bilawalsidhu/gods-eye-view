@@ -52,9 +52,11 @@ const TRACKED_DOT = Object.freeze({
 /** An orbit ring's colour when none is given (cyan). */
 const DEFAULT_RING_COLOR = Object.freeze([0, 1, 1, 1]);
 
-/** Rings: this alpha in front of the globe, the dimmer one behind it. */
+/**
+ * Rings draw at this alpha where they are in sight; the Earth hides the
+ * part behind it (no `depthFail` style).
+ */
 const RING_ALPHA = 0.6;
-const RING_BEHIND_ALPHA = 0.35;
 
 /** An RGBA colour with another alpha. */
 const withAlpha = (color, alpha) => [color[0], color[1], color[2], alpha];
@@ -284,10 +286,6 @@ export function createRendering({
     path.item.style = {
       kind: 'solid',
       color: withAlpha(path.color, RING_ALPHA * factor),
-    };
-    path.item.depthFail = {
-      kind: 'solid',
-      color: withAlpha(path.color, RING_BEHIND_ALPHA * factor),
     };
     sets?.rings.upsert([path.item]);
     return true;
@@ -557,8 +555,8 @@ export function createRendering({
 
   /**
    * Show orbital path for a satellite: the ring over one orbit, baked once
-   * in ECEF at the current GMST, bright in front of the globe and dimmed
-   * behind it (`depthFail`), and turned with the Earth each
+   * in ECEF at the current GMST, drawn where it is in front of the globe and
+   * hidden by the Earth behind it, and turned with the Earth each
    * `RING_ROTATION_MS` (`_updateOrbitPathRotations`).
    */
 
@@ -592,10 +590,7 @@ export function createRendering({
       // Along the ellipsoid between samples, as the ring always ran.
       mode: 'geodesic',
       style: { kind: 'solid', color: withAlpha(pathColor, RING_ALPHA) },
-      depthFail: {
-        kind: 'solid',
-        color: withAlpha(pathColor, RING_BEHIND_ALPHA),
-      },
+      // No `depthFail` style: the part behind the Earth is hidden by it.
       show: true,
     };
     layerState._orbitPaths.set(noradId, path);
@@ -621,8 +616,8 @@ export function createRendering({
    * likewise harmless. No unwrapping needed.
    *
    * No SGP4 here: WGS84 is rotationally symmetric about Z, so rotating the
-   * baked curve rigidly equals rebaking from rotated points. A ring with a
-   * `depthFail` style is built at once where it now runs, so it never blinks.
+   * baked curve rigidly equals rebaking from rotated points. A ring's
+   * positions are written in place where it now runs, so it never blinks.
    * @param {Date} nowDate Epoch used for current GMST.
    */
 

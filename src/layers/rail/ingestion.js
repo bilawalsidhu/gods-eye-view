@@ -135,7 +135,7 @@ export function createIngestion({ state, services, parts, source }) {
     if (removed > 0) {
       parts.rendering.syncRenderHold();
       governorRequestRender('rail-evict');
-      state._dataManager?.refreshLayerStats?.();
+      state._panel?.invalidate();
     }
     return removed;
   }
@@ -330,7 +330,7 @@ export function createIngestion({ state, services, parts, source }) {
       removeFeedTrains(feed.id);
       status.count = 0;
       parts.rendering.syncRenderHold();
-      state._dataManager?.refreshLayerStats?.();
+      state._panel?.invalidate();
       return;
     }
     status.pollSeq += 1;
@@ -424,7 +424,7 @@ export function createIngestion({ state, services, parts, source }) {
     state._revision += 1;
     parts.rendering.syncRenderHold();
     governorRequestRender('rail-poll');
-    state._dataManager?.refreshLayerStats?.();
+    state._panel?.invalidate();
     parts.controls.notify();
   }
 
@@ -445,7 +445,7 @@ export function createIngestion({ state, services, parts, source }) {
     status.loading = false;
     state._error = status.error;
     sweepAgedTrains(Date.now());
-    state._dataManager?.refreshLayerStats?.();
+    state._panel?.invalidate();
   }
 
   /**

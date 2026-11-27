@@ -74,23 +74,6 @@ export function createControls({ state: layerState, services, parts, source }) {
       };
     },
 
-    setRowControlsListener(listener) {
-      unsubscribeRowControls?.();
-      unsubscribeRowControls = null;
-      if (!listener) return;
-      let previousRoster;
-      let previousSelection;
-      unsubscribeRowControls = parts.panel.subscribePanel(({ roster }) => {
-        // Replay and telemetry can update without changing the roster or pick.
-        const selection = layerState._selectedLaunchId;
-        if (roster === previousRoster && selection === previousSelection)
-          return;
-        previousRoster = roster;
-        previousSelection = selection;
-        listener();
-      });
-    },
-
     /**
      * Hear each mission picked on the globe (a marker or its label), after
      * it is selected. The app reveals the Space Missions panel for it.
@@ -175,5 +158,25 @@ export function createControls({ state: layerState, services, parts, source }) {
     },
   };
 
-  return { methods };
+  /**
+   * Invalidate the panels' row while `panel` is given: a new roster or
+   * mission pick changes the row, while replay and telemetry updates do not.
+   * @param {{ invalidate: () => void } | null} panel
+   */
+  function watchRowControls(panel) {
+    unsubscribeRowControls?.();
+    unsubscribeRowControls = null;
+    if (!panel) return;
+    let previousRoster;
+    let previousSelection;
+    unsubscribeRowControls = parts.panel.subscribePanel(({ roster }) => {
+      const selection = layerState._selectedLaunchId;
+      if (roster === previousRoster && selection === previousSelection) return;
+      previousRoster = roster;
+      previousSelection = selection;
+      panel.invalidate();
+    });
+  }
+
+  return { methods, watchRowControls };
 }

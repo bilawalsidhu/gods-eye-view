@@ -68,6 +68,7 @@ export function normalizeOpenAqLocations(locations) {
             : null,
       })),
       lastObservedMs: Date.parse(row.datetimeLast?.utc) || null,
+      firstObservedMs: Date.parse(row.datetimeFirst?.utc) || null,
     });
   }
   return [...unique.values()];

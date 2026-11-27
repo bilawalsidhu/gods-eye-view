@@ -174,3 +174,88 @@ test('motion ends when its segment and glide do', () => {
     T0 + 18_000,
   );
 });
+
+/**
+ * The arc as it was evaluated through `eastNorthUp` before positions were
+ * written into a caller's vector: the reference the scalar axes must match
+ * bit for bit.
+ */
+function arcThroughFrame(segment, t) {
+  const DEG = Math.PI / 180;
+  const dt = Math.min(
+    segment.maxDtS,
+    Math.max(segment.minDtS, (t - segment.t0) / 1000),
+  );
+  let omega = (segment.turnRateDps || 0) * DEG;
+  if (Math.abs(omega) < 1e-4) omega = 0;
+  const half = omega * dt * 0.5;
+  const sinc =
+    Math.abs(half) < 1e-4 ? 1 - (half * half) / 6 : Math.sin(half) / half;
+  const reach = (segment.speedMps || 0) * dt * sinc;
+  const heading = (segment.trackDeg || 0) * DEG + half;
+  const e = reach * Math.sin(heading);
+  const n = reach * Math.cos(heading);
+  const u = (segment.climbMps || 0) * dt;
+  const { x: east, y: north, z: up } = eastNorthUp(segment.fix);
+  const fix = segment.fix;
+  return {
+    x: fix.x + east.x * e + north.x * n + up.x * u,
+    y: fix.y + east.y * e + north.y * n + up.y * u,
+    z: fix.z + east.z * e + north.z * n + up.z * u,
+  };
+}
+
+test('a position written into a given vector is that vector, bit for bit the fresh one', () => {
+  const geo = { lon: 4.1, lat: 51.95, height: 2 };
+  const arcs = [
+    { lon: -97.04, lat: 32.9, h: 10_500, track: 90, turn: 3 },
+    { lon: 151.2, lat: -33.9, h: 300, track: 271, turn: 0 },
+    { lon: 0, lat: 90, h: 9_000, track: 10, turn: -2 },
+    { lon: 0, lat: -90, h: 9_000, track: 200, turn: 1 },
+  ].map(({ lon, lat, h, track, turn }) => ({
+    kind: 'arc',
+    fix: fromDegrees(lon, lat, h),
+    t0: T0,
+    speedMps: 230,
+    trackDeg: track,
+    turnRateDps: turn,
+    climbMps: -4,
+    minDtS: -10,
+    maxDtS: 20,
+  }));
+  // Exactly on the axis: eastNorthUp's pole frame, both poles.
+  for (const z of [6_365_000, -6_365_000])
+    arcs.push({ ...arcs[0], fix: { x: 0, y: 0, z } });
+  const lerp = {
+    kind: 'lerp',
+    from: FIX,
+    to: { x: FIX.x + 900, y: FIX.y - 50, z: FIX.z + 3 },
+    t0: T0,
+    t1: T0 + 10_000,
+  };
+  const out = { x: NaN, y: NaN, z: NaN };
+  for (const t of [T0 - 15_000, T0, T0 + 3_217, T0 + 25_000]) {
+    for (const arc of arcs) {
+      const written = motionPosition(arc, null, t, out);
+      assert.equal(written, out, 'the arc writes into the given vector');
+      assert.deepEqual({ ...written }, arcThroughFrame(arc, t), 'arc bits');
+      assert.deepEqual(motionPosition(arc, null, t), arcThroughFrame(arc, t));
+    }
+    const fresh = motionPosition(lerp, null, t);
+    assert.equal(motionPosition(lerp, null, t, out), out);
+    assert.deepEqual({ ...out }, fresh, 'lerp bits');
+  }
+  assert.equal(motionPosition({ kind: 'hold' }, geo, T0, out), out);
+  assert.deepEqual(
+    { ...out },
+    fromDegrees(4.1, 51.95, 2),
+    'geodetic hold bits',
+  );
+  assert.equal(iconPosition({ pos: FIX }, T0, out), out);
+  assert.deepEqual({ ...out }, { x: FIX.x, y: FIX.y, z: FIX.z }, 'ECEF hold');
+  // Without one, each call still answers with a vector of its own.
+  const a = iconPosition({ pos: FIX }, T0);
+  const b = iconPosition({ pos: FIX }, T0);
+  assert.notEqual(a, b);
+  assert.notEqual(a, FIX);
+});

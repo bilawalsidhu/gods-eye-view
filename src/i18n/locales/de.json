@@ -4169,7 +4169,6 @@
   "Opens chat": "Öffnet den Chat",
   "Go to {place}": "Zu {place} wechseln",
   "Place or coordinates": "Ort oder Koordinaten",
-  "Search “{query}” as a place anyway": "„{query}“ trotzdem als Ort suchen",
   "Turn on": "Einschalten",
   "Turn off": "Ausschalten",
   "Command": "Befehl",
@@ -4213,10 +4212,9 @@
   "Search places, layers and things on the map, or ask GEV": "Suche Orte, Ebenen und Kartenelemente oder frage GEV",
   "Search places, layers, flights… or ask GEV  ·  > for commands": "Orte, Ebenen, Flüge suchen… oder GEV fragen · > für Befehle",
   "No matching command": "Kein passender Befehl",
-  "Looks private, so nothing is searched or sent": "Sieht privat aus, daher wird nichts gesucht oder gesendet",
   "Bilawal on YouTube": "Bilawal auf YouTube",
   "BROWSE STORIES": "STORIES ANSEHEN",
-  "ENTER GOD MODE": "GOTT-MODUS STARTEN",
+  "ENTER DEFAULT MODE": "STANDARDMODUS STARTEN",
   "Go deeper": "Mehr entdecken",
   "The studio behind GEV": "Das Studio hinter GEV",
   "Visual presets": "Visuelle Presets",
@@ -4227,7 +4225,7 @@
   "A cleaner, readable view where every value shows its source. For research and reporting.": "Eine klarere, gut lesbare Ansicht, in der jeder Wert seine Quelle zeigt. Für Recherche und Berichte.",
   "Keyhole HUD": "Schlüsselloch-HUD",
   "Analyst": "Analyse",
-  "God": "Gott",
+  "Default": "Standard",
   "COMING SOON": "DEMNÄCHST",
   "More from Halfpixel": "Mehr von Halfpixel",
   "Start with": "Starten mit",
@@ -4540,5 +4538,7 @@
   "Low-cost sensor": "Kostengünstiger Sensor",
   "{name} · sensor": "{name} · Sensor",
   "Reference monitor": "Referenzmessgerät",
-  "Needs {envVars} — add one in Provider Settings": "Benötigt {envVars}: einen davon in den Anbieter-Einstellungen hinzufügen"
+  "Needs {envVars} — add one in Provider Settings": "Benötigt {envVars}: einen davon in den Anbieter-Einstellungen hinzufügen",
+  "CABLE \u00b7 {name}": "KABEL · {name}",
+  "LANDING POINT \u00b7 {name}": "ANLANDEPUNKT · {name}"
 }

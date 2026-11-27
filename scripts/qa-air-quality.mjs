@@ -47,6 +47,16 @@ function record(name, ok, detail) {
   console.log(`  [${tag}] ${name}${detail ? `  — ${detail}` : ''}`);
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+/**
+ * Open Data Layers before reading its rows: they repaint while it is
+ * displayed, and it starts collapsed.
+ */
+const openDataLayers = (page) =>
+  page.evaluate(() => {
+    const panel = document.getElementById('data-panel');
+    if (panel?.classList.contains('collapsed'))
+      panel.querySelector('[data-collapse-target="data-panel"]')?.click();
+  });
 
 async function main() {
   let exitCode = 0;
@@ -203,6 +213,7 @@ async function main() {
     // The Layers row: not UNAVAILABLE, says KEY REQUIRED, and its title names
     // the OpenAQ key.
     let toggle = null;
+    await openDataLayers(page);
     for (let i = 0; i < 20 && !/KEY REQUIRED/.test(toggle?.meta ?? ''); i++) {
       await sleep(250);
       toggle = await page.evaluate(() => {
