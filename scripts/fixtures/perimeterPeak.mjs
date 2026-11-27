@@ -5,9 +5,11 @@
  * Shaped like a busy day in the western US: about 1000 pieces of 160 fires,
  * each piece the next growth ring of its fire cut into 47 sectors of 17
  * vertices (about 0.8 million vertices in all), its fire line along the
- * ring's outer edge. Pieces are born over the 3 days before `start` and on
- * at the same rate after it. A snapshot at `at` lists every piece born by
- * then.
+ * ring's outer edge. A ring is cut from the area around the last, as a
+ * source cuts growth: its inner edge runs through the last ring's outer
+ * points, so the layer draws only the newest ring's line as the fire's
+ * edge. Pieces are born over the 3 days before `start` and on at the same
+ * rate after it. A snapshot at `at` lists every piece born by then.
  */
 
 import { rng } from '../../src/testSupport/rng.mjs';
@@ -23,30 +25,39 @@ function offset(lon, lat, km, angle) {
 }
 
 /**
- * One growth ring of a fire, between `inner` and `outer` km from its
- * centre, as `sectors` polygons of `2 * (arc + 1) + 1` vertices each, and
- * the fire line along its outer edge.
+ * One growth ring of a fire, `grow` km out from `last` (each sector's arc
+ * of points and their distances from the centre, km; null for the first
+ * ring, from 0.5 km), as `sectors` polygons of `2 * (arc + 1) + 1` vertices
+ * each, and the fire line along its outer edge. Returns the ring's own
+ * arcs as the next ring's `last`.
  */
-function growthRing(next, fire, inner, outer, sectors, arc) {
+function growthRing(next, fire, last, grow, sectors, arc) {
   const polygons = [];
   const outline = [];
+  const arcs = [];
   const wobble = () => 0.9 + 0.2 * next();
   for (let k = 0; k < sectors; k++) {
     const from = (2 * Math.PI * k) / sectors;
     const to = (2 * Math.PI * (k + 1)) / sectors;
-    const outerArc = [];
-    const innerArc = [];
-    for (let i = 0; i <= arc; i++) {
-      const angle = from + ((to - from) * i) / arc;
-      outerArc.push(offset(fire.lon, fire.lat, outer * wobble(), angle));
-      innerArc.push(offset(fire.lon, fire.lat, inner, angle));
-    }
-    const ring = [...innerArc, ...outerArc.toReversed()];
+    const angles = Array.from(
+      { length: arc + 1 },
+      (_, i) => from + ((to - from) * i) / arc,
+    );
+    const inner = last?.[k] ?? {
+      km: angles.map(() => 0.5),
+      points: angles.map((angle) => offset(fire.lon, fire.lat, 0.5, angle)),
+    };
+    const km = inner.km.map((r) => r + grow * wobble());
+    const points = angles.map((angle, i) =>
+      offset(fire.lon, fire.lat, km[i], angle),
+    );
+    const ring = [...inner.points, ...points.toReversed()];
     ring.push(ring[0]);
     polygons.push([ring]);
-    outline.push(outerArc);
+    outline.push(points);
+    arcs.push({ km, points });
   }
-  return { polygons, outline };
+  return { polygons, outline, arcs };
 }
 
 /**
@@ -82,7 +93,7 @@ export function perimeterPeak({
   }
   const total = Math.round(pieceCount * (1 + afterHours / spanHours));
   const pieces = [];
-  // Each fire's area so far, km from its centre: a piece is its next ring.
+  // Each fire's outer arcs so far: a piece is its next ring.
   const reach = new Map();
   for (let i = 0; i < total; i++) {
     const fire = fires[Math.floor(next() * fires.length)];
@@ -91,17 +102,15 @@ export function perimeterPeak({
         spanHours * HOUR_MS +
         ((i + next()) / pieceCount) * spanHours * HOUR_MS,
     );
-    const inner = reach.get(fire.id) ?? 0.5;
-    const outer = inner + 0.5 + 1.5 * next();
-    reach.set(fire.id, outer);
-    const { polygons, outline } = growthRing(
+    const { polygons, outline, arcs } = growthRing(
       next,
       fire.anchor,
-      inner,
-      outer,
+      reach.get(fire.id) ?? null,
+      0.5 + 1.5 * next(),
       sectorsPerPiece,
       arcVertices,
     );
+    reach.set(fire.id, arcs);
     pieces.push({
       id: `${fire.id}|${born}`,
       fireId: fire.id,
