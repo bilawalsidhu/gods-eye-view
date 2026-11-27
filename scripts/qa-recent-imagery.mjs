@@ -378,6 +378,15 @@ try {
   if (!booted) throw new Error('boot timeout');
   await page.evaluate(installPageHelpers);
 
+  // The Data Layers rows repaint while the panel is displayed; it starts
+  // collapsed. Open it before moving the camera: a click that lands before
+  // the address has caught up with a camera move puts the camera back at the
+  // view the address names.
+  await page.evaluate(() => {
+    const panel = document.getElementById('data-panel');
+    if (panel?.classList.contains('collapsed'))
+      panel.querySelector('[data-collapse-target="data-panel"]')?.click();
+  });
   await setView(AUSTIN);
   await tilesSettled();
   const initialStack = await page.evaluate(() => window.__riQa.activeStack());
@@ -393,13 +402,6 @@ try {
 
   // ── enable: the panel in the rail, per the rail readout pattern ─────────
   const layerToggle = '[data-layer-id="recent-imagery"] .data-toggle-btn';
-  // The Data Layers rows repaint while the panel is displayed; it starts
-  // collapsed.
-  await page.evaluate(() => {
-    const panel = document.getElementById('data-panel');
-    if (panel?.classList.contains('collapsed'))
-      panel.querySelector('[data-collapse-target="data-panel"]')?.click();
-  });
   check(
     'the data panel carries a Recent Imagery toggle',
     await click(layerToggle),

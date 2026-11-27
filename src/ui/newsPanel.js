@@ -37,8 +37,12 @@ export function createNewsPanel({ container, setLayerParams = () => {} } = {}) {
   const body = watchDisplayed(container, () => {
     if (owed) render();
   });
-  const offOpening = onPanelOpening(panel, () => {
-    if (owed) render({ force: true });
+  const offOpening = onPanelOpening(panel, ({ displayedOnly = false } = {}) => {
+    if (!owed) return;
+    if (displayedOnly && !(container.getClientRects?.().length > 0)) return;
+    // The body is being shown: a later render paints it rather than owing it.
+    body.assumeShown();
+    render({ force: true });
   });
 
   function render({ force = false } = {}) {

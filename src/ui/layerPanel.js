@@ -401,7 +401,7 @@ export class LayerPanel {
       if (panel && !panels.has(panel)) {
         panels.add(panel);
         this._openingRemovers.push(
-          onPanelOpening(panel, () => this.flushOwedRows()),
+          onPanelOpening(panel, (options) => this.flushOwedRows(options)),
         );
       }
     }
@@ -413,11 +413,21 @@ export class LayerPanel {
   }
   /**
    * Paint now the rows a refresh skipped while their panel was not displayed.
-   * The panel chrome calls this as it opens a panel; a no-op when nothing is
-   * owed.
+   * Whatever shows a panel calls this first (see `rail/panelContent.js`); a
+   * no-op when nothing is owed. With `displayedOnly`, only lists that have a
+   * layout box now are painted and the others stay owed.
+   * @param {{ displayedOnly?: boolean }} [options]
    */
-  flushOwedRows() {
-    if (this._rowsOwed && !this._destroyed) this._paint();
+  flushOwedRows({ displayedOnly = false } = {}) {
+    if (!this._rowsOwed || this._destroyed) return;
+    const shown = [...this._displayWatches].filter(
+      ([element]) => !displayedOnly || element.getClientRects?.().length > 0,
+    );
+    if (displayedOnly && shown.length === 0) return;
+    // The lists are being shown: a refresh before the observer's next report
+    // paints them rather than owing them again.
+    for (const [, watch] of shown) watch.assumeShown();
+    this._paint({ whileShown: displayedOnly });
   }
   _isDisplayed(element) {
     return this._displayWatches.get(element)?.shown() ?? true;

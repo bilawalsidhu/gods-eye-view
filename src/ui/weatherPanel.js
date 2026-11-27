@@ -121,8 +121,12 @@ export function createWeatherPanel({
   const body = watchDisplayed(container, () => {
     if (owed) render();
   });
-  const flush = () => {
-    if (owed) render({ force: true });
+  const flush = ({ displayedOnly = false } = {}) => {
+    if (!owed) return;
+    if (displayedOnly && !(container.getClientRects?.().length > 0)) return;
+    // The body is being shown: a later render paints it rather than owing it.
+    body.assumeShown();
+    render({ force: true });
   };
   const offOpening = onPanelOpening(panel, flush);
   const render = ({ force = false } = {}) => {

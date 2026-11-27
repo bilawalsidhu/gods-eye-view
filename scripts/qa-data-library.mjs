@@ -223,8 +223,8 @@ try {
   await step(
     'Browse opens a labelled modal with addable entries first and packs last',
     async () => {
+      await openDataLayers(page);
       await page.evaluate(() => {
-        document.getElementById('data-panel')?.classList.remove('collapsed');
         document.getElementById('data-library-browse').click();
       });
       const dialog = await page.$eval('#data-library', (node) => ({
@@ -447,9 +447,7 @@ try {
     async () => {
       const chip =
         '#data-toggles [data-layer-id="lib-eia-power-plants"] [data-chip-id="zoom"]';
-      await page.evaluate(() =>
-        document.getElementById('data-panel')?.classList.remove('collapsed'),
-      );
+      await openDataLayers(page);
       // The icons work while the layer is off; Zoom switches it back on.
       await page.evaluate(() =>
         window.__godsEyeView.dataManager.setEnabled(
@@ -521,8 +519,8 @@ try {
     async () => {
       await page.evaluate(() => {
         window.__gevDataLibrary.browser.close();
-        document.getElementById('data-panel')?.classList.remove('collapsed');
       });
+      await openDataLayers(page);
       const chip =
         '#data-toggles [data-layer-id="lib-eia-power-plants"] [data-chip-id="remove"]';
       await page.evaluate(() =>

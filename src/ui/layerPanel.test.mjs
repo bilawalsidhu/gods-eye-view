@@ -573,6 +573,85 @@ test('a row read right after its panel is presented open sees current rows', asy
   }
 });
 
+test('a mode that shows the panels again repaints owed rows before anything reads them', async () => {
+  const sizes = installFakeResizeObserver();
+  const { SceneControls } = await import('./sceneControls.js');
+  const panelEl = document.createElement('div');
+  panelEl.id = 'data-panel';
+  panelEl.dataset.panelId = 'data-panel';
+  const { container, utilities, panel, layers, restore } =
+    await utilitiesFixture({
+      prepare: (list) => {
+        panelEl.append(list);
+        document.body.append(panelEl);
+      },
+    });
+  const active = (id) =>
+    container
+      .querySelector(`[data-layer-id="${id}"] .data-toggle-btn`)
+      .classList.contains('active');
+  try {
+    // Scene playback hides the panels; a refresh meanwhile is owed.
+    SceneControls.prototype.setPlaybackActive.call({ destroyed: false }, true);
+    sizes.report(container, 0, 0);
+    sizes.report(utilities, 0, 0);
+    layers.find(({ id }) => id === 'flights').enabled = true;
+    panel._refreshTogglePanel();
+    assert.equal(active('flights'), false);
+    // Leaving playback shows them again: the rows are current at once.
+    SceneControls.prototype.setPlaybackActive.call({ destroyed: false }, false);
+    assert.equal(active('flights'), true);
+    // A refresh before the observer's next report paints rather than owes.
+    layers.find(({ id }) => id === 'radio').enabled = true;
+    panel._refreshTogglePanel();
+    assert.equal(active('radio'), true);
+  } finally {
+    document.body.classList.remove('scene-playback-mode');
+    restore();
+    sizes.restore();
+  }
+});
+
+test('a layout pass repaints owed rows only where a list is displayed', async () => {
+  const sizes = installFakeResizeObserver();
+  const { flushDisplayedPanelContent } = await import('./rail/panelContent.js');
+  const panelEl = document.createElement('div');
+  panelEl.id = 'data-panel';
+  panelEl.dataset.panelId = 'data-panel';
+  const { container, utilities, panel, layers, restore } =
+    await utilitiesFixture({
+      prepare: (list) => {
+        panelEl.append(list);
+        document.body.append(panelEl);
+      },
+    });
+  try {
+    const renders = countRenders(panel);
+    sizes.report(container, 0, 0);
+    sizes.report(utilities, 0, 0);
+    layers.find(({ id }) => id === 'flights').enabled = true;
+    panel._refreshTogglePanel();
+    // Nothing has a layout box: the pass leaves the rows owed.
+    container.getClientRects = () => [];
+    utilities.getClientRects = () => [];
+    flushDisplayedPanelContent();
+    assert.deepEqual(renders, []);
+    // A class showed Data Layers before the observer reported it.
+    container.getClientRects = () => [{}];
+    flushDisplayedPanelContent();
+    assert.equal(renders.length, 1);
+    assertSameNode(renders[0], container);
+    assert.ok(
+      container
+        .querySelector('[data-layer-id="flights"] .data-toggle-btn')
+        .classList.contains('active'),
+    );
+  } finally {
+    restore();
+    sizes.restore();
+  }
+});
+
 test('a language change renders rows the equality check would otherwise skip', async () => {
   const { setLocale } = await import('../i18n/index.js');
   const { container, panel, restore } = await utilitiesFixture();

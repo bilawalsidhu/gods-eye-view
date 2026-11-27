@@ -3571,10 +3571,16 @@ A refresh (a layer's status or row controls, such as every step of a scene
 whose time advances) skips a row list whose panel is not displayed (collapsed
 or hidden) and repaints it once, with its current rows, when it is displayed
 again; the Weather and News rail readouts do the same for their bodies, while
-the panels still appear, count and open as before. Opening a panel (a click,
-voice or any other caller of the panel chrome) repaints what it owes at once,
-through `src/ui/rail/panelContent.js`, before the layout pass measures it or
-anything reads its rows; a ResizeObserver catches every other way a panel is
+the panels still appear, count and open as before. Whatever shows a panel
+repaints what it owes at once, through `src/ui/rail/panelContent.js`, before
+anything measures the panel or reads its rows: the panel chrome opening a panel
+(a click, voice or any other caller), a phone sheet (every panel of its rail,
+expanded ones included), and leaving clean view, Cockpit or scene playback.
+Each panel layout pass first repaints what is owed where a list or readout has
+a layout box, and content still not displayed stays owed. Content repainted
+this way counts as displayed until the ResizeObserver's next report, so a
+refresh in between paints it instead of owing it again. A ResizeObserver
+catches every other way a panel is
 displayed, before the browser draws it. A list whose presented rows equal the
 ones it shows is not rendered again.
 The clear control presents busy state while its existing action owns the transaction.

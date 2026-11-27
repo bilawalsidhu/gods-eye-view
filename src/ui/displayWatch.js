@@ -10,12 +10,17 @@
  * runs before the element is seen again.
  * @param {Element | null | undefined} element
  * @param {() => void} onShown Called each time the element is displayed again.
- * @returns {{ shown: () => boolean, disconnect: () => void }}
+ *
+ * `assumeShown()` counts the element displayed now, for a surface that has
+ * just painted because its panel is being shown, and asks the observer for a
+ * fresh report, so the next one corrects it if the element is not displayed
+ * after all.
+ * @returns {{ shown: () => boolean, assumeShown: () => void, disconnect: () => void }}
  */
 export function watchDisplayed(element, onShown) {
   const Observer = globalThis.ResizeObserver;
   if (!element || typeof Observer !== 'function')
-    return { shown: () => true, disconnect() {} };
+    return { shown: () => true, assumeShown() {}, disconnect() {} };
   let shown = true;
   let connected = true;
   const observer = new Observer((entries) => {
@@ -31,6 +36,13 @@ export function watchDisplayed(element, onShown) {
   observer.observe(element);
   return {
     shown: () => shown,
+    assumeShown() {
+      if (!connected) return;
+      shown = true;
+      // Observing anew reports the element's size again, whatever it is.
+      observer.unobserve(element);
+      observer.observe(element);
+    },
     disconnect() {
       connected = false;
       observer.disconnect();

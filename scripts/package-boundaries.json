@@ -1299,6 +1299,7 @@
       "src/ui/cockpitPresentation.js",
       "src/ui/cockpitSignals.js",
       "src/ui/cockpitTrackingController.js",
+      "src/ui/rail/panelContent.js",
       "src/cockpitMath.js",
       "src/cockpitUtilityLayout.js",
       "src/cockpitVisionPolicy.js",
@@ -1366,6 +1367,7 @@
   "scene-controls": {
     "exports": ["./ui/scenes"],
     "modules": [
+      "src/ui/rail/panelContent.js",
       "src/ui/scenes.js",
       "src/ui/sceneControls.js",
       "src/ui/scenePresentation.js",
@@ -1868,6 +1870,7 @@
   "scenes": {
     "exports": ["./scenes"],
     "modules": [
+      "src/ui/rail/panelContent.js",
       "src/scenes/nepalEvidencePack.js",
       "src/data/bhoteKoshiIncidentPlaces.js",
       "src/data/bhoteKoshiShotPaths.js",
