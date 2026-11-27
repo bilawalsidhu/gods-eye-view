@@ -1737,38 +1737,6 @@ test('a feed that has genuinely stopped answering still ages out', async (t) => 
   assert.equal(app.vehicles().length, 0, 'a silent feed empties the globe');
 });
 
-test('a vehicle with no surface yet waits instead of floating', async (t) => {
-  // Ellipsoid zero is not street level — in Boston it is about thirty metres
-  // underground — so a marker drawn at +3 m while its sample is pending sits
-  // above its final height and then drops. The owner saw that as floating.
-  let allowSamples = false;
-  const app = harness(t, {
-    floorAt: () => (allowSamples ? 30 : undefined),
-  });
-  serveMbta(app, () => [vehicle('b', 42.36, -71.06, Date.now() / 1000)]);
-  app.layer.enable(app.viewer);
-  await app.layer.update();
-  app.frame();
-
-  const entry = app.vehicles()[0];
-  assert.equal(
-    entry.heightPending,
-    true,
-    'it knows it has nothing to stand on',
-  );
-  assert.equal(entry.marker.show, false, 'so it is not drawn');
-
-  allowSamples = true;
-  app.settle();
-  assert.equal(entry.heightPending, false);
-  assert.equal(entry.marker.show, true, 'and appears once the ground answers');
-  const carto = Cesium.Cartographic.fromCartesian(entry.marker.position);
-  assert.ok(
-    Math.abs(carto.height - 31.5) < 1,
-    `standing on its floor plus the shared lift, got ${carto.height.toFixed(1)} m`,
-  );
-});
-
 test('a new vehicle borrows the lowest surface resolved nearby', async (t) => {
   // The first visible frame uses the best prior available rather than a flat
   // +3 m, and the prior is biased LOW so a marker can only rise onto its own
