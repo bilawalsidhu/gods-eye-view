@@ -46,30 +46,9 @@ const { buildVesselCard, buildSelectedVesselCard, cardScreenSeparated } =
   parts.cards;
 const { applyVesselFocusDeemphasis } = parts.rendering;
 
-test('open feed with vessels is healthy (null)', () => {
-  assert.equal(
-    deriveAisFeedError({ status: 'open', lastMessageAt: 1, error: null }, 42),
-    null,
-  );
-});
-
-test('open feed without a received message is not a fresh healthy update', () => {
-  assert.equal(
-    deriveAisFeedError({ status: 'open', lastMessageAt: null, error: null }, 0),
-    'awaiting first AIS message…',
-  );
-});
-
-test('open feed with a message but zero accepted positions stays non-fresh', () => {
-  assert.equal(
-    deriveAisFeedError({ status: 'open', lastMessageAt: 123, error: null }, 0),
-    'awaiting usable AIS positions…',
-  );
-});
-
 test('snapshot classification distinguishes raw rows from accepted vessel positions', () => {
   const payload = {
-    status: 'open',
+    status: 'live',
     lastMessageAt: 123,
     rows: [
       { mmsi: 'bad-lat', lat: 'not-a-number', lon: 4 },
@@ -78,7 +57,7 @@ test('snapshot classification distinguishes raw rows from accepted vessel positi
     ],
   };
   const snapshot = classifyAisFeedSnapshot(payload);
-  assert.equal(snapshot.transportStatus, 'open');
+  assert.equal(snapshot.transportStatus, 'live');
   assert.equal(snapshot.lastMessageAt, 123);
   assert.equal(snapshot.rawRowCount, 3);
   assert.equal(snapshot.acceptedRowCount, 1);
@@ -91,7 +70,7 @@ test('snapshot classification distinguishes raw rows from accepted vessel positi
 
 test('raw rows that all fail normalization do not satisfy AIS product health', () => {
   const snapshot = classifyAisFeedSnapshot({
-    status: 'open',
+    status: 'live',
     lastMessageAt: 123,
     rows: [{ mmsi: 'invalid', lat: 'bad', lon: -95.1 }],
   });
@@ -137,7 +116,7 @@ test('closed feed with no rows surfaces "feed disconnected"', () => {
   );
 });
 
-test('non-open status but rows still flowing is treated as stale, not down (null)', () => {
+test('non-live status but rows still flowing is treated as stale, not down (null)', () => {
   // e.g. reconnecting/refreshing while a cached buffer still serves rows.
   assert.equal(
     deriveAisFeedError({ status: 'connecting', error: null }, 30),
@@ -164,7 +143,7 @@ test('missing status treated as healthy (older/other payload shapes) (null)', ()
 // The server reports feed health as live | stale | reconnecting | down. A
 // degraded feed must stay visible even while cached vessels are still drawn.
 
-test("'live' is the healthy status and reads exactly like the older 'open'", () => {
+test("'live' is the healthy status", () => {
   assert.equal(
     deriveAisFeedError({ status: 'live', lastMessageAt: 1, error: null }, 42),
     null,
@@ -346,14 +325,14 @@ test('zero accepted rows preserve warm vessel selection, trail, and freshness ti
     trailPositions: [POS],
     loaded: true,
     lastUpdate: 456,
-    transportStatus: 'open',
+    transportStatus: 'live',
     lastMessageAt: 123,
   });
   try {
     const result = parts.ingestion.applyAisFeedSnapshot(
       {},
       {
-        status: 'open',
+        status: 'live',
         lastMessageAt: 789,
         rows: [{ mmsi: 'invalid', lat: 'bad', lon: 4 }],
       },
@@ -368,7 +347,7 @@ test('zero accepted rows preserve warm vessel selection, trail, and freshness ti
       error: 'awaiting usable AIS positions…',
       status: undefined,
       lastUpdate: 456,
-      transportStatus: 'open',
+      transportStatus: 'live',
       lastMessageAt: 789,
       rawRowCount: 1,
       acceptedRowCount: 0,
@@ -386,7 +365,7 @@ test('zero accepted rows preserve warm vessel selection, trail, and freshness ti
   }
 });
 
-test('open first load stays LOADING for one bounded first-connect grace period', () => {
+test('live first load stays LOADING for one bounded first-connect grace period', () => {
   const clock = makeFakeAisRuntime();
   _setAisRuntimeForTest(clock.runtime);
   _setVesselStateForTest({ viewer: {}, records: [] });
@@ -395,7 +374,7 @@ test('open first load stays LOADING for one bounded first-connect grace period',
     const result = parts.ingestion.applyAisFeedSnapshot(
       {},
       {
-        status: 'open',
+        status: 'live',
         lastMessageAt: null,
         rows: [],
       },
@@ -414,7 +393,7 @@ test('open first load stays LOADING for one bounded first-connect grace period',
     assert.equal(feed.firstConnectStartedAt, 1000);
     assert.equal(feed.firstConnectDeadline, 1000 + AIS_FIRST_CONNECT_GRACE_MS);
     assert.equal(layerFeedState(aisLiveVesselsLayer.getStats()), 'loading');
-    assert.equal(feed.transportStatus, 'open');
+    assert.equal(feed.transportStatus, 'live');
     assert.equal(feed.lastMessageAt, null);
     assert.equal(feed.rawRowCount, 0);
     assert.equal(feed.acceptedRowCount, 0);
@@ -434,7 +413,7 @@ test('open first load stays LOADING for one bounded first-connect grace period',
   }
 });
 
-test('open and connecting polls do not restart the first-connect deadline', () => {
+test('live and connecting polls do not restart the first-connect deadline', () => {
   const clock = makeFakeAisRuntime(5000);
   _setAisRuntimeForTest(clock.runtime);
   _setVesselStateForTest({ viewer: {}, records: [] });
@@ -445,7 +424,7 @@ test('open and connecting polls do not restart the first-connect deadline', () =
     parts.ingestion.applyAisFeedSnapshot({}, { status: 'connecting', rows: [] });
     parts.ingestion.applyAisFeedSnapshot(
       {},
-      { status: 'open', lastMessageAt: 9, rows: [] },
+      { status: 'live', lastMessageAt: 9, rows: [] },
     );
     const afterPolls = _getVesselFeedStateForTest();
     assert.equal(
@@ -488,7 +467,7 @@ test('definitive AIS transport failures end grace immediately', () => {
   }
 });
 
-test('first accepted position ends grace and warm data survives later open silence', () => {
+test('first accepted position ends grace and warm data survives later live silence', () => {
   const clock = makeFakeAisRuntime(7000);
   const record = makeRecord();
   _setAisRuntimeForTest(clock.runtime);
@@ -503,7 +482,7 @@ test('first accepted position ends grace and warm data survives later open silen
     const accepted = parts.ingestion.applyAisFeedSnapshot(
       {},
       {
-        status: 'open',
+        status: 'live',
         lastMessageAt: 12,
         rows: [
           {
@@ -527,7 +506,7 @@ test('first accepted position ends grace and warm data survives later open silen
     const silent = parts.ingestion.applyAisFeedSnapshot(
       {},
       {
-        status: 'open',
+        status: 'live',
         lastMessageAt: 13,
         rows: [],
       },
@@ -662,7 +641,7 @@ test('superseded AIS response cannot mutate or finalize a replacement request', 
 
     first.resolve(
       jsonResponse({
-        status: 'open',
+        status: 'live',
         lastMessageAt: 1000,
         rows: [
           { mmsi: oldRecord.mmsi, name: 'STALE RESPONSE', lat: 1, lon: 2 },
@@ -684,7 +663,7 @@ test('superseded AIS response cannot mutate or finalize a replacement request', 
     assert.equal(feed.selectedId, replacement.mmsi);
 
     second.resolve(
-      jsonResponse({ status: 'open', lastMessageAt: null, rows: [] }),
+      jsonResponse({ status: 'live', lastMessageAt: null, rows: [] }),
     );
     await replacementLoad;
     feed = _getVesselFeedStateForTest();
@@ -727,7 +706,7 @@ test('disable and destroy make abort-ignoring AIS responses inert', async () => 
     aisLiveVesselsLayer.disable();
     disableResponse.resolve(
       jsonResponse({
-        status: 'open',
+        status: 'live',
         lastMessageAt: 1000,
         rows: [{ mmsi: record.mmsi, lat: 1, lon: 2 }],
       }),
@@ -750,7 +729,7 @@ test('disable and destroy make abort-ignoring AIS responses inert', async () => 
     aisLiveVesselsLayer.destroy(viewer);
     destroyResponse.resolve(
       jsonResponse({
-        status: 'open',
+        status: 'live',
         lastMessageAt: 2000,
         rows: [{ mmsi: record.mmsi, lat: 3, lon: 4 }],
       }),
@@ -1412,7 +1391,7 @@ test('vessel interaction lifecycle: disable detaches input and enable reinstalls
 
     globalThis.fetch = async () => ({
       ok: true,
-      json: async () => ({ status: 'open', rows: [] }),
+      json: async () => ({ status: 'live', rows: [] }),
     });
     await aisLiveVesselsLayer.enable(harness.viewer);
 
@@ -1437,7 +1416,7 @@ test('enable owns one grace timer and disable/re-enable starts a new session', a
   const priorFetch = globalThis.fetch;
   const clock = makeFakeAisRuntime(20000);
   _setAisRuntimeForTest(clock.runtime);
-  globalThis.fetch = async () => jsonResponse({ status: 'open', rows: [] });
+  globalThis.fetch = async () => jsonResponse({ status: 'live', rows: [] });
   try {
     await aisLiveVesselsLayer.enable(harness.viewer);
     const first = _getVesselFeedStateForTest();

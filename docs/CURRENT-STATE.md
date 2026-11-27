@@ -7716,7 +7716,7 @@ and unreachable upstream (502/504) separately from road geometry.
   the HUD wrap the direction after rounding to whole degrees, so a course of
   359.5° or more reads `0°` (`0DEG` in the HUD) rather than `360°`.
 - The first enable in a session starts one 30-second client grace timer. Until
-  an accepted vessel position arrives, `live`/`open`/`connecting` transport reports
+  an accepted vessel position arrives, `live`/`connecting` transport reports
   `LOADING`; the timer is not restarted by the 60-second poll. Expiry or a
   definitive transport/credential failure reports `UNAVAILABLE`. Accepted
   warm vessels survive later zero-position refreshes as stale/degraded data,

@@ -597,7 +597,7 @@ const AIS_FIRST_CONNECT_STATS = aisStatsFor({
 /** The same module once the socket answers with an honestly empty viewport. */
 const AIS_SETTLED_EMPTY_STATS = aisStatsFor({
   enabled: true,
-  transportStatus: 'open',
+  transportStatus: 'live',
   firstConnectPhase: 'ready',
   lastUpdate: 1_700_000_000_000,
 });
@@ -606,7 +606,7 @@ const AIS_SETTLED_EMPTY_STATS = aisStatsFor({
 const AIS_REFRESHING_ANSWERED_STATS = aisStatsFor({
   enabled: true,
   loading: true,
-  transportStatus: 'open',
+  transportStatus: 'live',
   firstConnectPhase: 'ready',
   lastUpdate: 1_700_000_000_000,
   records: [{ mmsi: '1' }, { mmsi: '2' }, { mmsi: '3' }],

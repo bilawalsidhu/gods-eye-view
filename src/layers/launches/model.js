@@ -171,8 +171,7 @@ export function normalizeRocketLaunches(payload, now = new Date()) {
   const cutoff = now.getTime() - WINDOW_DAYS * 86400000;
   return launches
     .map((launch) => {
-      const launchTime =
-        launch.net || launch.window_start || launch.pad?.location?.name;
+      const launchTime = launch.net || launch.window_start;
       const date = Date.parse(launchTime);
       const pad = launch.pad || {};
       const location = pad.location || {};
@@ -189,8 +188,8 @@ export function normalizeRocketLaunches(payload, now = new Date()) {
         status: launch.status?.name || UNKNOWN_LAUNCH_STATUS,
         launchTime: Number.isFinite(date) ? new Date(date).toISOString() : null,
         launchSite: pad.name || location.name || 'Unknown launch site',
-        lat: Number.isFinite(lat) ? lat : null,
-        lon: Number.isFinite(lon) ? lon : null,
+        lat,
+        lon,
         provider: launch.launch_service_provider?.name || null,
         mission: launch.mission?.description || null,
         missionName: launch.mission?.name || null,

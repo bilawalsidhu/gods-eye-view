@@ -272,7 +272,7 @@ async function installSyntheticFetches(page) {
       if (url.includes('/api/military/track')) return json({ timestamp: Date.now() / 1000, trace: [] });
       if (url.includes('/api/flights')) return json({ time: Math.floor(Date.now() / 1000), states: [] });
       if (url.includes('/api/adsbdb/')) return json({ found: false });
-      if (url.includes('/api/vessels')) return json({ status: 'open', rows: [] });
+      if (url.includes('/api/vessels')) return json({ status: 'live', rows: [] });
       return realFetch(input, init);
     };
   });

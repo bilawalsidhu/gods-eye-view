@@ -836,9 +836,7 @@ check({
     // through stale/reconnecting/down — "the cached vessels on screen are
     // exactly what makes an outage invisible" (src/data/aisLiveVessels.js:183).
     // A live claim therefore needs status === 'live' AND rows.
-    // ('open' is the pre-watchdog spelling: still accepted by the client, never
-    // emitted by this server — ais-watchdog.js:72.)
-    const healthy = status === 'live' || status === 'open';
+    const healthy = status === 'live';
     if (healthy && rows > 0) {
       return pass(`${rows} vessels, status=${status}, newest=${r.json?.newestPositionAt || 'n/a'}, silentFor=${r.json?.silentForMs ?? 'n/a'}ms`);
     }
@@ -1552,7 +1550,7 @@ async function runBrowserGroup(record) {
     // rides on transportStatus (src/data/aisLiveVessels.js:646-668). And cached
     // rows survive a degraded feed on purpose, so count > 0 is not liveness.
     const transport = s.transportStatus;
-    const live = transport === 'live' || transport === 'open';
+    const live = transport === 'live';
     if (live && s.count > 0) {
       // Chip vocabulary: ON / LOADING / DEGRADED / STALE / FALLBACK /
       // UNAVAILABLE (src/data/feedState.js). A live feed with rows reads ON.

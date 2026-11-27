@@ -71,7 +71,7 @@ export const DEFAULT_AIS_RUNTIME = Object.freeze({
 });
 
 /**
- * Human-readable reasons for a non-'open' AISStream feed status, keyed to the
+ * Human-readable reasons for a non-'live' AISStream feed status, keyed to the
  * server's `_aisStreamStatus` values (see vite.config.js). Surfaced verbatim in
  * the layer chip so a dead feed reads "feed down" instead of a healthy-looking
  * "just now · 0 vessels".
@@ -86,13 +86,9 @@ export const AIS_STATUS_REASON = {
   idle: msg('feed idle'),
 };
 
-/**
- * Statuses in which fresh data is flowing. 'open' is the pre-watchdog spelling
- * and is still accepted so a cached bundle and a restarted server never
- * disagree about health.
- */
+/** Statuses in which fresh data is flowing. */
 
-export const AIS_HEALTHY_STATUSES = new Set(['live', 'open']);
+export const AIS_HEALTHY_STATUSES = new Set(['live']);
 
 /**
  * Server statuses meaning "the feed is not delivering right now". These are
