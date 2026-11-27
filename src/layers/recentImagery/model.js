@@ -627,47 +627,20 @@ function daysBetween(day, now) {
   );
 }
 
-function cloudLabel(cloud) {
-  if (!cloud) return 'cloud unknown';
-  const min = Math.round(cloud.min);
-  const max = Math.round(cloud.max);
-  return min === max ? `${min}% scene cloud` : `${min}–${max}% scene cloud`;
-}
-
-/**
- * The words of the readout. The page passes its own (translated, locale
- * formatted) set; this module stays free of i18n because AI tool services
- * import it outside the browser.
- */
-const READOUT_WORDS = Object.freeze({
-  /** `Sep 18, 2026` for a valid `YYYY-MM-DD` day. */
-  date: (day) => {
-    const [y, m, d] = day.split('-').map(Number);
-    return `${MONTHS[m - 1]} ${d}, ${y}`;
-  },
-  /** Age in whole UTC days, 0 or less for today. */
-  daysAgo: (delta) =>
-    delta <= 0 ? 'today' : delta === 1 ? 'yesterday' : `${delta} days ago`,
-  sensor: (sensor) => sensor,
-  metres: (value) => `${value} m`,
-  overview: () => 'overview',
-  /** `{ min, max }` scene cloud in percent, or null. */
-  cloud: cloudLabel,
-});
-
 /**
  * One-line UTC readout, e.g.
  * `Sep 18, 2026 17:12Z · 3 days ago · Sentinel-2 via HLS · 30 m · 12% scene cloud`.
+ * The page passes its words; this module stays free of i18n because AI tool
+ * services import it outside the browser.
  * @param {object} candidate
  * @param {string | number | Date} [now]
- * @param {Partial<typeof READOUT_WORDS>} [words] the page's localized words
+ * @param {object} words the page's localized words (display.js READOUT_WORDS)
  * @returns {string}
  */
 export function formatCandidateReadout(candidate, now = new Date(), words) {
   const product = PRODUCTS[candidate?.product];
   if (!product || !isValidDay(candidate?.day)) return '';
-  const say = words ? { ...READOUT_WORDS, ...words } : READOUT_WORDS;
-  let when = say.date(candidate.day);
+  let when = words.date(candidate.day);
   if (candidate.timeRange?.start) {
     const start = hhmm(candidate.timeRange.start);
     const end = candidate.timeRange.end ? hhmm(candidate.timeRange.end) : start;
@@ -678,10 +651,10 @@ export function formatCandidateReadout(candidate, now = new Date(), words) {
   }
   const parts = [when];
   const delta = daysBetween(candidate.day, now);
-  if (delta !== null) parts.push(say.daysAgo(delta));
-  parts.push(say.sensor(product.sensor), say.metres(product.resolutionM));
-  if (product.overview) parts.push(say.overview());
-  parts.push(say.cloud(candidate.cloud));
+  if (delta !== null) parts.push(words.daysAgo(delta));
+  parts.push(words.sensor(product.sensor), words.metres(product.resolutionM));
+  if (product.overview) parts.push(words.overview());
+  parts.push(words.cloud(candidate.cloud));
   return parts.join(' · ');
 }
 

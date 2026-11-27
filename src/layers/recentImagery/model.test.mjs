@@ -27,6 +27,7 @@ import {
   wvsSnapshotUrl,
 } from './model.js';
 import { BOX } from './testDoubles.mjs';
+import { READOUT_WORDS } from './display.js';
 
 function granule(overrides = {}) {
   return {
@@ -420,10 +421,10 @@ test('START HERE prefers a day that covers the whole box over a newer sliver', (
 test('the readout is one UTC line with age, sensor, resolution and scene cloud', () => {
   const now = '2026-09-21T12:00:00Z';
   const readout = (granules) =>
-    formatCandidateReadout(groupGranulesByDay(granules)[0], now);
+    formatCandidateReadout(groupGranulesByDay(granules)[0], now, READOUT_WORDS);
   assert.equal(
     readout([granule({ timeStart: '2026-09-18T17:12:10Z' })]),
-    'Sep 18, 2026 17:12Z · 3 days ago · Sentinel-2 via HLS · 30 m · 12% scene cloud',
+    'Sep 18, 2026 17:12Z · 3 days ago · Sentinel-\u20602 via HLS · 30\u00a0m · 12% scene cloud',
   );
   assert.equal(
     readout([
@@ -435,7 +436,7 @@ test('the readout is one UTC line with age, sensor, resolution and scene cloud',
         timeEnd: '2026-09-18T17:20:30Z',
       }),
     ]),
-    'Sep 18, 2026 17:12–17:20Z · 3 days ago · Sentinel-2 via HLS · 30 m · 12–18% scene cloud',
+    'Sep 18, 2026 17:12–17:20Z · 3 days ago · Sentinel-\u20602 via HLS · 30\u00a0m · 12–18% scene cloud',
   );
   assert.equal(
     readout([
@@ -446,11 +447,15 @@ test('the readout is one UTC line with age, sensor, resolution and scene cloud',
         timeEnd: null,
       }),
     ]),
-    'Sep 20, 2026 16:05Z · yesterday · Landsat 8/9 via HLS · 30 m · cloud unknown',
+    'Sep 20, 2026 16:05Z · yesterday · Landsat 8/9 via HLS · 30\u00a0m · cloud unknown',
   );
   assert.equal(
-    formatCandidateReadout(viirsCandidates('2026-09-21', 1)[0], now),
-    'Sep 21, 2026 · today · VIIRS NOAA-21 · 250 m · overview · cloud unknown',
+    formatCandidateReadout(
+      viirsCandidates('2026-09-21', 1)[0],
+      now,
+      READOUT_WORDS,
+    ),
+    'Sep 21, 2026 · today · VIIRS NOAA-\u206021 · 250\u00a0m · overview · cloud unknown',
   );
   assert.equal(formatCandidateReadout(null), '');
 });
