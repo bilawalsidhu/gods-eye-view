@@ -25,10 +25,10 @@ import {
   awarenessPulseState,
   awarenessRangeRingPositions,
   awarenessRingFlash,
-  createRendering,
   paintAwarenessBand,
   wakeAwarenessPulses,
-} from './rendering.js';
+} from './rangeRing.js';
+import { createRendering } from './rendering.js';
 import { getAwarenessEchoField } from '../../awarenessEcho.js';
 import { createLifecycle } from './lifecycle.js';
 import { createState } from './state.js';

@@ -6,7 +6,6 @@ import {
 import {
   formatAwarenessLabel,
   formatAwarenessDistance,
-  AWARENESS_RADIUS_M,
 } from '../../data/militaryAwarenessEngine.js';
 import { bearingBetweenCoordinates } from '../../cockpitMath.js';
 import { AWARENESS_PAGE_SIZE } from './policy.js';
@@ -23,17 +22,6 @@ import {
   toRadians,
 } from '../../geo/index.js';
 
-// The ring's and the pulses' own arithmetic, for their tests.
-export {
-  AWARENESS_BAND_PIXELS,
-  awarenessPulseLevel,
-  awarenessPulseState,
-  awarenessRangeRingPositions,
-  awarenessRingFlash,
-  paintAwarenessBand,
-  wakeAwarenessPulses,
-} from './rangeRing.js';
-
 export function createRendering({ state: layerState, services, parts }) {
   const { getKeyholeGeometry, celestialScreenAngle } = services.geometry;
   const { governorRequestRender } = services.render;
@@ -41,7 +29,7 @@ export function createRendering({ state: layerState, services, parts }) {
   const rangeRing = createRangeRing({
     state: layerState,
     governorRequestRender,
-    redraw: (subject) => renderVisual(subject),
+    redraw: (subject) => rangeRing.renderVisual(subject),
   });
 
   const CARDINALS = [
@@ -281,27 +269,6 @@ export function createRendering({ state: layerState, services, parts }) {
     presentDirection({ hidden: false, ring, heading, labels, markers });
   }
 
-  /**
-   * Run the range pulses again for `activeMs`, after a camera move. Call it
-   * during a frame (lifecycle's preRender): that frame's postRender arms the
-   * next request, so waking asks for no extra frame of its own.
-   */
-  function wakePulses() {
-    rangeRing.wakePulses();
-  }
-
-  function clearVisual() {
-    rangeRing.clearVisual();
-  }
-
-  /** Let the ring's draw sets go, as the layer is destroyed. */
-  function disposeVisual() {
-    rangeRing.disposeVisual();
-  }
-
-  function renderVisual(subject) {
-    rangeRing.renderVisual(subject);
-  }
   return {
     ensureDirectionOverlay,
     subscribeDirectionOverlay,
@@ -310,9 +277,15 @@ export function createRendering({ state: layerState, services, parts }) {
     scheduleDirectionOverlayUpdate,
     cancelDirectionOverlayUpdate,
     updateDirectionOverlay,
-    clearVisual,
-    disposeVisual,
-    renderVisual,
-    wakePulses,
+    clearVisual: rangeRing.clearVisual,
+    /** Let the ring's draw sets go, as the layer is destroyed. */
+    disposeVisual: rangeRing.disposeVisual,
+    renderVisual: rangeRing.renderVisual,
+    /**
+     * Run the range pulses again for `activeMs`, after a camera move. Call it
+     * during a frame (lifecycle's preRender): that frame's postRender arms the
+     * next request, so waking asks for no extra frame of its own.
+     */
+    wakePulses: rangeRing.wakePulses,
   };
 }
