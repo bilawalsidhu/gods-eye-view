@@ -198,8 +198,29 @@ function isTrustedPeerAddress(remoteAddress, env) {
     .some((entry) => entry.trim() !== '' && normalize(entry) === address);
 }
 
-/** Parse an exact local request authority from a Host header. */
-function localAuthority(hostHeader, protocol) {
+/**
+ * Host names or IP addresses the operator lists in
+ * GEV_KEY_SETUP_TRUSTED_HOSTS: exact names only, comma-separated. Suffix and
+ * wildcard entries are dropped, as in GEV_ALLOWED_HOSTS. The gate consults
+ * this list only for a request whose socket address is an exact
+ * GEV_KEY_SETUP_TRUSTED_PEERS entry, so loopback behaviour never changes.
+ */
+function trustedKeySetupHostnames(env) {
+  return new Set(
+    String(env?.GEV_KEY_SETUP_TRUSTED_HOSTS || '')
+      .split(',')
+      .map((entry) => entry.trim().toLowerCase())
+      .filter(
+        (entry) => entry && !entry.startsWith('.') && !entry.includes('*'),
+      ),
+  );
+}
+
+/**
+ * Parse an exact local request authority from a Host header. `extraHostnames`
+ * adds operator-listed names for a trusted peer; loopback requests pass none.
+ */
+function localAuthority(hostHeader, protocol, extraHostnames = new Set()) {
   const raw = String(hostHeader || '')
     .trim()
     .toLowerCase();
@@ -208,7 +229,8 @@ function localAuthority(hostHeader, protocol) {
     return null;
   try {
     const parsed = new URL(`${scheme}//${raw}`);
-    return LOCAL_HOSTNAMES.has(parsed.hostname.toLowerCase())
+    const hostname = parsed.hostname.toLowerCase();
+    return LOCAL_HOSTNAMES.has(hostname) || extraHostnames.has(hostname)
       ? parsed.origin
       : null;
   } catch {
@@ -352,10 +374,8 @@ export function admitKeySetupRequest({
       code: 'sharing',
     };
   }
-  if (
-    !LOOPBACK_ADDRESSES.has(String(remoteAddress || '')) &&
-    !isTrustedPeerAddress(remoteAddress, env)
-  ) {
+  const loopbackPeer = LOOPBACK_ADDRESSES.has(String(remoteAddress || ''));
+  if (!loopbackPeer && !isTrustedPeerAddress(remoteAddress, env)) {
     return {
       ok: false,
       status: 403,
@@ -363,7 +383,14 @@ export function admitKeySetupRequest({
       code: 'not-loopback',
     };
   }
-  const authority = localAuthority(hostHeader, protocol);
+  // A listed peer on another machine browses to this server by its LAN name
+  // or address, never `localhost`, so it may also use the names the operator
+  // listed for it. A loopback socket keeps the stock local-only names.
+  const authority = localAuthority(
+    hostHeader,
+    protocol,
+    loopbackPeer ? undefined : trustedKeySetupHostnames(env),
+  );
   if (!authority) {
     return {
       ok: false,

@@ -276,6 +276,32 @@ test('the admission gate refuses every non-local shape, one assertion per refusa
   assert.equal(admitKeySetupRequest({ ...gateway, env: trusted, hostHeader: 'abc.trycloudflare.com' }).ok, false, 'a listed peer still needs a local Host');
   assert.equal(admitKeySetupRequest({ ...gateway, env: trusted, origin: 'https://evil.example' }).ok, false, 'a listed peer still needs the exact Origin');
   assert.equal(admitKeySetupRequest({ ...gateway, env: trusted, proxyHeaders: { 'x-forwarded-for': '203.0.113.5' } }).ok, false, 'a listed peer still refuses proxied requests');
+  // A headless install (a Proxmox container, a NAS) has no local browser: the
+  // operator's own device is a listed peer browsing by the server's LAN name or
+  // address. GEV_KEY_SETUP_TRUSTED_HOSTS lists those names, and only for a
+  // listed peer; every other check still applies.
+  const lanEnv = {
+    GEV_KEY_SETUP_TRUSTED_PEERS: '192.168.1.46',
+    GEV_KEY_SETUP_TRUSTED_HOSTS: ' Globe.Lan , 192.168.1.60 ',
+  };
+  const lanPeer = {
+    ...local,
+    remoteAddress: '192.168.1.46',
+    hostHeader: 'globe.lan:4173',
+    origin: 'http://globe.lan:4173',
+    env: lanEnv,
+  };
+  assert.equal(admitKeySetupRequest(lanPeer).ok, true, 'a listed peer on a listed host name is admitted');
+  assert.equal(admitKeySetupRequest({ ...lanPeer, hostHeader: '192.168.1.60:4173', origin: 'http://192.168.1.60:4173' }).ok, true, 'a listed host IP is admitted');
+  assert.equal(admitKeySetupRequest({ ...lanPeer, env: { GEV_KEY_SETUP_TRUSTED_PEERS: '192.168.1.46' } }).code, 'not-local-host', 'a listed peer still needs a listed or local Host');
+  assert.equal(admitKeySetupRequest({ ...lanPeer, remoteAddress: '192.168.1.99' }).code, 'not-loopback', 'a listed host does not admit an unlisted peer');
+  assert.equal(admitKeySetupRequest({ ...lanPeer, remoteAddress: '127.0.0.1' }).code, 'not-local-host', 'listed hosts never widen a loopback socket');
+  assert.equal(admitKeySetupRequest({ ...lanPeer, hostHeader: 'other.lan:4173', origin: 'http://other.lan:4173' }).code, 'not-local-host', 'an unlisted name is refused');
+  assert.equal(admitKeySetupRequest({ ...lanPeer, origin: 'http://192.168.1.60:4173' }).code, 'cross-origin', 'the Origin must still match the Host exactly');
+  assert.equal(admitKeySetupRequest({ ...lanPeer, proxyHeaders: { 'x-forwarded-for': '203.0.113.5' } }).code, 'proxied', 'proxied requests are still refused');
+  assert.equal(admitKeySetupRequest({ ...lanPeer, env: { ...lanEnv, PINOKIO_SHARE_LOCAL: '1' } }).code, 'sharing', 'sharing still disables the surface');
+  assert.equal(admitKeySetupRequest({ ...lanPeer, env: { ...lanEnv, GEV_KEY_SETUP_TRUSTED_HOSTS: '.lan' } }).ok, false, 'suffix entries are ignored');
+  assert.equal(admitKeySetupRequest({ ...lanPeer, env: { ...lanEnv, GEV_KEY_SETUP_TRUSTED_HOSTS: '*' } }).ok, false, 'wildcard entries are ignored');
   // Tunnel and DNS-rebinding traffic carries a foreign Host over a loopback socket.
   assert.equal(admitKeySetupRequest({ ...local, hostHeader: 'abc.trycloudflare.com' }).ok, false, 'foreign Host refused');
   assert.equal(admitKeySetupRequest({ ...local, hostHeader: 'workstation.local:4173' }).ok, false, 'non-localhost hostnames refused');
