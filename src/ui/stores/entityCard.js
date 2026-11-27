@@ -4,7 +4,6 @@ import { layerFeedState } from '../../data/feedState.js';
 import { greatCircleKm } from '../../geoDistance.js';
 import { isAircraftLayer } from '../../data/aircraftLayerIds.js';
 import {
-  aboveInspectorHorizon,
   createInspectorIndexCache,
   expandInspectorBounds,
   inspectorFootprintSpan,
@@ -222,35 +221,16 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
   const scopeTier = shallowRef(null);
   const indexedRevision = ref(0);
   const selectedScopeOwner = shallowRef(null);
-  const selectedRowLayers = shallowRef(new Set());
-  const alternateScopes = ref(new Set());
-  let settledScopeKey = '';
   function setSelectedScopeOwner(owner) {
     selectedScopeOwner.value = owner;
-    alternateScopes.value.clear();
     return () => {
       if (selectedScopeOwner.value !== owner) return;
       selectedScopeOwner.value = null;
-      selectedRowLayers.value = new Set();
-      alternateScopes.value.clear();
       if (!readViewContextShown()) scopeIndex.suspend();
     };
   }
   function scopeIsShown() {
     return readViewContextShown() || selectedScopeOwner.value?.() === true;
-  }
-  function toggleGroupScope(id) {
-    if (alternateScopes.value.has(id)) alternateScopes.value.delete(id);
-    else alternateScopes.value.add(id);
-  }
-  function displayedScope(group) {
-    if (!group?.alternate) {
-      if (group && !group.loading) alternateScopes.value.delete(group.layerId);
-      return group;
-    }
-    return alternateScopes.value.has(group.layerId)
-      ? { ...group.alternate, alternate: group }
-      : group;
   }
   const scopeIndex = createInspectorIndexCache({
     shown: () =>
@@ -527,13 +507,6 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
    *   readLayers) rather than being read again for each step.
    */
   function setView(next, { settled = true } = {}) {
-    if (settled) {
-      const key = next?.center
-        ? viewKey(next, next.corners) + ':' + next.groundFootprint
-        : '';
-      if (key !== settledScopeKey) alternateScopes.value.clear();
-      settledScopeKey = key;
-    }
     viewMoving.value = Boolean(next) && !settled;
     if (!next?.center) scopeTier.value = null;
     else if (settled || !scopeTier.value) {
@@ -726,26 +699,29 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     const module = layerOf(id);
     const selected = options.anchor != null;
     const globe = !selected && tier.globe;
-    const dual =
+    const local =
       !globe && supportsLocalScopes(id) && !options.query && !options.page;
-    if (dual && !row.stats?.count) {
+    // Only a selected item has a radius, around the item. With nothing
+    // selected every layer reads In view (Satellites use nearbyLayers).
+    const dual = local && selected;
+    if (local && !row.stats?.count) {
       const tone = layerFeedState(row.stats);
       if (tone === 'unavailable' || row.stats?.sourceUnavailable)
         return { layerId: id, readFailed: true, count: null, items: [] };
       if (tone === 'loading')
         return { layerId: id, loading: true, count: null, items: [] };
     }
-    const project = (group) => (dual ? displayedScope(group) : group);
     const anchor = options.anchor ?? where.center;
     const sky = !globe && where.groundFootprint === false;
-    const overheadRange = !globe && options.overheadRange === true;
-    const nearbyFirst =
-      !dual && (overheadRange || (!globe && !sky && tier.city));
     const center = sky ? (where.eye ?? where.center) : where.center;
     const scale = inspectorViewScale(where);
     const rect = where.rect ?? worldBounds;
     const aircraft = isAircraftLayer(id);
-    const closestLimit = Math.min(20_000, Math.max(radius, scale * 3));
+    // Aircraft keep the unbounded Closest to view they had under the
+    // overhead range; other layers look as far as before.
+    const closestLimit = aircraft
+      ? 20_000
+      : Math.min(20_000, Math.max(radius, scale * 3));
     const closest =
       !globe &&
       (!sky || selected) &&
@@ -764,10 +740,8 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     ]);
     const optionsKey = JSON.stringify([
       radius,
-      overheadRange,
       globe,
       sky,
-      nearbyFirst,
       nearestOnly,
       options.anchor,
       options.excludeKey,
@@ -779,7 +753,7 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     const scopeKey = `${optionsKey}:${viewKey(where, where.corners)}`;
     const key = `${revision}:${scopeKey}`;
     const previous = scopedAnswers.get(id);
-    if (previous?.key === key) return project(previous.value);
+    if (previous?.key === key) return previous.value;
     const now = Date.now();
     if (
       viewMoving.value &&
@@ -789,7 +763,7 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
       now - previous.at <
         (previous.costMs > COSTLY_READ_MS ? movingWait(previous.costMs) : 1000)
     )
-      return project(previous.value);
+      return previous.value;
     const started = globalThis.performance?.now?.() ?? now;
 
     let value;
@@ -821,73 +795,51 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
         previous.value &&
         !previous.value.readFailed
       )
-        return project(previous.value);
+        return previous.value;
       return { layerId: id, loading: true, count: null, items: [] };
     }
 
     try {
-      const bounds = sky || (overheadRange && !aircraft) ? [] : [rect];
-      if (dual && (!sky || selected))
-        bounds.push(inspectorPointBounds(anchor, radius));
-      if (!dual && (sky || nearbyFirst)) {
-        const origin =
-          aircraft && overheadRange ? (where.eye ?? center) : center;
-        bounds.push(inspectorPointBounds(origin, radius));
-      }
-      if (
-        aircraft &&
-        !overheadRange &&
-        !sky &&
-        !globe &&
-        (!nearbyFirst ||
-          (where.eye &&
-            (where.eye.lat !== center.lat || where.eye.lon !== center.lon)))
-      )
-        bounds.push(inspectorPointBounds(where.eye ?? center, radius));
-      const closestKm = overheadRange
-        ? (at) => greatCircleKm(center, at)
-        : closest
-          ? selected
-            ? (at) => greatCircleKm(anchor, at)
-            : inspectorGroundDistance(
-                where,
-                rect,
-                inspectorScope(where).hemisphere,
-              )
-          : null;
+      // A selected item's Nearby is read around the item only.
+      const bounds = sky || dual ? [] : [rect];
+      if (dual) bounds.push(inspectorPointBounds(anchor, radius));
+      const closestKm = closest
+        ? selected
+          ? (at) => greatCircleKm(anchor, at)
+          : inspectorGroundDistance(
+              where,
+              rect,
+              inspectorScope(where).hemisphere,
+            )
+        : null;
       const scope = {
         radius,
         bounds,
         page: options.page,
         index: source?.index,
-        nearby: !dual && sky && !overheadRange,
         localScopes:
-          dual && (!sky || selected)
+          dual
             ? {
                 anchor,
                 selected,
                 excludeKey: options.excludeKey,
-                noGround: sky,
+                // Never count the view beside a selected item.
+                noGround: true,
               }
             : null,
-        overheadRange,
-        nearbyFirst,
         collectPopulation: summarizePopulation && !globe,
         nearestOnly,
         isPoint: inspectorPointRecord,
-        overhead: !globe ? aboveInspectorHorizon : () => false,
-        closestLimit: overheadRange ? Infinity : closestLimit,
+        closestLimit,
         closest: closestKm,
         closestCells:
           closestKm && source
             ? source.index.cellsByDistance(
-                overheadRange
-                  ? [worldBounds]
-                  : [
-                      selected
-                        ? inspectorPointBounds(anchor, closestLimit)
-                        : expandInspectorBounds(rect, closestLimit),
-                    ],
+                [
+                  selected
+                    ? inspectorPointBounds(anchor, closestLimit)
+                    : expandInspectorBounds(rect, closestLimit),
+                ],
                 closestKm,
               )
             : null,
@@ -968,7 +920,6 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
           };
         };
         value = withSummary(value);
-        if (value.alternate) value.alternate = withSummary(value.alternate);
       }
     } catch {
       value = { layerId: id, readFailed: true, count: null, items: [] };
@@ -983,27 +934,17 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
       globe,
       costMs: (globalThis.performance?.now?.() ?? now) - started,
     });
-    return project(value);
+    return value;
   }
 
-  function inspectorGroups(
-    ids,
-    radius,
-    { overheadIds = [], overheadRadius } = {},
-  ) {
+  function inspectorGroups(ids, radius) {
     const enabled = new Map(liveLayers().map((row) => [row.id, row]));
     scopeIndex.retain(enabled);
     for (const id of scopedAnswers.keys())
       if (!enabled.has(id)) scopedAnswers.delete(id);
     return ids.flatMap((id) => {
       const row = enabled.get(id);
-      const overheadRange = overheadIds.includes(id);
-      const group =
-        row &&
-        inspectorGroup(id, overheadRange ? overheadRadius : radius, {
-          row,
-          overheadRange,
-        });
+      const group = row && inspectorGroup(id, radius, { row });
       return group ? [group] : [];
     });
   }
@@ -1219,7 +1160,7 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
    * revision. A failed radius read has no count and no selectable items.
    * @param {number} lat
    * @param {number} lon
-   * @param {{radiusKm?: number, limit?: number, query?: string, excludeKey?: string, excludeLayers?: string[], onlyLayers?: string[], breakdown?: boolean, overheadRange?: boolean}} [options]
+   * @param {{radiusKm?: number, limit?: number, query?: string, excludeKey?: string, excludeLayers?: string[], onlyLayers?: string[], breakdown?: boolean, overheadRange?: boolean, closestLayers?: string[]}} [options]
    */
   function nearbyLayers(lat, lon, options = {}) {
     void managerVersion.value;
@@ -1245,6 +1186,7 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
         asked.excludeKey || '',
         asked.breakdown === true,
         asked.overheadRange === true,
+        asked.closestLayers?.join('|') ?? '',
         getLocale(),
       ]),
       (row, onSnapshotFallback) =>
@@ -1254,6 +1196,7 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
           { lat, lon },
           {
             ...asked,
+            closestFallback: asked.closestLayers?.includes(row.id) === true,
             shownLayerName,
             throwOnReadError: true,
             onSnapshotFallback,
@@ -1793,8 +1736,6 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     setViewContextShown,
     readViewContextShown,
     setSelectedScopeOwner,
-    selectedRowLayers,
-    toggleGroupScope,
     pulseInspector,
     publishInspectorRows,
     publishViewWeather,

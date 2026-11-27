@@ -115,6 +115,7 @@ const shownFields = computed(() =>
 );
 const lists = computed(() => {
   void tick.value;
+  void store.layerRevision;
   if (!scopeOwner()) return [];
   const found = store.nearbyLayers(props.lat, props.lon, {
     radiusKm: radiusKm.value,
@@ -122,20 +123,36 @@ const lists = computed(() => {
     excludeKey: props.excludeKey,
     query: contextNeedle.value,
     excludeLayers: ['radio', ...spatialLayers.value.map(row => row.id)],
+    closestLayers: searching.value || inSwath.value ? [] : ['flights'],
   });
   if (!props.ownLayer) return found;
   return [...found.filter((list) => list.layerId === props.ownLayer), ...found.filter((list) => list.layerId !== props.ownLayer)];
 });
 
-// The inline card and the Inspector share a panel. Suppress a duplicate
-// Inspector group only while this card actually shows rows for that layer.
-if (props.embedded) {
-  watch(
-    () => lists.value.filter(group => group.items.length).map(group => group.layerId).join('|'),
-    ids => { store.selectedRowLayers = new Set(ids ? ids.split('|') : []); },
-    { immediate: true },
-  );
-}
+// Flights always answers in the card, from the item: aircraft within the
+// radius sit in the lists; with none there, the closest three with their
+// distance; with none loaded, why.
+const FLIGHTS = 'flights';
+const flightsBlock = computed(() => {
+  void tick.value;
+  void store.managerVersion;
+  void store.layerRevision;
+  if (searching.value || inSwath.value || !scopeOwner()) return null;
+  const row = store.allLayers().find((layer) => layer.id === FLIGHTS && layer.enabled);
+  if (!row) return null;
+  const group = lists.value.find((list) => list.layerId === FLIGHTS);
+  if (group?.items.length && group.scope !== 'closest') return null;
+  const name = shownLayerName(row.name, row.id);
+  if (group?.scope === 'closest') return { name, group, status: '' };
+  const { tone, updatedAt } = presentLayerRow(row);
+  const status = group?.readFailed || tone === 'unavailable'
+    ? inspectorFeedLabel('unavailable')
+    : tone === 'loading' || (updatedAt === null && !row.stats?.count)
+      ? inspectorFeedLabel('loading')
+      : t('No nearby aircraft');
+  return { name, group: null, status };
+});
+const shownLists = computed(() => lists.value.filter((list) => list !== flightsBlock.value?.group));
 
 const alerts = computed(() => {
   void tick.value;
@@ -318,12 +335,18 @@ const distance = (n) => {
       <h4>{{ group.layerName }} · {{ group.readFailed ? t('Unavailable') : group.loading ? t('Loading') : formatNumber(group.count) }}</h4>
       <template v-if="!group.readFailed && !group.loading">
         <p>{{ groupLabel(group.scope) }}</p>
-        <UiButton v-if="group.alternate" class="view-context__scope-switch" :data-scope-layer="group.layerId" @click="store.toggleGroupScope(group.layerId)">{{ groupLabel(group.alternate.scope) }} · {{ formatNumber(group.alternate.count) }}</UiButton>
         <ContextBreakdownBar v-if="group.bar" :parts="group.bar.parts" />
         <NearbyLists :lists="[group]" :title="group.layerName" rows-only :approximate="approximate" @focus-lost="focusCardTitle()" />
       </template>
     </section>
-    <NearbyLists :lists="lists" :title="title" :approximate="approximate" @focus-lost="focusCardTitle()" />
+    <NearbyLists :lists="shownLists" :title="title" :approximate="approximate" @focus-lost="focusCardTitle()" />
+    <section v-if="flightsBlock" class="spot-conditions__block" data-spatial-layer="flights">
+      <h4>{{ flightsBlock.name }} · {{ flightsBlock.group ? formatNumber(flightsBlock.group.count) : flightsBlock.status }}</h4>
+      <template v-if="flightsBlock.group">
+        <p>{{ groupLabel('closest') }}</p>
+        <NearbyLists :lists="[flightsBlock.group]" :title="flightsBlock.name" rows-only :approximate="approximate" @focus-lost="focusCardTitle()" />
+      </template>
+    </section>
 
     <div v-if="shownHazards.length || hazardState" class="spot-conditions__block spot-conditions__hazards">
       <h4>

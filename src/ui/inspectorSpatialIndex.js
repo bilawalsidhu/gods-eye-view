@@ -141,16 +141,6 @@ export function inspectorGroundDistance(view, rect, hemisphere) {
   );
 }
 
-export function aboveInspectorHorizon(point, km) {
-  if (point.onGround !== false || !(point.altitudeM > 0)) return false;
-  const angle = km / EARTH_RADIUS_KM;
-  const radius = EARTH_RADIUS_KM + point.altitudeM / 1000;
-  return (
-    radius * Math.cos(angle) - EARTH_RADIUS_KM >=
-    radius * Math.sin(angle) * Math.tan(10 * RAD)
-  );
-}
-
 const hasGeometry = (point) =>
   Boolean(
     point?.[CONTEXT_AREA] || point?.[CONTEXT_LINES] || point?.parts?.length,

@@ -1214,10 +1214,14 @@ test('the Inspector falls back by scope without widening the Omnibar answer', (t
   assert.deepEqual(store.inView(), []);
 
   store.setView({ center, rect, heightM: 25_000 });
-  const nearby = read();
-  assert.equal(nearby.scope, 'nearby');
-  assert.equal(nearby.count, 1);
-  assert.ok(nearby.items[0].distanceKm > 24, 'distance is to the view centre');
+  const city = read();
+  assert.equal(
+    city.scope,
+    'closest',
+    'nothing selected reads the view at city scale too',
+  );
+  assert.equal(city.count, 1);
+  assert.ok(city.items[0].distanceKm < 3, 'distance is to the edge');
 
   store.setView({ center, rect, heightM: 25_000, groundFootprint: false });
   const sky = read();
@@ -1290,8 +1294,7 @@ function cityAircraftGroup(t, records) {
     rect: { west: -0.1, east: 0.1, south: -0.1, north: 0.1 },
     heightM: 40_000,
   });
-  const read = () =>
-    store.inspectorGroup('flights', 250, { overheadRange: true });
+  const read = () => store.inspectorGroup('flights', 250);
   assert.equal(read().loading, true);
   t.mock.timers.tick(0);
   return read();
@@ -1384,20 +1387,6 @@ test('Closest on a world-rectangle fallback measures from the visible limb and k
   assert.equal(store.inspectorGroup(id, 25).scope, 'none', 'beyond the cutoff');
 });
 
-test('at city scale only airborne aircraft high above the camera ground point count as overhead', (t) => {
-  const group = cityAircraftGroup(t, [
-    { ...point('high', 0.05, 0), altitudeM: 9000, onGround: false },
-    { ...point('low-far', 0.72, 0), altitudeM: 10_000, onGround: false },
-    { ...point('parked', 0.72, 0.01), altitudeM: 0, onGround: true },
-  ]);
-  assert.equal(group.scope, 'overhead');
-  assert.equal(group.count, 1);
-  assert.deepEqual(
-    group.items.map((row) => row.identity.id),
-    ['high'],
-  );
-});
-
 test('Closest counts and classifies only the three retained park tour flights', (t) => {
   const group = cityAircraftGroup(t, [
     { ...point('east-park', 0, 0.3), aircraftClass: 'light' },
@@ -1421,7 +1410,7 @@ test('Closest counts and classifies only the three retained park tour flights', 
   );
 });
 
-test('a visible aircraft that is not overhead stays In view at city scale', (t) => {
+test('a visible aircraft reads In view at city scale', (t) => {
   const group = cityAircraftGroup(t, [
     { ...point('visible', 0.08, 0.08), altitudeM: 500, onGround: false },
   ]);
@@ -1456,13 +1445,15 @@ test('the moving Inspector reuses its scope only while the range and query match
   assert.equal(read(250).loading, true);
   t.mock.timers.tick(0);
   const settled = read(250);
-  assert.equal(settled.scope, 'nearby');
+  assert.equal(settled.scope, 'closest');
   store.setView(
     { ...view, center: { lat: 0.001, lon: 0 } },
     { settled: false },
   );
   assert.equal(read(250), settled, 'movement alone keeps the settled rows');
-  assert.equal(read(25).scope, 'closest');
+  const narrower = read(25);
+  assert.notEqual(narrower, settled, 'a changed range reads again');
+  assert.equal(narrower.scope, 'closest');
   assert.deepEqual(read(25, { query: 'different event' }).items, []);
   assert.equal(
     scans(),
@@ -1515,7 +1506,7 @@ test('removing and re-adding a Library layer while Inspector is hidden evicts it
   assert.equal(read().items[0].identity.id, 'new');
 });
 
-test('the indexed fire radius and the filtered reader agree across the date line', (t) => {
+test('the indexed fire radius and the per-record reader agree across the date line', (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const layer = {
     id: 'local-firms',
@@ -1530,26 +1521,25 @@ test('the indexed fire radius and the filtered reader agree across the date line
   };
   const { store } = harness([layer]);
   t.after(() => store.setViewContextShown(false, null));
+  t.after(store.setSelectedScopeOwner(() => true));
   store.setViewContextShown(true, 1);
   store.setView({
     center: { lat: 0, lon: 180 },
     rect: { west: 179.98, east: -179.98, south: -0.1, north: 0.1 },
     heightM: 25_000,
   });
-  assert.equal(store.inspectorGroup(layer.id, 50).loading, true);
+  let anchor = { lat: 0, lon: 180 };
+  const read = (limit, options = {}) =>
+    store.inspectorGroup(layer.id, 50, { anchor, limit, ...options });
+  assert.equal(read(2).loading, true);
   t.mock.timers.tick(0);
 
-  const first = store.inspectorGroup(layer.id, 50, { limit: 2 });
-  assert.equal(first.scope, 'view');
-  assert.equal(first.count, 1);
-  store.toggleGroupScope(layer.id);
-  const result = store.inspectorGroup(layer.id, 50, { limit: 2 });
-  const filtered = store.inspectorGroup(layer.id, 50, {
-    limit: 2,
-    query: 'Detection',
-  });
+  const result = read(2);
+  // An exclusion that matches nothing sends the read record by record.
+  const filtered = read(2, { excludeKey: 'local-firms:none' });
   assert.equal(result.scope, 'nearby');
   assert.equal(result.count, 3);
+  assert.equal(result.alternate, undefined, 'no view scope beside it');
   assert.deepEqual(
     result.items.map(({ identity }) => identity.lon),
     [179.99, -179.96],
@@ -1562,22 +1552,57 @@ test('the indexed fire radius and the filtered reader agree across the date line
     { ...point('east', 0, 0.15), name: 'Detection east' },
   ];
   layer.stats = { recordsRevision: 2, count: 2 };
+  anchor = { lat: 0, lon: 0 };
   store.setView({
     center: { lat: 0, lon: 0 },
     rect: { west: 0.11, east: 0.16, south: -0.02, north: 0.02 },
     heightM: 25_000,
   });
-  assert.equal(store.inspectorGroup(layer.id, 50).loading, true);
+  assert.equal(read(1).loading, true);
+  t.mock.timers.tick(0);
+  const tied = read(1);
+  const filteredTie = read(1, { excludeKey: 'local-firms:none' });
+  assert.equal(tied.count, 2);
+  // Both are 16.7 km from the item; the view no longer breaks the tie.
+  assert.equal(Math.abs(tied.items[0].identity.lon), 0.15);
+  assert.deepEqual(tied.items, filteredTie.items);
+});
+
+test('a selected item’s local scope is measured from the item, never the view', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { store } = harness([
+    {
+      id: 'earthquakes',
+      enabled: true,
+      stats: { recordsRevision: 1, count: 2 },
+      records: [point('in-view', 0, 0), point('by-item', 0, 5.1)],
+    },
+  ]);
+  t.after(() => store.setViewContextShown(false, null));
+  t.after(store.setSelectedScopeOwner(() => true));
+  store.setView({
+    center: { lat: 0, lon: 0 },
+    rect: { west: -0.2, east: 0.2, south: -0.2, north: 0.2 },
+    heightM: 70_000,
+  });
+  const read = (radius) =>
+    store.inspectorGroup('earthquakes', radius, { anchor: { lat: 0, lon: 5 } });
+  assert.equal(read(25).loading, true);
   t.mock.timers.tick(0);
 
-  assert.equal(store.inspectorGroup(layer.id, 50, { limit: 1 }).count, 1);
-  store.toggleGroupScope(layer.id);
-  const tied = store.inspectorGroup(layer.id, 50, { limit: 1 });
-  const filteredTie = store.inspectorGroup(layer.id, 50, {
-    limit: 1,
-    query: 'Detection',
-  });
-  assert.equal(tied.count, 2);
-  assert.equal(tied.items[0].identity.lon, 0.15);
-  assert.deepEqual(tied.items, filteredTie.items);
+  const near = read(25);
+  assert.equal(near.scope, 'nearby');
+  assert.deepEqual(
+    near.items.map((row) => row.identity.id),
+    ['by-item'],
+  );
+  assert.equal(near.alternate, undefined);
+  // 11 km from the item: outside 1 km. The quake in view is not offered.
+  const far = read(1);
+  assert.equal(far.scope, 'closest');
+  assert.deepEqual(
+    far.items.map((row) => row.identity.id),
+    ['by-item'],
+  );
+  assert.ok(far.items[0].distanceKm > 10 && far.items[0].distanceKm < 12);
 });

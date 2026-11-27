@@ -1922,6 +1922,7 @@ export function nearbyByKind(
  * @param {string} [options.excludeKey] A record to leave out (the selected one).
  * @param {boolean} [options.breakdown] Summarize categories for the counted rows.
  * @param {boolean} [options.overheadRange] Use ground positions and show the closest points when the range is empty.
+ * @param {boolean} [options.closestFallback] Show the closest three, with distances, when the radius is empty (Flights on a card).
  * @param {(name: string, id: string) => string} [options.shownLayerName] A display alias to match.
  * @param {boolean} [options.throwOnReadError] Let a caller with a retry policy handle a reader error.
  * @param {() => void} [options.onSnapshotFallback] Use ordinary records and report an optional reader failure.
@@ -1938,6 +1939,7 @@ export function nearbyForLayer(
     excludeKey = '',
     breakdown = false,
     overheadRange = false,
+    closestFallback = false,
     shownLayerName,
     throwOnReadError = false,
     onSnapshotFallback,
@@ -1961,6 +1963,8 @@ export function nearbyForLayer(
   // A degree of latitude exceeds 110 km. This cheap rejection leaves the
   // exact great-circle test to handle the boundary, poles and date line.
   const latitudeSpan = radiusKm / 110;
+  // Satellites' range and Flights on a card fall back to the closest three.
+  const reach = overheadRange || closestFallback;
   function summarize({ source, points }) {
     const best = [];
     const closest = [];
@@ -1968,7 +1972,7 @@ export function nearbyForLayer(
     let count = 0;
     for (const point of points) {
       if (
-        !overheadRange &&
+        !reach &&
         source &&
         Math.abs(point.lat - here.lat) > latitudeSpan
       )
@@ -1977,7 +1981,7 @@ export function nearbyForLayer(
         continue;
       const { at, km } = source
         ? { at: point, km: distanceKm(here, point) }
-        : overheadRange
+        : reach
           ? {
               at: recordPosition(point),
               km: distanceKm(here, recordPosition(point)),
@@ -1987,7 +1991,7 @@ export function nearbyForLayer(
               refineKm: cutoffKm(best, keep),
             });
       const within = km <= radiusKm;
-      if (!within && (!overheadRange || !at || !Number.isFinite(km))) continue;
+      if (!within && (!reach || !at || !Number.isFinite(km))) continue;
       if (excludeKey || matchRecord || classified) {
         const record = source
           ? source.recordForPoint(point, Boolean(excludeKey))
@@ -2008,13 +2012,17 @@ export function nearbyForLayer(
         keepBest(closest, 3, -km, point, at);
       }
     }
-    const fallback = overheadRange && !count && closest.length > 0;
+    const fallback = reach && !count && closest.length > 0;
     return {
       layerId,
       layerName: name,
       icon: kind.icon,
       count: fallback ? closest.length : count,
-      ...(overheadRange ? { scope: fallback ? 'closest' : 'overhead' } : {}),
+      ...(fallback
+        ? { scope: 'closest' }
+        : overheadRange
+          ? { scope: 'overhead' }
+          : {}),
       ...(classified && !fallback
         ? { breakdown: recordBreakdown(kind.kind, classified) }
         : {}),
@@ -2030,7 +2038,7 @@ export function nearbyForLayer(
       })),
     };
   }
-  const near = overheadRange ? null : moduleRecordsNear(module, here, radiusKm);
+  const near = reach ? null : moduleRecordsNear(module, here, radiusKm);
   if (near) return summarize({ points: near });
   return readLayerPoints(
     dataManager,
@@ -2421,8 +2429,8 @@ export function inViewTest(
 
 /**
  * Optional inputs supplied by the Inspector store. With nothing selected,
- * In view comes first. With a selection, Nearby uses its coordinates. Each
- * result carries the count, breakdown and rows from one scope. Search and
+ * every layer reads In view. With a selection, local scopes are read around
+ * its coordinates only. Each result carries the count, breakdown and rows from one scope. Search and
  * Omnibar omit these inputs and use the in-view membership alone.
  * @typedef {object} InspectorSummaryOptions
  * @property {number} radius Radius in kilometres.
@@ -2433,8 +2441,6 @@ export function inViewTest(
  * @property {boolean} [nearby] Use only the radius for a view without ground.
  * @property {boolean} [nearbyFirst] Prefer the radius when it has results.
  * @property {boolean} [nearestOnly] Rank from the camera ground point and count retained rows.
- * @property {boolean} [overheadRange] Use the overhead scope, with a horizon check for aircraft.
- * @property {(point: object, km: number) => boolean} [overhead] Decide aircraft overhead membership.
  * @property {(point: object) => boolean} [isPoint] Identify ordinary point records.
  * @property {number} [sampleRadiusKm] Limit a globe sample without changing its provider total.
  * @property {?{score: number, order: number}} [page] Resume after a score and tie order.
@@ -2501,7 +2507,6 @@ export function viewSummaryForLayer(
   const kind = entityKind(layerId);
   const isSatelliteLayer = layerId === 'satellites';
   const aircraft = isAircraftLayer(layerId);
-  const aircraftOverhead = aircraft && inspector?.overheadRange;
   const needle = text(query).toLowerCase();
   const matchRecord =
     needle && !layerNameMatches(layer, name, needle, shownLayerName);
@@ -2522,12 +2527,6 @@ export function viewSummaryForLayer(
     ? groundLineCrossing(corners, seenFrom, heightM)
     : null;
   const rankFrom = inspector?.nearestOnly ? seenFrom : center;
-  const overheadScore = (point, at) => {
-    const km = distanceKm(seenFrom, at);
-    return km <= inspector.radius && inspector.overhead(point, km)
-      ? Math.cos(distanceKm(rankFrom, at) / EARTH_RADIUS_KM)
-      : -Infinity;
-  };
   const { x: cx, y: cy, z: cz } = unitVector(rankFrom.lat, rankFrom.lon);
   const vector = { x: 0, y: 0, z: 0 };
   const scoreInView = (at, altitudeM) => {
@@ -2541,6 +2540,7 @@ export function viewSummaryForLayer(
     ? Math.cos(inspector.sampleRadiusKm / EARTH_RADIUS_KM)
     : -Infinity;
   const dual = inspector?.localScopes;
+  // The Inspector sets only dual (nothing selected reads In view).
   const useRadius = dual || inspector?.nearby || inspector?.nearbyFirst;
   const radiusVector = useRadius
     ? dual
@@ -2625,9 +2625,7 @@ export function viewSummaryForLayer(
         continue;
       let score = -Infinity;
       if (useRadius && !fastRadius) {
-        if (aircraftOverhead) {
-          if (at) score = overheadScore(point, at);
-        } else if (indexed || inspector.isPoint(point)) {
+        if (indexed || inspector.isPoint(point)) {
           if (at) {
             const { x, y, z } = indexed ?? unitVector(at.lat, at.lon, vector);
             score =
@@ -2648,9 +2646,7 @@ export function viewSummaryForLayer(
           }
         }
       }
-      const within =
-        !fastRadius &&
-        (aircraftOverhead ? score > -Infinity : score >= radiusScore);
+      const within = !fastRadius && score >= radiusScore;
       if (dual && within) {
         nearbyCount++;
         keepBest(nearbyBest, keep, score, point, at);
@@ -2665,7 +2661,7 @@ export function viewSummaryForLayer(
         at = position;
       }
       if (!inRadius) {
-        if (nearbyChosen || (inspector?.overheadRange && !aircraft)) continue;
+        if (nearbyChosen) continue;
         const elevated =
           isSatelliteLayer || (aircraft && point?.onGround === false);
         score = scoreInView(at, elevated ? point?.altitudeM : null);
@@ -2717,14 +2713,6 @@ export function viewSummaryForLayer(
           at = { lat: center.lat, lon: center.lon, lineAnchor: true };
           score = scoreInView(at);
         }
-        if (
-          inspector &&
-          aircraft &&
-          !aircraftOverhead &&
-          score === -Infinity &&
-          at
-        )
-          score = overheadScore(point, at);
       }
       if (score === -Infinity || score < minimumScore) continue;
       const record = matchRecord
@@ -2815,9 +2803,7 @@ export function viewSummaryForLayer(
       count: closest ? outside.length : truncated ? best.length : count,
       ...(inspector && {
         scope: nearbyChosen
-          ? inspector.overheadRange
-            ? 'overhead'
-            : 'nearby'
+          ? 'nearby'
           : closest
             ? 'closest'
             : count
@@ -2872,11 +2858,7 @@ export function viewSummaryForLayer(
       }),
       ...(nearbyPopulation && { population: nearbyPopulation }),
     };
-    if (!viewGroup.count) return nearbyGroup;
-    const [first, other] = dual.selected
-      ? [nearbyGroup, viewGroup]
-      : [viewGroup, nearbyGroup];
-    return first.count === other.count ? first : { ...first, alternate: other };
+    return nearbyGroup;
   }
   if (inspector?.snapshot) return summarize(inspector.snapshot);
   return readLayerPoints(

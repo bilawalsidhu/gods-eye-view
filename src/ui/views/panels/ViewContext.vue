@@ -13,8 +13,7 @@ import { PANEL_LABEL_KEYS, layerSourceText, shownLayerName } from '../../layerNa
 import { translateFeedError, translateStatusMessage } from '../../statusText.js';
 import { entityKind, recordRow } from '../../../data/entityContext.js';
 import { missionSitePin, placeIdentity, viewPin, viewPlaceName } from '../../placeCard.js';
-import { contextRadiusKm, overheadRangeKm } from '../../contextRadius.js';
-import { isAircraftLayer } from '../../../data/aircraftLayerIds.js';
+import { DEFAULT_CONTEXT_RADIUS_KM, overheadRangeKm } from '../../contextRadius.js';
 import { weatherFacts, weatherLook } from '../../spotConditions.js';
 import { clockLine, contextAgeText, dayLengthMinutes, utcClock } from '../../contextTime.js';
 import { approximatePosition, distanceText } from '../../distanceText.js';
@@ -51,6 +50,9 @@ const { view, viewWeather } = storeToRefs(store);
 const counts = useLayerCountsStore();
 const missions = useSpaceMissionsStore();
 const props = defineProps({ listSearchMatches: Boolean, inlineCamera: Boolean, inlineSpatialCard: Boolean });
+// With nothing selected the radius only bounds how far Closest to view
+// looks; it is fixed, since no slider controls it here.
+const VIEW_REACH_KM = DEFAULT_CONTEXT_RADIUS_KM;
 const emit = defineEmits(['keyboardSelection']);
 const tick = ref(0);
 // Resample when Context becomes visible, before the next periodic tick.
@@ -181,7 +183,9 @@ const layerRows = computed(() =>
 const missionsFeed = computed(() => layerRows.value.find(({ id }) => id === MISSIONS_LAYER));
 // The layers that get a tile or block of their own.
 const liveLayers = computed(() => layerRows.value.filter((layer) => {
-  if (props.inlineSpatialCard && !contextNeedle.value && (supportsLocalScopes(layer.id) || (layer.id !== 'satellites' && store.selectedRowLayers.has(layer.id)))) return false;
+  // A selected card in the panel has the only Nearby: every item layer and
+  // Satellites are read around the item there, never around the view here.
+  if (props.inlineSpatialCard && !contextNeedle.value && (layer.id === 'satellites' || supportsLocalScopes(layer.id) || layerKind(layer.id) === 'items')) return false;
   if (layer.id === 'cctv' || shownApart(layer.id, missions.enabled)) return false;
   // The catalog that Missions enables for its own telemetry has no standalone points.
   return layer.id !== 'satellites' || !missions.enabled ||
@@ -214,7 +218,6 @@ async function turnOnFlights(event) {
   await nextTick();
   if (focused && !button.isConnected && doc.activeElement === doc.body) viewBox.value?.focus({ preventScroll: true });
 }
-const radiusText = computed(() => t('{n} km', { n: formatNumber(contextRadiusKm.value) }));
 
 // Layers with a point reading show its value at the centre of the view.
 // Air Quality also has station records that belong in Nearby.
@@ -284,10 +287,10 @@ const summaries = computed(() => {
         const module = store.layerModule(layer.id);
         if (typeof module?.getContextPopulation === 'function') {
           const group = displayedByLayer.value.get(layer.id)
-            ?? store.inspectorGroup(layer.id, contextRadiusKm.value);
+            ?? store.inspectorGroup(layer.id, VIEW_REACH_KM);
           summary = group?.summary ?? null;
           if (summary && layer.id === 'air-quality' && group.scope !== 'view') {
-            const scope = inspectorScopeLabel(group.scope, contextRadiusKm.value);
+            const scope = scopeLabel(group.scope);
             if (scope) summary = { ...summary, itemsLabel: [layer.name, scope].join(' · ') };
           }
         }
@@ -336,15 +339,9 @@ function stateText(layer) {
 // Refresh the enabled layers' nearest rows on the Inspector tick. The
 // store's readLayers owns the per-layer cache and expiry.
 const satellitesOn = computed(() => liveLayers.value.some(({ id }) => id === 'satellites'));
-const aircraftOverhead = computed(() => store.scopeTier?.city && view.value?.groundFootprint !== false);
-const overheadLayer = (id) => id === 'satellites' || (aircraftOverhead.value && isAircraftLayer(id));
-const hasOverhead = computed(() => liveLayers.value.some(({ id }) => overheadLayer(id)));
-const hasNearby = computed(() => liveLayers.value.some(({ id }) =>
-  !overheadLayer(id) && !CONTEXT_EXEMPT.includes(id) && layerKind(id) === 'items'
-));
-const preferOverhead = ref(false);
-const showOverhead = computed(() => hasOverhead.value && (!hasNearby.value || preferOverhead.value));
-const radiusLabel = computed(() => showOverhead.value ? t('Overhead range') : t('Radius'));
+// Satellites are the only layer read by a range here: the slider shows
+// only while they are on, and a selected card brings its own.
+const showRange = computed(() => !globeView.value && satellitesOn.value && !props.inlineSpatialCard);
 function readGroups(query) {
   if (!store.inspector.shown) return [];
   void store.layerRevision;
@@ -356,10 +353,7 @@ function readGroups(query) {
   // Search uses the viewport; browsing uses the enabled layers’ local scopes.
   const groups = query
     ? store.inView({ perLayer: 12, query, breakdown: true, includeEmpty: true, includeDrawnCoverage: true, viewport: true, excludeLayers: excluded })
-    : store.inspectorGroups(ids, contextRadiusKm.value, {
-      overheadIds: globeView.value ? [] : ids.filter(overheadLayer),
-      overheadRadius: overheadRangeKm.value,
-    });
+    : store.inspectorGroups(ids, VIEW_REACH_KM);
   const center = view.value?.center;
   const satellites = !query && !globeView.value && satellitesOn.value && center
     ? store.nearbyLayers(center.lat, center.lon, {
@@ -380,14 +374,13 @@ const lists = computed(() => contextNeedle.value ? readGroups(contextNeedle.valu
 const globeGroups = computed(() => Object.fromEntries(lists.value.map(group => [group.layerId, group])));
 const displayedByLayer = computed(() => new Map(displayedGroups.value.map(group => [group.layerId, group])));
 const inlineGroup = group => !contextNeedle.value && supportsLocalScopes(group.layerId);
-const radiusRows = computed(() => lists.value.filter(group => group.scope === 'nearby' && !inlineGroup(group)));
 const overheadRows = computed(() => lists.value.filter(group => group.scope === 'overhead'));
 const closestRows = computed(() => lists.value.filter(group => group.scope === 'closest' && !inlineGroup(group)));
-const scopeLabel = (scope) => inspectorScopeLabel(scope, scope === 'overhead' ? overheadRangeKm.value : contextRadiusKm.value);
+const scopeLabel = (scope) => inspectorScopeLabel(scope, overheadRangeKm.value);
 function tileScopeLabel(tile) {
   if (tile.scope !== 'total' && (tile.readFailed || tile.loading || (!tile.count && ['unavailable', 'loading'].includes(tile.tone)))) return '';
   if (tile.id === 'flights' && !tile.count && countStatus(tile)) return '';
-  if (tile.id === 'flights' && aircraftOverhead.value && !contextNeedle.value && tile.scope === 'none' && tile.count === 0 && Number.isFinite(tile.updatedAt) && tile.tone === 'nominal') return t('No nearby aircraft');
+  if (tile.id === 'flights' && !contextNeedle.value && tile.scope === 'none' && tile.count === 0 && Number.isFinite(tile.updatedAt) && ['nominal', 'fallback'].includes(tile.tone)) return t('No nearby aircraft');
   const scope = scopeLabel(tile.scope);
   if (tile.scope === 'total' && Number.isFinite(tile.totalAt)) {
     const age = inspectorNow.value - tile.totalAt;
@@ -400,7 +393,7 @@ const localTileGroups = computed(() => {
   const closest = [];
   const empty = [];
   for (const tile of localTiles.value) {
-    if (tile.scope === 'closest' && overheadLayer(tile.id)) closest.push(tile);
+    if (tile.scope === 'closest' && tile.id === 'satellites') closest.push(tile);
     else if (tile.scope === 'none' && tile.count === 0 && !tile.reading && !countStatus(tile)) empty.push(tile);
     else items.push(tile);
   }
@@ -479,7 +472,9 @@ const countStatus = (tile) => {
   if (tile.loading || (tile.id === 'flights' && tile.tone === 'loading' && !tile.count)) return inspectorFeedLabel('loading');
   if (tile.count) return '';
   if (['unavailable', 'degraded', 'stale'].includes(tile.tone)) return tile.toneText;
-  if (tile.id === 'flights' && tile.count === 0 && tile.updatedAt === null) return inspectorFeedLabel('unavailable');
+  // Before its first update a feed is still loading, not failed: a real
+  // failure carries an error and reads Unavailable above.
+  if (tile.id === 'flights' && tile.count === 0 && tile.updatedAt === null) return inspectorFeedLabel('loading');
   return tile.statusText || '';
 };
 const countText = (tile) => countStatus(tile) || (tile.count === null ? '…' : formatNumber(tile.count));
@@ -758,7 +753,7 @@ function openSuggested() {
         <p v-else class="spot-conditions__loading spot-conditions__weather-wait">{{ weatherFailed ? t('No weather reading here.') : t('Reading conditions here…') }}</p>
       </div>
 
-      <ContextRadius v-if="!globeView && (hasOverhead || hasNearby)" :label="radiusLabel" :overhead="showOverhead" :toggle="hasOverhead && hasNearby" @toggle="preferOverhead = !preferOverhead" />
+      <ContextRadius v-if="showRange" :label="t('Overhead range')" overhead />
 
       <slot name="cameras" />
       <h4 v-if="globeView ? tiles.length || overlayTiles.length : localTileGroups.some(group => group.key === 'items') || overlayTiles.length" class="view-context__label">{{ layerTileHeading }}</h4>
@@ -825,7 +820,6 @@ function openSuggested() {
           <strong v-else :role="tile.readFailed ? 'status' : undefined" :class="{ 'view-context__tile-status': countStatus(tile) }">{{ countText(tile) }}</strong>
           <ContextBreakdownBar v-if="tile.bar && !tile.reading && !summaries[tile.id]?.bands?.length" :parts="tile.bar.parts" />
           <small v-if="tileScopeLabel(tile)" class="view-context__tile-age">{{ tileScopeLabel(tile) }}</small>
-          <UiButton v-if="tile.group?.alternate" class="view-context__scope-switch" :data-scope-layer="tile.id" @click="store.toggleGroupScope(tile.id)">{{ scopeLabel(tile.group.alternate.scope) }} · {{ formatNumber(tile.group.alternate.count) }}</UiButton>
           <div v-if="tile.group && (summaries[tile.id]?.items?.length || (tile.id === 'air-quality' && summaries[tile.id]?.caption))" class="view-context__summary" :data-layer="tile.id">
             <span v-if="summaries[tile.id].items?.length" class="view-context__block-name">{{ summaries[tile.id].itemsLabel || tile.name }}</span>
             <ContextSummary :center="view?.center || null" :layer-id="tile.id" :summary="summaries[tile.id]" :caption="summaries[tile.id].caption || ''" @pick="(item, event) => openSummaryItem(tile.id, item, event)" />
@@ -867,7 +861,6 @@ function openSuggested() {
       <p v-for="layer in problems" :key="layer.id" class="view-context__problem">{{ layer.name }} · {{ layer.problem }}</p>
 
       <p v-if="globeView" class="view-context__hint">{{ t('Click anything on the globe to see its card.') }}</p>
-      <NearbyLists v-if="!globeView" :lists="radiusRows" :title="t('Nearby · {radius}', { radius: radiusText })" :select-item="selectRow" external-focus />
       <NearbyLists v-if="!globeView && overheadRows.length" :lists="overheadRows" :title="scopeLabel('overhead')" :select-item="selectRow" external-focus />
       <NearbyLists v-if="!globeView && closestRows.length" :lists="closestRows" :title="t('Closest to view')" :select-item="selectRow" external-focus />
       <NearbyLists v-if="!globeView && visibleRows.length" :lists="visibleRows" :title="t('In view')" :select-item="selectRow" external-focus />

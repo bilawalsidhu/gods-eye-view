@@ -46,8 +46,8 @@ test('the entity card hand-writes no button; each is a UiButton', () => {
   // no More info: a camera's details are on its card.
   assert.equal(camera.match(/<UiButton\b/g)?.length, 1);
   assert.equal(camera.match(/<UiCloseButton\b/g)?.length, 1);
-  // SpotConditions owns the hazard and alert rows and the scope switch.
-  assert.equal(nearby.match(/<UiButton\b/g)?.length, 3);
+  // SpotConditions owns the hazard and alert rows.
+  assert.equal(nearby.match(/<UiButton\b/g)?.length, 2);
   assert.equal(places[2].match(/<UiButton\b/g)?.length, 1);
 });
 

@@ -949,14 +949,6 @@
   text-transform: uppercase;
 }
 
-.view-context__radius-toggle {
-  min-height: 1.65rem;
-  padding-inline: 0.3rem;
-  border: 1px solid var(--glass-border);
-  border-radius: 4px;
-  background: transparent;
-}
-
 .view-context__radius-value {
   color: rgba(240, 247, 250, 0.95);
   font-family: var(--font-mono);
@@ -986,23 +978,6 @@
 
 .view-context__tile:has(.nearby-lists) {
   grid-column: 1 / -1;
-}
-.view-context__scope-switch {
-  align-self: start;
-  max-width: 100%;
-  border: 0;
-  padding: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  text-align: start;
-  text-decoration: underline;
-  overflow-wrap: anywhere;
-  cursor: pointer;
-}
-.view-context__scope-switch:focus-visible {
-  outline: 2px solid currentColor;
-  outline-offset: 2px;
 }
 .view-context__tile-age {
   color: rgba(199, 214, 222, 0.5);

@@ -7,7 +7,6 @@ import {
   contextLine,
 } from '../data/contextGeometry.js';
 import {
-  aboveInspectorHorizon,
   createInspectorSpatialIndex,
   distanceToInspectorBounds,
   expandInspectorBounds,
@@ -36,21 +35,6 @@ test('bounds use the nearer wrapped edge, and the expanded search keeps it', () 
   assert.deepEqual(
     matches.sort((a, b) => a.lon - b.lon),
     [east, west, center],
-  );
-});
-
-test('overhead membership is about aircraft elevation above the local horizon', () => {
-  assert.equal(
-    aboveInspectorHorizon({ altitudeM: 9000, onGround: false }, 30),
-    true,
-  );
-  assert.equal(
-    aboveInspectorHorizon({ altitudeM: 9000, onGround: false }, 80),
-    false,
-  );
-  assert.equal(
-    aboveInspectorHorizon({ altitudeM: 9000, onGround: true }, 0),
-    false,
   );
 });
 

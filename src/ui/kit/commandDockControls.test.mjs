@@ -35,10 +35,10 @@ const views = {
   // Inspect, Camera settings, Lists and Pinned, a list sub-tab and
   // Back to the followed card from Missions.
   'ContextView.vue': { markup: context, buttons: 9, icons: 3, closes: 0 },
-  // Pin this view, the Flights and Data Layers pointers, a nearest row and the scope switch.
+  // Pin this view, the Flights and Data Layers pointers and a nearest row.
   // The glyphs: the pin, the layer tiles' four and the pointer's layers.
   // A globe-view section uses EntityMark for its layer.
-  'panels/ViewContext.vue': { markup: inView, buttons: 5, icons: 6, closes: 0 },
+  'panels/ViewContext.vue': { markup: inView, buttons: 4, icons: 6, closes: 0 },
   // Open in Data Layers; a layer's glyph and the pointer's layers.
   'panels/SuggestedLayers.vue': {
     markup: suggested,

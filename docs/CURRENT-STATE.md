@@ -1116,28 +1116,30 @@ request also runs when the open Inspector enters globe view with a
 covered layer on, subject to its cooldown. Globe and city-scale changes
 settle with hysteresis.
 
-Below globe height, **In view** counts loaded items in the viewport.
-At city scale (about 50 km or closer), the Inspector first shows items
-**Within N km** of the view centre, then tries **In view** if there are none.
-Empty wide-coverage point layers show up to three items **Closest to view**,
-within the greater of the radius slider or three times the view scale,
-with distances measured to the view edge. A layer that loads by viewport
-shows **None in view** when empty. In a tilted low view that reaches much
-farther than the view scale, the Inspector shows three nearest visible
-items. With sky in the whole viewport, the Inspector uses **Nearby**
-around the camera's ground point for ground layers. Satellites below globe
-height use **Overhead range**, measured from the view centre to their ground
-position. An empty satellite range shows up to three loaded items under
-**Closest to view**. At city scale, an aircraft counts as overhead when it
-is airborne, within the selected range of the camera's ground point and at
-least 10° above the horizon from that point. If none qualify, the Inspector
-shows aircraft **In view**, then **Closest to view**. When both ranges apply, click
-the slider label to switch between them. The browser saves each distance
-independently, from 25 to 1,000 km, defaulting to 250 km.
+Below globe height and with nothing selected, every item layer reads
+**In view**: its count, breakdown and rows come from the viewport at every
+zoom, Flights included. Empty wide-coverage point layers show up to three
+items **Closest to view**, with distances measured to the view edge, within
+250 km or three times the view scale, whichever is greater; aircraft are
+looked for at any distance. A layer that loads by viewport shows
+**None in view** when empty. In a tilted low view that reaches much farther
+than the view scale, the Inspector shows three nearest visible items. A view
+with only sky in it has no ground in view and shows **None in view**.
+Satellites are the one range-based layer: below globe height they use
+**Overhead range**, measured from the view centre to their ground position,
+and an empty range shows up to three loaded satellites under
+**Closest to view**. The Overhead range slider shows only while Satellites are
+on and nothing is selected. The browser saves the overhead range and the card
+radius independently, from 25 to 1,000 km, defaulting to 250 km.
 
-Selecting an item uses the regular radius for **Nearby**, centered on the
-item. A saved 2,500 km radius is read as 1,000 km. GeoJSON line distance uses the nearest
-mapped part. Cable distance uses samples along the line and can miss a
+Selecting an item uses the card's radius for **Nearby**, measured from the
+item only: what lies within the radius, else up to three items
+**Closest to** the item with their distance, else **None nearby**; the view
+never stands in. Flights always answers on a card: aircraft within the
+radius, else the closest three with distance, else **No nearby aircraft**,
+**Loading** or **Unavailable**. A camera shown inline in Inspect has the
+panel's only Nearby and its only radius slider. A saved 2,500 km radius is
+read as 1,000 km. GeoJSON line distance uses the nearest mapped part. Cable distance uses samples along the line and can miss a
 segment near the radius boundary.
 
 Standalone field tiles appear under “At the centre of the view”. Air Quality

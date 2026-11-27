@@ -918,6 +918,20 @@ test('local Inspect enables Flights on request and distinguishes an empty observ
   assert.deepEqual(changes, [['flights', true]]);
 });
 
+test('Flights reads Loading before its first update and No nearby aircraft on a fallback feed', async (t) => {
+  const row = flightsOn([], { lastUpdate: undefined });
+  const { $, cards, notifyLayers } = fixture(t, [row]);
+  cards.setView(localView());
+  await settleInspectorIndex();
+  const tile = () => $('.view-context__tile[data-layer="flights"]').textContent;
+  assert.match(tile(), /Loading/);
+  assert.doesNotMatch(tile(), /Unavailable/);
+  row.stats = { count: 0, lastUpdate: Date.now(), source: 'adsb.lol' };
+  notifyLayers();
+  await settleInspectorIndex();
+  assert.match(tile(), /No nearby aircraft/);
+});
+
 test('ordinary Inspect offers the closest civilian flight with distance before showing an empty local result', async (t) => {
   const layer = flightsOn([
     { ...flight('town01', HERE.lat + 3, HERE.lon), onGround: false },
@@ -927,7 +941,6 @@ test('ordinary Inspect offers the closest civilian flight with distance before s
     { id: 'town-ponds', name: 'Town ponds', enabled: true, records: [] },
     layer,
   ]);
-  setOverheadRangeKm(50);
   cards.setView(localView());
   await settleInspectorIndex();
   const tile = () => $('.view-context__tile[data-layer="flights"]');
@@ -944,9 +957,10 @@ test('ordinary Inspect offers the closest civilian flight with distance before s
   );
   assert.doesNotMatch(tile().textContent, /No nearby aircraft/);
   assert.match(button().textContent, /TOWN01/);
-  assert.equal(
+  assert.match(
     button().querySelector('.nearby-lists__meta').textContent,
-    '334 km',
+    /^22\d km$/,
+    'distance to the view edge',
   );
   assert.equal(cards.card, null);
   assert.deepEqual(flown, []);
@@ -960,16 +974,21 @@ test('ordinary Inspect offers the closest civilian flight with distance before s
   assert.match(tile().textContent, /No nearby aircraft/);
 });
 
-test('the city flight tile shows the overhead range in the active language', async (t) => {
+test('the satellite tile shows the overhead range in the active language', async (t) => {
   const { $, cards } = fixture(t, [
-    flightsOn([{ ...flight('near01', HERE.lat, HERE.lon), onGround: false }]),
+    {
+      id: 'satellites',
+      name: 'Satellites',
+      enabled: true,
+      records: [{ noradId: '1', name: 'SAT', ...HERE }],
+    },
   ]);
   t.after(() => setLocale('en'));
   setLocale('de');
   setOverheadRangeKm(50);
   cards.setView(localView());
   await settleInspectorIndex();
-  const tile = $('.view-context__tile[data-layer="flights"]');
+  const tile = $('.view-context__tile[data-layer="satellites"]');
   assert.equal(
     tile.querySelector('.view-context__tile-age').textContent,
     'Überflug innerhalb von 50 km',
@@ -985,7 +1004,11 @@ test('changing the radius leaves visible flights and their counts in place', asy
   ]);
   cards.setView(localView());
   await settleInspectorIndex();
-  assert.ok($('.view-context__radius input'), 'city scope offers a radius');
+  assert.equal(
+    $('.view-context__radius input'),
+    null,
+    'no slider without Satellites',
+  );
   const previousRadius = contextRadiusKm.value;
   t.after(() => setContextRadiusKm(previousRadius));
   assert.match($('.view-context__tile[data-layer="flights"]').textContent, /1/);
@@ -2108,8 +2131,9 @@ test('the nearby lists follow the Context search', async (t) => {
   assert.match($(NEAREST).textContent, /NEAR01/);
   assert.equal(getComputedStyle($('.view-context__tiles')).display, 'none');
   assert.equal(
-    $('.view-context__radius input').getAttribute('aria-label'),
-    'Overhead range',
+    $('.view-context__radius input'),
+    null,
+    'no slider without Satellites',
   );
   assert.notEqual(getComputedStyle($('.nearby-lists')).display, 'none');
 });
@@ -7336,12 +7360,12 @@ test('a same-view index refresh keeps settled rows up until the replacement publ
 
   earthquakes.stats = { ...earthquakes.stats, recordsRevision: 3 };
   notifyLayers({ type: 'refresh', layerId: 'earthquakes' });
-  setContextRadiusKm(50);
+  cards.setView({ ...localView(), heightM: 40_500 });
   await nextTick();
   assert.equal(
     Boolean(row()),
     false,
-    'a changed radius cannot reuse a pending answer',
+    'a changed view cannot reuse a pending answer',
   );
 });
 
@@ -8490,17 +8514,13 @@ test('the Air Quality summary describes only the stations in view', async (t) =>
 
   const label = () => summary().querySelector('ul').getAttribute('aria-label');
   assert.equal(label(), 'Highest air-quality readings in view');
-  setContextRadiusKm(500);
   cards.setView({ ...view, heightM: 15_000 });
   await settleInspectorIndex();
   assert.match(label(), /in view/i);
-  $('button[data-scope-layer="air-quality"]').click();
-  await nextTick();
-  assert.match(summary().textContent, /Vancouver/);
-  assert.match(label(), /Within 500 km/);
   assert.equal(
-    summary().querySelector('.view-context__block-name').textContent,
-    label(),
+    $('button[data-scope-layer="air-quality"]'),
+    null,
+    'no radius switch with nothing selected',
   );
   cards.setView({
     ...localView({ lat: HERE.lat, lon: HERE.lon + 3 }),
@@ -12350,6 +12370,63 @@ test('a visible flight remains in the In view list as the camera moves closer', 
   assert.match(visible().textContent, /VISIBLE01/);
 });
 
+test('with nothing selected every item layer reads In view at city scale, Flights included', async (t) => {
+  const { $, cards } = fixture(t, [
+    flightsOn([
+      {
+        ...flight('high01', HERE.lat, HERE.lon),
+        onGround: false,
+        altitudeM: 9000,
+      },
+      { ...flight('edge01', HERE.lat + 0.5, HERE.lon), onGround: false },
+    ]),
+    {
+      id: 'ais-live-vessels',
+      name: 'Live Vessels',
+      enabled: true,
+      records: [
+        { id: 'b1', mmsi: 'b1', name: 'HERE BOAT', ...HERE },
+        {
+          id: 'b2',
+          mmsi: 'b2',
+          name: 'EDGE BOAT',
+          lat: HERE.lat + 0.5,
+          lon: HERE.lon,
+        },
+      ],
+    },
+    {
+      id: 'earthquakes',
+      name: 'Earthquakes',
+      enabled: true,
+      records: [
+        { id: 'q1', title: 'Here quake', ...HERE },
+        { id: 'q2', title: 'Edge quake', lat: HERE.lat + 0.5, lon: HERE.lon },
+      ],
+    },
+  ]);
+  // About 55 km out, the second item of each layer is outside a 25 km
+  // radius but inside the view: only In view counts both. At 60 km the
+  // 222 km wide view is not a tilted low view (nearest 3).
+  setContextRadiusKm(25);
+  cards.setView({ ...localView(), heightM: 60_000 });
+  await settleInspectorIndex();
+  for (const id of ['flights', 'ais-live-vessels', 'earthquakes']) {
+    const tile = $(`.view-context__tile[data-layer="${id}"]`);
+    assert.match(tile.getAttribute('aria-label'), /In view · 2$/, id);
+    assert.equal(tile.querySelector('button[data-scope-layer]'), null, id);
+  }
+  assert.doesNotMatch(
+    $('.view-context').textContent,
+    /Within \d|Overhead within|Nearby · /,
+  );
+  assert.equal(
+    $('.view-context__radius'),
+    null,
+    'no slider without Satellites',
+  );
+});
+
 test('unselected layers share In view scope and selecting a card keeps Nearby local', async (t) => {
   const { $, cards, clickGround } = fixture(
     t,
@@ -12379,13 +12456,76 @@ test('unselected layers share In view scope and selecting a card keeps Nearby lo
   cards.select({ layerId: 'earthquakes', id: 'q1' }, { fly: false });
   await nextTick();
   assert.ok($('.entity-card__head'));
-  assert.equal($('.entity-card [data-row-layer="flights"]'), null);
+  assert.equal(
+    $(
+      '.entity-card .spot-conditions > .nearby-lists [data-row-layer="flights"]',
+    ),
+    null,
+    'not listed as within the radius',
+  );
+  assert.match(
+    $('.entity-card [data-spatial-layer="flights"]').textContent,
+    /Closest to Local quake/,
+  );
   // The bridge clears the card when a clean click lands on open ground.
   clickGround();
   await nextTick();
   assert.ok(
     $('.nearby-lists[aria-label="In view"] [data-row-layer="earthquakes"]'),
   );
+});
+
+test('a selected card answers Flights from the item: closest with distance, then why there are none', async (t) => {
+  const row = flightsOn([flight('far01', HERE.lat + 1, HERE.lon)]);
+  const { $, cards, notifyLayers } = fixture(t, [
+    {
+      id: 'earthquakes',
+      name: 'Earthquakes',
+      enabled: true,
+      records: [{ id: 'q1', title: 'Local quake', ...HERE }],
+    },
+    row,
+  ]);
+  setContextRadiusKm(25);
+  cards.setView(localView());
+  cards.select({ layerId: 'earthquakes', id: 'q1' }, { fly: false });
+  await settleInspectorIndex();
+  const block = () => $('#entity-card [data-spatial-layer="flights"]');
+  assert.match(block().textContent, /Live Flights · 1/);
+  assert.match(block().textContent, /Closest to Local quake/);
+  assert.match(
+    block().querySelector('[data-row-key="flights:far01"] .nearby-lists__meta')
+      .textContent,
+    /^111 km/,
+  );
+
+  const next = async (stats, records = []) => {
+    row.records = records;
+    row.stats = stats;
+    notifyLayers();
+    await settleInspectorIndex();
+  };
+  await next({ count: 0, lastUpdate: Date.now() + 1 });
+  assert.match(block().textContent, /Live Flights · No nearby aircraft/);
+  await next({ count: 0, loading: true });
+  assert.match(block().textContent, /Live Flights · Loading/);
+  await next({ count: 0 });
+  assert.match(
+    block().textContent,
+    /Live Flights · Loading/,
+    'before the first update',
+  );
+  await next({ count: 0, status: 'unavailable' });
+  assert.match(block().textContent, /Live Flights · Unavailable/);
+  await next({ count: 1, lastUpdate: Date.now() + 2 }, [
+    flight('near01', HERE.lat + 0.05, HERE.lon),
+  ]);
+  assert.equal(
+    block(),
+    null,
+    'an aircraft within the radius is listed in Nearby',
+  );
+  assert.ok($('#entity-card .nearby-lists [data-row-key="flights:near01"]'));
 });
 
 test('moving the Gulf viewport updates earthquake and vessel rows beyond the radius', async (t) => {
@@ -12498,11 +12638,12 @@ test('an unmeasured local viewport does not show worldwide flight counts', async
   );
   cards.setView({ ...view, groundFootprint: false });
   await settleInspectorIndex();
-  assert.equal(tile().textContent, '1');
-  assert.match(
-    $('.nearby-lists [data-row-layer="flights"]').textContent,
-    /VISIBLE01/,
+  assert.equal(
+    tile().textContent,
+    '0',
+    'a sky-only view has no ground in view',
   );
+  assert.equal($('.nearby-lists [data-row-layer="flights"]'), null);
   cards.setView({ ...view, rect: localView().rect });
   await settleInspectorIndex();
   assert.equal(tile().textContent, '1');
@@ -12537,7 +12678,7 @@ test('with Space Missions on, a nearby launch adds no radius Rocket Launches gro
   assert.ok(!$('.view-context__tile[data-layer="rocket-launches"]'));
 });
 
-test('the radius label switches independent nearby and overhead ranges and globe ignores them', async (t) => {
+test('the overhead range slider belongs to Satellites alone and globe ignores it', async (t) => {
   const flights = flightsOn([
     { ...flight('shared', HERE.lat, HERE.lon), onGround: false },
   ]);
@@ -12636,39 +12777,30 @@ test('the radius label switches independent nearby and overhead ranges and globe
   earthquakes.enabled = true;
   notifyLayers();
   await settleInspectorIndex();
-  assert.match(radius().textContent, /Radius/);
+  const tile = (id) =>
+    $(`.view-context__tile[data-layer="${id}"]`).getAttribute('aria-label');
+  // Satellites own the only slider; the other layers read the view.
+  assert.equal(radius().textContent, 'Overhead range');
+  assert.equal($('.view-context__radius-toggle'), null);
   const slider = () => $('.view-context__radius input');
-  assert.equal(slider().getAttribute('aria-valuetext'), '100 km');
-  assert.match(
-    $('.view-context__tile[data-layer="earthquakes"]').getAttribute(
-      'aria-label',
-    ),
-    /Within 100 km · 1$/,
-  );
-  assert.match(
-    $('.view-context__tile[data-layer="flights"]').getAttribute('aria-label'),
-    /Overhead within 500 km · 1$/,
-  );
-  radius().click();
-  await nextTick();
-  assert.match(radius().textContent, /Overhead range/);
   assert.equal(slider().getAttribute('aria-valuetext'), '500 km');
+  assert.match(tile('earthquakes'), /Closest to view · 1$/);
+  // This tilted low view keeps In view to the nearest three.
+  assert.match(tile('flights'), /In view · nearest 3 · 1$/);
   slider().value = '0';
   slider().dispatchEvent(new window.Event('input', { bubbles: true }));
   await nextTick();
-  assert.match(
-    $('.view-context__tile[data-layer="satellites"]').getAttribute(
-      'aria-label',
-    ),
-    /Closest to view · 2$/,
-  );
+  assert.match(tile('satellites'), /Closest to view · 2$/);
   assert.match(
     rows()[0].closest('.nearby-lists').querySelector('h4').textContent,
     /Closest to view/,
   );
-  radius().click();
-  await nextTick();
-  assert.equal(slider().getAttribute('aria-valuetext'), '100 km');
+  assert.match(
+    tile('earthquakes'),
+    /Closest to view · 1$/,
+    'the slider leaves other layers alone',
+  );
+  assert.match(tile('flights'), /In view · nearest 3 · 1$/);
   setOverheadRangeKm(500);
   await nextTick();
   assert.match(
@@ -12901,7 +13033,7 @@ test('a sky-only viewport search reports no matches and retains a real feed outa
   const { $, cards, notifyLayers } = fixture(t, [flights]);
   cards.setView({ ...localView(), groundFootprint: false });
   await settleInspectorIndex();
-  assert.match($(NEAREST).textContent, /NEAR01/);
+  assert.equal($(NEAREST), null, 'a sky-only view has no ground in view');
   contextSearchOpen.value = true;
   contextSearchText.value = 'near01';
   await nextTick();
@@ -12965,7 +13097,7 @@ test('the passive Data Layers pointer is absent when layers are on without sugge
   }
 });
 
-test('quake scopes switch the count, rows and breakdown together and reset on a settled view', async (t) => {
+test('a quake layer reads In view with nothing selected and only around the selected quake', async (t) => {
   const records = [
     { id: 'visible', title: 'Visible quake', ...HERE, magnitude: 2 },
     {
@@ -12998,19 +13130,8 @@ test('quake scopes switch the count, rows and breakdown together and reset on a 
   cards.setView(view);
   await settleInspectorIndex();
   const tile = () => $('.view-context__tile[data-layer="earthquakes"]');
-  const action = () => tile().querySelector('button[data-scope-layer]');
   assert.match(tile().getAttribute('aria-label'), /In view · 1/);
-  assert.match(action().textContent, /250 km · 2/);
-  action().focus();
-  action().click();
-  await nextTick();
-  assert.equal(document.activeElement, action());
-  assert.match(tile().getAttribute('aria-label'), /250 km · 2/);
-  assert.ok(tile().querySelector('[data-row-key="earthquakes:outer"]'));
-  assert.ok(tile().querySelector('.view-context__bar[role="img"]'));
-  cards.setView({ ...view, heightM: view.heightM + 500 });
-  await settleInspectorIndex();
-  assert.match(tile().getAttribute('aria-label'), /In view · 1/);
+  assert.equal(tile().querySelector('button[data-scope-layer]'), null);
 
   cards.select({ layerId: 'earthquakes', id: 'anchor' }, { fly: false });
   await settleInspectorIndex();
@@ -13024,12 +13145,17 @@ test('quake scopes switch the count, rows and breakdown together and reset on a 
   assert.equal(
     selected().querySelector('button[data-scope-layer]'),
     null,
-    'equal counts',
+    'no scope switch',
   );
   setContextRadiusKm(25);
   await settleInspectorIndex();
-  assert.match(selected().textContent, /In view/);
-  assert.ok(selected().querySelector('[data-row-key="earthquakes:visible"]'));
+  assert.match(selected().textContent, /Closest to Anchor quake/);
+  assert.ok(selected().querySelector('[data-row-key="earthquakes:adjacent"]'));
+  assert.equal(
+    selected().querySelector('[data-row-key="earthquakes:visible"]'),
+    null,
+    'never the view-centred quake',
+  );
   cards.setView(localView({ lat: 0, lon: 0 }));
   await settleInspectorIndex();
   assert.match(selected().textContent, /Closest to Anchor quake/);
@@ -13095,7 +13221,70 @@ test('an inline Austin camera owns the single nearby flight count', async (t) =>
   assert.ok(group.querySelector('[data-row-key="flights:near01"]'));
 });
 
-test('wrecks, incident evidence and place results share the scope switch with source-specific closest coverage', async (t) => {
+test('an inline camera lists Satellites once, around the camera, under one slider', async (t) => {
+  const { $, cards, pinia } = fixture(t, [
+    {
+      id: 'cctv',
+      name: 'Cameras',
+      enabled: true,
+      records: [{ id: 'austin', name: 'Austin camera', ...HERE }],
+    },
+    {
+      id: 'satellites',
+      name: 'Satellites',
+      enabled: true,
+      records: [
+        {
+          noradId: '1',
+          name: 'Near satellite',
+          lat: HERE.lat + 0.1,
+          lon: HERE.lon,
+        },
+      ],
+    },
+    {
+      id: 'ais-live-vessels',
+      name: 'Live Vessels',
+      enabled: true,
+      records: [
+        {
+          id: 'b1',
+          mmsi: 'b1',
+          name: 'FAR BOAT',
+          lat: HERE.lat + 0.9,
+          lon: HERE.lon,
+        },
+      ],
+    },
+  ]);
+  setContextRadiusKm(25);
+  cards.setView(localView());
+  await settleInspectorIndex();
+  assert.ok($('.view-context__tile[data-layer="satellites"]'));
+  useCctvStore(pinia).publish(
+    presentCctvPanel({ enabled: true, activeCameraId: 'austin' }, true),
+  );
+  cards.select({ layerId: 'cctv', id: 'austin' }, { fly: false });
+  await settleInspectorIndex();
+  assert.equal($('.view-context__tile[data-layer="satellites"]'), null);
+  assert.equal(
+    document.querySelectorAll('[data-row-layer="satellites"]').length,
+    1,
+    'Satellites once',
+  );
+  assert.ok($('#entity-card .nearby-lists__layer[data-layer="satellites"]'));
+  // The vessel is 100 km from the camera: outside its radius, and not
+  // brought back as a view-centred tile.
+  assert.equal($('.view-context__tile[data-layer="ais-live-vessels"]'), null);
+  assert.equal(
+    document.querySelectorAll('.view-context__radius').length,
+    1,
+    'one slider: the card’s',
+  );
+  assert.ok($('#entity-card .spot-conditions__radius'));
+});
+
+test('wrecks, incident evidence and place results read In view with source-specific closest coverage', async (t) => {
   const points = [
     { id: 'first', name: 'First', ...HERE },
     { id: 'second', name: 'Second', lat: HERE.lat, lon: HERE.lon + 1.5 },
@@ -13128,10 +13317,7 @@ test('wrecks, incident evidence and place results share the scope switch with so
     'bhote-koshi-locator',
   ]) {
     assert.match(tile(id).getAttribute('aria-label'), /In view · 1/);
-    tile(id).querySelector('button[data-scope-layer]').click();
-    await nextTick();
-    assert.match(tile(id).getAttribute('aria-label'), /250 km · 2/);
-    assert.ok(tile(id).querySelector('[data-row-key="' + id + ':second"]'));
+    assert.equal(tile(id).querySelector('button[data-scope-layer]'), null);
   }
   setContextRadiusKm(25);
   cards.setView({
@@ -13205,7 +13391,7 @@ for (const phone of [false, true]) {
   });
 }
 
-test('inline camera leaves the existing view group visible when its card has no nearby row', async (t) => {
+test('an inline camera answers Flights from the camera when none are inside its radius', async (t) => {
   const { $, cards, pinia } = fixture(t, [
     {
       id: 'cctv',
@@ -13228,12 +13414,17 @@ test('inline camera leaves the existing view group visible when its card has no 
   await settleInspectorIndex();
   assert.ok($('#entity-card'));
   assert.equal(
-    $('#entity-card .nearby-lists__layer[data-layer="flights"]'),
+    $('.view-context__tile[data-layer="flights"]'),
     null,
+    'no view-centred Flights tile',
   );
-  const tile = $('.view-context__tile[data-layer="flights"]');
-  assert.match(tile.getAttribute('aria-label'), /In view · 1/);
-  assert.ok($('.view-context [data-row-key="flights:inview"]'));
+  const block = $('#entity-card [data-spatial-layer="flights"]');
+  assert.match(block.textContent, /Closest to Austin camera/);
+  const row = block.querySelector('[data-row-key="flights:inview"]');
+  assert.match(
+    row.querySelector('.nearby-lists__meta').textContent,
+    /^55\d km$/,
+  );
 });
 
 test('opening a News report reveals Lists on the phone and leaving the sheet hides its media', async (t) => {
