@@ -1,13 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
+import { applyFirmsOverlayPolicy } from './firmsHeatmap.js';
 import {
-  applyFirmsOverlayPolicy,
   buildFireCard,
   buildCellCard,
   buildSelectedFireCard,
   createFirmsHeatmapLayer,
-} from './firmsHeatmap.js';
+} from '../testSupport/firmsLayer.mjs';
 import {
   accentForSeverity,
   FIRMS_OVERLAY_SOURCE_ID,

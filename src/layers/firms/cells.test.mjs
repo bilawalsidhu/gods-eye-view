@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as Cesium from 'cesium';
-import { createFirmsHeatmapLayer } from '../../data/firmsHeatmap.js';
+import { createFirmsHeatmapLayer } from '../../testSupport/firmsLayer.mjs';
 import { fakeInput } from '../../input/testDoubles.mjs';
 import { bindRenderer } from '../../render/rendererOf.js';
 import { bindFakeCesiumScene } from '../../testSupport/fakeCesiumScene.mjs';

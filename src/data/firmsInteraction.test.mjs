@@ -5,11 +5,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
+import { applyFirmsOverlayPolicy } from './firmsHeatmap.js';
 import {
   createFirmsHeatmapLayer,
-  applyFirmsOverlayPolicy,
   buildCellCard,
-} from './firmsHeatmap.js';
+} from '../testSupport/firmsLayer.mjs';
 import { fireDetectionKey } from './firmsLabels.js';
 import {
   isUnderOtherCard,
