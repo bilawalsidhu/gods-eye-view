@@ -97,6 +97,10 @@ export function createFlightState({ source, services }) {
 
   flightState._detectionObjects = new Map();
 
+  /** The array getDetectableObjects fills and returns on every call. */
+
+  flightState._detectionResult = [];
+
   /** DEV-only explicit-position contacts used by qa-focus-evidence.mjs. */
 
   flightState._focusEvidenceIds = new Set();

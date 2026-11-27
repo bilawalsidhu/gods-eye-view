@@ -70,7 +70,8 @@ export function createFirmsState({ services, config }) {
 
   /** Panel callback: repaint the row controls (counter) after a load. */
 
-  layerState._rowControlsListener = null;
+  /** @type {{ invalidate: () => void } | null} the panels' handle, from init */
+  layerState._panel = null;
 
   layerState._cellCount = 0;
 

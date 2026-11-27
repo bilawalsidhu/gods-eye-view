@@ -118,7 +118,7 @@ export function createViewport({ state, services, parts }) {
     parts.rendering.syncRenderHold();
     governorRequestRender('transit-proximity');
     // Repaint now: the row follows the camera, the manager tick is 15 s.
-    if (changed) state._dataManager?.refreshLayerStats?.('transit');
+    if (changed) state._panel?.invalidate();
   }
 
   function onCameraChanged() {

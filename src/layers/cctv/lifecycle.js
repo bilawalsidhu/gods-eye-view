@@ -223,7 +223,8 @@ export function createLifecycle({
      * handling, and performs initial health sync. Coverage entities stay lazy.
      * @param {object} viewer - The viewer.
      */
-    async init(viewer) {
+    async init(viewer, { panel = null } = {}) {
+      layerState._panel = panel;
       layerState._sourceAbort?.abort();
       const sourceAbort = new AbortController();
       layerState._sourceAbort = sourceAbort;
@@ -569,6 +570,7 @@ export function createLifecycle({
      * releases what init attached, whichever viewer it is handed.
      */
     destroy() {
+      layerState._panel = null;
       services.credits?.hideOsmCredit?.(layerState._viewer, 'cctv');
       layerState._sourceAbort?.abort();
       if (typeof document !== 'undefined')

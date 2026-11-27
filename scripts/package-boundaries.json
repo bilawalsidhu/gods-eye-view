@@ -325,6 +325,7 @@
       "src/data/retryableLoad.js",
       "src/data/local_data/wikidata_places/files.js",
       "src/ui/views/panels/Omnibar.vue",
+      "src/ui/entityLookup.js",
       "src/exclusiveSurfaces.js",
       "src/geoDistance.js",
       "src/ui/omnibarGuide.js",
@@ -342,7 +343,6 @@
       "src/search/gridReference.js",
       "src/search/coordinateParser.js",
       "src/search/placeSuggestions.js",
-      "src/search/bip39Words.js",
       "src/ui/stores/station.js",
       "src/ui/views/panels/StationPanel.vue",
       "src/ui/stores/live.js",
@@ -1075,6 +1075,8 @@
       "src/ui/rail/rangeValue.js",
       "src/ui/weather/WeatherReadout.vue",
       "src/ui/newsPanel.js",
+      "src/ui/displayWatch.js",
+      "src/ui/rail/panelContent.js",
       "src/ui/news/NewsFeed.vue",
       "src/ui/news/NewsCard.vue",
       "src/ui/kit/UiEmpty.vue",
@@ -1296,6 +1298,7 @@
       "src/ui/cockpitPresentation.js",
       "src/ui/cockpitSignals.js",
       "src/ui/cockpitTrackingController.js",
+      "src/ui/rail/panelContent.js",
       "src/cockpitMath.js",
       "src/cockpitUtilityLayout.js",
       "src/cockpitVisionPolicy.js",
@@ -1363,6 +1366,7 @@
   "scene-controls": {
     "exports": ["./ui/scenes"],
     "modules": [
+      "src/ui/rail/panelContent.js",
       "src/ui/scenes.js",
       "src/ui/sceneControls.js",
       "src/ui/scenePresentation.js",
@@ -1436,6 +1440,7 @@
       "src/styles/surveillance.js",
       "src/styles/thermal.js",
       "src/ui/applicationShell.js",
+      "src/ui/entityLookup.js",
       "src/services/application.js",
       "src/services/requests.js",
       "src/sources/httpBody.js",
@@ -1569,6 +1574,7 @@
       "src/ui/mapSourceControls.js",
       "src/ui/navigationController.js",
       "src/ui/panelChrome.js",
+      "src/ui/rail/panelContent.js",
       "src/ui/panelDisclosure.js",
       "src/ui/panelLayoutController.js",
       "src/ui/panelMeasurement.js",
@@ -1665,6 +1671,7 @@
       "src/ui/rail/rangeValue.js",
       "src/ui/weather/WeatherReadout.vue",
       "src/ui/newsPanel.js",
+      "src/ui/displayWatch.js",
       "src/ui/news/NewsFeed.vue",
       "src/ui/news/NewsCard.vue",
       "src/ui/kit/UiEmpty.vue",
@@ -1786,7 +1793,8 @@
       "src/data/youtubeApi.js",
       "src/data/youtubeLivePlayer.js",
       "src/ui/liveControls.js",
-      "src/data/viewSheet.js"
+      "src/data/viewSheet.js",
+      "src/ui/contextCard.js"
     ],
     "external": [
       "cesium",
@@ -1862,6 +1870,7 @@
   "scenes": {
     "exports": ["./scenes"],
     "modules": [
+      "src/ui/rail/panelContent.js",
       "src/scenes/nepalEvidencePack.js",
       "src/data/bhoteKoshiIncidentPlaces.js",
       "src/data/bhoteKoshiShotPaths.js",
@@ -4043,7 +4052,14 @@
       "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js",
       "src/geoDistance.js",
-      "src/data/viewSheet.js"
+      "src/data/viewSheet.js",
+      "src/data/trackedCamera.js",
+      "src/time/worldClock.js",
+      "src/navigationPolicy.js",
+      "src/geo/julian.js",
+      "src/data/followed.js",
+      "src/geo/geodesic.js",
+      "src/data/clickSelect.js"
     ],
     "external": ["cesium", "kdbush"]
   },
@@ -4930,6 +4946,7 @@
       "src/styles/surveillance.js",
       "src/styles/thermal.js",
       "src/ui/applicationShell.js",
+      "src/ui/entityLookup.js",
       "src/ui/railEdgeScroll.js",
       "src/ui/mobileShell.js",
       "src/ui/mobileSheets.js",
@@ -5002,6 +5019,7 @@
       "src/ui/mapSourceControls.js",
       "src/ui/navigationController.js",
       "src/ui/panelChrome.js",
+      "src/ui/rail/panelContent.js",
       "src/ui/panelDisclosure.js",
       "src/ui/panelLayoutController.js",
       "src/ui/panelMeasurement.js",
@@ -5179,7 +5197,6 @@
       "src/data/transitFeeds.js",
       "src/data/transitIcons.js",
       "src/data/transitPresetStyle.js",
-      "src/layers/transit/controls.js",
       "src/layers/transit/height.js",
       "src/layers/transit/index.js",
       "src/layers/transit/cockpitSubject.js",
@@ -5539,6 +5556,7 @@
       "src/ui/rail/rangeValue.js",
       "src/ui/weather/WeatherReadout.vue",
       "src/ui/newsPanel.js",
+      "src/ui/displayWatch.js",
       "src/ui/news/NewsFeed.vue",
       "src/ui/news/NewsCard.vue",
       "src/ui/kit/UiSelect.js",
@@ -5751,7 +5769,8 @@
       "src/layers/airQuality/units.js",
       "src/data/aircraftViews.js",
       "src/data/aircraftViews.json",
-      "src/data/viewSheet.js"
+      "src/data/viewSheet.js",
+      "src/ui/contextCard.js"
     ],
     "external": [
       "hls.js",
@@ -6341,7 +6360,6 @@
       "src/data/transitFeeds.js",
       "src/data/transitIcons.js",
       "src/data/transitPresetStyle.js",
-      "src/layers/transit/controls.js",
       "src/layers/transit/height.js",
       "src/layers/transit/index.js",
       "src/layers/transit/cockpitSubject.js",
@@ -7009,6 +7027,7 @@
       "src/panelStackLayout.js",
       "src/ui/leftPanelRail.js",
       "src/ui/panelChrome.js",
+      "src/ui/rail/panelContent.js",
       "src/ui/panelDisclosure.js",
       "src/ui/panelLayoutController.js",
       "src/ui/panelMeasurement.js",
@@ -7675,7 +7694,6 @@
       "src/data/transitIcons.js",
       "src/data/transitPresetStyle.js",
       "src/data/transitProxy.js",
-      "src/layers/transit/controls.js",
       "src/layers/transit/height.js",
       "src/layers/transit/index.js",
       "src/layers/transit/cockpitSubject.js",
@@ -7784,7 +7802,6 @@
       "src/geoDistance.js",
       "src/data/transitIcons.js",
       "src/data/transitPresetStyle.js",
-      "src/layers/transit/controls.js",
       "src/layers/transit/height.js",
       "src/layers/transit/index.js",
       "src/layers/transit/cockpitSubject.js",
@@ -8777,6 +8794,11 @@
   "rail-paths": {
     "exports": ["./layers/rail/paths"],
     "modules": ["src/data/railPaths.js"],
+    "external": []
+  },
+  "context-card": {
+    "exports": ["./ui/context/card"],
+    "modules": ["src/ui/contextCard.js"],
     "external": []
   }
 }

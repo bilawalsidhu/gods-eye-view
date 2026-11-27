@@ -26,6 +26,7 @@ import {
   MOBILE_SHEET_ATTR,
   MOBILE_SHEET_PANELS,
 } from './mobileSheets.js';
+import { flushPanelContent } from './rail/panelContent.js';
 
 export {
   MOBILE_SHELL_CLASS,
@@ -261,6 +262,17 @@ export function initMobileShell({
     measureSheet();
   };
 
+  /**
+   * Repaint what every panel in the sheet's rail owes. The sheet shows more
+   * than the panels it expands (Utilities under Layers; Weather, News and
+   * Recent Imagery under Context), and repainting a panel it hides costs one
+   * paint of owed content.
+   */
+  const revealSheetContent = (sheet) => {
+    const rail = element(MOBILE_SHEET_PANELS[sheet][0])?.parentElement;
+    for (const panel of rail?.children ?? []) flushPanelContent(panel);
+  };
+
   /** The first visible control of the sheet's first panel, for focus on open. */
   const sheetFocusTarget = (sheet) => {
     const panel = element(MOBILE_SHEET_PANELS[sheet][0]);
@@ -294,6 +306,10 @@ export function initMobileShell({
     } else {
       restoreBorrowed();
     }
+    // A sheet shows panels of its rail that may already be expanded, so
+    // nothing presents them open: repaint what they owe before the sheet is
+    // measured or its focus target read.
+    if (sheet) revealSheetContent(sheet);
     present(sheet);
     if (!sheet) {
       borrowed = null;

@@ -55,6 +55,7 @@ export function createLifecycle({
       flightState._floorPinned.clear();
       flightState._iconFocusActive = 0;
       flightState._detectionObjects = new Map();
+      flightState._detectionResult.length = 0;
       flightState.records.data = new Map();
       forgetPlacedAircraft(
         services.placement,
@@ -251,6 +252,7 @@ export function createLifecycle({
       flightState._floorPinned.clear();
       flightState._iconFocusActive = 0;
       flightState._detectionObjects.clear();
+      flightState._detectionResult.length = 0;
       flightState.records.data.clear();
       forgetPlacedAircraft(
         services.placement,

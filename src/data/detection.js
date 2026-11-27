@@ -322,6 +322,20 @@ function _useOcclusionProbe(viewer) {
  * place just because its contact has since left the view.
  */
 const _surfaceSuppressedKeys = new Set();
+/** The paint's candidates, refilled by `_collectDetectableObjects`. */
+const _collected = [];
+/** What each paint asks the layers for, kept rather than made per layer. */
+const _cappedQuery = { mode: '', maxCount: LAYER_CANDIDATE_CAP, seed: 0 };
+const _uncappedQuery = {
+  mode: '',
+  maxCount: Number.POSITIVE_INFINITY,
+  seed: 0,
+};
+/** Per-paint containers, emptied and refilled rather than made per paint. */
+const _selectedIdentities = new Map();
+const _renderIdentities = new Map();
+const _candidateMap = new Map();
+const _renderEntries = [];
 let _surfaceDepthFallbackReported = false;
 let _lastLabelSolveAt = 0;
 let _labelSolveDirty = true;
@@ -400,6 +414,20 @@ export function initDetection(viewer, layers, onModeChange) {
   console.log('[Detection] Initialized');
 }
 
+/**
+ * Empty the containers kept between paints. They hold the last paint's
+ * contacts (the layers' own objects and the candidates made from them), so
+ * whenever no paint will refill them — detection off, torn down, or a paint
+ * that found nothing — they are emptied rather than keeping those alive.
+ */
+function _releaseKeptPaintState() {
+  _collected.length = 0;
+  _candidateMap.clear();
+  _renderEntries.length = 0;
+  _selectedIdentities.clear();
+  _renderIdentities.clear();
+}
+
 /** Release the host lane and all retained detection runtime state. */
 export function destroyDetection() {
   _clearCyberSonarRenderTimer();
@@ -430,6 +458,7 @@ export function destroyDetection() {
   _labelArbiter.clear();
   _surfaceOcclusion.clear();
   _surfaceSuppressedKeys.clear();
+  _releaseKeptPaintState();
   _useOcclusionProbe(null);
   _lastLabelSolveAt = 0;
   _labelSolveDirty = true;
@@ -758,6 +787,7 @@ function _applyModeState() {
     _labelArbiter.clear();
     _surfaceOcclusion.clear();
     _surfaceSuppressedKeys.clear();
+    _releaseKeptPaintState();
     _occlusionProbe.reset();
     _lastLabelSolveAt = 0;
     _labelSolveDirty = true;
@@ -890,23 +920,26 @@ function _paintDetectionLane(frame) {
  */
 function _collectDetectableObjects() {
   const label = MODE_LABELS[_mode];
-  const objects = [];
+  // One array and one options object per cap, refilled on every paint: the
+  // layers hand back their own kept objects, so a paint's collection makes no
+  // garbage of its own.
+  const objects = _collected;
+  objects.length = 0;
+  _cappedQuery.mode = label;
+  _uncappedQuery.mode = label;
 
   for (let i = 0; i < _layers.length; i++) {
     const layer = _layers[i];
     if (typeof layer.getDetectableObjects !== 'function') continue;
     try {
-      const maxCount = UNCAPPED_CANDIDATE_LAYERS.has(layer.id)
-        ? Number.POSITIVE_INFINITY
-        : LAYER_CANDIDATE_CAP;
-      const items = layer.getDetectableObjects({
-        mode: label,
-        maxCount,
-        seed: 0,
-      });
+      const items = layer.getDetectableObjects(
+        UNCAPPED_CANDIDATE_LAYERS.has(layer.id) ? _uncappedQuery : _cappedQuery,
+      );
       if (items && items.length > 0) {
-        for (const item of items) {
-          item._layerId = layer.id;
+        const layerId = layer.id;
+        for (let j = 0; j < items.length; j++) {
+          const item = items[j];
+          item._layerId = layerId;
           objects.push(item);
         }
       }
@@ -1241,6 +1274,20 @@ function _eyeHeight(frame) {
   return Number.isFinite(height) ? height : undefined;
 }
 
+/**
+ * Give a layer's object its cohort hash, kept on it while its identity holds:
+ * hashing builds strings, and this runs per contact on every solve. Out of
+ * `_drawOverlay`'s own body so the per-contact paint loop stays as small as
+ * the optimizer inlines it.
+ */
+function _stampCohortHash(obj, layerId, sourceId) {
+  if (obj._cohortHashLayer === layerId && obj._cohortHashSource === sourceId)
+    return;
+  obj._cohortHash = stableIdentityHash(layerId, sourceId);
+  obj._cohortHashLayer = layerId;
+  obj._cohortHashSource = sourceId;
+}
+
 /** Materialize one bounded rich-callout candidate for the existing arbiter. */
 function _materializeCandidate(
   obj,
@@ -1267,14 +1314,13 @@ function _materializeCandidate(
   if (placements.length === 0) return null;
   let centerDistance = Number.POSITIVE_INFINITY;
   let keyholeAlpha = 0;
-  for (const placement of placements) {
-    centerDistance = Math.min(
-      centerDistance,
-      Math.hypot(
-        placement.centerX - keyhole.centerX,
-        placement.centerY - keyhole.centerY,
-      ),
-    );
+  for (let i = 0; i < placements.length; i++) {
+    const placement = placements[i];
+    // Not `Math.hypot`: it is variadic and allocates per call, and screen
+    // offsets never approach the overflow range it guards.
+    const dx = placement.centerX - keyhole.centerX;
+    const dy = placement.centerY - keyhole.centerY;
+    centerDistance = Math.min(centerDistance, Math.sqrt(dx * dx + dy * dy));
     keyholeAlpha = Math.max(keyholeAlpha, placement.keyholeAlpha);
   }
   const layerId = obj._layerId || 'unknown';
@@ -1336,12 +1382,15 @@ function _drawOverlay(frame) {
     _labelSolveDirty || now - _lastLabelSolveAt >= LABEL_SOLVE_INTERVAL_MS;
   const calloutOcclusionRects = frame.uiRects;
   const selectedIdentities = shouldSolve
-    ? _labelArbiter.liveIdentities({ includeFading: false, now })
+    ? _labelArbiter.liveIdentities(
+        { includeFading: false, now },
+        _selectedIdentities,
+      )
     : null;
-  const renderIdentities = _labelArbiter.liveIdentities({
-    includeFading: true,
-    now,
-  });
+  const renderIdentities = _labelArbiter.liveIdentities(
+    { includeFading: true, now },
+    _renderIdentities,
+  );
   const objects = _collectDetectableObjects();
   const sampledCount = objects.length;
   if (objects.length === 0) {
@@ -1355,8 +1404,10 @@ function _drawOverlay(frame) {
     // rebuilds the buffer, but this one returns early — and because the
     // callout lane repaints the last solve on frames the sensor lane skips,
     // leaving rows here would strand the final callsigns on screen after the
-    // last data layer is switched off.
+    // last data layer is switched off. The kept containers go with it: no
+    // paint refills them while nothing is detectable.
     _calloutCount = 0;
+    _releaseKeptPaintState();
     _ctx.font = FONT;
     _drawScanlines(width, height, now);
     _drawSparseFocusRing(width, height);
@@ -1463,7 +1514,8 @@ function _drawOverlay(frame) {
   const bracketOpacityCounts = { full: 0, partial: 0, hidden: 0 };
   const aircraftBracketSectors = { left: 0, front: 0, right: 0 };
   let protectedVisibleCount = 0;
-  const candidateMap = new Map();
+  const candidateMap = _candidateMap;
+  candidateMap.clear();
   const cohortBuilders = shouldSolve ? new Map() : null;
   const demandByLayer = shouldSolve ? new Map() : null;
   let placementBuildCount = 0;
@@ -1612,7 +1664,7 @@ function _drawOverlay(frame) {
     obj._cohortPriority = _semanticPriority(obj);
     obj._cohortBand =
       admissionAlpha >= 0.999 ? 8 : Math.floor(admissionAlpha * 8);
-    obj._cohortHash = stableIdentityHash(layerId, sourceId);
+    _stampCohortHash(obj, layerId, sourceId);
     obj._candidateScreenX = sx;
     obj._candidateScreenY = sy;
     obj._candidateHalfW = halfW;
@@ -1750,7 +1802,11 @@ function _drawOverlay(frame) {
     _ctx.lineWidth = bracketWidth;
   }
 
-  let renderEntries = _labelArbiter.renderEntries(candidateMap, now);
+  let renderEntries = _labelArbiter.renderEntries(
+    candidateMap,
+    now,
+    _renderEntries,
+  );
   // A callout whose contact has gone behind something goes with it at once:
   // no carry-over to the next solve and no fade painted on the facade.
   if (_surfaceSuppressedKeys.size > 0) {

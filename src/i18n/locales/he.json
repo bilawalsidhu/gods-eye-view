@@ -4269,7 +4269,6 @@
   "Opens chat": "פותח את הצ׳אט",
   "Go to {place}": "מעבר אל {place}",
   "Place or coordinates": "מקום או קואורדינטות",
-  "Search “{query}” as a place anyway": "חפש את „{query}” כמקום בכל זאת",
   "Turn on": "הפעלה",
   "Turn off": "כיבוי",
   "Command": "פקודה",
@@ -4316,7 +4315,6 @@
   "Search places, layers and things on the map, or ask GEV": "חפשו מקומות, שכבות ופריטים במפה, או שאלו את GEV",
   "Search places, layers, flights… or ask GEV  ·  > for commands": "חיפוש מקומות, שכבות וטיסות… או שאלה ל‑GEV · > לפקודות",
   "No matching command": "אין פקודה תואמת",
-  "Looks private, so nothing is searched or sent": "נראה פרטי, ולכן שום דבר לא מחופש או נשלח",
   "Where do you want to start?": "מאיפה תרצו להתחיל?",
   "Three things to know": "שלושה דברים שכדאי לדעת",
   "Pick one to begin with. You can change everything later.": "בחרו אפשרות אחת להתחלה. אפשר לשנות הכול בהמשך.",
@@ -4334,7 +4332,7 @@
   "BACK": "חזרה",
   "Welcome to God's Eye View": "ברוכים הבאים ל־God's Eye View",
   "Choose your mode": "בחרו מצב",
-  "God": "אלוהים",
+  "Default": "ברירת מחדל",
   "FUN": "בשביל הכיף",
   "The spy-satellite keyhole: circular viewport, tactical HUD, cinematic camera. For exploring.": "מבט דרך לוויין ריגול: תצוגה עגולה, תצוגה עילית טקטית ומצלמה קולנועית. לחקירה וגילוי.",
   "Keyhole HUD": "תצוגה עילית עגולה",
@@ -4349,7 +4347,7 @@
   "Bilawal on YouTube": "בילוואל ב־YouTube",
   "The studio behind GEV": "הסטודיו שמאחורי GEV",
   "Open source. Self-host, fork, add a layer.": "קוד פתוח. אירוח עצמאי, יצירת עותק והוספת שכבה.",
-  "ENTER GOD MODE": "כניסה למצב אלוהים",
+  "ENTER DEFAULT MODE": "כניסה למצב ברירת מחדל",
   "Finding it…": "מחפש…",
   "No reading at this time": "אין קריאה בזמן הזה",
   "Last reading · {age}": "קריאה אחרונה · {age}",
@@ -4645,5 +4643,7 @@
   "Low-cost sensor": "חיישן בעלות נמוכה",
   "{name} · sensor": "{name} · חיישן",
   "Reference monitor": "מכשיר ניטור ייחוס",
-  "Needs {envVars} — add one in Provider Settings": "דורש {envVars} — הוסף אחד מהם בהגדרות הספקים"
+  "Needs {envVars} — add one in Provider Settings": "דורש {envVars} — הוסף אחד מהם בהגדרות הספקים",
+  "CABLE \u00b7 {name}": "כבל · {name}",
+  "LANDING POINT \u00b7 {name}": "נקודת נחיתה · {name}"
 }

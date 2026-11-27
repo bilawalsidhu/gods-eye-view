@@ -1,7 +1,9 @@
 import { h, render as renderVue } from 'vue';
-import { formatUtcDayMonth, t } from '../i18n/index.js';
+import { formatUtcDayMonth, getLocale, t } from '../i18n/index.js';
 import { utcClock } from './rail/utcClock.js';
 import WeatherReadout from './weather/WeatherReadout.vue';
+import { watchDisplayed } from './displayWatch.js';
+import { onPanelOpening } from './rail/panelContent.js';
 
 // Remounting controls must not reopen a panel the user already collapsed.
 // Keyed by the page's Weather panel, which outlives remounted controls.
@@ -101,8 +103,20 @@ export function createWeatherPanel({
     },
   };
   // The readout patches synchronously, so a newly opened card can be measured.
-  const paint = (view) =>
+  // A view equal to the one shown is not rendered again.
+  let shownView = null;
+  const paint = (view) => {
+    let key = null;
+    try {
+      // Its template translates labels too: a new locale renders again.
+      key = `${getLocale()}\u0000${JSON.stringify(view)}`;
+    } catch {
+      // A view that cannot be compared is always rendered.
+    }
+    if (key !== null && key === shownView) return;
+    shownView = key;
     renderVue(h(WeatherReadout, { view, ...handlers }), container);
+  };
   paint({
     hidden: true,
     observed: false,
@@ -111,7 +125,23 @@ export function createWeatherPanel({
     cards: [],
     observedCards: [],
   });
-  const render = () => {
+  // The readout is not repainted while its body is not displayed (the panel
+  // collapsed or hidden); it repaints once when the body is displayed again:
+  // at once when the panel is presented open or shown open, otherwise when a
+  // ResizeObserver reports the body displayed.
+  let owed = false;
+  const body = watchDisplayed(container, () => {
+    if (owed) render();
+  });
+  const flush = ({ displayedOnly = false } = {}) => {
+    if (!owed) return;
+    if (displayedOnly && !(container.getClientRects?.().length > 0)) return;
+    // The body is being shown: a later render paints it rather than owing it.
+    body.assumeShown();
+    render({ force: true });
+  };
+  const offOpening = onPanelOpening(panel, flush);
+  const render = ({ force = false } = {}) => {
     if (destroyed) return;
     const state = clock?.getState() || {
       mode: 'latest',
@@ -272,20 +302,29 @@ export function createWeatherPanel({
       };
     });
     const hidden = active.length === 0;
-    paint({
-      hidden,
-      observed: showObserved,
-      scope: observed.map(({ id }) => names[id]).join(' · '),
-      frameTime,
-      cards: models.filter(({ id }) => !OBSERVED.has(id)),
-      observedCards: models.filter(({ id }) => OBSERVED.has(id)),
-    });
-    // Only a change of open card moves the scroll position; refreshes leave it.
-    if (shownOpenId !== null && openId !== shownOpenId) {
-      const open = [
-        ...container.querySelectorAll('.weather-cards > [data-card-id]'),
-      ].find((node) => node.dataset.cardId === openId);
-      revealCard(container, open);
+    // A panel this render shows open displays its body before a size report.
+    const showsOpen =
+      Boolean(panel?.hidden) &&
+      !hidden &&
+      !panel.classList?.contains('collapsed');
+    owed = !force && !showsOpen && !body.shown();
+    if (!owed) {
+      paint({
+        hidden,
+        observed: showObserved,
+        scope: observed.map(({ id }) => names[id]).join(' · '),
+        frameTime,
+        cards: models.filter(({ id }) => !OBSERVED.has(id)),
+        observedCards: models.filter(({ id }) => OBSERVED.has(id)),
+      });
+      // Only a change of open card moves the scroll position; refreshes
+      // leave it.
+      if (shownOpenId !== null && openId !== shownOpenId) {
+        const open = [
+          ...container.querySelectorAll('.weather-cards > [data-card-id]'),
+        ].find((node) => node.dataset.cardId === openId);
+        revealCard(container, open);
+      }
     }
     shownOpenId = active.length ? openId : null;
     if (count) set(count, 'textContent', String(active.length));
@@ -302,7 +341,8 @@ export function createWeatherPanel({
         panel.querySelector('[data-collapse-target="weather-panel"]')?.click();
     }
   };
-  const unsubscribe = clock?.subscribe(render);
+  // The scene time is read here, never followed: the layer panel calls
+  // `update` again when the time moves (see LayerPanel.invalidate).
   return {
     update(nextEntries) {
       entries = nextEntries.filter(({ summary }) => summary);
@@ -345,7 +385,8 @@ export function createWeatherPanel({
     },
     destroy() {
       destroyed = true;
-      unsubscribe?.();
+      body.disconnect();
+      offOpening();
       renderVue(null, container);
       if (panel) set(panel, 'hidden', true);
       if (count) set(count, 'textContent', '0');

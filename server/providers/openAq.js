@@ -74,16 +74,50 @@ const AQI_HOURLY = Object.freeze({
 const AQI_LATEST = Object.freeze(['NO2', 'SO2']);
 /** Sensors whose hourly means are kept; the least recently read go first. */
 const MAX_SENSOR_SERIES = 2000;
+/**
+ * A past hour within this of now may still gain hours networks file late
+ * (some hours after): its stations and hourly means are read again every
+ * PAST_RECHECK_MS. An older hour's are read once.
+ */
+const PAST_FINAL_MS = 3 * 24 * HOUR;
+const PAST_RECHECK_MS = HOUR;
 /** A refused key is tried upstream again after this long, unless it changes. */
 const REFUSED_KEY_MS = 10 * 60_000;
 const error = (status, message) =>
   Object.assign(new Error(message), { status });
 /**
- * One view's cache identity: the camera rectangle and what it asks, one
- * pollutant's hourly means or (`mode: 'aqi'`) every pollutant's latest value.
+ * One view's cache identity: the camera rectangle, what it asks (one
+ * pollutant's hourly means or, with `mode: 'aqi'`, every pollutant's latest
+ * value) and the hour it is asked for (`at`, none for now).
  */
-const viewId = (view, parameter, mode) =>
-  `${view.join(',')}|${parameter || mode || ''}`;
+const viewId = (view, parameter, mode, at) =>
+  `${view.join(',')}|${parameter || mode || ''}|${at ?? ''}`;
+
+/**
+ * A sensor's hourly means of the six hours ending at `asOf` (at most 24,
+ * so a full answer is too many and refused).
+ */
+async function hourWindow(get, sensor, asOf) {
+  const data = await get(
+    `sensors/${sensor.id}/hours?limit=24&page=1&datetime_from=${encodeURIComponent(new Date(asOf - 6 * HOUR).toISOString())}&datetime_to=${encodeURIComponent(new Date(asOf).toISOString())}`,
+  );
+  if (data.results.length >= 24)
+    throw error(503, 'OpenAQ station exceeds acquisition limit');
+  return data.results;
+}
+
+/**
+ * The hour a snapshot is asked for: `at` (ms) floored to its hour, or null
+ * for now (none asked, or within the current hour). A time ahead of now has
+ * nothing to show and is refused.
+ */
+export function openAqHourAt(at, nowMs) {
+  if (at === undefined || at === null) return null;
+  if (!Number.isSafeInteger(at) || at < 0 || at > nowMs + 5 * 60_000)
+    throw error(400, 'Invalid time');
+  const hour = Math.floor(at / HOUR) * HOUR;
+  return hour >= Math.floor(nowMs / HOUR) * HOUR ? null : hour;
+}
 
 /** Strict numeric viewport, including an optional antimeridian crossing. */
 export function parseOpenAqView(value) {
@@ -215,26 +249,38 @@ export function createOpenAqAcquisition({
    * an hour, for the hours since its newest (three back, for late ones).
    */
   const sensorSeries = new Map();
-  async function hoursOf(get, sensor) {
+  async function hoursOf(get, sensor, at = null) {
     const keep = AQI_HOURLY[sensor.parameter];
-    const cached = sensorSeries.get(sensor.id);
-    const since = now() - (keep + 1) * HOUR;
+    const asOf = at ?? now();
+    const id = `${sensor.id}@${at ?? ''}`;
+    const cached = sensorSeries.get(id);
+    const since = asOf - (keep + 1) * HOUR;
     const kept = (cached?.hours ?? []).filter((hour) => hour.endMs > since);
-    if (cached && now() - cached.at < HOUR) return kept;
+    // Now's means are read again hourly, for the hours since the newest
+    // (three back, for late ones); a recent past hour's every
+    // PAST_RECHECK_MS, all of them (a late network fills any); an older
+    // one's once.
+    const fresh =
+      at === null
+        ? now() - cached?.at < HOUR
+        : now() - at > PAST_FINAL_MS || now() - cached?.at < PAST_RECHECK_MS;
+    if (cached && fresh) return kept;
     const newest = kept.at(-1)?.endMs;
     const from =
-      newest === undefined ? since : Math.max(since, newest - 3 * HOUR);
+      newest === undefined || at !== null
+        ? since
+        : Math.max(since, newest - 3 * HOUR);
     const data = await get(
-      `sensors/${sensor.id}/hours?limit=1000&page=1&datetime_from=${encodeURIComponent(new Date(from).toISOString())}&datetime_to=${encodeURIComponent(new Date(now()).toISOString())}`,
+      `sensors/${sensor.id}/hours?limit=1000&page=1&datetime_from=${encodeURIComponent(new Date(from).toISOString())}&datetime_to=${encodeURIComponent(new Date(asOf).toISOString())}`,
     );
     if (data.results.length >= 1000)
       throw error(503, 'OpenAQ sensor exceeds acquisition limit');
     const merged = new Map(kept.map((hour) => [hour.endMs, hour]));
-    for (const hour of normalizeOpenAqHourSeries(sensor, data.results, now()))
+    for (const hour of normalizeOpenAqHourSeries(sensor, data.results, asOf))
       if (hour.endMs > since) merged.set(hour.endMs, hour);
     const hours = [...merged.values()].sort((a, b) => a.endMs - b.endMs);
-    sensorSeries.delete(sensor.id);
-    sensorSeries.set(sensor.id, { at: now(), hours });
+    sensorSeries.delete(id);
+    sensorSeries.set(id, { at: now(), hours });
     while (sensorSeries.size > MAX_SENSOR_SERIES)
       sensorSeries.delete(sensorSeries.keys().next().value);
     return hours;
@@ -243,8 +289,12 @@ export function createOpenAqAcquisition({
    * One station's AQI-view reading: PM2.5, PM10, O3 and CO from their
    * sensors' hourly means, NO2 and SO2 from the latest values, folded into
    * one station with each pollutant on its averaging period (`aqiStations`).
+   * For a past hour `at`, every pollutant comes from the hourly means up to
+   * it: NO2 and SO2 from the newest within six hours, as the latest values
+   * are taken now.
    */
-  async function aqiStationRows(get, station) {
+  async function aqiStationRows(get, station, at = null) {
+    const asOf = at ?? now();
     const rows = [];
     for (const parameter of Object.keys(AQI_HOURLY)) {
       // The first sensor with a current hour (within the last three, the
@@ -255,16 +305,31 @@ export function createOpenAqAcquisition({
       for (const sensor of station.sensors
         .filter((s) => s.parameter === parameter)
         .slice(0, MAX_SENSORS)) {
-        const hours = await hoursOf(get, sensor);
+        const hours = await hoursOf(get, sensor, at);
         if (!hours.length) continue;
         if (!best || hours.at(-1).endMs > best.hours.at(-1).endMs)
           best = { sensor, hours };
-        if (now() - hours.at(-1).endMs <= AQI_MAX_SPREAD_MS) break;
+        if (asOf - hours.at(-1).endMs <= AQI_MAX_SPREAD_MS) break;
       }
       if (best)
         rows.push(...openAqHourReadings(station, best.sensor, best.hours));
     }
-    if (station.sensors.some((s) => AQI_LATEST.includes(s.parameter))) {
+    if (at !== null)
+      for (const parameter of AQI_LATEST)
+        for (const sensor of station.sensors
+          .filter((s) => s.parameter === parameter)
+          .slice(0, MAX_SENSORS)) {
+          const hour = normalizeOpenAqHours(
+            station,
+            sensor,
+            await hourWindow(get, sensor, at),
+            at,
+          );
+          if (!hour.length) continue;
+          rows.push(...hour);
+          break;
+        }
+    else if (station.sensors.some((s) => AQI_LATEST.includes(s.parameter))) {
       const data = await get(
         `locations/${station.stationId}/latest?limit=1000&page=1`,
       );
@@ -282,8 +347,22 @@ export function createOpenAqAcquisition({
   const views = new Map(),
     viewCache = new Map(),
     viewPending = new Map();
-  async function acquireView(upstream, view, parameter, mode, signal, cancel) {
-    const id = viewId(view, parameter, mode);
+  async function acquireView(
+    upstream,
+    view,
+    parameter,
+    mode,
+    at,
+    signal,
+    cancel,
+  ) {
+    const id = viewId(view, parameter, mode, at);
+    // The time the view's readings are for: the hour asked, else now. Ages
+    // and windows are judged at it; the budget, backoffs and asks keep the
+    // wall clock.
+    const asOf = () => at ?? now();
+    const rowKey = (station) =>
+      `${station.stationId}:${parameter || mode || ''}@${at ?? ''}`;
     let state = views.get(id);
     if (!state || now() - state.at > HOUR)
       state = createViewState(view, now(), state);
@@ -397,7 +476,9 @@ export function createOpenAqAcquisition({
     }
     const eligible = [...state.stations.values()].filter(
       (s) =>
-        (!s.lastObservedMs || now() - s.lastObservedMs <= FRESH_MS) &&
+        (!s.lastObservedMs || asOf() - s.lastObservedMs <= FRESH_MS) &&
+        // A past hour spends nothing on a station that began reporting later.
+        (!s.firstObservedMs || s.firstObservedMs <= asOf()) &&
         (!parameter ||
           s.sensors.some((sensor) => sensor.parameter === parameter)) &&
         // The AQI view spends no request on a station it cannot rate: one
@@ -410,9 +491,7 @@ export function createOpenAqAcquisition({
     // Overlapping pans/zooms reuse recent station checks without spending the
     // shared request budget again. Only stations discovered in this view join.
     for (const station of eligible) {
-      const previous = viewLatest.get(
-        `${station.stationId}:${parameter || mode || ''}`,
-      );
+      const previous = viewLatest.get(rowKey(station));
       if (
         previous &&
         previous.at >= (state.checked.get(station.stationId) ?? -Infinity)
@@ -420,7 +499,9 @@ export function createOpenAqAcquisition({
         // A due refresh must not erase still-current observations during cooldown.
         state.readings.set(
           station.stationId,
-          previous.readings.filter((row) => now() - row.observedMs <= FRESH_MS),
+          previous.readings.filter(
+            (row) => asOf() - row.observedMs <= FRESH_MS,
+          ),
         );
         state.checked.set(station.stationId, previous.at);
       }
@@ -433,16 +514,26 @@ export function createOpenAqAcquisition({
     const backoff = (s) =>
       now() - (state.failed.get(s.stationId) ?? -Infinity) < STATION_RETRY_MS;
     // The AQI view's hourly means change once an hour: its stations are
-    // checked hourly, the pollutant views' every 20 minutes.
-    const checkMs = mode === 'aqi' ? HOUR : 20 * 60_000;
+    // checked hourly, the pollutant views' every 20 minutes. A recent past
+    // hour's stations are checked again every PAST_RECHECK_MS, for hours
+    // filed late; an older hour's once.
+    const checkMs =
+      at === null
+        ? mode === 'aqi'
+          ? HOUR
+          : 20 * 60_000
+        : now() - at > PAST_FINAL_MS
+          ? Infinity
+          : PAST_RECHECK_MS;
     const needsCheck = (s) =>
       now() - (state.checked.get(s.stationId) ?? -Infinity) >= checkMs;
     const newestOf = (list) =>
       (list ?? []).reduce((at, row) => Math.max(at, row.observedMs), -Infinity);
     // When a station's shown readings age out; -Infinity when none is shown.
     const shownUntil = (s) => {
-      const at = newestOf(state.readings.get(s.stationId)) + FRESH_MS;
-      return at > now() ? at : -Infinity;
+      const until =
+        newestOf(state.readings.get(s.stationId)) + FRESH_MS - asOf() + now();
+      return until > now() ? until : -Infinity;
     };
     // Which stations a pass checks first: shown ones about to age out (the
     // soonest first), then those never checked, then the other shown ones
@@ -514,34 +605,41 @@ export function createOpenAqAcquisition({
         due.slice(i, i + 2).map(async (station) => {
           try {
             let rows = [];
-            if (mode === 'aqi') rows = await aqiStationRows(get, station);
+            if (mode === 'aqi') rows = await aqiStationRows(get, station, at);
             else
               for (const sensor of parameter
                 ? station.sensors
                     .filter((s) => s.parameter === parameter)
                     .slice(0, MAX_SENSORS)
                 : [null]) {
-                const data = await get(
-                  sensor
-                    ? `sensors/${sensor.id}/hours?limit=24&page=1&datetime_from=${encodeURIComponent(new Date(now() - 6 * HOUR).toISOString())}&datetime_to=${encodeURIComponent(new Date(now()).toISOString())}`
-                    : `locations/${station.stationId}/latest?limit=1000&page=1`,
-                );
-                if (data.results.length >= (sensor ? 24 : 1000))
-                  throw error(503, 'OpenAQ station exceeds acquisition limit');
-                rows = sensor
-                  ? normalizeOpenAqHours(station, sensor, data.results, now())
-                  : normalizeOpenAqLatest(station, data.results, now());
+                if (sensor)
+                  rows = normalizeOpenAqHours(
+                    station,
+                    sensor,
+                    await hourWindow(get, sensor, asOf()),
+                    asOf(),
+                  );
+                else {
+                  const data = await get(
+                    `locations/${station.stationId}/latest?limit=1000&page=1`,
+                  );
+                  if (data.results.length >= 1000)
+                    throw error(
+                      503,
+                      'OpenAQ station exceeds acquisition limit',
+                    );
+                  rows = normalizeOpenAqLatest(station, data.results, now());
+                }
                 if (rows.length) break;
               }
-            const key = `${station.stationId}:${parameter || mode || ''}`;
-            const previous = viewLatest.get(key);
+            const previous = viewLatest.get(rowKey(station));
             if (previous && newestOf(previous.readings) > newestOf(rows))
               rows = previous.readings;
             // A station newly shown or with a newer current reading is
             // progress, wherever it is in the view; rows older than the view
             // keeps are not.
             if (
-              newestOf(rows) > now() - FRESH_MS &&
+              newestOf(rows) > asOf() - FRESH_MS &&
               newestOf(rows) > newestOf(state.readings.get(station.stationId))
             )
               progress = true;
@@ -549,10 +647,8 @@ export function createOpenAqAcquisition({
             state.checked.set(station.stationId, now());
             state.failed.delete(station.stationId);
             succeeded++;
-            viewLatest.delete(
-              `${station.stationId}:${parameter || mode || ''}`,
-            );
-            viewLatest.set(`${station.stationId}:${parameter || mode || ''}`, {
+            viewLatest.delete(rowKey(station));
+            viewLatest.set(rowKey(station), {
               at: now(),
               station,
               readings: state.readings.get(station.stationId),
@@ -591,7 +687,7 @@ export function createOpenAqAcquisition({
     }
     const fresh = [...state.readings.values()]
       .flat()
-      .filter((r) => now() - r.observedMs <= FRESH_MS);
+      .filter((r) => asOf() - r.observedMs <= FRESH_MS);
     // A failed station check makes the view stale only once no station of it
     // has a check younger than the check interval.
     const stale =
@@ -654,6 +750,8 @@ export function createOpenAqAcquisition({
       sourceUrl: 'https://openaq.org/',
       scope: 'viewport',
       view,
+      // The hour answered for, or null for now.
+      at,
       // Counts, not the catalogue: the browser reads only how far along
       // discovery is, and the catalogue stays on the server.
       stationCount: state.stations.size,
@@ -673,7 +771,7 @@ export function createOpenAqAcquisition({
       retryAt: retryAt || (stale ? now() + 60_000 : nextAsk),
     };
   }
-  async function acquire(key, view, parameter, mode, consumerSignal) {
+  async function acquire(key, view, parameter, mode, at, consumerSignal) {
     const signal = AbortSignal.any([
       AbortSignal.timeout(40_000),
       ...(consumerSignal ? [consumerSignal] : []),
@@ -720,14 +818,16 @@ export function createOpenAqAcquisition({
         throw error(503, 'Malformed OpenAQ response');
       return data;
     }
-    return acquireView(get, view, parameter, mode, signal, consumerSignal);
+    return acquireView(get, view, parameter, mode, at, signal, consumerSignal);
   }
   return {
     /**
      * A viewport snapshot asks either one `parameter` (its hourly means) or,
-     * with `mode: 'aqi'`, every pollutant's latest value per station.
+     * with `mode: 'aqi'`, every pollutant's latest value per station. `at`
+     * (ms) asks a past hour instead of now: the hourly means up to it, for
+     * one pollutant or the US AQI view.
      */
-    async getSnapshot({ view, parameter, mode, signal } = {}) {
+    async getSnapshot({ view, parameter, mode, at, signal } = {}) {
       signal?.throwIfAborted();
       if (
         parameter !== undefined &&
@@ -737,6 +837,9 @@ export function createOpenAqAcquisition({
       if (mode !== undefined && (mode !== 'aqi' || parameter !== undefined))
         throw error(400, 'Invalid air quality mode');
       if (view) view = parseOpenAqView(view.join(','));
+      at = openAqHourAt(at, now());
+      if (at !== null && !parameter && mode !== 'aqi')
+        throw error(400, 'A past hour needs a pollutant');
       const key = getKey().trim();
       if (!key) throw error(428, 'OpenAQ key required');
       if (refused?.key === key && now() - refused.at < REFUSED_KEY_MS)
@@ -754,7 +857,7 @@ export function createOpenAqAcquisition({
         viewLatest.clear();
         viewCache.clear();
       }
-      const id = viewId(view, parameter, mode);
+      const id = viewId(view, parameter, mode, at);
       const previous = viewCache.get(id);
       if (previous && now() < (previous.value.retryAt || previous.at + 60_000))
         return previous.value;
@@ -769,7 +872,14 @@ export function createOpenAqAcquisition({
             retryAt: now() + 2000,
           });
         job = { controller: new AbortController(), consumers: new Set() };
-        job.promise = acquire(key, view, parameter, mode, job.controller.signal)
+        job.promise = acquire(
+          key,
+          view,
+          parameter,
+          mode,
+          at,
+          job.controller.signal,
+        )
           .then((value) => {
             if (views.has(id)) viewCache.set(id, { value, at: now() });
             return value;
@@ -820,8 +930,11 @@ export function openAqProxy(options = {}) {
       if (
         url.pathname !== '/' ||
         [...url.searchParams.keys()].some(
-          (k) => !['view', 'parameter', 'mode'].includes(k),
+          (k) => !['view', 'parameter', 'mode', 'at'].includes(k),
         ) ||
+        url.searchParams.getAll('at').length > 1 ||
+        (url.searchParams.has('at') &&
+          !/^\d{1,15}$/.test(url.searchParams.get('at'))) ||
         url.searchParams.getAll('view').length > 1 ||
         url.searchParams.getAll('parameter').length > 1 ||
         url.searchParams.getAll('mode').length > 1
@@ -836,6 +949,9 @@ export function openAqProxy(options = {}) {
           view,
           parameter: url.searchParams.get('parameter') ?? undefined,
           mode: url.searchParams.get('mode') ?? undefined,
+          at: url.searchParams.has('at')
+            ? Number(url.searchParams.get('at'))
+            : undefined,
           signal: controller.signal,
         }),
       );

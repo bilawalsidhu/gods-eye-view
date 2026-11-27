@@ -114,14 +114,17 @@ export function createTesting({ state: layerState, services, parts, source }) {
    * Seed the minimum render state a dense-catalog load needs, so a test can
    * exercise the real async load/settle/fail path (and the row-control states it
    * drives) without constructing a WebGL viewer.
-   * @param {{ catalog?: 'core'|'dense', showPoints?: boolean }} [options]
+   * @param {{ catalog?: 'core'|'dense', showPoints?: boolean, panel?: { invalidate: () => void } | null }} [options]
+   *   `panel` stands in for the handle init receives.
    */
 
   function _setDenseCatalogStateForTest({
     catalog = 'core',
     showPoints = true,
+    panel = null,
   } = {}) {
     layerState._viewer = {};
+    layerState._panel = panel;
     // Neutralize the shared world-overlay host: these tests exercise catalog and
     // row-control logic, not the ISS callout.
     layerState._overlayHost = {
@@ -149,7 +152,7 @@ export function createTesting({ state: layerState, services, parts, source }) {
   /** Tear the dense seam back down so ordering cannot leak into other tests. */
 
   function _clearDenseCatalogStateForTest() {
-    layerState._rowControlsListener = null;
+    layerState._panel = null;
     layerState._overlayHost = layerState.DEFAULT_OVERLAY_HOST;
     layerState._orbitPaths = new Map();
     layerState._viewer = null;

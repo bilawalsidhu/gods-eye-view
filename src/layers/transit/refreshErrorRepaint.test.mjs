@@ -78,9 +78,11 @@ test('leaving a feed whose tick failed repaints its error away', async () => {
     return `${layerFeedState(layer.stats)} | ${LayerPanel.prototype._buildMetaText(layer)}`;
   };
   const painted = [];
-  state._dataManager = {
-    refreshLayerStats(layerId) {
-      lifecycle.refreshLayerStats(layerId);
+  // The handle the manager gives the layer at init, plus a spy for what the
+  // panel would paint on its next frame.
+  state._panel = {
+    invalidate() {
+      entry.panel.invalidate();
       painted.push(row());
     },
   };

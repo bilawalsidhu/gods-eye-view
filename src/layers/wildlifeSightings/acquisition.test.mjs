@@ -60,7 +60,7 @@ function harness(source = { getSnapshot: async () => [] }) {
     lastUpdate: null,
     retryAt: 0,
     failures: 0,
-    controlsListener: () => notifications++,
+    panel: { invalidate: () => notifications++ },
   };
   bindWildlifeViewer(state.viewer);
   const services = {
