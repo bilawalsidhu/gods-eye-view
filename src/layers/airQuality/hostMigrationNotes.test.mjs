@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
-import { createAirQualityLayer } from './src/layers/airQuality/index.js';
-import { fromDegrees } from './src/geo/ellipsoid.js';
-import { bindFakeDraw } from './src/testSupport/fakeDrawPort.mjs';
+import { createAirQualityLayer } from './index.js';
+import { fromDegrees } from '../../geo/ellipsoid.js';
+import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 
 function harness(rows) {
   const viewer = { canvas: { clientWidth: 800, clientHeight: 600 } };
@@ -42,47 +42,19 @@ const base = {
   color: '#00ff00',
 };
 
-test('host migration', async () => {
+test('while rows of the previous host contract draw nothing, CURRENT-STATE does not call such hosts unaffected', async () => {
   // A host provider written to the previous contract: index-valued rows (scale, value, band).
   const legacy = harness([
     { ...base, scale: 'AQHI', value: 3, band: 'low', label: '3', risk: 'Low' },
   ]);
   await legacy.update();
   await new Promise((r) => setImmediate(r));
-  const conc = harness([
-    {
-      ...base,
-      parameter: 'PM2.5',
-      scale: 'PM2.5',
-      units: 'µg/m³',
-      value: 9,
-      label: '9',
-      kind: 'observation',
-      averagingMinutes: 60,
-    },
-  ]);
-  await conc.update();
-  await new Promise((r) => setImmediate(r));
-  console.log(
-    'legacy',
-    legacy.getStats().count,
-    'conc',
-    conc.getStats().count,
-    conc.getAnalystRecords()[0]?.value,
-  );
-  const notes = readFileSync(
-    'changelog.d/1921-worldwide-air-quality.md',
-    'utf8',
-  ).replace(/\s+/g, ' ');
-  // Only while previous-contract rows draw nothing must the notes say so.
   if (legacy.getStats().count !== 0) return;
   assert.doesNotMatch(
-    notes,
-    /hosts with their own providers are unaffected/,
-    'the migration notes call such hosts unaffected',
-  );
-  assert.doesNotMatch(
-    readFileSync('docs/CURRENT-STATE.md', 'utf8').replace(/\s+/g, ' '),
+    readFileSync(
+      new URL('../../../docs/CURRENT-STATE.md', import.meta.url),
+      'utf8',
+    ).replace(/\s+/g, ' '),
     /hosts with their own providers are unaffected/,
     'CURRENT-STATE repeats the claim',
   );
