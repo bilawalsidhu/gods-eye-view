@@ -52,6 +52,8 @@ export function useDockedCamera({
   const pageHidden = ref(Boolean(document?.hidden));
   const onVisibility = () => {
     pageHidden.value = Boolean(document?.hidden);
+    // A stream that failed tries once more when the page shows again.
+    if (!pageHidden.value) retryOwnStream();
   };
   document?.addEventListener?.('visibilitychange', onVisibility);
 
@@ -59,12 +61,38 @@ export function useDockedCamera({
   // carries a time stamp, so reading it again would restart a playing hold.
   const stream = shallowRef(null);
   const ownFailed = ref(false);
+  // A failed hold tries again on its own after a wait that grows (5 s,
+  // 15 s, 45 s, then every 2 min), and at once when the page shows again.
+  const OWN_RETRY_MS = [5_000, 15_000, 45_000, 120_000];
+  let ownRetries = 0;
+  let ownRetryTimer = 0;
+  function cancelOwnRetry() {
+    clearTimeout(ownRetryTimer);
+    ownRetryTimer = 0;
+  }
+  function retryOwnStream() {
+    cancelOwnRetry();
+    if (!ownFailed.value || !cameraId.value) return;
+    // The failed URL's time stamp may be why it failed: read it again.
+    stream.value =
+      layer()?.streamSourceForCamera?.(cameraId.value) || stream.value;
+    ownFailed.value = false;
+  }
+  function ownStreamFailed() {
+    ownFailed.value = true;
+    cancelOwnRetry();
+    const wait = OWN_RETRY_MS[Math.min(ownRetries, OWN_RETRY_MS.length - 1)];
+    ownRetries += 1;
+    ownRetryTimer = setTimeout(retryOwnStream, wait);
+  }
   watch(
     [tick, key],
     ([, next], [, was]) => {
       if (next !== was) {
         stream.value = null;
         ownFailed.value = false;
+        ownRetries = 0;
+        cancelOwnRetry();
       }
       if (!cameraId.value || stream.value) return;
       stream.value = layer()?.streamSourceForCamera?.(cameraId.value) || null;
@@ -92,7 +120,12 @@ export function useDockedCamera({
     { immediate: true },
   );
   // The map has the stream again: the dock's own hold may try again later.
-  watch(shared, (isShared) => isShared && (ownFailed.value = false));
+  watch(shared, (isShared) => {
+    if (!isShared) return;
+    ownFailed.value = false;
+    ownRetries = 0;
+    cancelOwnRetry();
+  });
   const streamMode = computed(() => {
     if (!cameraId.value) return '';
     if (shared.value) return 'shared';
@@ -119,11 +152,11 @@ export function useDockedCamera({
           onFailure: () => {
             if (!handle || hold !== handle) return;
             release();
-            ownFailed.value = true;
+            ownStreamFailed();
           },
         }) || null;
       if (!handle) {
-        ownFailed.value = true;
+        ownStreamFailed();
         return;
       }
       hold = handle;
@@ -197,6 +230,9 @@ export function useDockedCamera({
     void keepFrom(canvas.value);
   }
   watch(streamDrawn, (isDrawn) => isDrawn && keepStreamStill(true));
+  watch(streamDrawn, (isDrawn) => {
+    if (isDrawn && streamMode.value === 'own') ownRetries = 0;
+  });
 
   // A still camera's frame, read again once its refresh interval has
   // passed. The frame the camera's card last showed (the camera store) is
@@ -389,6 +425,7 @@ export function useDockedCamera({
   });
 
   onBeforeUnmount(() => {
+    cancelOwnRetry();
     showImage(null);
     stopPainter();
     release();

@@ -306,6 +306,47 @@ test('a docked stream that cannot go on shows only its own last frame, paused', 
   assert.deepEqual(scene.frameReads, [], 'never another source');
 });
 
+test('a docked stream that failed tries again: after a growing wait, and at once when the page shows again', async (t) => {
+  const setHidden = (hidden) => {
+    Object.defineProperty(document, 'hidden', {
+      value: hidden,
+      configurable: true,
+    });
+    document.dispatchEvent(new Event('visibilitychange'));
+  };
+  t.after(() => setHidden(false));
+  const scene = dock(t);
+  scene.camerasOn(true);
+  scene.open();
+  decoded(scene.mapVideo);
+  await settle();
+  await settle();
+  scene.camerasOn(false);
+  await settle();
+  assert.equal(scene.attached.length, 1, 'the dock holds the stream itself');
+  // settle() waits on real timers; from here on only nextTick is awaited.
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  scene.attached[0].onFailure();
+  await nextTick();
+  assert.equal(scene.attached[0].disposed, true);
+  t.mock.timers.tick(4_999);
+  await nextTick();
+  assert.equal(scene.attached.length, 1, 'not before the first wait');
+  t.mock.timers.tick(1);
+  await nextTick();
+  assert.equal(scene.attached.length, 2, 'one try after 5 s');
+  scene.attached[1].onFailure();
+  await nextTick();
+  t.mock.timers.tick(5_000);
+  await nextTick();
+  assert.equal(scene.attached.length, 2, 'the second wait is longer');
+  setHidden(true);
+  await nextTick();
+  setHidden(false);
+  await nextTick();
+  assert.equal(scene.attached.length, 3, 'a page shown again tries at once');
+});
+
 test('a first failed dock hold retains the settled card image after the card releases it', async (t) => {
   const scene = dock(t);
   scene.camerasOn(true, { video: false });
