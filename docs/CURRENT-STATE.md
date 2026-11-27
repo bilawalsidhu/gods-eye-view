@@ -6432,8 +6432,12 @@ Shipped locales: **en** (source and fallback), **ar**, **de**, **es**, **fr**, *
   loads the one for the language it starts in before the first view renders
   (`startPageLocale`), and another when the user picks it. `setLocale` and
   `switchLocale` apply a language once its catalog is loaded; when choices
-  follow one another faster than catalogs load, the last one wins, and a
-  catalog that fails to load keeps the current language. The build fails if
+  follow one another faster than catalogs load, the last one wins (an
+  earlier switch resolves `'superseded'`, whatever the later one does), and
+  a catalog that fails to load keeps the current language. A startup
+  catalog that fails or takes over 4 s starts the page in English; until
+  the language applies, `<html data-locale-pending>` hides the loading
+  screen's status text. The build fails if
   a catalog is in a chunk the page loads at startup, or shares a chunk
   (`build/localeChunks.js`). `npm test` loads every catalog first
   (`src/testSupport/loadCatalogs.mjs`), so a test's `setLocale` applies at

@@ -170,7 +170,6 @@ export function keepCodesWithValues(text) {
 // Each setLocale call takes a number; only the latest call applies its
 // locale, so a switch whose catalog arrives after a later choice is dropped.
 let latestChoice = 0;
-let latestSwitch = Promise.resolve(DEFAULT_LOCALE);
 
 /**
  * Switch the active locale once its catalog is loaded. Views re-render and
@@ -180,30 +179,27 @@ let latestSwitch = Promise.resolve(DEFAULT_LOCALE);
  * another applies when its catalog arrives, unless a later call chose
  * another locale first: the last choice wins. A catalog that fails to load
  * changes nothing and rejects the promise.
- * @returns {Promise<string>} The locale applied (normalized); for a call a
- *   later one replaced, that later call's.
+ * @returns {Promise<string|null>} The locale applied (normalized); null for
+ *   a call a later one replaced, whether that later call applies or fails.
  */
 export function setLocale(locale) {
   const normalized = normalizeLocale(locale) || DEFAULT_LOCALE;
   const choice = ++latestChoice;
   if (catalogReady(normalized)) {
     applyLocale(normalized);
-    latestSwitch = Promise.resolve(normalized);
-    return latestSwitch;
+    return Promise.resolve(normalized);
   }
-  const loaded = loadCatalog(normalized).then(
+  return loadCatalog(normalized).then(
     () => {
-      if (choice !== latestChoice) return latestSwitch;
+      if (choice !== latestChoice) return null;
       applyLocale(normalized);
       return normalized;
     },
     (error) => {
-      if (choice !== latestChoice) return latestSwitch;
+      if (choice !== latestChoice) return null;
       throw error;
     },
   );
-  latestSwitch = loaded;
-  return loaded;
 }
 
 function applyLocale(normalized) {

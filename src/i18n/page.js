@@ -48,28 +48,49 @@ export {
   translateKnown,
 } from './index.js';
 
+/** How long the page waits for its language's catalog before English. */
+export const START_LOCALE_TIMEOUT_MS = 4000;
+
 /**
  * Start the page in its language: `?lang=`, then the stored choice, then the
  * browser's languages, then English. Await it before any view renders, so
  * every lookup and `<html lang>`/`<html dir>` agree from the first frame: it
  * loads that language's catalog, then applies it and translates the page's
- * static `data-i18n` markup (a loading screen). A catalog that fails to load
- * leaves the page in English.
+ * static `data-i18n` markup (a loading screen). A catalog that fails to load,
+ * or has not loaded within `timeoutMs`, leaves the page in English. Markup
+ * waiting under `<html data-locale-pending>` (hidden by the page's
+ * stylesheet) shows once the language applies.
  * @param {Document} [doc]
  * @param {Parameters<typeof resolveLocale>[0]} [inputs] Location, storage
  *   and languages, for tests.
+ * @param {{timeoutMs?: number}} [options]
  * @returns {Promise<string>} The active locale.
  */
-export async function startPageLocale(doc = globalThis.document, inputs) {
-  let locale;
+export async function startPageLocale(
+  doc = globalThis.document,
+  inputs,
+  { timeoutMs = START_LOCALE_TIMEOUT_MS } = {},
+) {
+  let timer;
   try {
-    locale = await setLocale(resolveLocale(inputs));
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(
+        () => reject(new Error(`no catalog after ${timeoutMs} ms`)),
+        timeoutMs,
+      );
+    });
+    await Promise.race([setLocale(resolveLocale(inputs)), timeout]);
   } catch (error) {
     console.error('[i18n] the page language failed to load', error);
-    locale = await setLocale(DEFAULT_LOCALE);
+    // English replaces the load: a catalog arriving later is dropped.
+    await setLocale(DEFAULT_LOCALE);
+  } finally {
+    clearTimeout(timer);
   }
+  const locale = getLocale();
   applyDocumentLanguage(doc, locale);
   applyDocumentTranslations(doc);
+  doc?.documentElement?.removeAttribute?.('data-locale-pending');
   return locale;
 }
 
@@ -110,7 +131,13 @@ export async function switchLocale(locale, options) {
   const choice = ++latestSwitch;
   switching = true;
   try {
-    const applied = await setLocale(next);
+    let applied;
+    try {
+      applied = await setLocale(next);
+    } catch (error) {
+      if (choice !== latestSwitch) return 'superseded';
+      throw error;
+    }
     if (choice !== latestSwitch || applied !== next) return 'superseded';
     if (active) return 'unchanged';
     persistLocale(next, options);
