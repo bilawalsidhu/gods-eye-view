@@ -47,25 +47,18 @@ export function limitZoomOut(viewer) {
 }
 
 /**
- * Make `camera.rotate` skip an axis that is zero or not finite, and an angle
- * that is not finite. With the pointer on the centre of a whole-globe view,
- * Cesium's wheel zoom (`ScreenSpaceCameraController` `handleZoom`) can ask
- * for a turn about a zero axis, and `rotate` throws from
- * `Scene.initializeFrame`, stopping the render loop. The zoom still moves the
- * camera in after the skipped turn.
+ * Make `camera.rotate` skip a turn about a zero (or NaN) axis. With the
+ * pointer on the centre of a whole-globe view, Cesium's wheel zoom
+ * (`ScreenSpaceCameraController` `handleZoom`) can ask for one: a debug
+ * build of Cesium throws from `Scene.initializeFrame`, stopping the render
+ * loop, and a production build writes NaN into the camera's pose. The zoom
+ * still goes on in the wheel's direction after the skipped turn.
  * @param {Cesium.Camera} camera
  */
 export function guardDegenerateRotation(camera) {
   const rotate = camera.rotate;
   camera.rotate = function (axis, angle) {
-    if (axis) {
-      const magnitudeSquared = Cesium.Cartesian3.magnitudeSquared(axis);
-      if (
-        !(magnitudeSquared > 0 && magnitudeSquared < Infinity) ||
-        (angle !== undefined && !Number.isFinite(angle))
-      )
-        return;
-    }
+    if (!(Cesium.Cartesian3.magnitudeSquared(axis) > 0)) return;
     return rotate.call(this, axis, angle);
   };
 }

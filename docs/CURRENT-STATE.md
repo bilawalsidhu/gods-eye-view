@@ -118,7 +118,8 @@ transforms and flights also cancel it; external pose changes cancel stationary
 settling. Oblique views below 300 km are left alone.
 
 `QA_BASE_URL=http://localhost:4173 node scripts/qa-zoom-out-guard.mjs` exercises
-the real browser controller at desktop and phone widths with keyless fixtures.
+the real browser controller at desktop and phone widths with keyless fixtures,
+and a wheel notch on the centre of a straight-down whole-globe view.
 
 Below 150 km Cesium sizes a wheel or pinch zoom step from the depth it picks at
 the canvas centre. Icons drawn over depth (aircraft, vessels and most markers:
@@ -3683,10 +3684,11 @@ keeps it by default for other callers.
 Pitfalls:
 
 - With the pointer on the centre of a whole-globe view, Cesium's wheel zoom
-  can ask `Camera.rotate` for a turn about a zero axis, which throws from
-  `Scene.initializeFrame` and stops the loop. `createApplicationViewer()`
-  makes the camera skip that turn (`guardDegenerateRotation()` in
-  `src/render/cesium/applicationViewer.js`).
+  can ask `Camera.rotate` for a turn about a zero axis. A debug build of
+  Cesium throws from `Scene.initializeFrame` and stops the loop; a
+  production build writes NaN into the camera's pose.
+  `createApplicationViewer()` makes the camera skip that turn
+  (`guardDegenerateRotation()` in `src/render/cesium/applicationViewer.js`).
 - An error thrown outside Scene's error handling (a frame listener, `onTick`,
   a resize) stops the loop without a `renderError`. The notice wraps the
   widget's `render()` and `resize()` and raises it as one, once even with

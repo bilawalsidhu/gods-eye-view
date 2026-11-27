@@ -4,11 +4,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import {
-  createApplicationViewer,
   guardDegenerateRotation,
   limitZoomOut,
   zoomOutLimit,
 } from './applicationViewer.js';
+import { headlessCamera } from './cameraGoldens.js';
 
 // The share of the screen's height the globe spans from `altitude`.
 function globeShare(altitude, fovy) {
@@ -92,28 +92,11 @@ test('the viewer options take multisampling, by default 4, and keep the drawing 
   assert.equal(applicationViewerOptions(credits, { msaa: 8 }).msaaSamples, 8);
 });
 
-// A wheel zoom's turn about a zero axis is skipped, not thrown.
-
-/** Cesium's own Camera.rotate on a camera-shaped object, with no scene behind it. */
-function cameraFixture() {
-  const camera = Object.create(Cesium.Camera.prototype);
-  camera.position = new Cesium.Cartesian3(28_378_137, 0, 0);
-  camera.direction = new Cesium.Cartesian3(-1, 0, 0);
-  camera.up = new Cesium.Cartesian3(0, 0, 1);
-  camera.right = new Cesium.Cartesian3(0, 1, 0);
-  camera.defaultRotateAmount = Math.PI / 3600;
-  camera._adjustOrthographicFrustum = () => {};
-  return camera;
-}
+const cameraFixture = () => headlessCamera().camera;
 
 const pose = (camera) =>
   [camera.position, camera.direction, camera.up, camera.right].map((v) =>
     Cesium.Cartesian3.clone(v),
-  );
-
-const finitePose = (camera) =>
-  pose(camera).every((v) =>
-    [v.x, v.y, v.z].every((value) => Number.isFinite(value)),
   );
 
 test('a turn about a zero axis is skipped instead of thrown', () => {
@@ -129,17 +112,6 @@ test('a turn about a zero axis is skipped instead of thrown', () => {
   assert.deepEqual(pose(camera), before);
 });
 
-test('an axis or angle that is not finite leaves the camera where it is', () => {
-  const camera = cameraFixture();
-  const before = pose(camera);
-  guardDegenerateRotation(camera);
-  camera.rotate(new Cesium.Cartesian3(NaN, 0, 1), 0.01);
-  camera.rotate(new Cesium.Cartesian3(Infinity, 0, 1), 0.01);
-  camera.rotate(Cesium.Cartesian3.UNIT_Z, NaN);
-  camera.rotate(Cesium.Cartesian3.UNIT_Z, Infinity);
-  assert.deepEqual(pose(camera), before);
-});
-
 test('an ordinary rotation is exactly what Cesium does unguarded', () => {
   const axis = new Cesium.Cartesian3(0.2, -0.5, 0.84);
   const plain = cameraFixture();
@@ -152,15 +124,6 @@ test('an ordinary rotation is exactly what Cesium does unguarded', () => {
   ]) {
     turn(plain);
     turn(camera);
-    assert.ok(finitePose(camera));
     assert.deepEqual(pose(camera), pose(plain));
   }
-});
-
-test('the application viewer guards its camera', () => {
-  // createApplicationViewer builds a real Cesium.Viewer, which needs WebGL.
-  assert.match(
-    String(createApplicationViewer),
-    /guardDegenerateRotation\(viewer\.camera\)/,
-  );
 });
