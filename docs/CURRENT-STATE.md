@@ -7561,8 +7561,7 @@ and unreachable upstream (502/504) separately from road geometry.
   links or the schema version. The contributor
   check reads the complete published JSON ledger from `origin/main`, including
   retired reservations, so later assignments cannot silently replace published
-  ones. The pre-ledger base is accepted only at its known source blob; unknown
-  historical shapes fail closed.
+  ones. A base without the ledger, or with a malformed one, fails closed.
   Pull-request CI runs this check against `origin/main`.
 - `scripts/qa-layer-token-twochar.mjs` simulates exhaustion of the earlier
   digit slots and injects a no-network `00` layer only into isolated dev-browser
