@@ -341,10 +341,8 @@ export function createIngestion({
     layerState._retainedPreview = false;
     layerState._detailRoadsReady = false;
     let paintRevision = 0;
-    // The snapshot that ends a pass replaces the streamed roads with the
-    // composed set, which is mostly the tile records already parsed and
-    // drawn. Remembering those per pass means only the records new to that
-    // snapshot (the clipped coarse roads) are parsed, not the whole set again.
+    // The replacing snapshot reuses records parsed from tiles in this pass.
+    // Coarse roads added by the final detail snapshot are new records.
     let parsedBySource = new WeakMap();
     const onTile = (data, passSignal, preview) => {
       if (generation !== layerState._loadGeneration || passSignal.aborted)

@@ -76,13 +76,22 @@ for (const hasKey of [false, true])
         return response;
       };
       const painted = [];
+      const misses = [];
       const state = {
         _enabled: true,
         _loadGeneration: 0,
         _tileCache: new Map(),
         _roadMode: hasKey ? 'hybrid' : null,
         _liveMode: hasKey,
-        _parseRoads: (data) => data.roads,
+        // The model's contract: fill the map, answer known records from it.
+        _parseRoads: (data, trace, parsedBySource) => {
+          for (const record of data.roads)
+            if (!parsedBySource?.has(record)) {
+              misses.push({ record, replace: data.replace === true });
+              parsedBySource?.set(record, [record]);
+            }
+          return data.roads;
+        },
       };
       const ingestion = createIngestion({
         state,
@@ -132,6 +141,11 @@ for (const hasKey of [false, true])
         );
       assert.equal(ids.length, hasKey ? 3 : 2);
       assert.equal(new Set(ids).size, ids.length);
+      assert.deepEqual(
+        misses.filter((miss) => miss.record === local).map((miss) => miss.replace),
+        [false],
+        'the detail record is parsed as its tile streams, not again in the snapshot that ends the pass',
+      );
       ingestion.cancelActiveFetch();
       clearTimeout(state._retryTimer);
     });

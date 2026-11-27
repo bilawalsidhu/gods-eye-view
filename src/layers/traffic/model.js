@@ -1,6 +1,6 @@
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { distance } from '../../geo/vector.js';
-import { floorCellReader, roadSurfaceChunks } from './surface.js';
+import { floorReaderOf, roadSurfaceChunks } from './surface.js';
 import { t, translateKnown } from '../../i18n/index.js';
 import {
   flowDensityMult,
@@ -13,8 +13,9 @@ export function createModel({ state: layerState, services, parts, source }) {
   /**
    * Build scene waypoints from source records; thinning and terrain remain rendering policy.
    *
-   * `parsedBySource` (source record → its parsed roads) is filled as records
-   * are parsed, and a record already in it is answered from it.
+   * `parsedBySource` (source record → its parsed roads) is filled here; a
+   * record already in it returns those same road objects, so state on them
+   * carries over, except flow, which takes the record's as a fresh parse does.
    */
   function parseRoads(roadData, _trace, parsedBySource) {
     if (!roadData || !roadData.roads) {
@@ -22,13 +23,17 @@ export function createModel({ state: layerState, services, parts, source }) {
     }
 
     const roads = [];
-    const floorAt = floorCellReader(services.ground);
+    const floorAt = floorReaderOf(services.ground);
     for (const road of roadData.roads) {
       if (!road.coordinates || road.coordinates.length < 2) continue;
-      // A replacing snapshot repeats records this load already parsed.
+      // A replacing snapshot repeats records this pass already parsed.
       const known = parsedBySource?.get(road);
       if (known) {
-        for (const parsed of known) roads.push(parsed);
+        // Flow is matched per paint; a fresh parse takes the record's.
+        for (const parsed of known) {
+          parsed.flow = road.flow || null;
+          roads.push(parsed);
+        }
         continue;
       }
       const first = roads.length;

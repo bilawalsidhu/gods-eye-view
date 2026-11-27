@@ -9584,6 +9584,12 @@ on it.
   successful TileJSON metadata prefetched at enable and cached for the source lifetime, z12 wide pass and
   z14 detail below 4.5 km. The nearest 16 intersecting detail tiles cover the
   near field; coarse roads remain outside successfully loaded detail cores.
+  A coarse road wholly inside one of the four regions around a loaded core
+  is kept from its extent; only the others are clipped. The final detail
+  snapshot reuses the roads parsed from streamed tiles in that pass and
+  restores each record's flow. It parses every coarse road it adds,
+  including those kept by extent. Each pass shares DEM reads within ~111 m
+  cells, with direct reads at rounding boundaries. Mesh floors are read per point.
   Partial coverage retains coarse roads under missing tiles and retries at most
   three times with bounded backoff, reusing successful tiles. A failed detail pass retains major roads and separately
   reports "Detailed roads unavailable". OpenMapTiles admits motorway, trunk,

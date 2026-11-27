@@ -8,7 +8,7 @@ import {
   findQuery,
 } from '../../render/rendererOf.js';
 import {
-  floorCellReader,
+  floorReaderOf,
   roadHeightStations,
   viewerRoadSurface,
 } from './surface.js';
@@ -319,7 +319,7 @@ export function createFlow({ state: layerState, services, parts, source }) {
       }
     }
     if (depthHeight !== undefined) layerState._viewHeightEstimate = depthHeight;
-    const floorAt = floorCellReader(services.ground);
+    const floorAt = floorReaderOf(services.ground);
     for (const road of roads) {
       road.key ||= roadIdentity(road);
       const prepared = !refining && preparedRoads.get(road.key);
@@ -328,7 +328,10 @@ export function createFlow({ state: layerState, services, parts, source }) {
           copyInto(prepared.waypoints[i], road.waypoints[i]);
       } else if (
         (!road.surfaceReady || refining) &&
-        (localHeights.length || depthHeight !== undefined)
+        (localHeights.length ||
+          depthHeight !== undefined ||
+          // A failed surface preparation left 0 m where no floor was warm.
+          road.surfaceReady === false)
       ) {
         road.surfaceReady = false;
         // Opposite source directions may share waypoint arrays. Provisional

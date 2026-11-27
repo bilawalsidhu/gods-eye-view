@@ -1,7 +1,7 @@
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { distance } from '../../geo/vector.js';
 import { findFrame } from '../../render/rendererOf.js';
-import { floorCellReader, roadSurfaceChunks } from './surface.js';
+import { floorReaderOf, roadSurfaceChunks } from './surface.js';
 import { TRAFFIC_TIMING_ENABLED, DOT_HEIGHT_OFFSET } from './policy.js';
 
 export function createTiming({ state: layerState, services, parts, source }) {
@@ -233,16 +233,20 @@ export function createTiming({ state: layerState, services, parts, source }) {
     }
 
     const roads = [];
-    const floorAt = floorCellReader(services.ground);
+    const floorAt = floorReaderOf(services.ground);
     /* TRACE_ONLY_BEGIN */
     let _trafficTimingWaypointMaterializationMs = 0;
     /* TRACE_ONLY_END */
     for (const road of roadData.roads) {
       if (!road.coordinates || road.coordinates.length < 2) continue;
-      // A replacing snapshot repeats records this load already parsed.
+      // A replacing snapshot repeats records this pass already parsed.
       const known = parsedBySource?.get(road);
       if (known) {
-        for (const parsed of known) roads.push(parsed);
+        // Flow is matched per paint; a fresh parse takes the record's.
+        for (const parsed of known) {
+          parsed.flow = road.flow || null;
+          roads.push(parsed);
+        }
         continue;
       }
       const first = roads.length;
