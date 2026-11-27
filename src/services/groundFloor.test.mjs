@@ -3,22 +3,6 @@ import assert from 'node:assert/strict';
 import { createGroundFloor } from './groundFloor.js';
 import { createTerrainHeights } from './terrainHeights.js';
 
-/** Counts Number.prototype.toFixed calls made while `run` executes. */
-function countToFixed(run) {
-  const original = Number.prototype.toFixed;
-  let calls = 0;
-  Number.prototype.toFixed = function (...args) {
-    calls += 1;
-    return original.apply(this, args);
-  };
-  try {
-    run();
-  } finally {
-    Number.prototype.toFixed = original;
-  }
-  return calls;
-}
-
 /**
  * The floor read as it was before the cell became an integer: the coarse cell
  * through `toFixed(3)`, mesh cells and DEM cells under string keys.
@@ -99,11 +83,14 @@ test('the floor read answers exactly as the string-keyed read did', async () => 
       h: Math.round(next() * 4000),
     });
   }
-  // Cells along the equator and the prime meridian, where a cell index is 0.
+  // Cells on and a hair either side of coarse-cell edges, along lon 10 and
+  // lat 10. Each has its own height, so a read that lands in the
+  // neighbouring cell gets the wrong one.
   for (const edge of edgeCoordinates()) {
-    const lat = Number(edge.toFixed(3));
-    cells.push({ lat: Math.max(-89, Math.min(89, lat)), lon: 10, h: 77 });
-    cells.push({ lat: 10, lon: lat, h: 88 });
+    const deg = Number(edge.toFixed(3));
+    const lat = Math.max(-89, Math.min(89, deg));
+    cells.push({ lat, lon: 10, h: 5000 + Math.round(lat * 1000) });
+    cells.push({ lat: 10, lon: deg, h: 5000 + Math.round(deg * 1000) });
   }
   const reference = referenceFloor();
   for (const c of cells) reference.storeDem(c.lat, c.lon, c.h);
@@ -147,21 +134,20 @@ test('the floor read answers exactly as the string-keyed read did', async () => 
   }
 });
 
-test('reading a floor formats no numbers, hit or miss', async () => {
+test('reading a floor formats no numbers, hit or miss', async (t) => {
   const cell = { lat: 51.47, lon: -0.454, h: 25 };
   const terrain = await warmTerrain([cell]);
   const groundFloor = createGroundFloor({ terrain });
   groundFloor.reportMeshFloorCell(48.3537, 11.7861, 453);
 
-  const calls = countToFixed(() => {
-    // The DEM cell, a rendered-surface cell, and open ocean with neither.
-    assert.equal(groundFloor.cachedGroundFloor(51.4702, -0.4541), 25);
-    assert.equal(groundFloor.cachedGroundFloor(48.3538, 11.7862), 453);
-    for (let i = 0; i < 1000; i += 1)
-      assert.equal(groundFloor.cachedGroundFloor(30 + i * 0.011, -40.2), null);
-  });
-  // Before, each read made six toFixed calls (the cell twice, the DEM key).
-  assert.equal(calls, 0);
+  const toFixed = t.mock.method(Number.prototype, 'toFixed');
+  // The DEM cell, a rendered-surface cell, and open ocean with neither.
+  assert.equal(groundFloor.cachedGroundFloor(51.4702, -0.4541), 25);
+  assert.equal(groundFloor.cachedGroundFloor(48.3538, 11.7862), 453);
+  for (let i = 0; i < 1000; i += 1)
+    assert.equal(groundFloor.cachedGroundFloor(30 + i * 0.011, -40.2), null);
+  toFixed.mock.restore();
+  assert.equal(toFixed.mock.callCount(), 0);
 });
 
 test('a reading reported at a point is found from anywhere in its cell', async () => {

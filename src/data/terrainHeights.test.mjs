@@ -318,6 +318,8 @@ test('resolveEllipsoidalGround: geoid fallback cools down retries, then self-hea
       async () => {
         const first = await resolveEllipsoidalGround([point]);
         assert.equal(first[0].source, 'geoid-fallback');
+        assert.equal(cachedRealEllipsoidalGround(point.lat, point.lon), null, 'a fallback is not a real floor');
+        assert.equal(cachedEllipsoidalGround(point.lat, point.lon), first[0].ellipsoid);
 
         const cooling = await resolveEllipsoidalGround([point]);
         assert.equal(cooling[0].source, 'geoid-fallback');
@@ -327,6 +329,7 @@ test('resolveEllipsoidalGround: geoid fallback cools down retries, then self-hea
         const healed = await resolveEllipsoidalGround([point]);
         assert.equal(fetchCount, 2, 'the point should retry after cooldown');
         assert.equal(healed[0].source, 'reearth');
+        assert.equal(cachedRealEllipsoidalGround(point.lat, point.lon), healed[0].ellipsoid, 'the real height replaced the fallback');
 
         await resolveEllipsoidalGround([point]);
         assert.equal(fetchCount, 2, 'a successful retry replaces fallback and clears retry work');

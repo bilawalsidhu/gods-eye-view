@@ -293,9 +293,8 @@ export const COAST_FLOOR_LIFT_M = 1.5;
  */
 export function floorCoastedPosition(position, cachedGroundFloor) {
   if (typeof cachedGroundFloor !== 'function') return position;
-  // Most coasting contacts are at cruise, and this runs for each of them on
-  // every fleet pass. One above COAST_FLOOR_CEILING_M cannot be lifted by any
-  // ground, so it needs neither the geodetic conversion nor the floor read.
+  // One above COAST_FLOOR_CEILING_M cannot be lifted by any ground, so it
+  // needs neither the geodetic conversion nor the floor read.
   if (clearOfAllGround(position)) return position;
   const carto = toCartographicRadians(position);
   if (!carto) return position;
@@ -319,12 +318,9 @@ const COAST_CLEAR_SCALED_SQ = (1 + COAST_FLOOR_CEILING_M / WGS84.radii.z) ** 2;
 
 /**
  * Whether a position is certainly more than COAST_FLOOR_CEILING_M above the
- * ellipsoid, from three multiplications. Scale the axes so the ellipsoid is
- * the unit sphere: a point h metres up its surface normal is then at most
- * 1 + h / (polar radius) from the centre, so one further out than
- * 1 + ceiling / (polar radius) is above the ceiling. At the equator this
- * answers yes from about 30 m above the ceiling; at the poles, from the
- * ceiling itself.
+ * ellipsoid. With the axes scaled so the ellipsoid is the unit sphere, a point
+ * h metres up its normal is at most 1 + h / (polar radius) from the centre.
+ * Near the equator this answers yes only from about 30 m above the ceiling.
  * @param {{x: number, y: number, z: number}} position ECEF.
  * @returns {boolean}
  */

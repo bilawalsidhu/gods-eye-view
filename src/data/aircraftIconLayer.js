@@ -1,4 +1,5 @@
 import {
+  COAST_FLOOR_CEILING_M,
   COAST_FLOOR_LIFT_M,
   COURSE_HOLD_SPEED_MPS,
   courseSlewCapDps,
@@ -256,9 +257,6 @@ export const COAST_FLOOR_LOOKAHEAD_MS = 10_000;
 /** How far apart (ms) the ground under a coast is read, and how long each
  *  piece of a coast the ground lifts runs. */
 export const COAST_FLOOR_STEP_MS = 1_000;
-/** A coast from above this height (m) never meets the ground: no terrain
- *  is this high, and a level coast only rises off the ellipsoid. */
-const COAST_ABOVE_TERRAIN_M = 9_000;
 
 /**
  * How far the ground lifts an icon at `position`: metres to raise it to
@@ -305,9 +303,11 @@ function raised(position, lift) {
 export function floorCoastArc(arc, t, cachedGroundFloor) {
   if (!(arc.maxDtS > 0) || typeof cachedGroundFloor !== 'function') return null;
   const fixCarto = toCartographicRadians(arc.fix);
+  // A coast from above the ceiling that does not descend never meets the
+  // ground: a level coast only rises off the ellipsoid.
   if (
     fixCarto &&
-    fixCarto.height > COAST_ABOVE_TERRAIN_M &&
+    fixCarto.height > COAST_FLOOR_CEILING_M &&
     !((arc.climbMps ?? 0) < 0)
   )
     return null;

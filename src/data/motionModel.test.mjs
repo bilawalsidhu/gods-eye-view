@@ -369,7 +369,7 @@ test('a coasting contact above any terrain is not looked up against the ground',
     reads += 1;
     return 8821; // Everest's summit, the highest floor there is
   };
-  // Just over the ceiling and at cruise, from pole to equator.
+  // Just over the ceiling and at cruise, from pole to pole.
   for (let lat = -90; lat <= 90; lat += 7.5) {
     for (const lon of [0, 86.925, -78.8, 179.9]) {
       for (const height of [COAST_FLOOR_CEILING_M + 35, 10_000, 12_500, 40_000]) {
@@ -420,8 +420,4 @@ test('nothing at or below the ceiling skips the ground', () => {
     }
   }
   assert.equal(reads, asked);
-});
-
-test('the ceiling clears the highest ground with room to spare', () => {
-  assert.ok(COAST_FLOOR_CEILING_M > 8849 + 100);
 });

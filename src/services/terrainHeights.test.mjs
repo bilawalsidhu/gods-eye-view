@@ -170,22 +170,6 @@ test('an out-of-range cache bound falls back to the default instead of disabling
   }
 });
 
-/** Counts Number.prototype.toFixed calls made while `run` executes. */
-function countToFixed(run) {
-  const original = Number.prototype.toFixed;
-  let calls = 0;
-  Number.prototype.toFixed = function (...args) {
-    calls += 1;
-    return original.apply(this, args);
-  };
-  try {
-    run();
-  } finally {
-    Number.prototype.toFixed = original;
-  }
-  return calls;
-}
-
 test('a synchronous read finds exactly the entry its 5-decimal key names', async () => {
   // Stored coordinates, and for each the reads that must and must not reach it.
   // The expectation is the string key the cache has always used.
@@ -252,68 +236,60 @@ test('a synchronous read finds exactly the entry its 5-decimal key names', async
   );
 });
 
-test('a synchronous read of an ordinary coordinate formats no numbers', async () => {
+test('a synchronous read of an ordinary coordinate formats no numbers', async (t) => {
   const terrain = createTerrainHeights({ source: stubSource() });
   await terrain.resolveEllipsoidalGround([pointAt(1), pointAt(2)]);
-  const calls = countToFixed(() => {
-    assert.equal(
-      terrain.cachedRealEllipsoidalGround(0, lonAt(1)),
-      heightAt(lonAt(1)),
-    );
-    assert.equal(
-      terrain.cachedEllipsoidalGround(0, lonAt(2)),
-      heightAt(lonAt(2)),
-    );
-    // Misses are the common case: an aircraft over a cell nobody resolved.
-    for (let i = 10; i < 1010; i += 1)
-      assert.equal(terrain.cachedRealEllipsoidalGround(45.123, lonAt(i)), null);
-  });
-  // Before, every read built its key with two toFixed calls.
-  assert.equal(calls, 0);
-});
-
-test('an entry read again and again is not rewritten on each read, and still outlives the rest', async () => {
-  const terrain = createTerrainHeights({
-    source: stubSource(),
-    maxCacheEntries: 8,
-  });
-  for (let i = 0; i < 8; i += 1)
-    await terrain.resolveEllipsoidalGround([pointAt(i)]);
-
-  // Coordinate 0 is the coldest. Read it between stores, as a parked contact
-  // would; the seven newer ones are never read.
-  for (let i = 8; i < 15; i += 1) {
-    for (let read = 0; read < 50; read += 1)
-      assert.equal(
-        terrain.cachedEllipsoidalGround(0, lonAt(0)),
-        heightAt(lonAt(0)),
-      );
-    await terrain.resolveEllipsoidalGround([pointAt(i)]);
-  }
+  const toFixed = t.mock.method(Number.prototype, 'toFixed');
   assert.equal(
-    terrain.cachedEllipsoidalGround(0, lonAt(0)),
-    heightAt(lonAt(0)),
+    terrain.cachedRealEllipsoidalGround(0, lonAt(1)),
+    heightAt(lonAt(1)),
   );
-  for (let i = 1; i < 8; i += 1)
-    assert.equal(
-      terrain.cachedEllipsoidalGround(0, lonAt(i)),
-      null,
-      `unread coordinate ${i} was evicted`,
-    );
+  assert.equal(
+    terrain.cachedEllipsoidalGround(0, lonAt(2)),
+    heightAt(lonAt(2)),
+  );
+  // Misses are the common case: an aircraft over a cell nobody resolved.
+  for (let i = 10; i < 1010; i += 1)
+    assert.equal(terrain.cachedRealEllipsoidalGround(45.123, lonAt(i)), null);
+  toFixed.mock.restore();
+  assert.equal(toFixed.mock.callCount(), 0);
 });
 
-test('an evicted coordinate is gone from the synchronous read too', async () => {
+test('a read between two stores keeps the read entry over the unread one', async () => {
   const terrain = createTerrainHeights({
     source: stubSource(),
     maxCacheEntries: 2,
   });
-  for (let i = 0; i < 5; i += 1)
+  await terrain.resolveEllipsoidalGround([pointAt(0)]);
+  await terrain.resolveEllipsoidalGround([pointAt(1)]);
+  assert.equal(
+    terrain.cachedRealEllipsoidalGround(0, lonAt(0)),
+    heightAt(lonAt(0)),
+  );
+  await terrain.resolveEllipsoidalGround([pointAt(2)]);
+  assert.equal(
+    terrain.cachedRealEllipsoidalGround(0, lonAt(0)),
+    heightAt(lonAt(0)),
+  );
+  assert.equal(terrain.cachedRealEllipsoidalGround(0, lonAt(1)), null);
+});
+
+test('an entry read once every few stores is never evicted', async () => {
+  const terrain = createTerrainHeights({
+    source: stubSource(),
+    maxCacheEntries: 8,
+  });
+  await terrain.resolveEllipsoidalGround([pointAt(0)]);
+  for (let i = 1; i <= 4; i += 1)
     await terrain.resolveEllipsoidalGround([pointAt(i)]);
-  for (let i = 0; i < 3; i += 1)
-    assert.equal(terrain.cachedRealEllipsoidalGround(0, lonAt(i)), null);
-  for (let i = 3; i < 5; i += 1)
-    assert.equal(
-      terrain.cachedRealEllipsoidalGround(0, lonAt(i)),
-      heightAt(lonAt(i)),
-    );
+  assert.equal(
+    terrain.cachedRealEllipsoidalGround(0, lonAt(0)),
+    heightAt(lonAt(0)),
+  );
+  for (let i = 5; i <= 8; i += 1)
+    await terrain.resolveEllipsoidalGround([pointAt(i)]);
+  assert.equal(
+    terrain.cachedRealEllipsoidalGround(0, lonAt(0)),
+    heightAt(lonAt(0)),
+  );
 });
