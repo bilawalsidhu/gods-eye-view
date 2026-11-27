@@ -34,7 +34,6 @@ const TESTS = [
 const FILES = {
   keyboard: path.join(ROOT, 'src', 'ui', 'surfaceKeyboard.js'),
   module: path.join(ROOT, 'src', 'firstRunExperience.js'),
-  copy: path.join(ROOT, 'src', 'firstRunCopy.js'),
   surfaces: path.join(ROOT, 'src', 'exclusiveSurfaces.js'),
   html: path.join(ROOT, 'src', 'ui', 'views', 'WelcomeView.vue'),
   css: path.join(ROOT, 'src', 'ui', 'styles', 'first-run.css'),
@@ -321,13 +320,6 @@ const MUTATIONS = [
     file: 'module',
     from: 'if (!mission) return { ok: false, choice };',
     to: 'if (!mission) return { ok: true, choice };',
-  },
-  {
-    defect:
-      'the fires/quakes tile name stops being switchable from one constant',
-    file: 'copy',
-    from: 'ENVIRONMENTAL_LABEL_KEYS[choice] || ENVIRONMENTAL_LABEL_KEYS.ENVIRONMENTAL;',
-    to: 'ENVIRONMENTAL_LABEL_KEYS.ENVIRONMENTAL;',
   },
 
   // ── Defaults interplay (the ruling this whole integration turns on) ────────

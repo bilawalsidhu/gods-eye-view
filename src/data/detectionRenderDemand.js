@@ -75,26 +75,25 @@ export function detectionNeedsFollowUpFrame({
 export const DETECTION_PAINT_SKIP_THRESHOLD_MS = 22;
 
 /**
- * Under pathological load a paint may be deferred. The skipped frame could be the only
- * one requested, so `requestFollowUp` always equals `skip`.
+ * Whether to skip this detection paint under pathological load: alternate
+ * frames while the last paint cost more than the threshold. A skip is a
+ * deferral, so the caller must request another frame for every skip.
  * @param {object} input
  * @param {boolean} input.layoutChanged - The host's layout revision moved this frame.
  * @param {number} input.lastPaintMs - Cost of the previous detection paint.
  * @param {number} input.frameCount - Monotonic detection frame counter.
- * @param {number} [input.thresholdMs]
- * @returns {{skip: boolean, requestFollowUp: boolean}}
+ * @returns {boolean}
  */
 export function detectionPaintSkipDecision({
   layoutChanged,
   lastPaintMs,
   frameCount,
-  thresholdMs = DETECTION_PAINT_SKIP_THRESHOLD_MS,
 } = {}) {
-  const skip =
+  return (
     !layoutChanged &&
-    Number(lastPaintMs) > thresholdMs &&
-    Number(frameCount) % 2 !== 0;
-  return { skip, requestFollowUp: skip };
+    Number(lastPaintMs) > DETECTION_PAINT_SKIP_THRESHOLD_MS &&
+    Number(frameCount) % 2 !== 0
+  );
 }
 
 /**

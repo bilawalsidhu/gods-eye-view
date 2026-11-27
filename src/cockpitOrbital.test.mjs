@@ -33,7 +33,6 @@ import {
   ORBITAL_PREFETCH_ACROSS,
   ORBITAL_PREFETCH_LEAD_S,
   ORBITAL_PREFETCH_MAX_TILES,
-  destinationPoint,
   groundTrackAhead,
   imageryLevelForView,
   tilesForPoints,
@@ -438,15 +437,6 @@ const PASS = Object.freeze({
   groundTrackDeg: 45,
   velocityMps: 7_600,
   altitudeM: 500_000,
-});
-
-test('destinationPoint walks a great circle along a bearing', () => {
-  const east = destinationPoint(0, 179.9, 90, 111_195 * 0.2);
-  assert.ok(Math.abs(east.lat) < 1e-9);
-  assert.ok(Math.abs(east.lon - -179.9) < 1e-3, 'wraps the antimeridian');
-  const north = destinationPoint(10, 20, 0, 50_000);
-  assert.ok(Math.abs(greatCircleKm({ lat: 10, lon: 20 }, north) - 50) < 0.1);
-  assert.ok(north.lat > 10 && Math.abs(north.lon - 20) < 1e-9);
 });
 
 test('the points ahead run along the ground track at ground speed', () => {

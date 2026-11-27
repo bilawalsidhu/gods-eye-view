@@ -8,6 +8,26 @@ import { isAidToNavigation } from '../../data/vesselTypes.js';
 import { formatNumber, t } from '../../i18n/index.js';
 import { roundHeadingDegrees } from '../../data/headingDegrees.js';
 
+/**
+ * Whether a vessel has a name of its own: not the placeholder, nor the MMSI
+ * or id a source names it by when it has none.
+ */
+export function hasRealName(record) {
+  const name = String(record.name || '').trim();
+  return (
+    Boolean(name) &&
+    name !== 'VESSEL' &&
+    name !== record.mmsi &&
+    name !== record.id
+  );
+}
+
+/** The vessel id an overlay entry id names (see vesselOverlayEntryId), '' for another. */
+export function vesselIdFromEntry(entryId) {
+  const text = String(entryId || '');
+  return text.startsWith('vessel:') ? text.slice('vessel:'.length) : '';
+}
+
 export function createCards({
   vesselState,
   services,
@@ -191,10 +211,7 @@ export function createCards({
   }
 
   function displayVesselName(record) {
-    const name = String(record.name || '').trim();
-    // A source may name a vessel by its id when it has no name.
-    if (name && name !== 'VESSEL' && name !== record.mmsi && name !== record.id)
-      return name;
+    if (hasRealName(record)) return String(record.name).trim();
     return record.mmsi ? `MMSI ${record.mmsi}` : t('VESSEL');
   }
 
@@ -218,8 +235,9 @@ export function createCards({
   }
 
   function formatPositionTime(record) {
-    if (!record.lastPositionUtc) return t('POS: LIVE');
-    const date = new Date(record.lastPositionUtc);
+    const epoch = record.lastPositionEpoch;
+    if (!Number.isFinite(epoch)) return t('POS: LIVE');
+    const date = new Date(epoch * 1000);
     if (Number.isNaN(date.getTime())) return t('POS: LIVE');
     return t('POS: {time}Z', { time: date.toISOString().slice(11, 19) });
   }

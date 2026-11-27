@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createKartaViewViewer, loadImage, panoSizeFor } from './viewer.js';
+import { createKartaViewViewer, loadImage } from './viewer.js';
+import { panoSizeFor } from '../../photoViewer.js';
 import {
   drawn,
   fakeHost,

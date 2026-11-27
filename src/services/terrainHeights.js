@@ -159,18 +159,17 @@ export function createTerrainHeights({
         ? AbortSignal.any([requestSignal, AbortSignal.timeout(30000)])
         : AbortSignal.timeout(30000),
     });
-    const body = { results };
-    if (!Array.isArray(body?.results))
+    if (!Array.isArray(results))
       throw new Error('malformed terrain heights response (no results array)');
-    if (body.results.length !== chunk.length) {
+    if (results.length !== chunk.length) {
       throw new Error(
-        `terrain heights response length mismatch (expected ${chunk.length}, got ${body.results.length})`,
+        `terrain heights response length mismatch (expected ${chunk.length}, got ${results.length})`,
       );
     }
     const out = new Map();
     // The proxy preserves input order, so map positionally.
     for (let i = 0; i < chunk.length; i += 1) {
-      const ellipsoid = body.results[i]?.ellipsoid;
+      const ellipsoid = results[i]?.ellipsoid;
       if (!Number.isFinite(ellipsoid))
         throw new Error(`non-finite ellipsoid height at index ${i}`);
       out.set(chunk[i].key, ellipsoid);
@@ -247,8 +246,8 @@ export function createTerrainHeights({
     const now = Date.now();
     // What this call resolved or found warm, so the assembly below can report a
     // point even if a later chunk's writes pushed it past CACHE_MAX_ENTRIES.
-    // Without it a batch big enough to evict its own entries would report
-    // points as unresolved that it had in fact resolved.
+    // Without it a batch big enough to evict its own entries would lose points
+    // it had resolved.
     const resolvedThisCall = new Map();
     for (const item of work) {
       const entry = cacheTouch(item.key);
@@ -274,14 +273,12 @@ export function createTerrainHeights({
         const resolved = await fetchChunk(chunk, requestSignal);
         requestSignal?.throwIfAborted();
         for (const item of chunk) {
-          const ellipsoid = resolved.get(item.key);
-          // Only a finite value is cached as 'reearth'. A point the upstream omitted
-          // caches nothing and retries on the next warm.
-          if (Number.isFinite(ellipsoid)) {
-            const entry = { ellipsoid, source: 'reearth' };
-            resolvedThisCall.set(item.key, entry);
-            cacheStore(item.key, entry);
-          }
+          const entry = {
+            ellipsoid: resolved.get(item.key),
+            source: 'reearth',
+          };
+          resolvedThisCall.set(item.key, entry);
+          cacheStore(item.key, entry);
         }
       } catch (error) {
         requestSignal?.throwIfAborted();
@@ -327,14 +324,13 @@ export function createTerrainHeights({
       }
     }
 
-    // Assemble the output in the original input order from the cache. A point
-    // the upstream omitted has NO entry (deliberately uncached so it
-    // retries later): report it unresolved instead of throwing.
+    // Every point is in `resolvedThisCall`: warm, fetched, partial or geoid
+    // fallback. One non-finite height in a 200 response sends the whole chunk
+    // (up to 64 points) to the geoid fallback.
     return work.map((item) => {
-      const entry = cache.get(item.key) || resolvedThisCall.get(item.key);
-      return entry
-        ? { ellipsoid: entry.ellipsoid, source: entry.source }
-        : { ellipsoid: null, source: 'unresolved' };
+      const { ellipsoid, source } =
+        cache.get(item.key) || resolvedThisCall.get(item.key);
+      return { ellipsoid, source };
     });
   }
 

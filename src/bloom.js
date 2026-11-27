@@ -6,6 +6,7 @@
  * so all ingestion paths pass through {@link decodeBloomIntensity} which
  * detects the version and converts to the v2 range.
  */
+import { clamp } from './geo/vector.js';
 
 /** Current bloom scale version. Persisted in share links / scene projects. */
 export const BLOOM_SCALE_VERSION = 2;
@@ -18,11 +19,6 @@ export const BLOOM_INTENSITY_DEFAULT = 0;
 
 /** Maximum intensity on the legacy v1 scale (used for migration). */
 const LEGACY_BLOOM_INTENSITY_MAX = 100;
-
-/** @param {number} value @param {number} min @param {number} max */
-function clamp(value, min, max) {
-  return Math.max(min, Math.min(max, value));
-}
 
 /**
  * Clamp a raw bloom value to the valid v2 range [0, 200].

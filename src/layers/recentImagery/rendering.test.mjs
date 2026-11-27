@@ -6,7 +6,7 @@ import {
   createRecentImageryRenderer,
 } from './rendering.js';
 import { fromDegrees } from '../../geo/ellipsoid.js';
-import { boxKey, nonCrossingBoxes } from './model.js';
+import { boxKey, gibsTemplate, nonCrossingBoxes } from './model.js';
 import { BOX, FIJI_BOX } from './testDoubles.mjs';
 import { fakeGlobePort } from '../../testSupport/fakeGlobePort.mjs';
 import { fakeDrawPort } from '../../testSupport/fakeDrawPort.mjs';
@@ -25,6 +25,8 @@ function pendingFetches() {
 function fixture({ maxTileRequests, ...options } = {}) {
   const renders = [];
   const renderer = createRecentImageryRenderer({
+    tileTemplate: gibsTemplate,
+    credit: 'NASA GIBS',
     ...options,
     maxTileRequests,
     requestRender: (reason) => renders.push(reason),
@@ -393,7 +395,10 @@ test('an HLS dateline day drapes every half not confirmed empty, a VIIRS one onl
 });
 
 test('a probe that narrows or widens a dateline drape keeps the layer of the unchanged half', () => {
-  const renderer = createRecentImageryRenderer();
+  const renderer = createRecentImageryRenderer({
+    tileTemplate: gibsTemplate,
+    credit: 'NASA GIBS',
+  });
   const globe = fakeGlobePort();
   renderer.rebind({ collection: {}, kind: 'globe', globe });
   const [west, east] = nonCrossingBoxes(FIJI_BOX);

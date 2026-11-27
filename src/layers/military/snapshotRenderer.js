@@ -9,7 +9,7 @@ import {
   historyAfterTrail,
   mergeAircraftTimelineFixes,
 } from '../../data/timelineHistory.js';
-import { POSITION_HISTORY_LIMIT } from './recordPolicy.js';
+import { POSITION_HISTORY_LIMIT } from '../flights/recordPolicy.js';
 import { followsClock } from './policy.js';
 import { newestReport, pushReport } from '../../data/aircraftMotionRegime.js';
 import { observeLiveAircraft } from '../flights/placed.js';

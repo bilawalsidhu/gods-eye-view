@@ -30,7 +30,6 @@ function createState({ services }) {
     _icons: null,
     _enabled: false,
     _generation: 0,
-    _cameraChangedAttached: false,
     /** Removes the camera port listener; null when not listening. */
     _cameraChangedOff: null,
     /** Removes the one-shot look after the camera listener's first tick. */
@@ -215,7 +214,7 @@ export function createRailLayer({
           state._selectedAtMs = Date.now();
           parts.selection.selectTrain(key);
         }
-        services.render.governorRequestRender?.('rail-selection');
+        services.render.governorRequestRender('rail-selection');
         return state._selectedKey === key;
       },
       /** Whether the train a card names is the one selected. */
@@ -225,7 +224,7 @@ export function createRailLayer({
       /** Deselect the selected train, as a click on the map does. */
       clearSelection() {
         parts.selection.clearSelection();
-        services.render.governorRequestRender?.('rail-selection');
+        services.render.governorRequestRender('rail-selection');
         return true;
       },
       /** Test seams: this instance's own state and parts. */

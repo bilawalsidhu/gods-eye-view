@@ -9,7 +9,7 @@ import { useStreetLevelStore } from './stores/streetLevel.js';
 import StreetLevelPanel from './views/panels/StreetLevelPanel.vue';
 import { createStreetLevelLayer } from '../layers/streetLevel/index.js';
 import { createMapillaryProvider } from '../layers/streetLevel/providers/mapillary/index.js';
-import { DataLayerManager } from '../data/manager.js';
+import { DataLayerManager } from '../testSupport/dataLayerManager.mjs';
 import { LayerStateCoordinator } from '../data/layerStateCoordinator.js';
 import {
   LAYER_STATE_REGISTRY,

@@ -1,15 +1,7 @@
 import { readResponseJsonCapped } from '../../sources/httpBody.js';
-
-// Shared with the AI tools, so no i18n import: failures stay English here and
-// the weather layer translates them where it shows them (t / translateKnown).
-const msg = (text) => text;
-
-const WEATHER_PRODUCTS = Object.freeze([
-  'radar',
-  'clouds',
-  'clouds-regional',
-  'lightning',
-]);
+import { requestWithDeadline } from '../../sources/requestDeadline.js';
+// Failures stay English here; the weather layer translates them where it shows them.
+import { msg } from '../../i18n/marker.js';
 
 /** Only bounded, explicit observations may become imagery requests. */
 export function validateWeatherSnapshot(value, product) {
@@ -55,6 +47,7 @@ export const WEATHER_IMAGE_SIZES = Object.freeze({
   clouds: Object.freeze({ width: 2048, height: 1024 }),
   lightning: Object.freeze({ width: 4096, height: 2048 }),
 });
+const WEATHER_PRODUCTS = Object.freeze(Object.keys(WEATHER_IMAGE_SIZES));
 /** Largest detail-window image for every product; also the proxy default. */
 export const WEATHER_DETAIL_SIZE = Object.freeze({ width: 4096, height: 2048 });
 
@@ -192,27 +185,27 @@ export function createWeatherSource({
     async getSnapshot({ product = 'radar', signal } = {}) {
       if (!WEATHER_PRODUCTS.includes(product))
         throw new Error('Unknown weather product');
-      const controller = new AbortController();
-      const abort = () => controller.abort(signal.reason);
-      signal?.addEventListener('abort', abort, { once: true });
-      const timer = setTimeout(
-        () => controller.abort(new Error(msg('Weather request timed out'))),
-        timeoutMs,
-      );
       try {
-        signal?.throwIfAborted();
-        const response = await fetchImpl(
-          `/api/weather/manifest?product=${product}`,
-          { signal: controller.signal, cache: 'no-store', redirect: 'error' },
+        return await requestWithDeadline(
+          async (active) => {
+            const response = await fetchImpl(
+              `/api/weather/manifest?product=${product}`,
+              { signal: active, cache: 'no-store', redirect: 'error' },
+            );
+            if (!response.ok)
+              throw new Error(`Weather HTTP ${response.status}`);
+            return validateWeatherSnapshot(
+              await readResponseJsonCapped(response, 16_384, active),
+              product,
+            );
+          },
+          { signal, timeoutMs },
         );
-        if (!response.ok) throw new Error(`Weather HTTP ${response.status}`);
-        return validateWeatherSnapshot(
-          await readResponseJsonCapped(response, 16_384, controller.signal),
-          product,
-        );
-      } finally {
-        clearTimeout(timer);
-        signal?.removeEventListener('abort', abort);
+      } catch (error) {
+        // The deadline's own TimeoutError keeps the layer's English text.
+        if (error?.name === 'TimeoutError' && !signal?.aborted)
+          throw new Error(msg('Weather request timed out'));
+        throw error;
       }
     },
     /** Read one image frame through the bounded image route. */

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { sphereFromPoints } from '../../geo/sphere.js';
+import { hexColor } from '../../render/color.js';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 import { CYCLONE_SET_PREFIX, createCycloneRendering } from './rendering.js';
 import {
@@ -164,7 +165,7 @@ test('advisory geometry keeps polygon parts, holes and geographic seam coordinat
   assert.equal(cones[0].geometry.rings[0][1].lon, -178);
   for (const cone of cones) {
     assert.equal(cone.height, 'clampGround');
-    assert.equal(cone.fill, 'rgba(127,230,237,0.16)');
+    assert.deepEqual(cone.fill, hexColor('#7fe6ed', 0.16));
     assert.equal(cone.outline, undefined, 'outlines are lines of their own');
     assert.equal(cone.extrudedHeight, undefined);
   }
@@ -182,7 +183,7 @@ test('advisory geometry keeps polygon parts, holes and geographic seam coordinat
     assert.equal(outline.widthPx, 1);
     assert.deepEqual(outline.style, {
       kind: 'solid',
-      color: 'rgba(127,230,237,0.55)',
+      color: hexColor('#7fe6ed', 0.55),
     });
   }
   const track = lines.find((line) => line.id === 'cyclone:ep152026:track:0');
@@ -475,13 +476,13 @@ test('a JTWC danger area is drawn apart from any cone, with a dashed edge and it
   assert.equal(await h.rendering.setSnapshot({ storms: [jtwc] }), true);
   const [area] = [...h.sets.cones.items.values()];
   assert.equal(area.id, 'cyclone:sh042027:danger:0');
-  assert.equal(area.fill, 'rgba(255,177,92,0.12)');
+  assert.deepEqual(area.fill, hexColor('#ffb15c', 0.12));
   const outline = [...h.sets.lines.items.values()].find(
     (line) => line.id === 'cyclone:sh042027:danger:0:outline:0',
   );
   assert.deepEqual(outline.style, {
     kind: 'dash',
-    color: 'rgba(255,177,92,0.8)',
+    color: hexColor('#ffb15c', 0.8),
     length: 16,
   });
   const diagnostics = h.rendering.getDiagnostics();

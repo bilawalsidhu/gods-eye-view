@@ -38,6 +38,8 @@ import { rotorFrame, rotorTurns } from './rotorFrames.js';
 import { aircraftViewRef, registerAircraftViews } from './aircraftViews.js';
 import { aircraftRecedeSpec } from './aircraftRecession.js';
 import { TIMELINE_UNSEEN_MS } from '../time/timelineFixes.js';
+import { fleetColor } from './fleetModelDraw.js';
+import { placeAircraftAt } from '../layers/flights/placed.js';
 
 /** Raster size of the cockpit contact pip (cockpitContactDot.js draws 16 px). */
 const COCKPIT_DOT_PX = 16;
@@ -73,12 +75,6 @@ function cockpitDotImage() {
     `<svg xmlns="http://www.w3.org/2000/svg" width="${px}" height="${px}" viewBox="0 0 ${px} ${px}"><image width="${px}" height="${px}" href="${png}"/></svg>`,
   )}`;
   return cockpitDot;
-}
-
-/** A colour as the draw contract's `[r, g, b, a]`, from `{red, green, blue, alpha}`. */
-function rgba(color) {
-  if (!color || typeof color === 'string' || Array.isArray(color)) return color;
-  return [color.red, color.green, color.blue, color.alpha ?? 1];
 }
 
 /** Whether two plain values are the same, nested ones included. */
@@ -416,11 +412,6 @@ export function placedPlanSpread(id) {
   return 0.5 + ((hash >>> 0) % 1024) / 1024;
 }
 
-/** A display delay that never changes (ms). */
-function fixedDelay(ms) {
-  return { currentMs: ms, step: () => ms };
-}
-
 /**
  * An aircraft layer's contacts as one icon draw set: each item's motion
  * segment mirrors the layer's dead reckoning for the delayed display time,
@@ -438,13 +429,14 @@ function fixedDelay(ms) {
  *
  * @param {object} options
  * @param {object} options.state The layer's mutable state.
- * @param {object} options.services The layer's services (`focus`).
+ * @param {object} options.services The layer's services (`focus`, and
+ *   `placement` when a host-supplied placement draws live contacts where it
+ *   places them, `placeAircraftAt`).
  * @param {object} options.parts The layer's parts (`motion`, `rendering`).
  * @param {string} options.layerId Pick and focus owner id.
- * @param {{currentMs: number, step: (nowMs: number) => number}} [options.displayDelay]
+ * @param {{currentMs: number, step: (nowMs: number) => number}} options.displayDelay
  *   How far behind real time contacts draw (`data/displayDelay`), stepped
  *   once a frame; the renderer's motion clock follows it.
- * @param {number} [options.renderDelaySec] A fixed delay instead.
  * @param {() => boolean} [options.followsClock] True while the layer follows
  *   the world clock: contacts draw at the world's time (`state.now()`, the
  *   scene's time) with no delay.
@@ -458,12 +450,6 @@ function fixedDelay(ms) {
  * @param {(icao24: string) => void} [options.afterSettle] Runs after it.
  * @param {(icao24: string) => void} [options.onForget] Drops the layer's own
  *   per-contact state when a contact goes.
- * @param {((icao24: string, wallMs: number, info: object|undefined,
- *   history: object[], out: {x: number, y: number, z: number}) =>
- *   {courseDeg: number, speedMps: number}|null)|null} [options.placeAt]
- *   Where a host-supplied placement draws a live contact at a wall time,
- *   written into `out` (`placeAircraftAt`), or null when it does not place
- *   it; none without a placement.
  * @param {(url: string) => string} [options.resolveAsset] The layer's asset
  *   URL resolver, for the aircraft view sheet's image.
  */
@@ -472,8 +458,7 @@ export function createAircraftIcons({
   services,
   parts,
   layerId,
-  renderDelaySec = 0,
-  displayDelay = fixedDelay(renderDelaySec * 1000),
+  displayDelay,
   followsClock = () => false,
   staleAlpha = 0.45,
   courseMaxDps,
@@ -482,10 +467,16 @@ export function createAircraftIcons({
   beforeSettle = () => {},
   afterSettle = () => {},
   onForget = () => {},
-  placeAt = null,
   resolveAsset = (url) => url,
 }) {
   const { focusPassIsNeeded } = services.focus;
+  const placement = services.placement ?? null;
+  // Where the placement draws a live contact at a wall time, written into
+  // `out`, or null when it does not place it; none without a placement.
+  const placeAt = placement
+    ? (icao24, wallMs, info, history, out) =>
+        placeAircraftAt(placement, icao24, wallMs, info, history, out)
+    : null;
   // The near-image switch the rows were last written with (CSS px).
   let switchPx = nearImageSwitchPx(1);
   /** Whether the renderer draws icons along their course from the aircraft
@@ -1201,12 +1192,12 @@ export function createAircraftIcons({
           size: [cockpitContactSizePx, cockpitContactSizePx],
           scale: 1,
           scaleByDistance: COCKPIT_SCALE_BY_DISTANCE,
-          color: rgba(rendering._cockpitContactColor(icao24, info)),
+          color: fleetColor(rendering._cockpitContactColor(icao24, info)),
           rotationMode: 'screen',
         }
       : {
           ..._fleetLook(icao24, info, heliFrame),
-          color: rgba(rendering._fleetBillboardColor(icao24, info)),
+          color: fleetColor(rendering._fleetBillboardColor(icao24, info)),
           rotationMode: 'course',
         };
     if (!cockpitDot && station) {

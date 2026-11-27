@@ -10,7 +10,6 @@ import { createRendering } from './rendering.js';
 import { createLifecycle } from './lifecycle.js';
 import { createDependencies } from './dependencies.js';
 import { createControls } from './controls.js';
-import { createIngestion } from './ingestion.js';
 import { createState } from './state.js';
 
 /**
@@ -21,10 +20,10 @@ import { createState } from './state.js';
  * renderer bound, the caller loads the package's `./render/cesium/unbound`
  * export first.
  */
-export function createAwarenessLayer({ services, source }) {
+export function createAwarenessLayer({ services }) {
   const state = createState({ services });
   const parts = {};
-  const context = { state, services, parts, source };
+  const context = { state, services, parts };
   parts.model = createModel(context);
   parts.subject = createSubject(context);
   parts.panel = createPanel(context);
@@ -37,38 +36,17 @@ export function createAwarenessLayer({ services, source }) {
   parts.lifecycle = createLifecycle(context);
   parts.dependencies = createDependencies(context);
   parts.controls = createControls(context);
-  parts.ingestion = createIngestion(context);
-  return Object.assign(
+  const layer = Object.assign(
     {},
     parts.controls.methods,
     parts.lifecycle.methods,
-    parts.ingestion?.methods,
     {
-      contextTargetFlyToAllowed: parts.model.contextTargetFlyToAllowed,
-      awarenessClearMatchesSubject: parts.subject.awarenessClearMatchesSubject,
-      awarenessRefreshIntervalMs: parts.model.awarenessRefreshIntervalMs,
-      awarenessRefreshDecision: parts.model.awarenessRefreshDecision,
-      awarenessClearIsEviction: parts.model.awarenessClearIsEviction,
-      awarenessRefreshRequired: parts.model.awarenessRefreshRequired,
-      summarizeInstallationViewport:
-        parts.queries.summarizeInstallationViewport,
-      contactsWindowFromSnapshot: parts.model.contactsWindowFromSnapshot,
-      buildAwarenessContextSnapshot: parts.model.buildAwarenessContextSnapshot,
-      collectAircraftProximityWindow:
-        parts.queries.collectAircraftProximityWindow,
-      _getAwarenessNavigationStateForTest:
-        parts.testing._getAwarenessNavigationStateForTest,
-      _getAwarenessPanelRendersForTest:
-        parts.testing._getAwarenessPanelRendersForTest,
-      canNavigateAwarenessNext: parts.navigation.canNavigateAwarenessNext,
-      historySubjectSnapshot: parts.history.historySubjectSnapshot,
-      findCompatibleHistoryIndex: parts.history.findCompatibleHistoryIndex,
       subscribePanel: parts.panel.subscribePanel,
       subscribeDirectionOverlay: parts.rendering.subscribeDirectionOverlay,
-      awarenessResultsAreLive: parts.panel.awarenessResultsAreLive,
-      awarenessNeedsContinuousRender:
-        parts.model.awarenessNeedsContinuousRender,
+      contactsWindowFromSnapshot: parts.model.contactsWindowFromSnapshot,
     },
   );
+  Object.defineProperty(layer, 'testing', { value: parts.testing });
+  return layer;
 }
 export { AWARENESS_QUERY_LIMIT } from './policy.js';

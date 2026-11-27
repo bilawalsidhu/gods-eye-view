@@ -25,6 +25,7 @@ import {
 import { fromDegrees } from '../geo/ellipsoid.js';
 import { stopFollowing } from '../data/followed.js';
 import { worldClock } from '../time/worldClock.js';
+import { prefersReducedMotion } from '../reducedMotion.js';
 
 const PARAM_STORIES = 'stories';
 const PARAM_STORY = 'story';
@@ -491,9 +492,7 @@ export function createStoriesController({
   let pressing = false;
   let tourUntil = 0;
   let tourIndex = 0;
-  const reduceMotion = () =>
-    globalThis.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ??
-    false;
+  const reduceMotion = () => prefersReducedMotion(globalThis);
   const touring = () =>
     store.mode === 'explore' &&
     !store.picked &&

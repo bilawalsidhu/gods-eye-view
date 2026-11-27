@@ -1,6 +1,7 @@
 import { satelliteClassText } from '../../data/satelliteClass.js';
 import { toLonLatH } from '../../geo/ellipsoid.js';
 import { ISS_NORAD } from './policy.js';
+import { analystRecordLimit } from '../../data/analystRecordLimit.js';
 
 /**
  * Map one CelesTrak catalog satellite to a JSON-safe analyst record
@@ -79,9 +80,7 @@ export function createRecords({ state, parts }) {
 
   function getAnalystRecords(maxCount = 2000) {
     if (!state._enabled || !state._catalog.size) return [];
-    const limit = Number.isFinite(maxCount)
-      ? Math.max(1, Math.floor(maxCount))
-      : 2000;
+    const limit = analystRecordLimit(maxCount, { fallback: 2000, min: 1 });
     const now = new Date(state.now());
     const result = [];
     const emit = (noradId, sat) => {
@@ -89,7 +88,7 @@ export function createRecords({ state, parts }) {
       // A class the user hid stays out of answers too; the tracked one stays.
       if (
         noradId !== state._trackedNorad &&
-        parts.controls?._classVisible?.(noradId) === false
+        parts.controls._classVisible(noradId) === false
       )
         return true;
       const pos = analystGeo(noradId, sat, now);

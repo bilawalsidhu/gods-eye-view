@@ -22,9 +22,7 @@ import {
   photoFilterParams,
 } from './policy.js';
 import { msg } from '../../../../i18n/index.js';
-import { createLimiter } from '../../limiter.js';
-
-export { createLimiter } from '../../limiter.js';
+import { createLimiter } from '../../../../data/limiter.js';
 
 /**
  * An HTTP or API failure; `retryAfterSec` is set while KartaView rate-limits,

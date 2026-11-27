@@ -804,7 +804,6 @@ test('far zoom drapes one heatmap and the hand-off cross-fades it with the marke
     assert.equal(added.length, 1, 'one heat imagery layer');
     assert.equal(added[0].show, true);
     assert.equal(added[0].alpha, 1);
-    assert.equal(h.layer._entityCountForTest(), 0, 'no rectangle entities');
     assert.ok(h.published.length > 0, 'the far band still paints cards');
     assert.equal(
       markers().items.size,
@@ -971,7 +970,7 @@ test('the stand-in is asked where a marker is picked: the click as the sensor st
   const asked = [];
   const h = harness({ fires: [fire] });
   try {
-    registerStyleStages(h.viewer.scene, {
+    registerStyleStages(h.viewer, {
       surveillance: {
         enabled: true,
         uniforms: { intensity: 1, pixelation: 4 },
@@ -985,7 +984,7 @@ test('the stand-in is asked where a marker is picked: the click as the sensor st
     });
     h.click();
     const expected = sensorPickPosition(
-      h.viewer.scene,
+      h.viewer,
       { x: 400, y: 300 },
       h.viewer.scene.canvas,
     );

@@ -3,29 +3,8 @@ import * as Cesium from 'cesium';
 import test from 'node:test';
 import { createCesiumDraw } from './draw.js';
 import { AIRCRAFT_VIEWS } from '../../data/aircraftViews.js';
+import { fakeDrawScene } from '../../testSupport/fakeDrawScene.mjs';
 
-function fakeScene() {
-  const added = [];
-  return {
-    added,
-    renders: 0,
-    camera: { positionWC: new Cesium.Cartesian3(2e7, 0, 0) },
-    frameState: { time: Cesium.JulianDate.now() },
-    primitives: {
-      add: (p) => (added.push(p), p),
-      remove: (p) => {
-        const at = added.indexOf(p);
-        if (at >= 0) added.splice(at, 1);
-        return at >= 0;
-      },
-      length: 0,
-    },
-    requestRender() {
-      this.renders += 1;
-    },
-    isDestroyed: () => false,
-  };
-}
 const AT = Cesium.Cartesian3.fromDegrees(4.1, 51.95, 2);
 const viewIcon = (id) => ({
   id,
@@ -41,7 +20,7 @@ const viewIcon = (id) => ({
 });
 
 function hostOn(id) {
-  const scene = fakeScene();
+  const scene = fakeDrawScene();
   const part = createCesiumDraw({ scene, report: (e) => assert.fail(e) });
   part.port.views(AIRCRAFT_VIEWS.id, {
     ...AIRCRAFT_VIEWS.sheet,

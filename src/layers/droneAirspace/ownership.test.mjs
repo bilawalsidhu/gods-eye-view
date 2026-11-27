@@ -95,10 +95,12 @@ const row = {
 
 test('each zone polygon draws as one clamped fill with its draped boundary', async () => {
   const h = harness({
-    getSnapshot: async () => [
-      row,
-      { ...row, stableId: '400', typeCode: 'R', polygons: [[ring], [ring]] },
-    ],
+    getSnapshot: async () => ({
+      rows: [
+        row,
+        { ...row, stableId: '400', typeCode: 'R', polygons: [[ring], [ring]] },
+      ],
+    }),
   });
   assert.equal(await h.layer.update(h.viewer), true);
   const ids = [
@@ -124,7 +126,7 @@ test('each zone polygon draws as one clamped fill with its draped boundary', asy
 test('clicking a zone publishes its card; empty space clears it', async () => {
   let pickResult = null;
   const h = harness(
-    { getSnapshot: async () => [row] },
+    { getSnapshot: async () => ({ rows: [row] }) },
     { pick: () => pickResult },
   );
   await h.layer.update(h.viewer);
@@ -156,7 +158,7 @@ test('a click on a mission label over the open zone card keeps it open and takes
   let pickResult = null;
   let cardHitResult = null;
   const h = harness(
-    { getSnapshot: async () => [row] },
+    { getSnapshot: async () => ({ rows: [row] }) },
     { pick: () => pickResult, cardHit: () => cardHitResult },
   );
   await h.layer.update(h.viewer);
@@ -192,7 +194,7 @@ test("another layer's overlay on top keeps a click off the area", async () => {
   let pickResult = null;
   let foreignOnTop = false;
   const h = harness(
-    { getSnapshot: async () => [row] },
+    { getSnapshot: async () => ({ rows: [row] }) },
     {
       pick: () => pickResult,
       // Unfiltered: the topmost entry of any source.
@@ -247,7 +249,7 @@ test('late refresh cannot publish after disable or destroy', async () => {
     h.layer[action](h.viewer);
     assert.equal(signal.aborted, true);
     if (action === 'disable') h.layer.enable(h.viewer);
-    resolve([row]);
+    resolve({ rows: [row] });
     assert.equal(await pending, false);
     assert.equal(h.layer.getStats().count, 0);
     h.layer.destroy(h.viewer);
@@ -256,10 +258,12 @@ test('late refresh cannot publish after disable or destroy', async () => {
 
 test('the row legend names prohibited and restricted with the disclaimer', async () => {
   const h = harness({
-    getSnapshot: async () => [
-      row,
-      { ...row, stableId: '400', typeCode: 'R', type: 'Restricted' },
-    ],
+    getSnapshot: async () => ({
+      rows: [
+        row,
+        { ...row, stableId: '400', typeCode: 'R', type: 'Restricted' },
+      ],
+    }),
   });
   await h.layer.update(h.viewer);
   const legend = h.layer.getRowControls().legend;
@@ -274,8 +278,7 @@ test('a stale snapshot reads STALE, dated by its own fetch, and a fresh one clea
   const fetchedAt = Date.now() - 3 * 60 * 60 * 1000;
   let snapshot = { rows: [row], stale: true, fetchedAt };
   const h = harness({
-    getSnapshot: async () => snapshot.rows,
-    getSnapshotDetail: async () => snapshot,
+    getSnapshot: async () => snapshot,
   });
   await h.layer.update(h.viewer);
   assert.equal(h.layer.getStats().stale, true);
@@ -291,8 +294,7 @@ test('a stale snapshot reads STALE, dated by its own fetch, and a fresh one clea
 test('a failed refresh after a stale snapshot reads as the failure, not stale', async () => {
   let fail = false;
   const h = harness({
-    getSnapshot: async () => [row],
-    getSnapshotDetail: async () => {
+    getSnapshot: async () => {
       if (fail) throw new Error('FAA SUA HTTP 502');
       return { rows: [row], stale: true, fetchedAt: Date.now() - 60_000 };
     },
@@ -309,7 +311,7 @@ test('a failed refresh after a stale snapshot reads as the failure, not stale', 
 test('a boundary change alone redraws the zone; identical geometry does not', async () => {
   const moved = ring.map(([lon, lat]) => [lon + 0.5, lat]);
   let rows = [row];
-  const h = harness({ getSnapshot: async () => rows });
+  const h = harness({ getSnapshot: async () => ({ rows }) });
   await h.layer.update(h.viewer);
   const [first] = h.lines().items.values();
   rows = [{ ...row, polygons: [[ring.map((point) => [...point])]] }];

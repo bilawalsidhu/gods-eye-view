@@ -5,7 +5,7 @@ import {
 } from './surface.js';
 import { cableAnalystRecords } from './records.js';
 
-export function createLifecycle({ state, parts, source, mapStackEventTarget }) {
+export function createLifecycle({ state, parts, source, subscribeMapStack }) {
   return {
     id: 'telegeography-submarine-cables',
     name: 'Submarine Cables',
@@ -18,18 +18,14 @@ export function createLifecycle({ state, parts, source, mapStackEventTarget }) {
       state._viewer = viewer;
       state._clampTo = cableClassificationTypeForScene(viewer);
       parts.rendering.attach(viewer);
-      if (!state._mapStackListener && mapStackEventTarget?.addEventListener) {
-        state._mapStackListener = (event) => {
+      if (!state._mapStackRemover && subscribeMapStack) {
+        state._mapStackRemover = subscribeMapStack((event) => {
           parts.rendering.applyCableClassification(
             event?.detail?.activeId
               ? cableClassificationTypeForStack(event.detail.activeId)
               : cableClassificationTypeForScene(state._viewer),
           );
-        };
-        mapStackEventTarget.addEventListener(
-          'gev:map-stack-changed',
-          state._mapStackListener,
-        );
+        });
       }
       parts.interaction.beginInteraction(viewer);
       // The eye the sweep gate's motion probe reads, only when it probes.
@@ -120,13 +116,8 @@ export function createLifecycle({ state, parts, source, mapStackEventTarget }) {
         state._moveEndRemover();
         state._moveEndRemover = null;
       }
-      if (state._mapStackListener && mapStackEventTarget?.removeEventListener) {
-        mapStackEventTarget.removeEventListener(
-          'gev:map-stack-changed',
-          state._mapStackListener,
-        );
-        state._mapStackListener = null;
-      }
+      state._mapStackRemover?.();
+      state._mapStackRemover = null;
       state._viewer = null;
       state._enabled = false;
       state._loading = false;

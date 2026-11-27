@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { until } from '../../testSupport/kartaViewFakes.mjs';
 import { createRecentImagerySource } from './source.js';
 import { createThumbnailLoader } from './thumbnails.js';
-import { boxKey, nonCrossingBoxes } from './model.js';
+import { boxKey, gibsTemplate, nonCrossingBoxes } from './model.js';
 import { NO_IMAGERY_HOST } from '../../maps/imageryHost.js';
 import { acquireImageryComparison } from '../../maps/imageryComparison.js';
 import { MapSourceController } from '../../maps/controller.js';
@@ -72,6 +72,9 @@ function leasingController({ stuck = false, subscribable = false } = {}) {
     },
     getSwitchGeneration() {
       return this._generation;
+    },
+    getSwitchOrigin() {
+      return 'manual';
     },
     async setStack(id) {
       this.calls.push(['setStack', id]);
@@ -1648,7 +1651,10 @@ function realLayer({
     catalog: {
       searchHls: async () => ({ candidates, truncated: false, errors: [] }),
     },
-    renderer: createRecentImageryRenderer(),
+    renderer: createRecentImageryRenderer({
+      tileTemplate: gibsTemplate,
+      credit: 'NASA GIBS',
+    }),
     thumbnails: loader,
     host: () => ({ collection: globe.imagery, kind: 'globe' }),
     globeOf: () => globe,

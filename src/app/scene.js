@@ -26,6 +26,7 @@ import { keepPanelRendering } from './panelRendering.js';
 import { useStatusStore } from '../ui/stores/status.js';
 import { applicationPinia } from '../ui/vueRuntime.js';
 import { createSceneHost } from '../render/rendererOf.js';
+import { MAP_STACK_CHANGED_EVENT } from './mapStackEvents.js';
 
 let defaultLoad = null;
 
@@ -236,7 +237,7 @@ export async function createApplicationScene({
     // live scene state, so intermediate emissions are harmless.
     onChange: (state) => {
       window.dispatchEvent(
-        new CustomEvent('gev:map-stack-changed', { detail: state }),
+        new CustomEvent(MAP_STACK_CHANGED_EVENT, { detail: state }),
       );
     },
     onError: (message) => console.warn('[MapStack]', message),

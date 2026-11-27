@@ -79,11 +79,7 @@ export function createFireAnchors({
   async function resolveBatch(points) {
     const cold = points.filter((p) => cachedGroundFloor(p.lat, p.lon) == null);
     if (!cold.length) return false;
-    try {
-      await resolveGroundFloorCells(cold);
-    } catch {
-      /* resolver is best-effort and never throws; belt and braces */
-    }
+    await resolveGroundFloorCells(cold);
     return cold.some((p) => cachedGroundFloor(p.lat, p.lon) != null);
   }
 

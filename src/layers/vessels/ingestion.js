@@ -1,5 +1,6 @@
 import { AIS_FIRST_CONNECT_LABEL } from './recordPolicy.js';
 import { viewAreaMovedEnough } from './viewArea.js';
+import { KNOT_MPS } from '../../data/units.js';
 
 /** Longest a vessel request may take before it is given up. */
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -304,21 +305,16 @@ export function createIngestion({
       lon: record.longitude,
       fixes: record.fixes,
       name: record.name,
-      imo: record.imo,
       type: record.type,
       destination: record.destination,
       length: record.lengthM ?? null,
       beam: record.beamM ?? null,
-      speed: record.speedMps == null ? null : record.speedMps / 0.514444,
+      speed: record.speedMps == null ? null : record.speedMps / KNOT_MPS,
       course: record.courseDeg,
       heading: record.headingDeg,
       virtual: record.virtual === true,
       last_position_epoch:
         record.observedAtMs == null ? null : record.observedAtMs / 1000,
-      last_position_UTC:
-        record.observedAtMs == null
-          ? ''
-          : new Date(record.observedAtMs).toISOString(),
     };
   }
   /** Ask again when the view moved away from the last area asked for. */

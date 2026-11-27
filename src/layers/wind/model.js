@@ -3,21 +3,14 @@ export function normalizeLongitude(lon) {
   return ((((lon + 180) % 360) + 360) % 360) - 180;
 }
 
-function interpolate(array, a, b, c, d, tx, ty) {
-  return (
-    (array[a] * (1 - tx) + array[b] * tx) * (1 - ty) +
-    (array[c] * (1 - tx) + array[d] * tx) * ty
-  );
-}
+const cell = { a: 0, b: 0, c: 0, d: 0, tx: 0, ty: 0 };
 
-/** Sample a north-to-south, seam-wrapped wind grid bilinearly. */
-export function sampleWind(field, lon, lat, result = {}) {
-  if (!Number.isFinite(lon) || !Number.isFinite(lat)) {
-    result.u = 0;
-    result.v = 0;
-    return result;
-  }
-  const { u, v, nx, ny, lo1, la1, dx, dy } = field;
+/**
+ * The four indexes of a north-to-south, seam-wrapped grid around (lon, lat)
+ * and the weights between them, in one shared object: read it before the
+ * next call.
+ */
+export function gridCell({ nx, ny, lo1, la1, dx, dy }, lon, lat) {
   const x = ((normalizeLongitude(lon - lo1) + 360) % 360) / dx;
   const y = (la1 - lat) / dy;
   const x0 = Math.floor(x);
@@ -28,12 +21,33 @@ export function sampleWind(field, lon, lat, result = {}) {
   const ty = yClamped - y0;
   const left = ((x0 % nx) + nx) % nx;
   const right = (left + 1) % nx;
-  const a = y0 * nx + left;
-  const b = y0 * nx + right;
-  const c = y1 * nx + left;
-  const d = y1 * nx + right;
-  result.u = interpolate(u, a, b, c, d, tx, ty);
-  result.v = interpolate(v, a, b, c, d, tx, ty);
+  cell.a = y0 * nx + left;
+  cell.b = y0 * nx + right;
+  cell.c = y1 * nx + left;
+  cell.d = y1 * nx + right;
+  cell.tx = tx;
+  cell.ty = ty;
+  return cell;
+}
+
+/** Bilinear value of `values` at a gridCell(). */
+export function interpolateCell(values, { a, b, c, d, tx, ty }) {
+  return (
+    (values[a] * (1 - tx) + values[b] * tx) * (1 - ty) +
+    (values[c] * (1 - tx) + values[d] * tx) * ty
+  );
+}
+
+/** Sample a north-to-south, seam-wrapped wind grid bilinearly. */
+export function sampleWind(field, lon, lat, result = {}) {
+  if (!Number.isFinite(lon) || !Number.isFinite(lat)) {
+    result.u = 0;
+    result.v = 0;
+    return result;
+  }
+  const at = gridCell(field, lon, lat);
+  result.u = interpolateCell(field.u, at);
+  result.v = interpolateCell(field.v, at);
   return result;
 }
 

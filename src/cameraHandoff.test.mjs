@@ -382,7 +382,7 @@ test('refused canned destinations commit no location or POI state', () => {
 });
 
 test('world-focus listener lifecycle is symmetric and idempotent', () => {
-  assert.match(ui, /registerWorldFocusRequestListener\(\s*window,/);
+  assert.match(ui, /registerFocusRequestListener\(\s*window,\s*WORLD_FOCUS_REQUEST_EVENT,/);
   assert.match(ui, /routeWorldFocusRequest\(/);
   assert.match(ui, /flyToWorldTarget\(this\.viewer, detail\)/);
   assert.match(ui, /this\._removeWorldRequestFocusListener\?\.\(\);/);

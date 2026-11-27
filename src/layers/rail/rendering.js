@@ -11,13 +11,13 @@ import {
 } from '../../geo/ellipsoid.js';
 import { horizonFrom } from '../../geo/horizon.js';
 import { distanceSquared } from '../../geo/vector.js';
+import { approxDistanceKm } from '../../data/approxDistance.js';
 import {
   PLACED_WAKE_MS,
   applyDisplayCourse,
   playbackMoving,
   updatePlayback,
-} from '../transit/movement.js';
-import { HEIGHT_SAMPLE_MAX_ALTITUDE_M } from '../transit/policy.js';
+} from '../../data/transitMovement.js';
 import {
   COLD_CELL_FLUSH_MS,
   COLD_CELL_RETRY_MS,
@@ -37,6 +37,7 @@ import {
   FLOOR_CELLS_BURST,
   FLOOR_CELLS_PER_MINUTE,
   FLOOR_WARM_MAX_DIST_KM,
+  HEIGHT_SAMPLE_MAX_ALTITUDE_M,
   MARKER_PIXEL_SIZE,
   RAIL_CATEGORY_COLORS,
   UNSELECTED_TRAIN_ALPHA,
@@ -312,8 +313,7 @@ export function createRendering({ state, services, parts }) {
     const pose = cameraPose();
     if (!pose || !Number.isFinite(pose.lat) || !Number.isFinite(pose.lon))
       return Infinity;
-    const kLon = Math.cos((pose.lat * Math.PI) / 180);
-    return Math.hypot(lat - pose.lat, (lon - pose.lon) * kLon) * 111.32;
+    return approxDistanceKm(pose.lat, pose.lon, lat, lon);
   }
 
   /**
@@ -422,7 +422,6 @@ export function createRendering({ state, services, parts }) {
     }
     const camLat = pose.lat;
     const camLon = pose.lon;
-    const kLon = Math.cos((camLat * Math.PI) / 180);
     // The layer's own sets are not ground: heights see through them.
     const exclude = state._icons ? [state._icons.id] : undefined;
     const now = performance.now();
@@ -434,8 +433,7 @@ export function createRendering({ state, services, parts }) {
     let sampled = 0;
     for (const [key, point] of items) {
       if (sampled >= TRACK_SAMPLES_PER_FLUSH) break;
-      const dKm =
-        Math.hypot(point.lat - camLat, (point.lon - camLon) * kLon) * 111.32;
+      const dKm = approxDistanceKm(camLat, camLon, point.lat, point.lon);
       if (dKm > TRACK_SAMPLE_MAX_DIST_KM) continue;
       const prior = cachedGroundFloor(point.lat, point.lon);
       if (!Number.isFinite(prior)) continue;
@@ -653,9 +651,7 @@ export function createRendering({ state, services, parts }) {
     const prev = entry.drawnHeight;
     let h = targetH;
     if (prev && Number.isFinite(prev.h)) {
-      const kLon = Math.cos((lat * Math.PI) / 180);
-      const moved =
-        Math.hypot(lat - prev.lat, (lon - prev.lon) * kLon) * 111_320;
+      const moved = approxDistanceKm(prev.lat, prev.lon, lat, lon) * 1000;
       const better =
         (prev.q === 0 && targetQ > 0) || (prev.q <= 1 && targetQ >= 2);
       if (moved <= TRACK_SNAP_M && !better) {

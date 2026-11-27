@@ -4,7 +4,7 @@
 // current without a lookup per frame.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import fs, { readFileSync } from 'node:fs';
 import {
   NEAR_PLACE_MIN_ZOOM,
   PLACE_LOOKUP_MIN_MOVE_KM,
@@ -12,7 +12,6 @@ import {
   createPlaceTracker,
   nearPlaceRadiusKm,
   placeBelow,
-  placePackLoads,
 } from './placeBelow.js';
 
 const PLACES_PACK = new URL(
@@ -20,16 +19,26 @@ const PLACES_PACK = new URL(
   import.meta.url,
 );
 
-// Runs first: the counters are module-wide.
-test('the division and place packs load only when a lookup needs them', async () => {
-  assert.deepEqual(placePackLoads, { divisions: 0, places: 0 });
+// Runs first: the loaders are memoized module-wide.
+test('the division and place packs load only when a lookup needs them', async (t) => {
+  // Under Node every bundled pack is one readFileSync (src/data/bundledJson.js).
+  const reads = t.mock.method(fs, 'readFileSync');
+  const loads = (pack) =>
+    reads.mock.calls.filter((call) =>
+      String(call.arguments[0]).endsWith(`/natural_earth/${pack}.json`),
+    ).length;
+  const packLoads = () => ({
+    divisions: loads('states_provinces'),
+    places: loads('populated_places'),
+  });
+  assert.deepEqual(packLoads(), { divisions: 0, places: 0 });
   await placeBelow(42, 51, { nearKm: 50 });
-  assert.deepEqual(placePackLoads, { divisions: 0, places: 0 }, 'at sea');
+  assert.deepEqual(packLoads(), { divisions: 0, places: 0 }, 'at sea');
   await placeBelow(30.9, 104.2);
-  assert.deepEqual(placePackLoads, { divisions: 1, places: 0 }, 'at 1x');
+  assert.deepEqual(packLoads(), { divisions: 1, places: 0 }, 'at 1x');
   await placeBelow(30.9, 104.2, { nearKm: 60 });
   await placeBelow(31.2, 104.5, { nearKm: 30 });
-  assert.deepEqual(placePackLoads, { divisions: 1, places: 1 }, 'kept');
+  assert.deepEqual(packLoads(), { divisions: 1, places: 1 }, 'kept');
 });
 
 test('the populated-place pack is compact rows of name, position and rank', () => {

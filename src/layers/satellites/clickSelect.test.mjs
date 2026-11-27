@@ -110,6 +110,7 @@ function satellitesLayer(t, { height = 20_000, pose = null } = {}) {
     }),
     labels: part({ _dockedCompanionNames: () => [] }),
     controls: part({ _pointStyleFor: () => ({ color: '#fff' }) }),
+    cockpit: part(),
   };
   parts.tracking = createTracking({ state, services, parts });
   const interaction = createInteraction({ state, services, parts });

@@ -8,67 +8,104 @@ import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
 import { fakeSceneFrame } from '../testSupport/fakeCesiumScene.mjs';
 import { gstime } from 'satellite.js';
 import { worldClock } from '../time/worldClock.js';
-import { createModel } from '../layers/launches/model.js';
-import rocketLaunchesLayer, {
-  _setRocketMissionOverlayHostForTest,
-  _setSelectedRocketMissionForTest,
-  approximateOrbitPath,
-  buildMissionPaths,
+import {
   cameraHeadingForPath,
-  compactLaunchSiteName,
-  createMissionRosterPreviewOwnership,
-  createRocketMissionElementOverlayEntry,
-  createRocketMissionMarkerOverlayEntry,
-  formatMissionEventTime,
-  LAUNCH_PAD_ZONE_RADIUS_M,
-  launchPadZoneVisible,
-  launchStatusAllowsOrbit,
-  missionAnchorHorizonVisible,
-  missionAnchorVisible,
-  missionHoverPreviewRange,
-  missionDataCompleteness,
-  missionMarkerColor,
-  missionPathPresentation,
-  missionRosterEntries,
   missionZoomPitch,
-  orbitProgressAtTime,
-  normalizeReplaySpeed,
-  normalizeRocketLaunches,
-  parseMissionDurationSeconds,
-  replayState,
   replayCameraView,
   replayChaseCameraHeading,
+  replayInitialCameraHeading,
+  replayOrbitCameraPose,
+  replayOrbitCameraTarget,
   replayOrbitFrameSphere,
   replayOrbitGlobeAnchor,
-  replayOrbitCameraTarget,
-  replayOrbitCameraPose,
   replayOrbitGlobeRange,
+  smoothReplayCameraHeading,
+} from '../layers/launches/camera.js';
+import {
+  createRocketLaunchesLayer,
+  createLaunchSource,
+} from '../layers/launches/index.js';
+import {
+  shouldRetryAfterActiveTle,
+} from '../layers/launches/ingestion.js';
+import {
+  createModel,
+  missionMarkerColor,
+  normalizeRocketLaunches,
+} from '../layers/launches/model.js';
+import {
+  compactLaunchSiteName,
+  createRocketMissionElementOverlayEntry,
+  createRocketMissionMarkerOverlayEntry,
+  missionAnchorHorizonVisible,
+  missionAnchorVisible,
   replayOverlayMode,
-  replayInitialCameraHeading,
-  smoothReplayWindowPosition,
+  selectRocketMissionMarkerOverlayCohort,
+} from '../layers/launches/overlays.js';
+import {
+  createMissionRosterPreviewOwnership,
+  missionHoverPreviewRange,
+  resolveMissionRosterPreviewLaunch,
+} from '../layers/launches/panel.js';
+import {
+  approximateOrbitPath,
+  buildMissionPaths,
+  orbitProgressAtTime,
+  samplePath,
+} from '../layers/launches/paths.js';
+import {
+  formatMissionEventTime,
+  launchPadZoneVisible,
+  launchStatusAllowsOrbit,
+  missionDataCompleteness,
+  missionPathPresentation,
+  missionRosterEntries,
+  parseMissionDurationSeconds,
+  releaseAircraftTracking,
+  satelliteParamsAfterSpaceMissions,
+  satelliteParamsForSpaceMissions,
+} from '../layers/launches/policyHelpers.js';
+import {
+  normalizeReplaySpeed,
   replayAscentDurationSeconds,
   replayStartAfterPause,
+  replayState,
   replayVehicleScreenRotation,
-  resolveMissionRosterPreviewLaunch,
-  releaseAircraftTracking,
+  smoothReplayWindowPosition,
+} from '../layers/launches/replay.js';
+import * as geometry from '../celestialRing.js';
+import * as worldOverlay from '../overlays/worldOverlay.js';
+import * as render from '../renderGovernor.js';
+import * as picking from './pickRegistry.js';
+import * as satellites from './satellites.js';
+import rocketLaunchesLayer, {
+  LAUNCH_PAD_ZONE_RADIUS_M,
   ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT,
   ROCKET_MISSION_AMBIENT_OVERLAY_COLLISION_CAPACITY,
   ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID,
   ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_ID,
   ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_OPTIONS,
-  samplePath,
-  satelliteParamsAfterSpaceMissions,
-  satelliteParamsForSpaceMissions,
-  shouldRetryAfterActiveTle,
-  selectRocketMissionMarkerOverlayCohort,
-  smoothReplayCameraHeading,
 } from './rocketLaunches.js';
-import {
-  findSatelliteOrbitTrackInTle,
-  orbitFrameModelMatrix,
-  satelliteCatalogModeChanged,
-  scoreSatelliteNameMatch,
-} from './satellites.js';
+import { findSatelliteOrbitTrackInTle } from './satellites.js';
+import { createControls } from '../layers/satellites/controls.js';
+import { createOrbits } from '../layers/satellites/orbits.js';
+import { createRendering } from '../layers/satellites/rendering.js';
+
+const { satelliteCatalogModeChanged } = createControls({
+  state: {},
+  services: { layerState: {} },
+  parts: {},
+});
+const { scoreSatelliteNameMatch } = createOrbits({
+  state: {},
+  services: {},
+  parts: {},
+});
+const { orbitFrameModelMatrix } = createRendering({
+  state: {},
+  services: { focus: {} },
+  parts: {},
+});
 
 const NOW = new Date('2026-07-27T00:00:00Z');
 
@@ -1238,14 +1275,28 @@ test('real mission build, select, refresh, deselect, disable, and destroy paths 
     assert.equal(url, '/api/launches');
     return { ok: true, json: async () => launchPayload() };
   };
-  _setRocketMissionOverlayHostForTest(host);
+  const layer = createRocketLaunchesLayer({
+    source: createLaunchSource(),
+    services: {
+      satellites,
+      geometry,
+      overlays: {
+        ...worldOverlay,
+        setOverlayEntries: host.setEntries,
+        setOverlaySourceVisible: host.setVisible,
+        clearOverlaySource: host.clearSource,
+      },
+      render,
+      picking,
+    },
+  });
   let initialized = false;
   try {
-    rocketLaunchesLayer.init(viewer);
+    layer.init(viewer);
     initialized = true;
-    await rocketLaunchesLayer.enable();
+    await layer.enable();
     assert.equal(worldClock.coverage(), null, 'nothing loaded, no time to show');
-    await rocketLaunchesLayer.update();
+    await layer.update();
     const at = Date.parse(launchTime);
     // The launch is a mark labelled with its mission's name.
     assert.deepEqual(worldClock.coverage(), {
@@ -1296,7 +1347,7 @@ test('real mission build, select, refresh, deselect, disable, and destroy paths 
       'mission dot must return when its surface anchor faces the camera again',
     );
 
-    _setSelectedRocketMissionForTest('mission-runtime');
+    layer.testing._setSelectedRocketMissionForTest('mission-runtime');
     const selectedPublication = hostCalls.findLast(([type, sourceId]) => (
       type === 'entries' && sourceId === ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_ID
     ));
@@ -1366,7 +1417,7 @@ test('real mission build, select, refresh, deselect, disable, and destroy paths 
     );
 
     launchName = 'Mission Refresh | Gauntlet Payload';
-    await rocketLaunchesLayer.update();
+    await layer.update();
     assert.ok(missionItems().size >= 7);
     const refreshPublication = hostCalls.findLast(([type, sourceId]) => (
       type === 'entries' && sourceId === ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_ID
@@ -1374,14 +1425,14 @@ test('real mission build, select, refresh, deselect, disable, and destroy paths 
     assert.equal(refreshPublication[2][0].title, 'MISSION REFRESH');
     assert.deepEqual(refreshPublication[2][0].details, ['LAUNCH SITE · 39A']);
 
-    _setSelectedRocketMissionForTest(null);
+    layer.testing._setSelectedRocketMissionForTest(null);
     const deselectedPublication = hostCalls.findLast(([type, sourceId]) => (
       type === 'entries' && sourceId === ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID
     ));
     assert.equal(deselectedPublication[2][0].title, 'MISSION REFRESH');
     assert.equal(deselectedPublication[2][0].protected, false);
 
-    await rocketLaunchesLayer.disable();
+    await layer.disable();
     assert.equal(worldClock.coverage(), null, 'off, launches show no time');
     assert.deepEqual(hostCalls.slice(-4), [
       ['clear', ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID],
@@ -1389,7 +1440,7 @@ test('real mission build, select, refresh, deselect, disable, and destroy paths 
       ['clear', ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_ID],
       ['visible', ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_ID, false],
     ]);
-    await rocketLaunchesLayer.destroy(viewer);
+    await layer.destroy(viewer);
     initialized = false;
     assert.ok([...draw.sets.values()].every((record) => record.disposed));
     assert.deepEqual(hostCalls.slice(-4), [
@@ -1399,8 +1450,7 @@ test('real mission build, select, refresh, deselect, disable, and destroy paths 
       ['visible', ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_ID, false],
     ]);
   } finally {
-    if (initialized) await rocketLaunchesLayer.destroy(viewer);
-    _setRocketMissionOverlayHostForTest();
+    if (initialized) await layer.destroy(viewer);
     globalThis.fetch = realFetch;
     globalThis.document = realDocument;
     globalThis.HTMLCanvasElement = realHtmlCanvasElement;

@@ -1,3 +1,5 @@
+import { boundedBox } from './coordinateGeocoder.js';
+
 /** Half-width of the box a bundled landmark is framed with, in degrees. */
 const LANDMARK_HALF_SPAN_DEG = 0.005;
 
@@ -9,21 +11,6 @@ function normalizeName(value) {
     .replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-}
-
-/** Keep a generated box inside the poles and inside the dateline. */
-function boundedBox(lat, lon, halfSpan) {
-  const wrap = (value) => {
-    const wrapped = ((((value + 180) % 360) + 360) % 360) - 180;
-    return wrapped === -180 ? 180 : wrapped;
-  };
-  return {
-    southwest: {
-      lat: Math.max(-90, lat - halfSpan),
-      lng: wrap(lon - halfSpan),
-    },
-    northeast: { lat: Math.min(90, lat + halfSpan), lng: wrap(lon + halfSpan) },
-  };
 }
 
 /**
@@ -105,9 +92,7 @@ export function createPresetGeocoder({ presets = {} } = {}) {
     async geocode(query, { signal } = {}) {
       signal?.throwIfAborted();
       const place = byName.get(normalizeName(query));
-      return place
-        ? { place, answered: true }
-        : { place: null, answered: true };
+      return { place: place || null, answered: true };
     },
   };
 }

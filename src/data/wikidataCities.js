@@ -7,6 +7,7 @@
  * Rows are `[name, lat, lon, population, country, wikidata]`, largest first.
  */
 
+import { EARTH_RADIUS_KM, greatCircleKm } from '../geoDistance.js';
 import { createRetryableLoader } from './retryableLoad.js';
 
 const CELL_DEG = 1;
@@ -36,17 +37,8 @@ export const foldName = (name) =>
     .toLocaleLowerCase('en')
     .replace(/[łøđðıßæœþ]/g, (letter) => PLAIN_LETTERS[letter])
     .trim();
-const EARTH_KM = 6371;
+const EARTH_KM = EARTH_RADIUS_KM;
 const rad = (deg) => (deg * Math.PI) / 180;
-
-function distanceKm(lat1, lon1, lat2, lon2) {
-  const a =
-    Math.sin(rad(lat2 - lat1) / 2) ** 2 +
-    Math.cos(rad(lat1)) *
-      Math.cos(rad(lat2)) *
-      Math.sin(rad(lon2 - lon1) / 2) ** 2;
-  return 2 * EARTH_KM * Math.asin(Math.min(1, Math.sqrt(a)));
-}
 
 const cellKey = (lat, lon) =>
   `${Math.floor(lat / CELL_DEG)},${Math.floor(((((lon % 360) + 540) % 360) - 180) / CELL_DEG)}`;
@@ -117,7 +109,10 @@ export function citiesWithin(cells, latitude, longitude, radiusKm) {
       if (seen.has(key)) continue;
       seen.add(key);
       for (const row of cells.get(key) || []) {
-        const km = distanceKm(latitude, longitude, row[1], row[2]);
+        const km = greatCircleKm(
+          { lat: latitude, lon: longitude },
+          { lat: row[1], lon: row[2] },
+        );
         if (km <= radiusKm) found.push(toCity(row, km));
       }
     }
@@ -200,14 +195,14 @@ export async function citiesAround({
 export function countryName(
   code,
   language = globalThis.document?.documentElement?.lang || 'en',
+  fallback = code,
 ) {
   if (!code) return null;
   try {
-    return (
-      new Intl.DisplayNames([language], { type: 'region' }).of(code) || code
-    );
+    const name = new Intl.DisplayNames([language], { type: 'region' }).of(code);
+    return name && name !== code ? name : fallback;
   } catch {
-    return code;
+    return fallback;
   }
 }
 
@@ -329,11 +324,9 @@ export async function placesNear(
     (byName.get(foldName(place.name)) || []).some(
       (city) =>
         (city.country || '') === (place.country || '') &&
-        distanceKm(
-          city.latitude,
-          city.longitude,
-          place.latitude,
-          place.longitude,
+        greatCircleKm(
+          { lat: city.latitude, lon: city.longitude },
+          { lat: place.latitude, lon: place.longitude },
         ) <= TWIN_KM,
     );
   const found = [
@@ -385,7 +378,10 @@ export async function findPlace(
   if (Number.isFinite(near?.latitude) && Number.isFinite(near?.longitude)) {
     let best = null;
     for (const row of cities) {
-      const km = distanceKm(near.latitude, near.longitude, row[1], row[2]);
+      const km = greatCircleKm(
+        { lat: near.latitude, lon: near.longitude },
+        { lat: row[1], lon: row[2] },
+      );
       if (km <= radiusKm && (!best || km < best.distanceKm))
         best = toCity(row, km);
     }

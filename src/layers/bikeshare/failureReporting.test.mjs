@@ -24,7 +24,7 @@ function makeLayer() {
       clearOverlaySource() {},
     },
   };
-  const state = createState({ services });
+  const state = createState();
   const parts = { queries: { collectDetectableStations: () => [] } };
   const { methods } = createControls({ state, services, parts, source: {} });
   return { state, methods };
@@ -87,7 +87,6 @@ import { fakeCameraPort } from '../../testSupport/fakeCameraPort.mjs';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 import { CITY_BY_ID } from './registry.js';
 import { createIngestion } from './ingestion.js';
-import { createModel } from './model.js';
 import { createViewport } from './viewport.js';
 import { createRendering } from './rendering.js';
 import { createLifecycle } from './lifecycle.js';
@@ -179,11 +178,10 @@ function makeLiveLayer() {
     sprites: {},
     picking: { registerPickOwner() {}, unregisterPickOwner() {} },
   };
-  const state = createState({ services });
+  const state = createState();
   const parts = {};
   const context = { state, services, parts, source };
   parts.ingestion = createIngestion(context);
-  parts.model = createModel(context);
   parts.viewport = createViewport(context);
   parts.rendering = createRendering(context);
   // Selection owns a DOM click handler; nothing here selects a station.

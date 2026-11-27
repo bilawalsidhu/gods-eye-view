@@ -73,7 +73,7 @@ export function createStationPanel({
   function _stationShown() {
     if (!layerState._enabled) return null;
     // The right rail is hidden while the Cockpit rides; nothing to show.
-    if (parts.cockpit?._cockpitHeld()) return null;
+    if (parts.cockpit._cockpitHeld()) return null;
     return stations.find((station) => station.selected()) ?? null;
   }
 

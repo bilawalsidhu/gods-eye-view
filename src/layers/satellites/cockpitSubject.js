@@ -103,7 +103,7 @@ export function satelliteCockpitInfo(noradId, sat, fix) {
     // 'probes'|'debris'.
     satelliteClass: identity.satelliteClass,
     // Whether its class may be ridden in the orbital view (debris may not);
-    // the Cockpit's entry gate reads it (orbitEntryAllowed).
+    // the Cockpit's entry gate reads it (entryAllowed).
     enterable: satelliteClassEnterable(identity.satelliteClass),
     // International designator, e.g. '1998-067A'.
     cosparId: identity.cosparId,

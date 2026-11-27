@@ -1,4 +1,4 @@
-import { isRecognizedAisEnvelope } from '../../../src/data/aisStreamAdapter.js';
+import { isRecognizedAisEnvelope } from './ais-stream-adapter.js';
 import {
   aidToNavigationTypeName,
   isAidToNavigation,

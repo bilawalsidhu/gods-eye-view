@@ -19,6 +19,8 @@ import {
 } from '../scenes/shotPresentation.js';
 import { createDefaultScenePacks } from '../scenes/packs/defaults.js';
 import { createScenePackRegistry } from '../scenes/packs/registry.js';
+import { parseSceneDocument } from '../director/document.js';
+import { normalizeProject } from '../scenes/project.js';
 
 const adapter = await import('./blenderCamera.js');
 
@@ -633,3 +635,171 @@ test(
     }
   },
 );
+
+// Director timing and legacy documents
+
+const packs = createDefaultScenePacks();
+const dur = (s, sh) => shotRuntimeDurationSec(s, sh, packs);
+const hold = (s, sh) => effectiveShotHoldSec(s, sh, packs);
+const shot = (id, heading, durationSec) => ({
+  id,
+  durationSec,
+  holdSec: 0,
+  camera: pose({ heading, altitudeReference: 'ellipsoid' }),
+  move: {
+    from: pose({ heading, altitudeReference: 'ellipsoid' }),
+    easing: 'linear',
+  },
+});
+
+for (const [name, count, seconds] of [
+  ['nine shot cut', 9, 0.7],
+  ['six shot seek total', 6, 0.2],
+]) {
+  test(name, () => {
+    const scene = {
+      id: 'scene',
+      title: 'S',
+      shots: Array.from({ length: count }, (_, i) =>
+        shot(`s${i + 1}`, i * 10, seconds),
+      ),
+    };
+    const { samples, usda } = adapter.exportCameraUsda(
+      { version: 6, scenes: [scene] },
+      options(),
+    );
+    for (const [attribute, field] of [
+      ['gevStartTimeSec', 'startTimeSec'],
+      ['gevEndTimeSec', 'endTimeSec'],
+    ]) {
+      const times = [
+        ...usda.matchAll(new RegExp(`userProperties:${attribute} = (.+)`, 'g')),
+      ];
+      assert.deepEqual(
+        times.map(([, value]) => Number(value)),
+        samples.shots.map((shot) => shot[field]),
+        attribute,
+      );
+    }
+    // Each frame's camera still follows Director seeking.
+    const total = scene.shots.reduce((sum, sh) => sum + dur(scene, sh), 0);
+    for (const frame of samples.frames)
+      assert.equal(
+        frame.shotId,
+        sceneSeekState(scene, frame.timeSec / total, dur, hold).shot.id,
+      );
+    // The published duration seeks to the same owner.
+    for (const frame of samples.frames)
+      assert.equal(
+        frame.shotId,
+        sceneSeekState(
+          scene,
+          frame.timeSec / samples.timeline.durationSec,
+          dur,
+          hold,
+        ).shot.id,
+        `published total, frame ${frame.frame}`,
+      );
+    // Documented rule: a shot starts at the first sampled time at or after its start time.
+    for (const s of samples.shots) {
+      assert.ok(
+        samples.frames[s.frameStart - 1].timeSec >= s.startTimeSec,
+        `${s.id} starts before startTimeSec`,
+      );
+      if (s.frameStart > 1)
+        assert.ok(
+          samples.frames[s.frameStart - 2].timeSec < s.startTimeSec,
+          `${s.id}: frame ${s.frameStart - 1} at ${samples.frames[s.frameStart - 2].timeSec} s is at/after startTimeSec ${s.startTimeSec} but belongs to the previous shot`,
+        );
+    }
+  });
+}
+
+test('Director import timing', () => {
+  const text = JSON.stringify({
+    version: 6,
+    scenes: [
+      {
+        id: 'scene',
+        title: 'S',
+        shots: [
+          {
+            id: 'A',
+            durationSec: 0.1,
+            holdSec: 0,
+            camera: pose({ heading: 0 }),
+          },
+          {
+            id: 'B',
+            durationSec: 1,
+            holdSec: 0,
+            camera: pose({ heading: 90 }),
+          },
+        ],
+      },
+    ],
+  });
+  const loaded = normalizeProject(parseSceneDocument(text)).scenes[0];
+  assert.equal(loaded.shots[0].durationSec, 0.2, 'Director loads A as 0.2 s');
+  let samples;
+  try {
+    samples = adapter.sampleSceneCameras(parseSceneDocument(text), options());
+  } catch (error) {
+    // Rejecting a timing-changing document is an acceptable fix.
+    assert.match(error.message, /duration/i);
+    return;
+  }
+  const dur = (s, shot) => shotRuntimeDurationSec(s, shot, packs);
+  const hold = (s, shot) => effectiveShotHoldSec(s, shot, packs);
+  const total = loaded.shots.reduce((sum, shot) => sum + dur(loaded, shot), 0);
+  for (const frame of samples.frames) {
+    const reference = sceneSeekState(loaded, frame.timeSec / total, dur, hold)
+      .shot.id;
+    assert.equal(frame.shotId, reference, `frame ${frame.frame}`);
+  }
+  assert.equal(samples.shots[1].frameStart, 7);
+});
+
+const legacyOptions = options({ origin: { lat: 45, lon: 10, height: 0 } });
+const legacyDoc = (shotChanges, cameraChanges) =>
+  JSON.stringify({
+    version: 2,
+    scenes: [
+      {
+        id: 'scene',
+        title: 'S',
+        shots: [
+          {
+            id: 'A',
+            durationSec: 4,
+            holdSec: 0,
+            ...shotChanges,
+            camera: {
+              lat: 45,
+              lon: 10,
+              alt: 100,
+              heading: 0,
+              pitch: -30,
+              roll: 0,
+              ...cameraChanges,
+            },
+          },
+        ],
+      },
+    ],
+  });
+
+test('legacy numeric fields', () => {
+  const numeric = adapter.sampleSceneCameras(
+    parseSceneDocument(legacyDoc({}, {})),
+    legacyOptions,
+  );
+  for (const [label, text] of [
+    ['string coordinates', legacyDoc({}, { lat: '45', lon: '10', alt: '100' })],
+    ['string duration', legacyDoc({ durationSec: '4' }, {})],
+  ]) {
+    const parsed = parseSceneDocument(text); // the Director validator accepts it
+    const samples = adapter.sampleSceneCameras(parsed, legacyOptions);
+    assert.deepEqual(samples.frames, numeric.frames, label);
+  }
+});

@@ -11,7 +11,8 @@ import trafficLayer, {
   deriveTrafficFlowError,
   trafficFeedPresentation,
 } from './traffic.js';
-import { DataLayerManager, layerFeedState } from './manager.js';
+import { DataLayerManager } from '../testSupport/dataLayerManager.mjs';
+import { layerFeedState } from './feedState.js';
 
 /**
  * The app's live markers. Case-SENSITIVE on purpose: uppercase LIVE/GPS is

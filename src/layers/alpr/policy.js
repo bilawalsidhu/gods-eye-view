@@ -41,8 +41,6 @@ export const MAX_RENDERED = 1500;
 export const DIRECTION_CONE_M = 90;
 export const DIRECTION_CONE_HALF_ANGLE_DEG = 20;
 
-export const EARTH_MEAN_RADIUS_M = 6371008.8;
-
 /** Query boxes are snapped outward to this grid so nearby camera moves reuse
  * one accepted viewport snapshot rather than rebuilding records on every pan. */
 export const QUERY_SNAP_DEGREES = 0.05;

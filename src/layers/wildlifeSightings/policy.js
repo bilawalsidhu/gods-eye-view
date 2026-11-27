@@ -67,7 +67,6 @@ export const WILDLIFE_PHOTO_FETCH = Object.freeze({
 });
 
 export const WILDLIFE_DEBOUNCE_MS = 600;
-export { WILDLIFE_MAX_VIEW_DEGREES } from './bounds.js';
 export const WILDLIFE_VIEW_PADDING = 0.3;
 export const WILDLIFE_RETRY_MIN_MS = 30_000;
 export const WILDLIFE_RETRY_MAX_MS = 240_000;

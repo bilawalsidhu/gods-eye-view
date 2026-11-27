@@ -6,15 +6,13 @@
 // catalog, which is asked for again with a backoff when it fails.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  CATALOG_RETRY_FIRST_MS,
-  CATALOG_RETRY_MAX_MS,
-  FEED_EVICT_AFTER_MS,
-  RAIL_POLL_MS,
-  railCatalogRetryDelayMs,
-  railTrainKey,
-} from './policy.js';
+import { FEED_EVICT_AFTER_MS, RAIL_POLL_MS, railTrainKey } from './policy.js';
 import * as policy from './policy.js';
+import {
+  SCHEDULE_RETRY_FIRST_MS,
+  SCHEDULE_RETRY_MS,
+  scheduleRetryDelayMs,
+} from './schedules.js';
 import {
   getRegisteredRailFeed,
   publicRailCatalog,
@@ -336,30 +334,30 @@ test('a catalog that fails keeps pack-routed feeds held back and is asked for ag
   assert.ok(!app.state()._activeFeeds.has(LONG_DISTANCE));
 
   // Asked for again after 30 s, then after a further minute.
-  t.mock.timers.tick(CATALOG_RETRY_FIRST_MS - 1);
+  t.mock.timers.tick(SCHEDULE_RETRY_FIRST_MS - 1);
   await app.settle();
   assert.equal(app.catalogRequests.length, 1);
   t.mock.timers.tick(1);
   await app.settle();
   assert.equal(app.catalogRequests.length, 2);
   assert.deepEqual(asks().filter(needsPack), []);
-  t.mock.timers.tick(2 * CATALOG_RETRY_FIRST_MS);
+  t.mock.timers.tick(2 * SCHEDULE_RETRY_FIRST_MS);
   await app.settle();
   assert.equal(app.catalogRequests.length, 3);
   assert.ok(app.state()._activeFeeds.has(LONG_DISTANCE));
   assert.ok(app.requestedPaths.includes(LONG_DISTANCE));
 
   // A catalog that loaded is not asked for again.
-  t.mock.timers.tick(CATALOG_RETRY_MAX_MS);
+  t.mock.timers.tick(SCHEDULE_RETRY_MS);
   await app.settle();
   assert.equal(app.catalogRequests.length, 3);
 });
 
 test('the catalog retry backs off to ten minutes and stops with the layer', async (t) => {
   t.mock.method(console, 'warn', () => {});
-  assert.equal(railCatalogRetryDelayMs(1), CATALOG_RETRY_FIRST_MS);
-  assert.equal(railCatalogRetryDelayMs(2), 2 * CATALOG_RETRY_FIRST_MS);
-  assert.equal(railCatalogRetryDelayMs(30), CATALOG_RETRY_MAX_MS);
+  assert.equal(scheduleRetryDelayMs(1), SCHEDULE_RETRY_FIRST_MS);
+  assert.equal(scheduleRetryDelayMs(2), 2 * SCHEDULE_RETRY_FIRST_MS);
+  assert.equal(scheduleRetryDelayMs(30), SCHEDULE_RETRY_MS);
   const app = harness(t, {
     at: MADRID,
     catalog: () => Promise.reject(new Error('Rail feeds HTTP 500')),
@@ -368,7 +366,7 @@ test('the catalog retry backs off to ten minutes and stops with the layer', asyn
   liveFeedsAnswer(app);
   await app.enable();
   app.layer.disable(app.viewer);
-  t.mock.timers.tick(CATALOG_RETRY_MAX_MS);
+  t.mock.timers.tick(SCHEDULE_RETRY_MS);
   await app.settle();
   assert.equal(app.catalogRequests.length, 1, 'no retry while off');
 });

@@ -5,14 +5,7 @@ import {
   readStoredCloudVoiceAuthMode,
   writeStoredCloudVoiceAuthMode,
 } from './cloudVoiceAuth.js';
-
-function memoryStorage(seed = {}) {
-  const values = new Map(Object.entries(seed));
-  return {
-    getItem: (key) => values.get(key) ?? null,
-    setItem: (key, value) => values.set(key, value),
-  };
-}
+import { memoryStorage } from '../testSupport/memoryStorage.mjs';
 
 test('cloud voice auth defaults to API key and persists OAuth independently', () => {
   const storage = memoryStorage();

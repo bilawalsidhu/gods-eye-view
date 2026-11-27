@@ -1,44 +1,26 @@
 import {
-  RADIO_TUNER_STATION_LIMIT,
   RADIO_TUNER_DIRECTORY_LIMIT,
   EMPTY_ACCEPTED_CATALOG_SNAPSHOT,
 } from './policy.js';
 
 export function createTuning({ state: layerState, services, parts, source }) {
-  /** Bound one already ordered filtered directory without injecting outside selections. */
-
-  function buildRadioTunerBand(
-    rankedStations,
-    selected,
-    limit = RADIO_TUNER_STATION_LIMIT,
-  ) {
-    const boundedLimit = Math.min(
-      RADIO_TUNER_DIRECTORY_LIMIT,
-      Math.max(1, Math.floor(Number(limit) || RADIO_TUNER_STATION_LIMIT)),
-    );
-    return (Array.isArray(rankedStations) ? rankedStations : []).slice(
-      0,
-      boundedLimit,
-    );
-  }
-
-  function captureRadioTuningResolutionSnapshot() {
-    return layerState._acceptedCatalogSnapshot;
-  }
-
   /** Return the complete accepted filtered directory in stable catalog order. */
 
-  function getRadioTunerStations(limit = RADIO_TUNER_STATION_LIMIT) {
+  function getRadioTunerStations(limit = RADIO_TUNER_DIRECTORY_LIMIT) {
     if (
       !parts.interaction.radioPresentationAllowed() ||
       !layerState._acceptedCatalogSnapshot.stations.length
     )
       return [];
-    return buildRadioTunerBand(
-      parts.queries.visibleStations(),
-      parts.queries.selectedStation(),
-      limit,
-    );
+    return parts.queries
+      .visibleStations()
+      .slice(
+        0,
+        Math.min(
+          RADIO_TUNER_DIRECTORY_LIMIT,
+          Math.max(1, Math.floor(Number(limit) || RADIO_TUNER_DIRECTORY_LIMIT)),
+        ),
+      );
   }
 
   /** Begin a direct-manipulation tuning gesture and pause the current stream. */
@@ -49,7 +31,7 @@ export function createTuning({ state: layerState, services, parts, source }) {
       !parts.queries.visibleStations().length
     )
       return false;
-    const snapshot = captureRadioTuningResolutionSnapshot();
+    const snapshot = layerState._acceptedCatalogSnapshot;
     if (!Number.isSafeInteger(snapshot.generation) || !snapshot.stations.length)
       return false;
     layerState._tuningResolutionSnapshot = snapshot;
@@ -67,11 +49,7 @@ export function createTuning({ state: layerState, services, parts, source }) {
     layerState._tuningStartStationId = layerState._selectedId;
     layerState._tuningPreviewId = layerState._selectedId;
     // Like Previous/Next, the release plays only if a stream was active.
-    layerState._tuningResumesPlayback = [
-      'loading',
-      'buffering',
-      'playing',
-    ].includes(layerState._audioState);
+    layerState._tuningResumesPlayback = parts.playback.audioActive();
     parts.tuningNoise.installTuningNoise();
     parts.playback.pauseRadioPlayback({ origin: 'user' });
     parts.tuningNoise.syncTuningNoiseGain();
@@ -210,10 +188,7 @@ export function createTuning({ state: layerState, services, parts, source }) {
     // An exact tuner release owns its frozen target. A fallback armed by an
     // earlier non-playing selection must never retarget this gesture if the
     // broadcaster fails after release.
-    layerState._playFallbackId = null;
-    layerState._playFallbackFocus = null;
-    layerState._playFallbackOrigin = 'programmatic';
-    layerState._playFallbackAttemptId = null;
+    parts.playback.clearPlayFallback();
     // Muting alone would leave the noise graph running after a silent release.
     if (autoplay) parts.tuningNoise.syncTuningNoiseGain();
     else parts.tuningNoise.clearRadioTuningNoise({ emit: false });
@@ -232,8 +207,6 @@ export function createTuning({ state: layerState, services, parts, source }) {
     });
   }
   return {
-    buildRadioTunerBand,
-    captureRadioTuningResolutionSnapshot,
     getRadioTunerStations,
     beginRadioTuning,
     setRadioTuningStatic,

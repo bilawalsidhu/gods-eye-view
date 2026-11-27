@@ -18,6 +18,7 @@ import {
 } from './policy.js';
 import { emergencyBroadcastPhrase } from '../../data/aircraftEmergency.js';
 import { locateOnTrack } from '../../data/locate.js';
+import { analystRecordLimit } from '../../data/analystRecordLimit.js';
 
 export function createQueries({
   flightState,
@@ -361,9 +362,7 @@ export function createQueries({
       const t = parts.icons._displayMs();
       const scratch = flightState._scratchNearbyPos;
 
-      const limit = Number.isFinite(maxCount)
-        ? Math.max(1, Math.floor(maxCount))
-        : 50;
+      const limit = analystRecordLimit(maxCount, { fallback: 50, min: 1 });
       const maxRange =
         Number.isFinite(range) && range > 0 ? range : Number.POSITIVE_INFINITY;
 
@@ -604,9 +603,7 @@ export function createQueries({
     getAllPositions(maxCount = 500) {
       const icons = flightState._icons;
       if (!icons || icons.count === 0) return [];
-      const limit = Number.isFinite(maxCount)
-        ? Math.max(1, Math.floor(maxCount))
-        : 500;
+      const limit = analystRecordLimit(maxCount, { fallback: 500, min: 1 });
       const t = parts.icons._displayMs();
 
       const result = [];
@@ -644,9 +641,7 @@ export function createQueries({
     getAnalystRecords(maxCount = 2000) {
       if (!flightState._icons?.show || flightState.records.data.size === 0)
         return [];
-      const limit = Number.isFinite(maxCount)
-        ? Math.max(1, Math.floor(maxCount))
-        : 2000;
+      const limit = analystRecordLimit(maxCount, { fallback: 2000, min: 1 });
       const result = [];
       for (const [icao24, info] of flightState.records.data) {
         result.push(mapAnalystRecord(icao24, info));

@@ -16,6 +16,3 @@ export const TRACKED_RETENTION_MS = 10 * 60_000;
 
 /** Cooldown in milliseconds after a transient source error. */
 export const ERROR_BACKOFF_INTERVAL = 20000;
-
-/** Local equirectangular distance used for viewer-proximate floor sampling. */
-export { approxDistanceKm } from '../../data/approxDistance.js';

@@ -46,7 +46,7 @@ export function createRendering({
    */
 
   function renderCurrentLod(force = false) {
-    if (!layerState._cells || !layerState._viewer) return false;
+    if (!layerState._initialized || !layerState._viewer) return false;
     if (!layerState._fires.length) {
       // A filter that leaves nothing shown must not leave the old heat behind.
       layerState._heatImagery?.setShow(false);

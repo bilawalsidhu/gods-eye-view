@@ -13,7 +13,7 @@ import {
   transitRouteLabel,
 } from '../../data/transitFeeds.js';
 import { transitModeTier } from '../../data/transitPresetStyle.js';
-import { displayMotion } from './movement.js';
+import { displayMotion } from '../../data/transitMovement.js';
 
 /** The display's motion word as a record field for the Context card. */
 const MOTION_FIELD = Object.freeze({

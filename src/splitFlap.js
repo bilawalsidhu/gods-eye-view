@@ -227,15 +227,6 @@ export function visibleGlyphs(plan, elapsedMs, options = {}) {
   return out;
 }
 
-/** Whether the viewer asked for reduced motion. */
-export function prefersReducedMotion() {
-  return (
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  );
-}
-
 /**
  * Whether an element is actually on screen right now.
  *

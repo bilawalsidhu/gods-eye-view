@@ -178,7 +178,12 @@ test('only the tracked flight has a flight photo: not an installation, a militar
   };
   const { resolveSubjectPhoto } = createSubject({
     state: {},
-    services: { flights, military, vessels: {}, installations: {} },
+    services: {
+      flights,
+      military,
+      vessels: { getVesselPhoto: () => null },
+      installations: {},
+    },
     parts: {
       navigation: {
         isFlightLayer: (id) => id === 'flights' || id === 'military',

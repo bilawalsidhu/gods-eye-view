@@ -39,7 +39,7 @@ export function createRocketLaunchesLayer({ services, source }) {
   parts.testing = createTesting(context);
   parts.controls = createControls(context);
   parts.lifecycle = createLifecycle(context);
-  return Object.assign(
+  const layer = Object.assign(
     {},
     parts.controls.methods,
     parts.lifecycle.methods,
@@ -49,65 +49,10 @@ export function createRocketLaunchesLayer({ services, source }) {
       subscribePanel: parts.panel.subscribePanel,
       waitForSatelliteIntents: parts.satelliteIntents.settled,
       subscribeReplayOverlay: parts.overlays.subscribeReplayOverlay,
-      satelliteParamsForSpaceMissions:
-        parts.policyHelpers.satelliteParamsForSpaceMissions,
-      satelliteParamsAfterSpaceMissions:
-        parts.policyHelpers.satelliteParamsAfterSpaceMissions,
-      launchStatusAllowsOrbit: parts.policyHelpers.launchStatusAllowsOrbit,
-      missionPathPresentation: parts.policyHelpers.missionPathPresentation,
-      shouldRetryAfterActiveTle: parts.ingestion.shouldRetryAfterActiveTle,
-      releaseAircraftTracking: parts.policyHelpers.releaseAircraftTracking,
-      launchPadZoneVisible: parts.policyHelpers.launchPadZoneVisible,
-      missionAnchorHorizonVisible: parts.overlays.missionAnchorHorizonVisible,
-      missionAnchorVisible: parts.overlays.missionAnchorVisible,
-      compactLaunchSiteName: parts.overlays.compactLaunchSiteName,
-      createRocketMissionMarkerOverlayEntry:
-        parts.overlays.createRocketMissionMarkerOverlayEntry,
-      createRocketMissionElementOverlayEntry:
-        parts.overlays.createRocketMissionElementOverlayEntry,
-      selectRocketMissionMarkerOverlayCohort:
-        parts.overlays.selectRocketMissionMarkerOverlayCohort,
-      replayOverlayMode: parts.overlays.replayOverlayMode,
-      replayVehicleScreenRotation: parts.replay.replayVehicleScreenRotation,
-      smoothReplayWindowPosition: parts.replay.smoothReplayWindowPosition,
-      missionDataCompleteness: parts.policyHelpers.missionDataCompleteness,
-      missionRosterEntries: parts.policyHelpers.missionRosterEntries,
-      missionHoverPreviewRange: parts.panel.missionHoverPreviewRange,
-      createMissionRosterPreviewOwnership:
-        parts.panel.createMissionRosterPreviewOwnership,
-      resolveMissionRosterPreviewLaunch:
-        parts.panel.resolveMissionRosterPreviewLaunch,
-      formatMissionEventTime: parts.policyHelpers.formatMissionEventTime,
-      parseMissionDurationSeconds:
-        parts.policyHelpers.parseMissionDurationSeconds,
-      replayAscentDurationSeconds: parts.replay.replayAscentDurationSeconds,
-      normalizeReplaySpeed: parts.replay.normalizeReplaySpeed,
-      replayStartAfterPause: parts.replay.replayStartAfterPause,
-      replayState: parts.replay.replayState,
-      approximateOrbitPath: parts.paths.approximateOrbitPath,
-      samplePath: parts.paths.samplePath,
-      orbitProgressAtTime: parts.paths.orbitProgressAtTime,
-      reconstructedAscentPath: parts.paths.reconstructedAscentPath,
-      buildMissionPaths: parts.paths.buildMissionPaths,
-      cameraHeadingForPath: parts.camera.cameraHeadingForPath,
-      replayInitialCameraHeading: parts.camera.replayInitialCameraHeading,
-      replayChaseCameraHeading: parts.camera.replayChaseCameraHeading,
-      smoothReplayCameraHeading: parts.camera.smoothReplayCameraHeading,
-      missionZoomPitch: parts.camera.missionZoomPitch,
-      replayCameraView: parts.camera.replayCameraView,
-      replayOrbitGlobeAnchor: parts.camera.replayOrbitGlobeAnchor,
-      replayOrbitCameraTarget: parts.camera.replayOrbitCameraTarget,
-      replayOrbitCameraPose: parts.camera.replayOrbitCameraPose,
-      replayOrbitFrameSphere: parts.camera.replayOrbitFrameSphere,
-      replayOrbitGlobeRange: parts.camera.replayOrbitGlobeRange,
-      missionMarkerColor: parts.model.missionMarkerColor,
-      normalizeRocketLaunches: parts.model.normalizeRocketLaunches,
-      _setRocketMissionOverlayHostForTest:
-        parts.testing._setRocketMissionOverlayHostForTest,
-      _setSelectedRocketMissionForTest:
-        parts.testing._setSelectedRocketMissionForTest,
     },
   );
+  Object.defineProperty(layer, 'testing', { value: parts.testing });
+  return layer;
 }
 export {
   ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID,

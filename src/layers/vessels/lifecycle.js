@@ -124,7 +124,6 @@ export function createLifecycle({
     state.keyTarget = null;
     state.keydownHandler = null;
     state.trackedEntityRemover = null;
-    state.interactionKeyTarget = null;
     state.preRenderRemover = null;
     components.rendering.cancelTrailingVisibilityPass();
     state.lastVisibilityUpdate = 0;
@@ -139,7 +138,6 @@ export function createLifecycle({
     state.trailTimes = [];
     state.trailBodyCount = -1;
     state.trailId = null;
-    state.trailBackfillToken = 0;
   }
   const methods = {
     /** Configure the source before initialization; an active layer keeps its owner. */

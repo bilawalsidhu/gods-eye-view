@@ -33,6 +33,7 @@ import {
   applyInfraEvictionGrace,
   shouldRecomputeInfraLod,
 } from './localGeojsonLod.js';
+import { analystRecordLimit } from './analystRecordLimit.js';
 
 const DEFAULT_LABEL_MAX = 900;
 const DEFAULT_LABEL_GRID_PX = 132;
@@ -71,7 +72,7 @@ const LOCAL_STEM_TIP_EPSILON_SQ = LOCAL_STEM_TIP_EPSILON_M ** 2;
  * @returns {{title:string,details:string[]}}
  */
 export function localInfrastructureOverlayCopy(properties, layerId) {
-  const props = unwrapProperties(properties) || {};
+  const props = properties || {};
   const tags = props.tags || {};
   const title = featureLabelFromProperties(props, layerId);
   const details = [];
@@ -502,7 +503,7 @@ export function localGeojsonParts(features) {
 }
 
 function anonymousContent(feature) {
-  const properties = unwrapProperties(feature.properties ?? {});
+  const properties = { ...(feature.properties ?? {}) };
   // The library computes rank from the whole snapshot. Inserting a newer
   // row can change it even when this source feature is unchanged.
   delete properties.__gevRank;
@@ -531,7 +532,7 @@ function anonymousContextKeys(parts, layerId, previous, nextKey) {
         : kind === 'line'
           ? coordinates[0]
           : coordinates[0][0];
-    const properties = unwrapProperties(feature.properties ?? {});
+    const properties = feature.properties ?? {};
     const { name } = mapAnalystRecord({ properties }, layerId);
     placeOf.set(feature, JSON.stringify([point[1], point[0], name]));
     const sourceId = Object.hasOwn(properties, '__gevSourceId')
@@ -902,7 +903,7 @@ export function createLocalGeoJsonLayer(
       const pins = [];
       for (const part of parts) {
         if (part.kind === 'empty') continue;
-        const properties = unwrapProperties(part.feature.properties ?? {});
+        const properties = part.feature.properties ?? {};
         // The object every item of this part carries as its `meta`: what a
         // click or point-and-ask hit hands back, and the context carrier.
         const carrier = { layerId: id, id: part.id, record: null };
@@ -1115,7 +1116,6 @@ export function createLocalGeoJsonLayer(
     icon,
     source,
     updateInterval: 0,
-    statsRefreshInterval: 1000,
 
     init: async (viewer) => {
       // DataLayerManager calls this once
@@ -1161,9 +1161,7 @@ export function createLocalGeoJsonLayer(
      */
     getAnalystRecords(maxCount = 2000, onlyFeature = null) {
       if (!_enabled || (!_stemRecords.length && !_drawn)) return [];
-      const limit = Number.isFinite(maxCount)
-        ? Math.max(1, Math.floor(maxCount))
-        : 2000;
+      const limit = analystRecordLimit(maxCount, { fallback: 2000, min: 1 });
       const result = [];
       // One record per feature (localFeatureKey), as the layer counts them.
       // A multi-part polygon or point feature is listed at its first part,
@@ -1239,7 +1237,7 @@ export function createLocalGeoJsonLayer(
             recordId,
             middle[1],
             middle[0],
-            unwrapProperties(feature.properties ?? {}),
+            feature.properties ?? {},
           );
           result.push(record);
         }
@@ -1271,7 +1269,7 @@ export function createLocalGeoJsonLayer(
           record.id,
           record.lat,
           record.lon,
-          unwrapProperties(part.feature.properties ?? {}),
+          part.feature.properties ?? {},
         );
         if (record.parts) selected.parts = record.parts;
         Object.defineProperty(selected, CONTEXT_LINES, {
@@ -2058,20 +2056,6 @@ function labelPriorityFromProperties(props, layerId) {
   if (Number.isFinite(props.__gevRank))
     score += Math.max(0, Math.min(600, props.__gevRank));
   return score;
-}
-
-function unwrapProperties(value) {
-  if (!value || typeof value !== 'object') return value;
-  if (Array.isArray(value)) return value.map(unwrapProperties);
-  // Keep feed keys, including "__proto__", as own data properties.
-  return Object.fromEntries(
-    Object.entries(value).map(([key, entry]) => [
-      key,
-      entry && typeof entry.getValue === 'function'
-        ? unwrapProperties(entry.getValue())
-        : unwrapProperties(entry),
-    ]),
-  );
 }
 
 function cleanLabel(value) {

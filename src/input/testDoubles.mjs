@@ -16,18 +16,12 @@ import '../render/cesium/input.js';
 import '../render/cesium/nativeClick.js';
 import { rendererOf } from '../render/rendererOf.js';
 import { fakeScenePicks } from '../testSupport/fakeCesiumScene.mjs';
-import { provideStyleStageAlias } from '../styles/styleStages.js';
 import { inputFor } from './dispatcher.js';
 import { setClickCardHitTest } from '../data/pickRegistry.js';
 import { ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID } from '../layers/launches/policy.js';
 
 /** Cesium's own event types, the ones the input port binds. */
 export const FAKE_EVENT_TYPES = Cesium.ScreenSpaceEventType;
-
-// Tests record sensor styles on the viewer double's scene, as the code under
-// them once did: the dispatcher, which looks them up by the viewer, finds
-// them there too.
-provideStyleStageAlias((viewer) => viewer?.scene ?? null);
 
 /**
  * A query port for a viewer double's clicks: its renderer's, where that

@@ -2,7 +2,7 @@ import { encodeParams, decodeParams } from '../layers/streetLevel/params.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { DataLayerManager } from './manager.js';
+import { DataLayerManager } from '../testSupport/dataLayerManager.mjs';
 import {
   LEGACY_LAYER_STATE_TOKENS,
   LAYER_STATE_REGISTRY,

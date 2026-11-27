@@ -148,6 +148,26 @@ export function roundedRectPath(
 }
 
 /**
+ * Cover-fit an image, video or canvas into a box, cropping the overflow
+ * evenly; a source without dimensions draws nothing.
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {CanvasImageSource} image
+ * @param {number} x
+ * @param {number} y
+ * @param {number} w
+ * @param {number} h
+ */
+export function drawCover(ctx, image, x, y, w, h) {
+  const iw = image?.naturalWidth || image?.videoWidth || image?.width;
+  const ih = image?.naturalHeight || image?.videoHeight || image?.height;
+  if (!iw || !ih) return;
+  const s = Math.max(w / iw, h / ih);
+  const sw = w / s;
+  const sh = h / s;
+  ctx.drawImage(image, (iw - sw) / 2, (ih - sh) / 2, sw, sh, x, y, w, h);
+}
+
+/**
  * FIRMS-compatible distance fade: full through 70% of the far range, then a
  * linear ramp to zero. A finite minimum is a hard near-range policy boundary.
  * @param {number} distanceM

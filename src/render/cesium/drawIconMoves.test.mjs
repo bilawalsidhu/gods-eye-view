@@ -3,37 +3,13 @@ import inspector from 'node:inspector/promises';
 import * as Cesium from 'cesium';
 import test from 'node:test';
 import { createCesiumDraw } from './draw.js';
+import { fakeDrawScene } from '../../testSupport/fakeDrawScene.mjs';
 
 // Alone in its file, so the engine has seen only these icons when it
 // measures what an upsert allocates (`draw.test.mjs` covers what it draws).
 
-/** A scene with what an icon set touches: primitives and its events. */
-function fakeScene() {
-  const added = [];
-  return {
-    added,
-    postRender: new Cesium.Event(),
-    preRender: new Cesium.Event(),
-    camera: { positionWC: new Cesium.Cartesian3(2e7, 0, 0) },
-    frameState: { mode: Cesium.SceneMode.SCENE3D },
-    updateHeight: () => () => {},
-    getHeight: () => undefined,
-    primitives: {
-      add: (primitive) => (added.push(primitive), primitive),
-      remove: (primitive) => {
-        const at = added.indexOf(primitive);
-        if (at >= 0) added.splice(at, 1);
-        return at >= 0;
-      },
-      length: 0,
-    },
-    requestRender() {},
-    isDestroyed: () => false,
-  };
-}
-
 test('icons moved every frame are moved without lists made for the move', async () => {
-  const scene = fakeScene();
+  const scene = fakeDrawScene({ mode: Cesium.SceneMode.SCENE3D, events: true });
   const part = createCesiumDraw({
     scene,
     report: (error) => assert.fail(error),

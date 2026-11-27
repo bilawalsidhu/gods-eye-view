@@ -7,7 +7,7 @@ import {
   mergeHistory,
 } from '../../data/contactPlayback.js';
 import { createContactTrailRenderer } from '../../data/contactTrailRenderer.js';
-import { fixDistanceM } from './movement.js';
+import { fixDistanceM } from '../../data/transitMovement.js';
 import { TRANSIT_MODE_COLORS } from './policy.js';
 import { transitStyleProfile } from '../../data/transitPresetStyle.js';
 

@@ -16,6 +16,7 @@ function rig({ ids = ['A', 'B', 'C'], selected = null, enabled = true } = {}) {
     _enabled: enabled,
     _selectedLaunchId: selected,
     _missionRosterView: ids ? roster(...ids) : null,
+    _globePickListeners: new Set(),
   };
   const parts = {
     panel: {

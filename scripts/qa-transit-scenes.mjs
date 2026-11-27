@@ -222,8 +222,7 @@ export async function runFleetBudgets({
         window.__godsEyeView.dataManager.layers.get('transit').module;
       const state = layer._transitStateForTest();
       const { seek } = await import('/src/data/contactPlayback.js');
-      const { updatePlayback } =
-        await import('/src/layers/transit/movement.js');
+      const { updatePlayback } = await import('/src/data/transitMovement.js');
       for (const entry of state._vehicles.values()) {
         entry.clocks.wallNowMs = Date.now();
         entry.clocks.monoNowMs = performance.now();

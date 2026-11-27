@@ -175,7 +175,6 @@ export function createEvidence({
     });
   }
   return {
-    _focusEvidencePosition,
     _setFocusEvidenceAircraft,
     _moveFocusEvidenceAircraft,
     _focusEvidenceSnapshot,

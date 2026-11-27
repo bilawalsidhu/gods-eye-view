@@ -40,6 +40,7 @@ test('a card painted over a launch marker keeps its click; with none the mission
     parts: {
       panel: stubs(),
       overlays: stubs(),
+      controls: stubs(),
       launchPad: stubs(),
       orbitRendering: stubs(),
       replay: stubs(),

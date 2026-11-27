@@ -11,14 +11,6 @@ import { realtimeSessionEvent } from './realtimeEvents.js';
 import { createVoiceCommands } from './sessionCommands.js';
 import { createTestVoiceUi } from '../testSupport/voiceUi.mjs';
 
-function deferred() {
-  let resolve;
-  const promise = new Promise((done) => {
-    resolve = done;
-  });
-  return { promise, resolve };
-}
-
 function fixture(
   runner = async (name, args) => ({ ok: true, name, ...args }),
   signal,
@@ -109,7 +101,7 @@ test('alternate protocol shares session events and action execution without Real
 
 test('stop, interruption and lifetime abort cancel actions and suppress stale results', async () => {
   for (const cancel of ['stop', 'interruption', 'lifetime']) {
-    const result = deferred();
+    const result = Promise.withResolvers();
     const lifetime = new AbortController();
     let observed;
     const f = fixture(async (_name, _args, options) => {
@@ -137,7 +129,7 @@ test('stop, interruption and lifetime abort cancel actions and suppress stale re
 });
 
 test('caller cancellation and sibling actions preserve independent ownership', async () => {
-  const first = deferred();
+  const first = Promise.withResolvers();
   const f = fixture(async (name) =>
     name === 'first' ? first.promise : { ok: true },
   );

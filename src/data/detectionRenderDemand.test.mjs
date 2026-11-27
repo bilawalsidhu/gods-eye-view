@@ -164,8 +164,7 @@ test('a skipped paint always hands its frame forward — skip and re-request are
 
   // The one case that skips: expensive previous paint, odd frame, stable layout.
   const skipped = detectionPaintSkipDecision({ layoutChanged: false, lastPaintMs: heavy, frameCount: 1 });
-  assert.deepEqual(skipped, { skip: true, requestFollowUp: true },
-    'a skip must carry its own follow-up request');
+  assert.equal(skipped, true, 'an expensive odd frame on a stable layout skips');
 
   // Every other case paints, and a paint needs no deferral.
   for (const input of [
@@ -174,31 +173,18 @@ test('a skipped paint always hands its frame forward — skip and re-request are
     { layoutChanged: false, lastPaintMs: 1, frameCount: 1 },      // cheap paint — no relief needed
     { layoutChanged: false, lastPaintMs: DETECTION_PAINT_SKIP_THRESHOLD_MS, frameCount: 1 }, // at the threshold, not past it
   ]) {
-    assert.deepEqual(detectionPaintSkipDecision(input), { skip: false, requestFollowUp: false },
+    assert.equal(detectionPaintSkipDecision(input), false,
       `expected a paint for ${JSON.stringify(input)}`);
-  }
-
-  // The invariant, stated as one law over the whole input space: the valve can
-  // never skip without re-requesting. A wrapper cannot break this, because both
-  // halves come from the same decision.
-  for (const layoutChanged of [true, false]) {
-    for (const lastPaintMs of [0, 1, 22, 23, 35, 500, NaN]) {
-      for (const frameCount of [0, 1, 2, 3, 41, 100]) {
-        const d = detectionPaintSkipDecision({ layoutChanged, lastPaintMs, frameCount });
-        assert.equal(d.requestFollowUp, d.skip,
-          `skip/re-request diverged at ${JSON.stringify({ layoutChanged, lastPaintMs, frameCount })}`);
-      }
-    }
   }
 
   // And the deferral is bounded: consecutive frames cannot both skip, so the
   // work waits one frame rather than forever.
   const first = detectionPaintSkipDecision({ layoutChanged: false, lastPaintMs: heavy, frameCount: 7 });
   const second = detectionPaintSkipDecision({ layoutChanged: false, lastPaintMs: heavy, frameCount: 8 });
-  assert.equal(first.skip, true);
-  assert.equal(second.skip, false, 'the very next frame paints — a skip costs one frame, not the work');
+  assert.equal(first, true);
+  assert.equal(second, false, 'the very next frame paints — a skip costs one frame, not the work');
 
-  assert.deepEqual(detectionPaintSkipDecision(), { skip: false, requestFollowUp: false },
+  assert.equal(detectionPaintSkipDecision(), false,
     'no input is not a reason to drop a frame');
 });
 

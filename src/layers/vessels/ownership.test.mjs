@@ -111,7 +111,7 @@ test('vessel construction is inert and each instance owns its records and clock'
   assert.notEqual(one.state.trailPositions, two.state.trailPositions);
   const { layer } = setup(source);
   const other = createVesselLayer({ source, services: services() });
-  layer.testing._beginAisSessionForTest();
+  layer.testing.parts.lifecycle.beginAisSession();
   assert.equal(other.getStats().loading, false);
   assert.equal(requested, 0);
   layer.testing._setVesselStateForTest({ enabled: false });
@@ -585,7 +585,7 @@ test('an aid to navigation is drawn as the upright buoy, a vessel as its kind’
   assert.equal(buoy.rotation, 0, 'never turned');
   assert.deepEqual(buoy.color, cssColor(AID_TO_NAVIGATION_STYLE.css));
   // The source's virtual flag reaches the layer's record.
-  const recordOf = (id) => layer.testing._vesselRecordForTest(id);
+  const recordOf = (id) => layer.testing.vesselState.state.records.byId.get(id);
   assert.equal(recordOf('993672001').virtual, false);
   assert.equal(recordOf('366999002').virtual, false);
   const cargo = itemOf('366999002');
@@ -637,7 +637,10 @@ test('a virtual aid to navigation keeps its buoy and its virtual flag', async ()
   });
   await layer.update();
   assert.ok(icons.has('993672009'));
-  assert.equal(layer.testing._vesselRecordForTest('993672009').virtual, true);
+  assert.equal(
+    layer.testing.vesselState.state.records.byId.get('993672009').virtual,
+    true,
+  );
   assert.equal(icons.item('993672009').image, aidSprite());
 });
 

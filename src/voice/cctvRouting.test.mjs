@@ -1,8 +1,9 @@
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DataLayerManager } from '../data/manager.js';
+import { DataLayerManager } from '../testSupport/dataLayerManager.mjs';
 import { CCTV_FOCUS_RESULT } from '../layers/cctv/index.js';
 import { controlCctv, createGevActionRunner } from './gevActions.js';
+import { withVisibilityIntent } from '../testSupport/voiceRunnerFakes.mjs';
 
 const originalWindow = globalThis.window;
 before(() => {
@@ -22,19 +23,11 @@ function viewerFixture() {
   };
 }
 
-function deferred() {
-  let resolve;
-  const promise = new Promise((done) => {
-    resolve = done;
-  });
-  return { promise, resolve };
-}
-
 function runnerFixture(t, dataManager, options = {}) {
   const runner = createGevActionRunner({
     viewer: viewerFixture(),
     styleManager: {},
-    dataManager,
+    dataManager: withVisibilityIntent(dataManager),
     ...options,
   });
   t.after(() => runner.dispose());
@@ -96,7 +89,7 @@ async function lifecycleFixture(t, targetEnabled) {
       return moduleEnabled;
     },
     gate(outcome = true) {
-      const gate = { entered: deferred(), release: deferred(), outcome };
+      const gate = { entered: Promise.withResolvers(), release: Promise.withResolvers(), outcome };
       gates.push(gate);
       nextGate = gate;
       return gate;

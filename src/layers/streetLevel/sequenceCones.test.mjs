@@ -304,6 +304,6 @@ test('the cones stay drawn over the photo marker, whichever is drawn first', asy
   marker.set({ lon: -121.49, lat: 38.58 }, 90);
   const order = added.map((host) => host.get(0)?.id?.id ?? null);
   assert.deepEqual(order, ['sl:pos', 'mly:img:A-0'], 'bottom to top');
-  sequences.destroy(viewer);
+  sequences.destroy();
   marker.destroy();
 });

@@ -1,6 +1,10 @@
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { canvasOf, findFrame } from '../../render/rendererOf.js';
-import { recordFix, updatePlayback, attachFloorToPlace } from './movement.js';
+import {
+  recordFix,
+  updatePlayback,
+  attachFloorToPlace,
+} from '../../data/transitMovement.js';
 import { seek, setRate, mergeHistory } from '../../data/contactPlayback.js';
 import { getRegisteredTransitFeed } from '../../data/transitFeeds.js';
 import { transitIconCacheSize } from '../../data/transitIcons.js';

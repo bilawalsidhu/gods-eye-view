@@ -93,7 +93,7 @@ export function _activeCctvCameraId() {
 
 export function _resetCctvCalibration() {
   const cameraId = this._activeCctvCameraId();
-  if (!cameraId || !this.actions.setParams) return;
+  if (!cameraId) return;
   this.actions.setParams(
     {
       selectedCameraId: cameraId,
@@ -135,8 +135,7 @@ export function _beginCctvCalValueEdit(chip) {
       this._cctvState?.enabled &&
       this.actions.isEnabled() &&
       cameraId &&
-      cameraId === this._activeCctvCameraId() &&
-      this.actions.setParams
+      cameraId === this._activeCctvCameraId()
     ) {
       this.actions.setParams(
         {

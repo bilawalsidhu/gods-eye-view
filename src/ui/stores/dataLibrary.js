@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { markRaw, shallowRef } from 'vue';
+import { presented } from './presented.js';
 
 /**
  * DATA LAYERS ▸ Browse data library as its view renders it. The browser owner
@@ -10,20 +10,10 @@ import { markRaw, shallowRef } from 'vue';
  */
 export const useDataLibraryStore = defineStore('gev-data-library', () => {
   /** The presented browser; null until the owner first publishes. */
-  const view = shallowRef(null);
-
-  /** @param {?object} next A fresh presentation; every publish re-renders. */
-  function publish(next) {
-    view.value = next && markRaw(next);
-  }
+  const [view, publish] = presented();
 
   /** The browser owner the controls call, or null while none is wired. */
-  const controls = shallowRef(null);
-
-  /** @param {?object} next The owner's controls, or null to disconnect. */
-  function connect(next) {
-    controls.value = next && markRaw(next);
-  }
+  const [controls, connect] = presented();
 
   return { view, publish, controls, connect };
 });

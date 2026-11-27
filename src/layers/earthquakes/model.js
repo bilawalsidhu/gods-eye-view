@@ -1,3 +1,12 @@
+// The package carries no i18n: with no translator given, the card stays
+// English, its `{name}` slots filled in.
+import { englishText } from '../../i18n/marker.js';
+import { fnv1a } from '../../data/fnv1a.js';
+import {
+  ambientLabelEntry,
+  topByPriority,
+} from '../../data/ambientLabelOverlay.js';
+
 export const EARTHQUAKE_OVERLAY_SOURCE_ID = 'earthquakes';
 export const EARTHQUAKE_OVERLAY_COHORT_LIMIT = 96;
 export const EARTHQUAKE_OVERLAY_COLLISION_CAPACITY = 48;
@@ -110,23 +119,14 @@ export function createEarthquakeOverlayEntry({
   accent,
 }) {
   const mag = Number(magnitude);
-  return {
-    id: String(id),
+  return ambientLabelEntry({
+    id,
     position,
-    variant: 'label',
     title: earthquakeMagnitudeTitle(mag),
     accent,
     priority: Math.round(mag * 1000),
-    collisionGroup: 'ambient-label',
-    paintLane: 'ambient-label',
-    interactive: false,
-    edgeFade: 'keyhole',
-    horizonCull: true,
-    terrainOcclusion: false,
     gapPx: 15,
-    verticalOnly: true,
-    placement: 'above',
-  };
+  });
 }
 
 /** Where USGS publishes one event's page, its event id appended. */
@@ -149,12 +149,6 @@ export function earthquakeEventLink(usgsId) {
     : null;
 }
 
-// The package carries no i18n: with no translator given, the card stays
-// English, its `{name}` slots filled in.
-const english = (text, values) =>
-  String(text).replace(/\{(\w+)\}/g, (all, key) =>
-    values && Object.hasOwn(values, key) ? String(values[key]) : all,
-  );
 const utcMinute = (time) =>
   `${new Date(time).toISOString().slice(0, 16).replace('T', ' ')} UTC`;
 const oneDecimal = (value) => String(Math.round(value * 10) / 10);
@@ -178,7 +172,7 @@ const oneDecimal = (value) => String(Math.round(value * 10) / 10);
 export function describeEarthquake(
   event,
   {
-    t = english,
+    t = englishText,
     formatTime = utcMinute,
     formatDepth = oneDecimal,
     canOpen = true,
@@ -261,7 +255,7 @@ export function earthquakeSeverityLevel(magnitude) {
 }
 
 /** A magnitude's class, as a word in the page's language. */
-export function earthquakeSeverityName(magnitude, t = english) {
+export function earthquakeSeverityName(magnitude, t = englishText) {
   switch (earthquakeSeverityLevel(magnitude)) {
     case 5:
       return t('Great', { context: 'earthquake' });
@@ -293,7 +287,7 @@ export function earthquakeSeverityMeter(magnitude) {
  * The depth band the disc's colour shows, as a word: shallow (under 70 km,
  * red), intermediate (to 300 km, orange), deep (yellow).
  */
-export function earthquakeDepthBandName(depthKm, t = english) {
+export function earthquakeDepthBandName(depthKm, t = englishText) {
   const band = depthBand(depthKm);
   if (band === SHALLOW) return t('Shallow', { context: 'earthquake' });
   if (band === INTERMEDIATE)
@@ -328,16 +322,6 @@ const CONTOUR_HARMONICS = Object.freeze([2, 3, 5]);
 const CONTOUR_WEIGHTS = Object.freeze([1, 0.6, 0.3]);
 const CONTOUR_MAX_DRIFT = 1.5;
 
-/** A stable 32-bit hash of a string (FNV-1a). */
-function hashString(text) {
-  let h = 0x811c9dc5;
-  for (const ch of String(text ?? '')) {
-    h ^= ch.codePointAt(0);
-    h = Math.imul(h, 0x01000193);
-  }
-  return h >>> 0;
-}
-
 /**
  * One quake's contour shape: a few harmonics around the circle, each with
  * its own phase and a drift that turns it as a line runs outward, seeded by
@@ -346,7 +330,7 @@ function hashString(text) {
  * @returns {ReadonlyArray<{harmonic: number, weight: number, phase: number, drift: number}>}
  */
 export function earthquakeContourShape(seed) {
-  let state = hashString(seed) || 1;
+  let state = fnv1a(String(seed ?? '')) || 1;
   // xorshift32: a small, stable stream from the seed.
   const next = () => {
     state ^= state << 13;
@@ -451,7 +435,7 @@ function earthquakeRippleAlpha(fraction) {
  * @param {{t?: (text: string, values?: object) => string}} [text]
  * @returns {string}
  */
-export function earthquakeZoomLabel(event, { t = english } = {}) {
+export function earthquakeZoomLabel(event, { t = englishText } = {}) {
   return t('Zoom to {name}', { name: earthquakeMarkLabel(event) });
 }
 
@@ -460,45 +444,34 @@ export function selectEarthquakeOverlayCohort(
   entries,
   limit = EARTHQUAKE_OVERLAY_COHORT_LIMIT,
 ) {
-  const cap = Math.max(
-    0,
-    Math.min(EARTHQUAKE_OVERLAY_COHORT_LIMIT, Math.floor(Number(limit) || 0)),
-  );
-  if (!Array.isArray(entries) || cap === 0) return [];
-  return entries
-    .slice()
-    .sort(
-      (a, b) =>
-        b.priority - a.priority || String(a.id).localeCompare(String(b.id)),
-    )
-    .slice(0, cap);
+  return topByPriority(entries, limit, EARTHQUAKE_OVERLAY_COHORT_LIMIT);
 }
 
 /**
- * Map one earthquake's raw plain values to a JSON-safe analyst record
- * (analyst query engine seam). Pure — no Cesium types. Missing/unknown
- * fields are null, never NaN/undefined. Falls back to an index-based id
- * when the USGS event id is absent.
- * @param {Object|null|undefined} raw - Plain values pulled off the entity:
- *   {id, mag, place, time, depth, lat, lon}.
+ * Map one earthquake event to a JSON-safe analyst record (analyst query
+ * engine seam). Pure — no Cesium types. Missing/unknown fields are null,
+ * never NaN/undefined. Falls back to an index-based id when the USGS event
+ * id is absent.
+ * @param {Object|null|undefined} event - A normalized event:
+ *   {usgsId, mag, place, time, depthKm, lat, lon}.
  * @param {number} [index=0] - Position in the snapshot (fallback id only).
  * @returns {{id: string, magnitude: number|null, depthKm: number|null,
  *   lat: number|null, lon: number|null, timeMs: number|null, place: string|null}}
  */
-export function mapAnalystRecord(raw, index = 0) {
+export function mapAnalystRecord(event, index = 0) {
   const num = (v) => (Number.isFinite(v) ? v : null);
   const text = (v) => {
     const t = String(v ?? '').trim();
     return t || null;
   };
   return {
-    id: text(raw?.id) || `QUAKE-${String(index).padStart(4, '0')}`,
-    magnitude: num(raw?.mag),
-    depthKm: num(raw?.depth),
-    lat: num(raw?.lat),
-    lon: num(raw?.lon),
-    timeMs: num(raw?.time), // USGS epoch ms
-    place: text(raw?.place),
+    id: text(event?.usgsId) || `QUAKE-${String(index).padStart(4, '0')}`,
+    magnitude: num(event?.mag),
+    depthKm: num(event?.depthKm),
+    lat: num(event?.lat),
+    lon: num(event?.lon),
+    timeMs: num(event?.time), // USGS epoch ms
+    place: text(event?.place),
   };
 }
 

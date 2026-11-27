@@ -129,12 +129,7 @@ export function createMilitaryRegistry({ source, now = Date.now } = {}) {
     const signal = AbortSignal.any([owner.signal, AbortSignal.timeout(10000)]);
     _polling = true;
     try {
-      const ids =
-        typeof requestSource.getIdentities === 'function'
-          ? await requestSource.getIdentities({}, { signal })
-          : (await requestSource.getSnapshot({}, { signal })).records.map(
-              (record) => record.id,
-            );
+      const ids = await requestSource.getIdentities({}, { signal });
       signal.throwIfAborted();
       if (lifetime !== owner) return;
       if (!Array.isArray(ids))

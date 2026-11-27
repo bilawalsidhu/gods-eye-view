@@ -58,7 +58,7 @@ export function createViewFrameRate({
   apply(fps);
 
   function publish() {
-    store?.publishFrameRate?.({
+    store.publishFrameRate({
       fps,
       stop: fps === 0 ? UNLIMITED_STOP : fps,
       min: MIN_FRAME_RATE,
@@ -67,7 +67,7 @@ export function createViewFrameRate({
     });
   }
 
-  const token = store?.connect?.({
+  const token = store.connect({
     /** The slider's stop: a rate, or UNLIMITED_STOP. */
     setFrameRate(stop) {
       const next = frameRateOf(stop);
@@ -87,8 +87,8 @@ export function createViewFrameRate({
 
   return {
     destroy() {
-      if (token) store?.detach?.(token);
-      store?.publishFrameRate?.(null);
+      if (token) store.detach(token);
+      store.publishFrameRate(null);
     },
   };
 }

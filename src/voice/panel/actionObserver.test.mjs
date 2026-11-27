@@ -4,15 +4,6 @@ import { getEventListeners } from 'node:events';
 import { createPanelActionObserver } from './actionObserver.js';
 import { createVoiceSession } from '../session.js';
 
-function deferred() {
-  let resolve, reject;
-  const promise = new Promise((yes, no) => {
-    resolve = yes;
-    reject = no;
-  });
-  return { promise, resolve, reject };
-}
-
 test('sync value/throw, receiver, arguments and opaque unsupported result stay exact', () => {
   const receiver = {},
     args = {},
@@ -58,7 +49,7 @@ test('sync value/throw, receiver, arguments and opaque unsupported result stay e
 
 test('native Promise identity, fulfillment object and rejection object are preserved', async () => {
   for (const reject of [false, true]) {
-    const d = deferred(),
+    const d = Promise.withResolvers(),
       value = { exact: true },
       events = [];
     const observer = createPanelActionObserver({
@@ -83,8 +74,8 @@ test('native Promise identity, fulfillment object and rejection object are prese
 });
 
 test('null/reused callIds have independent keys and settlement cannot retire a sibling', async () => {
-  const a = deferred(),
-    b = deferred(),
+  const a = Promise.withResolvers(),
+    b = Promise.withResolvers(),
     events = [];
   const observer = createPanelActionObserver({
     runAction: (name) => (name === 'a' ? a.promise : b.promise),
@@ -243,8 +234,8 @@ test('accessor/custom options are forwarded untouched without extra getter/curre
 });
 
 test('real caller abort retires ownership only; late A cannot release or report over B', async () => {
-  const a = deferred(),
-    b = deferred(),
+  const a = Promise.withResolvers(),
+    b = Promise.withResolvers(),
     caller = new AbortController(),
     events = [],
     callbacks = [];
@@ -309,8 +300,8 @@ test('already-aborted caller and disposed mount still invoke original exactly on
 });
 
 test('reentrant start retirement retains only fresh ownership and never skips execution', async () => {
-  const a = deferred(),
-    b = deferred(),
+  const a = Promise.withResolvers(),
+    b = Promise.withResolvers(),
     called = [];
   let observer, pb;
   observer = createPanelActionObserver({
@@ -404,8 +395,8 @@ test('actual pinned-main common session: private invocation stream is separate f
 });
 
 test('actual common interruption aborts resources; injected real-lifecycle observation retires uncooperative A', async (t) => {
-  const a = deferred(),
-    b = deferred(),
+  const a = Promise.withResolvers(),
+    b = Promise.withResolvers(),
     events = [];
   let hooks, observer, aSignal;
   const session = createVoiceSession({
@@ -452,7 +443,7 @@ test('actual common interruption aborts resources; injected real-lifecycle obser
 
 test('null-prototype option descriptors survive instrumentation; mount abort does not fabricate settlement', async () => {
   const mount = new AbortController(),
-    d = deferred(),
+    d = Promise.withResolvers(),
     events = [],
     originalProgress = [];
   const options = Object.assign(Object.create(null), {

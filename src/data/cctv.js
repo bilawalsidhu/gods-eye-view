@@ -2,10 +2,11 @@ import { defaultSurface } from './surfaceServices.js';
 import { createApplicationCctv } from '../app/layers/cctv.js';
 import { createSourceSlot } from '../sources/sourceSlot.js';
 import { createCctvSource } from '../layers/cctv/source.js';
+import { CCTV_SOURCE_METHODS } from '../layers/cctv/sourcePolicy.js';
 
 const sourceSlot = createSourceSlot(
   createCctvSource(),
-  ['getCatalog', 'getHealth', 'getFrameUrl', 'getMediaUrl'],
+  CCTV_SOURCE_METHODS,
   'Cctv source',
 );
 export const configureCctvSource = sourceSlot.configure;

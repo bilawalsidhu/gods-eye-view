@@ -13,7 +13,7 @@ import {
   selectLocalInfrastructureOverlayCohort,
 } from './localGeojsonCore.js';
 import { localGeoJsonServices } from '../app/localGeojsonServices.js';
-import { layerFeedState } from './manager.js';
+import { layerFeedState } from './feedState.js';
 import {
   INFRA_LOD_ACTIVE_MIN,
   INFRA_LOD_ACTIVE_MAX,

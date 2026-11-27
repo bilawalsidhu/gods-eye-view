@@ -56,14 +56,6 @@ export const CACHE_LIMITS = { states: 12, tiles: 24 };
 /** A geocoded neighborhood point may sit this far outside the outline. */
 const NEIGHBORHOOD_AT_KM = 1.5;
 
-/** Test seam: count index, state and tile loads (lazy-loading contract). */
-export const packLoads = {
-  placeIndex: 0,
-  placeStates: [],
-  neighborhoodIndex: 0,
-  neighborhoodTiles: [],
-};
-
 /**
  * A name as spelled: case and punctuation only. Every mark is kept, so
  * "की" and "क", "Й" and "И" stay distinct.
@@ -133,7 +125,6 @@ const UNITED_STATES = new Set([
 // ── loading ─────────────────────────────────────────────────────────────
 
 const loadPlaceIndex = createRetryableLoader(async () => {
-  packLoads.placeIndex += 1;
   const index = await loadBundledJson(placeFiles.INDEX_URL());
   const states = index.states.map((state) => ({
     ...state,
@@ -202,7 +193,6 @@ function packUrl(urls, key) {
 function loadState(st) {
   return stateLoaders.load(st, () =>
     createRetryableLoader(async () => {
-      packLoads.placeStates.push(st);
       const [{ meta }, pack] = await Promise.all([
         loadPlaceIndex(),
         loadBundledJson(packUrl(placeFiles.STATE_URLS, st)),
@@ -233,7 +223,6 @@ function loadState(st) {
 let neighborhoodIndex = null;
 
 const loadNeighborhoodIndex = createRetryableLoader(async () => {
-  packLoads.neighborhoodIndex += 1;
   neighborhoodIndex = await loadBundledJson(neighborhoodFiles.INDEX_URL());
   return neighborhoodIndex;
 });
@@ -243,7 +232,6 @@ const tileLoaders = boundedLoaders(() => CACHE_LIMITS.tiles);
 function loadTile(key) {
   return tileLoaders.load(key, () =>
     createRetryableLoader(async () => {
-      packLoads.neighborhoodTiles.push(key);
       const [index, tile] = await Promise.all([
         loadNeighborhoodIndex(),
         loadBundledJson(packUrl(neighborhoodFiles.TILE_URLS, `t${key}`)),

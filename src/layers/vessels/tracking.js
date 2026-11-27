@@ -95,7 +95,6 @@ export function createTracking({
   function startSelectedVesselTrail(record) {
     state.trailAbort?.abort();
     state.trailAbort = new AbortController();
-    state.trailBackfillToken += 1;
     state.trailId = record.id;
     state.trailPositions = [];
     state.trailTimes = [];
@@ -115,7 +114,7 @@ export function createTracking({
         findFrame(state.viewer)?.on('preRender', drawSelectedVesselTrail) ??
         null;
     drawTrailBody();
-    backfillVesselTrail(record.id, state.trailBackfillToken, record.reference);
+    backfillVesselTrail(record.id, record.reference);
   }
 
   /**
@@ -131,11 +130,8 @@ export function createTracking({
     }
     state.trailAbort?.abort();
     state.trailAbort = new AbortController();
-    state.trailBackfillToken += 1;
     drawSelectedVesselTrail();
-    backfillVesselTrail(record.id, state.trailBackfillToken, record.reference, {
-      replace: true,
-    });
+    backfillVesselTrail(record.id, record.reference, { replace: true });
   }
 
   /** The world time the selected vessel is drawn at; Infinity live, where
@@ -193,13 +189,11 @@ export function createTracking({
    * TRAIL_MAX_POINTS (newest kept). Any failure (404/timeout/malformed)
    * silently keeps the live-only trail.
    * @param {string} id - Key of the selected vessel.
-   * @param {number} token - Backfill token captured at request time.
    * @returns {Promise<void>}
    */
 
   async function backfillVesselTrail(
     id,
-    token,
     reference = id,
     { replace = false } = {},
   ) {
@@ -219,13 +213,7 @@ export function createTracking({
     } catch {
       return; // silent — keep the live-accumulated trail
     }
-    if (
-      signal.aborted ||
-      owner !== state.trailAbort ||
-      !samples ||
-      token !== state.trailBackfillToken
-    )
-      return;
+    if (signal.aborted || owner !== state.trailAbort || !samples) return;
     if (state.trailId !== id) return;
 
     const older = [];
@@ -240,13 +228,9 @@ export function createTracking({
         !(Number.isFinite(sample?.observedAtMs) && sample.observedAtMs <= atMs)
       )
         continue;
-      // Per-sample N (≤ TRAIL_MAX_POINTS lookups) — same sea-surface datum as
-      // the live vertices so the spliced trail is height-continuous.
-      const heightM = components.queries.vesselDatumHeightM(
-        currentGeoidN(lat, lon),
-        TRAIL_HEIGHT_M,
-      );
-      older.push(fromDegrees(lon, lat, heightM));
+      // The same sea-surface datum as the live vertices, so the spliced trail
+      // is height-continuous.
+      older.push(vesselTrailPosition({ lat, lon }));
       olderTimes.push(
         Number.isFinite(sample?.observedAtMs) ? sample.observedAtMs : NaN,
       );
@@ -300,7 +284,6 @@ export function createTracking({
   function clearSelectedVesselTrail() {
     state.trailAbort?.abort();
     state.trailAbort = null;
-    state.trailBackfillToken += 1;
     state.trailId = null;
     state.trailPositions = [];
     state.trailTimes = [];

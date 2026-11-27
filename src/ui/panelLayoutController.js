@@ -4,6 +4,29 @@ import { syncRadioPanelPlacement } from './radioPanelPlacement.js';
 import { isPanelRailMutation } from './panelRailCatalog.js';
 import { flushDisplayedPanelContent } from './rail/panelContent.js';
 const COCKPIT_LAYOUT_SETTLE_MS = 240;
+/** The fixed UI regions either accordion's lane can meet. */
+const SHARED_STACK_OBSTACLES = [
+  '#cockpit-hud .cockpit-topline',
+  '#cockpit-hud .cockpit-topline > div',
+  '#title-bar',
+  '#style-indicator',
+  '#top-center-actions',
+  '#traffic-sync-chip',
+  '#cctv-sync-chip',
+  '#intel-hud .hud-top-left',
+  '#intel-hud .hud-top-right',
+  '#intel-hud .hud-bottom-left',
+  '#intel-hud .hud-bottom-right',
+  '#intel-hud .hud-bottom-bar',
+  '#intel-hud .hud-left-edge',
+  '#intel-hud .hud-right-edge',
+  '#cockpit-context',
+  '#cesium-credits .cesium-credit-logoContainer',
+  '#cesium-credits .cesium-credit-textContainer',
+  '#gev-credits',
+  '#gev-voice-control',
+  '#world-timeline',
+];
 /**
  * Fixed UI regions that can occupy the left accordion's vertical lane.
  * Rectangles are filtered at runtime for visibility and horizontal overlap,
@@ -11,28 +34,9 @@ const COCKPIT_LAYOUT_SETTLE_MS = 240;
  * intersect it at the current viewport size.
  */
 const LEFT_STACK_OBSTACLE_SELECTOR = [
-  '#cockpit-hud .cockpit-topline',
-  '#cockpit-hud .cockpit-topline > div',
-  '#title-bar',
-  '#style-indicator',
-  '#top-center-actions',
-  '#traffic-sync-chip',
-  '#cctv-sync-chip',
-  '#intel-hud .hud-top-left',
-  '#intel-hud .hud-top-right',
-  '#intel-hud .hud-bottom-left',
-  '#intel-hud .hud-bottom-right',
-  '#intel-hud .hud-bottom-bar',
-  '#intel-hud .hud-left-edge',
-  '#intel-hud .hud-right-edge',
-  '#cockpit-context',
-  '#cesium-credits .cesium-credit-logoContainer',
-  '#cesium-credits .cesium-credit-textContainer',
-  '#gev-credits',
-  '#gev-voice-control',
+  ...SHARED_STACK_OBSTACLES,
   '#pp-toggles',
   '#param-slider-panel',
-  '#world-timeline',
 ].join(', ');
 /**
  * Fixed UI regions that can occupy the right control lane. Runtime rectangle
@@ -40,31 +44,12 @@ const LEFT_STACK_OBSTACLE_SELECTOR = [
  * visible without tying the layout to one screen height.
  */
 const RIGHT_STACK_OBSTACLE_SELECTOR = [
-  '#cockpit-hud .cockpit-topline',
-  '#cockpit-hud .cockpit-topline > div',
-  '#title-bar',
-  '#style-indicator',
-  '#top-center-actions',
-  '#traffic-sync-chip',
-  '#cctv-sync-chip',
-  '#intel-hud .hud-top-left',
-  '#intel-hud .hud-top-right',
-  '#intel-hud .hud-bottom-left',
-  '#intel-hud .hud-bottom-right',
-  '#intel-hud .hud-bottom-bar',
-  '#intel-hud .hud-left-edge',
-  '#intel-hud .hud-right-edge',
-  '#cockpit-context',
+  ...SHARED_STACK_OBSTACLES,
   '#cockpit-signal-stream',
   // The "NEW: GEV Stories" card under the Stories button: panels start below
   // it while it is up, so its buttons never sit over a panel's controls.
   '#hPop',
-  '#cesium-credits .cesium-credit-logoContainer',
-  '#cesium-credits .cesium-credit-textContainer',
-  '#gev-credits',
   '#command-dock',
-  '#gev-voice-control',
-  '#world-timeline',
 ].join(', ');
 /** The body class the welcome sets while BROWSE STORIES loads. */
 const OPENING_STORIES = 'first-run-opening-stories';

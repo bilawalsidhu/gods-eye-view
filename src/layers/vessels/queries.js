@@ -1,6 +1,7 @@
 import { distance } from '../../geo/vector.js';
 import { t, msg } from '../../i18n/index.js';
 import { vesselCockpitInfo } from './cockpitSubject.js';
+import { finiteNumber } from './records.js';
 import { vesselTypeCss } from '../../data/vesselLabels.js';
 import { greatCircleMeters } from '../../geoDistance.js';
 import {
@@ -14,6 +15,7 @@ import {
 } from './policy.js';
 import { VESSEL_OVERLAY_SOURCE_ID } from '../../data/vesselLabels.js';
 import { locateOnTrack } from '../../data/locate.js';
+import { analystRecordLimit } from '../../data/analystRecordLimit.js';
 
 // ingestion.js is a portable export (package.json) and writes English labels
 // into state; translate the known ones here, pass anything else through.
@@ -303,37 +305,6 @@ export function createQueries({
     return (Number.isFinite(geoidN) ? geoidN : 0) + liftM;
   }
 
-  /**
-   * Reduce one vessel-selection gesture to the layer-owned action it should
-   * perform. The interaction handler reserves only vessel-record residuals and
-   * trail picks as no-ops. The interaction wire also reserves sibling-owned
-   * picks before this reducer so their camera action cannot mutate AIS state.
-   *
-   * @param {{selectedId?: string|number|null, pickedId?: string|number|null,
-   *   gesture?: 'click'|'escape'}} input - Current selection plus owned pick.
-   * @returns {{action: 'none'|'select'|'deselect'}}
-   */
-
-  function reduceVesselSelection(input = {}) {
-    const selectedId = normalizeSelectionId(input.selectedId);
-    const pickedId = normalizeSelectionId(input.pickedId);
-    const gesture = input.gesture || 'click';
-
-    if (gesture === 'escape') {
-      return selectedId ? { action: 'deselect' } : { action: 'none' };
-    }
-    if (gesture !== 'click') {
-      return { action: 'none' };
-    }
-    if (pickedId) {
-      if (pickedId === selectedId) {
-        return { action: 'none' };
-      }
-      return { action: 'select' };
-    }
-    return selectedId ? { action: 'deselect' } : { action: 'none' };
-  }
-
   function normalizeSelectionId(value) {
     if (value === null || value === undefined) return null;
     const text = String(value).trim();
@@ -344,7 +315,6 @@ export function createQueries({
     deriveAisFeedError,
     classifyAisFeedSnapshot,
     vesselDatumHeightM,
-    reduceVesselSelection,
 
     id: 'ais-live-vessels',
 
@@ -357,8 +327,6 @@ export function createQueries({
     requiresKeyId: 'aisstream',
 
     updateInterval: REFRESH_MS,
-
-    statsRefreshInterval: 1000,
 
     /**
      * Find a vessel by its exact id, exact MMSI or case-insensitive name
@@ -373,10 +341,7 @@ export function createQueries({
       const q = String(query).trim();
       if (!q) return null;
 
-      let record = state.records.byId.get(q) || null;
-      if (!record && /^\d+$/.test(q)) {
-        record = records.find((r) => r.mmsi === q) || null;
-      }
+      let record = recordFor(q);
       if (!record) {
         const lower = q.toLowerCase();
         record =
@@ -460,11 +425,6 @@ export function createQueries({
         Number.isFinite(maxCount) && maxCount > 0 ? Math.floor(maxCount) : 60;
       const center = { lat, lon };
       const subject = state.cockpitSubjectId;
-      const finite = (value) => {
-        if (value === null || value === undefined || value === '') return null;
-        const number = Number(value);
-        return Number.isFinite(number) ? number : null;
-      };
 
       const entries = [];
       records.forEach((record, index) => {
@@ -483,8 +443,8 @@ export function createQueries({
         name: String(record.name || record.mmsi || ''),
         latitude: record.lat,
         longitude: record.lon,
-        course: finite(record.course),
-        heading: finite(record.heading),
+        course: finiteNumber(record.course),
+        heading: finiteNumber(record.heading),
         type: String(record.type || ''),
         color: vesselTypeCss(record.type),
         stale: (record.missedRefreshes || 0) > 0,
@@ -552,9 +512,7 @@ export function createQueries({
       if (!state.feed.enabled) return [];
       const records = state.records.all;
       if (!Array.isArray(records) || !records.length) return [];
-      const limit = Number.isFinite(maxCount)
-        ? Math.max(1, Math.floor(maxCount))
-        : 2000;
+      const limit = analystRecordLimit(maxCount, { fallback: 2000, min: 1 });
       const result = [];
       for (const record of records) {
         if (result.length >= limit) break;
@@ -852,8 +810,6 @@ export function createQueries({
     classifyAisFeedSnapshot,
     mapAnalystRecord,
     vesselDatumHeightM,
-    reduceVesselSelection,
-    normalizeSelectionId,
     methods,
   };
 }

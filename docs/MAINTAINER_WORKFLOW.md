@@ -130,9 +130,8 @@ resolves the top of `CHANGELOG.md`. At release, `npm run changelog:check` previe
 the batch and its order; `npm run changelog` splices it into `CHANGELOG.md` and
 empties the directory. The assembler refuses a malformed filename or two fragments
 claiming one PR number before writing, and copies text through unchanged so the
-contributor's wording and credit ship. The write is staged in
-`changelog.d/.assembling/`, so if it fails part-way, rerunning `npm run changelog`
-finishes or rolls back the batch. It never duplicates or drops an entry.
+contributor's wording and credit ship. If it fails part-way, restore with
+`git checkout -- changelog.d CHANGELOG.md` and run it again.
 
 Return this concise record privately unless posting is authorized. Keep sensitive
 security evidence in the private report:

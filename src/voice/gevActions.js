@@ -14,7 +14,6 @@ import {
 import { resolveDeicticArgs } from './deixis.js';
 import { isStoriesOpen } from './realtimeInputPolicy.js';
 export { readLayerLifecycleSummary } from './layerSummary.js';
-import { defaultGeospatial } from '../search/defaults.js';
 import { msg } from '../i18n/index.js';
 import { useProviderSettingsStore } from '../ui/stores/providerSettings.js';
 import { layerFinderFor } from '../ui/layerFinderFilter.js';
@@ -267,6 +266,16 @@ const FRAME_TARGETS = new Map([
   ['vessels', 'ais-live-vessels'],
   ['ships', 'ais-live-vessels'],
 ]);
+
+/** Change one layer's visibility as a tracked intent; resolves with the manager's result and the settled intent. */
+async function setLayerWithIntent(dataManager, layerId, enabled, options) {
+  const intent = dataManager._setEnabledWithIntent(layerId, enabled, options);
+  const changed = await intent.promise;
+  const outcome = Number.isInteger(intent.intentEpoch)
+    ? await dataManager._waitForVisibilityIntent(layerId, intent.intentEpoch)
+    : null;
+  return { changed, outcome };
+}
 
 const serviceCaches = new WeakMap();
 function cachesFor(service) {
@@ -588,26 +597,12 @@ export function createGevActionRunner({
       let changeError = null;
       let intentOutcome = null;
       try {
-        if (typeof dataManager._setEnabledWithIntent === 'function') {
-          const intent = dataManager._setEnabledWithIntent(
-            layerId,
-            enabled,
-            changeOptions,
-          );
-          changed = await intent.promise;
-          if (Number.isInteger(intent.intentEpoch)) {
-            intentOutcome = await dataManager._waitForVisibilityIntent?.(
-              layerId,
-              intent.intentEpoch,
-            );
-          }
-        } else {
-          changed = await dataManager.setEnabled(
-            layerId,
-            enabled,
-            changeOptions,
-          );
-        }
+        ({ changed, outcome: intentOutcome } = await setLayerWithIntent(
+          dataManager,
+          layerId,
+          enabled,
+          changeOptions,
+        ));
         if (layerId === 'satellites') {
           // A Satellites OFF can end Space Missions, which needs it.
           await dataManager.layers
@@ -639,10 +634,7 @@ export function createGevActionRunner({
         };
       }
       const intentCommitted = intentOutcome?.succeeded === true;
-      const current =
-        !runOptions.signal?.aborted &&
-        (typeof runOptions.isCurrent !== 'function' || runOptions.isCurrent());
-      if (!current && !intentCommitted) {
+      if (!current() && !intentCommitted) {
         return {
           ok: false,
           action: 'set_layer_visibility',
@@ -1911,9 +1903,7 @@ export function createGevActionRunner({
       // Only an accepted, still-current result may become "the last list": a
       // cancelled turn or one finishing after the session ended must not
       // repopulate a cleared registry.
-      const stillCurrent =
-        !runOptions.signal?.aborted &&
-        (typeof runOptions.isCurrent !== 'function' || runOptions.isCurrent());
+      const stillCurrent = runOptions.isCurrent();
       if (stillCurrent)
         deixis?.referents?.recordResult?.(name, out, {
           since: referentGeneration,
@@ -1955,7 +1945,7 @@ function selectedCockpitTarget(dataManager) {
   if (!selected || !['flights', 'military'].includes(selected.layerId))
     return null;
   const module = dataManager?.layers?.get(selected.layerId)?.module;
-  if (!module?.trackById || typeof module.trackById !== 'function') return null;
+  if (typeof module?.trackById !== 'function') return null;
   const id = String(selected.id || '').trim();
   return id ? { layerId: selected.layerId, id } : null;
 }
@@ -2520,26 +2510,13 @@ export async function controlRadio(
     if (options.signal) enableOptions.signal = options.signal;
     let result = false;
     try {
-      if (typeof dataManager._setEnabledWithIntent === 'function') {
-        const intent = dataManager._setEnabledWithIntent(
+      ({ changed: result, outcome: lastIntentOutcome } =
+        await setLayerWithIntent(
+          dataManager,
           'radio',
           shouldEnable,
           enableOptions,
-        );
-        result = await intent.promise;
-        if (Number.isInteger(intent.intentEpoch)) {
-          lastIntentOutcome = await dataManager._waitForVisibilityIntent?.(
-            'radio',
-            intent.intentEpoch,
-          );
-        }
-      } else {
-        result = await dataManager.setEnabled(
-          'radio',
-          shouldEnable,
-          enableOptions,
-        );
-      }
+        ));
     } catch (error) {
       lastIntentError = error;
       return false;
@@ -3456,7 +3433,7 @@ function runManagedVoiceNavigation(
  */
 export async function getBasemapLabelContext(
   viewer,
-  service = defaultGeospatial,
+  service,
   { cachedOnly = false, previous = null, camera = cameraOf(viewer) } = {},
 ) {
   const pose = camera.pose();
@@ -3733,7 +3710,12 @@ function compassDir(azDeg) {
   return COMPASS_16[Math.round((((azDeg % 360) + 360) % 360) / 22.5) % 16];
 }
 
-function nextIssPass(viewer, dataManager, args) {
+/**
+ * The next pass of one satellite over the asked location or the camera:
+ * `getPass({ latDeg, lonDeg, minElevDeg })` gives the layer's `{ status, pass }`,
+ * and `label` names the satellite in the errors.
+ */
+function passResult(viewer, args, getPass, label, action) {
   let latDeg = Number.isFinite(args.latitude) ? args.latitude : null;
   let lonDeg = Number.isFinite(args.longitude) ? args.longitude : null;
   if (latDeg == null || lonDeg == null) {
@@ -3747,30 +3729,27 @@ function nextIssPass(viewer, dataManager, args) {
   const minElevDeg = Number.isFinite(args.minElevationDeg)
     ? args.minElevationDeg
     : 10;
-  const result = dataManager?.layers
-    ?.get('satellites')
-    ?.module?.getNextIssPass?.({ latDeg, lonDeg, minElevDeg }) ?? {
+  const result = getPass({ latDeg, lonDeg, minElevDeg }) ?? {
     status: 'no-tle',
   };
   if (result.status === 'no-tle') {
     return {
       ok: false,
-      action: 'next_iss_pass',
-      error:
-        'ISS orbital elements not loaded yet — enable the satellites layer once, then ask again.',
+      action,
+      error: `${label} orbital elements not loaded yet — enable the satellites layer once, then ask again.`,
     };
   }
   if (result.status === 'none') {
     return {
       ok: false,
-      action: 'next_iss_pass',
-      error: `No ISS pass above ${minElevDeg}° in the next 24 hours for this location.`,
+      action,
+      error: `No ${label} pass above ${minElevDeg}° in the next 24 hours for this location.`,
     };
   }
   const { pass } = result;
   return {
     ok: true,
-    action: 'next_iss_pass',
+    action,
     observer: { latitude: latDeg, longitude: lonDeg },
     riseIso: new Date(pass.riseMs).toISOString(),
     minutesFromNow: Math.round((pass.riseMs - Date.now()) / 60000),
@@ -3783,6 +3762,17 @@ function nextIssPass(viewer, dataManager, args) {
     setIso: new Date(pass.setMs).toISOString(),
     peakIso: new Date(pass.maxElevMs).toISOString(),
   };
+}
+
+function nextIssPass(viewer, dataManager, args) {
+  return passResult(
+    viewer,
+    args,
+    (options) =>
+      dataManager?.layers?.get('satellites')?.module?.getNextIssPass?.(options),
+    'ISS',
+    'next_iss_pass',
+  );
 }
 
 function nextSatellitePass(viewer, dataManager, args) {
@@ -3800,37 +3790,21 @@ function nextSatellitePass(viewer, dataManager, args) {
           ? 'Several loaded satellites match. Choose a NORAD ID from candidates.'
           : 'No loaded satellite matches. Enable satellites and use an exact name or NORAD ID.',
     };
-  // Reuse the legacy location fallback and result formatting, substituting only
-  // this explicitly resolved catalog identity and the optional visibility filter.
-  const adapter = {
-    layers: new Map([
-      [
-        'satellites',
-        {
-          module: {
-            getNextIssPass: (options) =>
-              layer.getNextSatellitePass(identity.noradId, {
-                ...options,
-                requireVisible: args.visibleOnly === true,
-              }),
-          },
-        },
-      ],
-    ]),
-  };
-  const result = nextIssPass(viewer, adapter, args);
-  if (result.error) {
-    result.error = result.error.replace(
-      /ISS/g,
-      identity.name || String(identity.noradId),
-    );
-    if (args.visibleOnly === true)
-      result.error +=
-        ' Search required estimated illumination under a dark sky.';
-  }
+  const result = passResult(
+    viewer,
+    args,
+    (options) =>
+      layer.getNextSatellitePass(identity.noradId, {
+        ...options,
+        requireVisible: args.visibleOnly === true,
+      }),
+    identity.name || String(identity.noradId),
+    'next_satellite_pass',
+  );
+  if (result.error && args.visibleOnly === true)
+    result.error += ' Search required estimated illumination under a dark sky.';
   return {
     ...result,
-    action: 'next_satellite_pass',
     noradId: identity.noradId,
     name: identity.name,
     visibleOnly: args.visibleOnly === true,
@@ -4638,7 +4612,7 @@ async function getEntityContext(
   dataManager,
   styleManager,
   args = {},
-  service = defaultGeospatial,
+  service,
 ) {
   const startedAt = performance.now();
   const scope = String(args.scope || 'auto').toLowerCase();
@@ -5237,7 +5211,7 @@ async function getSceneContext(
   styleManager,
   dataManager,
   viewTarget = null,
-  service = defaultGeospatial,
+  service,
 ) {
   const cartographic = cameraOf(viewer).pose();
   const basemap = await getBasemapContext(viewer, viewTarget, service);
@@ -5262,11 +5236,7 @@ async function getSceneContext(
   };
 }
 
-async function getBasemapContext(
-  viewer,
-  viewTarget = null,
-  service = defaultGeospatial,
-) {
+async function getBasemapContext(viewer, viewTarget = null, service) {
   const { reverseGeocodeCache, nearbyPlacesCache } = cachesFor(service);
   const target = viewTarget;
   const samples = sampleViewportCartographics(viewer);

@@ -3,7 +3,7 @@ import { worldClock } from '../time/worldClock.js';
 import { readEntityRecord } from '../data/entityRecords.js';
 import { nextTick, watch } from 'vue';
 import { getConfiguredLayerCounts } from '../services/application.js';
-import { resolveImageryHost } from '../layers/weather/imageryHost.js';
+import { resolveImageryHost } from '../maps/imageryHost.js';
 import { ShellFacade } from './shellFacade.js';
 import { AircraftDisplay } from './aircraftDisplay.js';
 import { LayerBindings } from './layerBindings.js';
@@ -760,25 +760,18 @@ export class StyleManager extends ShellFacade {
   // Compatibility reads for existing controls, scene snapshots and Cockpit.
 
   /** Advance camera authority and settle any older search UI immediately. */
-  _stampNavigation({ cancelPendingSelection = true } = {}) {
-    return this._navigation._stampNavigation(...arguments);
+  _stampNavigation(...args) {
+    return this._navigation._stampNavigation(...args);
   }
 
   /** Release every follow owner while preserving Contact and vessel selection. */
-  _releaseFollowCamera({
-    preserveVesselSelection = true,
-    preserveCameraFlight = false,
-    trackingOrigin = 'tool',
-  } = {}) {
-    return this._navigation._releaseFollowCamera(...arguments);
+  _releaseFollowCamera(...args) {
+    return this._navigation._releaseFollowCamera(...args);
   }
 
   /** Accept a delayed lookup without releasing its current camera owner. */
-  _beginDeferredNavigation(
-    noun = 'location',
-    { cancelPendingSelection = true } = {},
-  ) {
-    return this._navigation._beginDeferredNavigation(...arguments);
+  _beginDeferredNavigation(...args) {
+    return this._navigation._beginDeferredNavigation(...args);
   }
 
   /** Public lifecycle seam used by voice location navigation. */
@@ -817,13 +810,13 @@ export class StyleManager extends ShellFacade {
   }
 
   /** Apply a temporary cockpit-only CRT/NVG/FLIR/NOIR post-process override. */
-  _setCockpitVision(mode, active, { revealParameters = false } = {}) {
-    return this._visualSettings._setCockpitVision(...arguments);
+  _setCockpitVision(...args) {
+    return this._visualSettings._setCockpitVision(...args);
   }
 
   /** Reveal shared style parameters, optionally opening Cockpit Display first. */
-  _revealCockpitStyleParameters({ openDisplay = false } = {}) {
-    return this._visualSettings._revealCockpitStyleParameters(...arguments);
+  _revealCockpitStyleParameters(...args) {
+    return this._visualSettings._revealCockpitStyleParameters(...args);
   }
 
   /**
@@ -833,8 +826,8 @@ export class StyleManager extends ShellFacade {
    * @param {boolean} [options.syncShare=true] - Whether to push state to the share link.
    * @returns {void}
    */
-  _setBloomIntensity(intensity, { syncShare = true } = {}) {
-    return this._visualSettings._setBloomIntensity(...arguments);
+  _setBloomIntensity(...args) {
+    return this._visualSettings._setBloomIntensity(...args);
   }
 
   /**
@@ -983,8 +976,8 @@ export class StyleManager extends ShellFacade {
     this._mapSourceControls?.render(state);
   }
 
-  _setDetectionAllocation(strategy, { syncShare = true, persist = true } = {}) {
-    return this._visualSettings._setDetectionAllocation(...arguments);
+  _setDetectionAllocation(...args) {
+    return this._visualSettings._setDetectionAllocation(...args);
   }
 
   /**
@@ -996,12 +989,8 @@ export class StyleManager extends ShellFacade {
     this._shareState.publish({ type: 'settings-changed' });
   }
 
-  _setCommandDockPanelPinState(
-    panelId,
-    pin,
-    { restore = false, persist = true, syncShare = true } = {},
-  ) {
-    return this._panelChrome._setCommandDockPanelPinState(...arguments);
+  _setCommandDockPanelPinState(...args) {
+    return this._panelChrome._setCommandDockPanelPinState(...args);
   }
 
   _initGlobalContextPanel() {
@@ -1332,17 +1321,8 @@ export class StyleManager extends ShellFacade {
    * @param {boolean} [options.explicit=false] Whether a direct user action owns the panel lane.
    * @returns {void}
    */
-  setPanelCollapsed(
-    panelId,
-    collapsed,
-    {
-      explicit = false,
-      restore = false,
-      persist = true,
-      syncShare = true,
-    } = {},
-  ) {
-    return this._panelChrome.setPanelCollapsed(...arguments);
+  setPanelCollapsed(...args) {
+    return this._panelChrome.setPanelCollapsed(...args);
   }
 
   /**
@@ -1438,15 +1418,8 @@ export class StyleManager extends ShellFacade {
    * @param {number} [options.outsideOpacityPct] - Opacity beyond the fade distance, 0-100%.
    * @returns {{ok: boolean, detectionMode?: string, densityPct?: number|null, error?: string}}
    */
-  setDetection({
-    enabled,
-    mode,
-    densityPct,
-    allocationStrategy,
-    fadePct,
-    outsideOpacityPct,
-  } = {}) {
-    return this._visualSettings.setDetection(...arguments);
+  setDetection(...args) {
+    return this._visualSettings.setDetection(...args);
   }
 
   /**
@@ -1494,8 +1467,8 @@ export class StyleManager extends ShellFacade {
    * @param {number} [options.intensityPct] - 0-200.
    * @returns {{ok: boolean, bloom: {enabled: boolean, intensityPct: number|null}}}
    */
-  setBloom({ enabled, intensityPct } = {}) {
-    return this._visualSettings.setBloom(...arguments);
+  setBloom(...args) {
+    return this._visualSettings.setBloom(...args);
   }
 
   /**
@@ -1505,8 +1478,8 @@ export class StyleManager extends ShellFacade {
    * @param {number} [options.intensityPct] - 0-100.
    * @returns {{ok: boolean, sharpen: {enabled: boolean, intensityPct: number|null}}}
    */
-  setSharpen({ enabled, intensityPct } = {}) {
-    return this._visualSettings.setSharpen(...arguments);
+  setSharpen(...args) {
+    return this._visualSettings.setSharpen(...args);
   }
 
   /**
@@ -1519,8 +1492,8 @@ export class StyleManager extends ShellFacade {
    * @param {boolean} [options.focus=false]
    * @returns {{ok:boolean, celestialRing:{enabled:boolean,visible:boolean}, cameraFocused:boolean, error?:string}}
    */
-  setCelestialRingEnabled(enabled, { syncShare = true, focus = false } = {}) {
-    return this._visualSettings.setCelestialRingEnabled(...arguments);
+  setCelestialRingEnabled(...args) {
+    return this._visualSettings.setCelestialRingEnabled(...args);
   }
 
   /**
@@ -1636,16 +1609,16 @@ export class StyleManager extends ShellFacade {
    *   Omit it and the method behaves as it always has.
    * @returns {Promise<boolean>} Whether the state was committed.
    */
-  async applyVisualState(state = {}, { isCurrent = null } = {}) {
-    return this._visualSettings.applyVisualState(...arguments);
+  async applyVisualState(...args) {
+    return this._visualSettings.applyVisualState(...args);
   }
 
   /**
    * Applies recording-friendly post-processing and shader uniform overrides.
    * @param {object} preset
    */
-  applyCinematicPreset(preset = {}) {
-    return this._visualSettings.applyCinematicPreset(...arguments);
+  applyCinematicPreset(...args) {
+    return this._visualSettings.applyCinematicPreset(...args);
   }
 
   // ── Parameter Sliders ─────────────────────────
@@ -1657,8 +1630,8 @@ export class StyleManager extends ShellFacade {
    * @param {string} styleName - Style name whose uniforms to display.
    * @returns {void}
    */
-  _updateSliderPanel(styleName, { reveal = false } = {}) {
-    return this._visualSettings._updateSliderPanel(...arguments);
+  _updateSliderPanel(...args) {
+    return this._visualSettings._updateSliderPanel(...args);
   }
 
   // ── Style switching ───────────────────────────
@@ -1674,15 +1647,8 @@ export class StyleManager extends ShellFacade {
    * @param {boolean} [options.applyPreset=true] - Whether to apply STYLE_PRESET_DEFAULTS for the new style.
    * @returns {void}
    */
-  setStyle(
-    styleName,
-    {
-      applyPreset = true,
-      revealParameters = applyPreset,
-      restore = false,
-    } = {},
-  ) {
-    return this._visualSettings.setStyle(...arguments);
+  setStyle(...args) {
+    return this._visualSettings.setStyle(...args);
   }
 
   // ── Shader transitions ────────────────────────
@@ -1869,7 +1835,7 @@ export class StyleManager extends ShellFacade {
     this._updateHudButtonState();
 
     this._lifetime.listen(this._cockpitDisplayToggleBtn, 'click', () => {
-      this._setCockpitDisclosure?.(
+      this._setCockpitDisclosure(
         'display',
         !this._cockpitDisclosureOpen('display'),
       );

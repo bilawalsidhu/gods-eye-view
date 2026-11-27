@@ -17,16 +17,6 @@ import { setLocale, t } from '../i18n/index.js';
 const PROVIDER_KEY = 'gev.voice.provider';
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
-function deferred() {
-  let resolve;
-  let reject;
-  const promise = new Promise((yes, no) => {
-    resolve = yes;
-    reject = no;
-  });
-  return { promise, resolve, reject };
-}
-
 // A real control whose listeners, removals and provider focus are counted.
 // Removal is counted but keeps the control, so an interaction after teardown
 // still reaches any listener the binder failed to release.
@@ -272,7 +262,7 @@ function compositionFixture(
             const job = (async () => {
               if (attempt !== generation || hooks.signal.aborted) return;
               if (gateStarts(instance)) {
-                const gate = deferred();
+                const gate = Promise.withResolvers();
                 instance.gates.push(gate);
                 await gate.promise;
               }

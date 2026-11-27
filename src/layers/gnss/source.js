@@ -1,20 +1,9 @@
 import { readResponseJsonCapped } from '../../sources/httpBody.js';
+import { parseRetryAfterMs } from '../../sources/retryAfter.js';
 
 // A portable export (package.json): no i18n here. Failures stay English data;
 // the Layers panel shows them translated.
 const msg = (text) => text;
-
-function retryDelay(raw, nowMs) {
-  if (!raw) return null;
-  const seconds = Number(raw);
-  const ms = seconds * 1000;
-  if (Number.isFinite(ms) && seconds > 0)
-    return Math.min(3600000, Math.max(5000, ms));
-  const at = Date.parse(raw);
-  return Number.isFinite(at) && at > nowMs
-    ? Math.min(3600000, Math.max(5000, at - nowMs))
-    : null;
-}
 
 /** Request integrity facts around a view anchor through the same-origin adsb.lol proxy. */
 export function createAdsbGnssSource({
@@ -35,10 +24,12 @@ export function createAdsbGnssSource({
       });
       if (!response.ok) {
         const limited = response.status === 429;
-        const retryAfterMs = retryDelay(
+        const waitMs = parseRetryAfterMs(
           response.headers.get('retry-after'),
           now(),
         );
+        const retryAfterMs =
+          waitMs > 0 ? Math.min(3600000, Math.max(5000, waitMs)) : null;
         throw Object.assign(
           new Error(
             // HTTP errors are matched by FEED_ERROR_PATTERNS in ui/statusText.js.

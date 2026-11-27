@@ -5,6 +5,7 @@
  * listed, only `manual` ones.
  */
 import { msg, t } from '../i18n/index.js';
+import { wrapLongitude } from '../geo/vector.js';
 
 export const DRAW_COLORS = Object.freeze([
   'primary',
@@ -55,8 +56,7 @@ const finitePairs = (points) =>
     .map(lonLat)
     .filter(([lon, lat]) => Number.isFinite(lon) && Number.isFinite(lat));
 /** A longitude in [-180, 180]; an unwrapped outline can carry ±540. */
-const wrapLon = (lon) =>
-  lon >= -180 && lon <= 180 ? lon : ((((lon + 180) % 360) + 360) % 360) - 180;
+const wrapLon = (lon) => (lon >= -180 && lon <= 180 ? lon : wrapLongitude(lon));
 /** Whether consecutive positions step across the antimeridian once wrapped. */
 const crossesAntimeridian = (points) =>
   points.some(

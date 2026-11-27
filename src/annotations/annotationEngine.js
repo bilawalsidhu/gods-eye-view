@@ -3,7 +3,7 @@ import { defaultGeospatial } from '../search/defaults.js';
 import { cameraOf, findCamera, findQuery } from '../render/rendererOf.js';
 import { fromDegrees } from '../geo/ellipsoid.js';
 import { sphereFromPoints } from '../geo/sphere.js';
-import { distance, toRadians } from '../geo/vector.js';
+import { distance, toRadians, wrapLongitude } from '../geo/vector.js';
 import { greatCircleMeters } from '../geoDistance.js';
 import {
   holdContinuousRender,
@@ -1665,7 +1665,7 @@ export function createAnnotationEngine({
         ring,
         polygons: null,
         anchor: {
-          lon: ((((midLon + 180) % 360) + 360) % 360) - 180,
+          lon: wrapLongitude(midLon),
           lat: (Math.min(...lats) + Math.max(...lats)) / 2,
           height: 0,
         },

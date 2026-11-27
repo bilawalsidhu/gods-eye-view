@@ -2,7 +2,11 @@ import {
   allocatePanelStackHeights,
   panelStackAutoCollapseIndices,
 } from '../panelStackLayout.js';
-import { resolveHudRailLayout } from './panelRailGeometry.js';
+import {
+  preferredFirst,
+  resolveHudRailLayout,
+  visibleObstacles,
+} from './panelRailGeometry.js';
 
 import { settleSideAccordion } from './panelAccordion.js';
 
@@ -156,32 +160,16 @@ export function layoutRightPanelRail({
   const alignedTop = Number.isFinite(leftStackTop)
     ? leftStackTop + leftRailOffset
     : viewportHeight * 0.26;
-  const obstacleRects = [];
-
-  for (const obstacle of obstacles) {
-    if (stack.contains(obstacle)) continue;
-    let hiddenByAncestor = false;
-    for (let element = obstacle; element; element = element.parentElement) {
-      const style = getComputedStyle(element);
-      if (
-        style.display === 'none' ||
-        style.visibility === 'hidden' ||
-        Number(style.opacity) === 0
-      ) {
-        hiddenByAncestor = true;
-        break;
-      }
-    }
-    if (hiddenByAncestor) continue;
-    const rect = obstacle.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) continue;
-    obstacleRects.push({
-      left: rect.left,
-      right: rect.right,
-      top: rect.top,
-      bottom: rect.bottom,
-    });
-  }
+  const obstacleRects = visibleObstacles(
+    obstacles,
+    stack,
+    getComputedStyle,
+  ).map(({ rect }) => ({
+    left: rect.left,
+    right: rect.right,
+    top: rect.top,
+    bottom: rect.bottom,
+  }));
 
   // Auto-collapsed headers contribute the same need even when exclusive
   // presentation hides them. Manually collapsed launchers keep their policy.
@@ -282,14 +270,10 @@ export function layoutRightPanelRail({
   // Match the left lane: allocation order follows the latest explicit
   // disclosure, not DOM order. A focused panel is the fallback owner so
   // temporary presentation collapse never strands keyboard focus.
-  const expandedPanels = preferredExpandedPanel
-    ? [
-        preferredExpandedPanel,
-        ...expandedPanelsInDomOrder.filter(
-          (panel) => panel !== preferredExpandedPanel,
-        ),
-      ]
-    : expandedPanelsInDomOrder;
+  const expandedPanels = preferredFirst(
+    expandedPanelsInDomOrder,
+    preferredExpandedPanel,
+  );
   const expandedAvailableHeight = Math.max(
     0,
     safeBottom -

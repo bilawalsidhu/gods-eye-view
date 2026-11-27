@@ -54,6 +54,63 @@ export const ISS_ARM_LABELS = Object.freeze([
   msg('Wrist roll'),
 ]);
 
+/** The Manual "Sun position" choices, the same on every station. */
+export function sunGroup() {
+  return {
+    id: 'sun',
+    label: msg('Sun position'),
+    kind: 'choices',
+    choices: [
+      {
+        id: 'follow',
+        label: msg('Follow the Sun'),
+        isDefault: true,
+        apply: (a) => a.setOverride(null),
+      },
+      ...ISS_SUN_POSES.map(({ id, label, sun, sunlit }) => ({
+        id,
+        label,
+        apply: (a) => {
+          const fixed = { sun, sunlit };
+          a.setOverride(() => fixed);
+        },
+      })),
+      {
+        id: 'orbit',
+        label: msg('Fast orbit (40 s)'),
+        apply: (a) => {
+          const start = Date.now();
+          a.setOverride((nowMs) => issCommandFastOrbit(nowMs - start));
+        },
+      },
+    ],
+  };
+}
+
+/** A seven-joint arm posed by joint, in degrees. */
+export function armGroup(id, label, joints, resume) {
+  return {
+    id,
+    label,
+    kind: 'sliders',
+    resume: msg('Resume sway'),
+    sliders: joints.map((joint, i) => ({
+      id: joint.node,
+      label: ISS_ARM_LABELS[i],
+      min: -120,
+      max: 120,
+      apply: (a, value) =>
+        a.setJoint(
+          joint.node,
+          joint.pivot,
+          joint.axis,
+          (value * Math.PI) / 180,
+        ),
+    })),
+    resumeApply: resume,
+  };
+}
+
 /**
  * The ISS as the STATION section describes it (stationPanel.js): its joint
  * driver and telemetry from the model part, and the Manual controls the
@@ -76,16 +133,16 @@ export function issStationDescription({ state: layerState, parts }) {
     telemetry: () => {
       // The feed is read only while the model is drawn; away from it there
       // is no signal to report, and a stale answer would read as lost.
-      if ((parts.issModel?._visualPosition?.() ?? null) === null)
+      if ((parts.issModel._visualPosition() ?? null) === null)
         return { state: 'idle', poseAgeMs: null, liveUntilMs: null };
       return parts.issModel?._telemetryStatus?.() ?? null;
     },
     // The model's centre, else this frame's tracked sample, else the dot as
     // the rendering part draws it.
     position: () =>
-      parts.issModel?._visualPosition?.() ??
+      parts.issModel._visualPosition() ??
       layerState._trackedFrameCartesian ??
-      parts.rendering?._pointPosition?.(ISS_NORAD) ??
+      parts.rendering._pointPosition(ISS_NORAD) ??
       null,
     zoomLabel: msg('Zoom to the ISS'),
     notes: {
@@ -97,35 +154,7 @@ export function issStationDescription({ state: layerState, parts }) {
       ),
     },
     groups: [
-      {
-        id: 'sun',
-        label: msg('Sun position'),
-        kind: 'choices',
-        choices: [
-          {
-            id: 'follow',
-            label: msg('Follow the Sun'),
-            isDefault: true,
-            apply: (a) => a.setOverride(null),
-          },
-          ...ISS_SUN_POSES.map(({ id, label, sun, sunlit }) => ({
-            id,
-            label,
-            apply: (a) => {
-              const fixed = { sun, sunlit };
-              a.setOverride(() => fixed);
-            },
-          })),
-          {
-            id: 'orbit',
-            label: msg('Fast orbit (40 s)'),
-            apply: (a) => {
-              const start = Date.now();
-              a.setOverride((nowMs) => issCommandFastOrbit(nowMs - start));
-            },
-          },
-        ],
-      },
+      sunGroup(),
       {
         id: 'arrays',
         label: msg('Solar arrays'),
@@ -194,26 +223,9 @@ export function issStationDescription({ state: layerState, parts }) {
           },
         ],
       },
-      {
-        id: 'arm',
-        label: msg('Canadarm2 (degrees)'),
-        kind: 'sliders',
-        resume: msg('Resume sway'),
-        sliders: ISS_ARM_JOINTS.map((joint, i) => ({
-          id: joint.node,
-          label: ISS_ARM_LABELS[i],
-          min: -120,
-          max: 120,
-          apply: (a, value) =>
-            a.setJoint(
-              joint.node,
-              joint.pivot,
-              joint.axis,
-              (value * Math.PI) / 180,
-            ),
-        })),
-        resumeApply: (a) => a.resumeArm(),
-      },
+      armGroup('arm', msg('Canadarm2 (degrees)'), ISS_ARM_JOINTS, (a) =>
+        a.resumeArm(),
+      ),
     ],
     automatic: (a) => {
       a.setTelemetryAllowed?.(true);

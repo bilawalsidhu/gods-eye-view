@@ -121,6 +121,7 @@ async function fixture(t) {
   })) {
     parts[name] = factory(context);
   }
+  parts.stationPanel = { _syncStationPanel() {}, _destroyStationPanel() {} };
   const viewer = {
     scene: {
       canvas: new EventTarget(),

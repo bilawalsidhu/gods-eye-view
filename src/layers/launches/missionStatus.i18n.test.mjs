@@ -3,11 +3,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { setLocale } from '../../i18n/index.js';
-import {
-  launchStatusAllowsOrbit,
-  normalizeRocketLaunches,
-} from '../../data/rocketLaunches.js';
-import { UNKNOWN_LAUNCH_STATUS } from './model.js';
+import { normalizeRocketLaunches, UNKNOWN_LAUNCH_STATUS } from './model.js';
+import { launchStatusAllowsOrbit } from './policyHelpers.js';
 import { createPanel } from './panel.js';
 
 const NOW = new Date('2026-07-27T00:00:00Z');

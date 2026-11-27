@@ -9,45 +9,5 @@ const flightsLayer = createApplicationFlights({
   source: createFlightSource(),
   militaryRegistry,
 });
-export const _floorGroundedDisplayPositionForTest =
-  flightsLayer.testing._floorGroundedDisplayPositionForTest;
-export const _clearDisplayFloorStateForTest =
-  flightsLayer.testing._clearDisplayFloorStateForTest;
-export const _setTrackedFlightRefreshStateForTest =
-  flightsLayer.testing._setTrackedFlightRefreshStateForTest;
-export const _setFlightTrackingRefreshOutcomeForTest =
-  flightsLayer.testing._setFlightTrackingRefreshOutcomeForTest;
-export const _addFlightTrackingCandidateForTest =
-  flightsLayer.testing._addFlightTrackingCandidateForTest;
-export const _militaryLayerSuppressesForTest =
-  flightsLayer.testing._militaryLayerSuppressesForTest;
-export const _armFlightTrackingRestoreForTest =
-  flightsLayer.testing._armFlightTrackingRestoreForTest;
-export const _pendingFlightTrackingRestoreForTest =
-  flightsLayer.testing._pendingFlightTrackingRestoreForTest;
-export const _applyPendingFlightTrackingRestoreForTest =
-  flightsLayer.testing._applyPendingFlightTrackingRestoreForTest;
-export const _setCockpitDetectionSubjectForTest =
-  flightsLayer.testing._setCockpitDetectionSubjectForTest;
-export const _trackedModelRegimeActiveForTest =
-  flightsLayer.testing._trackedModelRegimeActiveForTest;
-export const _updateTrackedModelForTest =
-  flightsLayer.testing._updateTrackedModelForTest;
-export const _trackedBillboardColorForTest =
-  flightsLayer.testing._trackedBillboardColorForTest;
-export const _driveFleetModelHandoffForTest =
-  flightsLayer.testing._driveFleetModelHandoffForTest;
-export const _ensureFleetModelForTest =
-  flightsLayer.testing._ensureFleetModelForTest;
-export const _trackedModelForTest = flightsLayer.testing._trackedModelForTest;
-export const _trackedIconLookForTest =
-  flightsLayer.testing._trackedIconLookForTest;
-export const _modelSetIdsForTest = flightsLayer.testing._modelSetIdsForTest;
-export const _iconForTest = flightsLayer.testing._iconForTest;
-export const _setIconForTest = flightsLayer.testing._setIconForTest;
-export const _floorGroundedIconsForTest =
-  flightsLayer.testing._floorGroundedIconsForTest;
-export const _resetEnrichmentForTest =
-  flightsLayer.testing._resetEnrichmentForTest;
 export const mapAnalystRecord = flightsLayer.mapAnalystRecord;
 export default flightsLayer;

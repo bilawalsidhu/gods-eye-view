@@ -119,30 +119,20 @@ function viewerDouble(entities) {
  * `motion.set(on)` flips it later and tells its listeners, as the browser
  * does. Canvases are doubles that keep what is painted on them.
  */
-function ringRendering(t, { reducedMotion = false, legacyQuery = false } = {}) {
+function ringRendering(t, { reducedMotion = false } = {}) {
   const previous = globalThis.matchMedia;
   const listeners = new Set();
-  // `legacyQuery` is a MediaQueryList as Safari before 14 shipped it, with
-  // only addListener / removeListener.
-  const query = legacyQuery
-    ? {
-        get matches() {
-          return reducedMotion;
-        },
-        addListener: (listener) => listeners.add(listener),
-        removeListener: (listener) => listeners.delete(listener),
-      }
-    : {
-        get matches() {
-          return reducedMotion;
-        },
-        addEventListener(type, listener) {
-          if (type === 'change') listeners.add(listener);
-        },
-        removeEventListener(type, listener) {
-          if (type === 'change') listeners.delete(listener);
-        },
-      };
+  const query = {
+    get matches() {
+      return reducedMotion;
+    },
+    addEventListener(type, listener) {
+      if (type === 'change') listeners.add(listener);
+    },
+    removeEventListener(type, listener) {
+      if (type === 'change') listeners.delete(listener);
+    },
+  };
   globalThis.matchMedia = (media) =>
     media === '(prefers-reduced-motion: reduce)'
       ? query
@@ -928,6 +918,7 @@ test('disabling the layer tears the pulses down completely', (t) => {
     state,
     services: {
       render: { holdContinuousRender() {}, releaseContinuousRender() {} },
+      installations: { setContextAnchor() {} },
     },
     parts: {
       rendering,
@@ -1324,20 +1315,6 @@ test('turning reduced motion on mid-session stops the pulses, and off restarts t
   assert.ok(getAwarenessEchoField());
   // One media-query listener per visual; none once the ring is gone.
   assert.equal(motion.listeners(), 1);
-  rendering.clearVisual();
-  assert.equal(motion.listeners(), 0);
-});
-
-test('a reduced-motion change reaches older Safari through addListener', (t) => {
-  const ring = ringRendering(t, { legacyQuery: true });
-  const { scene, rendering, motion, state } = ring;
-  state.subject = flight(3);
-  rendering.renderVisual(state.subject);
-  assert.equal(drawn(ring).pulses.length, AWARENESS_RANGE_PULSE.count);
-  assert.equal(motion.listeners(), 1);
-  motion.set(true);
-  assert.deepEqual(drawn(ring).pulses, []);
-  assert.equal(scene.preRender.numberOfListeners, 0);
   rendering.clearVisual();
   assert.equal(motion.listeners(), 0);
 });

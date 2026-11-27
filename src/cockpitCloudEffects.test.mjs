@@ -2,9 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   cockpitCloudRenderSize,
-  cockpitCloudsShowFor,
   cockpitWeatherRefreshDue,
-  cockpitWeatherEnabledFromStoredValue,
 } from './cockpitCloudEffects.js';
 
 test('cockpit cloud framebuffer stays low resolution on large displays', () => {
@@ -15,20 +13,6 @@ test('cockpit cloud framebuffer stays low resolution on large displays', () => {
 test('cockpit cloud framebuffer never upscales or collapses to zero', () => {
   assert.deepEqual(cockpitCloudRenderSize(640, 360), { width: 269, height: 151 });
   assert.deepEqual(cockpitCloudRenderSize(0, Number.NaN), { width: 1, height: 1 });
-});
-
-test('cockpit weather defaults off and enables only from an explicit saved opt-in', () => {
-  assert.equal(cockpitWeatherEnabledFromStoredValue(null), false);
-  assert.equal(cockpitWeatherEnabledFromStoredValue(''), false);
-  assert.equal(cockpitWeatherEnabledFromStoredValue('0'), false);
-  assert.equal(cockpitWeatherEnabledFromStoredValue('1'), true);
-});
-
-test('the cloud pass stays off in orbit and runs for aircraft and bridges', () => {
-  assert.equal(cockpitCloudsShowFor('satellites'), false);
-  for (const layerId of ['flights', 'military', 'ais-live-vessels', null]) {
-    assert.equal(cockpitCloudsShowFor(layerId), true, String(layerId));
-  }
 });
 
 test('cockpit weather refreshes after time or meaningful movement', () => {

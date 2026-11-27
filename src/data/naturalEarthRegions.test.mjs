@@ -2,8 +2,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { statSync, readFileSync } from 'node:fs';
-import { findNaturalRegion, listRegions, lookupNaturalRegionOutline, pointInRing } from './naturalEarthRegions.js';
-import { greatCircleKm } from '../geoDistance.js';
+import { findNaturalRegion, listRegions, lookupNaturalRegionOutline } from './naturalEarthRegions.js';
+import { greatCircleKm, pointInRing } from '../geoDistance.js';
 
 const PACK_DIR = new URL('./local_data/natural_earth/', import.meta.url);
 

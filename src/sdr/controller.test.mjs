@@ -9,6 +9,7 @@ import {
 import { RTL2832U_Provider } from '@jtarrio/webrtlsdr/rtlsdr.js';
 import { RTL_SDR_USB_FILTERS } from './usbDevices.js';
 import { SDR_GAIN_STORAGE_KEY } from './gain.js';
+import { memoryStorage } from '../testSupport/memoryStorage.mjs';
 
 function replaceGlobal(name, value) {
   const prior = Object.getOwnPropertyDescriptor(globalThis, name);
@@ -20,15 +21,6 @@ function replaceGlobal(name, value) {
   return () => {
     if (prior) Object.defineProperty(globalThis, name, prior);
     else delete globalThis[name];
-  };
-}
-
-function memoryStorage(initial = {}) {
-  const values = new Map(Object.entries(initial));
-  return {
-    values,
-    getItem: (key) => (values.has(key) ? values.get(key) : null),
-    setItem: (key, value) => values.set(key, String(value)),
   };
 }
 

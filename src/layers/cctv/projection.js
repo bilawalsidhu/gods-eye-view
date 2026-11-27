@@ -26,6 +26,35 @@ function copyPosition(from, out) {
   return out;
 }
 
+/**
+ * Build the protected label associated with one active monitor plane.
+ * @param {{cameraId: string, name: string, position: object|Function}} input
+ * @returns {Object} Shared-host presentation entry.
+ */
+
+export function createCctvProjectionOverlayEntry({ cameraId, name, position }) {
+  return {
+    id: String(cameraId),
+    position,
+    variant: 'selected',
+    selected: true,
+    protected: true,
+    paintLane: 'selected',
+    collisionGroup: 'ambient-card',
+    priority: Number.MAX_SAFE_INTEGER - 1,
+    title: String(name || cameraId || 'CAMERA'),
+    details: [],
+    accent: '#6be8ff',
+    interactive: false,
+    gapPx: 6,
+    verticalOnly: true,
+    placement: 'above',
+    edgeFade: 'keyhole',
+    horizonCull: true,
+    terrainOcclusion: false,
+  };
+}
+
 export function createProjection({
   state: layerState,
   services,
@@ -33,35 +62,6 @@ export function createProjection({
   source,
 }) {
   const { holdContinuousRender, releaseContinuousRender } = services.render;
-
-  /**
-   * Build the protected label associated with one active monitor plane.
-   * @param {{cameraId: string, name: string, position: object|Function}} input
-   * @returns {Object} Shared-host presentation entry.
-   */
-
-  function createCctvProjectionOverlayEntry({ cameraId, name, position }) {
-    return {
-      id: String(cameraId),
-      position,
-      variant: 'selected',
-      selected: true,
-      protected: true,
-      paintLane: 'selected',
-      collisionGroup: 'ambient-card',
-      priority: Number.MAX_SAFE_INTEGER - 1,
-      title: String(name || cameraId || 'CAMERA'),
-      details: [],
-      accent: '#6be8ff',
-      interactive: false,
-      gapPx: 6,
-      verticalOnly: true,
-      placement: 'above',
-      edgeFade: 'keyhole',
-      horizonCull: true,
-      terrainOcclusion: false,
-    };
-  }
 
   /**
    * Re-derives the monitor plane's placement (position, orientation,
@@ -458,7 +458,6 @@ export function createProjection({
     setPlaneSource,
     plainPlaneSource,
     createProjectionPlane,
-    createProjectionRuntime,
     ensureProjectionRuntime,
     destroyProjectionRuntime,
     startProjectionLoop,

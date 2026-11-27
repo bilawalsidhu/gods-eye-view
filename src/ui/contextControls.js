@@ -105,55 +105,24 @@ export class ContextControls {
     this._contextMode = null;
     await this._restoreContextSession();
   }
-  _initGlobalContextPanel(...args) {
-    return _initGlobalContextPanel.call(this, ...args);
-  }
-  _syncContextModeButtons(...args) {
-    return _syncContextModeButtons.call(this, ...args);
-  }
-  _presentContext(...args) {
-    return _presentContext.call(this, ...args);
-  }
-  _trackContextLayerReaction(...args) {
-    return _trackContextLayerReaction.call(this, ...args);
-  }
-  _waitForContextLayerSettlement(...args) {
-    return _waitForContextLayerSettlement.call(this, ...args);
-  }
-  _captureContextSessionSnapshot(...args) {
-    return _captureContextSessionSnapshot.call(this, ...args);
-  }
-  _restoreContextSession(...args) {
-    return _restoreContextSession.call(this, ...args);
-  }
-  _restoreContextSessionAfterLayerSettles(...args) {
-    return _restoreContextSessionAfterLayerSettles.call(this, ...args);
-  }
-  _selectContextMode(...args) {
-    return _selectContextMode.call(this, ...args);
-  }
-  _deactivateContextForLayerChange(...args) {
-    return _deactivateContextForLayerChange.call(this, ...args);
-  }
-  _clearLayersOutsideContextMode(...args) {
-    return _clearLayersOutsideContextMode.call(this, ...args);
-  }
-  _handleContextLayerChange(...args) {
-    return _handleContextLayerChange.call(this, ...args);
-  }
-  _runUserFacingContextAction(...args) {
-    return _runUserFacingContextAction.call(this, ...args);
-  }
-  _claimContextVisualAuthority(...args) {
-    return _claimContextVisualAuthority.call(this, ...args);
-  }
-  getContextModeState(...args) {
-    return getContextModeState.call(this, ...args);
-  }
-  setContextMode(...args) {
-    return setContextMode.call(this, ...args);
-  }
-  clearSelectedLayers(...args) {
-    return clearSelectedLayers.call(this, ...args);
-  }
 }
+
+Object.assign(ContextControls.prototype, {
+  _initGlobalContextPanel,
+  _syncContextModeButtons,
+  _presentContext,
+  _trackContextLayerReaction,
+  _waitForContextLayerSettlement,
+  _captureContextSessionSnapshot,
+  _restoreContextSession,
+  _restoreContextSessionAfterLayerSettles,
+  _selectContextMode,
+  _deactivateContextForLayerChange,
+  _clearLayersOutsideContextMode,
+  _handleContextLayerChange,
+  _runUserFacingContextAction,
+  _claimContextVisualAuthority,
+  getContextModeState,
+  setContextMode,
+  clearSelectedLayers,
+});

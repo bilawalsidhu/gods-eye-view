@@ -3,14 +3,13 @@ import * as render from '../../renderGovernor.js';
 import * as sprites from '../../data/spriteOrder.js';
 import * as context from '../../data/contextStore.js';
 import * as picking from '../../data/pickRegistry.js';
-import * as overlays from '../../overlays/worldOverlay.js';
+import { overlayHost } from './overlayHost.js';
 import * as focus from '../../worldFocus.js';
 export const firmsServices = {
   render,
   sprites,
   context,
   picking,
-  overlays,
   focus,
 };
 
@@ -22,11 +21,6 @@ export function createApplicationFirms({ surface, ...options }) {
     source: options.source ?? 'NASA FIRMS',
     feed: options.feed,
     services: { ...firmsServices, anchors: surface.anchors },
-    overlayHost: options.overlayHost ?? {
-      setEntries: overlays.setOverlayEntries,
-      setVisible: overlays.setOverlaySourceVisible,
-      clearSource: overlays.clearOverlaySource,
-      hitTest: overlays.hitTestWorldOverlay,
-    },
+    overlayHost: options.overlayHost ?? overlayHost,
   });
 }

@@ -46,6 +46,7 @@ import { unavailablePlaceSearch } from '../search/placeSearch.js';
 import { isPickedWorldPosition } from '../data/scenePick.js';
 import { heightsOf } from '../queries/heights.js';
 import { fromDegrees, toLonLatH } from '../geo/ellipsoid.js';
+import { wrapLongitude } from '../geo/vector.js';
 import { canvasOf, findCamera, findQuery } from '../render/rendererOf.js';
 
 /** Prepare only local dateline outlines for planar admission and centering. */
@@ -853,7 +854,7 @@ export function createAnnotationResolver({
         frame.reference !== null &&
         (centroid.lon < -180 || centroid.lon >= 180)
       )
-        centroid.lon = ((((centroid.lon + 180) % 360) + 360) % 360) - 180;
+        centroid.lon = wrapLongitude(centroid.lon);
       // Same drift bound as the anchor gate: a polygon whose centroid would drag a good
       // anchor out of plausibility is the wrong feature — drop it, keep the point.
       if (

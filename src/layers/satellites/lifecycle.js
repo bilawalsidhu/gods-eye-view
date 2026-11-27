@@ -145,7 +145,7 @@ export function createLifecycle({
       for (const model of parts.stationModels ?? [])
         model._updateStationModel(); // off: releases the model
       parts.tracking._clearTracking();
-      parts.stationPanel?._syncStationPanel(); // off: takes the panel down
+      parts.stationPanel._syncStationPanel(); // off: takes the panel down
       parts.labels._syncIssOverlay();
       // Remove click handler + keydown listener + preRender propagation while disabled
       layerState._clickSubscription?.();
@@ -187,7 +187,7 @@ export function createLifecycle({
       layerState._overlayHost.setVisible(ISS_OVERLAY_SOURCE_ID, false);
       for (const model of parts.stationModels ?? [])
         model._destroyStationModel();
-      parts.stationPanel?._destroyStationPanel();
+      parts.stationPanel._destroyStationPanel();
       // The dots', tracked dot's and rings' sets are disposed of
       parts.rendering._detach(viewer);
       layerState._points.clear();

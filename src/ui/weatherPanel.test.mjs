@@ -392,6 +392,8 @@ test('settings, reading and footer actions pass the layer id, params and user or
     setLayerParams: (...args) => calls.push(args),
   });
   const reading = {
+    lat: 26.59,
+    lon: -123.34,
     coordinates: '26.59°N · 123.34°W',
     wind: '6.0 m/s from N',
     model: 'ECMWF',

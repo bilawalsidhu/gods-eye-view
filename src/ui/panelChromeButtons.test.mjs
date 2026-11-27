@@ -9,7 +9,6 @@ import { createPinia } from 'pinia';
 import { settleSideAccordion } from './panelAccordion.js';
 import { PanelChrome } from './panelChrome.js';
 import { followPanelState, vPanelState } from './rail/panelState.js';
-import { bindPanelDisclosure } from './panelDisclosure.js';
 import PanelCollapseButton from './rail/PanelCollapseButton.vue';
 import RailPanel from './rail/RailPanel.vue';
 import UiPanel from './kit/UiPanel.vue';
@@ -318,16 +317,6 @@ test('a remounted chrome starts from its own states, not one left behind', () =>
     auto: null,
   });
   second.destroy();
-});
-
-test('bindPanelDisclosure refuses the retired button wiring', () => {
-  const panel = new EventTarget();
-  for (const retired of [{ buttons: [] }, { onChange() {} }]) {
-    assert.throws(
-      () => bindPanelDisclosure({ panel, onEscape() {}, ...retired }),
-      TypeError,
-    );
-  }
 });
 
 test('a panel root draws its state at once, keeping classes others own', async (t) => {

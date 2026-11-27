@@ -1,5 +1,5 @@
 import { fromDegrees } from '../../geo/ellipsoid.js';
-import { distance } from '../../geo/vector.js';
+import { distance, smoothstep } from '../../geo/vector.js';
 import { findCamera, findFrame } from '../../render/rendererOf.js';
 import { hexColor } from '../../render/color.js';
 import { LAUNCH_PAD_ZONE_RADIUS_M } from './policy.js';
@@ -16,11 +16,6 @@ const ZONE_EDGE = 0.985;
 const ZONE_RIM_GLOW = 0.35;
 /** The zone image's side, pixels. */
 const ZONE_IMAGE_PX = 512;
-
-const smoothstep = (edge0, edge1, x) => {
-  const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
-  return t * t * (3 - 2 * t);
-};
 
 /**
  * The zone's colour and alpha at `r`, a fraction of its radius from its

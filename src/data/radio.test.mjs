@@ -9,7 +9,6 @@ import { entityFollowTarget, followedOf } from './followed.js';
 import { fakeDrawPort } from '../testSupport/fakeDrawPort.mjs';
 import { fakeInput } from '../input/testDoubles.mjs';
 import {
-  buildRadioTunerBand,
   buildRadioTunerTicks,
   buildRadioCategories,
   createRadioClusterOverlayEntry,
@@ -1584,16 +1583,6 @@ test('directory tuner pointer progress maps left, center, right, and midpoint ti
   });
   assert.equal(radioTunerPointerPosition(50, 10, 80, 0).stationIndex, -1);
   assert.deepEqual(radioTunerCommitSlot(2.5, 5), radioTunerSlot(3, 5));
-});
-
-test('directory tuner bands preserve stable filtered order without injecting outside selections', () => {
-  const ranked = Array.from({ length: 800 }, (_, index) => ({ id: `station-${index}` }));
-  const selected = { id: 'selected-outside-band' };
-  const band = buildRadioTunerBand(ranked, selected, 750);
-  assert.equal(band.length, 750);
-  assert.deepEqual(band, ranked.slice(0, 750));
-  assert.ok(!band.includes(selected));
-  assert.deepEqual(buildRadioTunerBand(ranked, ranked[5], 24), ranked.slice(0, 24));
 });
 
 test('directory tuner virtual tape is bounded and moves opposite the needle', () => {

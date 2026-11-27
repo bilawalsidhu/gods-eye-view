@@ -10,19 +10,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import flightsLayer, {
-  _setTrackedFlightRefreshStateForTest,
-  _trackedModelRegimeActiveForTest as flightsRegimeActive,
-  _updateTrackedModelForTest as flightsDriveTrackedModel,
-  _trackedBillboardColorForTest as flightsTrackedBillboardColor,
-  _driveFleetModelHandoffForTest as flightsDriveFleetModel,
-  _ensureFleetModelForTest as flightsEnsureFleetModel,
-  _trackedModelForTest as flightsTrackedModel,
-  _trackedIconLookForTest as flightsTrackedIconLook,
-  _modelSetIdsForTest as flightsModelSetIds,
-  _iconForTest as flightsIcon,
-  _setIconForTest as flightsSetIcon,
-} from './flights.js';
+import flightsLayer from './flights.js';
 import militaryFlightsLayer, {
   _setTrackedMilitaryRefreshStateForTest,
   _trackedModelRegimeActiveForTest as militaryRegimeActive,
@@ -46,6 +34,19 @@ import { fakeDrawPort } from '../testSupport/fakeDrawPort.mjs';
 import { loadFleetModelSet } from './fleetModels.js';
 import { aircraftLayerModelSpec } from '../layers/flights/modelSpec.js';
 import { fetchPublicFile } from '../testSupport/fleetGlb.mjs';
+const {
+  _setTrackedFlightRefreshStateForTest,
+  _trackedModelRegimeActiveForTest: flightsRegimeActive,
+  _updateTrackedModelForTest: flightsDriveTrackedModel,
+  _trackedBillboardColorForTest: flightsTrackedBillboardColor,
+  _driveFleetModelHandoffForTest: flightsDriveFleetModel,
+  _ensureFleetModelForTest: flightsEnsureFleetModel,
+  _trackedModelForTest: flightsTrackedModel,
+  _trackedIconLookForTest: flightsTrackedIconLook,
+  _modelSetIdsForTest: flightsModelSetIds,
+  _iconForTest: flightsIcon,
+  _setIconForTest: flightsSetIcon,
+} = flightsLayer.testing;
 
 // The layers draw only once the fleet model set has loaded; load it from disk.
 const _silentInfo = console.info;

@@ -61,6 +61,10 @@ import {
 } from '../../data/trailContinuity.js';
 import { roundHeadingDegrees } from '../../data/headingDegrees.js';
 import { entityRecord } from '../../data/entityRecords.js';
+import {
+  createTrackingRestore,
+  emitWindowEvent,
+} from '../../data/layerTracking.js';
 
 /**
  * The icao a click's hit carries (`event.hit`, the contract's `Hit`): a
@@ -114,23 +118,13 @@ export function createTracking({
     }
   }
 
-  function _emitAwarenessEvent(type, detail) {
-    if (
-      typeof window === 'undefined' ||
-      !window.dispatchEvent ||
-      typeof CustomEvent === 'undefined'
-    )
-      return;
-    window.dispatchEvent(new CustomEvent(type, { detail }));
-  }
-
   function _publishTrackedSelection(icao24, origin = 'programmatic') {
     const position = parts.icons._iconPosition(icao24, vec());
     const info = flightState.records.data.get(icao24);
     if (!position || !info) return false;
     if (flightState._trackedEntity)
       entityRecord(flightState._trackedEntity).selectionOrigin = origin;
-    _emitAwarenessEvent('gev:awareness-subject-selected', {
+    emitWindowEvent('gev:awareness-subject-selected', {
       layerId: 'flights',
       id: icao24,
       // Canonical display chain (callsign → registration → hex). Publishing a
@@ -742,7 +736,7 @@ export function createTracking({
       parts.icons._settleIcon(clearedIcao, { fromCourseDeg: trackedCourseDeg });
     parts.icons._applyIconPresentation(clearedIcao);
     clearTrackedSubjectContext('flights');
-    _emitAwarenessEvent('gev:awareness-subject-cleared', {
+    emitWindowEvent('gev:awareness-subject-cleared', {
       layerId: 'flights',
       id: clearedIcao,
       origin,
@@ -782,24 +776,18 @@ export function createTracking({
     return true;
   }
 
-  function _applyPendingTrackingRestore() {
-    const pending = flightState._pendingTrackingRestore;
-    if (
-      !pending ||
-      pending.generation !== flightState._trackingIntentGeneration
-    )
-      return false;
-    if (!flightState._icons?.show || !flightState._icons.has(pending.id))
-      return false;
-    flightState._pendingTrackingRestore = null;
-    _trackFlight(pending.id, { origin: pending.origin });
-    return true;
-  }
-
-  function _cancelPendingTrackingRestore() {
-    flightState._trackingIntentGeneration += 1;
-    flightState._pendingTrackingRestore = null;
-  }
+  const {
+    apply: _applyPendingTrackingRestore,
+    cancel: _cancelPendingTrackingRestore,
+  } = createTrackingRestore({
+    state: flightState,
+    canApply: (pending) =>
+      flightState._icons?.show && flightState._icons.has(pending.id),
+    track: (pending) => {
+      _trackFlight(pending.id, { origin: pending.origin });
+      return true;
+    },
+  });
 
   /**
    * The tracked plane's stale cue and whether it is drawn with the stale fade.
@@ -1430,7 +1418,6 @@ export function createTracking({
     document.addEventListener('keydown', _onKeyDown);
   }
   return {
-    _emitAwarenessEvent,
     _publishTrackedSelection,
     _contextSubjectMetadata,
     _isExplicitTrackingOrigin,

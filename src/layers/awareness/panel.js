@@ -45,6 +45,21 @@ function presentAwarenessReason(summary = {}) {
 }
 
 /**
+ * Whether an evaluation actually has a contact to point an arrow at.
+ *
+ * A cohort reports `count: null` when its feed is unavailable or stale, and `0`
+ * when the feed is healthy but empty. Only a positive count puts a marker on
+ * the compass rim, so anything else means there is nothing to animate.
+ * @param {?{cohorts?: Array<{summary?: {count: ?number}}>}} results
+ * @returns {boolean}
+ */
+
+export function awarenessResultsAreLive(results) {
+  const cohorts = Array.isArray(results?.cohorts) ? results.cohorts : [];
+  return cohorts.some((cohort) => Number(cohort?.summary?.count) > 0);
+}
+
+/**
  * The Contacts panel as a view renders it. The layer presents a plain view
  * object (`standby`, `results` or `empty`) and publishes it to subscribers;
  * Core's AwarenessPanel component renders it and calls the layer's
@@ -272,27 +287,12 @@ export function createPanel({ state: layerState, parts }) {
     layerState.pageTimer = null;
   }
 
-  /**
-   * Whether an evaluation actually has a contact to point an arrow at.
-   *
-   * A cohort reports `count: null` when its feed is unavailable or stale, and `0`
-   * when the feed is healthy but empty. Only a positive count puts a marker on
-   * the compass rim, so anything else means there is nothing to animate.
-   * @param {?{cohorts?: Array<{summary?: {count: ?number}}>}} results
-   * @returns {boolean}
-   */
-
-  function awarenessResultsAreLive(results) {
-    const cohorts = Array.isArray(results?.cohorts) ? results.cohorts : [];
-    return cohorts.some((cohort) => Number(cohort?.summary?.count) > 0);
-  }
   return {
     subscribePanel,
     ensurePanel,
     hidePanel,
     clearPanel,
     renderResults,
-    rotateAwarenessPages,
     startAwarenessPageRotation,
     stopAwarenessPageRotation,
     awarenessResultsAreLive,

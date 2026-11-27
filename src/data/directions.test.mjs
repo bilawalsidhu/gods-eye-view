@@ -25,8 +25,8 @@ import {
   STEP_ANCHOR_RETRY_MS,
   STEP_ANCHOR_SLOW_RETRY_MS,
   STEP_ANCHOR_FAST_ATTEMPTS,
-  createApplicationDirectionsLayer,
-} from './directions.js';
+} from '../layers/directions/index.js';
+import { createApplicationDirections } from '../app/layers/directions.js';
 import { GROUND_FLOOR_LIFT_M } from './groundFloor.js';
 import { isOwnedByOtherLayer, setClickCardHitTest } from './pickRegistry.js';
 import { fakeInput } from '../input/testDoubles.mjs';
@@ -55,7 +55,7 @@ import { LAYER_STATE_REGISTRY } from './layerState.js';
 import { SPRITE_LAYER_ORDER } from './spriteOrder.js';
 
 /** The instance under test; each ownership fixture builds a fresh one. */
-let directionsLayer = createApplicationDirectionsLayer();
+let directionsLayer = createApplicationDirections();
 
 const idle = {
   enabled: true,
@@ -453,16 +453,12 @@ test('a step selection can be requested and cleared through params', () => {
  * needed for the arming paths: they are pure state plus the pointer claim.
  */
 function ownershipFixture(t) {
-  directionsLayer = createApplicationDirectionsLayer();
-  directionsLayer._setOverlayHostForTest({
-    setEntries() {},
-    setVisible() {},
-    clearSource() {},
+  directionsLayer = createApplicationDirections({
+    overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
   });
   resetPointerOwnership();
   t.after(() => {
     directionsLayer.setParams({ clear: true });
-    directionsLayer._setOverlayHostForTest(null);
     resetPointerOwnership();
   });
 }
@@ -970,11 +966,12 @@ test('a placed endpoint draws its letter through the overlay, not as entity text
     visibility
       .filter(([source]) => source === DIRECTIONS_MARKER_OVERLAY_SOURCE_ID)
       .at(-1)?.[1];
-  directionsLayer = createApplicationDirectionsLayer();
-  directionsLayer._setOverlayHostForTest({
-    setEntries: (source, entries) => published.push([source, entries]),
-    setVisible: (source, visible) => visibility.push([source, visible]),
-    clearSource: (source) => cleared.push(source),
+  directionsLayer = createApplicationDirections({
+    overlayHost: {
+      setEntries: (source, entries) => published.push([source, entries]),
+      setVisible: (source, visible) => visibility.push([source, visible]),
+      clearSource: (source) => cleared.push(source),
+    },
   });
   resetPointerOwnership();
   const viewer = {
@@ -985,7 +982,6 @@ test('a placed endpoint draws its letter through the overlay, not as entity text
   t.after(() => {
     unbind();
     directionsLayer.destroy(viewer);
-    directionsLayer._setOverlayHostForTest(null);
     resetPointerOwnership();
   });
   directionsLayer.init(viewer);

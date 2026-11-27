@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { markRaw, shallowRef } from 'vue';
+import { presented } from './presented.js';
 
 /**
  * The active shot's Scene actions panel as its view renders it. The scene
@@ -15,20 +15,10 @@ export const useSceneInteractionsStore = defineStore(
      * card}`, or null while the shot has no actions. `container` is the
      * element it sits in; `owner` is passed back with each dispatch.
      */
-    const panel = shallowRef(null);
-
-    /** @param {?object} next A fresh presentation; every publish re-renders. */
-    function publish(next) {
-      panel.value = next && markRaw(next);
-    }
+    const [panel, publish] = presented();
 
     /** The controls whose `dispatch(id, owner)` an action button calls. */
-    const controls = shallowRef(null);
-
-    /** @param {?object} next The controls, or null to disconnect. */
-    function connect(next) {
-      controls.value = next && markRaw(next);
-    }
+    const [controls, connect] = presented();
 
     return { panel, publish, controls, connect };
   },

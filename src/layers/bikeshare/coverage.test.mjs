@@ -6,7 +6,6 @@ import assert from 'node:assert/strict';
 import { GBFS_CITY_REGISTRY } from './registry.js';
 import { createState } from './state.js';
 import { createIngestion } from './ingestion.js';
-import { createModel } from './model.js';
 import { createViewport } from './viewport.js';
 import { createRendering } from './rendering.js';
 import { createSelection } from './selection.js';
@@ -36,11 +35,10 @@ function makeLayer() {
     },
   };
   const source = { getStations: async () => ({ data: { stations: [] } }) };
-  const state = createState({ services });
+  const state = createState();
   const parts = {};
   const context = { state, services, parts, source };
   parts.ingestion = createIngestion(context);
-  parts.model = createModel(context);
   parts.viewport = createViewport(context);
   parts.rendering = createRendering(context);
   parts.selection = createSelection(context);

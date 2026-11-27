@@ -45,7 +45,7 @@ export function createRadioLayer({ services, source }) {
     {},
     parts.controls.methods,
     parts.lifecycle.methods,
-    parts.ingestion?.methods,
+    parts.ingestion.methods,
     {
       radioGlobeLabel: parts.labels.radioGlobeLabel,
       createRadioSelectedOverlayEntry:
@@ -80,7 +80,6 @@ export function createRadioLayer({ services, source }) {
       radioStationCameraPlan: parts.navigation.radioStationCameraPlan,
       radioGlobeNeedsRecentering: parts.navigation.radioGlobeNeedsRecentering,
       radioGlobeRecenterHeight: parts.navigation.radioGlobeRecenterHeight,
-      buildRadioTunerBand: parts.tuning.buildRadioTunerBand,
       radioTuningStaticShouldPlay:
         parts.tuningNoise.radioTuningStaticShouldPlay,
       getRadioAcceptedCatalogSnapshot:

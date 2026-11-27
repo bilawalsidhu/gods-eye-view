@@ -616,7 +616,6 @@ export function createLifecycle({
   };
 
   return {
-    clearRuntimeState,
     attachViewListeners,
     detachViewListeners,
     methods,

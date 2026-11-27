@@ -21,6 +21,7 @@ import {
   LABEL_MIN_SEP_PX,
 } from './policy.js';
 import { ICON_CULL_HEIGHT_M } from '../../data/iconSet.js';
+import { cardClearance } from '../../overlays/worldOverlayTokens.js';
 
 export function createModel({
   layerState,
@@ -426,18 +427,13 @@ export function createModel({
 
   function applyFirmsOverlayPolicy(card, fadeDistance) {
     const selected = card?.selected === true;
-    const rawGap = Number(card?.gapPx) || 10;
-    const gapPx = Math.max(12, rawGap + 8);
     return {
       ...card,
       variant: selected ? 'selected' : 'card',
       protected: selected,
       collisionGroup: 'ambient-card',
       cardStyle: 'tactical',
-      gapPx,
-      leaderOffsetPx: Math.max(2, gapPx - 6),
-      verticalOnly: true,
-      viewportMargin: 4,
+      ...cardClearance(Number(card?.gapPx) || 10),
       maxDistance: selected ? Number.POSITIVE_INFINITY : fadeDistance,
       distanceFadeStartRatio: 0.7,
       edgeFade: 'keyhole',

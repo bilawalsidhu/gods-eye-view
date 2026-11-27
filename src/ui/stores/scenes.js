@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { computed, markRaw, shallowRef } from 'vue';
+import { presented } from './presented.js';
 
 /**
  * @typedef {object} SceneRowHandlers
@@ -41,12 +42,7 @@ export const useSceneStore = defineStore('gev-scenes', () => {
    * `{running, hasShots, inStories, disabled: {[button]: boolean}, status,
    * progress, runtime, playLabel}`, or null until an owner presents them.
    */
-  const panel = shallowRef(null);
-
-  /** @param {?object} next A fresh presentation; every publish re-renders. */
-  function publishPanel(next) {
-    panel.value = next && markRaw(next);
-  }
+  const [panel, publishPanel] = presented();
 
   /** Whether an owner presents the project; until then the list is empty. */
   const attached = shallowRef(false);

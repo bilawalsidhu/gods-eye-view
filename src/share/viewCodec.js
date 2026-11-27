@@ -30,9 +30,8 @@ import {
   normalizeAllocationStrategy,
 } from '../data/detectionPolicy.js';
 import { clampScopeFeatherPct } from '../scopeMaskPolicy.js';
-import { VIEW_STYLES } from '../view/index.js';
+import { RETIRED_STYLES, VIEW_STYLES } from '../view/index.js';
 import { isWorldTime } from '../time/worldClock.js';
-import { RETIRED_STYLES } from '../visualStylePolicy.js';
 import {
   GLOBAL_POST_DEFAULTS,
   STYLE_PRESET_DEFAULTS,
@@ -41,6 +40,7 @@ import {
 import {
   SHARE_VIEW_ENTITY_KINDS,
   SHARE_VIEW_FOLLOW_OFFSET_DEFAULT,
+  SHARE_VIEW_FOLLOW_RANGE_MAX_M,
   followCameraFor,
 } from './follow.js';
 import {
@@ -80,7 +80,6 @@ export const SHARE_VIEW_EPOCH_S = Date.UTC(2026, 0, 1) / 1000;
 /** Coordinates are stored as integer multiples of this many degrees (≈11 m). */
 const COORDINATE_SCALE = 1e4;
 const MAX_ALTITUDE_M = 1e9;
-const MAX_FOLLOW_RANGE_M = 1e8;
 const MAX_UNSIGNED_SETTING = 1e6;
 /** Terminus pin range; mirrors SCOPE_TERMINUS_MIN/MAX_PCT in scopeMask.js. */
 const SCOPE_TERMINUS_MIN_PCT = 94;
@@ -661,7 +660,7 @@ function normalizeFollowOffset(offset) {
   const d = SHARE_VIEW_FOLLOW_OFFSET_DEFAULT;
   const source = offset && typeof offset === 'object' ? offset : {};
   return {
-    range: intOr(source.range, d.range, 1, MAX_FOLLOW_RANGE_M),
+    range: intOr(source.range, d.range, 1, SHARE_VIEW_FOLLOW_RANGE_MAX_M),
     heading: wrapAngle(source.heading, d.heading),
     pitch: intOr(source.pitch, d.pitch, -90, 90),
   };

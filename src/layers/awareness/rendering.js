@@ -34,12 +34,7 @@ export {
   wakeAwarenessPulses,
 } from './rangeRing.js';
 
-export function createRendering({
-  state: layerState,
-  services,
-  parts,
-  source,
-}) {
+export function createRendering({ state: layerState, services, parts }) {
   const { getKeyholeGeometry, celestialScreenAngle } = services.geometry;
   const { governorRequestRender } = services.render;
   /** The range ring with its pulses (`rangeRing.js`). */

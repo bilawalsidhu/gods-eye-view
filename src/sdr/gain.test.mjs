@@ -10,15 +10,7 @@ import {
   tunerGainValue,
   writeSdrGainSettings,
 } from './gain.js';
-
-function memoryStorage(initial = {}) {
-  const values = new Map(Object.entries(initial));
-  return {
-    values,
-    getItem: (key) => (values.has(key) ? values.get(key) : null),
-    setItem: (key, value) => values.set(key, String(value)),
-  };
-}
+import { memoryStorage } from '../testSupport/memoryStorage.mjs';
 
 test('gain steps are the R820T table and ADS-B defaults to manual 28.0 dB', () => {
   assert.equal(R820T_GAIN_STEPS_DB.length, 29);

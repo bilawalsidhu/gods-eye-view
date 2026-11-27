@@ -854,6 +854,7 @@ test('in-view satellites stand at their SGP4 catalogue positions (the layer reco
     },
     parts: {
       orbits,
+      controls: { _classVisible: () => true },
       rendering: {
         _pointPosition: () => {
           rendererAsked++;

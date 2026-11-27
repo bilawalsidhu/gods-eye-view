@@ -1,5 +1,6 @@
 import {
   CLICK_PICK_WINDOW_PX,
+  POSITION_PICK_ID,
   STREET_LEVEL_LAYER_ID,
   STREET_LEVEL_SET_PREFIX,
 } from './policy.js';
@@ -9,6 +10,21 @@ import { toLonLatH } from '../../geo/index.js';
 /** One click handler for every provider's lines and cones, and the marker. */
 export function createSelection({ state, parts }) {
   const { picking } = state.services;
+
+  /**
+   * The provider whose prefix a picked id carries (the registry keeps
+   * prefixes apart), `instance: null` for the core's position marker; null
+   * when the id is not ours.
+   */
+  function resolve(id) {
+    if (typeof id !== 'string' || !id) return null;
+    if (id === POSITION_PICK_ID) return { instance: null, id };
+    for (const entry of state.providers.values())
+      if (id.startsWith(entry.def.pickPrefix))
+        return { instance: entry.instance, id };
+    return null;
+  }
+  const ownsPick = (id) => resolve(id) !== null;
 
   /**
    * The pick id a click hit: a line part of ours answers for its sequence
@@ -36,9 +52,7 @@ export function createSelection({ state, parts }) {
       contact && !contact.surface
         ? pickIdOf({ drawHit: contact.set ? contact : null, id: event.id })
         : null;
-    const route =
-      parts.router.resolve(windowId) ??
-      (contactId ? parts.router.resolve(contactId) : null);
+    const route = resolve(windowId) ?? resolve(contactId);
     // Not ours: the ground handler decides whether it is the map itself.
     if (!route) {
       parts.openAtGround?.({ surface: hit.surface, ground: groundOf(event) });
@@ -85,7 +99,7 @@ export function createSelection({ state, parts }) {
     if (state.clickSubscription) return;
     state.clickSubscription = inputFor(viewer).onClick(onClick);
     document.addEventListener('keydown', onKeyDown);
-    picking?.registerPickOwner?.(STREET_LEVEL_LAYER_ID, parts.router.ownsPick);
+    picking?.registerPickOwner?.(STREET_LEVEL_LAYER_ID, ownsPick);
   }
 
   function uninstall() {
@@ -97,5 +111,5 @@ export function createSelection({ state, parts }) {
     picking?.unregisterPickOwner?.(STREET_LEVEL_LAYER_ID);
   }
 
-  return { install, uninstall, ownsPick: parts.router.ownsPick };
+  return { install, uninstall, ownsPick };
 }

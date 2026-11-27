@@ -86,12 +86,11 @@ only the main file. Exports, runtimes and new groups belong in the main file.
 
 ## Compatibility entries and owners
 
-| Retained entry                                      | Owner and current reason                                                                                           |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `src/data/manager.js`                               | Lifecycle/panel compatibility and existing tests; normal assembly constructs lifecycle and presentation separately |
-| `src/data/<layer>.js`                               | Legacy default instances; new assembly calls layer factories with supplied sources                                 |
-| `src/app/sources.js`, `src/services/application.js` | Existing default/override API; current application construction supplies its own instances                         |
-| `server/providers/local.js`                         | Existing Node composition barrel and provider helper re-exports                                                    |
+| Retained entry                                      | Owner and current reason                                                                   |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `src/data/<layer>.js`                               | Legacy default instances; new assembly calls layer factories with supplied sources         |
+| `src/app/sources.js`, `src/services/application.js` | Existing default/override API; current application construction supplies its own instances |
+| `server/providers/local.js`                         | Existing Node composition barrel and provider helper re-exports                            |
 
 The one exact standalone-import exception is `server/providers/local.js` to
 `server/standalone/key-setup.js`. It does not authorize new compatibility

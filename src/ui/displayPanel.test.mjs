@@ -436,14 +436,11 @@ test('the 3D aircraft group renders what AircraftDisplay shows', async (t) => {
     'true',
   );
 
-  // The button leaves the row to its own sync.
+  // The button and the mode row show the same switch.
   owner._setModels3dEnabled(false);
   await nextTick();
   assert.equal(coreClasses(button), 'pp-toggle-btn');
   assert.equal(button.getAttribute('aria-pressed'), 'false');
-  assert.equal(row.classList.contains('visible'), true);
-  owner._syncModels3dModeRow();
-  await nextTick();
   assert.equal(row.classList.contains('visible'), false);
 
   owner._setModels3dMode('all');

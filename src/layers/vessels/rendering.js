@@ -20,6 +20,7 @@ import {
 } from '../../render/rendererOf.js';
 import { poseSignature } from '../../render/camera/poseSignature.js';
 import { createVesselIconBook } from './iconBook.js';
+import { hasRealName, vesselIdFromEntry } from './cards.js';
 import {
   VESSEL_LIFT_M,
   DEFAULT_RENDER_ROWS,
@@ -738,6 +739,37 @@ export function createRendering({
   // vessels a fraction of a pixel each frame would take most of every frame.
   let hiddenFollowedAtWallMs = null;
   let hiddenCursor = 0;
+
+  /**
+   * Move the share of all vessels that the wall time since the last pass is
+   * of HIDDEN_FOLLOW_MS, going round the list.
+   */
+  function followHiddenShare(atMs, wallMs, visit) {
+    const all = state.records.all;
+    const sinceMs =
+      hiddenFollowedAtWallMs === null
+        ? HIDDEN_FOLLOW_MS
+        : wallMs - hiddenFollowedAtWallMs;
+    const share = Math.min(
+      all.length,
+      Math.ceil((all.length * Math.max(0, sinceMs)) / HIDDEN_FOLLOW_MS),
+    );
+    if (share > 0) hiddenFollowedAtWallMs = wallMs;
+    for (let k = 0; k < share; k += 1) {
+      if (hiddenCursor >= all.length) hiddenCursor = 0;
+      visit(all[hiddenCursor], atMs);
+      hiddenCursor += 1;
+    }
+  }
+
+  function followHidden(record, atMs) {
+    followRecord(record, atMs, false, motionPass);
+  }
+
+  function catchUpHidden(record, atMs) {
+    if (visualRecords.get(record)?.position) catchUpVisual(record, atMs);
+    else followHidden(record, atMs);
+  }
   let clockPassAtMs = null;
   // Whether the last pass left drawn vessels short of its world time.
   let drawnBehind = false;
@@ -800,24 +832,7 @@ export function createRendering({
       ? state.records.byId.get(state.cockpitSubjectId)
       : null;
     if (ridden) catchUpVisual(ridden, atMs);
-    const all = state.records.all;
-    const wallMs = performance.now();
-    const sinceMs =
-      hiddenFollowedAtWallMs === null
-        ? HIDDEN_FOLLOW_MS
-        : wallMs - hiddenFollowedAtWallMs;
-    const share = Math.min(
-      all.length,
-      Math.ceil((all.length * Math.max(0, sinceMs)) / HIDDEN_FOLLOW_MS),
-    );
-    if (share > 0) hiddenFollowedAtWallMs = wallMs;
-    for (let k = 0; k < share; k += 1) {
-      if (hiddenCursor >= all.length) hiddenCursor = 0;
-      const record = all[hiddenCursor];
-      if (visualRecords.get(record)?.position) catchUpVisual(record, atMs);
-      else followRecord(record, atMs, false, motionPass);
-      hiddenCursor += 1;
-    }
+    followHiddenShare(atMs, performance.now(), catchUpHidden);
   }
 
   /**
@@ -856,20 +871,7 @@ export function createRendering({
       for (const record of all) followRecord(record, atMs, true, motion);
     // As much of the list as the wall time since the last pass is of
     // HIDDEN_FOLLOW_MS, going round it.
-    const sinceMs =
-      hiddenFollowedAtWallMs === null
-        ? HIDDEN_FOLLOW_MS
-        : wallMs - hiddenFollowedAtWallMs;
-    const share = Math.min(
-      all.length,
-      Math.ceil((all.length * Math.max(0, sinceMs)) / HIDDEN_FOLLOW_MS),
-    );
-    if (share > 0) hiddenFollowedAtWallMs = wallMs;
-    for (let k = 0; k < share; k += 1) {
-      if (hiddenCursor >= all.length) hiddenCursor = 0;
-      followRecord(all[hiddenCursor], atMs, false, motionPass);
-      hiddenCursor += 1;
-    }
+    followHiddenShare(atMs, wallMs, followHidden);
     if (!moveDrawn) return;
     askMotionFrame(motion);
     noteClockStep(atMs, motion);
@@ -1170,12 +1172,7 @@ export function createRendering({
         (motion.angle * canvas.clientHeight) / (2 * Math.tan(pose.fovy / 2))
       );
     if (pose.fovy > 0 || !(canvas.clientWidth > 0)) return 0;
-    let width = NaN;
-    try {
-      width = 2 / findCamera(state.viewer).matrices().projection[0];
-    } catch {
-      return 0;
-    }
+    const width = viewWidth(pose);
     return width > 0 ? (motion.metres * canvas.clientWidth) / width : 0;
   }
 
@@ -1560,9 +1557,7 @@ export function createRendering({
           VESSEL_CARD_FADE_DISTANCE_M,
         );
         if (!card.interactive) return card;
-        const id = String(card.id || '').startsWith('vessel:')
-          ? card.id.slice('vessel:'.length)
-          : '';
+        const id = vesselIdFromEntry(card.id);
         const mmsi = state.records.byId.get(id)?.mmsi || '';
         return {
           ...card,
@@ -1588,23 +1583,16 @@ export function createRendering({
   function labelPriority(record, selected) {
     if (record === selected) return 100000;
     let score = 0;
-    if (hasUsefulName(record)) score += 1000;
+    if (
+      hasRealName(record) &&
+      !/^MMSI\s*\d+$/i.test(String(record.name).trim())
+    )
+      score += 1000;
     if (record.speed !== null)
       score += Math.min(400, Math.max(0, record.speed) * 20);
     if (record.heading !== null || record.course !== null) score += 80;
     if (record.type) score += 40;
     return score;
-  }
-
-  function hasUsefulName(record) {
-    const text = String(record.name || '').trim();
-    return Boolean(
-      text &&
-      text !== 'VESSEL' &&
-      !/^MMSI\s*\d+$/i.test(text) &&
-      text !== record.mmsi &&
-      text !== record.id,
-    );
   }
 
   function setVisible(show) {
@@ -1651,7 +1639,6 @@ export function createRendering({
     updateClusteredLabels,
     publishVesselOverlayEntries,
     labelPriority,
-    hasUsefulName,
     setVisible,
     updateModels,
     destroyModels,

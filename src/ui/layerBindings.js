@@ -1,15 +1,17 @@
 import { onFollowChanged } from '../data/followed.js';
 import { isExplicitLayerStateOrigin } from '../data/layerState.js';
 import {
-  registerCctvFocusRequestListener,
+  CCTV_FOCUS_REQUEST_EVENT,
   routeCctvFocusRequest,
 } from '../cctvFocusRequest.js';
 import {
+  WORLD_FOCUS_REQUEST_EVENT,
   flyToWorldTarget,
-  registerWorldFocusRequestListener,
+  registerFocusRequestListener,
   routeWorldFocusRequest,
 } from '../worldFocus.js';
 import { registerNavigationAuthorityListener } from '../navigationPolicy.js';
+import { WEATHER_PANEL_LAYER_IDS } from './weatherPanel.js';
 /** Own manager subscriptions and the camera-entry events that outlive controls. */
 export class LayerBindings {
   constructor({
@@ -70,8 +72,9 @@ export class LayerBindings {
         (cameraId, durationSec) =>
           this.services.cctvLayer.focusCamera(cameraId, durationSec),
       );
-    this._removeCctvRequestFocusListener = registerCctvFocusRequestListener(
+    this._removeCctvRequestFocusListener = registerFocusRequestListener(
       window,
+      CCTV_FOCUS_REQUEST_EVENT,
       this._cctvRequestFocusHandler,
     );
     this._worldRequestFocusHandler = (event) =>
@@ -80,8 +83,9 @@ export class LayerBindings {
         (detail, fly) => this._runExplicitWorldFocus(detail, fly),
         (detail) => flyToWorldTarget(this.viewer, detail),
       );
-    this._removeWorldRequestFocusListener = registerWorldFocusRequestListener(
+    this._removeWorldRequestFocusListener = registerFocusRequestListener(
       window,
+      WORLD_FOCUS_REQUEST_EVENT,
       this._worldRequestFocusHandler,
     );
     this._navigationOwnerChangedRemover = onFollowChanged(
@@ -129,14 +133,7 @@ export class LayerBindings {
     for (const layer of this._weatherShellModules)
       layer.attachShellServices?.(null);
     this._weatherShellModules = [];
-    for (const id of [
-      'wind',
-      'weather-radar',
-      'weather-satellite',
-      'weather-lightning',
-      'weather-cyclones',
-      'air-quality',
-    ]) {
+    for (const id of WEATHER_PANEL_LAYER_IDS) {
       const layer = this._dataManager?.layers?.get(id)?.module;
       if (typeof layer?.attachShellServices !== 'function') continue;
       let noun = 'weather';

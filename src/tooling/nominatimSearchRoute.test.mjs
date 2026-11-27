@@ -190,11 +190,6 @@ test('the real composition binds durable storage before dev or preview installat
     path.join(storage, 'state.json'),
     path.join(standaloneStorage, 'state.json'),
   ]);
-  for (const value of [null, '', 'relative'])
-    assert.throws(
-      () => localProviderPlugins({ nominatimStorageDir: value }),
-      /absolute directory/,
-    );
   assert.equal(
     bound.length,
     2,

@@ -64,11 +64,8 @@ export function createLifecycle({ state, services, parts, timetable }) {
       state._overlayHost.setVisible(RAIL_STOP_OVERLAY_SOURCE_ID, true);
       parts.selection.installClickHandler(viewer);
       registerPickOwner('rail', (pickedId) => state._trains.has(pickedId));
-      if (!state._cameraChangedAttached) {
-        parts.viewport.watchCamera(viewer);
-        // Attached only with a camera to listen to, so a later enable retries.
-        state._cameraChangedAttached = state._cameraChangedOff !== null;
-      }
+      // Listening only with a camera to listen to, so a later enable retries.
+      if (!state._cameraChangedOff) parts.viewport.watchCamera(viewer);
       parts.rendering.startFrames(viewer);
       state._networkFade = -1;
       parts.rendering.startModels();
@@ -89,7 +86,6 @@ export function createLifecycle({ state, services, parts, timetable }) {
       unregisterPickOwner('rail');
       // Unconditional: whatever watching started, none of it outlives this.
       parts.viewport.unwatchCamera();
-      state._cameraChangedAttached = false;
       parts.rendering.stopFrames();
       parts.viewport.cancelCatalog();
       timetable.stop();

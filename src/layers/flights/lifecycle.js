@@ -156,7 +156,7 @@ export function createLifecycle({
           flightState._lastFleetTickMs = 0;
         });
       }
-      flightState.timeline?.start();
+      flightState.timeline.start();
     },
 
     /**
@@ -165,8 +165,8 @@ export function createLifecycle({
      * @param {object} viewer
      */
     disable(viewer) {
-      flightState.timeline?.stop();
-      parts.controller._abortActiveUpdates();
+      flightState.timeline.stop();
+      parts.ingestion.abortAll();
       parts.tracking._cancelPendingTrackingRestore();
       if (flightState._icons) flightState._icons.show = false;
       parts.rendering._stopPace();
@@ -204,10 +204,10 @@ export function createLifecycle({
      * @param {object} viewer
      */
     destroy(viewer) {
-      flightState.timeline?.stop();
+      flightState.timeline.stop();
       flightState.lifetime.abort();
       flightState._enrich.reset();
-      parts.controller._abortActiveUpdates();
+      parts.ingestion.abortAll();
       parts.rendering._stopPace(); // direct-destroy path
       parts.tracking._clearTracking();
       parts.tracking._destroyTrail();

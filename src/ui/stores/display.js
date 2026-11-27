@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { markRaw, shallowRef } from 'vue';
+import { presented } from './presented.js';
 import { createOwners } from './owners.js';
 
 /**
@@ -61,24 +62,14 @@ export const useDisplayStore = defineStore('gev-display', () => {
    * The Sky group, `{switches, milkyWay}` (switches by name, the Milky Way
    * in percent); null where the renderer has no sky to set.
    */
-  const sky = shallowRef(null);
-
-  /** @param {?object} next A fresh presentation of the Sky group. */
-  function publishSky(next) {
-    sky.value = next && markRaw(next);
-  }
+  const [sky, publishSky] = presented();
 
   /**
    * The Frame rate row, `{fps, stop, min, max, step}`: the rate (0 for
    * unlimited) and the slider's stop for it, the last stop being unlimited;
    * null until the controls first present it.
    */
-  const frameRate = shallowRef(null);
-
-  /** @param {?object} next A fresh presentation of the Frame rate row. */
-  function publishFrameRate(next) {
-    frameRate.value = next && markRaw(next);
-  }
+  const [frameRate, publishFrameRate] = presented();
 
   /** The Draw controls; null until the draw tool first renders. */
   const draw = shallowRef(null);
@@ -105,12 +96,7 @@ export const useDisplayStore = defineStore('gev-display', () => {
   }
 
   /** The map source chips and status; null until the controls first render. */
-  const mapSource = shallowRef(null);
-
-  /** @param {object} next A fresh presentation of the map source row. */
-  function publishMapSource(next) {
-    mapSource.value = next && markRaw(next);
-  }
+  const [mapSource, publishMapSource] = presented();
 
   /** Rows added under Map Source, in the order first shown. */
   const mapLayers = shallowRef([]);
@@ -142,32 +128,17 @@ export const useDisplayStore = defineStore('gev-display', () => {
    * The active style's parameter rows, `{style, rows}`; null while the style
    * has none. Each row's change calls act('setStyleParameter', name, value).
    */
-  const parameters = shallowRef(null);
-
-  /** @param {?{style: string, rows: object[]}} next */
-  function publishParameters(next) {
-    parameters.value = next && markRaw(next);
-  }
+  const [parameters, publishParameters] = presented();
 
   /**
    * The Cockpit's Display popover slots while Cockpit shows the Display
    * controls, `{hud, detection, parameters, models3d}` (elements); null while
    * they stay in the Display panel. The panel teleports its groups there.
    */
-  const cockpitPortal = shallowRef(null);
-
-  /** @param {?object} next The slots, or null to bring the groups home. */
-  function publishCockpitPortal(next) {
-    cockpitPortal.value = next && markRaw(next);
-  }
+  const [cockpitPortal, publishCockpitPortal] = presented();
 
   /** The phone shell's tab bar; null until the shell first presents it. */
-  const phoneShell = shallowRef(null);
-
-  /** @param {?{enabled: boolean, sheet: string|null, tabs: object[]}} next The phone shell's tabs, whether it is on and its open sheet. */
-  function publishPhoneShell(next) {
-    phoneShell.value = next && markRaw(next);
-  }
+  const [phoneShell, publishPhoneShell] = presented();
 
   return {
     view,

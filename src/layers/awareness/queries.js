@@ -1,19 +1,59 @@
 import { AWARENESS_RADIUS_M } from '../../data/militaryAwarenessEngine.js';
+import { englishText, msg } from '../../i18n/marker.js';
 
 // The reason stays English for the voice analyst; the Contacts panel shows it
 // in the UI language from `reasonTemplate`.
-const msg = (text) => text;
-const fillTemplate = (template, values = {}) =>
-  template.replace(/\{(\w+)\}/g, (_, name) => String(values[name]));
 const withReason = (summary, template, values) => ({
   ...summary,
-  reason: fillTemplate(template, values),
+  reason: englishText(template, values),
   reasonTemplate: template,
   reasonValues: values,
 });
 import { DEPENDENCIES, AWARENESS_QUERY_LIMIT } from './policy.js';
+import { summarizeAwarenessCohortForNavigation } from './navigation.js';
 
-export function createQueries({ state: layerState, services, parts, source }) {
+/**
+ * Summarize viewport-backed installations without implying radius-complete coverage.
+ * @param {Array<object>} items Loaded installation matches.
+ * @param {object} source Current source availability and staleness.
+ * @returns {object} Awareness summary with viewport-honest reasoning.
+ */
+
+export function summarizeInstallationViewport(items, source) {
+  const coverage = source.stats?.coverage;
+  // getNearby measures these distances from the current subject, independent
+  // of the retained square used to fetch installation tiles.
+  const withinRadius =
+    coverage?.kind === 'subject' && Number.isFinite(coverage.radiusM)
+      ? items.filter(
+          (item) => (item.distanceM ?? item.distance) <= coverage.radiusM,
+        )
+      : items;
+  const summary = summarizeAwarenessCohortForNavigation(withinRadius, source);
+  if (summary.count === null)
+    return source.stats?.statusMessage
+      ? { ...summary, reason: source.stats.statusMessage }
+      : summary;
+  // A subject window is its own bounded area: name it instead of the viewport.
+  if (coverage?.kind === 'subject' && Number.isFinite(coverage.radiusM)) {
+    const km = Math.round(coverage.radiusM / 1000);
+    return withReason(
+      summary,
+      summary.count
+        ? msg('mapped matches within {km} km of the subject')
+        : msg('none mapped within {km} km; not a complete 250 km survey'),
+      { km },
+    );
+  }
+  return withReason(
+    summary,
+    summary.count
+      ? msg('mapped matches from the loaded viewport')
+      : msg('viewport feed is not a complete 250 km survey'),
+  );
+}
+
+export function createQueries({ state: layerState, services, parts }) {
   const flightsLayer = services.flights;
   const militaryFlightsLayer = services.military;
 
@@ -86,50 +126,6 @@ export function createQueries({ state: layerState, services, parts, source }) {
   }
 
   /**
-   * Summarize viewport-backed installations without implying radius-complete coverage.
-   * @param {Array<object>} items Loaded installation matches.
-   * @param {object} source Current source availability and staleness.
-   * @returns {object} Awareness summary with viewport-honest reasoning.
-   */
-
-  function summarizeInstallationViewport(items, source) {
-    const coverage = source.stats?.coverage;
-    // getNearby measures these distances from the current subject, independent
-    // of the retained square used to fetch installation tiles.
-    const withinRadius =
-      coverage?.kind === 'subject' && Number.isFinite(coverage.radiusM)
-        ? items.filter(
-            (item) => (item.distanceM ?? item.distance) <= coverage.radiusM,
-          )
-        : items;
-    const summary = parts.navigation.summarizeAwarenessCohortForNavigation(
-      withinRadius,
-      source,
-    );
-    if (summary.count === null)
-      return source.stats?.statusMessage
-        ? { ...summary, reason: source.stats.statusMessage }
-        : summary;
-    // A subject window is its own bounded area: name it instead of the viewport.
-    if (coverage?.kind === 'subject' && Number.isFinite(coverage.radiusM)) {
-      const km = Math.round(coverage.radiusM / 1000);
-      return withReason(
-        summary,
-        summary.count
-          ? msg('mapped matches within {km} km of the subject')
-          : msg('none mapped within {km} km; not a complete 250 km survey'),
-        { km },
-      );
-    }
-    return withReason(
-      summary,
-      summary.count
-        ? msg('mapped matches from the loaded viewport')
-        : msg('viewport feed is not a complete 250 km survey'),
-    );
-  }
-
-  /**
    * THE aircraft-proximity engine. One computation, two consumers: the Contacts
    * panel window and the voice analyst's entity-centred "how many nearby".
    *
@@ -184,7 +180,6 @@ export function createQueries({ state: layerState, services, parts, source }) {
     };
   }
   return {
-    sourceState,
     collectSourceStates,
     sourceRevision,
     isSame,

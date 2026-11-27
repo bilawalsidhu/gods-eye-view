@@ -1,4 +1,5 @@
 import { nextTick } from 'vue';
+import { prefersReducedMotion } from '../reducedMotion.js';
 
 const DOCK_KEY = 'gev.panel.docked';
 
@@ -86,7 +87,7 @@ function layOut({ ui, name, minimize }) {
   // What the last placement depended on, short of measuring.
   let placedInputs = '';
   const animateHeight = (from, to) => {
-    if (view.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    if (prefersReducedMotion(view)) return;
     heightAnimation?.cancel();
     heightAnimation = panel.animate?.(
       [

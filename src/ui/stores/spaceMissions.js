@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { markRaw, shallowRef } from 'vue';
+import { presented } from './presented.js';
 
 /**
  * The Space Missions panel as its views render it. The Space Missions layer
@@ -31,12 +32,7 @@ export const useSpaceMissionsStore = defineStore('gev-space-missions', () => {
   }
 
   /** The Space Missions layer whose panel commands the components call. */
-  const layer = shallowRef(null);
-
-  /** @param {?object} next The Space Missions layer, or null to disconnect. */
-  function connect(next) {
-    layer.value = next && markRaw(next);
-  }
+  const [layer, connect] = presented();
 
   return { enabled, setEnabled, roster, mission, publish, layer, connect };
 });

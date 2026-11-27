@@ -142,12 +142,14 @@ export function tileLocalToLonLat(px, py, extent, x, y, z) {
   return [lon, lat];
 }
 
-/** Sequence-tile zoom for a camera height above ground (m); Mapillary stops at z14. */
-export function coverageZoomForHeight(heightM) {
+/**
+ * Coverage-tile zoom for a camera height above ground (m): the zoom of the
+ * first `[maxHeightM, zoom]` band (lowest first) the height is at or under;
+ * null above the last band, or for a height that is not finite.
+ */
+export function zoomForHeight(heightM, bands) {
   if (!Number.isFinite(heightM)) return null;
-  if (heightM > 60_000) return null;
-  if (heightM > 12_000) return 11;
-  if (heightM > 5_000) return 12;
-  if (heightM > 1_800) return 13;
-  return 14;
+  for (const [maxHeightM, zoom] of bands)
+    if (heightM <= maxHeightM) return zoom;
+  return null;
 }

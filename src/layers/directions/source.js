@@ -8,16 +8,14 @@ export function directionsRequestUrl(mode, a, b) {
   return `/api/route?profile=${encodeURIComponent(mode)}&coords=${encodeURIComponent(coords)}&steps=1`;
 }
 
-/** Acquire route records using caller-owned transport and an optional endpoint. */
+/** Acquire route records using caller-owned transport. */
 export function createDirectionsSource({
   fetchImpl = (...args) => globalThis.fetch(...args),
-  endpoint = '/api/route',
 } = {}) {
   return {
     async getRoute({ mode, a, b }, { signal } = {}) {
       signal?.throwIfAborted();
-      const query = directionsRequestUrl(mode, a, b).split('?')[1];
-      const response = await fetchImpl(`${endpoint}?${query}`, {
+      const response = await fetchImpl(directionsRequestUrl(mode, a, b), {
         signal,
         headers: { Accept: 'application/json' },
       });

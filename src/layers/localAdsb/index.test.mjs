@@ -8,7 +8,6 @@ import { aircraftIcon } from '../../data/aircraftIcons.js';
 import { ROTOR_STILL_FRAME, rotorFrame } from '../../data/rotorFrames.js';
 import {
   createLocalAdsbLayer,
-  HEARD_BY_RECEIVER,
   localAdsbCardModel,
   localAdsbReceiverLine,
   localAdsbStatus,
@@ -840,7 +839,6 @@ test('the click card lists identity, kinematics, freshness and the receiver line
     'POSITION 4 S AGO · 48 MSGS',
     'Heard by your receiver · 1090 MHz · browser SDR',
   ]);
-  assert.equal(HEARD_BY_RECEIVER, 'Heard by your receiver');
   const bare = localAdsbCardModel(
     record({
       callsign: null,
@@ -915,7 +913,7 @@ test('the receiver line names every band and source that heard the aircraft', ()
   );
   assert.equal(
     localAdsbReceiverLine({ icao: 'abc123' }),
-    HEARD_BY_RECEIVER,
+    'Heard by your receiver',
     'a record without band or source keeps the plain line',
   );
 });

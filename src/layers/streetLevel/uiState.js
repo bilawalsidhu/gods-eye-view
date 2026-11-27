@@ -67,8 +67,7 @@ export function keyAlternatives(providers) {
 function filterControls(providers) {
   const active = providers.filter((p) => p.on);
   const honoured = (key) =>
-    active.length === 0 ||
-    active.some((p) => (p.filters ?? ['pano', 'since']).includes(key));
+    active.length === 0 || active.some((p) => p.filters.includes(key));
   return { pano: honoured('pano'), since: honoured('since') };
 }
 

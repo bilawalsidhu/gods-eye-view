@@ -2,8 +2,15 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as Cesium from 'cesium';
 import { twoline2satrec } from 'satellite.js';
-import {
-  ISS_OVERLAY_SOURCE_OPTIONS,
+import { ISS_OVERLAY_SOURCE_OPTIONS, createIssOverlayEntry } from './satellites.js';
+import { followedOf } from './followed.js';
+import { bindRenderer } from '../render/rendererOf.js';
+import { fakeDrawPort } from '../testSupport/fakeDrawPort.mjs';
+import satellitesLayer from './satellites.js';
+import { createTrackedOverlayEntry } from './trackedReadout.js';
+import { readEntityRecord, withEntityRecord } from './entityRecords.js';
+
+const {
   _applyPendingSatelliteTrackingRestoreForTest,
   _clearSatelliteLabelLifecycleForTest,
   _pendingSatelliteTrackingRestoreForTest,
@@ -14,14 +21,7 @@ import {
   _setTrackedSatelliteRefreshStateForTest,
   _trackedFrameCartesianForTest,
   _trackIssForTest,
-  createIssOverlayEntry,
-} from './satellites.js';
-import { followedOf } from './followed.js';
-import { bindRenderer } from '../render/rendererOf.js';
-import { fakeDrawPort } from '../testSupport/fakeDrawPort.mjs';
-import satellitesLayer from './satellites.js';
-import { createTrackedOverlayEntry } from './trackedReadout.js';
-import { readEntityRecord, withEntityRecord } from './entityRecords.js';
+} = satellitesLayer.testing;
 
 const L1 =
   '1 25544U 98067A   08264.51782528 -.00002182  00000-0 -11606-4 0  2927';

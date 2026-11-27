@@ -1,4 +1,4 @@
-import { findNaturalRegion, pointInRing } from '../data/naturalEarthRegions.js';
+import { findNaturalRegion } from '../data/naturalEarthRegions.js';
 
 /**
  * The unqualified Alps ask names the European range, not a same-named peak
@@ -17,24 +17,12 @@ export function createAlpsGeocoder({ lookupRegion = findNaturalRegion } = {}) {
 
       const region = await lookupRegion('Alps');
       signal?.throwIfAborted();
+      // A broken pack is not permission to cache an unrelated network peak
+      // as the canonical range. Existing search error/retry handling owns it.
       if (
         region?.name !== 'Alps' ||
         region.kind !== 'natural' ||
-        !Array.isArray(region.polygons) ||
-        region.polygons.length === 0 ||
-        !region.polygons.every(
-          (ring) =>
-            Array.isArray(ring) &&
-            ring.length >= 3 &&
-            ring.every(
-              (point) =>
-                Array.isArray(point) &&
-                point.length === 2 &&
-                point.every(Number.isFinite) &&
-                Math.abs(point[0]) <= 180 &&
-                Math.abs(point[1]) <= 90,
-            ),
-        )
+        !region.polygons?.length
       )
         throw new Error('Bundled Alps geometry unavailable');
       const vertices = region.polygons.flat();
@@ -44,14 +32,6 @@ export function createAlpsGeocoder({ lookupRegion = findNaturalRegion } = {}) {
       const north = Math.max(...vertices.map(([, lat]) => lat));
       const lat = (south + north) / 2;
       const lng = (west + east) / 2;
-      if (
-        ![west, east, south, north, lat, lng].every(Number.isFinite) ||
-        !region.polygons.some((ring) => pointInRing(ring, lat, lng))
-      ) {
-        // A broken pack is not permission to cache an unrelated network peak
-        // as the canonical range. Existing search error/retry handling owns it.
-        throw new Error('Bundled Alps geometry unavailable');
-      }
       return {
         answered: true,
         place: {

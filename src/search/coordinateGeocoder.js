@@ -4,7 +4,7 @@ import { parseCoordinateQuery } from './coordinateParser.js';
 const COORDINATE_HALF_SPAN_DEG = 0.015;
 
 /** Keep a generated box inside the poles and inside the dateline. */
-function boundedBox(lat, lon, halfSpan) {
+export function boundedBox(lat, lon, halfSpan) {
   const wrap = (value) => {
     const wrapped = ((((value + 180) % 360) + 360) % 360) - 180;
     return wrapped === -180 ? 180 : wrapped;

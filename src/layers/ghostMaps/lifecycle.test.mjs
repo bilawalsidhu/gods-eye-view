@@ -7,6 +7,7 @@ import { inputFor } from '../../input/dispatcher.js';
 import { MISSION_LABEL } from '../../input/testDoubles.mjs';
 import { clickCard, setClickCardHitTest } from '../../data/pickRegistry.js';
 import { GHOSTMAPS_PRODUCTS, GHOSTMAPS_LATEST_DROP } from './catalog.js';
+import { makeZip } from '../../testSupport/zip.mjs';
 
 function element(localName, children = [], value = '', attributes = {}) {
   const node = {
@@ -56,39 +57,9 @@ function documentFixture(reports = [{ name: 'Test report' }]) {
 
 // A stored KMZ with a local icon; the XML DOM double supplies its one point.
 function fixtureKmz() {
-  const files = [
-    ['doc.kml', '<kml/>'],
-    ['icon.png', 'packed icon'],
-  ];
-  const local = [];
-  const central = [];
-  let offset = 0;
-  for (const [name, value] of files) {
-    const key = Buffer.from(name);
-    const bytes = Buffer.from(value);
-    const header = Buffer.alloc(30);
-    header.writeUInt32LE(0x04034b50);
-    header.writeUInt32LE(bytes.length, 18);
-    header.writeUInt32LE(bytes.length, 22);
-    header.writeUInt16LE(key.length, 26);
-    const directory = Buffer.alloc(46);
-    directory.writeUInt32LE(0x02014b50);
-    directory.writeUInt32LE(bytes.length, 20);
-    directory.writeUInt32LE(bytes.length, 24);
-    directory.writeUInt16LE(key.length, 28);
-    directory.writeUInt32LE(offset, 42);
-    local.push(header, key, bytes);
-    central.push(directory, key);
-    offset += header.length + key.length + bytes.length;
-  }
-  const directory = Buffer.concat(central);
-  const end = Buffer.alloc(22);
-  end.writeUInt32LE(0x06054b50);
-  end.writeUInt16LE(files.length, 8);
-  end.writeUInt16LE(files.length, 10);
-  end.writeUInt32LE(directory.length, 12);
-  end.writeUInt32LE(offset, 16);
-  return new Uint8Array(Buffer.concat([...local, directory, end]));
+  return new Uint8Array(
+    makeZip({ 'doc.kml': '<kml/>', 'icon.png': 'packed icon' }),
+  );
 }
 
 function fixture(
@@ -509,8 +480,16 @@ test('unchanged cached products age out on the timer, clear selected cards and k
       dated('Surviving', '11/2/2026'),
     ],
     controls: {
-      overlayHost: { setEntries: (_id, entries) => cards.push(entries) },
-      picking: { resolvePickId: (picked) => picked },
+      overlayHost: {
+        setEntries: (_id, entries) => cards.push(entries),
+        setVisible() {},
+      },
+      picking: {
+        resolvePickId: (picked) => picked,
+        clickCard: () => null,
+        registerPickOwner() {},
+        unregisterPickOwner() {},
+      },
     },
   });
   await layer.update(viewer);
@@ -605,8 +584,16 @@ test('narrowing the window keeps the open card of a surviving marker', async (t)
     now: () => Date.UTC(2026, 10, 3, 12),
     reports: [dated('Recent', '11/2/2026'), dated('Older', '10/20/2026')],
     controls: {
-      overlayHost: { setEntries: (_id, entries) => cards.push(entries) },
-      picking: { resolvePickId: (picked) => picked },
+      overlayHost: {
+        setEntries: (_id, entries) => cards.push(entries),
+        setVisible() {},
+      },
+      picking: {
+        resolvePickId: (picked) => picked,
+        clickCard: () => null,
+        registerPickOwner() {},
+        unregisterPickOwner() {},
+      },
     },
   });
   await layer.update(viewer);
@@ -640,8 +627,16 @@ test('a widened reload that returns a different report at the selected index clo
     now: () => Date.UTC(2026, 10, 3, 12),
     reports,
     controls: {
-      overlayHost: { setEntries: (_id, entries) => cards.push(entries) },
-      picking: { resolvePickId: (picked) => picked },
+      overlayHost: {
+        setEntries: (_id, entries) => cards.push(entries),
+        setVisible() {},
+      },
+      picking: {
+        resolvePickId: (picked) => picked,
+        clickCard: () => null,
+        registerPickOwner() {},
+        unregisterPickOwner() {},
+      },
     },
   });
   await layer.update(viewer);
@@ -702,8 +697,16 @@ test("a click on a mission label over the open card never opens the card's link,
       },
     ],
     controls: {
-      overlayHost: { setEntries: (_id, entries) => cards.push(entries) },
-      picking: { resolvePickId: (picked) => picked?.id ?? null, clickCard },
+      overlayHost: {
+        setEntries: (_id, entries) => cards.push(entries),
+        setVisible() {},
+      },
+      picking: {
+        resolvePickId: (picked) => picked?.id ?? null,
+        clickCard,
+        registerPickOwner() {},
+        unregisterPickOwner() {},
+      },
       openExternal: (url) => opened.push(url),
     },
   });
@@ -745,6 +748,7 @@ test('a covered selected card yields while genuine GhostMaps markers still selec
     controls: {
       overlayHost: {
         setEntries: (_id, entries) => cards.push(entries),
+        setVisible() {},
         hitTest: (_x, _y, { sourceId } = {}) =>
           painted.find((hit) => !sourceId || hit.sourceId === sourceId) ?? null,
       },
@@ -752,6 +756,8 @@ test('a covered selected card yields while genuine GhostMaps markers still selec
         resolvePickId: (picked) => picked,
         // The card on top at a click, as the registry answers from the host.
         clickCard: () => painted[0] ?? null,
+        registerPickOwner() {},
+        unregisterPickOwner() {},
       },
       openExternal: (url) => opened.push(url),
     },

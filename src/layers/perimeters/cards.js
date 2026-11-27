@@ -1,5 +1,6 @@
 /** Card model for one selected fire-perimeter incident. Pure — no Cesium types. */
 import { formatNumber, t, tn } from '../../i18n/index.js';
+import { formatAge } from '../wildlifeSightings/photoText.js';
 
 export const PERIMETER_OVERLAY_SOURCE_ID = 'fire-perimeters';
 
@@ -82,19 +83,6 @@ function titleCase(name) {
   return String(name)
     .toLowerCase()
     .replace(/\b[a-z]/g, (letter) => letter.toUpperCase());
-}
-
-/** Compact age, "5m" / "3h" / "2d", in the UI language ("3 h", "3 ч"). */
-function formatAge(deltaMs) {
-  if (!Number.isFinite(deltaMs) || deltaMs < 0) return null;
-  const hours = Math.floor(deltaMs / 3600000);
-  if (hours < 1)
-    return t('{count}m', {
-      context: 'age',
-      count: Math.max(1, Math.floor(deltaMs / 60000)),
-    });
-  if (hours < 24) return t('{count}h', { context: 'age', count: hours });
-  return t('{count}d', { context: 'age', count: Math.floor(hours / 24) });
 }
 
 /**

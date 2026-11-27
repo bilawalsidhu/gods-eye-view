@@ -6,12 +6,10 @@ import { createSubject } from './subject.js';
 import { createModel } from './model.js';
 import { summarizeAwarenessCohort } from '../../data/militaryAwarenessEngine.js';
 import { layerFeedState } from '../../data/feedState.js';
-import aisLiveVesselsLayer, {
-  _setVesselStateForTest,
-  _beginAisSessionForTest,
-  _applyAisFeedSnapshotForTest,
-  _setAisRuntimeForTest,
-} from '../../data/aisLiveVessels.js';
+import aisLiveVesselsLayer from '../../data/aisLiveVessels.js';
+
+const { _setVesselStateForTest, _setAisRuntimeForTest } =
+  aisLiveVesselsLayer.testing;
 
 test('a poll that returns the same stale AIS snapshot restores STALE on Contacts cohorts', () => {
   globalThis.document ??= { body: null };
@@ -91,9 +89,9 @@ test('first AIS connect (no snapshot yet) carries no STALE on the Contacts cohor
   _setAisRuntimeForTest(fakeRuntime());
   _setVesselStateForTest({ viewer: {}, records: [] });
   try {
-    _beginAisSessionForTest();
+    aisLiveVesselsLayer.testing.parts.lifecycle.beginAisSession();
     // What server/providers/vessels/ais-live.js answers while its socket connects.
-    _applyAisFeedSnapshotForTest({}, {
+    aisLiveVesselsLayer.testing.parts.ingestion.applyAisFeedSnapshot({}, {
       rows: [], source: 'AISStream', status: 'connecting', refreshing: true,
     });
     const vesselStats = aisLiveVesselsLayer.getStats();

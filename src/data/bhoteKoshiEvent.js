@@ -6,6 +6,7 @@ import {
   setOverlayEntries,
   setOverlaySourceVisible,
 } from '../overlays/worldOverlay.js';
+import { drawCover } from '../overlays/worldOverlayDraw.js';
 import { WORLD_OVERLAY_STYLE } from '../overlays/worldOverlayTokens.js';
 import {
   governorRequestRender,
@@ -679,30 +680,6 @@ function evidenceFrameCanvas(observation) {
   canvas.height = layout.canvasHeight;
   canvas._bhoteEvidenceLayout = layout;
   return canvas;
-}
-
-function drawCover(ctx, image, x, y, width, height) {
-  const sourceWidth =
-    Number(image?.videoWidth || image?.width || image?.naturalWidth) || width;
-  const sourceHeight =
-    Number(image?.videoHeight || image?.height || image?.naturalHeight) ||
-    height;
-  const scale = Math.max(width / sourceWidth, height / sourceHeight);
-  const cropWidth = width / scale;
-  const cropHeight = height / scale;
-  const sourceX = Math.max(0, (sourceWidth - cropWidth) / 2);
-  const sourceY = Math.max(0, (sourceHeight - cropHeight) / 2);
-  ctx.drawImage(
-    image,
-    sourceX,
-    sourceY,
-    cropWidth,
-    cropHeight,
-    x,
-    y,
-    width,
-    height,
-  );
 }
 
 function drawContain(ctx, image, x, y, width, height) {

@@ -1,3 +1,4 @@
+import { clamp } from '../../geo/vector.js';
 import {
   DEFAULT_UPDATE_INTERVAL_MS,
   MIN_AUTO_HOP_SEC,
@@ -68,7 +69,7 @@ export function createControls({ state: layerState, services, parts, source }) {
         typeof params.autoHopSec === 'number' &&
         Number.isFinite(params.autoHopSec)
       ) {
-        layerState._autoHopSec = parts.model.clamp(
+        layerState._autoHopSec = clamp(
           Math.round(params.autoHopSec),
           MIN_AUTO_HOP_SEC,
           MAX_AUTO_HOP_SEC,

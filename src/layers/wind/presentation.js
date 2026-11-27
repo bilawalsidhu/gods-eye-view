@@ -37,17 +37,16 @@ function displaySpeed(speed, units) {
   });
 }
 
-/** "1012.4 hPa" / "-3.0 °C" from the English reading, in the active language. */
+/** "1012.4 hPa" / "-3.0 °C" from the reading's number, in the active language. */
 function displayScalar(reading) {
   if (reading.scalarKind === 'speed' && Number.isFinite(reading.speed))
     return displaySpeed(reading.speed, reading.units);
-  const match = /^(-?\d+(?:\.\d+)?) (°C|hPa)$/.exec(reading.scalarValue);
-  if (!match) return reading.scalarValue;
-  const decimals = match[1].split('.')[1]?.length || 0;
-  return formatQuantity(Number(match[1]), match[2], {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  });
+  if (!Number.isFinite(reading.scalar)) return reading.scalarValue;
+  return formatQuantity(
+    reading.scalar,
+    reading.scalarKind === 'temperature' ? '°C' : 'hPa',
+    { minimumFractionDigits: 1, maximumFractionDigits: 1 },
+  );
 }
 
 /**
@@ -65,24 +64,16 @@ export function windValueText(speed, from, units = 'km/h') {
 
 /** The wind line in the active language; the reading itself stays English. */
 function windText(reading) {
-  if (!Number.isFinite(reading.speed))
-    return reading.wind === 'Aim the map center at Earth'
-      ? t('Aim the map center at Earth')
-      : reading.wind;
+  if (!Number.isFinite(reading.speed)) return t(reading.wind);
   return windValueText(reading.speed, reading.from, reading.units);
 }
 
-/** "29.93°N · 97.74°W" from the English reading, in the active language. */
-function displayCoordinates(coordinates) {
-  const match = /^(\d+(?:\.\d+)?)°([NS]) · (\d+(?:\.\d+)?)°([EW])$/.exec(
-    coordinates,
-  );
-  if (!match) return coordinates.replace(' · ', ' ');
+/** "29.93°N 97.74°W" from the reading's degrees, in the active language. */
+function displayCoordinates(lat, lon) {
   const part = (value, hemisphere) => {
-    const decimals = value.split('.')[1]?.length || 0;
-    const amount = formatNumber(Number(value), {
-      minimumFractionDigits: decimals,
-      maximumFractionDigits: decimals,
+    const amount = formatNumber(Math.abs(value), {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
       useGrouping: false,
     });
     switch (hemisphere) {
@@ -96,7 +87,7 @@ function displayCoordinates(coordinates) {
         return t('{value}°W', { value: amount });
     }
   };
-  return `${part(match[1], match[2])} ${part(match[3], match[4])}`;
+  return `${part(lat, lat < 0 ? 'S' : 'N')} ${part(lon, lon < 0 ? 'W' : 'E')}`;
 }
 
 /** "2026-10-14 14:00 UTC" from the reading, as "10-14 14:00 UTC" / "14.10 …". */
@@ -108,10 +99,9 @@ function displayValidTime(validTime) {
 
 /** Portable result block consumed by the WEATHER card. */
 export function windReadingResult(reading) {
-  const coordinates =
-    reading.coordinates === 'No surface reading'
-      ? t('No surface reading')
-      : displayCoordinates(reading.coordinates);
+  const coordinates = Number.isFinite(reading.lat)
+    ? displayCoordinates(reading.lat, reading.lon)
+    : t(reading.coordinates);
   return {
     id: 'reading',
     label: t('WIND AT {coordinates}', { coordinates }),

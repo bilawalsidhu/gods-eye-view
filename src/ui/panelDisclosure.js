@@ -17,15 +17,9 @@ function listenerScope() {
  * Bind bubbling Escape to an existing panel. Its collapse buttons are views
  * that ask the panel's owner to toggle it (PanelCollapseButton).
  */
-export function bindPanelDisclosure({ panel, onEscape, ...retired }) {
+export function bindPanelDisclosure({ panel, onEscape }) {
   if (!panel || typeof onEscape !== 'function') {
     throw new TypeError('Panel disclosure requires a panel and onEscape');
-  }
-  // Buttons are views now; a caller still passing them would lose its clicks.
-  if ('buttons' in retired || 'onChange' in retired) {
-    throw new TypeError(
-      'Panel disclosure binds Escape only; render the buttons as views',
-    );
   }
   const scope = listenerScope();
   scope.listen(panel, 'keydown', onEscape);

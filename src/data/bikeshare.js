@@ -13,12 +13,6 @@ const layer = createApplicationBikeshare({
 });
 export const createBikeshareSelectedOverlayEntry =
   layer.createBikeshareSelectedOverlayEntry;
-export const _setBikeshareSelectionStateForTest =
-  layer._setBikeshareSelectionStateForTest;
-export const _selectBikeshareStationForTest =
-  layer._selectBikeshareStationForTest;
-export const _clearBikeshareSelectionForTest =
-  layer._clearBikeshareSelectionForTest;
 export {
   BIKESHARE_SELECTED_OVERLAY_SOURCE_ID,
   BIKESHARE_SELECTED_OVERLAY_SOURCE_OPTIONS,

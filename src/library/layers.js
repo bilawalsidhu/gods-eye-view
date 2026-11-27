@@ -226,7 +226,7 @@ export function createLibraryDatasetLayer(
   };
   return Object.assign(layer, {
     libraryEntryId: entry.id,
-    refreshInterval: maxAgeMs,
+    updateInterval: maxAgeMs,
     init(viewer, options = {}) {
       panel = options.panel ?? null;
       return init(viewer, options);
@@ -607,7 +607,6 @@ export function createLibraryTileLayer(
     source: entry.provider,
     libraryEntryId: entry.id,
     updateInterval: 0,
-    statsRefreshInterval: 1000,
     async init(nextViewer) {
       viewer = nextViewer;
     },
@@ -956,7 +955,6 @@ export function createLibraryViewLayer(
     source: entry.provider,
     libraryEntryId: entry.id,
     updateInterval: 0,
-    statsRefreshInterval: 1000,
     async init(nextViewer) {
       viewer = nextViewer;
     },

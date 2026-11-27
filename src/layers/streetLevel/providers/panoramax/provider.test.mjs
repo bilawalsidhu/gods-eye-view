@@ -2,18 +2,18 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   createPanoramaxProvider,
-  panoramaxZoomFor,
   passesCoverage,
   pictureTilesAround,
 } from './index.js';
 import {
+  COVERAGE_ZOOMS,
   FILTERED_HINT,
   NO_COVERAGE_HINT,
   PICK_PREFIX,
   ZOOM_IN_HINT,
 } from './policy.js';
 import { validateProviders } from '../../registry.js';
-import { tileBounds } from '../../tileMath.js';
+import { tileBounds, zoomForHeight } from '../../tileMath.js';
 import {
   drawn,
   fakeHost,
@@ -160,17 +160,18 @@ test('Panoramax registers keyless and off by default, with both filters and its 
 });
 
 test('lines at z10–14 below 60 km, as Mapillary’s; nothing above', () => {
-  assert.equal(panoramaxZoomFor(500), 14);
-  assert.equal(panoramaxZoomFor(1_800), 14);
-  assert.equal(panoramaxZoomFor(4_000), 13);
-  assert.equal(panoramaxZoomFor(12_000), 12);
-  assert.equal(panoramaxZoomFor(25_000), 11);
-  assert.equal(panoramaxZoomFor(30_000), 11);
-  assert.equal(panoramaxZoomFor(30_001), 10);
-  assert.equal(panoramaxZoomFor(60_000), 10);
-  assert.equal(panoramaxZoomFor(60_001), null);
-  assert.equal(panoramaxZoomFor(20_000_000), null);
-  assert.equal(panoramaxZoomFor(NaN), null);
+  const zoomFor = (h) => zoomForHeight(h, COVERAGE_ZOOMS);
+  assert.equal(zoomFor(500), 14);
+  assert.equal(zoomFor(1_800), 14);
+  assert.equal(zoomFor(4_000), 13);
+  assert.equal(zoomFor(12_000), 12);
+  assert.equal(zoomFor(25_000), 11);
+  assert.equal(zoomFor(30_000), 11);
+  assert.equal(zoomFor(30_001), 10);
+  assert.equal(zoomFor(60_000), 10);
+  assert.equal(zoomFor(60_001), null);
+  assert.equal(zoomFor(20_000_000), null);
+  assert.equal(zoomFor(NaN), null);
 });
 
 test('a line with no camera type or no day passes the filters: a click finds out', () => {

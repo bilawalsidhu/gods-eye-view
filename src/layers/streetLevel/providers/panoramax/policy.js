@@ -35,11 +35,13 @@ export const COLORS = Object.freeze({
  * Mapillary's are (a dense tile over Paris: z10 ~2.1 MB and 8,600
  * sequences, z11 ~1.4 MB, z12 ~800 kB). Higher up nothing is drawn.
  */
-export const COVERAGE_Z14_BELOW_M = 1_800;
-export const COVERAGE_Z13_BELOW_M = 5_000;
-export const COVERAGE_Z12_BELOW_M = 12_000;
-export const COVERAGE_Z11_BELOW_M = 30_000;
-export const COVERAGE_LINES_BELOW_M = 60_000;
+export const COVERAGE_ZOOMS = Object.freeze([
+  [1_800, 14],
+  [5_000, 13],
+  [12_000, 12],
+  [30_000, 11],
+  [60_000, 10],
+]);
 export const COVERAGE_TUNING = Object.freeze({
   maxTiles: 9,
   // Each tile draws at most 1,600 lines, its longest first (as decoded,
@@ -143,8 +145,6 @@ export const SD_WIDTH = 2_048;
 /** On-globe credit: licences are per picture, named in the caption. */
 export const PANORAMAX_CREDIT_HTML =
   'Street Level: imagery © <a href="https://panoramax.fr" target="_blank" rel="noopener">Panoramax</a> contributors, licence per picture';
-
-export const LINE_CLICK_HINT = 'click a line for its nearest photo';
 
 /** Licence ids Panoramax uses, as the caption names them. */
 const LICENSE_LABELS = Object.freeze({

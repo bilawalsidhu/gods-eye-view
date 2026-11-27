@@ -26,6 +26,10 @@ import {
 } from './policy.js';
 import { entityRecord, readEntityRecord } from '../../data/entityRecords.js';
 import { modelFor } from './stationModels.js';
+import {
+  createTrackingRestore,
+  emitWindowEvent,
+} from '../../data/layerTracking.js';
 
 export function createTracking({ state: layerState, services, parts, source }) {
   const { clearFocusTarget } = services.focus;
@@ -44,39 +48,21 @@ export function createTracking({ state: layerState, services, parts, source }) {
     return rounded > 0 ? rounded : null;
   }
 
-  function _emitAwarenessEvent(type, detail) {
-    if (
-      typeof window === 'undefined' ||
-      !window.dispatchEvent ||
-      typeof CustomEvent === 'undefined'
-    )
-      return;
-    window.dispatchEvent(new CustomEvent(type, { detail }));
-  }
-
-  function _applyPendingTrackingRestore() {
-    const pending = layerState._pendingTrackingRestore;
-    if (
-      !pending ||
-      pending.generation !== layerState._trackingIntentGeneration ||
-      !layerState._enabled
-    )
-      return false;
-    if (
-      !layerState._viewer ||
-      !layerState._catalog.has(pending.id) ||
-      !layerState._points.has(pending.id)
-    )
-      return false;
-    layerState._pendingTrackingRestore = null;
-    _trackSatellite(pending.id, { origin: pending.origin });
-    return layerState._trackedNorad === pending.id;
-  }
-
-  function _cancelPendingTrackingRestore() {
-    layerState._trackingIntentGeneration += 1;
-    layerState._pendingTrackingRestore = null;
-  }
+  const {
+    apply: _applyPendingTrackingRestore,
+    cancel: _cancelPendingTrackingRestore,
+  } = createTrackingRestore({
+    state: layerState,
+    canApply: (pending) =>
+      layerState._enabled &&
+      layerState._viewer &&
+      layerState._catalog.has(pending.id) &&
+      layerState._points.has(pending.id),
+    track: (pending) => {
+      _trackSatellite(pending.id, { origin: pending.origin });
+      return layerState._trackedNorad === pending.id;
+    },
+  });
 
   /**
    * Stop tracking the currently followed satellite.
@@ -145,14 +131,14 @@ export function createTracking({ state: layerState, services, parts, source }) {
     }
     layerState._trackedDockedToStation = null;
     layerState._trackedDockedToIss = false;
-    parts.controls._syncIssOrbit?.();
+    parts.controls._syncIssOrbit();
     // A held Cockpit subject that stops being tracked gets its marks back.
     if (layerState._cockpitSubjectNorad !== null)
-      parts.cockpit?._syncCockpitSubjectVisuals();
+      parts.cockpit._syncCockpitSubjectVisuals();
     parts.labels._syncIssOverlay();
     clearTrackedSubjectContext('satellites');
     layerState._contextRefreshedAtMs = 0;
-    _emitAwarenessEvent('gev:awareness-subject-cleared', {
+    emitWindowEvent('gev:awareness-subject-cleared', {
       layerId: 'satellites',
       id: clearedNorad,
       origin,
@@ -599,7 +585,7 @@ export function createTracking({ state: layerState, services, parts, source }) {
     if (!layerState._trackedDockedToIss)
       parts.rendering._showOrbitPath(noradId, TRACKED_ORBIT_COLOR);
     if (noradId === ISS_NORAD || layerState._trackedDockedToIss)
-      parts.controls._syncIssOrbit?.();
+      parts.controls._syncIssOrbit();
 
     // The tracked position propagates per evaluation through the per-frame
     // cache (WS-D2) — dot, host readout, and camera share one SGP4 epoch per frame.
@@ -644,7 +630,7 @@ export function createTracking({ state: layerState, services, parts, source }) {
     _updateTrackedSatelliteLabelModel(initialPos?.altitude ?? null);
 
     const dotPosition = parts.rendering._pointPosition(noradId);
-    _emitAwarenessEvent('gev:awareness-subject-selected', {
+    emitWindowEvent('gev:awareness-subject-selected', {
       layerId: 'satellites',
       id: noradId,
       label: name,
@@ -674,7 +660,6 @@ export function createTracking({ state: layerState, services, parts, source }) {
   }
   return {
     _normalizeTrackedNorad,
-    _emitAwarenessEvent,
     _applyPendingTrackingRestore,
     _cancelPendingTrackingRestore,
     _clearTracking,
@@ -682,8 +667,6 @@ export function createTracking({ state: layerState, services, parts, source }) {
     _trackedDisplayCached,
     _contextSubjectMetadata,
     _reconcileTrackedSubjectContext,
-    _refreshTrackedSubjectContext,
-    _updateTrackedSatelliteLabelModel,
     _trackSatellite,
     _followTracked,
     _trackedIsFollowed,

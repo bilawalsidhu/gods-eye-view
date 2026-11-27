@@ -24,7 +24,7 @@ import {
   recordFix,
   updatePlayback,
   syncPlayback,
-} from './movement.js';
+} from '../../data/transitMovement.js';
 
 /**
  * How far ahead of the snapshot's own fetch time a vehicle stamp may sit
@@ -235,20 +235,21 @@ export function createIngestion({ state, services, parts, source }) {
                 ? FIX_FLAGS.FEED_TIME
                 : FIX_FLAGS.RECEIPT_TIME,
       };
+      const observation = {
+        receivedAt: now,
+        monoNowMs: monoNow,
+        wallNowMs: now,
+        replayed,
+        modeInferred,
+        context: {
+          trip: record.tripId || '',
+          route: record.routeId || '',
+          mode,
+        },
+      };
       let entry = state._vehicles.get(key);
       if (entry) {
-        const heard = recordFix(entry, fix, {
-          receivedAt: now,
-          monoNowMs: monoNow,
-          wallNowMs: now,
-          replayed,
-          modeInferred,
-          context: {
-            trip: record.tripId || '',
-            route: record.routeId || '',
-            mode,
-          },
-        });
+        const heard = recordFix(entry, fix, observation);
         if (!heard.accepted) {
           entry.pollSeq = pollSeq;
           seen += 1;
@@ -335,18 +336,7 @@ export function createIngestion({ state, services, parts, source }) {
           pollSeq,
         };
         initializePlayback(entry, state._historyBudget, status.lag);
-        const first = recordFix(entry, fix, {
-          receivedAt: now,
-          monoNowMs: monoNow,
-          wallNowMs: now,
-          replayed,
-          modeInferred,
-          context: {
-            trip: record.tripId || '',
-            route: record.routeId || '',
-            mode,
-          },
-        });
+        const first = recordFix(entry, fix, observation);
         if (!first.accepted) {
           destroyTrack(entry.track);
           continue;

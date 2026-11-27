@@ -2,14 +2,15 @@ import { dispatchCockpitModeChanged } from '../ui/cockpitTrackingController.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import flightsLayer, {
-  _setCockpitDetectionSubjectForTest as setFlightsCockpitSubject,
-  _setTrackedFlightRefreshStateForTest,
-} from './flights.js';
+import flightsLayer from './flights.js';
 import militaryFlightsLayer, {
   _setCockpitDetectionSubjectForTest as setMilitaryCockpitSubject,
   _setTrackedMilitaryRefreshStateForTest,
 } from './militaryFlights.js';
+const {
+  _setCockpitDetectionSubjectForTest: setFlightsCockpitSubject,
+  _setTrackedFlightRefreshStateForTest,
+} = flightsLayer.testing;
 
 const SUBJECT = 'abc123';
 const NEXT_SUBJECT = 'def456';

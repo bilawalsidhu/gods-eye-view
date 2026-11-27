@@ -140,8 +140,6 @@ export function createVolume({ state: layerState, services, parts, source }) {
   return {
     clampRadioVolume,
     cancelRadioVolumeTransition,
-    scheduleVolumeFrame,
-    volumeClock,
     setRadioVolume,
     setRadioVoiceDucking,
   };

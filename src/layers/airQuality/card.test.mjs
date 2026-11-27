@@ -6,6 +6,7 @@ import { interpretHourly } from './interpretation.js';
 import { fromDegrees, toLonLatH } from '../../geo/ellipsoid.js';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 import { onAqiPeriods } from '../../testSupport/airQualityViewer.mjs';
+import { layerFeedState } from '../../data/feedState.js';
 import {
   LayerPanel,
   layerKeyRequirementTooltip,
@@ -1063,7 +1064,6 @@ test('a camera move folded into a scheduled update leaves a provider without its
 });
 
 test('the stats say loading only until the first network answers, not on every refresh', async () => {
-  const { layerFeedState } = await import('../../data/feedState.js');
   const held = [];
   const { layer } = cardHarness({
     openaq: () => new Promise((resolve) => held.push(() => resolve([]))),
@@ -1718,4 +1718,22 @@ test('a selected station below the top five shows its index details', async () =
   const controls = layer.getRowControls();
   assert.ok(!controls.list.items.some((i) => i.active));
   assert.match(controls.summary.result.title, /Calculated US AQI/);
+});
+
+test('a successful empty OpenAQ viewport is not reported stale', async () => {
+  const { layer } = cardHarness(
+    { openaq: [] },
+    {
+      definitions: [OPENAQ],
+      coverage: { openaq: { schemaVersion: 1, complete: true } },
+    },
+  );
+  await layer.update();
+  await new Promise((resolve) => setImmediate(resolve));
+  const stats = layer.getStats();
+  assert.equal(stats.count, 0);
+  assert.notEqual(stats.lastUpdate, null);
+  // Now: stale true and layerFeedState 'stale' (Layers row, HUD, voice provenance).
+  assert.equal(stats.stale, false);
+  assert.notEqual(layerFeedState(stats), 'stale');
 });

@@ -1,5 +1,7 @@
 import { toCartographicRadians } from '../../geo/ellipsoid.js';
+import { PI_OVER_TWO } from '../../geo/vector.js';
 import { formatNumber, isolate, onLocaleChange, t } from '../../i18n/index.js';
+import { cameraOf } from '../../render/rendererOf.js';
 import {
   MISSION_CLOSE_VIEW_RANGE_M,
   MISSION_GLOBE_VIEW_RANGE_M,
@@ -15,96 +17,93 @@ function accuracyLabel(accuracy) {
   return accuracy;
 }
 
+/**
+ * Preserve the user's globe scale for roster previews while avoiding an
+ * accidental surface-level fly-to when the list is opened from a close view.
+ * @param {number} cameraHeight Current camera height above the ellipsoid.
+ * @returns {number} Preview range in metres.
+ */
+export function missionHoverPreviewRange(cameraHeight) {
+  const height = Number(cameraHeight);
+  return Math.max(
+    MISSION_CLOSE_VIEW_RANGE_M,
+    Number.isFinite(height) ? height : MISSION_GLOBE_VIEW_RANGE_M,
+  );
+}
+
+/**
+ * Coordinate pointer and keyboard ownership of the temporary roster preview.
+ * The most recent input owns the preview until it leaves, then any remaining
+ * input resumes ownership. This lets keyboard focus take over from a pointer
+ * resting on another row without losing that pointer preview on blur.
+ * @param {{preview: (index: number) => void, clear: () => void}} handlers
+ * @returns {{pointerEnter: (index: number) => void, pointerLeave: () => void,
+ *   focus: (index: number) => void, blur: (nextIndex?: number|null) => void,
+ *   reset: () => void}}
+ */
+export function createMissionRosterPreviewOwnership({ preview, clear }) {
+  let pointerIndex = null;
+  let focusIndex = null;
+  let latestOwner = null;
+  let activeIndex = null;
+
+  const sync = () => {
+    const nextIndex =
+      latestOwner === 'pointer'
+        ? (pointerIndex ?? focusIndex)
+        : (focusIndex ?? pointerIndex);
+    if (nextIndex === activeIndex) return;
+    activeIndex = nextIndex;
+    if (Number.isInteger(nextIndex)) preview(nextIndex);
+    else clear();
+  };
+
+  return {
+    pointerEnter(index) {
+      pointerIndex = index;
+      latestOwner = 'pointer';
+      sync();
+    },
+    pointerLeave() {
+      pointerIndex = null;
+      if (latestOwner === 'pointer')
+        latestOwner = focusIndex === null ? null : 'focus';
+      sync();
+    },
+    focus(index) {
+      focusIndex = index;
+      latestOwner = 'focus';
+      sync();
+    },
+    blur(nextIndex = null) {
+      focusIndex = Number.isInteger(nextIndex) ? nextIndex : null;
+      if (latestOwner === 'focus')
+        latestOwner =
+          focusIndex === null
+            ? pointerIndex === null
+              ? null
+              : 'pointer'
+            : 'focus';
+      sync();
+    },
+    reset() {
+      pointerIndex = null;
+      focusIndex = null;
+      latestOwner = null;
+      activeIndex = null;
+      clear();
+    },
+  };
+}
+
+/** Resolve a pending preview against the current refresh, never a stale object. */
+export function resolveMissionRosterPreviewLaunch(launches, launchId) {
+  return (
+    (launches || []).find((candidate) => candidate.id === launchId) || null
+  );
+}
+
 export function createPanel({ state: layerState, services, parts, source }) {
-  /**
-   * Preserve the user's globe scale for roster previews while avoiding an
-   * accidental surface-level fly-to when the list is opened from a close view.
-   * @param {number} cameraHeight Current camera height above the ellipsoid.
-   * @returns {number} Preview range in metres.
-   */
-
-  function missionHoverPreviewRange(cameraHeight) {
-    const height = Number(cameraHeight);
-    return Math.max(
-      MISSION_CLOSE_VIEW_RANGE_M,
-      Number.isFinite(height) ? height : MISSION_GLOBE_VIEW_RANGE_M,
-    );
-  }
-
-  /**
-   * Coordinate pointer and keyboard ownership of the temporary roster preview.
-   * The most recent input owns the preview until it leaves, then any remaining
-   * input resumes ownership. This lets keyboard focus take over from a pointer
-   * resting on another row without losing that pointer preview on blur.
-   * @param {{preview: (index: number) => void, clear: () => void}} handlers
-   * @returns {{pointerEnter: (index: number) => void, pointerLeave: () => void,
-   *   focus: (index: number) => void, blur: (nextIndex?: number|null) => void,
-   *   reset: () => void}}
-   */
-
-  function createMissionRosterPreviewOwnership({ preview, clear }) {
-    let pointerIndex = null;
-    let focusIndex = null;
-    let latestOwner = null;
-    let activeIndex = null;
-
-    const sync = () => {
-      const nextIndex =
-        latestOwner === 'pointer'
-          ? (pointerIndex ?? focusIndex)
-          : (focusIndex ?? pointerIndex);
-      if (nextIndex === activeIndex) return;
-      activeIndex = nextIndex;
-      if (Number.isInteger(nextIndex)) preview(nextIndex);
-      else clear();
-    };
-
-    return {
-      pointerEnter(index) {
-        pointerIndex = index;
-        latestOwner = 'pointer';
-        sync();
-      },
-      pointerLeave() {
-        pointerIndex = null;
-        if (latestOwner === 'pointer')
-          latestOwner = focusIndex === null ? null : 'focus';
-        sync();
-      },
-      focus(index) {
-        focusIndex = index;
-        latestOwner = 'focus';
-        sync();
-      },
-      blur(nextIndex = null) {
-        focusIndex = Number.isInteger(nextIndex) ? nextIndex : null;
-        if (latestOwner === 'focus')
-          latestOwner =
-            focusIndex === null
-              ? pointerIndex === null
-                ? null
-                : 'pointer'
-              : 'focus';
-        sync();
-      },
-      reset() {
-        pointerIndex = null;
-        focusIndex = null;
-        latestOwner = null;
-        activeIndex = null;
-        clear();
-      },
-    };
-  }
-
-  /** Resolve a pending preview against the current refresh, never a stale object. */
-
-  function resolveMissionRosterPreviewLaunch(launches, launchId) {
-    return (
-      (launches || []).find((candidate) => candidate.id === launchId) || null
-    );
-  }
-
   /**
    * Publish a fresh view unless it is the one already shown. The roster
    * carries its own signature, so a telemetry update compares the mission.
@@ -398,9 +397,23 @@ export function createPanel({ state: layerState, services, parts, source }) {
         layerState._launches,
         launch.id,
       );
-      if (currentLaunch)
-        parts.policyHelpers.previewMissionFromRoster(currentLaunch);
+      if (currentLaunch) previewMissionFromRoster(currentLaunch);
     }, 140);
+  }
+
+  function previewMissionFromRoster(launch) {
+    if (!layerState._viewer || !launch || layerState._selectedLaunchId) return;
+    const camera = cameraOf(layerState._viewer);
+    const range = missionHoverPreviewRange(camera.pose().height);
+    layerState._cameraReleased = false;
+    camera.flyToBounds(
+      { center: { lon: launch.lon, lat: launch.lat }, radius: 0 },
+      {
+        offset: { heading: 0, pitch: -PI_OVER_TWO, range },
+        durationS: 0.8,
+        easing: 'cubicInOut',
+      },
+    );
   }
 
   /** Select the mission before or after the selected one. */

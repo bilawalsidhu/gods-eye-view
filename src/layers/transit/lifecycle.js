@@ -91,28 +91,6 @@ export function createLifecycle({ state, services, parts }) {
       state._viewer = viewer;
       state._panel = panel;
       parts.rendering.createMarkers(viewer);
-      state._enabled = false;
-      state._activeFeeds.clear();
-      state._feedStatus.clear();
-      state._inFlight.clear();
-      for (const entry of state._vehicles.values()) {
-        entry.detectContact = null;
-        parts.rendering.cancelWake(entry);
-        destroyTrack(entry.track);
-        entry.placement?.forget(entry.key);
-      }
-      state._vehicles.clear();
-      parts.height.clear();
-      state._selectedKey = null;
-      state._cockpitSubjectKey = null;
-      state._lastUpdate = null;
-      state._error = null;
-      state._limitWarned = false;
-      state._altitudeGateOpen = false;
-      state._moving.clear();
-      state._heightDirty.clear();
-      state._rotationPose = null;
-      state._rotationDirty = false;
       state._overlayHost.setVisible(TRANSIT_SELECTED_OVERLAY_SOURCE_ID, false);
       bindStyleEvents();
       console.log(
@@ -137,11 +115,9 @@ export function createLifecycle({ state, services, parts }) {
       state._overlayHost.setVisible(TRANSIT_SELECTED_OVERLAY_SOURCE_ID, true);
       parts.selection.installClickHandler(viewer);
       registerPickOwner('transit', (pickedId) => state._vehicles.has(pickedId));
-      if (!state._cameraChangedAttached) {
+      // Listening only with a camera to listen to, so a later enable retries.
+      if (!state._cameraChangedOff)
         parts.rendering.watchCamera(viewer, parts.viewport.onCameraChanged);
-        // Attached only with a camera to listen to, so a later enable retries.
-        state._cameraChangedAttached = state._cameraChangedOff !== null;
-      }
       parts.rendering.startFrames(viewer);
       parts.rendering.startModels();
       parts.viewport.runProximityCheck();
@@ -174,7 +150,6 @@ export function createLifecycle({ state, services, parts }) {
       unregisterPickOwner('transit');
       // Unconditional: whatever watching started, none of it outlives this.
       parts.rendering.unwatchCamera();
-      state._cameraChangedAttached = false;
       parts.rendering.stopFrames();
       parts.ingestion.abortAllInFlight();
       state._activeFeeds.clear();

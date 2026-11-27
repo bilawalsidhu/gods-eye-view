@@ -28,7 +28,6 @@ function setup({ geoidN = 40, track = null, clockAt = null } = {}) {
       viewer: {},
       trail: null,
       trailPositions: [],
-      trailBackfillToken: 0,
       trailAbort: null,
       trailId: null,
       records: { all: records },

@@ -21,17 +21,18 @@ import {
 } from './tr3bRegistry.js';
 import { aircraftIcon, TRACKED_ICON_PX } from './aircraftIcons.js';
 import flightsLayer, {
-  _setTrackedFlightRefreshStateForTest,
   mapAnalystRecord as mapFlightAnalystRecord,
 } from './flights.js';
 import militaryFlightsLayer, {
   _setTrackedMilitaryRefreshStateForTest,
   mapAnalystRecord as mapMilitaryAnalystRecord,
 } from './militaryFlights.js';
-import { findCompatibleHistoryIndex } from './militaryAwareness.js';
+import { findCompatibleHistoryIndex } from '../layers/awareness/history.js';
 import { createGevActionRunner } from '../voice/gevActions.js';
 import { ANALYST_LAYERS, createAnalystEngine } from './analystEngine.js';
 import { readEntityRecord, withEntityRecord } from './entityRecords.js';
+
+const { _setTrackedFlightRefreshStateForTest } = flightsLayer.testing;
 
 /** Decode an `aircraftIcon()` data URI back to its SVG source. */
 function decodeIcon(uri) {

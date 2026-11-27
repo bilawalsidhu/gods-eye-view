@@ -7,7 +7,7 @@ import {
   rendererOf,
 } from '../../render/rendererOf.js';
 import { acquireWeatherImage } from './infraredImage.js';
-import { imageryHostStatus } from './imageryHost.js';
+import { imageryHostStatus } from '../../maps/imageryHost.js';
 import { WEATHER_IMAGERY_SHOWS } from './imageryOrder.js';
 import { WEATHER_DETAIL_SIZE, WEATHER_IMAGE_SIZES } from './source.js';
 import { msg } from '../../i18n/index.js';
@@ -111,6 +111,45 @@ export function detailWindow(footprint, bounds, previous = null) {
 
 let weatherShells = 0;
 
+/** One prefetch at a time: a newer key cancels the older job; a finished key is not fetched again until cancel(). */
+export function createPrefetchSlot(timeoutMs) {
+  let job = null;
+  let doneKey = null;
+  const cancel = () => {
+    clearTimeout(job?.timeout);
+    job?.controller.abort();
+    job = null;
+    doneKey = null;
+  };
+  return {
+    cancel,
+    get busy() {
+      return job !== null;
+    },
+    /** Run `work(signal)` for `key`; resolves true once it finished and is still the newest. */
+    async run(key, work) {
+      if (job?.key === key || doneKey === key) return false;
+      cancel();
+      const mine = { key, controller: new AbortController() };
+      job = mine;
+      const { signal } = mine.controller;
+      mine.timeout = setTimeout(() => mine.controller.abort(), timeoutMs);
+      try {
+        await work(signal);
+        signal.throwIfAborted();
+        if (job === mine) doneKey = key;
+        return true;
+      } catch {
+        mine.controller.abort();
+        return false;
+      } finally {
+        clearTimeout(mine.timeout);
+        if (job === mine) job = null;
+      }
+    },
+  };
+}
+
 /** Observed weather on 3D Tiles: one raised shell per product and one
  * full-extent image per frame. The previous image stays until the next is ready.
  * Inside a window around the view the same surface samples a sharper image of
@@ -172,8 +211,8 @@ export function createWeatherShell({
   let lastError = null;
   const images = new Map();
   let imageBytes = 0;
-  let prefetchJob = null;
-  let prefetchedKey = null;
+  const prefetches = createPrefetchSlot(timeoutMs);
+  const cancelPrefetch = prefetches.cancel;
   // The detail window for the shown bounds, the image drawn in it and its fetch.
   let view = null;
   let viewBounds = null;
@@ -414,12 +453,6 @@ export function createWeatherShell({
         if (current && computeView()) refreshDetail();
       }) ?? null;
   }
-  function cancelPrefetch() {
-    clearTimeout(prefetchJob?.timeout);
-    prefetchJob?.controller.abort();
-    prefetchJob = null;
-    prefetchedKey = null;
-  }
   function watch(frame, signal) {
     if (!signal) return;
     frame.owned = true;
@@ -551,7 +584,6 @@ export function createWeatherShell({
     },
     cancelPrefetch,
     async prefetch(snapshot, time, { infrared: mode = 'filtered' } = {}) {
-      let job;
       try {
         if (
           hidden ||
@@ -566,26 +598,15 @@ export function createWeatherShell({
           view && viewBounds === boundsKey(snapshot.bounds) ? view : null;
         const coarse = cacheKey(time, mode);
         const key = box ? cacheKey(time, mode, box) : coarse;
-        if (prefetchJob?.key === key || prefetchedKey === key) return false;
-        cancelPrefetch();
-        job = { key, controller: new AbortController() };
-        prefetchJob = job;
-        const { signal } = job.controller;
-        job.timeout = setTimeout(() => job.controller.abort(), timeoutMs);
-        // Both images at once: one after the other would outlast playback's step.
-        await Promise.all([
-          acquire(time, mode, signal, { keep: box ? [key] : [] }),
-          box ? acquire(time, mode, signal, { box, keep: [coarse] }) : null,
-        ]);
-        signal.throwIfAborted();
-        if (prefetchJob === job) prefetchedKey = key;
-        return true;
+        return await prefetches.run(key, (signal) =>
+          // Both images at once: one after the other would outlast playback's step.
+          Promise.all([
+            acquire(time, mode, signal, { keep: box ? [key] : [] }),
+            box ? acquire(time, mode, signal, { box, keep: [coarse] }) : null,
+          ]),
+        );
       } catch {
-        job?.controller.abort();
         return false;
-      } finally {
-        clearTimeout(job?.timeout);
-        if (job && prefetchJob === job) prefetchJob = null;
       }
     },
     async setFrame(
@@ -696,7 +717,6 @@ export function createWeatherShell({
         show: field.show,
         alpha: fieldAlpha,
         rendering: owed && field.show,
-        detail: { uploaded: detailDrawn, window },
       };
       return {
         host: 'shell',
@@ -717,7 +737,7 @@ export function createWeatherShell({
                   detail.key === wantedDetail() &&
                   drawn.ready &&
                   drawn.show &&
-                  drawn.detail.uploaded &&
+                  detailDrawn &&
                   window &&
                   !owed,
                 ),
@@ -728,7 +748,7 @@ export function createWeatherShell({
         cache: {
           mosaics: images.size,
           bytes: imageBytes,
-          prefetching: !!prefetchJob,
+          prefetching: prefetches.busy,
         },
         imageryCount: Number(fieldBounds !== null) + Number(!!incoming?.staged),
         mosaic: (incoming || current)?.mosaic,

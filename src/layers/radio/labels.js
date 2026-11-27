@@ -204,8 +204,6 @@ export function createLabels({ state: layerState, services, parts, source }) {
     return `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><path d="M2 13V2H13 M27 2H38V13 M38 27V38H27 M13 38H2V27" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="square"/></svg>`;
   }
   return {
-    compactRadioLabelText,
-    cleanRadioLabelName,
     radioGlobeLabel,
     createRadioSelectedOverlayEntry,
     createRadioClusterOverlayEntry,

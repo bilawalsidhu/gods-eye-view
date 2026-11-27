@@ -12,6 +12,7 @@
  *
  * Pure: no Cesium, no DOM.
  */
+import { clamp } from './geo/vector.js';
 
 /** The kinds the Cockpit rides itself; no provider may take one. */
 export const COCKPIT_BUILT_IN_KINDS = Object.freeze([
@@ -62,7 +63,6 @@ const TONES = new Set(COCKPIT_SUBJECT_TONES);
 const isObject = (value) =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
 const finite = (value) => typeof value === 'number' && Number.isFinite(value);
-const clamp = (value, low, high) => Math.min(high, Math.max(low, value));
 
 /**
  * `value` as display text: trimmed, at most `max` characters (the last one

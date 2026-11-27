@@ -14,6 +14,7 @@ import { findCamera } from '../../render/rendererOf.js';
 import { vec } from '../../geo/index.js';
 import { inputFor } from '../../input/dispatcher.js';
 import { VESSEL_OVERLAY_SOURCE_ID } from '../../data/vesselLabels.js';
+import { vesselIdFromEntry } from './cards.js';
 
 /**
  * How far a follow camera starts from a ship, metres: a ship sits on the
@@ -40,7 +41,7 @@ export function createSelection({
 
   function installInteraction(viewer) {
     if (state.clickSubscription || !viewer) return;
-    bindVesselInteraction(viewer, state.interactionKeyTarget || document);
+    bindVesselInteraction(viewer, document);
   }
 
   function bindVesselInteraction(viewer, keyTarget) {
@@ -56,9 +57,7 @@ export function createSelection({
       const top = services.picking.clickCard?.(event) ?? null;
       if (top) {
         if (top.sourceId !== VESSEL_OVERLAY_SOURCE_ID) return;
-        const id = String(top.entryId || '').startsWith('vessel:')
-          ? top.entryId.slice('vessel:'.length)
-          : null;
+        const id = vesselIdFromEntry(top.entryId);
         const carded = id ? state.records.byId.get(id) || null : null;
         // A stale card id is not empty terrain and must not clear a newer
         // selection. The next paint will evict its hit rectangle.
@@ -94,14 +93,7 @@ export function createSelection({
 
       if (record) {
         clickVessel(record);
-      } else {
-        const transition = components.queries.reduceVesselSelection({
-          selectedId: state.selectedRecord?.id,
-          pickedId: null,
-          gesture: 'click',
-        });
-        if (transition.action === 'deselect') clearVesselInspection();
-      }
+      } else if (state.selectedRecord?.id) clearVesselInspection();
     });
     state.keyTarget = keyTarget;
     state.keydownHandler = onVesselKeyDown;
@@ -214,12 +206,7 @@ export function createSelection({
    */
   function selectAndFocusVessel(record) {
     if (!record?.id) return false;
-    const transition = components.queries.reduceVesselSelection({
-      selectedId: state.selectedRecord?.id,
-      pickedId: record.id,
-      gesture: 'click',
-    });
-    if (transition.action === 'select') selectVessel(record);
+    if (state.selectedRecord?.id !== record.id) selectVessel(record);
     requestWorldFocus({
       kind: 'vessel',
       id: record.id,
@@ -247,13 +234,7 @@ export function createSelection({
 
   function onVesselKeyDown(event) {
     if (!state.feed.enabled || event.key !== 'Escape') return;
-    const transition = components.queries.reduceVesselSelection({
-      selectedId: state.selectedRecord?.id,
-      gesture: 'escape',
-    });
-    if (transition.action === 'deselect') {
-      clearVesselInspection();
-    }
+    if (state.selectedRecord?.id) clearVesselInspection();
   }
 
   function selectVessel(record) {

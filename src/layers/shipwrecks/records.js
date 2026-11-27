@@ -1,6 +1,9 @@
 // Shared by the server proxy (server/providers/shipwrecks.js) and the browser
 // layer, so it must not load the i18n catalogs: values stay data.
 
+import { greatCircleKm } from '../../geoDistance.js';
+import { httpUrl } from '../../sources/httpUrl.js';
+
 /** EMODnet Human Activities "Cultural Heritage – Ship wrecks" (CC BY 4.0). */
 export const EMODNET_WFS_URL =
   'https://ows.emodnet-humanactivities.eu/wfs?service=WFS&request=GetFeature' +
@@ -96,19 +99,6 @@ function validPoint(lat, lon) {
   );
 }
 
-function httpUrl(value) {
-  const text = clean(value, 400);
-  if (!text) return null;
-  try {
-    const url = new URL(text);
-    return url.protocol === 'https:' || url.protocol === 'http:'
-      ? url.href
-      : null;
-  } catch {
-    return null;
-  }
-}
-
 /** Whether a provenance or link value points at wrecksite.eu, in any form. */
 function fromWrecksite(value) {
   return typeof value === 'string' && /wrecksite/i.test(value);
@@ -180,14 +170,14 @@ export function normalizeEmodnetFeatures(payload) {
       survivors: null,
       country: clean(p.country, 60),
       originator: origin,
-      url: httpUrl(p.website1),
+      url: httpUrl(clean(p.website1, 400)),
     });
   }
   return out;
 }
 
 function wikiUrl(value) {
-  const url = httpUrl(value);
+  const url = httpUrl(clean(value, 400));
   return url && /^https:\/\/[a-z]{2,3}\.wikipedia\.org\/wiki\//.test(url)
     ? url
     : null;
@@ -329,7 +319,7 @@ function foldSinkingEvents(records) {
       ships.find(
         (ship) =>
           nameKey(ship.name) === key &&
-          distanceKm(ship, record) <= SAME_WRECK_KM,
+          greatCircleKm(ship, record) <= SAME_WRECK_KM,
       );
     if (!twin) {
       ships.push(record);
@@ -348,7 +338,7 @@ function foldSinkingEvents(records) {
       return (
         key.length >= 3 &&
         eventKey.includes(` ${key} `) &&
-        distanceKm(candidate, event) <= SAME_SINKING_KM
+        greatCircleKm(candidate, event) <= SAME_SINKING_KM
       );
     });
     if (!ship) {
@@ -382,16 +372,6 @@ function nameKey(name) {
     .trim();
 }
 
-function distanceKm(a, b) {
-  const rad = Math.PI / 180;
-  const dLat = (b.lat - a.lat) * rad;
-  const dLon = (b.lon - a.lon) * rad;
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLon / 2) ** 2;
-  return 12742 * Math.asin(Math.min(1, Math.sqrt(h)));
-}
-
 /**
  * One list from both sources. A wreck in both (same name, a few km apart)
  * keeps the Wikidata record, which links an article, and takes EMODnet's
@@ -408,7 +388,7 @@ export function mergeShipwreckRecords(emodnet = [], wikidata = []) {
   const kept = [];
   for (const record of emodnet) {
     const twin = (byName.get(nameKey(record.name)) || []).find(
-      (candidate) => distanceKm(candidate, record) <= SAME_WRECK_KM,
+      (candidate) => greatCircleKm(candidate, record) <= SAME_WRECK_KM,
     );
     if (!twin) {
       kept.push(record);
@@ -448,7 +428,7 @@ export function normalizeShipwreckSnapshot(payload) {
     rows.push({
       ...record,
       year: Number.isInteger(record.year) ? record.year : null,
-      url: httpUrl(record.url),
+      url: httpUrl(clean(record.url, 400)),
     });
   }
   return rows;

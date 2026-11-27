@@ -3,6 +3,8 @@
 // that fails is dropped, a payload that fails is rejected whole. A portable
 // export (layers/news/source): no i18n here.
 
+import { httpUrl } from '../../sources/httpUrl.js';
+
 const CATEGORY = /^[a-z][a-z-]{1,31}$/;
 const CODE = /^[A-Za-z][A-Za-z0-9-]{0,31}$/;
 const ID = /^[a-z0-9][a-z0-9_-]{0,63}$/i;
@@ -29,20 +31,6 @@ const code = (value) =>
   typeof value === 'string' && CODE.test(value) ? value : null;
 const severity = (value) =>
   Number.isInteger(value) && value >= 0 && value <= 3 ? value : null;
-
-/** An http(s) URL without credentials, as its normalised href, or null. */
-export function httpUrl(value) {
-  try {
-    const url = new URL(value);
-    return ['http:', 'https:'].includes(url.protocol) &&
-      !url.username &&
-      !url.password
-      ? url.href
-      : null;
-  } catch {
-    return null;
-  }
-}
 
 function normalizeBbox(bbox) {
   if (!Array.isArray(bbox) || bbox.length !== 4) return null;

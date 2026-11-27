@@ -22,15 +22,10 @@ import { createSurfaceKeyboard } from './ui/surfaceKeyboard.js';
 // is enthusiasm, not "never show me this again".
 
 import { t, msg } from './i18n/index.js';
-import { EXCLUSIVE_SURFACE_CLASSES } from './exclusiveSurfaces.js';
-import { environmentalLabel } from './firstRunCopy.js';
+import { exclusiveSurfaceActive } from './exclusiveSurfaces.js';
+import { ENVIRONMENTAL_TITLE } from './firstRunCopy.js';
 import { useFirstRunStore } from './ui/stores/firstRun.js';
 import { applicationPinia } from './ui/vueRuntime.js';
-
-export {
-  ENVIRONMENTAL_LABEL_CHOICE,
-  environmentalLabel,
-} from './firstRunCopy.js';
 
 /** Launchers already wired, so a second call is a no-op. */
 const initializedLaunchers = new WeakSet();
@@ -280,24 +275,6 @@ export async function runFirstRunChoice(
 }
 
 /**
- * Body classes that mean "another surface owns the screen". Each of these also
- * hides the launcher in CSS, and the observer below turns that into a yield —
- * see the ESC ARBITRATION note on initFirstRunExperience.
- */
-export { EXCLUSIVE_SURFACE_CLASSES };
-
-/**
- * Is some other surface currently claiming the screen?
- * @param {Document} [documentRef]
- * @returns {boolean}
- */
-export function exclusiveSurfaceActive(documentRef = globalThis.document) {
-  const list = documentRef?.body?.classList;
-  if (!list) return false;
-  return EXCLUSIVE_SURFACE_CLASSES.some((name) => list.contains(name));
-}
-
-/**
  * Wire and reveal the mission launcher.
  * @param {object} input
  * @param {object} input.styleManager Initialized StyleManager.
@@ -333,9 +310,8 @@ export function initFirstRunExperience({
     busy: null,
     // Empty until a mission reports progress or an error.
     status: '',
-    // The tile name is owner-switchable from one constant, so paint it from
-    // the module rather than trusting the markup to match.
-    environmentalTitle: environmentalLabel().title,
+    // Paint the tile name from the module rather than trusting the markup to match.
+    environmentalTitle: t(ENVIRONMENTAL_TITLE),
     environmentalSub: t(
       'Live earthquakes and active fires, from USGS and NASA',
     ),

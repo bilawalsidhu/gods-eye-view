@@ -40,6 +40,7 @@ import { createBhoteKoshiEmbeddedMedia } from './bhoteKoshiEmbeddedMedia.js';
 import { SceneDirector } from '../scenes/director.js';
 
 const eventUrl = new URL('../../public/events/bhote-koshi-2026/event.json', import.meta.url);
+const event = JSON.parse(await readFile(eventUrl, 'utf8'));
 const eventModuleUrl = new URL('./bhoteKoshiEvent.js', import.meta.url);
 
 /** The event's divider as the imagery split store holds it, or undefined. */
@@ -302,7 +303,6 @@ function eventViewer(splitPosition = 0.37, ports = {}) {
 
 test('public lifecycle restores Nepal scene ownership without forwarding origin to enable', async () => {
   const previous = { document: globalThis.document, window: globalThis.window };
-  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
   try {
     for (const initialMap of ['photoreal', 'esri-imagery']) {
       for (const origin of ['scene', 'local-restore', 'share-restore']) {
@@ -372,7 +372,6 @@ test('trimmed scene media holds through provider startup, playback and fade, the
   };
   let phase = 'starting';
   let hidden = 0;
-  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
     imagerySpecFactory: async (url) => ({ url }),
@@ -426,7 +425,6 @@ test('scene media plays again when a run goes on from a seek inside its hold, un
   let frames = 0;
   globalThis.requestAnimationFrame = () => ++frames;
   globalThis.cancelAnimationFrame = () => {};
-  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
   let plays = 0;
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
@@ -485,7 +483,6 @@ test('a run going on from a seek in Timure’s hold resumes its evidence sequenc
     frames.delete(nextFrame);
     callback?.(now);
   };
-  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
     imagerySpecFactory: async (url) => ({ url }),
@@ -537,7 +534,6 @@ test('a run going on from a seek in Gyirong’s hold plays its restarted clip ou
   globalThis.window = { setTimeout: () => 1, clearTimeout() {} };
   globalThis.requestAnimationFrame = () => 1;
   globalThis.cancelAnimationFrame = () => {};
-  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
   let plays = 0;
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
@@ -591,12 +587,12 @@ test('a run going on from a seek in Gyirong’s hold plays its restarted clip ou
 });
 
 test('Pinokio source-card fallback selects authored Director dwell, not an impossible player hold', async () => {
+  const draft = structuredClone(event);
   const previous = { document: globalThis.document, window: globalThis.window };
   installEventDom();
   globalThis.window = { setTimeout: () => 1, clearTimeout() {} };
-  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
   const layer = createBhoteKoshiEventLayer({
-    eventLoader: async () => event,
+    eventLoader: async () => draft,
     imagerySpecFactory: async url => ({ url }),
     terrainSampler: async (_viewer, observations) => observations.map(() => ({ height: 800 })),
     mediaLoader: async () => { throw Object.assign(new Error('No bundled clip'), { name: 'AbortError' }); },
@@ -627,7 +623,7 @@ test('Pinokio source-card fallback selects authored Director dwell, not an impos
       stopScene: () => assert.fail('a source card must not time out'),
     }, { id: 'scene' }, { id: 'shot' }, token);
     assert.deepEqual(waits, [7650], 'use the authored dwell instead of completing instantly or polling 20 seconds');
-    event.evidenceSpine.find(item => item.id === 'mailung-bazzar').media.videoPath = 'fixture-approved.mp4';
+    draft.evidenceSpine.find(item => item.id === 'mailung-bazzar').media.videoPath = 'fixture-approved.mp4';
     assert.equal(layer.getSceneShotMediaHold('mailung-bazzar').pending, true,
       'an approved local clip remains a real playback owner even with the provider suppressed');
   } finally { await layer.destroy(); Object.assign(globalThis, previous); }
@@ -639,7 +635,6 @@ test('saved autoplay controls cannot authorize media; live shot ownership is can
   const timers = new Map(); let timerId = 0;
   globalThis.window = { setTimeout: fn => { timers.set(++timerId, fn); return timerId; }, clearTimeout: id => timers.delete(id) };
   const calls = [];
-  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
     imagerySpecFactory: async url => ({ url }),
@@ -781,7 +776,6 @@ test('Bhote Koshi card summaries wrap on words instead of clipping mid-sentence'
 });
 
 test('Bhote Koshi evidence timeline is ordered by phase and corridor chainage with one active beat', async () => {
-  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
   const timeline = buildEvidenceTimeline(event.evidenceSpine, event.reconstruction.corridor);
   assert.deepEqual(
     timeline.map((beat) => beat.observation.id),
@@ -831,7 +825,6 @@ test('Bhote Koshi evidence timeline is ordered by phase and corridor chainage wi
 });
 
 test('Bhote Koshi scene beats resolve stable ids inside their reveal windows', async () => {
-  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
   const timeline = buildEvidenceTimeline(event.evidenceSpine, event.reconstruction.corridor);
   for (const beat of timeline) {
     const progress = evidenceBeatProgress(beat.observation.id, timeline, 0.36);
@@ -843,7 +836,6 @@ test('Bhote Koshi scene beats resolve stable ids inside their reveal windows', a
 });
 
 test('Bhote Koshi scene shots continue the standalone evidence clock from Border Gate onward', async () => {
-  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
   const timeline = buildEvidenceTimeline(event.evidenceSpine, event.reconstruction.corridor);
   const border = evidenceSequenceWindow('gyirong-border-gate', timeline);
   assert.deepEqual(border, {
@@ -936,7 +928,6 @@ test('Bhote Koshi gives YouTube and Facebook players priority over local review 
 });
 
 test('Bhote Koshi beat navigation is deterministic in both directions and clamps at its ends', async () => {
-  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
   const timeline = buildEvidenceTimeline(event.evidenceSpine, event.reconstruction.corridor);
   assert.equal(adjacentEvidenceIndex(0, timeline, -1), 0);
   assert.equal(adjacentEvidenceIndex(0, timeline, 1), 1);
@@ -947,7 +938,6 @@ test('Bhote Koshi beat navigation is deterministic in both directions and clamps
 });
 
 test('Bhote Koshi evidence fallback stays media-first and source-linked without card copy overload', async () => {
-  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
   const timure = event.evidenceSpine.find((observation) => observation.id === 'timure-cluster');
   const originalDocument = globalThis.document;
   const contexts = [];
@@ -988,7 +978,6 @@ test('Bhote Koshi evidence fallback stays media-first and source-linked without 
 });
 
 test('Bhote Koshi evidence compositor contains portrait video from its decoded dimensions', async () => {
-  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
   const observation = event.evidenceSpine[0];
   const drawCalls = [];
   const context = {
@@ -1023,7 +1012,6 @@ test('Bhote Koshi evidence compositor contains portrait video from its decoded d
 });
 
 test('Bhote Koshi failed direct enable restores the prior map and shared split', async () => {
-  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
   const mapCalls = [];
   const overlayCalls = [];
   const originalDocument = globalThis.document;
@@ -1076,7 +1064,6 @@ test('Bhote Koshi failed direct enable restores the prior map and shared split',
 });
 
 test('Bhote Koshi cancellation during the map switch restores the prior stack', async () => {
-  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
   const originalDocument = globalThis.document;
   const originalWindow = globalThis.window;
   const controller = new AbortController();
@@ -1120,7 +1107,6 @@ test('Bhote Koshi cancellation during the map switch restores the prior stack', 
 });
 
 test('Bhote Koshi disable preserves an operator-selected map and tears down every surface', async () => {
-  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
   const originalDocument = globalThis.document;
   const originalWindow = globalThis.window;
   const { body, removedProperties } = installEventDom();
@@ -1188,7 +1174,6 @@ test('Bhote Koshi disable preserves an operator-selected map and tears down ever
 });
 
 test('Bhote Koshi disable stops active playback and releases its global render hold', async () => {
-  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
   const originalDocument = globalThis.document;
   const originalWindow = globalThis.window;
   const originalPerformance = globalThis.performance;
@@ -1248,7 +1233,6 @@ test('Bhote Koshi disable stops active playback and releases its global render h
 });
 
 test('Bhote Koshi passive restores do not start off-screen playback', async () => {
-  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
   const originalDocument = globalThis.document;
   const originalWindow = globalThis.window;
   installEventDom();
@@ -1289,7 +1273,6 @@ test('Bhote Koshi passive restores do not start off-screen playback', async () =
 });
 
 test('Bhote Koshi standalone Scene keeps its Esri cinematic contract', async () => {
-  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
   const originalDocument = globalThis.document;
   const originalWindow = globalThis.window;
   const originalPerformance = globalThis.performance;
@@ -1355,7 +1338,6 @@ test('Bhote Koshi standalone Scene keeps its Esri cinematic contract', async () 
 });
 
 test('Bhote Koshi scene beats preserve photoreal and never take camera ownership', async () => {
-  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
   const originalDocument = globalThis.document;
   const originalWindow = globalThis.window;
   const originalPerformance = globalThis.performance;
@@ -1686,7 +1668,6 @@ test('Bhote Koshi scene beats preserve photoreal and never take camera ownership
 });
 
 test('Nepal hybrid comparison preserves native split and terrain-clamped flood trail', async () => {
-  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
   const originalDocument = globalThis.document;
   const originalWindow = globalThis.window;
   installEventDom();
@@ -1767,7 +1748,6 @@ test('Nepal hybrid comparison preserves native split and terrain-clamped flood t
 });
 
 test('Bhote Koshi event pack keeps observations separate from reconstruction', async () => {
-  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
   assert.equal(BHOTE_KOSHI_LAYER_ID, event.id);
   assert.equal(event.imagery.before.observedAt, '2021-10-16');
   assert.equal(event.imagery.after.observedAt, '2026-08-27');
@@ -1834,7 +1814,6 @@ test('Bhote Koshi event pack keeps observations separate from reconstruction', a
 });
 
 test('Bhote Koshi publishes the evidence spine once and scrubs through cards and breadcrumbs', async () => {
-  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
   const originalDocument = globalThis.document;
   const originalWindow = globalThis.window;
   const { body } = installEventDom();
@@ -1894,13 +1873,13 @@ test('Bhote Koshi publishes the evidence spine once and scrubs through cards and
 });
 
 test('Bhote Koshi keeps one local fallback video active and unloads it on beat change and disable', async () => {
-  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
+  const draft = structuredClone(event);
   // Synthetic clips exercise the player; public event data never bundles these.
-  event.evidenceSpine.find(({ id }) => id === 'immediate-collapse-viewpoint').media.videoPath = 'evidence-01.mp4';
-  event.evidenceSpine.find(({ id }) => id === 'timure-cluster').media.videoPath = 'evidence-04.mp4';
-  event.evidenceSpine.find(({ id }) => id === 'immediate-collapse-viewpoint').media.sourceUrl =
+  draft.evidenceSpine.find(({ id }) => id === 'immediate-collapse-viewpoint').media.videoPath = 'evidence-01.mp4';
+  draft.evidenceSpine.find(({ id }) => id === 'timure-cluster').media.videoPath = 'evidence-04.mp4';
+  draft.evidenceSpine.find(({ id }) => id === 'immediate-collapse-viewpoint').media.sourceUrl =
     'https://example.com/immediate-collapse';
-  event.evidenceSpine.find(({ id }) => id === 'timure-cluster').media.sourceUrl =
+  draft.evidenceSpine.find(({ id }) => id === 'timure-cluster').media.sourceUrl =
     'https://example.com/timure';
   const originalDocument = globalThis.document;
   const originalWindow = globalThis.window;
@@ -1939,7 +1918,7 @@ test('Bhote Koshi keeps one local fallback video active and unloads it on beat c
     return video;
   };
   const layer = createBhoteKoshiEventLayer({
-    eventLoader: async () => event,
+    eventLoader: async () => draft,
     imagerySpecFactory: async (url) => ({ url }),
     terrainSampler: async (_viewer, observations) => (
       observations.map((observation) => ({ height: observation.fallbackElevationM }))
@@ -1989,9 +1968,9 @@ test('Bhote Koshi keeps one local fallback video active and unloads it on beat c
 });
 
 test('Upper Valley Collapse autoplays its muted local fallback without starting the event clock', async () => {
-  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
-  event.evidenceSpine.find(({ id }) => id === 'immediate-collapse-viewpoint').media.videoPath = 'evidence-01.mp4';
-  event.evidenceSpine.find(({ id }) => id === 'immediate-collapse-viewpoint').media.sourceUrl =
+  const draft = structuredClone(event);
+  draft.evidenceSpine.find(({ id }) => id === 'immediate-collapse-viewpoint').media.videoPath = 'evidence-01.mp4';
+  draft.evidenceSpine.find(({ id }) => id === 'immediate-collapse-viewpoint').media.sourceUrl =
     'https://example.com/immediate-collapse';
   const originalDocument = globalThis.document;
   const originalWindow = globalThis.window;
@@ -2040,7 +2019,7 @@ test('Upper Valley Collapse autoplays its muted local fallback without starting 
     return video;
   };
   const layer = createBhoteKoshiEventLayer({
-    eventLoader: async () => event,
+    eventLoader: async () => draft,
     imagerySpecFactory: async (url) => ({ url }),
     terrainSampler: async (_viewer, observations) => (
       observations.map((observation) => ({ height: observation.fallbackElevationM }))
@@ -2100,7 +2079,6 @@ test('Upper Valley Collapse autoplays its muted local fallback without starting 
 });
 
 test('Debris-Dammed Lake card opens its source and is armed for approved local video autoplay', async () => {
-  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
   const originalDocument = globalThis.document;
   const originalWindow = globalThis.window;
   installEventDom();
@@ -2186,7 +2164,6 @@ test('Debris-Dammed Lake card opens its source and is armed for approved local v
 });
 
 test('Nepal evidence shots resume the standalone callout and flood sequence from Border Gate', async () => {
-  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
   const timeline = buildEvidenceTimeline(event.evidenceSpine, event.reconstruction.corridor);
   const originalDocument = globalThis.document;
   const originalWindow = globalThis.window;
@@ -2362,7 +2339,6 @@ test('Nepal evidence shots resume the standalone callout and flood sequence from
 });
 
 test('Bhote Koshi beat controls keep cards, flood, camera, and panel on the one clock', async () => {
-  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
   const timeline = buildEvidenceTimeline(event.evidenceSpine, event.reconstruction.corridor);
   const originalDocument = globalThis.document;
   const originalWindow = globalThis.window;
@@ -2493,7 +2469,6 @@ test('Bhote Koshi beat controls keep cards, flood, camera, and panel on the one 
 });
 
 test('Bhote Koshi repeated event frames republish no panel and churn no camera', async () => {
-  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
   const originalDocument = globalThis.document;
   const originalWindow = globalThis.window;
   const originalPerformance = globalThis.performance;
@@ -2579,7 +2554,6 @@ test('Bhote Koshi frame path keeps evidence lookup scalar and wrapper-free', asy
 });
 
 test('Bhote Koshi cinematic camera stays synchronized through pause and deterministic scrubbing', async () => {
-  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
   const originalDocument = globalThis.document;
   const originalWindow = globalThis.window;
   const originalPerformance = globalThis.performance;
@@ -2654,7 +2628,6 @@ test('Bhote Koshi cinematic camera stays synchronized through pause and determin
 });
 
 test('Bhote Koshi replay restores cinematic ownership unless the operator released it', async () => {
-  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
   const originalDocument = globalThis.document;
   const originalWindow = globalThis.window;
   const originalPerformance = globalThis.performance;
@@ -2747,9 +2720,9 @@ test('Bhote Koshi replay restores cinematic ownership unless the operator releas
 });
 
 test('Bhote Koshi closes a poster that resolves after disable', async () => {
-  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
-  event.evidenceSpine = event.evidenceSpine.slice(0, 1);
-  event.evidenceSpine[0].media.posterPath = 'evidence-09.jpg';
+  const draft = structuredClone(event);
+  draft.evidenceSpine = draft.evidenceSpine.slice(0, 1);
+  draft.evidenceSpine[0].media.posterPath = 'evidence-09.jpg';
   const originalDocument = globalThis.document;
   const originalWindow = globalThis.window;
   installEventDom();
@@ -2758,7 +2731,7 @@ test('Bhote Koshi closes a poster that resolves after disable', async () => {
   let resolvePoster;
   const poster = { closed: false, close() { this.closed = true; } };
   const layer = createBhoteKoshiEventLayer({
-    eventLoader: async () => event,
+    eventLoader: async () => draft,
     imagerySpecFactory: async (url) => ({ url }),
     terrainSampler: async () => [{ height: 2800 }],
     mediaLoader: async (url) => {
@@ -2788,7 +2761,6 @@ test('Bhote Koshi closes a poster that resolves after disable', async () => {
 });
 
 test('every sourced shot grows its tail with its head, keeps its own card, and clears on exit', async () => {
-  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
   const originals = Object.fromEntries(['document', 'window', 'performance', 'requestAnimationFrame', 'cancelAnimationFrame']
     .map((key) => [key, globalThis[key]]));
   installEventDom();
@@ -2894,7 +2866,6 @@ test('every sourced shot grows its tail with its head, keeps its own card, and c
 });
 
 test('media-led upper-valley shots retain only their upstream prefix during camera travel', async () => {
-  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
   const originals = Object.fromEntries(['document', 'window', 'performance', 'requestAnimationFrame', 'cancelAnimationFrame']
     .map((key) => [key, globalThis[key]]));
   installEventDom();
@@ -2980,7 +2951,6 @@ test('media-led upper-valley shots retain only their upstream prefix during came
 });
 
 test('camera-led Nepal flood motion preserves its prefix and stays ahead of shot travel', async () => {
-  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
   const originals = Object.fromEntries(['document', 'window', 'performance', 'requestAnimationFrame', 'cancelAnimationFrame']
     .map((key) => [key, globalThis[key]]));
   installEventDom();
@@ -3187,7 +3157,6 @@ test('camera-led Nepal flood motion preserves its prefix and stays ahead of shot
 });
 
 test('Bhote Koshi corridor remains ordered downstream and inside the imagery rectangle', async () => {
-  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
   const { west, south, east, north } = event.imagery.rectangle;
   let priorChainage = Number.NEGATIVE_INFINITY;
   for (const point of event.reconstruction.corridor) {
@@ -3199,7 +3168,6 @@ test('Bhote Koshi corridor remains ordered downstream and inside the imagery rec
 });
 
 test('an evidence point whose terrain sample misses sits at its fallback elevation, not sea level', async () => {
-  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
   const originalDocument = globalThis.document;
   const originalWindow = globalThis.window;
   installEventDom();
@@ -3240,8 +3208,7 @@ test('an evidence point whose terrain sample misses sits at its fallback elevati
 
 for (const [source, expected] of [['terrain', 'sampled'], ['ellipsoid', 'fallback']]) {
   test(`the default terrain sampler places an evidence point at a ${source} answer's ${expected} height`, async () => {
-    const event = JSON.parse(await readFile(eventUrl, 'utf8'));
-    const originalDocument = globalThis.document;
+      const originalDocument = globalThis.document;
     const originalWindow = globalThis.window;
     installEventDom();
     globalThis.window = { setTimeout: () => 71, clearTimeout() {} };
@@ -3288,7 +3255,6 @@ for (const [source, expected] of [['terrain', 'sampled'], ['ellipsoid', 'fallbac
 }
 
 test('an event image that fails to load takes the comparison down, not the event', async (t) => {
-  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
   const originalDocument = globalThis.document;
   const originalWindow = globalThis.window;
   installEventDom();

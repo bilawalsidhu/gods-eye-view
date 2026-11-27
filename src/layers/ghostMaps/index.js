@@ -13,9 +13,13 @@ import {
   t,
   tn,
 } from '../../i18n/index.js';
-import { createHorizonCull } from '../streetLevel/view.js';
+import { createHorizonCull } from '../../render/horizonCull.js';
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { hexColor } from '../../render/color.js';
+import {
+  SELECTED_CARD_SOURCE_OPTIONS,
+  selectedCard,
+} from '../../overlays/worldOverlayTokens.js';
 import { drawOf, findFrame } from '../../render/rendererOf.js';
 import { readGhostMapsKml } from './kml.js';
 import {
@@ -40,11 +44,6 @@ const STORAGE_KEY = 'gev.ghostmaps.products';
 const AGE_STORAGE_KEY = 'gev.ghostmaps.ageDays';
 const ACCENT = '#c8ff00';
 const MAX_ICON_BYTES = 512 * 1024;
-const CARD_HOST_OPTIONS = Object.freeze({
-  cohortLimit: 1,
-  collisionCapacity: 1,
-  moving: false,
-});
 const MAX_CARD_LINES = 12;
 
 /** Panel names for the catalog's product ids (the catalog sends English). */
@@ -625,7 +624,7 @@ export function createGhostMapsLayer({
       overlayHost.setEntries(
         GHOSTMAPS_OVERLAY_SOURCE_ID,
         [],
-        CARD_HOST_OPTIONS,
+        SELECTED_CARD_SOURCE_OPTIONS,
       );
       return;
     }
@@ -656,24 +655,17 @@ export function createGhostMapsLayer({
     const title = t('S2 · {name}', {
       name: fieldLabel(feature.name || feature.folder) || t('Report'),
     });
-    const card = {
+    // A click card comes and goes with the click, as CCTV cards do, rather
+    // than holding the label arbiter's 2.5 s minimum lifetime; and it hides
+    // when its marker turns behind the planet.
+    const card = selectedCard({
       id: `ghostmaps-card:${_selectedKey}`,
-      selected: true,
       interactive: Boolean(_selectedLink && openExternal),
       title,
       details,
       accent: PRODUCT_COLORS[product?.id] || ACCENT,
-      priority: Number.MAX_SAFE_INTEGER,
-      gapPx: 15,
-      verticalOnly: true,
-      placement: 'above',
-      // A click card comes and goes with the click, as CCTV cards do, rather
-      // than holding the label arbiter's 2.5 s minimum lifetime; and it hides
-      // when its marker turns behind the planet.
-      stateless: true,
-      horizonCull: true,
       position: fromDegrees(...feature.anchor),
-    };
+    });
     if (card.interactive) {
       const link = _selectedLink;
       card.accessibilityLabel = t('Open the source for {title}', { title });
@@ -686,9 +678,9 @@ export function createGhostMapsLayer({
     overlayHost.setEntries(
       GHOSTMAPS_OVERLAY_SOURCE_ID,
       [card],
-      CARD_HOST_OPTIONS,
+      SELECTED_CARD_SOURCE_OPTIONS,
     );
-    overlayHost.setVisible?.(GHOSTMAPS_OVERLAY_SOURCE_ID, true);
+    overlayHost.setVisible(GHOSTMAPS_OVERLAY_SOURCE_ID, true);
   }
 
   function clearSelection() {
@@ -697,12 +689,16 @@ export function createGhostMapsLayer({
     _selectedLink = null;
     // An empty publish, as the perimeter cards deselect: it releases the
     // selected card's paint lane, which clearing the source alone left drawn.
-    overlayHost?.setEntries(GHOSTMAPS_OVERLAY_SOURCE_ID, [], CARD_HOST_OPTIONS);
+    overlayHost?.setEntries(
+      GHOSTMAPS_OVERLAY_SOURCE_ID,
+      [],
+      SELECTED_CARD_SOURCE_OPTIONS,
+    );
   }
 
   function installClickHandler() {
     if (!canSelect() || _clickSubscription || !_viewer) return;
-    picking.registerPickOwner?.(
+    picking.registerPickOwner(
       GHOSTMAPS_LAYER_ID,
       (pickedId) =>
         typeof pickedId === 'string' && pickedId.startsWith(PICK_PREFIX),
@@ -712,7 +708,7 @@ export function createGhostMapsLayer({
       // click so every layer agrees: ours opens its source whatever is drawn
       // under it; another layer's is that layer's click, so the maps under
       // it do not act and the selection stays.
-      const cardHit = picking.clickCard?.(event) ?? null;
+      const cardHit = picking.clickCard(event) ?? null;
       if (cardHit) {
         if (
           cardHit.sourceId === GHOSTMAPS_OVERLAY_SOURCE_ID &&
@@ -746,7 +742,7 @@ export function createGhostMapsLayer({
   function removeClickHandler() {
     _clickSubscription?.();
     _clickSubscription = null;
-    picking?.unregisterPickOwner?.(GHOSTMAPS_LAYER_ID);
+    picking?.unregisterPickOwner(GHOSTMAPS_LAYER_ID);
   }
 
   function featureCount() {

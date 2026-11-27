@@ -14,7 +14,7 @@ import {
   findQuery,
 } from '../../render/rendererOf.js';
 import { fromDegreesInto } from '../../geo/ellipsoid.js';
-import { NO_IMAGERY_HOST } from '../weather/imageryHost.js';
+import { NO_IMAGERY_HOST } from '../../maps/imageryHost.js';
 import { msg } from '../../i18n/index.js';
 import { createWindGpuRendering } from './gpuRendering.js';
 import { advectParticle, sampleWind } from './model.js';
@@ -130,11 +130,6 @@ export function createWindRendering({
   getHost: hostOf,
   eventTarget = globalThis.window,
   createGpuRendering = createWindGpuRendering,
-  globeOf = findGlobe,
-  drawOf = findDraw,
-  cameraOf = findCamera,
-  frameOf = findFrame,
-  queryOf = findQuery,
   onStatusChange,
 } = {}) {
   // The host the shell names, else the viewer's globe imagery.
@@ -163,11 +158,11 @@ export function createWindRendering({
   let bounds = null;
   let cameraChanged = true;
   let painted = 0;
-  const gpu = createGpuRendering({ getViewer, drawOf });
+  const gpu = createGpuRendering({ getViewer, drawOf: findDraw });
   let gpuActive = false;
   let reportedGpuReady = null;
   let gpuNarrow = false;
-  const relief = createWindRelief({ getViewer, globeOf });
+  const relief = createWindRelief({ getViewer, globeOf: findGlobe });
   const signature = Array(8).fill(null);
   const wind = { u: 0, v: 0 };
   const before = { lon: 0, lat: 0 };
@@ -187,17 +182,17 @@ export function createWindRendering({
     const viewer = getViewer?.();
     return viewer && !viewer.isDestroyed?.() ? viewer : null;
   };
-  const poseOf = (viewer) => cameraOf(viewer)?.pose?.() ?? null;
+  const poseOf = (viewer) => findCamera(viewer)?.pose?.() ?? null;
   // The camera's height, or undefined where there is none (or the eye sits
   // at the earth's centre and it is not a number).
   const heightOf = (viewer) => {
     const height = viewer ? poseOf(viewer)?.height : undefined;
     return Number.isFinite(height) ? height : undefined;
   };
-  const requestRender = (viewer) => frameOf(viewer)?.requestRender?.('wind');
+  const requestRender = (viewer) => findFrame(viewer)?.requestRender?.('wind');
   // What a paint projects with: the query port and the eye's position.
   const viewOf = (viewer) => ({
-    query: queryOf(viewer),
+    query: findQuery(viewer),
     eye: poseOf(viewer)?.position ?? null,
   });
 
@@ -261,7 +256,7 @@ export function createWindRendering({
 
   function updateBounds(viewer) {
     bounds = null;
-    const camera = cameraOf(viewer);
+    const camera = findCamera(viewer);
     if (!camera?.viewRectangle) return;
     try {
       const rect = camera.viewRectangle();
@@ -395,13 +390,13 @@ export function createWindRendering({
       imageryError = NO_IMAGERY_HOST;
       return;
     }
-    const globe = kind === 'tileset' ? null : globeOf(viewer);
+    const globe = kind === 'tileset' ? null : findGlobe(viewer);
     const raster = createFieldRaster(snapshot, overlay);
     if (!raster) {
       imageryError = fieldUnavailableText(overlay);
       return;
     }
-    const draw = kind === 'tileset' ? drawOf(viewer) : null;
+    const draw = kind === 'tileset' ? findDraw(viewer) : null;
     if (kind === 'tileset' ? !draw?.field : !globe) {
       imageryError = msg('Globe imagery unavailable');
       return;
@@ -420,7 +415,7 @@ export function createWindRendering({
           draw,
           texture,
           overlay === 'temperature' ? 1 : 0.85,
-          { cameraOf, frameOf },
+          { cameraOf: findCamera, frameOf: findFrame },
         );
         imageryKind = kind;
         updateImageryFade(heightOf(viewer), true);
@@ -559,8 +554,8 @@ export function createWindRendering({
     listen(eventTarget, 'gev:map-stack-changed', rehome);
     const viewer = viewerReady();
     if (!viewer) return;
-    listenPort(frameOf(viewer), 'preRender', viewChanged);
-    listenPort(cameraOf(viewer), 'moveEnd', cameraSettled);
+    listenPort(findFrame(viewer), 'preRender', viewChanged);
+    listenPort(findCamera(viewer), 'moveEnd', cameraSettled);
   }
   function detachListeners() {
     for (const remove of removers) remove();

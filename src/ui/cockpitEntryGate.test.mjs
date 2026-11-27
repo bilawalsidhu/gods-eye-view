@@ -8,7 +8,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createPinia } from 'pinia';
 import { createApp, defineComponent, h, nextTick } from 'vue';
-import { DataLayerManager } from '../data/manager.js';
+import { DataLayerManager } from '../testSupport/dataLayerManager.mjs';
 import { withEntityRecord } from '../data/entityRecords.js';
 import {
   bindFakeCesiumCamera,
@@ -410,8 +410,7 @@ function contactsCoordinator() {
   const dependencies = createDependencies({
     state,
     services: {},
-    parts: { subject: {}, focus: {} },
-    source: null,
+    parts: { subject: { currentSelectedVesselSubject: () => null }, focus: {} },
   });
   return {
     id: 'military-awareness',

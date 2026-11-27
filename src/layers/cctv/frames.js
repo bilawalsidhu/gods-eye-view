@@ -417,14 +417,11 @@ export function createFrames({ state: layerState, services, parts, source }) {
   }
   return {
     frameSignatureFromPixels,
-    projectionFrameSignature,
-    paintNextProjectionBuffer,
     refreshProjectionTextures,
     frameUrlFor,
     mediaUrlFor,
     paintProjectionPlaceholder,
     refreshProjectionImage,
-    paintPlaceholderThrottled,
     drawProjectionFrame,
   };
 }

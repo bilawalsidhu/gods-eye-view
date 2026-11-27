@@ -299,7 +299,7 @@ try {
           return (
             subject?.layerId === 'military-installations' &&
             subject.id === window.installationSubjectId &&
-            !a._getAwarenessNavigationStateForTest().pendingSelectionKey
+            !a.testing._getAwarenessNavigationStateForTest().pendingSelectionKey
           );
         },
         { timeout: 15000 },

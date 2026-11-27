@@ -9,6 +9,15 @@
  * `{x, y, z}` objects in Earth-fixed (ECEF) metres, so the policy is
  * unit-testable and the Cockpit camera copies them into its own scratch.
  */
+import { destinationPoint } from './geoDistance.js';
+import {
+  cross,
+  dot,
+  magnitude,
+  scale,
+  toRadians,
+  wrapLongitude,
+} from './geo/vector.js';
 
 /** Mean Earth radius used for footprint and framing geometry, metres. */
 export const ORBITAL_EARTH_RADIUS_M = 6371008.8;
@@ -246,26 +255,6 @@ export function footprintWidthKm(altitudeM, fovRad, aspect = 1) {
   return (2 * R * central) / 1000;
 }
 
-function length(v) {
-  return Math.hypot(v.x, v.y, v.z);
-}
-
-function scale(v, s) {
-  return { x: v.x * s, y: v.y * s, z: v.z * s };
-}
-
-function dot(a, b) {
-  return a.x * b.x + a.y * b.y + a.z * b.z;
-}
-
-function cross(a, b) {
-  return {
-    x: a.y * b.z - a.z * b.y,
-    y: a.z * b.x - a.x * b.z,
-    z: a.x * b.y - a.y * b.x,
-  };
-}
-
 /** `v` with its component along unit `d` removed, or null when degenerate. */
 function perpendicularUnit(v, d) {
   const along = dot(v, d);
@@ -274,7 +263,7 @@ function perpendicularUnit(v, d) {
     y: v.y - along * d.y,
     z: v.z - along * d.z,
   };
-  const n = length(p);
+  const n = magnitude(p);
   return n > 1e-6 ? scale(p, 1 / n) : null;
 }
 
@@ -308,11 +297,11 @@ export function nadirOrientation(
   { previousUp = null, headingDeg = null } = {},
 ) {
   if (!position) return null;
-  const r = length(position);
+  const r = magnitude(position);
   if (!Number.isFinite(r) || r < 1) return null;
   const direction = scale(position, -1 / r);
   let up = perpendicularUnit(NORTH_AXIS, direction);
-  if (!up && previousUp && Number.isFinite(length(previousUp)))
+  if (!up && previousUp && Number.isFinite(magnitude(previousUp)))
     up = perpendicularUnit(previousUp, direction);
   if (!up) {
     // Looking down -z (north pole): north at longitude 0 points along -x.
@@ -618,31 +607,6 @@ export function centreLinesFirst(
 /** At most this many tile requests per look-ahead. */
 export const ORBITAL_PREFETCH_MAX_TILES = 12;
 
-const toRadians = (deg) => (deg * Math.PI) / 180;
-const toDegrees = (rad) => (rad * 180) / Math.PI;
-
-/**
- * The point `distanceM` from a point along an initial bearing, on a sphere.
- * @returns {{lat: number, lon: number}} Degrees, longitude in -180..180.
- */
-export function destinationPoint(latDeg, lonDeg, bearingDeg, distanceM) {
-  const delta = distanceM / ORBITAL_EARTH_RADIUS_M;
-  const lat1 = toRadians(latDeg);
-  const theta = toRadians(bearingDeg);
-  const lat2 = Math.asin(
-    Math.sin(lat1) * Math.cos(delta) +
-      Math.cos(lat1) * Math.sin(delta) * Math.cos(theta),
-  );
-  const lon2 =
-    toRadians(lonDeg) +
-    Math.atan2(
-      Math.sin(theta) * Math.sin(delta) * Math.cos(lat1),
-      Math.cos(delta) - Math.sin(lat1) * Math.sin(lat2),
-    );
-  const lon = ((((toDegrees(lon2) + 180) % 360) + 360) % 360) - 180;
-  return { lat: toDegrees(lat2), lon };
-}
-
 /**
  * Points the view will pass over: for each lead time, the sub-satellite
  * point that far along the ground track (orbital speed scaled down to the
@@ -671,23 +635,28 @@ export function groundTrackAhead(
     return [];
   const R = ORBITAL_EARTH_RADIUS_M;
   const groundMps = (velocityMps * R) / (R + altitudeM);
+  const wrapped = (p) => ({ lat: p.lat, lon: wrapLongitude(p.lon) });
   const points = [];
   for (const seconds of leadS) {
-    const centre = destinationPoint(
-      latitude,
-      longitude,
-      groundTrackDeg,
-      groundMps * seconds,
+    const centre = wrapped(
+      destinationPoint(
+        latitude,
+        longitude,
+        groundTrackDeg,
+        groundMps * seconds,
+      ),
     );
     for (const fraction of across) {
       points.push(
         fraction === 0
           ? centre
-          : destinationPoint(
-              centre.lat,
-              centre.lon,
-              groundTrackDeg + (fraction > 0 ? 90 : -90),
-              Math.abs(fraction) * viewKm * 1000,
+          : wrapped(
+              destinationPoint(
+                centre.lat,
+                centre.lon,
+                groundTrackDeg + (fraction > 0 ? 90 : -90),
+                Math.abs(fraction) * viewKm * 1000,
+              ),
             ),
       );
     }

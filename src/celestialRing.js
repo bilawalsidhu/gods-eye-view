@@ -14,6 +14,7 @@ import {
 import { WGS84 } from './geo/ellipsoid.js';
 import { frameVector } from './geo/frames.js';
 import {
+  clamp,
   dot,
   magnitude,
   normalize,
@@ -76,11 +77,6 @@ const CELESTIAL_MAX_DEVICE_PIXEL_RATIO = 1.25;
 
 let keyholeFadeRatio = KEYHOLE_LABEL_FEATHER_RATIO;
 let keyholeOutsideOpacity = KEYHOLE_OUTSIDE_OPACITY_DEFAULT;
-
-/** Clamp a number to an inclusive range. */
-function clamp(value, min, max) {
-  return Math.max(min, Math.min(max, value));
-}
 
 /** Update the shared fade distance and outside-opacity floor. */
 export function setKeyholeFadeTuning({ fadeRatio, outsideOpacity } = {}) {

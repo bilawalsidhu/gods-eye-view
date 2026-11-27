@@ -129,7 +129,7 @@ export function createRendering({ state, services, parts }) {
 
   function occluder() {
     const eye = state.viewer ? findCamera(state.viewer)?.pose().position : null;
-    return eye ? services.occluderFactory?.(eye) : null;
+    return eye ? services.occluderFactory(eye) : null;
   }
 
   function cull() {
@@ -214,7 +214,7 @@ export function createRendering({ state, services, parts }) {
     updateBadgeSpacing();
     cull();
     // A painted thumbnail already names its sighting; drop the repeat label.
-    if (changed) parts.selection?.photoCardsChanged?.();
+    if (changed) parts.selection.photoCardsChanged();
   }
 
   function resampleAnchors() {
@@ -236,7 +236,7 @@ export function createRendering({ state, services, parts }) {
       cull();
       parts.selection.refreshAmbient();
       parts.selection.publishSelected();
-      parts.selection.notify?.();
+      parts.selection.notify();
       parts.selection.refreshContexts();
       requestRender('terrain');
     } finally {
@@ -415,9 +415,9 @@ export function createRendering({ state, services, parts }) {
         parts.selection.refreshAmbient();
         parts.selection.publishSelected();
         parts.selection.refreshContexts();
-        parts.selection.syncCredits?.();
-        parts.selection.notify?.();
-        parts.controls?.notify?.();
+        parts.selection.syncCredits();
+        parts.selection.notify();
+        parts.controls.notify();
       });
       return 'pending';
     }

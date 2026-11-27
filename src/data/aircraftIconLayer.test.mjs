@@ -8,11 +8,31 @@ import {
   placedPlanSpread,
 } from './aircraftIconLayer.js';
 import { COAST_FLOOR_LIFT_M, recoveryMs } from './motionModel.js';
-import { fromDegrees, toCartographicRadians } from '../geo/ellipsoid.js';
+import {
+  fromDegrees,
+  toCartographicRadians,
+  toLonLatH,
+} from '../geo/ellipsoid.js';
 import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
 import { createDisplayDelay } from './displayDelay.js';
 import { aircraftIcon, FLEET_ICON_PX } from './aircraftIcons.js';
 import { ROTOR_STILL_FRAME } from './rotorFrames.js';
+
+/** A display delay that never changes (ms). */
+const fixedDelay = (ms) => ({ currentMs: ms, step: () => ms });
+
+/** A placement drawing each contact at `at(id, wallMs)` (ECEF, or null)
+ *  with course 90° at `speedMps`. */
+function placementAt(at, speedMps) {
+  return {
+    place(id, wallMs) {
+      const p = at(id, wallMs);
+      if (!p) return null;
+      const { lon, lat, height } = toLonLatH(p);
+      return { lon, lat, altitudeM: height, courseDeg: 90, speedMps };
+    },
+  };
+}
 
 const WORLD_MS = Date.UTC(2026, 10, 1, 12, 0);
 
@@ -30,7 +50,7 @@ test('following the world clock, contacts draw at the world’s time on the scen
     services: { focus: { focusPassIsNeeded: () => false } },
     parts: {},
     layerId: 'flights',
-    renderDelaySec: 30,
+    displayDelay: fixedDelay(30_000),
     followsClock: () => following,
     courseMaxDps: 3,
     cockpitContactSizePx: 8,
@@ -149,7 +169,7 @@ test('a coasting icon is kept above rising ground, as the CPU coast is', () => {
       },
     },
     layerId: 'flights',
-    renderDelaySec: 30,
+    displayDelay: fixedDelay(30_000),
     followsClock: () => true,
     courseMaxDps: 3,
     cockpitContactSizePx: 8,
@@ -251,6 +271,7 @@ test('only airborne helicopters in view turn their rotor, written when the frame
       },
     },
     layerId: 'flights',
+    displayDelay: fixedDelay(0),
     courseMaxDps: 3,
     cockpitContactSizePx: 8,
   });
@@ -333,6 +354,7 @@ function rotorFixture(records, positions, tracking = {}) {
       tracking,
     },
     layerId: 'flights',
+    displayDelay: fixedDelay(0),
     courseMaxDps: 3,
     cockpitContactSizePx: 8,
   });
@@ -438,17 +460,17 @@ test('back at live, a placed contact eases from where it is drawn over a recover
     };
     const icons = createAircraftIcons({
       state,
-      services: { focus: { focusPassIsNeeded: () => false } },
+      services: {
+        focus: { focusPassIsNeeded: () => false },
+        placement: placementAt((_id, wallMs) => placedAt(wallMs), SPEED),
+      },
       parts: {
         motion: { _displayTimeAt: (ms) => ms, _fixEpochMs: (f) => f.epochMs },
       },
       layerId: 'flights',
+      displayDelay: fixedDelay(0),
       courseMaxDps: 3,
       cockpitContactSizePx: 8,
-      placeAt: (_id, wallMs, _info, _history, out) => {
-        Object.assign(out, placedAt(wallMs));
-        return { courseDeg: 90, speedMps: SPEED };
-      },
     });
     state._icons.put(
       {
@@ -504,7 +526,7 @@ test('back at live, a placed contact eases from where it is drawn over a recover
 });
 
 /** A layer whose placement has every contact flying east from `at(id)`. */
-function placedFleet(ids, at, { displayDelay } = {}) {
+function placedFleet(ids, at, { displayDelay = fixedDelay(0) } = {}) {
   const state = {
     now: () => Date.now(),
     _icons: createContactIcons(),
@@ -513,20 +535,17 @@ function placedFleet(ids, at, { displayDelay } = {}) {
   };
   const icons = createAircraftIcons({
     state,
-    services: { focus: { focusPassIsNeeded: () => false } },
+    services: {
+      focus: { focusPassIsNeeded: () => false },
+      placement: placementAt(at, 200),
+    },
     parts: {
       motion: { _displayTimeAt: (ms) => ms, _fixEpochMs: (f) => f.epochMs },
     },
     layerId: 'flights',
+    displayDelay,
     courseMaxDps: 3,
     cockpitContactSizePx: 8,
-    ...(displayDelay ? { displayDelay } : {}),
-    placeAt: (id, wallMs, _info, _history, out) => {
-      const placed = at(id, wallMs);
-      if (!placed) return null;
-      Object.assign(out, placed);
-      return { courseDeg: 90, speedMps: 200 };
-    },
   });
   for (const id of ids)
     state._icons.put(
@@ -841,6 +860,7 @@ function viewsFixture(
       },
     },
     layerId: 'flights',
+    displayDelay: fixedDelay(0),
     courseMaxDps: 3,
     cockpitContactSizePx: 8,
     resolveAsset,

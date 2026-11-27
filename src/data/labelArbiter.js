@@ -32,23 +32,6 @@ function demandEntries(demandByLayer) {
     .sort(([a], [b]) => a.localeCompare(b));
 }
 
-function redistributeUnused(quotas, demand, capacity, order) {
-  let used = Array.from(quotas.values()).reduce((sum, value) => sum + value, 0);
-  while (used < capacity) {
-    let changed = false;
-    for (const layerId of order) {
-      const current = quotas.get(layerId) || 0;
-      if (current >= (demand.get(layerId) || 0)) continue;
-      quotas.set(layerId, current + 1);
-      used++;
-      changed = true;
-      if (used >= capacity) break;
-    }
-    if (!changed) break;
-  }
-  return quotas;
-}
-
 function allocateLayerQuotasInto(
   demand,
   capacity,
@@ -175,74 +158,21 @@ export function allocateLayerQuotas(
   layerWeights = {},
 ) {
   const entries = demandEntries(demandByLayer);
-  const totalDemand = entries.reduce((sum, [, demand]) => sum + demand, 0);
-  const cap = clampInt(capacity, 0, totalDemand);
-  const quotas = new Map(entries.map(([layerId]) => [layerId, 0]));
-  if (cap === 0 || entries.length === 0) return quotas;
-
   const demand = new Map(entries);
   const ids = entries.map(([layerId]) => layerId);
-  const normalizedStrategy = normalizeAllocationStrategy(strategy);
-
-  if (normalizedStrategy === ALLOCATION_ELASTIC) {
-    const base = Math.floor(cap / ids.length);
-    let remainder = cap % ids.length;
-    for (const layerId of ids) {
-      const entitlement = base + (remainder > 0 ? 1 : 0);
-      remainder = Math.max(0, remainder - 1);
-      quotas.set(layerId, Math.min(demand.get(layerId), entitlement));
-    }
-    return redistributeUnused(quotas, demand, cap, ids);
-  }
-
-  const weighted = entries.map(([layerId, count]) => {
-    const semanticWeight = Math.max(0.05, Number(layerWeights[layerId]) || 1);
-    return { layerId, count, weight: Math.sqrt(count) * semanticWeight };
-  });
-  const priorityOrder = weighted
-    .slice()
-    .sort((a, b) => b.weight - a.weight || a.layerId.localeCompare(b.layerId))
-    .map((entry) => entry.layerId);
-
-  let remaining = cap;
-  if (cap >= ids.length) {
-    for (const layerId of ids) quotas.set(layerId, 1);
-    remaining -= ids.length;
-  }
-
-  const totalWeight = weighted.reduce((sum, entry) => sum + entry.weight, 0);
-  const remainders = [];
-  if (remaining > 0 && totalWeight > 0) {
-    let apportioned = 0;
-    for (const entry of weighted) {
-      const exact = (remaining * entry.weight) / totalWeight;
-      const room = entry.count - (quotas.get(entry.layerId) || 0);
-      const whole = Math.min(room, Math.floor(exact));
-      quotas.set(entry.layerId, (quotas.get(entry.layerId) || 0) + whole);
-      apportioned += whole;
-      remainders.push({
-        layerId: entry.layerId,
-        fraction: exact - Math.floor(exact),
-        weight: entry.weight,
-      });
-    }
-    remaining -= apportioned;
-    remainders.sort(
-      (a, b) =>
-        b.fraction - a.fraction ||
-        b.weight - a.weight ||
-        a.layerId.localeCompare(b.layerId),
-    );
-    for (const entry of remainders) {
-      if (remaining <= 0) break;
-      const current = quotas.get(entry.layerId) || 0;
-      if (current >= demand.get(entry.layerId)) continue;
-      quotas.set(entry.layerId, current + 1);
-      remaining--;
-    }
-  }
-
-  return redistributeUnused(quotas, demand, cap, priorityOrder);
+  const totalDemand = entries.reduce((sum, [, count]) => sum + count, 0);
+  return allocateLayerQuotasInto(
+    demand,
+    clampInt(capacity, 0, totalDemand),
+    normalizeAllocationStrategy(strategy),
+    layerWeights,
+    ids,
+    ids.length,
+    new Map(),
+    [],
+    [],
+    [],
+  );
 }
 
 function rectIsFinite(rect) {

@@ -955,8 +955,6 @@
   "This browser is blocking storage, so that could not be saved.": "Este navegador bloquea el almacenamiento, así que no se pudo guardar.",
   "Live earthquakes and active fires, from USGS and NASA": "Terremotos en vivo e incendios activos, de USGS y NASA",
   "ENVIRONMENTAL": "MEDIO AMBIENTE",
-  "EARTH WATCH": "VIGILANCIA TERRESTRE",
-  "ACTIVE EVENTS": "EVENTOS ACTIVOS",
   "POWER UP · {count} KEYS WAITING": {
     "one": "ENCENDER · {count} CLAVE EN ESPERA",
     "many": "ENCENDER · {count} DE CLAVES EN ESPERA",

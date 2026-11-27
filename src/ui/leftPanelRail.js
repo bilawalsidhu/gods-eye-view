@@ -5,7 +5,11 @@ import {
   resolvePanelStackCorridor,
 } from '../panelStackLayout.js';
 import { measurePanelNaturalHeight } from './panelMeasurement.js';
-import { bandBesideMidpointObstacles } from './panelRailGeometry.js';
+import {
+  bandBesideMidpointObstacles,
+  preferredFirst,
+  visibleObstacles,
+} from './panelRailGeometry.js';
 import { settleSideAccordion } from './panelAccordion.js';
 
 /**
@@ -122,23 +126,11 @@ export function layoutLeftPanelRail({
   const bottomObstacles = [];
   const inLane = [];
 
-  for (const obstacle of obstacles) {
-    if (stack.contains(obstacle)) continue;
-    let hiddenByAncestor = false;
-    for (let element = obstacle; element; element = element.parentElement) {
-      const style = getComputedStyle(element);
-      if (
-        style.display === 'none' ||
-        style.visibility === 'hidden' ||
-        Number(style.opacity) === 0
-      ) {
-        hiddenByAncestor = true;
-        break;
-      }
-    }
-    if (hiddenByAncestor) continue;
-    const rect = obstacle.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) continue;
+  for (const { element: obstacle, rect } of visibleObstacles(
+    obstacles,
+    stack,
+    getComputedStyle,
+  )) {
     // The centered controls can enter the stack's transparent outer gutter.
     // Only constrain the lane if they reach an expanded panel itself, whose
     // actual bounds also include the edge-rail offset.
@@ -216,14 +208,10 @@ export function layoutLeftPanelRail({
   // user's newest disclosure. Measure and allocate that explicitly opened
   // panel first so an older expanded sibling yields when the corridor cannot
   // usefully present both (for example Map Stack followed by Scenes).
-  const expandedPanels = preferredExpandedPanel
-    ? [
-        preferredExpandedPanel,
-        ...expandedPanelsInDomOrder.filter(
-          (panel) => panel !== preferredExpandedPanel,
-        ),
-      ]
-    : expandedPanelsInDomOrder;
+  const expandedPanels = preferredFirst(
+    expandedPanelsInDomOrder,
+    preferredExpandedPanel,
+  );
   // Clear the prior pass before reading intrinsic heights. The allocated
   // outer height and the inner scroller otherwise feed their constrained
   // size back into the next HUD-mode calculation.

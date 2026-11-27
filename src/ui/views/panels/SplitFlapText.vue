@@ -7,9 +7,9 @@ import {
   SPLIT_FLAP_ENABLED,
   isOnScreen,
   planSplitFlap,
-  prefersReducedMotion,
   visibleGlyphs,
 } from '../../../splitFlap.js';
+import { prefersReducedMotion } from '../../../reducedMotion.js';
 
 // A status label that flips its changed characters into place, planned by
 // src/splitFlap.js (read its invariants first). The text is one long-lived

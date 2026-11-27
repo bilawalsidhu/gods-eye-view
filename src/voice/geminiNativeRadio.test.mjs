@@ -9,7 +9,7 @@ import {
 } from '../testSupport/geminiNativeHarness.mjs';
 import { createGevActionRunner } from './gevActions.js';
 import { createVoiceSession } from './session.js';
-import { DataLayerManager } from '../data/manager.js';
+import { DataLayerManager } from '../testSupport/dataLayerManager.mjs';
 
 const viewerFixture = () => ({
   clock: { onTick: { addEventListener: () => () => {} } },

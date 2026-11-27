@@ -8,7 +8,8 @@ test('reenabling an empty filtered layer never reveals the retained pre-filter h
   const layerState = {
     _enabled: false,
     _viewer: {},
-    _cells: {},
+    _initialized: true,
+    _visibility: { show: false },
     _fires: [],
     _loading: true,
     _pickIndexById: new Map(),

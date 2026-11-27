@@ -198,17 +198,31 @@ try {
     ),
     true,
   );
-  const clickPoint = await page.evaluate(() => {
-    window.__qaPainted = [];
-    const { viewer } = window.__godsEyeView;
-    const Cartesian3 = viewer.camera.position.constructor;
-    const point = viewer.scene.cartesianToCanvasCoordinates(
-      Cartesian3.fromDegrees(-97.7469, 30.2681),
+  // A real pointer click on the fixture station at `index` (its position
+  // is the fixture's: 0.001° north-east per index).
+  async function clickStation(index, reason) {
+    const point = await page.evaluate(
+      (index, reason) => {
+        window.__qaPainted = [];
+        const app = window.__godsEyeView;
+        const { viewer } = app;
+        const Cartesian3 = viewer.camera.position.constructor;
+        const canvasPoint = viewer.scene.cartesianToCanvasCoordinates(
+          Cartesian3.fromDegrees(
+            -97.7469 + index * 0.001,
+            30.2681 + index * 0.001,
+          ),
+        );
+        const rect = viewer.scene.canvas.getBoundingClientRect();
+        app.requestRender(reason);
+        return { x: rect.left + canvasPoint.x, y: rect.top + canvasPoint.y };
+      },
+      index,
+      reason,
     );
-    const rect = viewer.scene.canvas.getBoundingClientRect();
-    return { x: rect.left + point.x, y: rect.top + point.y };
-  });
-  await page.mouse.click(clickPoint.x, clickPoint.y);
+    await page.mouse.click(point.x, point.y);
+  }
+  await clickStation(0, 'gbfs-name-click-qa');
   await page.waitForFunction(
     () => window.__qaPainted.includes('QA English Square'),
     { timeout: 10000 },
@@ -219,19 +233,12 @@ try {
     true,
   );
   await page.keyboard.press('Escape');
-  for (const [id, title] of [
-    ['english', 'QA English Square'],
-    ['short', 'QA Short Name'],
-    ['unnamed', 'Station unnamed'],
+  for (const [index, id, title] of [
+    [0, 'english', 'QA English Square'],
+    [1, 'short', 'QA Short Name'],
+    [2, 'unnamed', 'Station unnamed'],
   ]) {
-    await page.evaluate((id) => {
-      window.__qaPainted = [];
-      const app = window.__godsEyeView;
-      app.dataManager.layers
-        .get('bikeshare')
-        .module._selectBikeshareStationForTest(`austin-capmetro:${id}`);
-      app.requestRender('gbfs-name-selection-qa');
-    }, id);
+    await clickStation(index, 'gbfs-name-selection-qa');
     await page.waitForFunction(
       (title) => window.__qaPainted.includes(title),
       { timeout: 10000 },
@@ -264,7 +271,6 @@ try {
   }
   await page.setViewport({ width: 390, height: 844 });
   await page.evaluate(() => {
-    window.__qaPainted = [];
     const app = window.__godsEyeView;
     // Use the supported clean view to inspect the mobile card clear of panels.
     app.styleManager.toggleCleanView(true);
@@ -274,11 +280,8 @@ try {
       destination: Cartesian3.fromDegrees(-97.7449, 30.2701, 3000),
       orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
     });
-    app.dataManager.layers
-      .get('bikeshare')
-      .module._selectBikeshareStationForTest('austin-capmetro:english');
-    app.requestRender('gbfs-name-mobile-qa');
   });
+  await clickStation(0, 'gbfs-name-mobile-qa');
   await page.waitForFunction(
     () => window.__qaPainted.includes('QA English Square'),
     { timeout: 10000 },

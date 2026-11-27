@@ -1,10 +1,9 @@
 import { localReceiverFeedName } from './feedNames.js';
 import { LAYER_SOURCE } from './policy.js';
+import { msg } from '../../i18n/marker.js';
 
-// Marks English that the Layers panel translates when it shows the status.
-// Texts with a number or a feed name stay English data too; the panel shows
-// them through STATUS_PIECE_PATTERNS (ui/statusText.js), piece by piece.
-const msg = (text) => text;
+// Texts with a number or a feed name stay English data; the Layers panel
+// shows them through STATUS_PIECE_PATTERNS (ui/statusText.js), piece by piece.
 
 /**
  * Layers-panel status for Local ADS-B, from its two inputs: the browser

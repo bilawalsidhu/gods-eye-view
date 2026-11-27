@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ShareLinkManager } from '../sharelink.js';
 import { createDefaultLayerState } from '../data/layerState.js';
-import { HUD_LAYOUTS } from '../hudLayoutPolicy.js';
+import { HUD_LAYOUTS } from '../hudLayouts.js';
 import { VIEW_MAPS, VIEW_STYLES } from '../view/index.js';
 import {
   HAL_EXAMPLE_HASH,

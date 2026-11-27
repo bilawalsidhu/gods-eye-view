@@ -10,7 +10,7 @@ export function createSubmarineCableLayer({
   overlayHost,
   picking = null,
   inputFor = defaultInputFor,
-  mapStackEventTarget = null,
+  subscribeMapStack = null,
   sweepClock = defaultSweepClock,
 }) {
   if (!source?.fetch || !source.label)
@@ -25,7 +25,7 @@ export function createSubmarineCableLayer({
     source,
     inputFor,
     picking,
-    mapStackEventTarget,
+    subscribeMapStack,
   };
   parts.rendering = createRendering(context);
   parts.ingestion = createIngestion(context);

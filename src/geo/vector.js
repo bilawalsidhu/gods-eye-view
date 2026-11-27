@@ -9,6 +9,12 @@ export const PI_OVER_TWO = Math.PI / 2;
 export const EPSILON14 = 1e-14;
 
 export const vec = (x = 0, y = 0, z = 0) => ({ x, y, z });
+/** Whether `v` is an object with finite x, y and z. */
+export const finiteVector = (v) =>
+  Boolean(v) &&
+  Number.isFinite(v.x) &&
+  Number.isFinite(v.y) &&
+  Number.isFinite(v.z);
 /**
  * A three-vector of a shape its own, for a position rewritten every frame.
  * Every `{x, y, z}` literal in the page shares one hidden shape, and once
@@ -73,6 +79,11 @@ export const toDegrees = (radians) => radians * DEGREES_PER_RADIAN;
 export const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 /** `a` to `b` by `t`, written as the default renderer writes it. */
 export const lerp = (a, b, t) => (1 - t) * a + t * b;
+/** Hermite ease of `x` between two edges, clamped to [0, 1]. */
+export function smoothstep(edge0, edge1, x) {
+  const t = clamp((x - edge0) / (edge1 - edge0), 0, 1);
+  return t * t * (3 - 2 * t);
+}
 /** Degrees in [0, 360). */
 export const norm360 = (deg) => ((deg % 360) + 360) % 360;
 /** Degrees in (-180, 180]. */
@@ -80,6 +91,8 @@ export function norm180(deg) {
   const n = norm360(deg);
   return n > 180 ? n - 360 : n;
 }
+/** Longitude in [-180, 180). */
+export const wrapLongitude = (lon) => ((((lon + 180) % 360) + 360) % 360) - 180;
 export const acosClamped = (v) => Math.acos(clamp(v, -1, 1));
 export const equalsEpsilon = (a, b, eps) => Math.abs(a - b) <= eps;
 

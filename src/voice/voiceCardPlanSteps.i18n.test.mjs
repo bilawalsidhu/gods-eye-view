@@ -3,7 +3,7 @@
 // What the model receives stays English.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { setLocale } from '../i18n/index.js';
+import { inLocale } from '../testSupport/inLocale.mjs';
 import { GEV_ACTION_SCHEMAS } from './actionSchemas.js';
 import { presentResult, shownSnapshotTime } from './resultDisplay.js';
 import { CITY_POIS } from '../cityPois.js';
@@ -15,15 +15,6 @@ import {
 } from './voiceCardPresentation.js';
 
 const TOOLS = GEV_ACTION_SCHEMAS.map((schema) => schema.name);
-
-function inLocale(locale, run) {
-  setLocale(locale);
-  try {
-    return run();
-  } finally {
-    setLocale('en');
-  }
-}
 
 test('every tool has a plan label, never its raw name', () => {
   for (const name of TOOLS) {

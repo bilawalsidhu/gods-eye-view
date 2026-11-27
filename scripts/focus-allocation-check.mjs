@@ -11,6 +11,15 @@ if (typeof global.gc !== 'function') {
 const CALLS = 100_000;
 const TRIALS = 9;
 const WARMUP_CALLS = 200_000;
+
+/**
+ * Allocation budgets cover two intentionally different call shapes:
+ * - Prebuilt-option pure paths: <=16 B/call for each treatment helper.
+ * - Production sprite tick: <=212 B/tick when its caller builds both fresh
+ *   options literals. The latter preserves roughly 25% headroom over the
+ *   locally measured steady-state median instead of pretending those caller
+ *   allocations belong to the pure helper bound.
+ */
 const PURE_CALL_BUDGET = 16;
 const PRODUCTION_SPRITE_TICK_BUDGET = 212;
 

@@ -3,7 +3,9 @@ import { performance, PerformanceObserver } from 'node:perf_hooks';
 import test from 'node:test';
 import { perfBudgetTestOptions } from '../../../scripts/run-perf-tests.mjs';
 import { denseContinentalRendering } from './renderPerformanceFixtures.mjs';
-import { WILDLIFE_MOVE_END_BUDGET_MS } from './performance.js';
+
+/** The longest a moveEnd's work may take, in milliseconds. */
+const WILDLIFE_MOVE_END_BUDGET_MS = 4;
 
 const median = (values) =>
   [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];

@@ -41,6 +41,56 @@ export const WORLD_OVERLAY_STYLE = Object.freeze({
   leaderWidth: 1.35,
 });
 
+/** Host options for a source that shows one selected, still card. */
+export const SELECTED_CARD_SOURCE_OPTIONS = Object.freeze({
+  cohortLimit: 1,
+  collisionCapacity: 1,
+  moving: false,
+});
+
+/** A clicked item's card, drawn above its marker and over every other card. */
+export function selectedCard({
+  id,
+  title,
+  details,
+  accent,
+  position,
+  interactive = false,
+}) {
+  return {
+    id,
+    selected: true,
+    interactive,
+    title,
+    details,
+    accent,
+    priority: Number.MAX_SAFE_INTEGER,
+    gapPx: 15,
+    verticalOnly: true,
+    placement: 'above',
+    stateless: true,
+    horizonCull: true,
+    position,
+  };
+}
+
+/**
+ * Where a card hangs off its marker: the gap and the leader's start follow the
+ * marker size.
+ */
+export function cardClearance(
+  markerPx,
+  { minGapPx = 12, verticalOnly = true } = {},
+) {
+  const gapPx = Math.max(minGapPx, markerPx + 8);
+  return {
+    gapPx,
+    leaderOffsetPx: Math.max(2, gapPx - 6),
+    verticalOnly,
+    viewportMargin: 4,
+  };
+}
+
 /** CCTV's field-tested thumbnail-card overrides on top of shared card chrome. */
 export const CCTV_THUMBNAIL_STYLE = Object.freeze({
   padding: 4,

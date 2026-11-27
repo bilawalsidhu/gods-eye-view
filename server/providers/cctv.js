@@ -258,11 +258,7 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
       });
       const svType = cctvRasterImageType(svResp.headers.get('content-type'));
       if (!svResp.ok || !svType) {
-        try {
-          await svResp.body?.cancel();
-        } catch {
-          /* no-op */
-        }
+        await svResp.body?.cancel().catch(() => {});
         return null;
       }
 
@@ -537,19 +533,11 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
             });
             if (downstream.closed) {
               // The headers arrived for a viewer who is no longer there.
-              try {
-                await upstream.body?.cancel();
-              } catch {
-                /* already closed */
-              }
+              await upstream.body?.cancel().catch(() => {});
               return;
             }
             if (!upstream.ok) {
-              try {
-                await upstream.body?.cancel();
-              } catch {
-                /* already closed */
-              }
+              await upstream.body?.cancel().catch(() => {});
               setHealth(cameraId, {
                 status: 'degraded',
                 sourceKind: 'upstream',
@@ -575,11 +563,7 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
               upstream.headers.get('content-type'),
             );
             if (!contentType) {
-              try {
-                await upstream.body?.cancel();
-              } catch {
-                /* already closed */
-              }
+              await upstream.body?.cancel().catch(() => {});
               setHealth(cameraId, {
                 status: 'degraded',
                 sourceKind: 'upstream',

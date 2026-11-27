@@ -10,26 +10,19 @@
  * low → its destination should be nearby).
  */
 
-import { EARTH_RADIUS_KM, greatCircleKm, isGeoPoint } from '../geoDistance.js';
-
-const D2R = Math.PI / 180;
-
-function bearingRad(lat1, lon1, lat2, lon2) {
-  const p1 = lat1 * D2R;
-  const p2 = lat2 * D2R;
-  const dl = (lon2 - lon1) * D2R;
-  const y = Math.sin(dl) * Math.cos(p2);
-  const x =
-    Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl);
-  return Math.atan2(y, x);
-}
+import {
+  EARTH_RADIUS_KM,
+  greatCircleKm,
+  initialBearingRad,
+  isGeoPoint,
+} from '../geoDistance.js';
 
 /** Signed cross-track distance (km) of point from the great circle p1→p2. */
 export function crossTrackKm(lat, lon, lat1, lon1, lat2, lon2) {
   const d13 =
     greatCircleKm({ lat: lat1, lon: lon1 }, { lat, lon }) / EARTH_RADIUS_KM;
-  const b13 = bearingRad(lat1, lon1, lat, lon);
-  const b12 = bearingRad(lat1, lon1, lat2, lon2);
+  const b13 = initialBearingRad(lat1, lon1, lat, lon);
+  const b12 = initialBearingRad(lat1, lon1, lat2, lon2);
   return Math.asin(Math.sin(d13) * Math.sin(b13 - b12)) * EARTH_RADIUS_KM;
 }
 
@@ -37,8 +30,8 @@ export function crossTrackKm(lat, lon, lat1, lon1, lat2, lon2) {
 function alongTrackKm(position, origin, destination) {
   const distance = greatCircleKm(origin, position) / EARTH_RADIUS_KM;
   const direction =
-    bearingRad(origin.lat, origin.lon, position.lat, position.lon) -
-    bearingRad(origin.lat, origin.lon, destination.lat, destination.lon);
+    initialBearingRad(origin.lat, origin.lon, position.lat, position.lon) -
+    initialBearingRad(origin.lat, origin.lon, destination.lat, destination.lon);
   return (
     Math.atan2(Math.sin(distance) * Math.cos(direction), Math.cos(distance)) *
     EARTH_RADIUS_KM

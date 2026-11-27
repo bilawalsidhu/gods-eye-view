@@ -212,7 +212,6 @@ export function createEnrichment({
     _requestRouteEnrichment,
     _requestPhotoEnrichment,
     _ambientBudgetKnobs,
-    _refillAmbientBudget,
     _sweepAmbientEnrichment,
   };
 }

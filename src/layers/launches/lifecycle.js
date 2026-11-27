@@ -181,13 +181,7 @@ export function createLifecycle({
     if (!launch) return false;
     parts.selection.setSelectedMission(launch.id);
     if (move) parts.selection.focusMission(launch);
-    for (const listener of [...layerState._globePickListeners]) {
-      try {
-        listener(launch.id);
-      } catch (error) {
-        console.warn('[Data:RocketLaunches] globe pick listener failed', error);
-      }
-    }
+    parts.controls.notifyGlobePick(launch.id);
     return true;
   };
   let hover = null;

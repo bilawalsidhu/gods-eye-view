@@ -54,7 +54,7 @@ const LAYER_NOUNS = Object.freeze({
   'osm-places': 'places',
 });
 
-const MAX_ANALYST_HEADLINE = 64;
+export const MAX_ANALYST_HEADLINE = 64;
 
 export function analystNounFor(layerKeys) {
   const keys = [...new Set((layerKeys || []).filter(Boolean))];
@@ -86,14 +86,24 @@ const MATERIAL_FEED_TAGS = Object.freeze({
 
 const MAX_LABEL = 48;
 
-/** Collapse whitespace and control characters, and bound a spoken label. */
-export function spokenLabel(value, max = MAX_LABEL) {
+/**
+ * Collapse whitespace and bound a label. Other characters stay: the card keeps
+ * the bidi isolates of a right-to-left headline.
+ */
+export function boundedLabel(value, max) {
   const text = String(value ?? '')
-    .replace(/[\p{Cc}\p{Cf}]+/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim();
   if (text.length <= max) return text;
   return `${text.slice(0, max - 1).trimEnd()}…`;
+}
+
+/** Collapse whitespace and control characters, and bound a spoken label. */
+export function spokenLabel(value, max = MAX_LABEL) {
+  return boundedLabel(
+    String(value ?? '').replace(/[\p{Cc}\p{Cf}]+/gu, ' '),
+    max,
+  );
 }
 
 function listPhrase(items) {

@@ -1,16 +1,8 @@
 import { worldClock, worldTimeFor } from '../../time/worldClock.js';
 import { SATELLITE_SETTLE_TIMEOUT_MS } from './policy.js';
 
-export function createState({ services }) {
-  const { setOverlayEntries, setOverlaySourceVisible, clearOverlaySource } =
-    services.overlays;
+export function createState() {
   const state = {};
-
-  state.DEFAULT_OVERLAY_HOST = Object.freeze({
-    setEntries: setOverlayEntries,
-    setVisible: setOverlaySourceVisible,
-    clearSource: clearOverlaySource,
-  });
 
   // The layer's draw sets by name, while it is initialised.
   state._missionSets = null;
@@ -133,8 +125,6 @@ export function createState({ services }) {
 
   state._missionOverlayRecords = new Map();
 
-  state._missionOverlayHost = state.DEFAULT_OVERLAY_HOST;
-
   state._selectedMissionOverlayTimeText = null;
 
   state._missionZoomAnchorRemover = null;
@@ -181,7 +171,6 @@ export function createState({ services }) {
 
   state._pendingLaunchIds = new Set();
 
-  state._pathDistanceCache = new WeakMap();
   state._sourceController = new AbortController();
   return state;
 }

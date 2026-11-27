@@ -15,7 +15,7 @@ import {
 import { FLOOR_WARM_PER_POLL } from './policy.js';
 import { fleetModelFakes } from '../../testSupport/fleetModelFakes.mjs';
 import { layerPlacement } from '../../data/placementProvider.js';
-import { PLACED_WAKE_MS } from './movement.js';
+import { PLACED_WAKE_MS } from '../../data/transitMovement.js';
 import { FUTURE_STAMP_TOLERANCE_MS } from './ingestion.js';
 import { ORDER_REJECTS_BEFORE_RESET } from '../../data/contactPlayback.js';
 
@@ -90,6 +90,21 @@ function vehicle(id, lat, lon, atSeconds, extra = {}) {
     occupancy: null,
     ...extra,
   };
+}
+
+/**
+ * Answer every MBTA poll with a 200 snapshot of `vehicles()`. Both are read
+ * per request, so a test that advances the clock moves the fixes and the
+ * fetch time with it; `fetchedAt` pins the fetch time, `headers` go on the reply.
+ */
+function serveMbta(app, vehicles, { fetchedAt, headers } = {}) {
+  app.serve('mbta', () => ({
+    status: 200,
+    ...(headers && { headers }),
+    body: snapshot('mbta', 'MBTA', vehicles(), {
+      fetchedAt: fetchedAt ?? Date.now(),
+    }),
+  }));
 }
 
 /**
@@ -634,17 +649,7 @@ function harness(
 test('a vehicle is played back a fixed lag behind its fixes, at 1x', async (t) => {
   const app = harness(t);
   const start = Date.now();
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [vehicle('bus-1', 42.36, -71.06, reported())],
-      {
-        fetchedAt: Date.now(),
-      },
-    ),
-  }));
+  serveMbta(app, () => [vehicle('bus-1', 42.36, -71.06, reported())]);
   app.layer.enable(app.viewer);
   await app.layer.update();
   const [entry] = app.vehicles();
@@ -663,17 +668,7 @@ test('a vehicle is played back a fixed lag behind its fixes, at 1x', async (t) =
   // A later poll gives it a new fix. Nothing is drawn yet: the display clock
   // has not reached the first fix.
   app.advance(TRANSIT_POLL_MS);
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [vehicle('bus-1', 42.362, -71.06, reported())],
-      {
-        fetchedAt: Date.now(),
-      },
-    ),
-  }));
+  serveMbta(app, () => [vehicle('bus-1', 42.362, -71.06, reported())]);
   await app.layer.update();
   assert.ok(
     entry.wakeTimer != null,
@@ -701,26 +696,13 @@ test('a vehicle the feed stops reporting is removed, and its primitive with it',
     vehicle('bus-1', 42.36, -71.06, now / 1000),
     vehicle('bus-2', 42.37, -71.07, now / 1000),
   ];
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot('mbta', 'MBTA', both, { fetchedAt: Date.now() }),
-  }));
+  serveMbta(app, () => both);
   app.layer.enable(app.viewer);
   await app.layer.update();
   assert.equal(app.vehicles().length, 2);
   assert.equal(app.markers('still').size, 2);
 
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [vehicle('bus-1', 42.361, -71.06, Date.now() / 1000)],
-      {
-        fetchedAt: Date.now(),
-      },
-    ),
-  }));
+  serveMbta(app, () => [vehicle('bus-1', 42.361, -71.06, Date.now() / 1000)]);
   // One missed poll is tolerated (feeds drop a vehicle for a beat), two is not.
   app.advance(TRANSIT_POLL_MS);
   await app.layer.update();
@@ -740,17 +722,7 @@ test('a vehicle the feed stops reporting is removed, and its primitive with it',
 
 test('one feed stale beside one fresh reads DEGRADED, not nominal', async (t) => {
   const app = harness(t);
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [vehicle('bus-1', 42.36, -71.06, Date.now() / 1000)],
-      {
-        fetchedAt: Date.now(),
-      },
-    ),
-  }));
+  serveMbta(app, () => [vehicle('bus-1', 42.36, -71.06, Date.now() / 1000)]);
   app.layer.enable(app.viewer);
   await app.layer.update();
 
@@ -782,17 +754,7 @@ test('one feed stale beside one fresh reads DEGRADED, not nominal', async (t) =>
 
 test('a feed that goes silent has its vehicles evicted instead of frozen on the globe', async (t) => {
   const app = harness(t);
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [vehicle('bus-1', 42.36, -71.06, Date.now() / 1000)],
-      {
-        fetchedAt: Date.now(),
-      },
-    ),
-  }));
+  serveMbta(app, () => [vehicle('bus-1', 42.36, -71.06, Date.now() / 1000)]);
   app.layer.enable(app.viewer);
   await app.layer.update();
   assert.equal(app.vehicles().length, 1);
@@ -811,27 +773,14 @@ test('a feed that goes silent has its vehicles evicted instead of frozen on the 
 test('inside a fresh snapshot, only the vehicle fixes that are too old are dropped', async (t) => {
   const app = harness(t);
   const now = Date.now();
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [
-        vehicle('fresh', 42.36, -71.06, Date.now() / 1000),
-        // A live feed really does carry these: a vehicle parked since this
-        // morning, still listed, still reporting its last known position.
-        vehicle(
-          'ancient',
-          42.37,
-          -71.07,
-          (Date.now() - 4 * 60 * 60 * 1000) / 1000,
-        ),
-        // A clock ahead of ours is treated as current, never as negative age.
-        vehicle('future', 42.38, -71.08, (Date.now() + 60_000) / 1000),
-      ],
-      { fetchedAt: Date.now() },
-    ),
-  }));
+  serveMbta(app, () => [
+    vehicle('fresh', 42.36, -71.06, Date.now() / 1000),
+    // A live feed really does carry these: a vehicle parked since this
+    // morning, still listed, still reporting its last known position.
+    vehicle('ancient', 42.37, -71.07, (Date.now() - 4 * 60 * 60 * 1000) / 1000),
+    // A clock ahead of ours is treated as current, never as negative age.
+    vehicle('future', 42.38, -71.08, (Date.now() + 60_000) / 1000),
+  ]);
   app.layer.enable(app.viewer);
   await app.layer.update();
   assert.deepEqual(
@@ -857,10 +806,7 @@ test('a snapshot the proxy replayed from its own cache for six minutes is refuse
     vehicle('bus-1', 42.36, -71.06, fetchedAt / 1000),
     vehicle('bus-2', 42.37, -71.07, fetchedAt / 1000),
   ];
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot('mbta', 'MBTA', vehicles, { fetchedAt }),
-  }));
+  serveMbta(app, () => vehicles, { fetchedAt });
   app.layer.enable(app.viewer);
   await app.layer.update();
   assert.equal(app.vehicles().length, 2);
@@ -868,11 +814,10 @@ test('a snapshot the proxy replayed from its own cache for six minutes is refuse
   // The operator stops answering. The proxy keeps handing back the SAME
   // snapshot every 15 s with STALE-ERROR; receiving bytes on a fresh cadence is
   // not the same as the buses being where they say.
-  app.serve('mbta', () => ({
-    status: 200,
+  serveMbta(app, () => vehicles, {
+    fetchedAt,
     headers: { 'x-gev-cache': 'STALE-ERROR' },
-    body: snapshot('mbta', 'MBTA', vehicles, { fetchedAt }),
-  }));
+  });
   for (let tick = 0; tick < 24; tick += 1) {
     app.advance(TRANSIT_POLL_MS);
     await app.layer.update();
@@ -923,17 +868,7 @@ test('disable aborts in-flight work and a response that lands late is ignored', 
     await pending;
     return originalFetch(url);
   };
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [vehicle('bus-1', 42.36, -71.06, Date.now() / 1000)],
-      {
-        fetchedAt: Date.now(),
-      },
-    ),
-  }));
+  serveMbta(app, () => [vehicle('bus-1', 42.36, -71.06, Date.now() / 1000)]);
   app.layer.enable(app.viewer);
   const inFlight = app.layer.update();
 
@@ -960,15 +895,7 @@ test('disable aborts in-flight work and a response that lands late is ignored', 
  * once and settles; returns its entry.
  */
 async function oneBus(app, place = { lat: 42.36 }) {
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [vehicle('bus-1', place.lat, -71.06, reported())],
-      { fetchedAt: Date.now() },
-    ),
-  }));
+  serveMbta(app, () => [vehicle('bus-1', place.lat, -71.06, reported())]);
   app.layer.enable(app.viewer);
   await app.layer.update();
   app.settle();
@@ -1026,15 +953,7 @@ test('a vehicle waits for its floor rather than standing on the ellipsoid', asyn
   // afterwards is exactly the floating the owner reported.
   let terrainReady = false;
   const app = harness(t, { floorAt: () => (terrainReady ? 47 : undefined) });
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [vehicle('bus-1', 42.36, -71.06, Date.now() / 1000)],
-      { fetchedAt: Date.now() },
-    ),
-  }));
+  serveMbta(app, () => [vehicle('bus-1', 42.36, -71.06, Date.now() / 1000)]);
   app.layer.enable(app.viewer);
   await app.layer.update();
   const entry = app.vehicles()[0];
@@ -1055,15 +974,7 @@ test('a vehicle waits for its floor rather than standing on the ellipsoid', asyn
   // born in.
   app.advance(TRANSIT_POLL_MS);
   const cellBefore = entry.heightCell;
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [vehicle('bus-1', 42.362, -71.06, Date.now() / 1000)],
-      { fetchedAt: Date.now() },
-    ),
-  }));
+  serveMbta(app, () => [vehicle('bus-1', 42.362, -71.06, Date.now() / 1000)]);
   await app.layer.update();
   assert.notEqual(app.vehicles()[0].heightCell, cellBefore);
 });
@@ -1071,17 +982,7 @@ test('a vehicle waits for its floor rather than standing on the ellipsoid', asyn
 test('the render hold follows real motion, and is released when everything settles', async (t) => {
   const app = harness(t);
   const start = Date.now();
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [vehicle('bus-1', 42.36, -71.06, reported())],
-      {
-        fetchedAt: Date.now(),
-      },
-    ),
-  }));
+  serveMbta(app, () => [vehicle('bus-1', 42.36, -71.06, reported())]);
   app.layer.enable(app.viewer);
   await app.layer.update();
   // The first poll draws each vehicle at its fix; there is nothing to play,
@@ -1097,17 +998,7 @@ test('the render hold follows real motion, and is released when everything settl
 
   // A second fix IS motion to come: the vehicle is armed and the loop held.
   app.advance(TRANSIT_POLL_MS);
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [vehicle('bus-1', 42.362, -71.06, reported())],
-      {
-        fetchedAt: Date.now(),
-      },
-    ),
-  }));
+  serveMbta(app, () => [vehicle('bus-1', 42.362, -71.06, reported())]);
   await app.layer.update();
   const firstFixAt = start - AGE_MS;
   app.run(firstFixAt + LAG_MS + TRANSIT_POLL_MS / 2 - Date.now());
@@ -1166,17 +1057,7 @@ test('a move before the camera listener first measures is still looked at', asyn
 
 test('destroy releases every shared registration this layer took', async (t) => {
   const app = harness(t);
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [vehicle('bus-1', 42.36, -71.06, Date.now() / 1000)],
-      {
-        fetchedAt: Date.now(),
-      },
-    ),
-  }));
+  serveMbta(app, () => [vehicle('bus-1', 42.36, -71.06, Date.now() / 1000)]);
   app.layer.enable(app.viewer);
   await app.layer.update();
   assert.ok(app.pickOwners.has('transit'));
@@ -1227,17 +1108,7 @@ test('two layers built from the factory share no state', async (t) => {
       },
     },
   });
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [vehicle('bus-1', 42.36, -71.06, Date.now() / 1000)],
-      {
-        fetchedAt: Date.now(),
-      },
-    ),
-  }));
+  serveMbta(app, () => [vehicle('bus-1', 42.36, -71.06, Date.now() / 1000)]);
   app.layer.enable(app.viewer);
   await app.layer.update();
   assert.equal(app.vehicles().length, 1);
@@ -1261,17 +1132,7 @@ test('a proxy cooldown reaches the row as a time, not just a shrug', async (t) =
   assert.equal(stats.retryInSec, 60);
 
   // A successful poll clears both the error and the countdown.
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [vehicle('bus-1', 42.36, -71.06, Date.now() / 1000)],
-      {
-        fetchedAt: Date.now(),
-      },
-    ),
-  }));
+  serveMbta(app, () => [vehicle('bus-1', 42.36, -71.06, Date.now() / 1000)]);
   app.advance(TRANSIT_POLL_MS);
   await app.layer.update();
   const recovered = app.layer.getStats();
@@ -1281,17 +1142,7 @@ test('a proxy cooldown reaches the row as a time, not just a shrug', async (t) =
 
 test('the coverage text ages a quiet feed by the same rule the row state uses', async (t) => {
   const app = harness(t);
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [vehicle('bus-1', 42.36, -71.06, Date.now() / 1000)],
-      {
-        fetchedAt: Date.now(),
-      },
-    ),
-  }));
+  serveMbta(app, () => [vehicle('bus-1', 42.36, -71.06, Date.now() / 1000)]);
   app.layer.enable(app.viewer);
   await app.layer.update();
   assert.equal(app.layer.getStats().coverage, 'MBTA 1');
@@ -1314,10 +1165,7 @@ test('a parked fleet that keeps reporting the same position stops asking for fra
     vehicle('bus-1', 42.36, -71.06, reported()),
     vehicle('bus-2', 42.37, -71.07, reported()),
   ];
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot('mbta', 'MBTA', parked(), { fetchedAt: Date.now() }),
-  }));
+  serveMbta(app, () => parked());
   app.layer.enable(app.viewer);
   await app.layer.update();
   app.frame();
@@ -1343,18 +1191,10 @@ test('a parked fleet that keeps reporting the same position stops asking for fra
 
   // One vehicle finally moves: that IS work, and the hold comes back.
   app.advance(TRANSIT_POLL_MS);
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [
-        vehicle('bus-1', 42.3605, -71.06, reported()),
-        vehicle('bus-2', 42.37, -71.07, reported()),
-      ],
-      { fetchedAt: Date.now() },
-    ),
-  }));
+  serveMbta(app, () => [
+    vehicle('bus-1', 42.3605, -71.06, reported()),
+    vehicle('bus-2', 42.37, -71.07, reported()),
+  ]);
   await app.layer.update();
   assert.equal(
     app.holds().includes('transit'),
@@ -1390,15 +1230,7 @@ test('a vehicle a placement holds still stops asking for frames, and moves on wh
       }),
     },
   });
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [vehicle('bus-1', 42.36, -71.06, reported())],
-      { fetchedAt: Date.now() },
-    ),
-  }));
+  serveMbta(app, () => [vehicle('bus-1', 42.36, -71.06, reported())]);
   app.layer.enable(app.viewer);
   await app.layer.update();
   app.settle();
@@ -1483,33 +1315,13 @@ test('a vehicle a placement draws is shown from a high camera, as one it does no
 test('the last vehicle leaving mid-segment takes the render hold with it', async (t) => {
   const app = harness(t);
   const fetchedAt = Date.now();
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [vehicle('bus-1', 42.36, -71.06, reported())],
-      {
-        fetchedAt: Date.now(),
-      },
-    ),
-  }));
+  serveMbta(app, () => [vehicle('bus-1', 42.36, -71.06, reported())]);
   app.layer.enable(app.viewer);
   await app.layer.update();
 
   // Second poll: the vehicle has somewhere to go, so the hold is taken.
   app.advance(TRANSIT_POLL_MS);
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [vehicle('bus-1', 42.362, -71.06, reported())],
-      {
-        fetchedAt: Date.now(),
-      },
-    ),
-  }));
+  serveMbta(app, () => [vehicle('bus-1', 42.362, -71.06, reported())]);
   await app.layer.update();
   app.advance(TRANSIT_POLL_MS / 3);
   app.frame();
@@ -1537,28 +1349,17 @@ test('only the vehicles near the view are animated frame by frame', async (t) =>
   // Far enough away to be outside any plausible inflation of the harness view
   // rectangle, but well inside the feed's coverage circle.
   const far = vehicle('far', 42.62, -71.44, reported());
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot('mbta', 'MBTA', [near, far], { fetchedAt: Date.now() }),
-  }));
+  serveMbta(app, () => [near, far]);
   app.layer.enable(app.viewer);
   await app.layer.update();
   app.frame();
 
   // Both move on the next poll; only the one in view is armed at all.
   app.advance(TRANSIT_POLL_MS);
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [
-        vehicle('near', 42.3625, -71.06, reported()),
-        vehicle('far', 42.6225, -71.44, reported()),
-      ],
-      { fetchedAt: Date.now() },
-    ),
-  }));
+  serveMbta(app, () => [
+    vehicle('near', 42.3625, -71.06, reported()),
+    vehicle('far', 42.6225, -71.44, reported()),
+  ]);
   await app.layer.update();
   const byId = new Map(app.vehicles().map((entry) => [entry.record.id, entry]));
   app.advance(6000);
@@ -1650,10 +1451,7 @@ test('a lone visible vehicle is offered to DETECT out of a large hidden fleet', 
     // index zero, which would hide the fault rather than show it.
     if (i === 0) vehicles.push(vehicle('visible', 42.361, -71.058, now / 1000));
   }
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot('mbta', 'MBTA', vehicles, { fetchedAt: Date.now() }),
-  }));
+  serveMbta(app, () => vehicles);
   app.layer.enable(app.viewer);
   await app.layer.update();
   app.settle();
@@ -1675,10 +1473,7 @@ test('removing one vehicle does not hand every label to its neighbour', async (t
   for (let i = 0; i < 40; i += 1) {
     fleet.push(vehicle(`bus-${i}`, 42.35 + i * 0.001, -71.06, now / 1000));
   }
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot('mbta', 'MBTA', fleet, { fetchedAt: Date.now() }),
-  }));
+  serveMbta(app, () => fleet);
   app.layer.enable(app.viewer);
   await app.layer.update();
   app.settle();
@@ -1692,15 +1487,9 @@ test('removing one vehicle does not hand every label to its neighbour', async (t
   // takes MISSED_POLLS_TO_DROP polls of silence for it to actually leave.
   for (let poll = 0; poll < MISSED_POLLS_TO_DROP + 1; poll += 1) {
     app.advance(TRANSIT_POLL_MS);
-    app.serve('mbta', () => ({
-      status: 200,
-      body: snapshot(
-        'mbta',
-        'MBTA',
-        fleet.slice(1).map((v) => ({ ...v, timestamp: Date.now() / 1000 })),
-        { fetchedAt: Date.now() },
-      ),
-    }));
+    serveMbta(app, () =>
+      fleet.slice(1).map((v) => ({ ...v, timestamp: Date.now() / 1000 })),
+    );
     await app.layer.update();
     app.frame();
   }
@@ -1734,12 +1523,7 @@ test('a vehicle inside the view drives out of it instead of vanishing', async (t
     view: { west: -71.062, south: 42.3585, east: -71.058, north: 42.3605 },
   });
   const now = Date.now();
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot('mbta', 'MBTA', [vehicle('b', 42.36, -71.06, now / 1000)], {
-      fetchedAt: Date.now(),
-    }),
-  }));
+  serveMbta(app, () => [vehicle('b', 42.36, -71.06, now / 1000)]);
   app.layer.enable(app.viewer);
   await app.layer.update();
   app.settle();
@@ -1749,15 +1533,7 @@ test('a vehicle inside the view drives out of it instead of vanishing', async (t
   // Next fix is beyond the inflated rectangle; the vehicle is still drawn
   // inside it.
   app.advance(TRANSIT_POLL_MS);
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [vehicle('b', 42.3625, -71.06, Date.now() / 1000)],
-      { fetchedAt: Date.now() },
-    ),
-  }));
+  serveMbta(app, () => [vehicle('b', 42.3625, -71.06, Date.now() / 1000)]);
   await app.layer.update();
   app.frame();
 
@@ -1777,12 +1553,7 @@ test('the selected card lands where the vehicle stopped, not short of it', async
   // segment ends left it a few metres behind, and then the render hold was
   // released with no frame scheduled to close the gap.
   const app = harness(t);
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot('mbta', 'MBTA', [vehicle('b', 42.36, -71.06, reported())], {
-      fetchedAt: Date.now(),
-    }),
-  }));
+  serveMbta(app, () => [vehicle('b', 42.36, -71.06, reported())]);
   app.layer.enable(app.viewer);
   await app.layer.update();
   // Its floor resolves, so the marker is shown: a hidden vehicle has no card.
@@ -1795,17 +1566,7 @@ test('the selected card lands where the vehicle stopped, not short of it', async
   // Stamped exactly one poll after the first fix, so the vehicle's own lag
   // equals the feed's and the clock runs at exactly 1x through the segment.
   const secondFixS = (entry.fixes[0].t + TRANSIT_POLL_MS) / 1000;
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [vehicle('b', 42.3625, -71.0625, secondFixS)],
-      {
-        fetchedAt: Date.now(),
-      },
-    ),
-  }));
+  serveMbta(app, () => [vehicle('b', 42.3625, -71.0625, secondFixS)]);
   await app.layer.update();
 
   // Codex's sequence: a card refresh 200 ms before the segment completes, then
@@ -1849,11 +1610,7 @@ test('a parked fleet over unsampled ground off screen stops asking for frames', 
   for (let i = 0; i < 200; i += 1) {
     parked.push(vehicle(`p-${i}`, 42.5 + i * 0.003, -71.4, now / 1000));
   }
-  const serve = () => ({
-    status: 200,
-    body: snapshot('mbta', 'MBTA', parked, { fetchedAt: Date.now() }),
-  });
-  app.serve('mbta', serve);
+  serveMbta(app, () => parked);
   app.layer.enable(app.viewer);
   await app.layer.update();
   app.frame();
@@ -1861,7 +1618,7 @@ test('a parked fleet over unsampled ground off screen stops asking for frames', 
   // Eight polls — two minutes — with nothing moving and nothing in view.
   for (let poll = 0; poll < 8; poll += 1) {
     app.advance(TRANSIT_POLL_MS);
-    app.serve('mbta', serve);
+    serveMbta(app, () => parked);
     await app.layer.update();
     for (let f = 0; f < 4; f += 1) {
       app.advance(100);
@@ -1888,10 +1645,7 @@ test('a height that arrives from a neighbour lifts a stationary vehicle too', as
   const app = harness(t, { floorAt: () => 125 });
   const now = Date.now();
   const parked = vehicle('still', 42.36, -71.06, now / 1000);
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot('mbta', 'MBTA', [parked], { fetchedAt: Date.now() }),
-  }));
+  serveMbta(app, () => [parked]);
   app.layer.enable(app.viewer);
   await app.layer.update();
 
@@ -1904,15 +1658,7 @@ test('a height that arrives from a neighbour lifts a stationary vehicle too', as
   app.ground._warm.set(app.ground._key(42.36, -71.06), 125);
 
   app.advance(TRANSIT_POLL_MS);
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [vehicle('still', 42.36, -71.06, Date.now() / 1000)],
-      { fetchedAt: Date.now() },
-    ),
-  }));
+  serveMbta(app, () => [vehicle('still', 42.36, -71.06, Date.now() / 1000)]);
   await app.layer.update();
   app.frame();
 
@@ -1999,15 +1745,7 @@ test('a vehicle with no surface yet waits instead of floating', async (t) => {
   const app = harness(t, {
     floorAt: () => (allowSamples ? 30 : undefined),
   });
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [vehicle('b', 42.36, -71.06, Date.now() / 1000)],
-      { fetchedAt: Date.now() },
-    ),
-  }));
+  serveMbta(app, () => [vehicle('b', 42.36, -71.06, Date.now() / 1000)]);
   app.layer.enable(app.viewer);
   await app.layer.update();
   app.frame();
@@ -2042,10 +1780,7 @@ test('a new vehicle borrows the lowest surface resolved nearby', async (t) => {
     vehicle('c', 42.36, -71.061, Date.now() / 1000),
     vehicle('d', 42.361, -71.061, Date.now() / 1000),
   ];
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot('mbta', 'MBTA', early, { fetchedAt: Date.now() }),
-  }));
+  serveMbta(app, () => early);
   app.layer.enable(app.viewer);
   await app.layer.update();
   app.settle();
@@ -2054,19 +1789,11 @@ test('a new vehicle borrows the lowest surface resolved nearby', async (t) => {
   // neighbours are warm. The shared floor wants at least three resolved
   // neighbours before it will speak for a cold cell.
   app.advance(TRANSIT_POLL_MS);
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [
-        ...early.map((v) => ({ ...v, timestamp: Date.now() / 1000 })),
-        // Its own cell is cold; the three around it are warm.
-        vehicle('second', 42.3605, -71.0605, Date.now() / 1000),
-      ],
-      { fetchedAt: Date.now() },
-    ),
-  }));
+  serveMbta(app, () => [
+    ...early.map((v) => ({ ...v, timestamp: Date.now() / 1000 })),
+    // Its own cell is cold; the three around it are warm.
+    vehicle('second', 42.3605, -71.0605, Date.now() / 1000),
+  ]);
   await app.layer.update();
 
   const second = app.vehicles().find((e) => e.record.id === 'second');
@@ -2093,10 +1820,7 @@ test('only the vehicles in view have their ground warmed', async (t) => {
       vehicle(`far-${i}`, 42.6 + i * 0.002, -71.45, Date.now() / 1000),
     );
   }
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot('mbta', 'MBTA', fleet, { fetchedAt: Date.now() }),
-  }));
+  serveMbta(app, () => fleet);
   app.layer.enable(app.viewer);
   await app.layer.update();
   app.settle();
@@ -2119,12 +1843,7 @@ test('a segment climbs from the ground it left to the ground it reaches', async 
   // drawn — so each fix carries its own floor.
   const app = harness(t, { floorAt: (lat) => (lat > 42.3615 ? 100 : 10) });
   const start = Date.now();
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot('mbta', 'MBTA', [vehicle('b', 42.36, -71.06, reported())], {
-      fetchedAt: Date.now(),
-    }),
-  }));
+  serveMbta(app, () => [vehicle('b', 42.36, -71.06, reported())]);
   app.layer.enable(app.viewer);
   await app.layer.update();
   app.settle();
@@ -2135,12 +1854,7 @@ test('a segment climbs from the ground it left to the ground it reaches', async 
   // the poll resolves it immediately, on the fix that stands there.
   app.ground._warm.set(app.ground._key(42.362, -71.06), 100);
   app.advance(TRANSIT_POLL_MS);
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot('mbta', 'MBTA', [vehicle('b', 42.362, -71.06, reported())], {
-      fetchedAt: Date.now(),
-    }),
-  }));
+  serveMbta(app, () => [vehicle('b', 42.362, -71.06, reported())]);
   await app.layer.update();
   assert.ok(Math.abs(entry.heightM - 101.5) < 1, 'the destination is uphill');
   const height = () =>
@@ -2181,12 +1895,7 @@ test('a segment climbs from the ground it left to the ground it reaches', async 
 });
 test('a lone impossible fix leaves the displayed vehicle and health untouched', async (t) => {
   const app = harness(t, { floorAt: () => 5 });
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot('mbta', 'MBTA', [vehicle('b', 42.36, -71.06, reported())], {
-      fetchedAt: Date.now(),
-    }),
-  }));
+  serveMbta(app, () => [vehicle('b', 42.36, -71.06, reported())]);
   app.layer.enable(app.viewer);
   await app.layer.update();
   app.settle();
@@ -2194,12 +1903,7 @@ test('a lone impossible fix leaves the displayed vehicle and health untouched', 
 
   // Eleven kilometres in one poll: 2,600 km/h.
   app.advance(TRANSIT_POLL_MS);
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot('mbta', 'MBTA', [vehicle('b', 42.46, -71.06, reported())], {
-      fetchedAt: Date.now(),
-    }),
-  }));
+  serveMbta(app, () => [vehicle('b', 42.46, -71.06, reported())]);
   await app.layer.update();
 
   assert.equal(
@@ -2219,42 +1923,26 @@ test('a lone impossible fix leaves the displayed vehicle and health untouched', 
 });
 test('the detection metric says what the display is doing, not what the feed claims', async (t) => {
   const app = harness(t);
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [
-        vehicle('m', 42.36, -71.06, Date.now() / 1000, {
-          routeId: 'Green-C',
-          status: 'STOPPED_AT',
-          stopId: '49001',
-        }),
-      ],
-      { fetchedAt: Date.now() },
-    ),
-  }));
+  serveMbta(app, () => [
+    vehicle('m', 42.36, -71.06, Date.now() / 1000, {
+      routeId: 'Green-C',
+      status: 'STOPPED_AT',
+      stopId: '49001',
+    }),
+  ]);
   app.layer.enable(app.viewer);
   await app.layer.update();
   app.settle();
 
   // It moves; the feed still says STOPPED_AT.
   app.advance(TRANSIT_POLL_MS);
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [
-        vehicle('m', 42.362, -71.06, Date.now() / 1000, {
-          routeId: 'Green-C',
-          status: 'STOPPED_AT',
-          stopId: '49001',
-        }),
-      ],
-      { fetchedAt: Date.now() },
-    ),
-  }));
+  serveMbta(app, () => [
+    vehicle('m', 42.362, -71.06, Date.now() / 1000, {
+      routeId: 'Green-C',
+      status: 'STOPPED_AT',
+      stopId: '49001',
+    }),
+  ]);
   await app.layer.update();
   app.advance(2_000);
   app.frame();
@@ -2275,21 +1963,13 @@ test('the detection metric says what the display is doing, not what the feed cla
 
 test('the card keeps the operator claim as a report and says the mode plainly', async (t) => {
   const app = harness(t);
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [
-        vehicle('m', 42.36, -71.06, Date.now() / 1000, {
-          routeId: 'Red',
-          status: 'STOPPED_AT',
-          stopId: '49001',
-        }),
-      ],
-      { fetchedAt: Date.now() },
-    ),
-  }));
+  serveMbta(app, () => [
+    vehicle('m', 42.36, -71.06, Date.now() / 1000, {
+      routeId: 'Red',
+      status: 'STOPPED_AT',
+      stopId: '49001',
+    }),
+  ]);
   app.layer.enable(app.viewer);
   await app.layer.update();
   app.settle();
@@ -2320,17 +2000,7 @@ test('a vehicle reporting every 30 s moves continuously at its own speed', async
   const firstFixAt = start - AGE_MS;
   let fixAt = firstFixAt;
   let north = 42.36;
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [vehicle('b', north, -71.06, fixAt / 1000)],
-      {
-        fetchedAt: Date.now(),
-      },
-    ),
-  }));
+  serveMbta(app, () => [vehicle('b', north, -71.06, fixAt / 1000)]);
   app.layer.enable(app.viewer);
   await app.layer.update();
   app.settle();
@@ -2395,12 +2065,7 @@ test('the selected card anchors to the live marker every frame and republishes t
   // is re-sent only when it has changed.
   const app = harness(t);
   const start = Date.now();
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot('mbta', 'MBTA', [vehicle('b', 42.36, -71.06, reported())], {
-      fetchedAt: Date.now(),
-    }),
-  }));
+  serveMbta(app, () => [vehicle('b', 42.36, -71.06, reported())]);
   app.layer.enable(app.viewer);
   await app.layer.update();
   // Its floor resolves, so the marker is shown: a hidden vehicle has no card.
@@ -2418,17 +2083,7 @@ test('the selected card anchors to the live marker every frame and republishes t
   assert.equal(typeof card.position, 'function', 'the anchor is a getter');
 
   app.advance(TRANSIT_POLL_MS);
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [vehicle('b', 42.3625, -71.0625, reported())],
-      {
-        fetchedAt: Date.now(),
-      },
-    ),
-  }));
+  serveMbta(app, () => [vehicle('b', 42.3625, -71.0625, reported())]);
   await app.layer.update();
   // Frames at 16 ms through the segment: the anchor never lags the marker,
   // whether or not a card refresh happened to run.
@@ -2481,10 +2136,7 @@ test('DETECT gets the same candidate list back until something could have change
         routeId: `${i}`,
       }),
     );
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot('mbta', 'MBTA', fleet(), { fetchedAt: Date.now() }),
-  }));
+  serveMbta(app, () => fleet());
   app.layer.enable(app.viewer);
   await app.layer.update();
   app.settle();
@@ -2531,19 +2183,11 @@ test('DETECT gets the same candidate list back until something could have change
 
 test('under FLIR and NVG every sprite is white-hot with a dark halo, and selection cannot undo it', async (t) => {
   const app = harness(t);
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [
-        vehicle('bus', 42.36, -71.06, reported(), { routeId: '742' }),
-        vehicle('metro', 42.361, -71.06, reported(), { routeId: 'Red' }),
-        vehicle('tram', 42.362, -71.06, reported(), { routeId: 'Green-E' }),
-      ],
-      { fetchedAt: Date.now() },
-    ),
-  }));
+  serveMbta(app, () => [
+    vehicle('bus', 42.36, -71.06, reported(), { routeId: '742' }),
+    vehicle('metro', 42.361, -71.06, reported(), { routeId: 'Red' }),
+    vehicle('tram', 42.362, -71.06, reported(), { routeId: 'Green-E' }),
+  ]);
   app.layer.enable(app.viewer);
   await app.layer.update();
   app.settle();
@@ -2601,12 +2245,7 @@ test('under FLIR and NVG every sprite is white-hot with a dark halo, and selecti
 
 test('a cockpit vision override wins over the map style while it lasts, and destroy stops listening', async (t) => {
   const app = harness(t);
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot('mbta', 'MBTA', [vehicle('b', 42.36, -71.06, reported())], {
-      fetchedAt: Date.now(),
-    }),
-  }));
+  serveMbta(app, () => [vehicle('b', 42.36, -71.06, reported())]);
   app.layer.enable(app.viewer);
   await app.layer.update();
   app.settle();
@@ -2639,19 +2278,11 @@ test('a cockpit vision override wins over the map style while it lasts, and dest
 
 test('DETECT contacts carry a bracket tier per mode, keyed or keyless alike', async (t) => {
   const app = harness(t);
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [
-        vehicle('bus', 42.36, -71.06, reported(), { routeId: '742' }),
-        vehicle('metro', 42.361, -71.06, reported(), { routeId: 'Red' }),
-        vehicle('tram', 42.362, -71.06, reported(), { routeId: 'Green-E' }),
-      ],
-      { fetchedAt: Date.now() },
-    ),
-  }));
+  serveMbta(app, () => [
+    vehicle('bus', 42.36, -71.06, reported(), { routeId: '742' }),
+    vehicle('metro', 42.361, -71.06, reported(), { routeId: 'Red' }),
+    vehicle('tram', 42.362, -71.06, reported(), { routeId: 'Green-E' }),
+  ]);
   app.layer.enable(app.viewer);
   await app.layer.update();
   app.settle();
@@ -2671,19 +2302,11 @@ test('the floor cycle samples the rendered mesh for the cells it warms, with its
   // proximity gate — with the layer's billboards excluded so a vertical probe
   // cannot land on a bus.
   const app = harness(t, { floorAt: () => 5 });
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [
-        vehicle('a', 42.36, -71.06, reported()),
-        vehicle('b', 42.37, -71.07, reported()),
-        vehicle('far', 42.62, -71.44, reported()),
-      ],
-      { fetchedAt: Date.now() },
-    ),
-  }));
+  serveMbta(app, () => [
+    vehicle('a', 42.36, -71.06, reported()),
+    vehicle('b', 42.37, -71.07, reported()),
+    vehicle('far', 42.62, -71.44, reported()),
+  ]);
   app.layer.enable(app.viewer);
   await app.layer.update();
   app.settle();
@@ -2724,10 +2347,7 @@ test('a failing prefix of cells cannot starve the vehicle behind it of a floor',
   const fleet = Array.from({ length: count }, (_, i) =>
     vehicle(`v${i}`, 42.36 + i * 0.002, -71.06, reported()),
   );
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot('mbta', 'MBTA', fleet, { fetchedAt: Date.now() }),
-  }));
+  serveMbta(app, () => fleet);
   app.layer.enable(app.viewer);
   await app.layer.update();
   // The unique-cell budget resets per poll; the next poll rotates priority.
@@ -2749,12 +2369,7 @@ test('a resolved floor still adopts a later mesh sample or a regime change on a 
   // changes to a 50 m mesh sample; the parked entry kept 11.5 m for ever
   // because ingestion only re-read a resolved height when the cell changed.
   const app = harness(t, { floorAt: () => 10 });
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot('mbta', 'MBTA', [vehicle('p', 42.36, -71.06, reported())], {
-      fetchedAt: Date.now(),
-    }),
-  }));
+  serveMbta(app, () => [vehicle('p', 42.36, -71.06, reported())]);
   app.layer.enable(app.viewer);
   await app.layer.update();
   app.settle();
@@ -2790,12 +2405,7 @@ test('a stamp an hour ahead is bounded, so the honest fixes that follow are not 
   // survived eviction because every refused snapshot refreshed its record.
   const app = harness(t, { floorAt: () => 5 });
   const ahead = (Date.now() + 3_600_000) / 1000;
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot('mbta', 'MBTA', [vehicle('c', 42.36, -71.06, ahead)], {
-      fetchedAt: Date.now(),
-    }),
-  }));
+  serveMbta(app, () => [vehicle('c', 42.36, -71.06, ahead)]);
   app.layer.enable(app.viewer);
   await app.layer.update();
   app.settle();
@@ -2810,12 +2420,7 @@ test('a stamp an hour ahead is bounded, so the honest fixes that follow are not 
     app.advance(TRANSIT_POLL_MS);
     north += 0.0018;
     const fixAtS = (Date.now() - 2_000) / 1000;
-    app.serve('mbta', () => ({
-      status: 200,
-      body: snapshot('mbta', 'MBTA', [vehicle('c', north, -71.06, fixAtS)], {
-        fetchedAt: Date.now(),
-      }),
-    }));
+    serveMbta(app, () => [vehicle('c', north, -71.06, fixAtS)]);
     await app.layer.update();
   }
   assert.ok(
@@ -2833,12 +2438,7 @@ test('a stamp an hour ahead is bounded, so the honest fixes that follow are not 
 test('a run of out-of-order fixes restarts the history instead of freezing the vehicle', async (t) => {
   const app = harness(t, { floorAt: () => 5 });
   const later = (Date.now() + 5_000) / 1000; // within tolerance, but newer than what follows
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot('mbta', 'MBTA', [vehicle('o', 42.36, -71.06, later)], {
-      fetchedAt: Date.now(),
-    }),
-  }));
+  serveMbta(app, () => [vehicle('o', 42.36, -71.06, later)]);
   app.layer.enable(app.viewer);
   await app.layer.update();
   app.settle();
@@ -2848,17 +2448,9 @@ test('a run of out-of-order fixes restarts the history instead of freezing the v
   for (let poll = 1; poll <= ORDER_REJECTS_BEFORE_RESET; poll += 1) {
     app.advance(TRANSIT_POLL_MS);
     const stale = later - 60 + poll;
-    app.serve('mbta', () => ({
-      status: 200,
-      body: snapshot(
-        'mbta',
-        'MBTA',
-        [vehicle('o', 42.365, -71.06, stale, { label: `poll${poll}` })],
-        {
-          fetchedAt: Date.now(),
-        },
-      ),
-    }));
+    serveMbta(app, () => [
+      vehicle('o', 42.365, -71.06, stale, { label: `poll${poll}` }),
+    ]);
     await app.layer.update();
     if (poll < ORDER_REJECTS_BEFORE_RESET) {
       assert.equal(
@@ -2886,15 +2478,7 @@ test('a run of out-of-order fixes restarts the history instead of freezing the v
 test('selected trail and marker share revised start floors, with unknown history left as gaps', async (t) => {
   const app = harness(t, { floorAt: () => 10 });
   let position = 42.36;
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [vehicle('trail', position, -71.06, reported())],
-      { fetchedAt: Date.now() },
-    ),
-  }));
+  serveMbta(app, () => [vehicle('trail', position, -71.06, reported())]);
   app.layer.enable(app.viewer);
   await app.layer.update();
   app.settle();
@@ -2940,12 +2524,7 @@ test('selected trail and marker share revised start floors, with unknown history
 
 test('selection restores retained history without changing clock or health; churn aborts late reads', async (t) => {
   const app = harness(t);
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot('mbta', 'MBTA', [vehicle('b', 42.36, -71.06, reported())], {
-      fetchedAt: Date.now(),
-    }),
-  }));
+  serveMbta(app, () => [vehicle('b', 42.36, -71.06, reported())]);
   app.layer.enable(app.viewer);
   await app.layer.update();
   app.settle();
@@ -3013,15 +2592,9 @@ test('a long selected history shortens its oldest geometry before sacrificing th
   const app = harness(t);
   const parts = app.layer._transitPartsForTest();
   const { mergeHistory, seek } = await import('../../data/contactPlayback.js');
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [vehicle('long', 42.36, -71.06, reported(), { routeId: 'CR-1' })],
-      { fetchedAt: Date.now() },
-    ),
-  }));
+  serveMbta(app, () => [
+    vehicle('long', 42.36, -71.06, reported(), { routeId: 'CR-1' }),
+  ]);
   app.layer.enable(app.viewer);
   await app.layer.update();
   app.settle();
@@ -3063,15 +2636,9 @@ test('sparse rail reports preserve a bounded marker corridor with and without se
   const { seek } = await import('../../data/contactPlayback.js');
   let latitude = 42.36 - 16000 / 111320;
   let timestamp = reported();
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [vehicle('sparse', latitude, -71.06, timestamp, { routeId: 'CR-1' })],
-      { fetchedAt: Date.now() },
-    ),
-  }));
+  serveMbta(app, () => [
+    vehicle('sparse', latitude, -71.06, timestamp, { routeId: 'CR-1' }),
+  ]);
   app.layer.enable(app.viewer);
   await app.layer.update();
   app.settle();
@@ -3117,18 +2684,10 @@ test('sparse rail reports preserve a bounded marker corridor with and without se
 test('missing rectangle still rejects the far side, and frustum rejection wins', async (t) => {
   const app = harness(t, { altitude: 100_000 });
   app.viewer.camera.computeViewRectangle = () => undefined;
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [
-        vehicle('near', 42.36, -71.06, reported()),
-        vehicle('far', -42.36, 108.94, reported()),
-      ],
-      { fetchedAt: Date.now() },
-    ),
-  }));
+  serveMbta(app, () => [
+    vehicle('near', 42.36, -71.06, reported()),
+    vehicle('far', -42.36, 108.94, reported()),
+  ]);
   app.layer.enable(app.viewer);
   await app.layer.update();
   app.advance(250);
@@ -3148,15 +2707,7 @@ test('missing rectangle still rejects the far side, and frustum rejection wins',
 test('motion transitions migrate billboards and update cached positions; disable clears owners', async (t) => {
   const app = harness(t);
   let latitude = 42.36;
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [vehicle('bus', latitude, -71.06, reported())],
-      { fetchedAt: Date.now() },
-    ),
-  }));
+  serveMbta(app, () => [vehicle('bus', latitude, -71.06, reported())]);
   app.layer.enable(app.viewer);
   await app.layer.update();
   app.settle();
@@ -3197,15 +2748,9 @@ test('motion transitions migrate billboards and update cached positions; disable
 
 test('every styling path retains the mode palette and exact unpadded size', async (t) => {
   const app = harness(t);
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [vehicle('bus', 42.36, -71.06, reported(), { routeId: '741' })],
-      { fetchedAt: Date.now() },
-    ),
-  }));
+  serveMbta(app, () => [
+    vehicle('bus', 42.36, -71.06, reported(), { routeId: '741' }),
+  ]);
   app.layer.enable(app.viewer);
   await app.layer.update();
   app.settle();
@@ -3443,17 +2988,11 @@ test('selection churn releases past geometry on every retained vehicle', async (
   const app = harness(t, { floorAt: () => 10 });
   const { mergeHistory, seek } = await import('../../data/contactPlayback.js');
   const parts = app.layer._transitPartsForTest();
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      Array.from({ length: 5 }, (_, i) =>
-        vehicle(`churn-${i}`, 42.36, -71.06, reported()),
-      ),
-      { fetchedAt: Date.now() },
+  serveMbta(app, () =>
+    Array.from({ length: 5 }, (_, i) =>
+      vehicle(`churn-${i}`, 42.36, -71.06, reported()),
     ),
-  }));
+  );
   app.layer.enable(app.viewer);
   await app.layer.update();
   app.settle();
@@ -3579,15 +3118,7 @@ test('keyless loaded terrain resolves a pending surface without needing a frame 
   let floor;
   app.viewer.scene.globe.show = true;
   app.viewer.scene.globe.getHeight = () => floor;
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [vehicle('bus', 42.36, -71.06, reported())],
-      { fetchedAt: Date.now() },
-    ),
-  }));
+  serveMbta(app, () => [vehicle('bus', 42.36, -71.06, reported())]);
   app.layer.enable(app.viewer);
   await app.layer.update();
   const entry = app.vehicles()[0],
@@ -3771,15 +3302,9 @@ test('intercepted scripted reports resolve their explicit floor and wake without
   const app = harness(t, { floorAt: () => undefined });
   app.layer._setTransitFixtureFloorsForTest(['mbta:sim-straight'], 20);
   let latitude = BOSTON.lat;
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [vehicle('sim-straight', latitude, BOSTON.lon, reported())],
-      { fetchedAt: Date.now() },
-    ),
-  }));
+  serveMbta(app, () => [
+    vehicle('sim-straight', latitude, BOSTON.lon, reported()),
+  ]);
   app.layer.enable(app.viewer);
   await app.layer.update();
   app.advance(15000);
@@ -4098,7 +3623,7 @@ test('sensor clicks map displayed pixels into the pre-shader pick buffer', async
   let preset = 'surveillance';
   const stage = (name) =>
     name === preset ? { enabled: true, uniforms } : undefined;
-  registerStyleStages(scene, {
+  registerStyleStages(app.viewer, {
     get surveillance() {
       return stage('surveillance');
     },
@@ -4122,15 +3647,9 @@ test('rejected route metadata stays on the accepted bus', async (t) => {
   const app = harness(t);
   let routeId = '741',
     latitude = 42.36;
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [vehicle('b', latitude, -71.06, reported(), { routeId })],
-      { fetchedAt: Date.now() },
-    ),
-  }));
+  serveMbta(app, () => [
+    vehicle('b', latitude, -71.06, reported(), { routeId }),
+  ]);
   app.layer.enable(app.viewer);
   await app.layer.update();
   app.settle();
@@ -4157,15 +3676,7 @@ test('rejected route metadata stays on the accepted bus', async (t) => {
 test('reject then selected history backfill cannot resurrect a 111 km displacement', async (t) => {
   const app = harness(t);
   let latitude = 42.36;
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [vehicle('b', latitude, -71.06, reported())],
-      { fetchedAt: Date.now() },
-    ),
-  }));
+  serveMbta(app, () => [vehicle('b', latitude, -71.06, reported())]);
   app.layer.enable(app.viewer);
   await app.layer.update();
   app.settle();
@@ -4503,6 +4014,7 @@ test('parked transit reprojects held and reported courses at the bounded camera 
         holdContinuousRender: noop,
         releaseContinuousRender: noop,
       },
+      ground: { GROUND_FLOOR_LIFT_M: 0 },
     },
     parts: { height: { nearGround: () => false }, trails: { update: noop } },
   });
@@ -4567,15 +4079,7 @@ test('parked transit reprojects held and reported courses at the bounded camera 
 
 test('a view with no feed reads its coverage prompt, not an undated feed', async (t) => {
   const app = harness(t);
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [vehicle('bus-1', 42.36, -71.06, Date.now() / 1000)],
-      { fetchedAt: Date.now() },
-    ),
-  }));
+  serveMbta(app, () => [vehicle('bus-1', 42.36, -71.06, Date.now() / 1000)]);
   app.layer.enable(app.viewer);
   await app.layer.update();
   assert.ok(app.layer.getStats().lastUpdate, 'Boston has a dated snapshot');
@@ -4619,21 +4123,13 @@ test('the prompt names the altitude the gate opens at, not 3,000 km', async (t) 
 /** A bus running north a step a poll, polled `polls` times; its key. */
 async function busRunningNorth(app, polls = 4, extra = {}) {
   let step = 0;
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [
-        vehicle('bus-1', 42.36 + step * 0.001, -71.06, reported(), {
-          stopId: 'place-1',
-          status: 'IN_TRANSIT_TO',
-          ...extra,
-        }),
-      ],
-      { fetchedAt: Date.now() },
-    ),
-  }));
+  serveMbta(app, () => [
+    vehicle('bus-1', 42.36 + step * 0.001, -71.06, reported(), {
+      stopId: 'place-1',
+      status: 'IN_TRANSIT_TO',
+      ...extra,
+    }),
+  ]);
   app.layer.enable(app.viewer);
   await app.layer.update();
   app.settle();
@@ -4817,10 +4313,7 @@ test('a held vehicle hides, keeps moving out of view, and lets go when it goes',
 
   app.layer.setCockpitSubject(key);
   app.silence('mbta');
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot('mbta', 'MBTA', [], { fetchedAt: Date.now() }),
-  }));
+  serveMbta(app, () => []);
   for (let i = 0; i < MISSED_POLLS_TO_DROP + 1; i += 1) {
     app.run(TRANSIT_POLL_MS);
     await app.layer.update();
@@ -4869,15 +4362,9 @@ test('a held parked vehicle draws no icon; let go, it draws its icon again', asy
   // A parked bus with no course: nothing moves or turns its icon, so only the
   // hold itself can take the icon out of the set that draws it.
   const app = harness(t);
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [vehicle('bus-1', 42.36, -71.06, reported(), { stopId: 'place-1' })],
-      { fetchedAt: Date.now() },
-    ),
-  }));
+  serveMbta(app, () => [
+    vehicle('bus-1', 42.36, -71.06, reported(), { stopId: 'place-1' }),
+  ]);
   app.layer.enable(app.viewer);
   await app.layer.update();
   app.settle();
@@ -4912,18 +4399,10 @@ test('a held parked vehicle draws no icon; let go, it draws its icon again', asy
 
 test('a hold moved to another vehicle lets the first go out of view', async (t) => {
   const app = harness(t);
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [
-        vehicle('bus-1', 42.36, -71.06, reported()),
-        vehicle('bus-2', 42.37, -71.05, reported()),
-      ],
-      { fetchedAt: Date.now() },
-    ),
-  }));
+  serveMbta(app, () => [
+    vehicle('bus-1', 42.36, -71.06, reported()),
+    vehicle('bus-2', 42.37, -71.05, reported()),
+  ]);
   app.layer.enable(app.viewer);
   await app.layer.update();
   app.settle();
@@ -4948,18 +4427,10 @@ test('a vehicle in view let go of a hold goes on from its own clock', async (t) 
       const app = harness(t, { floorAt: () => 5 });
       let fixAt = Date.now() - AGE_MS;
       let north = 42.36;
-      app.serve('mbta', () => ({
-        status: 200,
-        body: snapshot(
-          'mbta',
-          'MBTA',
-          [
-            vehicle('a', north, -71.06, fixAt / 1000),
-            vehicle('b', 42.37, -71.05, reported()),
-          ],
-          { fetchedAt: Date.now() },
-        ),
-      }));
+      serveMbta(app, () => [
+        vehicle('a', north, -71.06, fixAt / 1000),
+        vehicle('b', 42.37, -71.05, reported()),
+      ]);
       app.layer.enable(app.viewer);
       await app.layer.update();
       app.settle();

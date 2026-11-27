@@ -5,10 +5,10 @@ import {
   ORBITAL_EARTH_RADIUS_M,
   ORBITAL_PREFETCH_INTERVAL_MS,
   ORBITAL_PREFETCH_MAX_TILES,
-  destinationPoint,
   fovForZoom,
   orbitalBaseFovRad,
 } from '../../cockpitOrbital.js';
+import { destinationPoint } from '../../geoDistance.js';
 import { preloadImageryAhead } from './imageryLookAhead.js';
 
 /** A WorldView-3 pass: 617 km up, heading 52° over the ground, at 30° N. */

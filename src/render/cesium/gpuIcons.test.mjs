@@ -19,33 +19,10 @@ import {
   iconPosition,
   motionPosition,
 } from '../motion/iconMotion.js';
-
-/** A scene with what the draw port touches, and a frame time to set. */
-function fakeScene() {
-  const added = [];
-  return {
-    added,
-    renders: 0,
-    camera: { positionWC: new Cesium.Cartesian3(2e7, 0, 0) },
-    frameState: { time: Cesium.JulianDate.now() },
-    primitives: {
-      add: (primitive) => (added.push(primitive), primitive),
-      remove: (primitive) => {
-        const at = added.indexOf(primitive);
-        if (at >= 0) added.splice(at, 1);
-        return at >= 0;
-      },
-      length: 0,
-    },
-    requestRender() {
-      this.renders += 1;
-    },
-    isDestroyed: () => false,
-  };
-}
+import { fakeDrawScene } from '../../testSupport/fakeDrawScene.mjs';
 
 function drawOver(options = {}) {
-  const scene = fakeScene();
+  const scene = fakeDrawScene();
   const part = createCesiumDraw({
     scene,
     report: (error) => assert.fail(error),

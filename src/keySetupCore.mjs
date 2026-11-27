@@ -14,7 +14,11 @@
  */
 
 import { msg } from './i18n/marker.js';
-import { hasProxySignals } from './localRequestGate.mjs';
+import {
+  hasProxySignals,
+  isExactOrigin,
+  requestAuthority,
+} from './localRequestGate.mjs';
 
 /** Longest accepted key/token value. Real provider keys are all far shorter. */
 export const KEY_SETUP_VALUE_LIMIT = 512;
@@ -200,20 +204,10 @@ function isTrustedPeerAddress(remoteAddress, env) {
 
 /** Parse an exact local request authority from a Host header. */
 function localAuthority(hostHeader, protocol) {
-  const raw = String(hostHeader || '')
-    .trim()
-    .toLowerCase();
-  const scheme = String(protocol || '').toLowerCase();
-  if (!raw || !['http:', 'https:'].includes(scheme) || /[\s/?#@]/.test(raw))
-    return null;
-  try {
-    const parsed = new URL(`${scheme}//${raw}`);
-    return LOCAL_HOSTNAMES.has(parsed.hostname.toLowerCase())
-      ? parsed.origin
-      : null;
-  } catch {
-    return null;
-  }
+  const authority = requestAuthority(hostHeader, protocol);
+  return authority && LOCAL_HOSTNAMES.has(new URL(authority).hostname)
+    ? authority
+    : null;
 }
 
 /** True only for a subprocess that exited normally and successfully. */
@@ -395,14 +389,7 @@ export function admitKeySetupRequest({
         code: 'origin-unrecognized',
       };
     }
-    const exactOrigin =
-      parsedOrigin.username === '' &&
-      parsedOrigin.password === '' &&
-      parsedOrigin.pathname === '/' &&
-      parsedOrigin.search === '' &&
-      parsedOrigin.hash === '' &&
-      parsedOrigin.origin === authority;
-    if (!exactOrigin) {
+    if (!isExactOrigin(parsedOrigin, authority)) {
       return {
         ok: false,
         status: 403,

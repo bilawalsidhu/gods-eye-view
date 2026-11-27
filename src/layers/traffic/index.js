@@ -53,7 +53,7 @@ export function createTrafficLayer({ services, source }) {
     {},
     parts.controls.methods,
     parts.lifecycle.methods,
-    parts.ingestion?.methods,
+    parts.ingestion.methods,
     {
       getTrafficTimingDiagnostics: parts.timing.getTrafficTimingDiagnostics,
       deriveTrafficFlowError: parts.flow.deriveTrafficFlowError,

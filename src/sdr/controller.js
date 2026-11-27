@@ -16,6 +16,7 @@ import {
   sdrDeviceLabel,
   selectAuthorizedSdrDevice,
 } from './usbDevices.js';
+import { browserStorage } from '../browserStorage.js';
 import { summarizeLocalAdsb } from '../sources/adsbRecords.js';
 import {
   formatNumber,
@@ -97,14 +98,6 @@ const ADSB_SAMPLE_RATE = SDR_RECEIVER_PRESETS.adsb.sampleRate;
 
 function normalizeMode(mode) {
   return mode === 'adsb' ? 'adsb' : 'fm';
-}
-
-function defaultStorage() {
-  try {
-    return globalThis.localStorage || null;
-  } catch {
-    return null;
-  }
 }
 
 async function setRtlAgc(device, enabled) {
@@ -354,7 +347,7 @@ export class SdrController {
     closeTimeoutMs = SDR_CLOSE_TIMEOUT_MS,
     workerAdmission = SDR_WORKER_ADMISSION,
     decoderDiagnostics = false,
-    storage = defaultStorage(),
+    storage = browserStorage(),
     webUsb = typeof navigator !== 'undefined' ? navigator.usb : null,
   } = {}) {
     const webUsbSupported = Boolean(webUsb);

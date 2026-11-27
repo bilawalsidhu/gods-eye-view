@@ -12,19 +12,6 @@ export function createTesting({
   const aisLiveVesselsLayer = layer;
 
   /**
-   * Bind the production interaction callbacks to a mockable viewer. Clicks
-   * come through the viewer's input dispatcher (src/input/testDoubles.mjs).
-   * Test-only seam; behavior is shared with installInteraction().
-   * @param {Object} viewer - Viewer-like object with scene.pick().
-   * @param {Object} keyTarget - EventTarget-like object with add/removeEventListener().
-   * @returns {void}
-   */
-
-  function _bindVesselInteractionForTest(viewer, keyTarget) {
-    components.selection.bindVesselInteraction(viewer, keyTarget);
-  }
-
-  /**
    * Prime the minimum live state needed by interaction/lifecycle wire tests.
    * @param {Object} [options={}] - Test state values.
    * @returns {void}
@@ -74,49 +61,6 @@ export function createTesting({
     state.feed.firstConnectPhase = options.firstConnectPhase || 'idle';
     state.feed.firstConnectStartedAt = options.firstConnectStartedAt ?? null;
     state.feed.firstConnectDeadline = options.firstConnectDeadline ?? null;
-    state.interactionKeyTarget = options.interactionKeyTarget || null;
-  }
-
-  /** Inject a host recorder for lifecycle/contract tests; null restores production. */
-
-  function _setVesselOverlayHostForTest(host = null) {
-    vesselState._vesselOverlayHost =
-      host || vesselState.DEFAULT_VESSEL_OVERLAY_HOST;
-  }
-
-  /** Exercise the production selector/publisher through a test-owned state. */
-
-  function _updateVesselCardsForTest(records = []) {
-    components.rendering.updateClusteredLabels(records);
-  }
-
-  /**
-   * Reconcile AIS rows through the production lifecycle. Test-only seam.
-   * @param {Object} viewer - Viewer-like object.
-   * @param {Array<Object>} rows - Raw AIS rows.
-   * @returns {void}
-   */
-
-  function _reconcileVesselsForTest(viewer, rows) {
-    components.snapshots.reconcileVessels(viewer, rows);
-  }
-
-  /** Apply one server snapshot through the production pre-reconcile health gate. */
-
-  function _applyAisFeedSnapshotForTest(viewer, payload) {
-    return components.ingestion.applyAisFeedSnapshot(viewer, payload);
-  }
-
-  /** Exercise the request-owned live loader with a test-controlled fetch. */
-
-  function _loadLivePositionsForTest(viewer) {
-    return components.ingestion.loadLivePositions(viewer);
-  }
-
-  /** Start the production first-connect grace state without installing UI. */
-
-  function _beginAisSessionForTest() {
-    components.lifecycle.beginAisSession();
   }
 
   /** Inject a deterministic clock/scheduler; null restores production runtime. */
@@ -159,41 +103,6 @@ export function createTesting({
     };
   }
 
-  /** Run one preRender visibility/focus pass. Test-only seam. */
-
-  function _runVisibilityPassForTest(force = false) {
-    components.rendering.updateVisibility(force);
-  }
-
-  /** Draw a record's visual where it stands now. Test-only seam. */
-
-  function _prepareVesselVisualForTest(record) {
-    return components.rendering.prepareRecordVisual(record);
-  }
-
-  /** A record's visual (the record itself before it has one). Test-only seam. */
-
-  function _vesselVisualForTest(record) {
-    return components.rendering.getVisual(record);
-  }
-
-  /** Run one live placement pass (a host-supplied placement). Test-only seam. */
-
-  function _runPlacementPassForTest() {
-    components.rendering.followPlacements();
-  }
-
-  /**
-   * Run what one live frame runs (not following the clock): settle whether
-   * icons move on the renderer's clock, then the placement pass. Test-only
-   * seam.
-   */
-
-  function _runLiveFrameForTest() {
-    components.rendering.syncSegments();
-    components.rendering.followPlacements();
-  }
-
   /** Run one world-clock pass at world time `atMs`. Test-only seam. */
 
   function _runClockPassForTest(atMs) {
@@ -211,12 +120,6 @@ export function createTesting({
     vesselState.worldNow = () => atMs ?? 0;
   }
 
-  /** True while a trailing visibility frame is scheduled. Test-only seam. */
-
-  function _hasTrailingVisibilityPassForTest() {
-    return state.trailingVisibilityTimer !== null;
-  }
-
   /**
    * Read lifecycle ownership state without exposing the mutable state object.
    * Test-only seam.
@@ -230,32 +133,14 @@ export function createTesting({
       vesselCount: state.records.byId.size,
     };
   }
-
-  /** The layer's record for a vessel id, or null. Test-only seam. */
-
-  function _vesselRecordForTest(id) {
-    return state.records.byId.get(id) ?? null;
-  }
   return {
-    _bindVesselInteractionForTest,
+    vesselState,
+    parts: components,
     _setVesselStateForTest,
     _followClockForTest,
-    _setVesselOverlayHostForTest,
-    _updateVesselCardsForTest,
-    _reconcileVesselsForTest,
-    _applyAisFeedSnapshotForTest,
-    _loadLivePositionsForTest,
-    _beginAisSessionForTest,
     _setAisRuntimeForTest,
     _getVesselFeedStateForTest,
     _getVesselStateForTest,
-    _vesselRecordForTest,
-    _runVisibilityPassForTest,
-    _prepareVesselVisualForTest,
-    _vesselVisualForTest,
-    _runPlacementPassForTest,
     _runClockPassForTest,
-    _runLiveFrameForTest,
-    _hasTrailingVisibilityPassForTest,
   };
 }

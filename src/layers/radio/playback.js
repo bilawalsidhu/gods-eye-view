@@ -14,6 +14,19 @@ const AUDIO_ERROR_START_FAILED = msg(
 );
 
 export function createPlayback({ state: layerState, services, parts, source }) {
+  /** True while a stream is starting, buffering or playing. */
+  function audioActive() {
+    return ['loading', 'buffering', 'playing'].includes(layerState._audioState);
+  }
+
+  /** Forget the armed fallback station and the attempt it belongs to. */
+  function clearPlayFallback() {
+    layerState._playFallbackId = null;
+    layerState._playFallbackFocus = null;
+    layerState._playFallbackOrigin = 'programmatic';
+    layerState._playFallbackAttemptId = null;
+  }
+
   function audioEventBelongsToActiveAttempt(audio) {
     const attempt = layerState._activePlaybackAttempt;
     return (
@@ -53,8 +66,7 @@ export function createPlayback({ state: layerState, services, parts, source }) {
     audio.addEventListener('playing', () => {
       if (layerState._audio !== audio) return;
       if (!audioEventBelongsToActiveAttempt(audio)) return;
-      if (!['loading', 'buffering', 'playing'].includes(layerState._audioState))
-        return;
+      if (!audioActive()) return;
       layerState._audioState = 'playing';
       layerState._audioError = null;
       if (layerState._tuningAwaitingStationId === layerState._audioStationId)
@@ -74,16 +86,14 @@ export function createPlayback({ state: layerState, services, parts, source }) {
     audio.addEventListener('waiting', () => {
       if (layerState._audio !== audio) return;
       if (!audioEventBelongsToActiveAttempt(audio)) return;
-      if (!['loading', 'buffering', 'playing'].includes(layerState._audioState))
-        return;
+      if (!audioActive()) return;
       layerState._audioState = 'buffering';
       parts.presentation.emitState();
     });
     audio.addEventListener('error', () => {
       if (layerState._audio !== audio) return;
       if (!audioEventBelongsToActiveAttempt(audio)) return;
-      if (!['loading', 'buffering', 'playing'].includes(layerState._audioState))
-        return;
+      if (!audioActive()) return;
       const failedId = layerState._audioStationId;
       const attempt = layerState._activePlaybackAttempt;
       if (tryRadioFallback(failedId, attempt?.origin, attempt?.id)) return;
@@ -103,10 +113,7 @@ export function createPlayback({ state: layerState, services, parts, source }) {
       ? layerState._stationById.get(fallbackId)
       : null;
     const fallbackFocusPolicy = layerState._playFallbackFocus;
-    layerState._playFallbackId = null;
-    layerState._playFallbackFocus = null;
-    layerState._playFallbackOrigin = 'programmatic';
-    layerState._playFallbackAttemptId = null;
+    clearPlayFallback();
     if (
       !fallbackStation ||
       fallbackId === failedId ||
@@ -195,10 +202,7 @@ export function createPlayback({ state: layerState, services, parts, source }) {
       layerState._audioState = 'playing';
       if (layerState._tuningAwaitingStationId === station.id)
         parts.tuningNoise.clearRadioTuningNoise({ emit: false });
-      layerState._playFallbackId = null;
-      layerState._playFallbackFocus = null;
-      layerState._playFallbackOrigin = 'programmatic';
-      layerState._playFallbackAttemptId = null;
+      clearPlayFallback();
       recordDirectoryClick(station.id);
       parts.presentation.emitState();
       if (origin === 'user')
@@ -316,10 +320,7 @@ export function createPlayback({ state: layerState, services, parts, source }) {
     const stoppedAttemptId = layerState._activePlaybackAttempt?.id || null;
     parts.tuning.endRadioTuning();
     layerState._playGeneration += 1;
-    layerState._playFallbackId = null;
-    layerState._playFallbackFocus = null;
-    layerState._playFallbackOrigin = 'programmatic';
-    layerState._playFallbackAttemptId = null;
+    clearPlayFallback();
     layerState._activePlaybackAttempt = null;
     if (layerState._audio) {
       layerState._audio.pause();
@@ -339,15 +340,14 @@ export function createPlayback({ state: layerState, services, parts, source }) {
   /** Pause or resume the selected stream. Resuming is still click initiated. */
 
   function toggleRadioPlayback({ origin = 'programmatic' } = {}) {
-    if (['loading', 'playing', 'buffering'].includes(layerState._audioState)) {
+    if (audioActive()) {
       return Promise.resolve(pauseRadioPlayback({ origin }));
     }
     if (!parts.interaction.radioPresentationAllowed())
       return Promise.resolve(false);
     if (layerState._selectedId) {
       // Drop a fallback left by a voice step whose playback never started.
-      layerState._playFallbackId = null;
-      layerState._playFallbackFocus = null;
+      clearPlayFallback();
     } else {
       const ranked = parts.queries.rankedVisibleStations();
       if (!ranked.length) return Promise.resolve(false);
@@ -363,16 +363,12 @@ export function createPlayback({ state: layerState, services, parts, source }) {
   /** Pause Radio without toggling a stopped or already-paused stream back on. */
 
   function pauseRadioPlayback({ origin = 'programmatic' } = {}) {
-    if (!['loading', 'playing', 'buffering'].includes(layerState._audioState))
-      return false;
+    if (!audioActive()) return false;
     const pausedAttemptId = layerState._activePlaybackAttempt?.id || null;
     if (layerState._tuningAwaitingStationId && !layerState._tuningActive)
       parts.tuning.endRadioTuning();
     layerState._playGeneration += 1;
-    layerState._playFallbackId = null;
-    layerState._playFallbackFocus = null;
-    layerState._playFallbackOrigin = 'programmatic';
-    layerState._playFallbackAttemptId = null;
+    clearPlayFallback();
     layerState._activePlaybackAttempt = null;
     layerState._audio?.pause();
     layerState._audioState = 'paused';
@@ -383,10 +379,9 @@ export function createPlayback({ state: layerState, services, parts, source }) {
     return true;
   }
   return {
-    audioEventBelongsToActiveAttempt,
+    audioActive,
+    clearPlayFallback,
     installAudio,
-    tryRadioFallback,
-    recordDirectoryClick,
     playSelectedRadio,
     confirmRadioPlayback,
     playPreparedRadioForVoice,

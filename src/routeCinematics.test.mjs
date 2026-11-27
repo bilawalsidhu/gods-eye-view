@@ -25,7 +25,6 @@ import {
   interruptCameraMotion,
   interruptCameraMotionIfActive,
   moveCamera,
-  prefersReducedMotion,
   routeAltitudeOffsetM,
   routeColdSeedFloorM,
   routeCorridorCells,
@@ -36,6 +35,7 @@ import {
   routeSpeedProfile,
   signedTurnRad,
 } from './cameraVerbs.js';
+import { prefersReducedMotion } from './reducedMotion.js';
 
 const FRAME_S = 1 / 60;
 const CRUISE_M_S = { slow: 20, normal: 40, fast: 90 };

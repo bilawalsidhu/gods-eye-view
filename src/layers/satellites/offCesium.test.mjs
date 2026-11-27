@@ -3,10 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import * as Cesium from 'cesium';
 import { satelliteClassColor } from '../../data/satelliteClass.js';
-import satellitesLayer, {
-  _clearSatelliteLabelLifecycleForTest,
-  _setSatelliteLabelLifecycleStateForTest,
-} from '../../data/satellites.js';
+import satellitesLayer from '../../data/satellites.js';
 import {
   POINT_STYLES,
   TRACK_VIEW_FROM_LEO,
@@ -17,6 +14,10 @@ import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 import { gstime } from 'satellite.js';
 import * as focusDeemphasis from '../../data/focusDeemphasis.js';
 
+const {
+  _clearSatelliteLabelLifecycleForTest,
+  _setSatelliteLabelLifecycleStateForTest,
+} = satellitesLayer.testing;
 const rgba = (color) => [color.red, color.green, color.blue, color.alpha];
 
 test('point styles keep the colours the dots were drawn in', () => {
@@ -202,6 +203,8 @@ test('the rendering part draws the dots, the tracked dot and the rings through t
       parts: {
         orbits: { computeOrbitPath: () => path },
         tracking: { _getTrackedFramePosition: () => sampleFrame() },
+        cockpit: { _syncCockpitSubjectVisuals() {} },
+        stationPanel: { _syncStationPanel() {} },
       },
     });
     // The frame's own sample, taken after the tick's first part.
@@ -345,7 +348,11 @@ test('a dot handed to a station model draws only beyond its range; the tracked d
           focusPassIsNeeded: () => false,
         },
       },
-      parts: { tracking: { _getTrackedFramePosition: () => null } },
+      parts: {
+        tracking: { _getTrackedFramePosition: () => null },
+        cockpit: { _syncCockpitSubjectVisuals() {} },
+        stationPanel: { _syncStationPanel() {} },
+      },
     });
     rendering._attach(viewer);
     const points = draw.find('satellites:').spec.id;
@@ -485,6 +492,8 @@ test('the focus pass projects every dot in one call and dims the dot under the f
       parts: {
         controls: { _pointStyleFor: () => ({ color: [1, 1, 1, 1] }) },
         tracking: { _getTrackedFramePosition: () => null },
+        cockpit: { _syncCockpitSubjectVisuals() {} },
+        stationPanel: { _syncStationPanel() {} },
       },
     });
     rendering._attach(viewer);

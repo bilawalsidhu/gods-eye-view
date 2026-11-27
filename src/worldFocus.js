@@ -55,20 +55,14 @@ export function requestWorldFocus(detail, eventTarget = globalThis.window) {
   return true;
 }
 
-/** Register one listener and return an idempotent disposer. */
-export function registerWorldFocusRequestListener(eventTarget, listener) {
-  if (
-    !eventTarget?.addEventListener ||
-    !eventTarget?.removeEventListener ||
-    typeof listener !== 'function'
-  )
-    return () => {};
-  eventTarget.addEventListener(WORLD_FOCUS_REQUEST_EVENT, listener);
+/** Register one listener for `eventName` and return an idempotent disposer. */
+export function registerFocusRequestListener(eventTarget, eventName, listener) {
+  eventTarget.addEventListener(eventName, listener);
   let disposed = false;
   return () => {
     if (disposed) return;
     disposed = true;
-    eventTarget.removeEventListener(WORLD_FOCUS_REQUEST_EVENT, listener);
+    eventTarget.removeEventListener(eventName, listener);
   };
 }
 
@@ -76,8 +70,6 @@ export function registerWorldFocusRequestListener(eventTarget, listener) {
 export function routeWorldFocusRequest(event, runExplicitFocus, fly) {
   const detail = event?.detail;
   if (!isValidWorldFocusTarget(detail)) return false;
-  if (typeof runExplicitFocus !== 'function' || typeof fly !== 'function')
-    return false;
   return runExplicitFocus(detail, () => fly(detail));
 }
 

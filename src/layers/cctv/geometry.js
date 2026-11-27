@@ -1,6 +1,7 @@
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { eastNorthUp, frameVector } from '../../geo/frames.js';
-import { distance, vec } from '../../geo/vector.js';
+import { clamp, distance, toRadians, vec } from '../../geo/vector.js';
+import { greatCircleKm } from '../../geoDistance.js';
 import {
   FRUSTUM_GROUND_CLEARANCE_M,
   PROBE_MIN_RANGE_M,
@@ -13,6 +14,7 @@ import {
 import {
   planeDimensions,
   poseHash,
+  projectPoint,
   requiredPlaneLift,
 } from '../../data/cctvFootprint.js';
 
@@ -138,39 +140,20 @@ export function createGeometry({ state: layerState, services, parts, source }) {
       Number.isFinite(override) && override > 0
         ? Math.min(poseRange, override)
         : poseRange;
-    const pitchDeg = parts.model.clamp(
+    const pitchDeg = clamp(
       parts.model.safeNumber(camera.pitchDeg, -17),
       -89,
       89,
     );
-    const fovDeg = parts.model.clamp(
-      parts.model.safeNumber(camera.fovDeg, 74),
-      8,
-      160,
-    );
+    const fovDeg = clamp(parts.model.safeNumber(camera.fovDeg, 74), 8, 160);
     const heading = parts.model.safeNumber(camera.headingDeg, 0);
     const mountAlt = ground + parts.model.safeNumber(camera.mountHeightM, 24);
     const dims = planeDimensions({ rangeM: R, pitchDeg, fovDeg });
 
-    const capLL = parts.model.projectPoint(
-      camera.lat,
-      camera.lon,
-      heading,
-      dims.horiz,
-    );
+    const capLL = projectPoint(camera.lat, camera.lon, heading, dims.horiz);
     const capAlt = mountAlt + dims.vert;
-    const capL = parts.model.projectPoint(
-      capLL.lat,
-      capLL.lon,
-      heading - 90,
-      dims.halfW,
-    );
-    const capR = parts.model.projectPoint(
-      capLL.lat,
-      capLL.lon,
-      heading + 90,
-      dims.halfW,
-    );
+    const capL = projectPoint(capLL.lat, capLL.lon, heading - 90, dims.halfW);
+    const capR = projectPoint(capLL.lat, capLL.lon, heading + 90, dims.halfW);
     // Ground clearance: ONE rigid lift for the whole rectangle, sized by the
     // support point with the largest deficit against the ground measured
     // under it (a 3×3 grid over the plane; see footprint.js). Points without
@@ -201,12 +184,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
       footprintExtraM > 0 ? measured.limitingKey : base.limitingKey;
     const capAltLifted = capAlt + liftM;
     const corner = (base, sign) => {
-      const ll = parts.model.projectPoint(
-        base.lat,
-        base.lon,
-        heading,
-        sign * dims.upHoriz,
-      );
+      const ll = projectPoint(base.lat, base.lon, heading, sign * dims.upHoriz);
       return {
         lat: ll.lat,
         lon: ll.lon,
@@ -284,8 +262,8 @@ export function createGeometry({ state: layerState, services, parts, source }) {
    */
 
   function frustumFrameEcef(camera, atPos) {
-    const h = parts.model.toRad(camera.headingDeg);
-    const p = parts.model.toRad(camera.pitchDeg);
+    const h = toRadians(camera.headingDeg);
+    const p = toRadians(camera.pitchDeg);
     const enu = eastNorthUp(atPos);
     // ENU components: view axis + the perpendicular "up" of the pitched cap.
     const dirEnu = vec(
@@ -453,11 +431,9 @@ export function createGeometry({ state: layerState, services, parts, source }) {
       }
       return {
         record,
-        distKm: parts.model.haversineKm(
-          activeRecord.camera.lat,
-          activeRecord.camera.lon,
-          record.camera.lat,
-          record.camera.lon,
+        distKm: greatCircleKm(
+          { lat: activeRecord.camera.lat, lon: activeRecord.camera.lon },
+          { lat: record.camera.lat, lon: record.camera.lon },
         ),
       };
     });
@@ -497,11 +473,9 @@ export function createGeometry({ state: layerState, services, parts, source }) {
     let count = 0;
     for (const record of layerState._records) {
       if (record === targetRecord) continue;
-      const dKm = parts.model.haversineKm(
-        targetRecord.camera.lat,
-        targetRecord.camera.lon,
-        record.camera.lat,
-        record.camera.lon,
+      const dKm = greatCircleKm(
+        { lat: targetRecord.camera.lat, lon: targetRecord.camera.lon },
+        { lat: record.camera.lat, lon: record.camera.lon },
       );
       const overlapKm =
         ((targetRecord.camera.rangeM + record.camera.rangeM) / 1000) * 0.92;
@@ -563,7 +537,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
       const inRange = (d) => Number.isFinite(d) && d > 0 && d < camera.rangeM;
       return Promise.all([
         parts.rendering.obstructionHit(mountPos, dir),
-        parts.rendering.terrainHit?.(mountPos, dir) ?? null,
+        parts.rendering.terrainHit(mountPos, dir) ?? null,
       ])
         .then(([hit, terrain]) => {
           if (record.probeToken !== token) return;
@@ -736,7 +710,6 @@ export function createGeometry({ state: layerState, services, parts, source }) {
     materializeCctvCoverageEntities,
     materializeCctvActiveCoverageEntities,
     materializeCctvVisibleCoverageEntities,
-    registerCoverageEntities,
     ensureActiveCoverageEntities,
     ensureVisibleCoverageEntities,
     destroyCoverageEntities,

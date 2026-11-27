@@ -27,6 +27,7 @@ function contacts(selection) {
       getNearby: () => [],
       getAllPositions: () => [],
       getSelectedInfo: () => selection.vessel,
+      getVesselPhoto: () => null,
     },
     installations: {
       getNearby: () => [],

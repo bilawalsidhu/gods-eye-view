@@ -253,7 +253,7 @@ export function createHlsPuller({
       }
     }
   };
-  const ensure = async (cameraId, url, leaseId = 'legacy') => {
+  const ensure = async (cameraId, url, leaseId) => {
     if (closed) throw new Error('HLS service closed');
     sameOriginHlsUrl(url, url);
     let entry = active.get(cameraId);
@@ -297,7 +297,7 @@ export function createHlsPuller({
     }
     return false;
   };
-  const buildPlaylist = async (entry, cameraId, leaseId = 'legacy') => {
+  const buildPlaylist = async (entry, cameraId, leaseId) => {
     if (entry.stopping || entry.segments.size < 2) return null;
     touch(entry, leaseId);
     const segments = [...entry.segments.values()].sort((a, b) => a.seq - b.seq);
@@ -323,7 +323,7 @@ export function createHlsPuller({
     }
     return lines.join('\n') + '\n';
   };
-  const getSegment = (cameraId, token, seq, leaseId = 'legacy') => {
+  const getSegment = (cameraId, token, seq, leaseId) => {
     const entry = active.get(cameraId);
     if (!entry || entry.token !== token || !entry.leases.has(leaseId))
       return null;

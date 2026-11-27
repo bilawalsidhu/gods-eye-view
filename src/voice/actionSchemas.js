@@ -1,4 +1,4 @@
-import { HUD_LAYOUTS } from '../hudLayoutPolicy.js';
+import { HUD_LAYOUTS } from '../hudLayouts.js';
 import {
   AREA_CANDIDATE_ID_PATTERN,
   MAX_AREA_CANDIDATE_ID_LENGTH,

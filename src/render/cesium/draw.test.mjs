@@ -1579,7 +1579,8 @@ test('point sets blend as asked and fall off with distance', () => {
 
 test('the bikeshare layer draws its stations as point primitives on a viewer of its own', async () => {
   const { createState } = await import('../../layers/bikeshare/state.js');
-  const { createModel } = await import('../../layers/bikeshare/model.js');
+  const { parseStationInformation, parseStationStatus } =
+    await import('../../sources/gbfsStations.js');
   const { createRendering } =
     await import('../../layers/bikeshare/rendering.js');
   const { createSelection } =
@@ -1594,16 +1595,15 @@ test('the bikeshare layer draws its stations as point primitives on a viewer of 
       clearOverlaySource() {},
     },
   };
-  const state = createState({ services });
+  const state = createState();
   const parts = {};
   const context = { state, services, parts, source: {} };
-  parts.model = createModel(context);
   parts.rendering = createRendering(context);
   parts.selection = createSelection(context);
   state._viewer = viewer;
   parts.rendering.attachSets(viewer);
   state._stationSet.show = true;
-  const info = parts.model.parseStationInformation({
+  const info = parseStationInformation({
     data: {
       stations: [
         { station_id: 'a', name: 'A', lat: 30.26, lon: -97.74, capacity: 20 },
@@ -1614,7 +1614,7 @@ test('the bikeshare layer draws its stations as point primitives on a viewer of 
   parts.rendering.ensureCityPoints('austin', info);
   parts.rendering.applyStatusToPoints(
     'austin',
-    parts.model.parseStationStatus({
+    parseStationStatus({
       data: {
         stations: [
           { station_id: 'a', num_bikes_available: 18, num_docks_available: 2 },
@@ -4052,7 +4052,7 @@ test('the vessels layer draws its ships as one GPU icon set that holds them on c
   );
   try {
     layer.testing._setVesselStateForTest({ viewer, icons: null });
-    layer.testing._reconcileVesselsForTest(viewer, [
+    layer.testing.parts.snapshots.reconcileVessels(viewer, [
       { mmsi: '244000001', lat: 51.95, lon: 4.1, heading: 90, speed: 12 },
       { mmsi: '244000002', lat: 51.96, lon: 4.2, course: 200, speed: 2 },
     ]);
@@ -4083,7 +4083,7 @@ test('the vessels layer draws its ships as one GPU icon set that holds them on c
     });
 
     // A poll that moves one and drops the other writes rows, not a new host.
-    layer.testing._reconcileVesselsForTest(viewer, [
+    layer.testing.parts.snapshots.reconcileVessels(viewer, [
       { mmsi: '244000001', lat: 51.95, lon: 4.12, heading: 95, speed: 12 },
     ]);
     assert.equal(scene.added[0], host);
@@ -4098,7 +4098,7 @@ test('the vessels layer draws its ships as one GPU icon set that holds them on c
     layer.destroy(viewer);
     assert.equal(scene.added.length, 0, 'destroyed: the set goes');
     layer.testing._setVesselStateForTest({ viewer, icons: null });
-    layer.testing._reconcileVesselsForTest(viewer, [
+    layer.testing.parts.snapshots.reconcileVessels(viewer, [
       { mmsi: '244000003', lat: 51.9, lon: 4.0, heading: 10, speed: 5 },
     ]);
     assert.equal(scene.added.length, 1);
@@ -4351,7 +4351,7 @@ test('vessels on a host without the sprite order still draw, at the default draw
   const { layer, viewer, part, unbind } = await vesselLayerOver(scene, {});
   const ship = { mmsi: '244000001', lat: 51.95, lon: 4.1, heading: 90 };
   layer.testing._setVesselStateForTest({ viewer, icons: null });
-  layer.testing._reconcileVesselsForTest(viewer, [ship]);
+  layer.testing.parts.snapshots.reconcileVessels(viewer, [ship]);
   assert.equal(scene.added.length, 1, 'drawn');
   assert.equal(part.sets.get(scene.added[0].drawSetId).spec.drawOrder, 0);
   layer.destroy(viewer);
@@ -4368,8 +4368,9 @@ test('an aircraft layer draws its contacts as one GPU icon set moving on the del
     await import('../../data/iconAtlas.js');
   const { aircraftIcon, FLEET_ICON_PX, TRACKED_ICON_PX } =
     await import('../../data/aircraftIcons.js');
-  const { aircraftMotionRegime, createMotionRegime, fixEpochMs, julianAt } =
+  const { aircraftMotionRegime, createMotionRegime, fixEpochMs } =
     await import('../../data/aircraftMotionRegime.js');
+  const { julianFromEpochMs: julianAt } = await import('../../geo/julian.js');
   const scene = fakeScene();
   const part = createCesiumDraw({
     scene,
@@ -4435,7 +4436,7 @@ test('an aircraft layer draws its contacts as one GPU icon set moving on the del
     services: { focus: { focusPassIsNeeded: () => false } },
     parts,
     layerId: 'flights',
-    renderDelaySec: delayMs / 1000,
+    displayDelay: { currentMs: delayMs, step: () => delayMs },
     courseMaxDps: 3,
     cockpitContactSizePx: 6,
   });
@@ -5237,6 +5238,11 @@ test('the directions layer draws its markers, flowing route and maneuver dots on
     const sprites = [];
     const overlays = [];
     const layer = createDirectionsLayer({
+      overlayHost: {
+        setEntries: (source, entries) => overlays.push([source, entries]),
+        setVisible: noop,
+        clearSource: noop,
+      },
       source: {
         getRoute: async () => ({
           ok: true,
@@ -5267,12 +5273,6 @@ test('the directions layer draws its markers, flowing route and maneuver dots on
           },
         },
         picking: { registerPickOwner: noop, unregisterPickOwner: noop },
-        overlays: {
-          setOverlayEntries: (source, entries) =>
-            overlays.push([source, entries]),
-          setOverlaySourceVisible: noop,
-          clearOverlaySource: noop,
-        },
         ground: {
           GROUND_FLOOR_LIFT_M: 2,
           cachedGroundFloor: () => 150,
@@ -8690,6 +8690,7 @@ test('the transit layer draws its vehicles as two icon sets, moving a marker bet
       holdContinuousRender: noop,
       releaseContinuousRender: noop,
     },
+    ground: { GROUND_FLOOR_LIFT_M: 0 },
     sprites: {
       spriteDrawOrder: (layerId) => {
         registered.push(layerId);

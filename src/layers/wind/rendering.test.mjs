@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createWindRendering } from './rendering.js';
-import { NO_IMAGERY_HOST } from '../weather/imageryHost.js';
+import { bindRenderer } from '../../render/rendererOf.js';
+import { NO_IMAGERY_HOST } from '../../maps/imageryHost.js';
 import { WEATHER_IMAGERY_Z } from '../weather/imageryOrder.js';
 import {
   createShellCesium,
@@ -233,15 +234,17 @@ function harness({
     ? createCesiumFields({ scene: viewer.scene, cesium: shellCesium })
     : null;
   const draw = fields && { field: (spec) => fields.field(spec) };
+  bindRenderer(viewer, {
+    globe,
+    camera: cameraPort,
+    frame: framePort,
+    query: queryPort,
+    // The Cesium draw port's raster shells, over the doubles.
+    ...(draw ? { draw } : {}),
+  });
   const rendering = createWindRendering({
     container,
     getViewer: () => viewer,
-    globeOf: (given) => (given === viewer ? globe : null),
-    // The Cesium draw port's raster shells, over the doubles.
-    drawOf: (given) => (given === viewer ? draw : null),
-    cameraOf: (given) => (given === viewer ? cameraPort : null),
-    frameOf: (given) => (given === viewer ? framePort : null),
-    queryOf: (given) => (given === viewer ? queryPort : null),
     createGpuRendering,
     onStatusChange,
     getHost,

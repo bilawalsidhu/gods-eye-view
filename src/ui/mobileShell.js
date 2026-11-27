@@ -383,10 +383,6 @@ export function initMobileShell({
   if (media?.addEventListener) {
     media.addEventListener('change', onChange);
     removers.push(() => media.removeEventListener('change', onChange));
-  } else if (media?.addListener) {
-    // Safari before 14 only offers the legacy listener API.
-    media.addListener(onChange);
-    removers.push(() => media.removeListener(onChange));
   }
 
   listen(documentRef, 'click', (event) => {

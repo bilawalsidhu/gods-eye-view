@@ -60,7 +60,7 @@ export function hasProxySignals(headers = {}) {
  * @param {string} protocol `http:` or `https:`
  * @returns {string|null}
  */
-function requestAuthority(hostHeader, protocol) {
+export function requestAuthority(hostHeader, protocol) {
   const raw = String(hostHeader || '')
     .trim()
     .toLowerCase();
@@ -72,6 +72,24 @@ function requestAuthority(hostHeader, protocol) {
   } catch {
     return null;
   }
+}
+
+/**
+ * Whether a parsed Origin is exactly `authority`: no credentials, path,
+ * query or fragment, and the same scheme, host and port.
+ * @param {URL} parsedOrigin
+ * @param {string|null} authority
+ * @returns {boolean}
+ */
+export function isExactOrigin(parsedOrigin, authority) {
+  return (
+    parsedOrigin.username === '' &&
+    parsedOrigin.password === '' &&
+    parsedOrigin.pathname === '/' &&
+    parsedOrigin.search === '' &&
+    parsedOrigin.hash === '' &&
+    parsedOrigin.origin === authority
+  );
 }
 
 /**
@@ -138,14 +156,7 @@ export function admitSameSiteRequest({
     } catch {
       return { ok: false, status: 403, error: 'Unrecognized Origin refused' };
     }
-    const exactOrigin =
-      parsedOrigin.username === '' &&
-      parsedOrigin.password === '' &&
-      parsedOrigin.pathname === '/' &&
-      parsedOrigin.search === '' &&
-      parsedOrigin.hash === '' &&
-      parsedOrigin.origin === authority;
-    if (!exactOrigin) {
+    if (!isExactOrigin(parsedOrigin, authority)) {
       return {
         ok: false,
         status: 403,

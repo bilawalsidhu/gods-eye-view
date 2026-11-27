@@ -1,3 +1,4 @@
+import { greatCircleKm } from '../../geoDistance.js';
 import { findFrame } from '../../render/rendererOf.js';
 import {
   createFrameSlot,
@@ -120,11 +121,9 @@ export function createCards({ state: layerState, services, parts, source }) {
       }
       candidates.push({
         id,
-        distanceKm: parts.model.haversineKm(
-          viewerLat,
-          viewerLon,
-          record.camera.lat,
-          record.camera.lon,
+        distanceKm: greatCircleKm(
+          { lat: viewerLat, lon: viewerLon },
+          { lat: record.camera.lat, lon: record.camera.lon },
         ),
         inView,
         // Québec's browser-only sources have no registered frame endpoint;
@@ -402,7 +401,6 @@ export function createCards({ state: layerState, services, parts, source }) {
     pushAmbientCardEntries,
     fetchCardFrame,
     startCardFrameLoop,
-    stopCardFrameLoop,
     teardownAmbientCards,
   };
 }

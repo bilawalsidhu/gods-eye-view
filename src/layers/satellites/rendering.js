@@ -839,10 +839,10 @@ export function createRendering({
 
     // While the Cockpit rides the tracked satellite, keep its marks hidden.
     if (layerState._cockpitSubjectNorad !== null)
-      parts.cockpit?._syncCockpitSubjectVisuals();
+      parts.cockpit._syncCockpitSubjectVisuals();
 
     // NASA's live video beside the card while the ISS is selected.
-    parts.stationPanel?._syncStationPanel();
+    parts.stationPanel._syncStationPanel();
 
     _updatePointFocus(now);
 
@@ -1028,7 +1028,6 @@ export function createRendering({
     _showOrbitPath,
     _updateOrbitPathRotations,
     _hideOrbitPath,
-    _propagateAll,
     _reckonPoints,
     _preRenderTick,
     _startPace,

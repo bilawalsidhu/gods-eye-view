@@ -10,6 +10,7 @@
 import { isSharingEnabled } from '../../src/keySetupCore.mjs';
 import { hasProxySignals } from '../../src/localRequestGate.mjs';
 import { createMcpHttpHandler } from '../../src/tools/mcp/index.js';
+import { readRequestBody } from '../providers/common/request.js';
 import { createLocalMcpServer } from './server.js';
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
@@ -102,7 +103,11 @@ export function localMcpPlugin({
       try {
         const body =
           req.method === 'POST'
-            ? await readBody(req, bodyTimeoutMs)
+            ? await readRequestBody(
+                req,
+                MAX_BODY_BYTES,
+                AbortSignal.timeout(bodyTimeoutMs),
+              )
             : undefined;
         const request = new Request(`http://${host}/mcp`, {
           method: req.method,
@@ -118,16 +123,22 @@ export function localMcpPlugin({
       } catch (error) {
         if (disconnect.signal.aborted) return;
         if (res.headersSent) return res.destroy();
-        res.writeHead([408, 413].includes(error?.status) ? error.status : 400, {
+        const status =
+          error?.code === 'BODY_TOO_LARGE'
+            ? 413
+            : error?.name === 'TimeoutError'
+              ? 408
+              : 400;
+        res.writeHead(status, {
           'Content-Type': 'application/json',
           'Cache-Control': 'no-store',
         });
         res.end(
           JSON.stringify({
             error:
-              error?.status === 413
+              status === 413
                 ? 'Request too large'
-                : error?.status === 408
+                : status === 408
                   ? 'Request timed out'
                   : 'Bad request',
           }),
@@ -142,38 +153,4 @@ export function localMcpPlugin({
     configureServer: install,
     configurePreviewServer: install,
   };
-}
-
-function readBody(req, timeoutMs = BODY_TIMEOUT_MS) {
-  return new Promise((resolve, reject) => {
-    const chunks = [];
-    let size = 0;
-    let tooLarge = false;
-    // A client that stops sending must not hold the request open.
-    const timer = setTimeout(
-      () =>
-        reject(Object.assign(new Error('Request timed out'), { status: 408 })),
-      timeoutMs,
-    );
-    const fail = (error) => {
-      clearTimeout(timer);
-      reject(error);
-    };
-    req.on('data', (chunk) => {
-      size += chunk.length;
-      // Keep draining without storing, so the 413 response can still be sent.
-      if (tooLarge || size <= MAX_BODY_BYTES) {
-        if (!tooLarge) chunks.push(chunk);
-        return;
-      }
-      tooLarge = true;
-      chunks.length = 0;
-      fail(Object.assign(new Error('Request too large'), { status: 413 }));
-    });
-    req.on('end', () => {
-      clearTimeout(timer);
-      resolve(Buffer.concat(chunks));
-    });
-    req.on('error', fail);
-  });
 }

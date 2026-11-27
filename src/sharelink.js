@@ -5,7 +5,14 @@ import {
   migrateDetectionState,
   normalizeAllocationStrategy,
 } from './data/detectionPolicy.js';
-import { clampScopeTerminusPct } from './scopeMask.js';
+import {
+  KEYHOLE_LABEL_FEATHER_RATIO,
+  KEYHOLE_OUTSIDE_OPACITY_DEFAULT,
+} from './celestialRing.js';
+import {
+  SCOPE_FEATHER_RATIO_DEFAULT,
+  clampScopeTerminusPct,
+} from './scopeMask.js';
 import { worldClock as pageWorldClock } from './time/worldClock.js';
 import { clampScopeFeatherPct } from './scopeMaskPolicy.js';
 import {
@@ -43,25 +50,19 @@ import {
 const DEBOUNCE_MS = 500;
 const LEGACY_BLOOM_FALLBACK = 50;
 
-// Style name mapping: internal → URL-friendly, shared with views.
-const STYLE_TO_URL = STYLE_URL_NAMES;
-
 const SHARE_UI_STATE_PARAM = 'ui';
 const SHARE_STYLE_PARAMS_PARAM = 'sp';
 const SHARE_CREATED_AT_PARAM = 'at';
 
 // The panel and visual-preset parameter tables are the share format's own
 // (src/share/viewCodec.js); the long form spells their entries by token.
-const SHARE_PANEL_STATE_REGISTRY = SHARE_VIEW_PANELS;
 const SHARE_PANEL_STATE_BY_TOKEN = Object.freeze(
-  new Map(SHARE_PANEL_STATE_REGISTRY.map((entry) => [entry.token, entry])),
+  new Map(SHARE_VIEW_PANELS.map((entry) => [entry.token, entry])),
 );
 
 const URL_TO_STYLE = Object.fromEntries(
-  Object.entries(STYLE_TO_URL).map(([k, v]) => [v, k]),
+  Object.entries(STYLE_URL_NAMES).map(([k, v]) => [v, k]),
 );
-
-const SHARE_STYLE_PARAM_REGISTRY = SHARE_VIEW_STYLE_PARAMS;
 
 export class ShareLinkManager {
   constructor(
@@ -100,14 +101,15 @@ export class ShareLinkManager {
     this._detectionMode = 'OFF';
     this._detectionDensity = 50;
     this._detectionAllocation = 'ELASTIC';
-    this._detectionFadePct = 7;
-    // The link this session generates follows the default in
-    // KEYHOLE_OUTSIDE_OPACITY_DEFAULT and the slider's markup value. The `ko` parse
-    // fallback stays at 5.
-    this._detectionOutsideOpacityPct = 1;
+    // The link this session makes starts from what it draws; the `ko` parse
+    // fallback below stays 5.
+    this._detectionFadePct = Math.round(KEYHOLE_LABEL_FEATHER_RATIO * 100);
+    this._detectionOutsideOpacityPct = Math.round(
+      KEYHOLE_OUTSIDE_OPACITY_DEFAULT * 100,
+    );
     this._celestialRingEnabled = false;
     this._scopeEnabled = true;
-    this._scopeFeatherPct = 100;
+    this._scopeFeatherPct = Math.round(SCOPE_FEATHER_RATIO_DEFAULT * 100);
     // How strongly the scope mask shows, 0..100; 100 (the full mask) is the
     // default and leaves `sco` out of the link.
     this._scopeOpacityPct = 100;
@@ -593,7 +595,7 @@ export class ShareLinkManager {
       return;
     }
     const assignments = [];
-    for (const spec of SHARE_PANEL_STATE_REGISTRY) {
+    for (const spec of SHARE_VIEW_PANELS) {
       const state = panelState.specs.find((entry) => entry.id === spec.id);
       if (!state || typeof state.collapsed !== 'boolean') continue;
       assignments.push(`${spec.token}.c.${state.collapsed ? '1' : '0'}`);
@@ -784,7 +786,7 @@ export class ShareLinkManager {
     params.set('heading', Math.round(toDegrees(pose.heading)).toString());
     params.set('pitch', Math.round(toDegrees(pose.pitch)).toString());
     params.set('roll', Math.round(toDegrees(pose.roll)).toString());
-    params.set('style', STYLE_TO_URL[this._currentStyle] || 'normal');
+    params.set('style', STYLE_URL_NAMES[this._currentStyle] || 'normal');
     params.set('bloom', this._bloomEnabled ? '1' : '0');
     params.set('sharpen', this._sharpenEnabled ? '1' : '0');
     params.set('bi', Math.round(this._bloomIntensity).toString());
@@ -868,7 +870,7 @@ export function decodeShareCreatedAtMs(params, { nowMs = Date.now() } = {}) {
 
 /** Encode allowlisted parameters for the active visual preset. */
 export function encodeStyleParamState(params, styleName, values) {
-  const registry = SHARE_STYLE_PARAM_REGISTRY[styleName];
+  const registry = SHARE_VIEW_STYLE_PARAMS[styleName];
   if (!registry || !values || typeof values !== 'object') {
     params.delete(SHARE_STYLE_PARAMS_PARAM);
     return;
@@ -889,7 +891,7 @@ export function encodeStyleParamState(params, styleName, values) {
 export function decodeStyleParamState(params, styleName) {
   if (params.get('v') !== '2' || !params.has(SHARE_STYLE_PARAMS_PARAM))
     return null;
-  const registry = SHARE_STYLE_PARAM_REGISTRY[styleName];
+  const registry = SHARE_VIEW_STYLE_PARAMS[styleName];
   if (!registry) return null;
   const byToken = new Map(registry.map((spec) => [spec.token, spec]));
   const decoded = {};

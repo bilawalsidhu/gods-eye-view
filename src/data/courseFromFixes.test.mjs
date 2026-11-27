@@ -1,15 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { courseBetweenFixes, courseFromFixes } from './courseFromFixes.js';
+import { courseFromFixes } from './courseFromFixes.js';
+
+/** The course read from an anchor at (lat1, lon1) to a fix two seconds later. */
+const course = (lat1, lon1, lat2, lon2) =>
+  courseFromFixes(
+    { lat: lat1, lon: lon1, ms: 0 },
+    { lat: lat2, lon: lon2, ms: 2000 },
+  ).courseDeg;
 
 test('course between fixes reads true bearings, across the antimeridian too', () => {
-  assert.ok(Math.abs(courseBetweenFixes(0, 0, 0, 0.01) - 90) < 1e-6);
-  assert.ok(Math.abs(courseBetweenFixes(0, 0, -0.01, 0) - 180) < 1e-6);
-  assert.ok(
-    Math.abs(courseBetweenFixes(0, 179.9997, 0, -179.9997) - 90) < 1e-6,
-  );
-  assert.equal(courseBetweenFixes(30, -97, 30.0001, -97), null, 'about 11 m');
-  assert.equal(courseBetweenFixes(null, 0, 0, 0.01), null);
+  assert.ok(Math.abs(course(0, 0, 0, 0.01) - 90) < 1e-6);
+  assert.ok(Math.abs(course(0, 0, -0.01, 0) - 180) < 1e-6);
+  assert.ok(Math.abs(course(0, 179.9997, 0, -179.9997) - 90) < 1e-6);
+  assert.equal(course(30, -97, 30.0001, -97), null, 'about 11 m');
 });
 
 test('the anchor moves only with a course, and only forward in time', () => {

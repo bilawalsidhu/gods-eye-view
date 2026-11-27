@@ -32,18 +32,7 @@ export function createLifecycle({
         parts.rendering.syncSelectionFill,
       );
       // Cached markers and geometry become visible before the next fetch.
-      if (
-        layerState.records?.some((r) =>
-          r.sources?.some((s) => s.name === 'OpenStreetMap'),
-        )
-      )
-        services.credits?.showOsmCredit?.(layerState.viewer, LAYER_ID, {
-          openMapTiles: layerState.records.some((r) =>
-            r.sources?.some(
-              (s) => s.name === 'OpenStreetMap' && s.id?.startsWith('tile:'),
-            ),
-          ),
-        });
+      parts.rendering.syncOsmCredit();
       parts.namedMarkers?.enable();
       parts.namedMarkers?.sync(layerState.records || []);
       registerPickOwner(LAYER_ID, (id) => layerState.recordById.has(id));

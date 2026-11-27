@@ -2,7 +2,7 @@
 // stubbed /api/launches, so a failed first load takes the browser's path.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DataLayerManager } from '../../data/manager.js';
+import { DataLayerManager } from '../../testSupport/dataLayerManager.mjs';
 import { ContextControls } from '../../ui/contextControls.js';
 import { createLaunchSource } from './source.js';
 import { createState } from './state.js';

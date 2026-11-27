@@ -16,8 +16,6 @@ import {
 
 import { msg } from '../../../../i18n/index.js';
 
-export { panoSizeFor } from '../../photoViewer.js';
-
 /** English data: the Street Level panel translates it (translateKnown). */
 const LOAD_FAILED = msg('The KartaView photo could not be loaded');
 

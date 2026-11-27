@@ -17,6 +17,8 @@ export function createSelection({
   parts,
   source,
 }) {
+  const { setOverlayEntries, clearOverlaySource } = services.overlays;
+
   /**
    * Build a multi-line text label for the selected station popup.
    * Shows station name, availability counts, and any abnormal operational flags.
@@ -106,7 +108,7 @@ export function createSelection({
     if (record?.position)
       layerState._stationSet?.upsert([parts.rendering.stationItem(record)]);
     if (layerState._selectedSet?.size()) layerState._selectedSet.clear();
-    layerState._overlayHost.clearSource(BIKESHARE_SELECTED_OVERLAY_SOURCE_ID);
+    clearOverlaySource(BIKESHARE_SELECTED_OVERLAY_SOURCE_ID);
   }
 
   /**
@@ -129,7 +131,7 @@ export function createSelection({
     ]);
     const entry = createBikeshareSelectedOverlayEntry(key, record);
     if (entry) {
-      layerState._overlayHost.setEntries(
+      setOverlayEntries(
         BIKESHARE_SELECTED_OVERLAY_SOURCE_ID,
         [entry],
         BIKESHARE_SELECTED_OVERLAY_SOURCE_OPTIONS,

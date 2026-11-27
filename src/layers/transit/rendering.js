@@ -17,7 +17,7 @@ import {
   applyDisplayCourse,
   playbackMoving,
   syncPlayback,
-} from './movement.js';
+} from '../../data/transitMovement.js';
 import {
   SELECTED_ICON_PX,
   haloFrame,
@@ -115,19 +115,17 @@ export function createRendering({ state, services, parts }) {
   function createMarkers(viewer) {
     destroyMarkers(viewer);
     const draw = drawOf(viewer);
-    const drawOrder = (layerId) =>
-      services.sprites?.spriteDrawOrder?.(layerId) ?? 0;
     state._stillIcons = draw.icons({
       id: `transit:${instance}:still`,
       blend: 'translucent',
       show: false,
-      drawOrder: drawOrder('transit'),
+      drawOrder: services.sprites.spriteDrawOrder('transit'),
     });
     state._movingIcons = draw.icons({
       id: `transit:${instance}:moving`,
       blend: 'translucent',
       show: false,
-      drawOrder: drawOrder('transit-motion'),
+      drawOrder: services.sprites.spriteDrawOrder('transit-motion'),
     });
     // Emptied, they are drawn now: in the scene at once.
     state._stillIcons.set([]);
@@ -435,7 +433,7 @@ export function createRendering({ state, services, parts }) {
         flatTerrain = flat;
         // Floors read under the last answer are read again under this one,
         // in a fresh cycle (which replaces the one pending).
-        if (state._enabled) parts.height.anchorFloors?.();
+        if (state._enabled) parts.height.anchorFloors();
       },
       () => {
         // Asked again at the next read.
@@ -931,7 +929,7 @@ export function createRendering({ state, services, parts }) {
   let modelItems = new Map();
   let spareItems = new Map();
   /** The lift icons are drawn with above the floor; a model stands on the floor. */
-  const groundLiftM = services.ground?.GROUND_FLOOR_LIFT_M || 0;
+  const groundLiftM = services.ground.GROUND_FLOOR_LIFT_M;
 
   /** Load the fleet set and create the layer's models (on enable). */
   function startModels() {

@@ -8,7 +8,7 @@
  */
 import { spawnSync } from 'node:child_process';
 
-const FILES = ['src/aircraftViewsUnknownSubject.test.mjs'];
+const FILES = ['src/tooling/aircraftViewsUnknownSubject.test.mjs'];
 const run = spawnSync(process.execPath, ['--test', ...FILES], {
   stdio: 'inherit',
   env: { ...process.env, GEV_BLENDER_TESTS: '1' },

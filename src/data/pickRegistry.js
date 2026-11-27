@@ -65,15 +65,7 @@ export function unregisterPickOwner(layerId) {
  * @returns {string|null} Owning layer id.
  */
 export function findPickOwner(pickedId) {
-  if (!pickedId) return null;
-  for (const [ownerId, predicate] of _owners) {
-    try {
-      if (predicate(pickedId)) return ownerId;
-    } catch {
-      // a broken predicate must never break picking
-    }
-  }
-  return null;
+  return ownerOf(pickedId);
 }
 
 /**
@@ -83,16 +75,21 @@ export function findPickOwner(pickedId) {
  * @returns {boolean}
  */
 export function isOwnedByOtherLayer(layerId, pickedId) {
-  if (!pickedId) return false;
+  return ownerOf(pickedId, layerId) !== null;
+}
+
+/** The first registered layer other than `skipLayerId` that owns `pickedId`, or null. */
+function ownerOf(pickedId, skipLayerId) {
+  if (!pickedId) return null;
   for (const [ownerId, predicate] of _owners) {
-    if (ownerId === layerId) continue;
+    if (ownerId === skipLayerId) continue;
     try {
-      if (predicate(pickedId)) return true;
+      if (predicate(pickedId)) return ownerId;
     } catch {
-      // a broken predicate must never break click handling
+      // a broken predicate must never break picking
     }
   }
-  return false;
+  return null;
 }
 
 /**

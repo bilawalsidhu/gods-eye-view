@@ -33,6 +33,7 @@ import {
   findQuery,
 } from '../../render/rendererOf.js';
 import { heightsOf } from '../../queries/heights.js';
+import { fnv1a } from '../../data/fnv1a.js';
 import {
   fromDegrees,
   fromDegreesInto,
@@ -103,16 +104,6 @@ function frustumVolumeItem(id, positions, color) {
     color,
     flat: true,
   };
-}
-
-/** FNV-1a over a camera id: a stable, well-spread order for crowded cells. */
-function idHash(id) {
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < id.length; i++) {
-    hash ^= id.charCodeAt(i);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return hash >>> 0;
 }
 
 export function createRendering({
@@ -802,7 +793,8 @@ export function createRendering({
           : status === 'offline'
             ? 3
             : 2;
-    record.viewHash ??= idHash(record.camera.id);
+    // FNV-1a over the camera id: a stable, well-spread order for crowded cells.
+    record.viewHash ??= fnv1a(record.camera.id);
     return tier * 2 ** 32 + record.viewHash;
   }
 

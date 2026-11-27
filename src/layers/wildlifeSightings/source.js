@@ -12,6 +12,7 @@ import {
   WILDLIFE_GRID_TILE_CAP,
   wildlifeGridCellId,
 } from './gridViewport.js';
+import { parseRetryAfterSeconds } from '../../sources/retryAfter.js';
 
 // Leave room for projected observations while bounding malformed proxy replies.
 const SNAPSHOT_MAX_BYTES = 2 * 1024 * 1024;
@@ -69,27 +70,6 @@ function validProjectedGrid(payload) {
     payload.cells.reduce((sum, cell) => sum + cell.cellCount, 0) ===
       payload.totalResults
   );
-}
-
-function retryAfterSeconds(value, nowMs) {
-  if (typeof value !== 'string' || !value.trim()) return null;
-  const text = value.trim();
-  if (/^\d+(?:\.\d+)?$/.test(text)) {
-    const seconds = Number(text);
-    return Number.isFinite(seconds)
-      ? Math.min(WILDLIFE_RETRY_AFTER_MAX_SEC, Math.ceil(seconds))
-      : null;
-  }
-  // Reject malformed numeric values rather than letting Date.parse interpret
-  // them as calendar dates. HTTP dates include a named weekday or month.
-  if (!/[a-z]/i.test(text)) return null;
-  const deadline = Date.parse(text);
-  return Number.isFinite(deadline) && Number.isFinite(nowMs)
-    ? Math.min(
-        WILDLIFE_RETRY_AFTER_MAX_SEC,
-        Math.max(0, Math.ceil((deadline - nowMs) / 1000)),
-      )
-    : null;
 }
 
 function validProjectedRows(rows, origin) {
@@ -231,10 +211,11 @@ export function createWildlifeSightingsSource({
     signal?.throwIfAborted();
     const response = await fetchImpl(url, { signal });
     signal?.throwIfAborted();
-    const retryAfterSec = retryAfterSeconds(
+    const told = parseRetryAfterSeconds(
       response.headers?.get?.('Retry-After'),
       now(),
     );
+    const retryAfterSec = told === null ? null : Math.max(0, told);
     const upstreamStatus =
       Number(response.headers?.get?.('X-Upstream-Status')) || 0;
     if (!response.ok) {

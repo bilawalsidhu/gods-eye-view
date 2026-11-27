@@ -29,10 +29,9 @@
  */
 
 import { feedProvenanceEnvelope } from './layerSnapshot.js';
-import { pointInRing } from './naturalEarthRegions.js';
+import { greatCircleKm, pointInRing } from '../geoDistance.js';
 import { pointInPreparedArea, prepareArea } from './areaGeometry.js';
 import { VOICE_LAYER_MANIFEST, voiceLayer } from '../voice/layerManifest.js';
-import { greatCircleKm } from '../geoDistance.js';
 
 /**
  * Layers the engine understands, with the fields queries may reference,

@@ -5,6 +5,16 @@ import WeatherReadout from './weather/WeatherReadout.vue';
 import { watchDisplayed } from './displayWatch.js';
 import { onPanelOpening } from './rail/panelContent.js';
 
+/** The Weather group's layers, in the order the layer panel lists them. */
+export const WEATHER_PANEL_LAYER_IDS = Object.freeze([
+  'air-quality',
+  'wind',
+  'weather-radar',
+  'weather-satellite',
+  'weather-lightning',
+  'weather-cyclones',
+]);
+
 // Remounting controls must not reopen a panel the user already collapsed.
 // Keyed by the page's Weather panel, which outlives remounted controls.
 const appearedPanels = new WeakSet();

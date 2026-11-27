@@ -21,22 +21,25 @@ import { bindRenderer } from '../../render/rendererOf.js';
 import {
   COLORS,
   COVERAGE_TUNING,
+  COVERAGE_ZOOMS,
   KEY_REJECTED_MESSAGE,
   PICK_PREFIX,
   RATE_LIMITED_MESSAGE,
 } from './providers/mapillary/policy.js';
 import {
-  coverageZoomForHeight,
   lonToTileX,
   latToTileY,
   tileBounds,
+  zoomForHeight,
 } from './tileMath.js';
+
+const mapillaryZoomFor = (h) => zoomForHeight(h, COVERAGE_ZOOMS);
 
 const { maxSequences: COVERAGE_MAX_SEQUENCES, maxTiles: COVERAGE_MAX_TILES } =
   COVERAGE_TUNING;
 
 /** Line coverage as the Mapillary provider builds it, over `source`. */
-function createCoverage({ state, source, zoomFor = coverageZoomForHeight }) {
+function createCoverage({ state, source, zoomFor = mapillaryZoomFor }) {
   return createLineCoverage({
     state,
     fetchTile: async (tile, { signal }) =>
@@ -280,7 +283,7 @@ test('a zoomFor in the older {zoom, kind} shape still draws its lines', async ()
   // an object: it must not ask for no tiles and say nothing.
   const { source, coverage, bytes, onGlobe } = setup({
     zoomFor: (height) => {
-      const zoom = coverageZoomForHeight(height);
+      const zoom = mapillaryZoomFor(height);
       return zoom == null ? null : { zoom, kind: 'sequence' };
     },
   });

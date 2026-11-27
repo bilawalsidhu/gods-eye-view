@@ -9,7 +9,13 @@
  * layer computes from concentrations, `usAqi.js`), the value itself and its
  * band.
  */
+import {
+  ambientLabelEntry,
+  topByPriority,
+} from '../../data/ambientLabelOverlay.js';
 import { concentrationIn, layerUnits } from './units.js';
+// usAqi.js imports this module too; both read the other's bindings only inside functions.
+import { AQI_PARAMETERS } from './usAqi.js';
 
 /** Colour used when a station reports no usable reading. */
 export const AIR_QUALITY_UNKNOWN_COLOR = '#6b7785';
@@ -81,24 +87,15 @@ export function createAirQualityOverlayEntry({
   accent,
   value,
 }) {
-  return {
-    id: String(id),
+  return ambientLabelEntry({
+    id,
     position,
-    variant: 'label',
     title,
     accent,
     // Worse air wins the label budget — the reading people need to see first.
     priority: Math.round(Number(value) || 0) * 1000,
-    collisionGroup: 'ambient-label',
-    paintLane: 'ambient-label',
-    interactive: false,
-    edgeFade: 'keyhole',
-    horizonCull: true,
-    terrainOcclusion: false,
     gapPx: 14,
-    verticalOnly: true,
-    placement: 'above',
-  };
+  });
 }
 
 /** Keep the worst readings, with stable identity as the tie-break. */
@@ -106,18 +103,7 @@ export function selectAirQualityOverlayCohort(
   entries,
   limit = AIR_QUALITY_OVERLAY_COHORT_LIMIT,
 ) {
-  const cap = Math.max(
-    0,
-    Math.min(AIR_QUALITY_OVERLAY_COHORT_LIMIT, Math.floor(Number(limit) || 0)),
-  );
-  if (!Array.isArray(entries) || cap === 0) return [];
-  return entries
-    .slice()
-    .sort(
-      (a, b) =>
-        b.priority - a.priority || String(a.id).localeCompare(String(b.id)),
-    )
-    .slice(0, cap);
+  return topByPriority(entries, limit, AIR_QUALITY_OVERLAY_COHORT_LIMIT);
 }
 
 /** Whether a reading lies inside a lon/lat rectangle; a null rectangle holds everything. */
@@ -211,8 +197,7 @@ export function mapAnalystRecord(raw, index = 0) {
                 ...Object.fromEntries(
                   Object.entries(raw.aqiValues ?? {}).filter(
                     ([id, v]) =>
-                      ['pm25', 'pm10', 'o3', 'no2', 'so2', 'co'].includes(id) &&
-                      Number.isFinite(v),
+                      Object.hasOwn(AQI_PARAMETERS, id) && Number.isFinite(v),
                   ),
                 ),
                 aqi: raw.aqi

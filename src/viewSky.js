@@ -49,7 +49,7 @@ export function createViewSky(
 ) {
   const sky = findGlobe(viewer)?.sky ?? null;
   if (!sky) {
-    store?.publishSky?.(null);
+    store.publishSky(null);
     return { destroy() {} };
   }
   const choice = readSaved(storage);
@@ -57,7 +57,7 @@ export function createViewSky(
 
   function publish() {
     const shown = sky.get();
-    store?.publishSky?.({
+    store.publishSky({
       switches: Object.fromEntries(
         SKY_SWITCHES.map((key) => [key, Boolean(shown[key])]),
       ),
@@ -80,7 +80,7 @@ export function createViewSky(
     publish();
   }
 
-  const token = store?.connect?.({
+  const token = store.connect({
     setSkySwitch(key, on) {
       if (!SKY_SWITCHES.includes(key)) return;
       apply({ [key]: Boolean(on) });
@@ -96,8 +96,8 @@ export function createViewSky(
 
   return {
     destroy() {
-      if (token) store?.detach?.(token);
-      store?.publishSky?.(null);
+      if (token) store.detach(token);
+      store.publishSky(null);
     },
   };
 }

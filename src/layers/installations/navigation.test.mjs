@@ -29,6 +29,7 @@ test('camera changes debounce, deduplicate moveEnd, cancel superseded loads and 
       setShown() {},
       detach() {},
       clearRendered() {},
+      syncOsmCredit() {},
     },
     ingestion: {
       loadInstallations() {

@@ -14,7 +14,11 @@ import { rm } from 'node:fs/promises';
 import { gbfsProxy } from '../../../server/providers/gbfs.js';
 import { localProviderPlugins } from '../../../server/providers/local.js';
 import { createBikeshareSource } from './source.js';
-import { createModel } from './model.js';
+import {
+  parseStationInformation,
+  parseStationStatus,
+  toNonNegativeInteger,
+} from '../../sources/gbfsStations.js';
 import { CITY_BY_ID } from './registry.js';
 import { makeFixtureRoot } from '../../tooling/fixtureRoot.mjs';
 
@@ -160,9 +164,8 @@ test('the station source reaches the mounted proxy and both documents join into 
     'the proxy reached the upstream the client asked for, unchanged',
   );
 
-  const model = createModel({});
-  const infoMap = model.parseStationInformation(info);
-  const statusMap = model.parseStationStatus(status);
+  const infoMap = parseStationInformation(info);
+  const statusMap = parseStationStatus(status);
   const station = infoMap.get('2537');
   const availability = statusMap.get('2537');
   assert.ok(station, 'station information survived the round trip');
@@ -380,9 +383,8 @@ for (const hook of ['configureServer', 'configurePreviewServer']) {
       AUSTIN.stationStatusUrl,
     ]);
 
-    const model = createModel({});
-    const station = model.parseStationInformation(info).get('2537');
-    const availability = model.parseStationStatus(status).get('2537');
+    const station = parseStationInformation(info).get('2537');
+    const availability = parseStationStatus(status).get('2537');
     assert.deepEqual(
       {
         name: station?.name,
@@ -421,18 +423,17 @@ test('unknown GBFS counts stay unknown through the source, model and station col
           },
         }),
     });
-    const model = createModel({});
-    const status = model
-      .parseStationStatus(await source.getStations(AUSTIN.stationStatusUrl))
-      .get('2537');
+    const status = parseStationStatus(
+      await source.getStations(AUSTIN.stationStatusUrl),
+    ).get('2537');
     const rendering = createRendering({
       state: {},
       services: { render: {} },
-      parts: { model },
+      parts: {},
     });
     assert.equal(status.bikesAvailable, null);
     assert.equal(
-      model.toNonNegativeInteger(status.bikesAvailable),
+      toNonNegativeInteger(status.bikesAvailable),
       null,
       'render-map normalization preserves unknown',
     );
@@ -444,18 +445,17 @@ test('unknown GBFS counts stay unknown through the source, model and station col
       'reported zero is still empty',
     );
     assert.equal(
-      model.toNonNegativeInteger(missing, 7),
+      toNonNegativeInteger(missing, 7),
       7,
       'caller fallback is preserved',
     );
-    assert.equal(model.toNonNegativeInteger('3'), 3);
+    assert.equal(toNonNegativeInteger('3'), 3);
   }
 });
 
 test('a station without a published capacity re-derives it from every status poll', async () => {
   const { createRendering } = await import('./rendering.js');
   const { COLOR_YELLOW } = await import('./policy.js');
-  const model = createModel({});
   const state = {
     _cityRuntime: new Map(),
     _stationRenderMap: new Map(),
@@ -464,9 +464,9 @@ test('a station without a published capacity re-derives it from every status pol
   const rendering = createRendering({
     state,
     services: { render: { governorRequestRender() {} } },
-    parts: { model },
+    parts: {},
   });
-  const info = model.parseStationInformation({
+  const info = parseStationInformation({
     data: {
       stations: [
         { station_id: 'open', name: 'Open', lat: 30.26, lon: -97.74 },
@@ -484,7 +484,7 @@ test('a station without a published capacity re-derives it from every status pol
   const poll = (stations) =>
     rendering.applyStatusToPoints(
       'austin',
-      model.parseStationStatus({ data: { stations } }),
+      parseStationStatus({ data: { stations } }),
     );
   const open = state._stationRenderMap.get('austin:open');
   const fixed = state._stationRenderMap.get('austin:fixed');

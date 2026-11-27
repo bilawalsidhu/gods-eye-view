@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { installRenderFailureNotice } from './renderFailure.js';
+import { renderLoopFixture } from './renderLoopFixture.mjs';
 
 function fixture(t, options = {}) {
   const canvasListeners = new Map();
@@ -175,3 +176,340 @@ test('uninstall removes the listeners and the notice', (t) => {
   f.frame(new Error('later'));
   assert.equal(f.store.renderFailure, null);
 });
+
+// Errors thrown in the render loop outside Scene's tryAndCatchError. Drives
+// Cesium's real startRenderLoop through the useDefaultRenderLoop setter.
+function runLoop(render) {
+  const scene = {
+    renderError: new Cesium.Event(),
+    preUpdate: new Cesium.Event(),
+    postRender: new Cesium.Event(),
+    requestRender() {},
+    initializeFrame() {},
+    render,
+  };
+  const fixture = renderLoopFixture(scene);
+  fixture.viewer.useDefaultRenderLoop = true;
+  fixture.runFrames(3);
+  return { ...fixture, uninstall: fixture.restore };
+}
+
+test('an error thrown outside tryAndCatchError still shows the notice', () => {
+  // Scene.render raises preRender outside tryAndCatchError (Scene.js:4439),
+  // so a listener's exception propagates.
+  const { widget, store, logged, uninstall } = runLoop(function () {
+    this.preUpdate.raiseEvent(this);
+    throw new TypeError("Cannot read properties of undefined (reading 'x')");
+  });
+  assert.equal(widget.useDefaultRenderLoop, false);
+  assert.equal(store.renderFailure?.reason, 'render-error');
+  assert.equal(logged.length, 1);
+  uninstall();
+});
+
+test('an error Scene raised and threw on with rethrowRenderErrors is reported once', () => {
+  const { store, logged, uninstall } = runLoop(function () {
+    this.preUpdate.raiseEvent(this);
+    const error = new Error('boom');
+    this.renderError.raiseEvent(this, error);
+    throw error;
+  });
+  assert.equal(store.renderFailure?.detail, 'boom');
+  assert.equal(logged.length, 1);
+  uninstall();
+});
+
+// Retry after an error Scene catches itself: the loop is marked stopped but
+// its next frame is still queued, so an early Retry must not start a second
+// loop. Drives Cesium's real startRenderLoop and useDefaultRenderLoop setter.
+function secondLoopSetup({ targetFrameRate } = {}) {
+  const scene = {
+    renderError: new Cesium.Event(),
+    preUpdate: new Cesium.Event(),
+    preRender: new Cesium.Event(),
+    postRender: new Cesium.Event(),
+    broken: false,
+    drawn: 0,
+    requestRender() {},
+    initializeFrame() {},
+    // Scene.render (Scene.js:4369): an update error is caught by
+    // tryAndCatchError, which raises renderError and returns normally.
+    render(time) {
+      this.drawn += 1;
+      this.preUpdate.raiseEvent(this, time);
+      if (this.broken) this.renderError.raiseEvent(this, new Error('boom'));
+      this.preRender.raiseEvent(this, time);
+      this.postRender.raiseEvent(this, time);
+    },
+  };
+  return { scene, ...renderLoopFixture(scene, { targetFrameRate }) };
+}
+
+for (const targetFrameRate of [undefined, 60]) {
+  test(`targetFrameRate ${targetFrameRate}: Retry before the next frame after an error Scene caught keeps one render loop`, () => {
+    const { frames, scene, viewer, store, runFrames, restore } =
+      secondLoopSetup({
+        targetFrameRate,
+      });
+    try {
+      viewer.useDefaultRenderLoop = true;
+      runFrames(2);
+      scene.broken = true;
+      runFrames(1);
+      assert.equal(store.renderFailure?.reason, 'render-error');
+      // The cause is gone; Retry runs (a queued Enter on the focused Retry)
+      // before the loop's next animation frame.
+      scene.broken = false;
+      store.renderFailure.retry();
+      assert.equal(frames.length, 1, 'one animation frame queued after Retry');
+      scene.drawn = 0;
+      runFrames(3);
+      assert.equal(store.renderFailure, null);
+      assert.equal(scene.drawn, 3, 'the globe draws once a frame');
+    } finally {
+      restore();
+    }
+  });
+}
+
+test('control: Retry after the next frame ran keeps one render loop', () => {
+  const { frames, scene, viewer, store, runFrames, restore } =
+    secondLoopSetup();
+  try {
+    viewer.useDefaultRenderLoop = true;
+    runFrames(2);
+    scene.broken = true;
+    runFrames(1);
+    scene.broken = false;
+    runFrames(1);
+    assert.equal(frames.length, 0, 'the stopped loop queued nothing');
+    store.renderFailure.retry();
+    scene.drawn = 0;
+    runFrames(3);
+    assert.equal(scene.drawn, 3);
+  } finally {
+    restore();
+  }
+});
+
+test('a tab hidden and shown again before the next frame after an error Scene caught keeps one render loop', () => {
+  const { scene, viewer, runFrames, restore } = secondLoopSetup();
+  try {
+    viewer.useDefaultRenderLoop = true;
+    runFrames(2);
+    scene.broken = true;
+    runFrames(1);
+    scene.broken = false;
+    // src/app/tools.js turns the loop off while the tab is hidden and back on
+    // when it is shown, before the queued frame runs.
+    viewer.useDefaultRenderLoop = false;
+    viewer.useDefaultRenderLoop = true;
+    scene.drawn = 0;
+    runFrames(3);
+    assert.equal(scene.drawn, 3, 'the globe draws once a frame');
+  } finally {
+    restore();
+  }
+});
+
+// Retry after a scene event listener throws. Cesium's Event.raiseEvent has no
+// try/finally, so the event stays mid-raise and only queues listener changes.
+// Drives Cesium's real Event and startRenderLoop.
+function eventRetrySetup() {
+  // Scene.render as in Scene.js:4369: preUpdate always, preRender/postRender
+  // only when a frame is rendered (requestRenderMode idle skips them).
+  const scene = {
+    renderError: new Cesium.Event(),
+    preUpdate: new Cesium.Event(),
+    preRender: new Cesium.Event(),
+    postRender: new Cesium.Event(),
+    requestRenderMode: true,
+    _renderRequested: false,
+    rendered: 0,
+    requestRender() {
+      this._renderRequested = true;
+    },
+    initializeFrame() {},
+    render(time) {
+      this.preUpdate.raiseEvent(this, time);
+      const shouldRender = !this.requestRenderMode || this._renderRequested;
+      if (!shouldRender) return;
+      this._renderRequested = false;
+      this.preRender.raiseEvent(this, time);
+      this.rendered += 1;
+      this.postRender.raiseEvent(this, time);
+    },
+  };
+  return { scene, ...renderLoopFixture(scene) };
+}
+
+for (const eventName of ['postRender', 'preUpdate']) {
+  test(`idle: a ${eventName} listener that threw once; a successful Retry clears the notice`, () => {
+    const { scene, viewer, store, runFrames, restore } = eventRetrySetup();
+    try {
+      let broken = true;
+      scene[eventName].addEventListener(() => {
+        if (broken) throw new TypeError('listener failed');
+      });
+      scene.requestRender();
+      viewer.useDefaultRenderLoop = true;
+      runFrames(1);
+      assert.equal(store.renderFailure?.reason, 'render-error');
+      assert.equal(viewer.useDefaultRenderLoop, false);
+      broken = false; // the cause goes away
+      store.renderFailure.retry();
+      const before = scene.rendered;
+      runFrames(10); // idle: no camera move, no render request
+      assert.ok(scene.rendered > before, 'the globe drew again');
+      assert.equal(store.renderFailure, null, 'the notice is cleared');
+    } finally {
+      restore();
+    }
+  });
+}
+
+test('a throwing postRender listener removed before Retry is not called again', () => {
+  const { scene, viewer, store, runFrames, restore } = eventRetrySetup();
+  try {
+    let calls = 0;
+    const remove = scene.postRender.addEventListener(() => {
+      calls += 1;
+      throw new TypeError('layer listener failed');
+    });
+    scene.requestRender();
+    viewer.useDefaultRenderLoop = true;
+    runFrames(1);
+    assert.equal(store.renderFailure?.reason, 'render-error');
+    remove(); // the user turns the layer off
+    store.renderFailure.retry();
+    runFrames(5);
+    assert.equal(calls, 1, 'the removed listener ran again after Retry');
+    assert.equal(viewer.useDefaultRenderLoop, true, 'the loop keeps running');
+    assert.equal(store.renderFailure, null, 'the notice is cleared');
+  } finally {
+    restore();
+  }
+});
+
+const listenerCount = (event) =>
+  [...event._listeners.values()].reduce((sum, scopes) => sum + scopes.size, 0);
+
+// While the loop is stopped, a layer turned off and on again, or a ground
+// task in worldAnnotationRenderer that starts, times out and starts again.
+const RESUBSCRIBE = {
+  'turned off and on': (event, listener) => {
+    event.removeEventListener(listener);
+    event.addEventListener(listener);
+  },
+  'added, removed and added again': (event, listener) => {
+    event.addEventListener(listener);
+    event.removeEventListener(listener);
+    event.addEventListener(listener);
+  },
+};
+
+for (const [name, resubscribe] of Object.entries(RESUBSCRIBE)) {
+  test(`a listener ${name} while the loop is stopped runs after Retry`, () => {
+    const { scene, viewer, store, runFrames, restore } = eventRetrySetup();
+    try {
+      let broken = true;
+      scene.postRender.addEventListener(() => {
+        if (broken) throw new TypeError('layer listener failed');
+      });
+      let calls = 0;
+      const listener = () => {
+        calls += 1;
+      };
+      if (name === 'turned off and on')
+        scene.postRender.addEventListener(listener);
+      scene.requestRender();
+      viewer.useDefaultRenderLoop = true;
+      runFrames(1);
+      assert.equal(store.renderFailure?.reason, 'render-error');
+      resubscribe(scene.postRender, listener);
+      broken = false;
+      store.renderFailure.retry();
+      calls = 0;
+      scene.requestRender();
+      runFrames(3);
+      assert.ok(calls > 0, 'the re-added listener runs after Retry');
+      assert.equal(
+        scene.postRender.numberOfListeners,
+        listenerCount(scene.postRender),
+      );
+    } finally {
+      restore();
+    }
+  });
+}
+
+// Every event a listener's error can cut short is finished when the error
+// surfaces, so a listener added at once is subscribed.
+const FRAME_EVENTS = {
+  'scene.preUpdate': (v) => v.scene.preUpdate,
+  'scene.postUpdate': (v) => v.scene.postUpdate,
+  'scene.preRender': (v) => v.scene.preRender,
+  'scene.postRender': (v) => v.scene.postRender,
+  'camera.changed': (v) => v.scene.camera.changed,
+  'camera.moveStart': (v) => v.scene.camera.moveStart,
+  'camera.moveEnd': (v) => v.scene.camera.moveEnd,
+  'clock.onTick': (v) => v.clock.onTick,
+  'clock.onStop': (v) => v.clock.onStop,
+  'globe.tileLoadProgressEvent': (v) => v.scene.globe.tileLoadProgressEvent,
+  'tileset.loadProgress': (v) => v.scene.primitives.get(0).loadProgress,
+  'tileset.allTilesLoaded': (v) => v.scene.primitives.get(0).allTilesLoaded,
+  'tileset.initialTilesLoaded': (v) =>
+    v.scene.primitives.get(0).initialTilesLoaded,
+};
+
+for (const [name, pick] of Object.entries(FRAME_EVENTS)) {
+  test(`a listener that throws in ${name} leaves it finished`, () => {
+    const events = () => ({
+      changed: new Cesium.Event(),
+      moveStart: new Cesium.Event(),
+      moveEnd: new Cesium.Event(),
+    });
+    const tileset = {
+      loadProgress: new Cesium.Event(),
+      allTilesLoaded: new Cesium.Event(),
+      initialTilesLoaded: new Cesium.Event(),
+    };
+    const viewer = {
+      scene: {
+        renderError: new Cesium.Event(),
+        preUpdate: new Cesium.Event(),
+        postUpdate: new Cesium.Event(),
+        preRender: new Cesium.Event(),
+        postRender: new Cesium.Event(),
+        camera: events(),
+        globe: { tileLoadProgressEvent: new Cesium.Event() },
+        primitives: { length: 1, get: () => tileset },
+      },
+      clock: { onTick: new Cesium.Event(), onStop: new Cesium.Event() },
+      canvas: { addEventListener() {}, removeEventListener() {} },
+      cesiumWidget: {
+        _renderLoopRunning: false,
+        render: () => pick(viewer).raiseEvent(),
+      },
+    };
+    const store = { publishRenderFailure() {} };
+    const uninstall = installRenderFailureNotice(viewer, {
+      store,
+      locationRef: { href: 'https://gev.example/', reload() {}, assign() {} },
+      logError() {},
+    });
+    try {
+      const event = pick(viewer);
+      event.addEventListener(() => {
+        throw new TypeError('listener failed');
+      });
+      assert.throws(() => viewer.cesiumWidget.render(), TypeError);
+      assert.equal(event._invokingListeners, false);
+      const listener = () => {};
+      event.addEventListener(listener);
+      assert.ok(event._listeners.has(listener));
+    } finally {
+      uninstall();
+    }
+  });
+}

@@ -5,7 +5,7 @@ import {
   isLoopbackPeer,
 } from './common/rate-limit.js';
 import { hasProxySignals } from '../../src/localRequestGate.mjs';
-import { readRequestBodyCapped } from './common/request.js';
+import { readRequestBody } from './common/request.js';
 import { admitSameSiteKeyless } from './common/same-site.js';
 import {
   OVERPASS_MAX_BODY_BYTES,
@@ -167,9 +167,7 @@ function overpassProxy({ routing = {} } = {}) {
         // Collect POST body with a hard byte cap (Overpass QL queries are small)
         let body;
         try {
-          body = (
-            await readRequestBodyCapped(req, OVERPASS_MAX_BODY_BYTES)
-          ).toString();
+          body = await readRequestBody(req, OVERPASS_MAX_BODY_BYTES);
         } catch (err) {
           if (err?.code === 'BODY_TOO_LARGE') {
             res.writeHead(413, { 'Content-Type': 'application/json' });

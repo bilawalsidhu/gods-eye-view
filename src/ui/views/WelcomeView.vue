@@ -2,7 +2,7 @@
 import { storeToRefs } from 'pinia';
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { msg, t } from '../../i18n/index.js';
-import { FIRST_RUN_LINKS, environmentalLabel } from '../../firstRunCopy.js';
+import { FIRST_RUN_LINKS, ENVIRONMENTAL_TITLE } from '../../firstRunCopy.js';
 import UiButton from '../kit/UiButton.vue';
 import UiCheckbox from '../kit/UiCheckbox.vue';
 import UiIcon from '../kit/UiIcon.vue';
@@ -230,11 +230,11 @@ function onSuppress(event) {
           </UiButton>
           <UiButton data-first-run-start="environmental" :pressed="start === 'environmental'" :aria-disabled="String(settling || launcher?.busy === 'true')" @click="selectStart('environmental')">
             <UiIcon name="local_fire_department" :size="null" />
-            <!-- The title is ENVIRONMENTAL_LABEL_CHOICE's label once initialized. -->
+            <!-- The title is ENVIRONMENTAL_TITLE once initialized. -->
             <!-- Subcopy names BOTH feeds this tile turns on, because the launcher
                  optimizes for the fully configured experience (owner ruling,
                  2026-08-23) — see the mission table in src/firstRunExperience.js. -->
-            <span><strong data-first-run-environmental-title>{{ launcher?.environmentalTitle ?? environmentalLabel().title }}</strong><small>{{ launcher?.environmentalSub ?? t(ENVIRONMENTAL_SUB) }}</small></span>
+            <span><strong data-first-run-environmental-title>{{ launcher?.environmentalTitle ?? t(ENVIRONMENTAL_TITLE) }}</strong><small>{{ launcher?.environmentalSub ?? t(ENVIRONMENTAL_SUB) }}</small></span>
           </UiButton>
           <UiButton data-first-run-start="explore" :pressed="start === 'explore'" :aria-disabled="String(settling || launcher?.busy === 'true')" @click="selectStart('explore')">
             <UiIcon name="public" :size="null" />

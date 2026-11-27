@@ -8,6 +8,7 @@ import * as trails from '../../data/trailRenderer.js';
 import * as geoid from '../../data/geoid.js';
 import { markDetectionSourcesChanged } from '../../data/detection.js';
 import { refreshTrackedReadout } from '../../data/trackedReadout.js';
+import { appAssetUrl } from './overlayHost.js';
 
 /**
  * Construct the Local ADS-B layer, the browser RTL-SDR session it shares with
@@ -25,8 +26,7 @@ export function createApplicationLocalAdsb({
   surface = null,
   enrichment = null,
   displayParams = null,
-  resolveAsset = (url) =>
-    `${import.meta.env?.BASE_URL || '/'}${url.replace(/^\//, '')}`,
+  resolveAsset = appAssetUrl,
 } = {}) {
   return createLocalAdsbLayer({
     receiver,

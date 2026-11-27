@@ -9,7 +9,7 @@ import {
   WEATHER_SHELL_CACHE_BYTES,
   WEATHER_SHELL_HEIGHTS,
 } from './shellRendering.js';
-import { NO_IMAGERY_HOST } from './imageryHost.js';
+import { NO_IMAGERY_HOST } from '../../maps/imageryHost.js';
 import {
   bindShellFields,
   createShellCesium,

@@ -1,6 +1,6 @@
 import { positionMarkerGlyph, viewConeMarkerGlyph } from './glyphs.js';
 import { COLORS, POSITION_PICK_ID } from './policy.js';
-import { createHorizonCull } from './view.js';
+import { createHorizonCull } from '../../render/horizonCull.js';
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { drawOf } from '../../render/rendererOf.js';
 

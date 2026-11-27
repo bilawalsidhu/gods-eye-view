@@ -1035,7 +1035,7 @@ function installSceneRuntime(project = PROJECT_FIXTURE, { storage } = {}) {
 /**
  * Data manager double recording every reconcile call the director makes.
  *
- * Models the real abort contract (src/data/manager.js): an aborted transition
+ * Models the real abort contract (src/data/lifecycle.js): an aborted transition
  * is rolled back through the module's own disable() and answers false, so an
  * abort leaves NO half-applied layer — which is the whole point of passing the
  * signal rather than only checking a boolean afterwards.

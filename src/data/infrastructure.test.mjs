@@ -274,6 +274,7 @@ test('consumer build includes only infrastructure code and resolves assets under
   // renderer bound draws once the caller has loaded
   // `./render/cesium/unbound`.
   assert.deepEqual(sources.map((id) => id.split('/').at(-1)).sort(), [
+    'analystRecordLimit.js',
     'color.js',
     'contextGeometry.js',
     'dispatcher.js',

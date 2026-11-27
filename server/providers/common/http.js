@@ -20,11 +20,7 @@ export {
 export async function readCappedResponseText(upstream, maxBytes) {
   const declared = Number(upstream.headers.get('content-length'));
   if (Number.isFinite(declared) && declared > maxBytes) {
-    try {
-      await upstream.body?.cancel();
-    } catch {
-      /* no-op */
-    }
+    await upstream.body?.cancel?.().catch(() => {});
     return { tooLarge: true, text: '' };
   }
   if (
@@ -42,11 +38,7 @@ export async function readCappedResponseText(upstream, maxBytes) {
   for await (const chunk of upstream.body) {
     total += chunk.length;
     if (total > maxBytes) {
-      try {
-        await upstream.body.cancel();
-      } catch {
-        /* no-op */
-      }
+      await upstream.body.cancel?.().catch(() => {});
       return { tooLarge: true, text: '' };
     }
     text += decoder.decode(chunk, { stream: true });

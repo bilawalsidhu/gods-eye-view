@@ -1,4 +1,5 @@
 import { temeToPseudoFixed } from '../../geo/celestial.js';
+import { smoothstep } from '../../geo/vector.js';
 import {
   MISSION_ORBIT_PATTERN_GROUPS,
   MISSION_ORBIT_DASHES_PER_GROUP,
@@ -8,11 +9,6 @@ import {
 const CELL_PX = 8;
 /** The pattern image's height: the line's width, across. */
 const PATTERN_HEIGHT_PX = 16;
-
-const smoothstep = (edge0, edge1, x) => {
-  const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
-  return t * t * (3 - 2 * t);
-};
 
 /**
  * The selected-orbit tactical pattern, one group of it: a compact round dot

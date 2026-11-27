@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { markRaw, shallowRef } from 'vue';
+import { presented } from './presented.js';
 
 /**
  * The visible map target list as its view renders it. The world overlay
@@ -14,20 +14,10 @@ export const useWorldOverlayActionsStore = defineStore(
      * `{owner, items: [{key, label, selected}], status}`, or null without an
      * overlay host. `owner` is passed back with each activation.
      */
-    const actions = shallowRef(null);
-
-    /** @param {?object} next A fresh presentation; every publish re-renders. */
-    function publish(next) {
-      actions.value = next && markRaw(next);
-    }
+    const [actions, publish] = presented();
 
     /** The controls whose `activate(owner, key)` a target button calls. */
-    const controls = shallowRef(null);
-
-    /** @param {?object} next The controls, or null to disconnect. */
-    function connect(next) {
-      controls.value = next && markRaw(next);
-    }
+    const [controls, connect] = presented();
 
     return { actions, publish, controls, connect };
   },

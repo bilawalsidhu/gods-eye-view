@@ -1,6 +1,6 @@
 import { clampScopeFeatherPct } from '../scopeMaskPolicy.js';
 import { STYLE_STATUS_LABELS } from './visualPresets.js';
-import { RETIRED_STYLES } from '../visualStylePolicy.js';
+import { RETIRED_STYLES } from '../view/index.js';
 import { useDisplayStore } from './stores/display.js';
 import { applicationPinia } from './vueRuntime.js';
 import { onLocaleChange, t } from '../i18n/index.js';

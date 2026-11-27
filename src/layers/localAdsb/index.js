@@ -5,7 +5,7 @@ import {
   registerAircraftViews,
 } from '../../data/aircraftViews.js';
 import { rotorFrame } from '../../data/rotorFrames.js';
-import { KNOT_MPS } from '../../data/units.js';
+import { FOOT_M, KNOT_MPS } from '../../data/units.js';
 import {
   courseScreenRotation,
   stabilizeScreenRotation,
@@ -56,11 +56,9 @@ import {
 import { localAdsbStatus } from './status.js';
 import { entityRecord } from '../../data/entityRecords.js';
 
-export { HEARD_BY_RECEIVER } from './policy.js';
 export { localAdsbCardModel, localAdsbReceiverLine } from './card.js';
 export { localAdsbStatus } from './status.js';
 
-const FEET_TO_METERS = 0.3048;
 const RENDER_HOLD_ID = 'local-adsb';
 /** Picks looked through under a click for a local aircraft. */
 const CLICK_DRILL_LIMIT = 8;
@@ -251,9 +249,7 @@ export function createLocalAdsbLayer({
     if (marker.geoidN === null) marker.geoidN = geoidN(lat, lon);
     const height = pickRenderAltitudeM({
       geoAltM: null,
-      baroAltM: Number.isFinite(altitudeFt)
-        ? altitudeFt * FEET_TO_METERS
-        : null,
+      baroAltM: Number.isFinite(altitudeFt) ? altitudeFt * FOOT_M : null,
       onGround: false,
       surfaceM: null,
       geoidN: marker.geoidN,
@@ -316,10 +312,10 @@ export function createLocalAdsbLayer({
       latDeg: marker.lat ?? record.lat,
       lonDeg: marker.lon ?? record.lon,
       altitudeM: Number.isFinite(record.altitudeFt)
-        ? record.altitudeFt * FEET_TO_METERS
+        ? record.altitudeFt * FOOT_M
         : null,
       verticalRateMps: Number.isFinite(record.verticalRateFpm)
-        ? (record.verticalRateFpm * FEET_TO_METERS) / 60
+        ? (record.verticalRateFpm * FOOT_M) / 60
         : null,
       origin: route.origin,
       destination: route.destination,
@@ -1045,7 +1041,7 @@ export function createLocalAdsbLayer({
           lat,
           lon,
           altitudeM: Number.isFinite(record.altitudeFt)
-            ? Math.round(record.altitudeFt * 0.3048)
+            ? Math.round(record.altitudeFt * FOOT_M)
             : null,
           speedKts: num(record.groundSpeedKt),
           heading: num(record.trackDeg),

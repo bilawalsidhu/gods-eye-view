@@ -3,6 +3,7 @@ import {
   setOverlayEntries,
   setOverlaySourceVisible,
 } from '../../overlays/worldOverlay.js';
+import { cardClearance } from '../../overlays/worldOverlayTokens.js';
 import { t } from '../../i18n/index.js';
 
 /**
@@ -40,17 +41,6 @@ const CYCLONE_OVERLAY_HOST = Object.freeze({
   clearSource: clearOverlaySource,
 });
 
-/** Fire-card anchor clearance: the gap and leader start follow the marker. */
-function markerClearance(markerPx) {
-  const gapPx = Math.max(12, markerPx + 8);
-  return {
-    gapPx,
-    leaderOffsetPx: Math.max(2, gapPx - 6),
-    verticalOnly: true,
-    viewportMargin: 4,
-  };
-}
-
 const SHARED_CARD = Object.freeze({
   cardStyle: 'tactical',
   collisionGroup: 'ambient-card',
@@ -70,7 +60,7 @@ const SHARED_CARD = Object.freeze({
 function cycloneStormEntry(storm, selected) {
   return {
     ...SHARED_CARD,
-    ...markerClearance(
+    ...cardClearance(
       selected ? CYCLONE_MARKER_PX.selected : CYCLONE_MARKER_PX.storm,
     ),
     id: `storm:${storm.id}`,
@@ -98,7 +88,7 @@ function cycloneStormEntry(storm, selected) {
 function cycloneLeadEntry(stormId, point) {
   return {
     ...SHARED_CARD,
-    ...markerClearance(CYCLONE_MARKER_PX.forecast),
+    ...cardClearance(CYCLONE_MARKER_PX.forecast),
     id: `lead:${stormId}:${point.tauHours}`,
     position: point.position,
     variant: 'card',
@@ -123,7 +113,7 @@ function cycloneLeadEntry(stormId, point) {
 function cycloneDangerAreaEntry(stormId, position) {
   return {
     ...SHARED_CARD,
-    ...markerClearance(0),
+    ...cardClearance(0),
     id: `area:${stormId}`,
     position,
     variant: 'card',

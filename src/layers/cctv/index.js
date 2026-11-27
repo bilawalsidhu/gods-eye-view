@@ -19,6 +19,7 @@ import { createControls } from './controls.js';
 import { createIngestion } from './ingestion.js';
 import { createState } from './state.js';
 import { createDrawSets } from './drawSets.js';
+import { CCTV_SOURCE_METHODS } from './sourcePolicy.js';
 
 /**
  * Construct one layer with its own scene state and supplied application services.
@@ -32,11 +33,7 @@ import { createDrawSets } from './drawSets.js';
  * `Access-Control-Expose-Headers`. A frame without the header shows no time.
  */
 export function createCctvLayer({ services, source }) {
-  if (
-    !['getCatalog', 'getHealth', 'getFrameUrl', 'getMediaUrl'].every(
-      (key) => typeof source?.[key] === 'function',
-    )
-  )
+  if (!CCTV_SOURCE_METHODS.every((key) => typeof source?.[key] === 'function'))
     throw new TypeError('A camera source is required');
   const state = createState({ services });
   const parts = {};
@@ -65,7 +62,7 @@ export function createCctvLayer({ services, source }) {
     {},
     parts.controls.methods,
     parts.lifecycle.methods,
-    parts.ingestion?.methods,
+    parts.ingestion.methods,
     {
       calibrationPatchMovesAnchor:
         parts.calibration.calibrationPatchMovesAnchor,

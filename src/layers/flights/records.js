@@ -11,8 +11,8 @@ import {
   aircraftModelSpec,
   fleetModelSet,
 } from '../../data/fleetModels.js';
+import { approxDistanceKm } from '../../data/approxDistance.js';
 import {
-  approxDistanceKm,
   GROUND_FLOOR_CLAMP_RADIUS_KM,
   GROUND_FLOOR_WARM_MAX_ALT_M,
   LANDED_MISSING_POLL_LIMIT,

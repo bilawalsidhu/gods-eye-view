@@ -1,3 +1,4 @@
+import { clamp } from '../../geo/vector.js';
 import { createCalibrationGizmo } from '../../data/cctvGizmo.js';
 import {
   DEFAULT_CAMERA_CALIBRATION,
@@ -39,39 +40,31 @@ export function createCalibration({
     const raw = value && typeof value === 'object' ? value : {};
     return {
       offsetNorthM: parts.model.quantize(
-        parts.model.clamp(
-          parts.model.safeNumber(raw.offsetNorthM, 0),
-          -900,
-          900,
-        ),
+        clamp(parts.model.safeNumber(raw.offsetNorthM, 0), -900, 900),
         0.1,
       ),
       offsetEastM: parts.model.quantize(
-        parts.model.clamp(
-          parts.model.safeNumber(raw.offsetEastM, 0),
-          -900,
-          900,
-        ),
+        clamp(parts.model.safeNumber(raw.offsetEastM, 0), -900, 900),
         0.1,
       ),
       headingDeg: parts.model.quantize(
-        parts.model.clamp(parts.model.safeNumber(raw.headingDeg, 0), -180, 180),
+        clamp(parts.model.safeNumber(raw.headingDeg, 0), -180, 180),
         0.1,
       ),
       pitchDeg: parts.model.quantize(
-        parts.model.clamp(parts.model.safeNumber(raw.pitchDeg, 0), -45, 45),
+        clamp(parts.model.safeNumber(raw.pitchDeg, 0), -45, 45),
         0.1,
       ),
       fovDeg: parts.model.quantize(
-        parts.model.clamp(parts.model.safeNumber(raw.fovDeg, 0), -50, 50),
+        clamp(parts.model.safeNumber(raw.fovDeg, 0), -50, 50),
         0.1,
       ),
       rangeScale: parts.model.quantize(
-        parts.model.clamp(parts.model.safeNumber(raw.rangeScale, 1), 0.35, 3.0),
+        clamp(parts.model.safeNumber(raw.rangeScale, 1), 0.35, 3.0),
         0.01,
       ),
       heightM: parts.model.quantize(
-        parts.model.clamp(parts.model.safeNumber(raw.heightM, 0), -120, 240),
+        clamp(parts.model.safeNumber(raw.heightM, 0), -120, 240),
         0.1,
       ),
     };
@@ -89,12 +82,12 @@ export function createCalibration({
    * @returns {Object} A new values object.
    */
   function migrateRangeScaleForFloor(values, packRangeM) {
-    const oldBase = parts.model.clamp(
+    const oldBase = clamp(
       parts.model.safeNumber(packRangeM, 700),
       LEGACY_CALIBRATION_RANGE_FLOOR_M,
       2200,
     );
-    const newBase = parts.model.clamp(
+    const newBase = clamp(
       parts.model.safeNumber(packRangeM, 700),
       CALIBRATION_RANGE_FLOOR_M,
       2200,

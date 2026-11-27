@@ -3,7 +3,7 @@ import { fromDegrees, fromRadians } from '../../geo/ellipsoid.js';
 import { horizonFrom } from '../../geo/horizon.js';
 import { densifyRhumb } from '../../geo/rhumb.js';
 import { distance, toRadians } from '../../geo/vector.js';
-import { cssColor } from '../../render/color.js';
+import { cssColor, withAlpha } from '../../render/color.js';
 import { cameraOf, canvasOf, drawOf } from '../../render/rendererOf.js';
 import {
   clampLabel,
@@ -16,6 +16,8 @@ import {
 import { featureLabel, featureReference, geometryParts } from './geometry.js';
 import { cablePinImage } from './pin.js';
 import {
+  BASE_CABLE_COLOR,
+  BASE_LANDING_COLOR,
   CABLE_LAYER_ID,
   CABLE_LINE_GRANULARITY_M,
   CABLE_PIN_SIZE_PX,
@@ -34,9 +36,6 @@ const BLACK_OUTLINE = [0, 0, 0, 0.65];
 
 /** A polygon's edges are placed along rhumb lines a degree apart at most. */
 const POLYGON_GRANULARITY_M = (6378137 * Math.PI) / 180;
-
-/** A renderer colour with its alpha replaced. */
-const withAlpha = (color, alpha) => [color[0], color[1], color[2], alpha];
 
 /** A feature's CSS colour property, or null when absent or unreadable. */
 const propColor = (value) =>
@@ -204,7 +203,7 @@ export function createRendering({ state }) {
    */
   function buildFeatures(features, kind, out) {
     const cable = kind === 'cable';
-    const baseColor = cssColor(cable ? state.cableColor : state.landingColor);
+    const baseColor = cssColor(cable ? BASE_CABLE_COLOR : BASE_LANDING_COLOR);
     features.forEach((feature, index) => {
       // A feature with no reference still draws, as the GeoJSON loader drew
       // it: unstyled, not picked and never culled.

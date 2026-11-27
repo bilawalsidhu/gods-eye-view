@@ -74,8 +74,6 @@ export function createVesselState({ source, services }) {
     keydownHandler: null,
     /** Follow-change listener disposer. */
     trackedEntityRemover: null,
-    /** Test-only key target for enable-time interaction installation. */
-    interactionKeyTarget: null,
     preRenderRemover: null,
     /** Pending timer that renders one frame after a cadence-skipped pass. */
     trailingVisibilityTimer: null,
@@ -104,8 +102,6 @@ export function createVesselState({ source, services }) {
     trailHeadOff: null,
     /** @type {string|null} Id of the vessel that owns the active selected-vessel trail. */
     trailId: null,
-    /** @type {number} Monotonic token — invalidates in-flight backfill responses */
-    trailBackfillToken: 0,
     trailAbort: null,
   };
   return vesselState;

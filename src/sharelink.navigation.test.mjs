@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ShareLinkManager } from './sharelink.js';
 import { ShareRestoration } from './ui/shareRestoration.js';
-import { DataLayerManager } from './data/manager.js';
+import { DataLayerManager } from './testSupport/dataLayerManager.mjs';
 import {
   LAYER_STATE_REGISTRY,
   REGISTERED_LAYER_IDS,

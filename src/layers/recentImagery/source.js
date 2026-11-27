@@ -105,17 +105,14 @@ function withHalves(response, { presentBoxes, emptyBoxes }) {
  */
 export function createRecentImagerySource({
   fetchImpl = (...args) => globalThis.fetch(...args),
-  search = searchHls,
   thumbnailUrl = wvsSnapshotUrl,
-  tileTemplate = gibsTemplate,
-  credit = 'NASA GIBS',
   halfDeadlineMs = DEFAULT_HALF_DEADLINE_MS,
   setTimeoutImpl = (fn, ms) => globalThis.setTimeout(fn, ms),
   clearTimeoutImpl = (id) => globalThis.clearTimeout(id),
 } = {}) {
   return {
-    credit,
-    searchHls: (query) => search({ ...query, fetchImpl }),
+    credit: 'NASA GIBS',
+    searchHls: (query) => searchHls({ ...query, fetchImpl }),
     async getThumbnail(candidate, box, { size = 256, signal } = {}) {
       signal?.throwIfAborted();
       const halves = requestBoxes(box);
@@ -172,6 +169,6 @@ export function createRecentImagerySource({
         emptyBoxes: halvesWhere('false'),
       });
     },
-    getTileTemplate: (product, day) => tileTemplate(product, day),
+    getTileTemplate: (product, day) => gibsTemplate(product, day),
   };
 }

@@ -1,4 +1,5 @@
 import { zonedParts } from '../data/railTimeZones.js';
+import { lowPrecisionSun } from '../geo/lowPrecisionSun.js';
 import { formatDate, formatNumber, t } from '../i18n/index.js';
 
 /** Localized age of an elapsed observation. */
@@ -59,16 +60,11 @@ export function clockLine(zone, now = Date.now(), loading = false) {
 const RAD = Math.PI / 180;
 const DAY_MS = 86_400_000;
 const SUNRISE_ALTITUDE_SINE = Math.sin(-0.833 * RAD);
-const daysSince2000 = (now) => (now - Date.UTC(2000, 0, 1, 12)) / DAY_MS;
 
 /** The sun's declination, from the low-precision solar formula. */
 function sunDeclination(now) {
-  const d = daysSince2000(now);
-  const g = (357.529 + 0.98560028 * d) * RAD;
-  const q = 280.459 + 0.98564736 * d;
-  const ecliptic = (q + 1.915 * Math.sin(g) + 0.02 * Math.sin(2 * g)) * RAD;
-  const tilt = (23.439 - 0.00000036 * d) * RAD;
-  return Math.asin(Math.sin(tilt) * Math.sin(ecliptic));
+  const { eclipticLongitudeRad, obliquityRad } = lowPrecisionSun(now);
+  return Math.asin(Math.sin(obliquityRad) * Math.sin(eclipticLongitudeRad));
 }
 
 /**

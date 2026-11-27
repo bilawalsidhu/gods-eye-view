@@ -11,6 +11,7 @@
  */
 
 import { loadBundledJson } from './bundledJson.js';
+import { pointInRing } from '../geoDistance.js';
 import { createRetryableLoader } from './retryableLoad.js';
 
 // bbox = [west, south, east, north]; only load a city file when the point falls in its box.
@@ -65,21 +66,6 @@ function sameWords(featureWords, queryWords) {
   return q.length === f.size && q.every((w) => f.has(w));
 }
 
-/** Ray-casting point-in-ring. ring = [[lon,lat], …]. */
-function pointInRing(lon, lat, ring) {
-  let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const xi = ring[i][0];
-    const yi = ring[i][1];
-    const xj = ring[j][0];
-    const yj = ring[j][1];
-    const intersect =
-      yi > lat !== yj > lat && lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi;
-    if (intersect) inside = !inside;
-  }
-  return inside;
-}
-
 /** Normalize Polygon | MultiPolygon → array of polygons (each = [outerRing, ...holes]). */
 function toPolygons(geom) {
   if (!geom) return [];
@@ -93,10 +79,10 @@ function containingOuterRing(feature, lon, lat) {
   for (const poly of toPolygons(feature.geometry)) {
     const outer = poly[0];
     if (!outer || outer.length < 3) continue;
-    if (!pointInRing(lon, lat, outer)) continue;
+    if (!pointInRing(outer, lat, lon)) continue;
     let inHole = false;
     for (let h = 1; h < poly.length; h++) {
-      if (pointInRing(lon, lat, poly[h])) {
+      if (pointInRing(poly[h], lat, lon)) {
         inHole = true;
         break;
       }

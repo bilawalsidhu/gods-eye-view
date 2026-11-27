@@ -10,3 +10,8 @@ export function approxDistanceKm(lat1, lon1, lat2, lon2) {
     dLonDeg * 111.32 * Math.cos((((lat1 + lat2) / 2) * Math.PI) / 180);
   return Math.hypot(dLat, dLon);
 }
+
+/** {@link approxDistanceKm} in metres between `{lon, lat}` points. */
+export function approxDistanceM(a, b) {
+  return 1000 * approxDistanceKm(a.lat, a.lon, b.lat, b.lon);
+}

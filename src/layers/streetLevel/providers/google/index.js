@@ -12,7 +12,6 @@ import {
   GROUND_CLICK_HINT,
   KEY_REJECTED_MESSAGE,
   NEAREST_RADIUS_M,
-  NEAREST_RADIUS_MAX_M,
   NEAREST_TIMEOUT_MS,
   NO_ANSWER_MESSAGE,
   PICK_PREFIX,
@@ -89,7 +88,7 @@ export function createGoogleProvider({
       });
       const stopAuthWatch = loader.onAuthFailure(() => {
         // Switched off: its chip says so.
-        if (context.isActive?.())
+        if (context.isActive())
           context.actions.reportError(KEY_REJECTED_MESSAGE);
         context.notify();
       });
@@ -140,10 +139,8 @@ export function createGoogleProvider({
          */
         async nearestImage({ lat, lon }, { signal, radiusM } = {}) {
           if (loader.authFailed()) throw new Error(KEY_REJECTED_MESSAGE);
-          // Wider than the shared default only on request, never past the cap.
-          const radius = Number.isFinite(radiusM)
-            ? Math.min(NEAREST_RADIUS_MAX_M, Math.max(1, radiusM))
-            : NEAREST_RADIUS_M;
+          // The core passes a radius only when wider, already capped.
+          const radius = radiusM ?? NEAREST_RADIUS_M;
           signal?.throwIfAborted();
           // Set once the caller has its answer (aborted, timed out, refused):
           // a lookup still waiting on Google's script then asks nothing.

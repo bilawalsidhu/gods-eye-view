@@ -45,6 +45,7 @@ import {
   detectionHorizontalSector,
   labelBudgetFor,
   normalizeAllocationStrategy,
+  normalizeProfile,
   profileForDensity,
   viewScaleForAltitude,
 } from './detectionPolicy.js';
@@ -90,15 +91,6 @@ const MODE_BALANCED = 2;
 const MODE_DENSE = 3;
 /** @constant {string[]} MODE_LABELS - Human-readable labels indexed by mode value */
 const MODE_LABELS = ['OFF', 'SPARSE', 'BALANCED', 'DENSE'];
-
-/** @constant {Object<string,string>} LEGACY_MODE_ALIAS - Maps deprecated mode names to current labels */
-const LEGACY_MODE_ALIAS = {
-  SURVEY: 'SPARSE',
-  GOD: 'DENSE',
-  PANOPTIC: 'DENSE',
-  NORMAL: 'BALANCED',
-  ON: 'DENSE',
-};
 
 /**
  * @constant {Object<string, {line: string, label: string, labelBg: string, glow: string, blend: string, filter: string, scanline: number}>}
@@ -157,11 +149,7 @@ const BILL_FAR_SCALE = 0.5;
  * @returns {boolean}
  */
 export function detectionDebugRequested(search) {
-  try {
-    return new URLSearchParams(String(search ?? '')).get('detectDebug') === '1';
-  } catch {
-    return false;
-  }
+  return new URLSearchParams(String(search ?? '')).get('detectDebug') === '1';
 }
 
 /** Resolved once per `initDetection` — never re-read per frame. */
@@ -250,8 +238,6 @@ let _platePaint = DETECTION_THEME_MAP._default.calloutPlate;
 let _platePaintSpace = DETECTION_THEME_MAP._default.calloutPlateSpace;
 /** @type {Object} Active theme palette from THEME_MAP */
 let _theme = THEME_MAP._default;
-/** @type {string} Name of the active theme */
-let _themeName = 'normal';
 /** @type {number} Canonical density stop (0, 25, 50, 75, or 100). */
 let _densityPct = 50;
 /** @type {'ELASTIC'|'WEIGHTED'} Active layer-capacity splitter. */
@@ -506,7 +492,7 @@ export function cycleMode() {
  */
 export function setMode(modeLabel) {
   if (!modeLabel) return;
-  const target = _normalizeModeLabel(modeLabel);
+  const target = normalizeProfile(modeLabel);
   if (!target) return;
   if (target === 'OFF') {
     if (_mode !== MODE_OFF) _lastNonOffMode = _mode;
@@ -700,8 +686,7 @@ function _publishDiagnostics() {
  *   Falls back to '_default' for unrecognized names.
  */
 export function setDetectionStyle(styleName) {
-  _themeName = styleName || 'normal';
-  _theme = THEME_MAP[_themeName] || THEME_MAP._default;
+  _theme = THEME_MAP[styleName || 'normal'] || THEME_MAP._default;
   // Resolve the plate fills once per style change. The callout painter reads
   // these strings directly, so the hot path never builds a colour.
   _platePaint = _theme.calloutPlate || THEME_MAP._default.calloutPlate;
@@ -744,18 +729,6 @@ export function getDetectionTheme() {
     glow: _theme.glow,
     labelBg: _theme.labelBg,
   };
-}
-
-/**
- * Normalizes a mode label string, resolving legacy aliases to current names.
- * @param {string} label - Raw mode label (case-insensitive).
- * @returns {string|null} Canonical mode label or null if unrecognized.
- */
-function _normalizeModeLabel(label) {
-  const upper = String(label).toUpperCase();
-  if (LEGACY_MODE_ALIAS[upper]) return LEGACY_MODE_ALIAS[upper];
-  if (MODE_LABELS.includes(upper)) return upper;
-  return null;
 }
 
 /**
@@ -809,22 +782,20 @@ function _shouldPaintDetectionLane(frame) {
     _clearCyberSonarRenderTimer();
     _lastCyberSonarPaintAt = Number.NEGATIVE_INFINITY;
   }
-  // The skip and the follow-up request come from ONE decision, so the valve
-  // cannot drop a frame without handing its request forward — see
-  // `detectionPaintSkipDecision`. (Skipping is a deferral, never a cancellation:
-  // without a render hold, the frame this declines may be the only one anybody
-  // asked for.)
-  const decision = detectionPaintSkipDecision({
-    layoutChanged,
-    lastPaintMs: _lastPaintMs,
-    frameCount: _frameCount,
-  });
-  if (decision.skip) {
+  // A skip is a deferral, never a cancellation: without a render hold, the
+  // frame this declines may be the only one anybody asked for, so every skip
+  // requests a follow-up.
+  if (
+    detectionPaintSkipDecision({
+      layoutChanged,
+      lastPaintMs: _lastPaintMs,
+      frameCount: _frameCount,
+    })
+  ) {
     _throttleSkipCount++;
     if (_lastDiagnostics)
       _lastDiagnostics.throttleSkipCount = _throttleSkipCount;
-    if (decision.requestFollowUp)
-      governorRequestRender('detection-paint-skipped');
+    governorRequestRender('detection-paint-skipped');
     return false;
   }
   return true;
@@ -845,13 +816,7 @@ function _paintDetectionLane(frame) {
     _labelSolveDirty = true;
   }
   const start = performance.now();
-  const result = _drawOverlay(frame) || {
-    didSolve: false,
-    solveMs: 0,
-    fadingCount: 0,
-    animatingCount: 0,
-    solvePending: false,
-  };
+  const result = _drawOverlay(frame);
   _lastRenderMs = performance.now() - start;
   _lastSolveMs = result.solveMs || 0;
   _lastPaintMs = Math.max(0, _lastRenderMs - _lastSolveMs);

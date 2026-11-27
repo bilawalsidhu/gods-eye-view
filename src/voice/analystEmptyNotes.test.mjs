@@ -5,6 +5,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { setLocale } from '../i18n/index.js';
+import { inLocale } from '../testSupport/inLocale.mjs';
 import { attachVoiceResult } from './speech.js';
 import {
   initialVoiceCardState,
@@ -48,15 +49,6 @@ function viewFor(layer, caveat) {
 
 function notesFor(layerKey, caveat) {
   return viewFor({ layerKey }, caveat).result.notes;
-}
-
-function inLocale(locale, run) {
-  setLocale(locale);
-  try {
-    run();
-  } finally {
-    setLocale('en');
-  }
 }
 
 // Caveat = `${layerKey}: ${getEmptyNote(layerKey)}` (data/analystEngine.js;

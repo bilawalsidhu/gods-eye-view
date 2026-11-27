@@ -1,5 +1,6 @@
 import { COLORS as SHARED_COLORS, PROVIDER_COLORS } from '../../policy.js';
 import { msg } from '../../../../i18n/index.js';
+import { initialBearingDeg } from '../../../../geoDistance.js';
 
 export { NEAREST_RADIUS_M } from '../../policy.js';
 
@@ -33,8 +34,10 @@ export const COLORS = Object.freeze({
  * zooms take seconds per tile (z10 does not answer), so higher up the panel
  * asks the user to zoom in.
  */
-export const COVERAGE_STREET_ZOOM_BELOW_M = 2_500;
-export const COVERAGE_MAX_HEIGHT_M = 6_000;
+export const COVERAGE_ZOOMS = Object.freeze([
+  [2_500, 14],
+  [6_000, 13],
+]);
 export const COVERAGE_TUNING = Object.freeze({
   maxTiles: 9,
   // Chained ways are short: a dense downtown z13 tile holds ~1,500, so each
@@ -196,7 +199,6 @@ export function photoFilterParams(filter) {
 
 /** The cone and coverage noun: a line is a street with photos, not a sequence. */
 export const COVERAGE_NOUN = 'streets';
-export const LINE_CLICK_HINT = 'click a line for its nearest photo';
 
 /** Base64url of a string, as the image proxy reads addresses. */
 function base64Url(text) {
@@ -251,17 +253,6 @@ export function kartaViewTimeMs(value) {
   return Number.isFinite(ms) ? ms : null;
 }
 
-/** Initial great-circle bearing from `a` to `b`, degrees clockwise from north. */
-export function bearingBetween(a, b) {
-  const rad = Math.PI / 180;
-  const dLon = (b.lon - a.lon) * rad;
-  const y = Math.sin(dLon) * Math.cos(b.lat * rad);
-  const x =
-    Math.cos(a.lat * rad) * Math.sin(b.lat * rad) -
-    Math.sin(a.lat * rad) * Math.cos(b.lat * rad) * Math.cos(dLon);
-  return (Math.atan2(y, x) / rad + 360) % 360;
-}
-
 /** Photos closer than this say nothing about the direction of travel. */
 const COURSE_MIN_STEP_M = 2;
 /** How many photos along to look for one far enough away. */
@@ -281,7 +272,12 @@ export function assignCourses(photos, metres) {
     let course = null;
     for (let j = i + 1; j <= i + COURSE_SEARCH && j < photos.length; j++)
       if (metres(photo, photos[j]) >= COURSE_MIN_STEP_M) {
-        course = bearingBetween(photo, photos[j]);
+        course = initialBearingDeg(
+          photo.lat,
+          photo.lon,
+          photos[j].lat,
+          photos[j].lon,
+        );
         break;
       }
     for (
@@ -290,7 +286,12 @@ export function assignCourses(photos, metres) {
       k--
     )
       if (metres(photos[k], photo) >= COURSE_MIN_STEP_M)
-        course = bearingBetween(photos[k], photo);
+        course = initialBearingDeg(
+          photos[k].lat,
+          photos[k].lon,
+          photo.lat,
+          photo.lon,
+        );
     photo.course = course;
   });
   return photos;

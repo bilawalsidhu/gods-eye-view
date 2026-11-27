@@ -12,7 +12,6 @@ import {
   beaconPixelSize,
   cardEvents,
   cardView,
-  distanceKm,
   eventPixelSize,
   feedCardView,
   feedQueryFor,
@@ -36,6 +35,7 @@ import {
   withinNewsWindow,
 } from './model.js';
 import { newsFeedQuery } from './source.js';
+import { greatCircleKm } from '../../geoDistance.js';
 
 const NOW = Date.parse('2026-10-28T10:00:00Z');
 const report = (id, publishedAt, extra = {}) => ({
@@ -677,7 +677,8 @@ test('in view: half-degree cells and reports within 500 km of the centre', () =>
   assert.equal(viewCell({ lat: 50.4, lon: 36.9 }), '100:73');
   assert.notEqual(viewCell({ lat: 50.6, lon: 36.7 }), '100:73');
   assert.ok(
-    Math.abs(distanceKm({ lat: 0, lon: 0 }, { lat: 0, lon: 1 }) - 111.2) < 0.5,
+    Math.abs(greatCircleKm({ lat: 0, lon: 0 }, { lat: 0, lon: 1 }) - 111.2) <
+      0.5,
   );
   const filters = normalizeFilters({ minSeverity: 0 });
   const near = report('near', '2026-10-28T09:00:00Z', { severity: 1 });
@@ -687,7 +688,7 @@ test('in view: half-degree cells and reports within 500 km of the centre', () =>
   });
   const old = report('old', '2026-10-27T08:00:00Z');
   const centre = { lat: 49, lon: 36 };
-  assert.ok(distanceKm(centre, far.pins[0]) > NEWS_IN_VIEW_RADIUS_KM);
+  assert.ok(greatCircleKm(centre, far.pins[0]) > NEWS_IN_VIEW_RADIUS_KM);
   assert.deepEqual(
     reportsInView([near, far, old, major], centre, filters, NOW).map(
       (r) => r.id,

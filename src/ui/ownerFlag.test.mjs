@@ -11,9 +11,9 @@ import {
   ownerFlagStyle,
   ownerMark,
   preloadOwnerFlags,
-  regionName,
   shownOwnerMark,
 } from './ownerFlag.js';
+import { countryName } from '../data/wikidataCities.js';
 
 test('an owner country shows its flag, named in the reader language', () => {
   assert.deepEqual(ownerMark({ countryCode: 'us', label: 'USA' }), {
@@ -57,8 +57,8 @@ test('an unknown owner shows nothing', () => {
 });
 
 test('a region name comes from Intl, never the bare code', () => {
-  assert.equal(regionName('JP', 'en'), 'Japan');
-  assert.equal(regionName('XX', 'en'), null);
+  assert.equal(countryName('JP', 'en', null), 'Japan');
+  assert.equal(countryName('XX', 'en', null), null);
 });
 
 test('the sheet holds every owner country a satellite can be marked with', () => {

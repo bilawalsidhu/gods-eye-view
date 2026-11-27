@@ -119,7 +119,7 @@ export function issModelSpec({ parts }) {
     // The Cockpit rides the station from a mount on the model, so the model
     // stays while it does.
     hideInCockpit: false,
-    syncOrbit: () => parts.controls._syncIssOrbit?.(),
+    syncOrbit: () => parts.controls._syncIssOrbit(),
   };
 }
 

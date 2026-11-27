@@ -1,4 +1,30 @@
 import { CITY_BY_ID } from './registry.js';
+import {
+  parseStationInformation,
+  parseStationStatus,
+} from '../../sources/gbfsStations.js';
+import { greatCircleKm } from '../../geoDistance.js';
+
+/**
+ * Drop stations outside a city's load radius. Some operators list depots on
+ * other continents as in-service stations in a city's feed (Bogotá's and
+ * Santiago's PBSC feeds carry warehouses in São Paulo and Madrid), which
+ * would otherwise draw as live docks thousands of kilometres away.
+ * @param {{ centerLat: number, centerLon: number, loadRadiusKm: number }} city
+ * @param {Map<string, Object>} stationMap - Parsed station info map.
+ * @returns {Map<string, Object>} Stations within the city's load radius.
+ */
+function stationsWithinCity(city, stationMap) {
+  const kept = new Map();
+  for (const [stationId, station] of stationMap) {
+    const distance = greatCircleKm(
+      { lat: city.centerLat, lon: city.centerLon },
+      { lat: station.lat, lon: station.lon },
+    );
+    if (distance <= city.loadRadiusKm) kept.set(stationId, station);
+  }
+  return kept;
+}
 
 export function createIngestion({
   state: layerState,
@@ -6,17 +32,6 @@ export function createIngestion({
   parts,
   source,
 }) {
-  /**
-   * Convert an upstream GBFS URL into a local proxy URL.
-   * The dev server proxies /api/gbfs/* to avoid CORS issues with third-party feeds.
-   * @param {string} upstreamUrl - Full HTTPS GBFS endpoint URL.
-   * @returns {string} Relative proxy URL.
-   */
-
-  function toProxyUrl(upstreamUrl) {
-    return `/api/gbfs/${encodeURIComponent(upstreamUrl)}`;
-  }
-
   /** Increment the loading reference count and mark loading state active. */
 
   function beginLoading() {
@@ -29,19 +44,6 @@ export function createIngestion({
   function endLoading() {
     layerState._loadingOps = Math.max(0, layerState._loadingOps - 1);
     layerState._loading = layerState._loadingOps > 0;
-  }
-
-  /**
-   * Fetch and parse JSON from a GBFS endpoint via the local proxy.
-   * @param {string} upstreamUrl - Full HTTPS GBFS endpoint URL.
-   * @param {Object} [options]
-   * @param {AbortSignal} [options.signal] - Optional abort signal for cancellation.
-   * @returns {Promise<Object>} Parsed JSON payload.
-   * @throws {Error} On non-OK HTTP status or malformed JSON.
-   */
-
-  async function fetchGbfsJson(upstreamUrl, options) {
-    return source.getStations(upstreamUrl, options);
   }
 
   /**
@@ -76,12 +78,11 @@ export function createIngestion({
    * Station info is static metadata (location, name, capacity) and is
    * fetched once per city per session.
    * @param {string} cityId - City identifier.
-   * @param {number} generation - Proximity generation to detect stale requests.
    * @returns {Promise<Map<string, Object>>} Map of stationId to station info.
    * @throws {Error} On unknown city, fetch failure, or empty station list.
    */
 
-  async function loadCityStationInfo(cityId, generation) {
+  async function loadCityStationInfo(cityId) {
     if (layerState._stationInfoCache.has(cityId))
       return layerState._stationInfoCache.get(cityId);
     const inFlight = layerState._inFlightInfo.get(cityId);
@@ -94,12 +95,12 @@ export function createIngestion({
     const promise = (async () => {
       beginLoading();
       try {
-        const payload = await fetchGbfsJson(city.stationInformationUrl, {
+        const payload = await source.getStations(city.stationInformationUrl, {
           signal: controller.signal,
         });
-        const stationMap = parts.model.stationsWithinCity(
+        const stationMap = stationsWithinCity(
           city,
-          parts.model.parseStationInformation(payload),
+          parseStationInformation(payload),
         );
         if (stationMap.size === 0) {
           throw new Error(`No station information for ${city.city}`);
@@ -116,7 +117,7 @@ export function createIngestion({
         layerState._inFlightInfo.delete(cityId);
     });
 
-    layerState._inFlightInfo.set(cityId, { promise, controller, generation });
+    layerState._inFlightInfo.set(cityId, { promise, controller });
     return promise;
   }
 
@@ -125,12 +126,11 @@ export function createIngestion({
    * Unlike station info, status is NOT served from cache — it is always re-fetched
    * to keep availability data current. Concurrent requests are deduplicated.
    * @param {string} cityId - City identifier.
-   * @param {number} generation - Proximity generation to detect stale requests.
    * @returns {Promise<Map<string, Object>>} Map of stationId to status objects.
    * @throws {Error} On unknown city or fetch failure.
    */
 
-  async function loadCityStationStatus(cityId, generation) {
+  async function loadCityStationStatus(cityId) {
     const inFlight = layerState._inFlightStatus.get(cityId);
     if (inFlight) return inFlight.promise;
 
@@ -141,10 +141,10 @@ export function createIngestion({
     const promise = (async () => {
       beginLoading();
       try {
-        const payload = await fetchGbfsJson(city.stationStatusUrl, {
+        const payload = await source.getStations(city.stationStatusUrl, {
           signal: controller.signal,
         });
-        const statusMap = parts.model.parseStationStatus(payload);
+        const statusMap = parseStationStatus(payload);
         layerState._statusCache.set(cityId, {
           statusMap,
           timestamp: Date.now(),
@@ -159,7 +159,7 @@ export function createIngestion({
         layerState._inFlightStatus.delete(cityId);
     });
 
-    layerState._inFlightStatus.set(cityId, { promise, controller, generation });
+    layerState._inFlightStatus.set(cityId, { promise, controller });
     return promise;
   }
   const methods = {
@@ -182,7 +182,7 @@ export function createIngestion({
       await Promise.all(
         cityIds.map(async (cityId) => {
           try {
-            const statusMap = await loadCityStationStatus(cityId, generation);
+            const statusMap = await loadCityStationStatus(cityId);
             if (!isCurrent(cityId)) return;
             parts.rendering.applyStatusToPoints(cityId, statusMap);
             layerState._failedCityIds.delete(cityId);
@@ -206,10 +206,8 @@ export function createIngestion({
   };
 
   return {
-    toProxyUrl,
     beginLoading,
     endLoading,
-    fetchGbfsJson,
     abortInFlight,
     abortAllInFlight,
     loadCityStationInfo,

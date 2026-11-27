@@ -1,4 +1,51 @@
-export function createHistory({ state: layerState, services, parts, source }) {
+import { aircraftClassMatches } from '../../data/militaryAwarenessEngine.js';
+import { isFlightLayer } from './navigation.js';
+
+/** Retain filter metadata when a production subject enters navigation history. */
+
+export function historySubjectSnapshot(subject, sourceItem = null) {
+  const aircraftClass =
+    sourceItem?.aircraftClass ||
+    sourceItem?.klass ||
+    sourceItem?.type ||
+    subject?.aircraftClass ||
+    null;
+  return aircraftClass ? { ...subject, aircraftClass } : { ...subject };
+}
+
+/** Find the next history entry compatible with requested navigation filters. */
+
+export function findCompatibleHistoryIndex(
+  history,
+  startIndex,
+  direction,
+  {
+    targetLayer = null,
+    aircraftClass = null,
+    aircraftOnly = false,
+    resolveItem = (subject) => subject,
+  } = {},
+) {
+  const step = direction < 0 ? -1 : 1;
+  for (
+    let index = startIndex + step;
+    index >= 0 && index < history.length;
+    index += step
+  ) {
+    const subject = history[index];
+    if (aircraftOnly && !isFlightLayer(subject?.layerId)) continue;
+    if (targetLayer && subject?.layerId !== targetLayer) continue;
+    if (
+      aircraftClass &&
+      !aircraftClassMatches(resolveItem(subject), aircraftClass)
+    )
+      continue;
+    return index;
+  }
+  return -1;
+}
+
+export function createHistory({ state: layerState, services, parts }) {
   const militaryFlightsLayer = services.military;
   const flightsLayer = services.flights;
 
@@ -75,6 +122,20 @@ export function createHistory({ state: layerState, services, parts, source }) {
 
     if (direction < 0) return false;
 
+    const focusExpanded = () => {
+      const expanded = parts.navigation.findExpandedFlightTarget({
+        targetLayer,
+        aircraftClass,
+      });
+      return expanded
+        ? parts.focus.requestFocus(
+            expanded.candidate.layerId,
+            expanded.candidate.id,
+            false,
+            { origin },
+          )
+        : null;
+    };
     let targets = parts.navigation.selectNavigationTargets(
       layerState.results?.cohorts,
       layerState.subject,
@@ -89,18 +150,8 @@ export function createHistory({ state: layerState, services, parts, source }) {
       parts.navigation.isFlightLayer(layerState.subject?.layerId) &&
       !subjectCohortUnknown
     ) {
-      const expanded = parts.navigation.findExpandedFlightTarget({
-        targetLayer,
-        aircraftClass,
-      });
-      if (expanded) {
-        return parts.focus.requestFocus(
-          expanded.candidate.layerId,
-          expanded.candidate.id,
-          false,
-          { origin },
-        );
-      }
+      const focused = focusExpanded();
+      if (focused !== null) return focused;
     }
     if (targetHistoryFullyVisited) {
       parts.navigation.resetNavigationVisitedCycle();
@@ -119,18 +170,8 @@ export function createHistory({ state: layerState, services, parts, source }) {
       !hasNearbyFlight &&
       !subjectCohortUnknown
     ) {
-      const expanded = parts.navigation.findExpandedFlightTarget({
-        targetLayer,
-        aircraftClass,
-      });
-      if (expanded) {
-        return parts.focus.requestFocus(
-          expanded.candidate.layerId,
-          expanded.candidate.id,
-          false,
-          { origin },
-        );
-      }
+      const focused = focusExpanded();
+      if (focused !== null) return focused;
     }
     if (parts.subject.subjectCohortFeedUnknown()) return false;
     const candidate = targets[0];
@@ -140,31 +181,24 @@ export function createHistory({ state: layerState, services, parts, source }) {
     });
   }
 
-  function historySubjectItem(subject) {
-    if (!subject) return null;
+  /** The subject's record in the current sweep's cohort, if it is there. */
+  function cohortItem(subject) {
     const cohort = layerState.results?.cohorts?.find(
       (item) => item.id === subject.layerId,
     );
-    const items =
-      cohort?.summary?.navigationNearest || cohort?.summary?.nearest || [];
     return (
-      items.find(
-        (item) =>
-          String(item?.icao24 || item?.id || item?.mmsi) === String(subject.id),
-      ) || subject
+      cohort?.summary?.navigationNearest ||
+      cohort?.summary?.nearest ||
+      []
+    ).find(
+      (item) =>
+        String(item?.icao24 || item?.id || item?.mmsi) === String(subject.id),
     );
   }
 
-  /** Retain filter metadata when a production subject enters navigation history. */
-
-  function historySubjectSnapshot(subject, sourceItem = null) {
-    const aircraftClass =
-      sourceItem?.aircraftClass ||
-      sourceItem?.klass ||
-      sourceItem?.type ||
-      subject?.aircraftClass ||
-      null;
-    return aircraftClass ? { ...subject, aircraftClass } : { ...subject };
+  function historySubjectItem(subject) {
+    if (!subject) return null;
+    return cohortItem(subject) || subject;
   }
 
   function historySourceItem(subject) {
@@ -173,14 +207,7 @@ export function createHistory({ state: layerState, services, parts, source }) {
     // The current sweep already holds this contact's record. Reusing it keeps
     // selection O(1) against the cohort instead of paying a fresh full-layer
     // proximity scan per selection — the burst cost when NEXT walks a cohort.
-    const cohort = layerState.results?.cohorts?.find(
-      (item) => item.id === subject.layerId,
-    );
-    const items =
-      cohort?.summary?.navigationNearest || cohort?.summary?.nearest || [];
-    const fromSweep = items.find(
-      (item) => String(item?.icao24 || item?.id) === String(subject.id),
-    );
+    const fromSweep = cohortItem(subject);
     if (fromSweep) return fromSweep;
     const layer =
       subject.layerId === 'military' ? militaryFlightsLayer : flightsLayer;
@@ -193,43 +220,7 @@ export function createHistory({ state: layerState, services, parts, source }) {
     );
   }
 
-  /** Find the next history entry compatible with requested navigation filters. */
-
-  function findCompatibleHistoryIndex(
-    history,
-    startIndex,
-    direction,
-    {
-      targetLayer = null,
-      aircraftClass = null,
-      aircraftOnly = false,
-      resolveItem = (subject) => subject,
-    } = {},
-  ) {
-    const step = direction < 0 ? -1 : 1;
-    for (
-      let index = startIndex + step;
-      index >= 0 && index < history.length;
-      index += step
-    ) {
-      const subject = history[index];
-      if (aircraftOnly && !parts.navigation.isFlightLayer(subject?.layerId))
-        continue;
-      if (targetLayer && subject?.layerId !== targetLayer) continue;
-      if (
-        aircraftClass &&
-        !parts.navigation.aircraftClassMatchesFilter(
-          resolveItem(subject),
-          aircraftClass,
-        )
-      )
-        continue;
-      return index;
-    }
-    return -1;
-  }
   return {
-    focusCompatibleHistory,
     navigateHistory,
     historySubjectItem,
     historySubjectSnapshot,

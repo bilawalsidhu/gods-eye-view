@@ -4,7 +4,6 @@ import { createRendering } from './rendering.js';
 import { createIcons } from './icons.js';
 import { createMotion } from './motion.js';
 import { createTracking } from './tracking.js';
-import { createController } from './controller.js';
 import { createEnrichment } from './enrichment.js';
 import { createIngestion } from './ingestion.js';
 import { createLifecycle } from './lifecycle.js';
@@ -17,6 +16,17 @@ import {
   snapshotAnswer,
 } from '../../time/snapshotTimeline.js';
 import { worldClock } from '../../time/worldClock.js';
+import { findCamera } from '../../render/rendererOf.js';
+
+/** The feed query around the camera's ground point, or {} with none. */
+export function flightQuery(viewer) {
+  const pose = viewer ? findCamera(viewer)?.pose() : null;
+  // An eye at the earth's centre has no ground point: the pose gives NaN.
+  return pose && Number.isFinite(pose.lat) && Number.isFinite(pose.lon)
+    ? { latitude: pose.lat, longitude: pose.lon }
+    : {};
+}
+
 /** Compose one civil-flight layer with application-owned scene services. */
 export function createCivilFlightLayer({
   source,
@@ -31,7 +41,6 @@ export function createCivilFlightLayer({
   parts.icons = createIcons(context);
   parts.motion = createMotion(context);
   parts.tracking = createTracking(context);
-  parts.controller = createController(context);
   parts.enrichment = createEnrichment(context);
   parts.lifecycle = createLifecycle(context);
   parts.evidence = createEvidence(context);
@@ -53,8 +62,7 @@ export function createCivilFlightLayer({
   });
   parts.ingestion = createIngestion({
     feed: flightState.feed,
-    getQuery: (viewer) =>
-      parts.controller._flightQuery(viewer || flightState._viewer),
+    getQuery: (viewer) => flightQuery(viewer || flightState._viewer),
     applySnapshot: (snapshot, viewer, options) => {
       // At another time the snapshot takes the place of every contact: how
       // each moved belongs to the time the clock left. Back at live too, but

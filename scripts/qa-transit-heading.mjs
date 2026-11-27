@@ -33,7 +33,7 @@ export async function runTransitHeadingRegression(base, check) {
         recordFix,
         updatePlayback,
         attachFloorToPlace,
-      } = await import('/src/layers/transit/movement.js');
+      } = await import('/src/data/transitMovement.js');
       // The first three are parked: held east, reported east only, unknown.
       for (let i = 0; i < 3; i++) {
         const entry = state._vehicles.get(`mbta:qa-${i}`);

@@ -8,13 +8,15 @@ import {
   satelliteClassOf,
   satelliteClassText,
 } from './satelliteClass.js';
-import satellitesLayer, {
+import satellitesLayer from './satellites.js';
+import { CATALOG_GROUPS } from '../layers/satellites/policy.js';
+import { SATELLITE_CLASS_DISPLAY } from '../layers/satellites/classes.js';
+
+const {
   _catalogGroupForTest,
   _clearDenseCatalogStateForTest,
   _setDenseCatalogStateForTest,
-} from './satellites.js';
-import { CATALOG_GROUPS } from '../layers/satellites/policy.js';
-import { SATELLITE_CLASS_DISPLAY } from '../layers/satellites/classes.js';
+} = satellitesLayer.testing;
 
 /**
  * A real, parseable TLE under an arbitrary 5-digit catalog number, so the dense

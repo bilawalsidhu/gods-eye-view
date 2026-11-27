@@ -1,5 +1,4 @@
 import { createAircraftIcons } from '../../data/aircraftIconLayer.js';
-import { placeAircraftAt } from '../flights/placed.js';
 import {
   COCKPIT_CONTACT_SIZE_PX,
   COURSE_MAX_DPS,
@@ -20,17 +19,5 @@ export function createIcons({ flightState, services, parts, resolveAsset }) {
     staleAlpha: STALE_ALPHA,
     courseMaxDps: COURSE_MAX_DPS,
     cockpitContactSizePx: COCKPIT_CONTACT_SIZE_PX,
-    // A host-supplied placement, if any, draws a live contact where it places it.
-    placeAt: services.placement
-      ? (icao24, wallMs, info, history, out) =>
-          placeAircraftAt(
-            services.placement,
-            icao24,
-            wallMs,
-            info,
-            history,
-            out,
-          )
-      : null,
   });
 }

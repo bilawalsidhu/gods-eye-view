@@ -89,7 +89,7 @@ const minuteFixes = [
 test('following the clock, an icon moves along its fixes on the scene clock and is drawn again only when that runs out', (t) => {
   const { layer, viewer, icons } = setup(t);
   layer.testing._followClockForTest(T + 10_000);
-  layer.testing._reconcileVesselsForTest(viewer, [row(minuteFixes)]);
+  layer.testing.parts.snapshots.reconcileVessels(viewer, [row(minuteFixes)]);
   layer.testing._runClockPassForTest(T + 10_000);
   const set = icons();
   assert.deepEqual(set.spec.motionClock, { kind: 'scene' });
@@ -117,7 +117,7 @@ test('following the clock, an icon moves along its fixes on the scene clock and 
 test('a time moved back before the stretch drawn draws the one it is in', (t) => {
   const { layer, viewer, icons } = setup(t);
   layer.testing._followClockForTest(T + 90_000);
-  layer.testing._reconcileVesselsForTest(viewer, [row(minuteFixes)]);
+  layer.testing.parts.snapshots.reconcileVessels(viewer, [row(minuteFixes)]);
   layer.testing._runClockPassForTest(T + 90_000);
   assert.equal(icons().items.get('111').motion.t0, T + 60_000);
   layer.testing._runClockPassForTest(T + 30_000);
@@ -133,7 +133,7 @@ test('a long stretch between fixes is drawn a piece of at most 10 km at a time',
     { atMs: T + 3_600_000, lat: 52.0, lon: 4.05 },
   ];
   layer.testing._followClockForTest(T + 700_000);
-  layer.testing._reconcileVesselsForTest(viewer, [row(fixes)]);
+  layer.testing.parts.snapshots.reconcileVessels(viewer, [row(fixes)]);
   layer.testing._runClockPassForTest(T + 700_000);
   const { motion } = icons().items.get('111');
   assert.deepEqual([motion.t0, motion.t1], [T + 600_000, T + 1_200_000]);
@@ -142,11 +142,12 @@ test('a long stretch between fixes is drawn a piece of at most 10 km at a time',
 test('going live, every icon holds again on the live clock', (t) => {
   const { layer, viewer, icons } = setup(t);
   layer.testing._followClockForTest(T + 10_000);
-  layer.testing._reconcileVesselsForTest(viewer, [row(minuteFixes)]);
+  layer.testing.parts.snapshots.reconcileVessels(viewer, [row(minuteFixes)]);
   layer.testing._runClockPassForTest(T + 10_000);
   assert.equal(icons().items.get('111').motion.kind, 'lerp');
   layer.testing._followClockForTest(null);
-  layer.testing._runLiveFrameForTest();
+  layer.testing.parts.rendering.syncSegments();
+  layer.testing.parts.rendering.followPlacements();
   assert.equal(icons().items.get('111').motion.kind, 'hold');
   assert.equal(icons().spec.motionClock.kind, 'live');
 });
@@ -154,7 +155,7 @@ test('going live, every icon holds again on the live clock', (t) => {
 test('a renderer without motion segments has the layer move each icon, as before', (t) => {
   const { layer, viewer, icons } = setup(t, { capabilities: new Set() });
   layer.testing._followClockForTest(T + 10_000);
-  layer.testing._reconcileVesselsForTest(viewer, [row(minuteFixes)]);
+  layer.testing.parts.snapshots.reconcileVessels(viewer, [row(minuteFixes)]);
   layer.testing._runClockPassForTest(T + 10_000);
   assert.equal(icons().items.get('111').motion.kind, 'hold');
   assert.equal(icons().spec.motionClock, undefined);
@@ -163,7 +164,7 @@ test('a renderer without motion segments has the layer move each icon, as before
 test('a vessel shows a minute before its first fix, and hides again when the time moves back before that', (t) => {
   const { layer, viewer, icons } = setup(t);
   layer.testing._followClockForTest(T - 120_000);
-  layer.testing._reconcileVesselsForTest(viewer, [row(minuteFixes)]);
+  layer.testing.parts.snapshots.reconcileVessels(viewer, [row(minuteFixes)]);
   layer.testing._runClockPassForTest(T - 120_000);
   assert.equal(icons().items.get('111').show, false);
   layer.testing._runClockPassForTest(T - 60_000);
@@ -177,10 +178,10 @@ test('a vessel shows a minute before its first fix, and hides again when the tim
 test('the detection overlay reads a vessel where it is at the time drawn', (t) => {
   const { layer, viewer } = setup(t);
   layer.testing._followClockForTest(T + 10_000);
-  layer.testing._reconcileVesselsForTest(viewer, [row(minuteFixes)]);
+  layer.testing.parts.snapshots.reconcileVessels(viewer, [row(minuteFixes)]);
   layer.testing._runClockPassForTest(T + 10_000);
-  const record = layer.testing._vesselRecordForTest('111');
-  const visual = layer.testing._vesselVisualForTest(record);
+  const record = layer.testing.vesselState.state.records.byId.get('111');
+  const visual = layer.testing.parts.rendering.getVisual(record);
   visual.visible = true;
   // Mid-stretch, with no pass reading this vessel since.
   layer.testing._followClockForTest(T + 40_000);
@@ -200,7 +201,7 @@ const latAt = (atMs) => 51.93 + (0.01 * (atMs - T)) / 60_000;
 test('positions asked of the layer are where the vessels are drawn at the time drawn', (t) => {
   const { layer, viewer } = setup(t);
   layer.testing._followClockForTest(T + 10_000);
-  layer.testing._reconcileVesselsForTest(viewer, fleet());
+  layer.testing.parts.snapshots.reconcileVessels(viewer, fleet());
   layer.testing._runClockPassForTest(T + 10_000);
   // Mid-stretch, with no pass since.
   layer.testing._followClockForTest(T + 40_000);
@@ -215,8 +216,8 @@ test('positions asked of the layer are where the vessels are drawn at the time d
   for (const { id, position } of rows)
     assert.ok(Math.abs(latOf(position) - latAt(T + 40_000)) < 1e-5, id);
   // One vessel asked of by itself is brought there too.
-  const record = layer.testing._vesselRecordForTest('222');
-  const visual = layer.testing._vesselVisualForTest(record);
+  const record = layer.testing.vesselState.state.records.byId.get('222');
+  const visual = layer.testing.parts.rendering.getVisual(record);
   layer.findByQuery('222');
   assert.ok(Math.abs(visual.drawnLat - latAt(T + 40_000)) < 1e-6);
 });
@@ -224,14 +225,15 @@ test('positions asked of the layer are where the vessels are drawn at the time d
 test('going live, every icon holds where its segment last drew it', (t) => {
   const { layer, viewer, icons } = setup(t);
   layer.testing._followClockForTest(T + 10_000);
-  layer.testing._reconcileVesselsForTest(viewer, fleet());
+  layer.testing.parts.snapshots.reconcileVessels(viewer, fleet());
   layer.testing._runClockPassForTest(T + 10_000);
   layer.testing._runClockPassForTest(T + 40_000);
   layer.testing._followClockForTest(null);
-  layer.testing._runLiveFrameForTest();
+  layer.testing.parts.rendering.syncSegments();
+  layer.testing.parts.rendering.followPlacements();
   for (const id of ['111', '222', '333']) {
-    const record = layer.testing._vesselRecordForTest(id);
-    const visual = layer.testing._vesselVisualForTest(record);
+    const record = layer.testing.vesselState.state.records.byId.get(id);
+    const visual = layer.testing.parts.rendering.getVisual(record);
     assert.ok(Math.abs(visual.drawnLat - latAt(T + 40_000)) < 1e-6, id);
     assert.deepEqual(icons().items.get(id).pos, visual.position);
     assert.equal(icons().items.get(id).motion.kind, 'hold');
@@ -247,7 +249,7 @@ test('a time on the end of a piece draws the next piece', (t) => {
     { atMs: T + 3_599_002, lat: 52.0, lon: 4.05 },
   ];
   layer.testing._followClockForTest(T);
-  layer.testing._reconcileVesselsForTest(viewer, [row(fixes)]);
+  layer.testing.parts.snapshots.reconcileVessels(viewer, [row(fixes)]);
   for (let k = 1; k < 6; k += 1) {
     const atMs = T + (3_599_002 * k) / 6;
     layer.testing._runClockPassForTest(atMs);
@@ -259,10 +261,10 @@ test('a time on the end of a piece draws the next piece', (t) => {
 test('going live, a vessel a live update has drawn since stays where that drew it', (t) => {
   const { layer, viewer, icons } = setup(t);
   layer.testing._followClockForTest(T + 10_000);
-  layer.testing._reconcileVesselsForTest(viewer, fleet());
+  layer.testing.parts.snapshots.reconcileVessels(viewer, fleet());
   // A later fix while following: each record keeps the move to it.
   const later = { atMs: T + 180_000, lat: 51.96, lon: 4.05 };
-  layer.testing._reconcileVesselsForTest(
+  layer.testing.parts.snapshots.reconcileVessels(
     viewer,
     fleet()
       .map((r) => row([...r.fixes, { ...later, lon: r.lon }]))
@@ -273,11 +275,12 @@ test('going live, a vessel a live update has drawn since stays where that drew i
   layer.testing._followClockForTest(null);
   // The live feed lands before the next frame, the ship further north.
   const live = fleet().map((row) => ({ ...row, lat: 52.1 }));
-  layer.testing._reconcileVesselsForTest(viewer, live);
-  layer.testing._runLiveFrameForTest();
+  layer.testing.parts.snapshots.reconcileVessels(viewer, live);
+  layer.testing.parts.rendering.syncSegments();
+  layer.testing.parts.rendering.followPlacements();
   for (const id of ['111', '222', '333']) {
-    const record = layer.testing._vesselRecordForTest(id);
-    const visual = layer.testing._vesselVisualForTest(record);
+    const record = layer.testing.vesselState.state.records.byId.get(id);
+    const visual = layer.testing.parts.rendering.getVisual(record);
     assert.equal(visual.drawnLat, 52.1, id);
     assert.deepEqual(icons().items.get(id).pos, visual.position);
   }

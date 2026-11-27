@@ -2,10 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   wildlifeViewportBoxes,
-  snapWildlifeBox,
   boxIntersects,
   retryDelayMs,
 } from './viewport.js';
+import { snapWildlifeBox } from './bounds.js';
 import { ACARTIA_GUARD_BOX } from './policy.js';
 import { getWildlifeHeightBand } from './model.js';
 

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as credits from '../../data/dataCredits.js';
 import { createLifecycle } from './lifecycle.js';
+import { createRendering } from './rendering.js';
 import { LAYER_ID } from './policy.js';
 import { bindFakeCesiumCredits } from '../../testSupport/fakeCreditsPort.mjs';
 
@@ -28,6 +29,11 @@ for (const source of [
     };
     let markersVisible = false;
     let drawnShown = false;
+    const { syncOsmCredit } = createRendering({
+      state,
+      services: { credits, ground: {}, context: {}, render: {}, anchors: {} },
+      parts: {},
+    });
     const parts = {
       namedMarkers: {
         enable: () => {
@@ -44,6 +50,7 @@ for (const source of [
         setShown: (shown) => {
           drawnShown = shown;
         },
+        syncOsmCredit,
       },
       viewport: { clearUnavailableRetry: noop },
       ingestion: { setInstallationStatus: noop },

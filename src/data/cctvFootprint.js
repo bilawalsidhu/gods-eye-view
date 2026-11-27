@@ -16,6 +16,9 @@
  * pose and the client can reuse those samples as long as the pose is the same.
  */
 
+import { destinationPoint } from '../geoDistance.js';
+import { fnv1a } from './fnv1a.js';
+
 const EARTH_RADIUS_M = 6371000;
 const PLANE_VERT_ASPECT = 16 / 9;
 export const SUPPORT_KEYS = Object.freeze([
@@ -39,22 +42,8 @@ const toDeg = (rad) => (rad * 180) / Math.PI;
  * @param {number} lat @param {number} lon @param {number} headingDeg @param {number} distM
  * @returns {{lat:number, lon:number}}
  */
-export function projectPoint(lat, lon, headingDeg, distM) {
-  const b = toRad(headingDeg);
-  const la = toRad(lat);
-  const lo = toRad(lon);
-  const ad = distM / EARTH_RADIUS_M;
-  const la2 = Math.asin(
-    Math.sin(la) * Math.cos(ad) + Math.cos(la) * Math.sin(ad) * Math.cos(b),
-  );
-  const lo2 =
-    lo +
-    Math.atan2(
-      Math.sin(b) * Math.sin(ad) * Math.cos(la),
-      Math.cos(ad) - Math.sin(la) * Math.sin(la2),
-    );
-  return { lat: toDeg(la2), lon: toDeg(lo2) };
-}
+export const projectPoint = (lat, lon, headingDeg, distM) =>
+  destinationPoint(lat, lon, headingDeg, distM, EARTH_RADIUS_M);
 
 /**
  * Plane dimensions and offsets for a pose, before any ground is known.
@@ -188,11 +177,5 @@ export function poseHash(pose) {
     Number(pose.rangeM).toFixed(1),
     Number(pose.mountHeightM).toFixed(1),
   ].join('|');
-  // FNV-1a 32-bit, base36: short, stable, dependency-free.
-  let h = 0x811c9dc5;
-  for (let i = 0; i < text.length; i += 1) {
-    h ^= text.charCodeAt(i);
-    h = Math.imul(h, 0x01000193) >>> 0;
-  }
-  return `p1-${h.toString(36)}`;
+  return `p1-${fnv1a(text).toString(36)}`;
 }

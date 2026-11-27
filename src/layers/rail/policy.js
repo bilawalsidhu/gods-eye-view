@@ -3,18 +3,27 @@
  * @description Constants and pure decisions for the Rail layer. No Cesium
  * scene state, no network: everything here is exercised by node:test.
  *
- * Motion between reports is the Transit layer's delayed playback
- * (src/layers/transit/movement.js over src/data/contactPlayback.js), so the
- * report-age rules here are Transit's too.
+ * Motion between reports is Transit's delayed playback
+ * (src/data/transitMovement.js over src/data/contactPlayback.js); report
+ * aging, activation and feed health are Transit's too
+ * (src/data/transitPolicy.js).
  */
 
-import { msg } from '../../i18n/marker.js';
+// Tools and the server may import this module, so no catalogue here: the
+// layer passes the UI's t().
+import { englishText, msg } from '../../i18n/marker.js';
 import {
   RAIL_CATEGORIES,
   RAIL_POSITION_SOURCES,
 } from '../../data/railFeeds.js';
-import { displayMotion } from '../transit/movement.js';
-import { roundHeadingDegrees } from '../../data/headingDegrees.js';
+import {
+  createSelectedVehicleOverlayEntry,
+  lastReportText,
+  motionText,
+  reportAgeText,
+  reportedMotionText,
+  vehicleIdText,
+} from '../../data/transitPolicy.js';
 import {
   stopClock,
   stopLateMinutes,
@@ -23,35 +32,28 @@ import {
 } from './stopLabels.js';
 
 export const RAIL_SELECTED_OVERLAY_SOURCE_ID = 'rail-selected';
-export const RAIL_SELECTED_OVERLAY_SOURCE_OPTIONS = Object.freeze({
-  cohortLimit: 1,
-  collisionCapacity: 0,
-  moving: true,
-});
 
 /** Poll interval (ms), matching the proxy's 15 s cache window. */
 export const RAIL_POLL_MS = 15_000;
-/**
- * Feeds activate below this camera altitude, with hysteresis. Rail networks
- * are regional, so the gate is Transit's: low enough that a whole-continent
- * view does not poll every operator at once.
- */
-export const ACTIVATION_ALTITUDE_M = 3_000_000;
-export const ACTIVATION_ENTER_ALTITUDE_M = ACTIVATION_ALTITUDE_M - 150_000;
-export const ACTIVATION_EXIT_ALTITUDE_M = ACTIVATION_ALTITUDE_M + 150_000;
-export const CAMERA_DEBOUNCE_MS = 340;
-export const CAMERA_PERCENTAGE_CHANGED = 0.05;
-/** A feed already active stays active this far past its coverage edge. */
-export const RANGE_SLACK_KM = 40;
 export const MAX_TRAINS_TOTAL = 5_000;
-/** A train a feed stops listing for this many polls in a row is removed. */
-export const MISSED_POLLS_TO_DROP = 2;
-/** A report older than this is not drawn (a frozen feed empties, it does not lie). */
-export const TRAIN_MAX_FIX_AGE_MS = 10 * 60_000;
-/** A feed whose operator has not answered for this long reads as stale. */
-export const FEED_STALE_AFTER_MS = 90_000;
-/** ...and for this long, its trains are removed. */
-export const FEED_EVICT_AFTER_MS = 5 * 60_000;
+
+// Activation, feed aging and the ground gate are Transit's.
+export {
+  ACTIVATION_ENTER_ALTITUDE_M,
+  ACTIVATION_EXIT_ALTITUDE_M,
+  CAMERA_DEBOUNCE_MS,
+  CAMERA_PERCENTAGE_CHANGED,
+  FEED_EVICT_AFTER_MS,
+  FEED_STALE_AFTER_MS,
+  HEIGHT_SAMPLE_MAX_ALTITUDE_M,
+  MISSED_POLLS_TO_DROP,
+  RANGE_SLACK_KM,
+  SELECTED_VEHICLE_OVERLAY_SOURCE_OPTIONS,
+  aggregateTransitFeedHealth,
+  isStaleVehicleFix,
+  vehicleReportTimeMs,
+} from '../../data/transitPolicy.js';
+
 /** A stamp this far ahead of the fetch is a clock fault, bounded by the fetch. */
 export const FUTURE_STAMP_TOLERANCE_MS = 10_000;
 
@@ -74,25 +76,6 @@ export const RAIL_LIVE_POSITION_SOURCES = RAIL_POSITION_SOURCES;
 export function isLiveRailPositionSource(source) {
   return RAIL_LIVE_POSITION_SOURCES.includes(source ?? 'gps');
 }
-/**
- * A feed catalog that fails is asked for again after CATALOG_RETRY_FIRST_MS,
- * then twice as long after each failure in a row, up to CATALOG_RETRY_MAX_MS.
- */
-export const CATALOG_RETRY_FIRST_MS = 30_000;
-export const CATALOG_RETRY_MAX_MS = 10 * 60_000;
-
-/**
- * How long the catalog waits after its nth failure in a row (ms).
- * @param {number} failures 1 after the first.
- * @returns {number}
- */
-export function railCatalogRetryDelayMs(failures) {
-  return Math.min(
-    CATALOG_RETRY_MAX_MS,
-    CATALOG_RETRY_FIRST_MS * 2 ** Math.max(0, failures - 1),
-  );
-}
-
 /**
  * Floor cells a moving train reaches cold are warmed in batches: at most
  * COLD_CELLS_PER_FLUSH per flush, COLD_CELL_FLUSH_MS after the first one is
@@ -245,40 +228,6 @@ export function railTrainKey(feedId, trainId) {
   return `rail:${feedId}:${trainId}`;
 }
 
-/**
- * When a report was made, in ms: the train's own stamp, else the fetch time.
- * @param {object} record
- * @param {number|null} [fetchedAtMs]
- * @returns {number}
- */
-export function trainReportTimeMs(record, fetchedAtMs = null) {
-  const seconds = Number(record?.timestamp);
-  if (Number.isFinite(seconds) && seconds > 0) return seconds * 1000;
-  if (Number.isFinite(fetchedAtMs)) return fetchedAtMs;
-  return Date.now();
-}
-
-/**
- * Age of a report in ms (never negative). An unstamped record is aged from
- * the snapshot's fetch time, never from now.
- * @param {object} record
- * @param {number} nowMs
- * @param {number|null} [fetchedAtMs]
- * @returns {number}
- */
-export function trainFixAgeMs(record, nowMs, fetchedAtMs = null) {
-  const seconds = Number(record?.timestamp);
-  if (Number.isFinite(seconds) && seconds > 0)
-    return Math.max(0, nowMs - seconds * 1000);
-  if (Number.isFinite(fetchedAtMs)) return Math.max(0, nowMs - fetchedAtMs);
-  return 0;
-}
-
-/** Whether a report is too old to draw. */
-export function isStaleTrainFix(record, nowMs, fetchedAtMs = null) {
-  return trainFixAgeMs(record, nowMs, fetchedAtMs) > TRAIN_MAX_FIX_AGE_MS;
-}
-
 /** The movement module's speed ceilings are keyed by Transit mode names. */
 export function playbackModeFor(railMode) {
   return railMode === 'metro'
@@ -286,14 +235,6 @@ export function playbackModeFor(railMode) {
     : railMode === 'tram'
       ? 'tram'
       : 'rail';
-}
-
-// Tools and the server may import this module, so no catalogue here: the
-// layer passes the UI's t().
-function englishText(text, values) {
-  return String(text).replace(/\{(\w+)\}/g, (match, key) =>
-    values && key in values ? String(values[key]) : match,
-  );
 }
 
 /** Card words for where a train's position comes from. */
@@ -387,17 +328,7 @@ export function buildRailSelectionCopy(
   const add = (rank, text) => lines.push({ rank, text });
   add(0, `${category} · ${mode} · ${feed.name} · ${feed.region}`);
 
-  const shown = entry ? displayMotion(entry, nowMs) : null;
-  const motion =
-    shown?.word === 'STOPPED'
-      ? t('Stopped', { context: 'vehicle motion' })
-      : shown?.word === 'NO FIX'
-        ? t('No recent fix')
-        : shown?.word === 'WAITING'
-          ? t('Waiting for update')
-          : shown
-            ? t('Moving')
-            : '';
+  const motion = motionText(entry, nowMs, t);
   const sourceWord = RAIL_POSITION_SOURCE_WORDS[record.positionSource];
   const source = sourceWord ? t(sourceWord) : '';
   if (motion || source)
@@ -410,60 +341,16 @@ export function buildRailSelectionCopy(
     add(3, stopLine(stops[roles.previous], 'previous', t));
   const haveStops = roles.next >= 0 || roles.previous >= 0;
 
-  const ageS = Math.round(
-    (Number.isFinite(entry?.sample?.latestReportAgeMs)
-      ? entry.sample.latestReportAgeMs
-      : trainFixAgeMs(record, nowMs, fetchedAtMs)) / 1000,
-  );
-  const reported =
-    ageS < 90
-      ? t('Reported {seconds} s ago', { seconds: ageS })
-      : t('Reported {minutes} min ago', { minutes: Math.floor(ageS / 60) });
-  const ownTime =
-    Number.isFinite(record.timestamp) &&
-    record.timestamp > 0 &&
-    (!record.timestampSource || record.timestampSource === 'vehicle');
-  const lagS = Number.isFinite(entry?.sample?.actualDelayMs)
-    ? Math.max(0, Math.round(entry.sample.actualDelayMs / 1000))
-    : null;
-  add(
-    4,
-    (ownTime ? reported : t('{reported} (feed time)', { reported })) +
-      (lagS === null
-        ? ''
-        : ` · ${t('shown {seconds} s behind', { seconds: lagS })}`),
-  );
+  add(4, reportAgeText(record, entry, nowMs, fetchedAtMs, t));
 
-  const reportedMotion = [];
-  if (Number.isFinite(record.speedMps))
-    reportedMotion.push(
-      t('reported {speed} km/h', { speed: Math.round(record.speedMps * 3.6) }),
-    );
-  if (Number.isFinite(record.bearing))
-    reportedMotion.push(
-      t('reported hdg {heading}°', {
-        heading: roundHeadingDegrees(record.bearing),
-      }),
-    );
-  if (reportedMotion.length) add(7, reportedMotion.join(' · '));
+  const reportedMotion = reportedMotionText(record, t);
+  if (reportedMotion) add(7, reportedMotion);
   // The feed's own stop id says less than the schedule pack's stop names.
-  if (!haveStops) {
-    if (record.status === 'STOPPED_AT' && record.stopId)
-      add(8, t('Last report: stopped at stop {stop}', { stop: record.stopId }));
-    else if (record.status === 'INCOMING_AT' && record.stopId)
-      add(
-        8,
-        t('Last report: arriving at stop {stop}', { stop: record.stopId }),
-      );
-    else if (record.status === 'IN_TRANSIT_TO' && record.stopId)
-      add(8, t('Last report: next stop {stop}', { stop: record.stopId }));
-  }
+  const lastReport = haveStops ? '' : lastReportText(record, t);
+  if (lastReport) add(8, lastReport);
   if (record.mode === 'metro')
     add(5, t('Shown at street level · depth not in the feed'));
-  add(
-    6,
-    `${t('Vehicle {vehicle}', { vehicle: record.id })}${record.label && record.label !== record.id ? ` · ${record.label}` : ''}`,
-  );
+  add(6, vehicleIdText(record, t));
 
   // Past the limit, the highest ranks go; the rest keep their order.
   const kept = lines
@@ -484,26 +371,10 @@ export function buildRailSelectionCopy(
  * @returns {object|null}
  */
 export function createRailSelectedOverlayEntry(key, position, copy, category) {
-  if (!key || !position) return null;
-  return {
-    id: String(key),
+  return createSelectedVehicleOverlayEntry(
+    key,
     position,
-    variant: 'selected',
-    selected: true,
-    protected: true,
-    paintLane: 'selected',
-    collisionGroup: 'ambient-card',
-    priority: Number.MAX_SAFE_INTEGER,
-    title: copy.title,
-    details: copy.details,
-    accent: RAIL_CATEGORY_COLORS[category] || RAIL_CATEGORY_COLORS.local,
-    interactive: false,
-    anchorRadiusPx: 9,
-    minAnchorGapPx: 11,
-    verticalOnly: true,
-    placement: 'above',
-    edgeFade: 'keyhole',
-    horizonCull: true,
-    terrainOcclusion: false,
-  };
+    copy,
+    RAIL_CATEGORY_COLORS[category] || RAIL_CATEGORY_COLORS.local,
+  );
 }

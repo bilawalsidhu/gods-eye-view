@@ -13,7 +13,7 @@ export function createViewerHost({ state, parts }) {
   let openSeq = 0;
 
   function notify() {
-    state.notify?.();
+    state.notify();
   }
 
   function applyPose(pose) {
@@ -208,11 +208,7 @@ export function createViewerHost({ state, parts }) {
     if (providerId && active?.id !== providerId && mounting?.id !== providerId)
       return;
     close();
-    const pending = mounting;
-    mounting = null;
-    active?.unsubscribe();
-    (active?.adapter ?? pending?.adapter)?.unmount();
-    active = null;
+    release(active?.id ?? mounting?.id);
   }
 
   /**

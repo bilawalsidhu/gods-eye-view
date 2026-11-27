@@ -18,7 +18,7 @@
 
 import { loadBundledJson } from './bundledJson.js';
 import { createRetryableLoader } from './retryableLoad.js';
-import { EARTH_RADIUS_KM, greatCircleKm } from '../geoDistance.js';
+import { EARTH_RADIUS_KM, greatCircleKm, pointInRing } from '../geoDistance.js';
 
 const toRad = (d) => (d * Math.PI) / 180;
 
@@ -303,27 +303,6 @@ export async function listRegions() {
 
 // exported for tests
 export { normalizeName as _normalizeName };
-
-/**
- * Ray-cast (even-odd) point-in-ring test. Ring = [[lon,lat], …], open or
- * closed. Degenerate rings (<3 verts) are never containing.
- * @param {Array<[number,number]>} ring
- * @param {number} lat
- * @param {number} lon
- * @returns {boolean}
- */
-export function pointInRing(ring, lat, lon) {
-  if (!Array.isArray(ring) || ring.length < 3) return false;
-  let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
-    const [xi, yi] = ring[i];
-    const [xj, yj] = ring[j];
-    const intersects =
-      yi > lat !== yj > lat && lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi;
-    if (intersects) inside = !inside;
-  }
-  return inside;
-}
 
 /**
  * Resolve a natural-region OUTLINE ring for the annotation resolver's first

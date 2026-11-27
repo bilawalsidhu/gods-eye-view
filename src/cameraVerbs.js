@@ -74,6 +74,7 @@ import {
   findCamera,
   findFrame,
 } from './render/rendererOf.js';
+import { prefersReducedMotion } from './reducedMotion.js';
 
 let _isCockpitActive = null;
 /** °/s by speed word — orbit; pan uses fractions of view height/s. */
@@ -221,19 +222,6 @@ const ROUTE_ARM_S = 1.2;
 const ROUTE_MAX_DESCENT_MPS = 10;
 
 /* ── Pure cinematic helpers (unit-tested; no viewer, no module state) ────── */
-
-/** Whether the operating system asked us to keep motion boring. */
-export function prefersReducedMotion() {
-  try {
-    return (
-      typeof window !== 'undefined' &&
-      typeof window.matchMedia === 'function' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches === true
-    );
-  } catch {
-    return false;
-  }
-}
 
 /**
  * Frame-rate independent first-order approach (exponential smoothing).

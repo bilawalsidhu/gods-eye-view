@@ -24,9 +24,6 @@ export function createLifecycle({
      */
     init(viewer) {
       layerState._viewer = viewer;
-      layerState._dotSet?.dispose();
-      layerState._heatSet?.dispose();
-      layerState._heatOverSet?.dispose();
       const instance = ++instances;
       const draw = drawOf(viewer);
       layerState._dotSet = draw.points({
@@ -46,28 +43,6 @@ export function createLifecycle({
         id: `traffic:${instance}:heat-over`,
         clampTo: 'tiles',
       });
-      layerState._heatJam = [];
-      layerState._heatLineCount = 0;
-      layerState._dots = [];
-      layerState._roads = [];
-      layerState._count = 0;
-      layerState._lastUpdate = null;
-      layerState._lastBounds = null;
-      layerState._fetching = false;
-      layerState._loadGeneration = 0;
-      layerState._densityScale = 1.0;
-      layerState._speedScale = 1.0;
-      layerState._lastViewCenter = null;
-      layerState._flowRoads = null;
-      layerState._flowError = null;
-      layerState._flowStale = false;
-      layerState._flowOldestTileAt = null;
-      if (TRAFFIC_TIMING_ENABLED) {
-        layerState._trafficTimingCurrentAnchor = null;
-        layerState._trafficTimingSequence = 0;
-        layerState._trafficTimingTracesCreated = 0;
-        layerState._trafficTimingDroppedTraces = 0;
-      }
 
       // Preset-aware dot styling: adopt the active post-FX style (persisted
       // style restore may run before layer registration, so read the dataset)

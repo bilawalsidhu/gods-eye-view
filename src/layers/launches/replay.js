@@ -1,9 +1,8 @@
 import { stopFollowing } from '../../data/followed.js';
 import { toCartographicRadians } from '../../geo/ellipsoid.js';
-import { clamp, distance, toRadians } from '../../geo/vector.js';
+import { clamp, distance, lerp, toRadians } from '../../geo/vector.js';
 import { t } from '../../i18n/index.js';
 import { cameraOf, findCamera, findFrame } from '../../render/rendererOf.js';
-import { lerp } from './geometry.js';
 import {
   REPLAY_ASCENT_FALLBACK_SEC,
   REPLAY_ASCENT_MIN_SEC,
@@ -17,175 +16,162 @@ import {
   REPLAY_ORBIT_DURATION_SEC,
   REPLAY_INITIAL_RANGE_M,
 } from './policy.js';
+import { orbitInsertionOffsetSeconds, tangentPoint } from './paths.js';
+
+/**
+ * Rotate an upright screen-space rocket so its nose follows a projected path.
+ * @param {{x: number, y: number}} from Current screen point.
+ * @param {{x: number, y: number}} to Forward screen point.
+ * @returns {number} Clockwise CSS rotation in radians.
+ */
+export function replayVehicleScreenRotation(from, to) {
+  const dx = Number(to?.x) - Number(from?.x);
+  const dy = Number(to?.y) - Number(from?.y);
+  if (!Number.isFinite(dx) || !Number.isFinite(dy) || Math.hypot(dx, dy) < 0.01)
+    return 0;
+  return Math.atan2(dx, -dy);
+}
+
+/**
+ * Reduce small screen-space reprojection jitter without allowing the marker
+ * to lag behind a camera jump or a phase transition.
+ * @param {{x:number,y:number}|null} previous Previous rendered position.
+ * @param {{x:number,y:number}} next Current path projection.
+ * @param {number} [alpha] Interpolation amount.
+ * @param {number} [snapDistance] Maximum distance to smooth.
+ * @returns {{x:number,y:number}}
+ */
+export function smoothReplayWindowPosition(
+  previous,
+  next,
+  alpha = 0.55,
+  snapDistance = 24,
+) {
+  if (!previous || !next) return next;
+  const distance = Math.hypot(next.x - previous.x, next.y - previous.y);
+  if (!Number.isFinite(distance) || distance > snapDistance) return next;
+  const amount = clamp(Number(alpha) || 0, 0, 1);
+  return {
+    x: lerp(previous.x, next.x, amount),
+    y: lerp(previous.y, next.y, amount),
+  };
+}
+
+/**
+ * Derive a compressed but mission-specific ascent replay duration.
+ * Launch Library timelines are authoritative when they expose insertion,
+ * SECO, or separation timing. Sparse records fall back to the reconstructed
+ * path length and a conservative ascent velocity estimate.
+ * @param {object} launch Normalized launch record.
+ * @param {Array<{x: number, y: number, z: number}>} ascentPath
+ *   Reconstructed or supplied ascent, ECEF.
+ * @returns {number} Replay duration in seconds.
+ */
+export function replayAscentDurationSeconds(launch, ascentPath = []) {
+  const disclosedSeconds = orbitInsertionOffsetSeconds(launch);
+  let realAscentSeconds = disclosedSeconds > 0 ? disclosedSeconds : null;
+  if (!realAscentSeconds && ascentPath.length > 1) {
+    const pathLength = ascentPath
+      .slice(1)
+      .reduce(
+        (total, point, index) => total + distance(ascentPath[index], point),
+        0,
+      );
+    realAscentSeconds = Math.max(180, pathLength / 9000);
+  }
+  if (!realAscentSeconds) realAscentSeconds = REPLAY_ASCENT_FALLBACK_SEC * 50;
+  return clamp(
+    REPLAY_ASCENT_FALLBACK_SEC * (realAscentSeconds / 600),
+    REPLAY_ASCENT_MIN_SEC,
+    REPLAY_ASCENT_MAX_SEC,
+  );
+}
+
+/**
+ * Clamp and snap a replay speed multiplier to the supported slider range.
+ * @param {number|string} value Requested playback multiplier.
+ * @returns {number} Supported multiplier between 0.25x and 4x.
+ */
+export function normalizeReplaySpeed(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 1;
+  const clamped = clamp(numeric, REPLAY_SPEED_MIN, REPLAY_SPEED_MAX);
+  return Math.round(clamped / REPLAY_SPEED_STEP) * REPLAY_SPEED_STEP;
+}
+
+/**
+ * Preserve replay elapsed time when resuming after a pause.
+ * @param {number} startedAt Original replay start epoch in milliseconds.
+ * @param {number} pausedAt Pause epoch in milliseconds.
+ * @param {number} resumedAt Resume epoch in milliseconds.
+ * @returns {number} Shifted start epoch.
+ */
+export function replayStartAfterPause(startedAt, pausedAt, resumedAt) {
+  if (![startedAt, pausedAt, resumedAt].every(Number.isFinite))
+    return startedAt;
+  return startedAt + Math.max(0, resumedAt - pausedAt);
+}
+
+export function replayState(
+  launch,
+  startedAt,
+  ascentDurationSec,
+  orbitDurationSec,
+  orbitPeriodSec,
+  speed = 1,
+  nowMs = Date.now(),
+  preCountdownDurationSec = 0,
+  loop = true,
+) {
+  const animationDurationSec = ascentDurationSec + orbitDurationSec;
+  const realSecondsSinceStart = (nowMs - startedAt) / 1000;
+  const preCountdownDuration = Math.max(
+    0,
+    Number(preCountdownDurationSec) || 0,
+  );
+  // The hold precedes the whole countdown; ending it at -hold cut T-10 to T-5.
+  const preCountdownActive =
+    preCountdownDuration > 0 &&
+    realSecondsSinceStart < -REPLAY_COUNTDOWN_DURATION_SEC;
+  const countdownActive = realSecondsSinceStart < 0 && !preCountdownActive;
+  const countdownSeconds = countdownActive
+    ? Math.ceil(-realSecondsSinceStart)
+    : 0;
+  const elapsedSinceStart = Math.max(
+    0,
+    realSecondsSinceStart * normalizeReplaySpeed(speed),
+  );
+  const elapsed = loop
+    ? elapsedSinceStart % animationDurationSec
+    : Math.min(elapsedSinceStart, Math.max(0, animationDurationSec - 1e-6));
+  const insertionOffsetSec = orbitInsertionOffsetSeconds(launch);
+  const ascending = elapsed < ascentDurationSec;
+  const phaseProgress = ascending
+    ? elapsed / ascentDurationSec
+    : (elapsed - ascentDurationSec) / orbitDurationSec;
+  const missionOffsetSec =
+    insertionOffsetSec === null
+      ? null
+      : ascending
+        ? phaseProgress * insertionOffsetSec
+        : insertionOffsetSec + phaseProgress * orbitPeriodSec;
+  const launchEpoch = Date.parse(launch.launchTime);
+  const eventTime =
+    Number.isFinite(launchEpoch) && missionOffsetSec !== null
+      ? new Date(launchEpoch + missionOffsetSec * 1000)
+      : null;
+  return {
+    ascending,
+    phaseProgress,
+    eventTime,
+    elapsedSinceStart,
+    countdownActive,
+    preCountdownActive,
+    countdownSeconds,
+  };
+}
 
 export function createReplay({ state: layerState, services, parts, source }) {
-  /**
-   * Rotate an upright screen-space rocket so its nose follows a projected path.
-   * @param {{x: number, y: number}} from Current screen point.
-   * @param {{x: number, y: number}} to Forward screen point.
-   * @returns {number} Clockwise CSS rotation in radians.
-   */
-
-  function replayVehicleScreenRotation(from, to) {
-    const dx = Number(to?.x) - Number(from?.x);
-    const dy = Number(to?.y) - Number(from?.y);
-    if (
-      !Number.isFinite(dx) ||
-      !Number.isFinite(dy) ||
-      Math.hypot(dx, dy) < 0.01
-    )
-      return 0;
-    return Math.atan2(dx, -dy);
-  }
-
-  /**
-   * Reduce small screen-space reprojection jitter without allowing the marker
-   * to lag behind a camera jump or a phase transition.
-   * @param {{x:number,y:number}|null} previous Previous rendered position.
-   * @param {{x:number,y:number}} next Current path projection.
-   * @param {number} [alpha] Interpolation amount.
-   * @param {number} [snapDistance] Maximum distance to smooth.
-   * @returns {{x:number,y:number}}
-   */
-
-  function smoothReplayWindowPosition(
-    previous,
-    next,
-    alpha = 0.55,
-    snapDistance = 24,
-  ) {
-    if (!previous || !next) return next;
-    const distance = Math.hypot(next.x - previous.x, next.y - previous.y);
-    if (!Number.isFinite(distance) || distance > snapDistance) return next;
-    const amount = clamp(Number(alpha) || 0, 0, 1);
-    return {
-      x: lerp(previous.x, next.x, amount),
-      y: lerp(previous.y, next.y, amount),
-    };
-  }
-
-  /**
-   * Derive a compressed but mission-specific ascent replay duration.
-   * Launch Library timelines are authoritative when they expose insertion,
-   * SECO, or separation timing. Sparse records fall back to the reconstructed
-   * path length and a conservative ascent velocity estimate.
-   * @param {object} launch Normalized launch record.
-   * @param {Array<{x: number, y: number, z: number}>} ascentPath
-   *   Reconstructed or supplied ascent, ECEF.
-   * @returns {number} Replay duration in seconds.
-   */
-
-  function replayAscentDurationSeconds(launch, ascentPath = []) {
-    const disclosedSeconds = parts.paths.orbitInsertionOffsetSeconds(launch);
-    let realAscentSeconds = disclosedSeconds > 0 ? disclosedSeconds : null;
-    if (!realAscentSeconds && ascentPath.length > 1) {
-      const pathLength = ascentPath
-        .slice(1)
-        .reduce(
-          (total, point, index) => total + distance(ascentPath[index], point),
-          0,
-        );
-      realAscentSeconds = Math.max(180, pathLength / 9000);
-    }
-    if (!realAscentSeconds) realAscentSeconds = REPLAY_ASCENT_FALLBACK_SEC * 50;
-    return clamp(
-      REPLAY_ASCENT_FALLBACK_SEC * (realAscentSeconds / 600),
-      REPLAY_ASCENT_MIN_SEC,
-      REPLAY_ASCENT_MAX_SEC,
-    );
-  }
-
-  /**
-   * Clamp and snap a replay speed multiplier to the supported slider range.
-   * @param {number|string} value Requested playback multiplier.
-   * @returns {number} Supported multiplier between 0.25x and 4x.
-   */
-
-  function normalizeReplaySpeed(value) {
-    const numeric = Number(value);
-    if (!Number.isFinite(numeric)) return 1;
-    const clamped = clamp(numeric, REPLAY_SPEED_MIN, REPLAY_SPEED_MAX);
-    return Math.round(clamped / REPLAY_SPEED_STEP) * REPLAY_SPEED_STEP;
-  }
-
-  /**
-   * Preserve replay elapsed time when resuming after a pause.
-   * @param {number} startedAt Original replay start epoch in milliseconds.
-   * @param {number} pausedAt Pause epoch in milliseconds.
-   * @param {number} resumedAt Resume epoch in milliseconds.
-   * @returns {number} Shifted start epoch.
-   */
-
-  function replayStartAfterPause(startedAt, pausedAt, resumedAt) {
-    if (![startedAt, pausedAt, resumedAt].every(Number.isFinite))
-      return startedAt;
-    return startedAt + Math.max(0, resumedAt - pausedAt);
-  }
-
-  function replayState(
-    launch,
-    startedAt,
-    ascentDurationSec,
-    orbitDurationSec,
-    orbitPeriodSec,
-    speed = 1,
-    nowMs = Date.now(),
-    preCountdownDurationSec = 0,
-    loop = true,
-  ) {
-    const animationDurationSec = ascentDurationSec + orbitDurationSec;
-    const realSecondsSinceStart = (nowMs - startedAt) / 1000;
-    const preCountdownDuration = Math.max(
-      0,
-      Number(preCountdownDurationSec) || 0,
-    );
-    // The hold precedes the whole countdown; ending it at -hold cut T-10 to T-5.
-    const preCountdownActive =
-      preCountdownDuration > 0 &&
-      realSecondsSinceStart < -REPLAY_COUNTDOWN_DURATION_SEC;
-    const countdownActive = realSecondsSinceStart < 0 && !preCountdownActive;
-    const countdownSeconds = countdownActive
-      ? Math.ceil(-realSecondsSinceStart)
-      : 0;
-    const elapsedSinceStart = Math.max(
-      0,
-      realSecondsSinceStart * normalizeReplaySpeed(speed),
-    );
-    const elapsed = loop
-      ? elapsedSinceStart % animationDurationSec
-      : Math.min(elapsedSinceStart, Math.max(0, animationDurationSec - 1e-6));
-    const insertionOffsetSec = parts.paths.orbitInsertionOffsetSeconds(launch);
-    const ascending = elapsed < ascentDurationSec;
-    const phaseProgress = ascending
-      ? elapsed / ascentDurationSec
-      : (elapsed - ascentDurationSec) / orbitDurationSec;
-    const missionOffsetSec =
-      insertionOffsetSec === null
-        ? null
-        : ascending
-          ? phaseProgress * insertionOffsetSec
-          : insertionOffsetSec + phaseProgress * orbitPeriodSec;
-    const launchEpoch = Date.parse(launch.launchTime);
-    const eventTime =
-      Number.isFinite(launchEpoch) && missionOffsetSec !== null
-        ? new Date(launchEpoch + missionOffsetSec * 1000)
-        : null;
-    return {
-      ascending,
-      phaseProgress,
-      eventTime,
-      elapsedSinceStart,
-      countdownActive,
-      preCountdownActive,
-      countdownSeconds,
-    };
-  }
-
-  /** Republish the mission panel after a replay state change. */
-  function syncReplayButton() {
-    parts.panel.publishPanel();
-  }
-
   /**
    * The replay controls as the mission panel shows them: the start button,
    * the transport with its pause toggle, and the speed slider.
@@ -233,15 +219,11 @@ export function createReplay({ state: layerState, services, parts, source }) {
     parts.panel.publishPanel();
   }
 
-  function syncReplaySpeedControl() {
-    parts.panel.publishPanel();
-  }
-
   function setReplaySpeed(value) {
     const nextSpeed = normalizeReplaySpeed(value);
     const previousSpeed = layerState._replaySpeed;
     if (nextSpeed === previousSpeed) {
-      syncReplaySpeedControl();
+      parts.panel.publishPanel();
       return;
     }
     const now =
@@ -258,7 +240,7 @@ export function createReplay({ state: layerState, services, parts, source }) {
       );
     }
     layerState._replaySpeed = nextSpeed;
-    syncReplaySpeedControl();
+    parts.panel.publishPanel();
   }
 
   function replayClockNow(launchId) {
@@ -277,7 +259,7 @@ export function createReplay({ state: layerState, services, parts, source }) {
       return false;
     layerState._replayPausedAtMs = Date.now();
     layerState._replayPaused = true;
-    syncReplayButton();
+    parts.panel.publishPanel();
     return true;
   }
 
@@ -305,7 +287,7 @@ export function createReplay({ state: layerState, services, parts, source }) {
     }
     layerState._replayPaused = false;
     layerState._replayPausedAtMs = null;
-    syncReplayButton();
+    parts.panel.publishPanel();
     return true;
   }
 
@@ -326,7 +308,7 @@ export function createReplay({ state: layerState, services, parts, source }) {
     layerState._replayPausedAtMs = null;
     if (stoppedLaunchId)
       layerState._animationStarts.set(stoppedLaunchId, Date.now());
-    syncReplayButton();
+    parts.panel.publishPanel();
     parts.overlays.syncMissionOverlayEntries();
   }
 
@@ -357,7 +339,7 @@ export function createReplay({ state: layerState, services, parts, source }) {
       track.ascentPath,
     );
     track.lastCameraHeading = initialHeading;
-    syncReplayButton();
+    parts.panel.publishPanel();
     parts.overlays.syncMissionOverlayEntries();
     parts.policyHelpers.releaseAircraftTracking(layerState._dataManager);
     stopFollowing(layerState._viewer);
@@ -444,14 +426,10 @@ export function createReplay({ state: layerState, services, parts, source }) {
           range: cameraRange,
         });
       } else {
-        const tangentStep = Math.max(0.002, 0.8 / Math.max(2, path.length - 1));
-        const tangentProgress = Math.min(1, state.phaseProgress + tangentStep);
-        const tangentPosition = parts.paths.samplePath(
+        const tangentPosition = tangentPoint(
           path,
-          tangentProgress > state.phaseProgress
-            ? tangentProgress
-            : Math.max(0, state.phaseProgress - tangentStep),
-        );
+          state.phaseProgress,
+        ).position;
         const orbitPose = parts.camera.replayOrbitCameraPose(
           position,
           tangentPosition,
@@ -512,10 +490,8 @@ export function createReplay({ state: layerState, services, parts, source }) {
     normalizeReplaySpeed,
     replayStartAfterPause,
     replayState,
-    syncReplayButton,
     presentReplay,
     syncReplayCountdownButton,
-    syncReplaySpeedControl,
     setReplaySpeed,
     replayClockNow,
     pauseMissionReplay,

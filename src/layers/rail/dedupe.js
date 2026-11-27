@@ -307,8 +307,7 @@ export function chooseCopies(groups, previous = new Map(), held = null) {
       .map((copy) => previous.get(copy.key))
       .find((key) => key && keys.has(key));
     let best =
-      scored.find(({ copy }) => copy.key === incumbentKey) ??
-      scored.reduce((a, b) => (better(b.score, a.score) ? b : a));
+      scored.find(({ copy }) => copy.key === incumbentKey) ?? scored[0];
     for (const candidate of scored)
       if (better(candidate.score, best.score)) best = candidate;
     best = scored.find(({ copy }) => copy.key === held) ?? best;

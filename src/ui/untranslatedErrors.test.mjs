@@ -127,7 +127,7 @@ for (const locale of ['es', 'ru']) {
     assert.equal(message, 'Weather request timed out', 'stored in English');
     setLocale(locale);
     try {
-      // The layer shows `t(problem)` (weather/index.js presentWeatherProblem).
+      // The layer shows it through translateFeedError (weather/index.js).
       assert.notEqual(t(message), message, 'should be translated');
       assert.notEqual(translateKnown(message), message);
     } finally {

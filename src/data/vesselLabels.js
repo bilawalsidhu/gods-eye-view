@@ -5,6 +5,7 @@
  */
 
 import { t, msg } from '../i18n/index.js';
+import { cardClearance } from '../overlays/worldOverlayTokens.js';
 import {
   normalizeVesselType,
   vesselKind,
@@ -124,19 +125,17 @@ export function applyVesselOverlayPolicy(
   fadeDistance = VESSEL_CARD_FADE_DISTANCE_M,
 ) {
   const selected = card?.selected === true;
-  const rawGap = Number(card?.gapPx) || 10;
-  const gapPx = Math.max(selected ? 28 : 12, rawGap + 8);
   return {
     ...card,
     variant: selected ? 'selected' : 'card',
     protected: selected,
     collisionGroup: 'ambient-card',
     cardStyle: 'tactical',
-    gapPx,
-    leaderOffsetPx: Math.max(2, gapPx - 6),
     // Selected detail cards may move beside the contact to clear solid panels.
-    verticalOnly: !selected,
-    viewportMargin: 4,
+    ...cardClearance(Number(card?.gapPx) || 10, {
+      minGapPx: selected ? 28 : 12,
+      verticalOnly: !selected,
+    }),
     maxDistance: selected ? Number.POSITIVE_INFINITY : fadeDistance,
     distanceFadeStartRatio: VESSEL_CARD_FADE_START_RATIO,
     edgeFade: 'keyhole',

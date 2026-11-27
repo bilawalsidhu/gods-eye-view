@@ -1,8 +1,16 @@
 import { weatherTileUrl, closeWeatherPixels } from './source.js';
 import { WEATHER_IMAGERY_SHOWS, WEATHER_IMAGERY_Z } from './imageryOrder.js';
-import { imageryHostStatus } from './imageryHost.js';
-import { globeImageryHost } from './shellRendering.js';
-import { drawMosaicTile, createFrameTileFetch } from './rasterTiles.js';
+import { imageryHostStatus } from '../../maps/imageryHost.js';
+import {
+  createPrefetchSlot,
+  createWeatherShell,
+  globeImageryHost,
+} from './shellRendering.js';
+import {
+  drawMosaicTile,
+  createFrameTileFetch,
+  geographicTile,
+} from './rasterTiles.js';
 import { weatherDisplay } from './display.js';
 import { msg } from '../../i18n/index.js';
 import {
@@ -33,7 +41,7 @@ export const READY_WAKE_MS = 150;
  * A degrees rectangle's overlap with another, or null; either may cross the
  * antimeridian (`west > east`), as a view rectangle can.
  */
-export function rectangleOverlap(a, b) {
+function rectangleOverlap(a, b) {
   let aEast = a.east;
   let aWest = a.west;
   let bEast = b.east;
@@ -51,14 +59,6 @@ export function rectangleOverlap(a, b) {
   const north = Math.min(a.north, b.north);
   if (south >= north) return null;
   return { west, south, east, north };
-}
-
-/** A tile of the geographic scheme (two level-zero tiles), in degrees. */
-export function geographicTile(x, y, level) {
-  const size = 180 / 2 ** level;
-  const west = -180 + x * size;
-  const north = 90 - y * size;
-  return { west, south: north - size, east: west + size, north };
 }
 
 /** HTTP statuses a weather tile is fetched again for, rather than failing. */
@@ -91,8 +91,8 @@ function createGlobeRendering({
   let frameHidden = false;
   let lastError = null;
   const mosaics = new Map();
-  let prefetchJob = null;
-  let prefetchedKey = null;
+  const prefetches = createPrefetchSlot(timeoutMs);
+  const cancelPrefetch = prefetches.cancel;
 
   /** The deepest level the feed's own tiles of `product` go to, or null. */
   function suppliedLevel(product) {
@@ -122,13 +122,6 @@ function createGlobeRendering({
         suppliedLevel(product) ??
         (product === 'clouds' ? GLOBAL_TILE_MAXIMUM_LEVEL : TILE_MAXIMUM_LEVEL),
     };
-  }
-
-  function cancelPrefetch() {
-    clearTimeout(prefetchJob?.timeout);
-    prefetchJob?.controller.abort();
-    prefetchJob = null;
-    prefetchedKey = null;
   }
 
   async function mosaic(time, mode, signal, onFetched) {
@@ -306,7 +299,6 @@ function createGlobeRendering({
     cancelPrefetch,
     updateSnapshot,
     async prefetch(snapshot, time, { infrared = 'filtered' } = {}) {
-      let job;
       try {
         if (
           frameHidden ||
@@ -324,33 +316,25 @@ function createGlobeRendering({
           : supplied
             ? `${snapshot.product}|${time}|${tiles.map(({ z, x, y }) => `${z}/${x}/${y}`).join('|')}`
             : urls.join('|');
-        if (prefetchJob?.key === key || prefetchedKey === key) return false;
-        cancelPrefetch();
-        job = { key, controller: new AbortController() };
-        prefetchJob = job;
-        const { signal } = job.controller;
-        job.timeout = setTimeout(() => job.controller.abort(), timeoutMs);
-        if (global) await mosaic(time, infrared, signal);
-        else if (supplied)
-          await prefetchFrameTiles(snapshot, time, tiles, signal);
-        else
-          await Promise.all(
-            urls.map(async (url) => {
-              const response = await fetchImpl(url, { signal });
-              if (!response.ok)
-                throw new Error(msg('Weather prefetch unavailable'));
-              await readResponseBytesCapped(response, 4 * 1024 * 1024 + 65_536);
-            }),
-          );
-        signal.throwIfAborted();
-        if (prefetchJob === job) prefetchedKey = key;
-        return true;
+        return await prefetches.run(key, async (signal) => {
+          if (global) await mosaic(time, infrared, signal);
+          else if (supplied)
+            await prefetchFrameTiles(snapshot, time, tiles, signal);
+          else
+            await Promise.all(
+              urls.map(async (url) => {
+                const response = await fetchImpl(url, { signal });
+                if (!response.ok)
+                  throw new Error(msg('Weather prefetch unavailable'));
+                await readResponseBytesCapped(
+                  response,
+                  4 * 1024 * 1024 + 65_536,
+                );
+              }),
+            );
+        });
       } catch {
-        job?.controller.abort();
         return false;
-      } finally {
-        clearTimeout(job?.timeout);
-        if (job && prefetchJob === job) prefetchJob = null;
       }
     },
     async setFrame(
@@ -652,7 +636,7 @@ function createGlobeRendering({
     getDiagnostics() {
       return {
         host: 'globe',
-        cache: { mosaics: mosaics.size, prefetching: !!prefetchJob },
+        cache: { mosaics: mosaics.size, prefetching: prefetches.busy },
         imageryCount:
           Number(!!current) + Number(!!incoming?.layer) + retiring.size,
         mosaic: (incoming || current)?.mosaic,
@@ -675,7 +659,7 @@ function createGlobeRendering({
  * A host switch tears one renderer down and restages the last frame on the other. */
 export function createWeatherRendering({
   viewer,
-  createShell,
+  createShell = createWeatherShell,
   globeOf = findGlobe,
   cameraOf = findCamera,
   creditsOf = findCredits,

@@ -15,7 +15,6 @@ const rec = (type) => ({
   speed: 5,
   course: 10,
   heading: 10,
-  lastPositionUtc: '',
   missedRefreshes: 0,
   position: POS,
   billboard: null,

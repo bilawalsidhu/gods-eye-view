@@ -1,6 +1,4 @@
-// Marks text for i18n extraction; the UI translates it with t(). Kept local
-// because AI tool services import this module outside the browser.
-const msg = (text) => text;
+import { msg } from '../../i18n/marker.js';
 
 /**
  * Pure domain model for the Recent Imagery layer: products, the selection box,
@@ -25,6 +23,15 @@ const QUANTUM = 100000;
 const DAY_MS = 86_400_000;
 const PRODUCT_ORDER = ['S30', 'L30', 'VIIRS'];
 const MONTHS = 'Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.split(' ');
+
+/** The two imagery slots a comparison drapes. */
+export const SLOT_IDS = ['a', 'b'];
+
+/** `value` clamped to 0..1, or `fallback` when it is not a number. */
+export function clampUnit(value, fallback = 1) {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(0, Math.min(1, number)) : fallback;
+}
 
 /**
  * Keyless, browser-direct imagery products. HLS products are searched via
@@ -190,20 +197,18 @@ export function validateBox(box) {
     return refuse('degenerate', msg('Box must enclose an area'));
   const { width, height } = boxSideKm(normalized);
   if (width > MAX_BOX_SIDE_KM || height > MAX_BOX_SIDE_KM)
-    return refuse('too-large', tooLargeMessage(Math.max(width, height)));
+    return refuse('too-large', sizeRefusal('Box', Math.max(width, height)));
   return { ok: true, box: normalized };
 }
 
 const formatKm = (km) => Math.round(Number(km) || 0).toLocaleString('en-US');
 
-// One short line each: the panel's hint says what to do about it.
-function tooLargeMessage(sideKm) {
-  return `Box is ${formatKm(sideKm)} km wide · limit ${formatKm(MAX_BOX_SIDE_KM)} km`;
-}
-
-/** The refusal for USE VIEW when the camera sees more than the cap allows. */
-export function viewTooLargeMessage(sideKm) {
-  return `View is ${formatKm(sideKm)} km wide · limit ${formatKm(MAX_BOX_SIDE_KM)} km`;
+/**
+ * One short line; the panel's hint says what to do about it. `noun` is 'Box'
+ * or 'View' (USE VIEW), as src/ui/recentImagery.js reads it back.
+ */
+export function sizeRefusal(noun, sideKm) {
+  return `${noun} is ${formatKm(sideKm)} km wide · limit ${formatKm(MAX_BOX_SIDE_KM)} km`;
 }
 
 /**

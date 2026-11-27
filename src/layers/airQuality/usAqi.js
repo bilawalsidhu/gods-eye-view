@@ -440,8 +440,8 @@ function newer(a, b) {
   return a.reason === 'flagged' && b.reason !== 'flagged';
 }
 
-/** An hourly mean below this data coverage (45 minutes) counts as missing. */
-const HOUR_MIN_COVERAGE = 75;
+/** Minimum hourly data coverage (45 minutes): a mean below it counts as missing. */
+export const HOURLY_MIN_COVERAGE = 75;
 
 /**
  * The averaging periods, in minutes, each pollutant's table is rated on
@@ -665,7 +665,7 @@ export function aqiStations(readings) {
       // so it never enters a NowCast or 8-hour mean.
       const covered =
         !Number.isFinite(reading.coveragePercent) ||
-        reading.coveragePercent >= HOUR_MIN_COVERAGE;
+        reading.coveragePercent >= HOURLY_MIN_COVERAGE;
       const fault = value !== null && value > AQI_CEILINGS[key];
       const hour = {
         ...candidate,

@@ -1,15 +1,8 @@
+import { browserStorage } from '../browserStorage.js';
+
 const CLOUD_VOICE_AUTH_MODES = Object.freeze(['api-key', 'oauth']);
 const DEFAULT_CLOUD_VOICE_AUTH_MODE = 'api-key';
 export const CLOUD_VOICE_AUTH_STORAGE_KEY = 'godsEyeView.voice.cloudAuth';
-
-function storageRef(storage) {
-  if (storage) return storage;
-  try {
-    return typeof localStorage === 'undefined' ? null : localStorage;
-  } catch {
-    return null;
-  }
-}
 
 function normalizeCloudVoiceAuthMode(mode) {
   const normalized = String(mode || '')
@@ -23,7 +16,7 @@ function normalizeCloudVoiceAuthMode(mode) {
 export function readStoredCloudVoiceAuthMode(storage) {
   try {
     return normalizeCloudVoiceAuthMode(
-      storageRef(storage)?.getItem(CLOUD_VOICE_AUTH_STORAGE_KEY),
+      (storage || browserStorage())?.getItem(CLOUD_VOICE_AUTH_STORAGE_KEY),
     );
   } catch {
     return DEFAULT_CLOUD_VOICE_AUTH_MODE;
@@ -33,7 +26,10 @@ export function readStoredCloudVoiceAuthMode(storage) {
 export function writeStoredCloudVoiceAuthMode(mode, storage) {
   const resolved = normalizeCloudVoiceAuthMode(mode);
   try {
-    storageRef(storage)?.setItem(CLOUD_VOICE_AUTH_STORAGE_KEY, resolved);
+    (storage || browserStorage())?.setItem(
+      CLOUD_VOICE_AUTH_STORAGE_KEY,
+      resolved,
+    );
   } catch {
     /* best effort */
   }

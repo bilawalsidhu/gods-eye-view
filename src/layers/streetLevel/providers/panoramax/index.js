@@ -1,28 +1,30 @@
 import {
+  LINE_CLICK_HINT,
   createLineCoverage,
   freshCoverage,
   sequenceIdFromPick,
 } from '../../lineCoverage.js';
 import { createSequenceCones, thinImages } from '../../sequenceCones.js';
 import { passesImageryFilter } from '../../filter.js';
-import { lonToTileX, latToTileY, tileBounds } from '../../tileMath.js';
-import { metresBetween } from '../../view.js';
+import {
+  lonToTileX,
+  latToTileY,
+  tileBounds,
+  zoomForHeight,
+} from '../../tileMath.js';
+import { approxDistanceM } from '../../../../data/approxDistance.js';
 import { findCamera } from '../../../../render/rendererOf.js';
-import { createLru, createTileCache } from '../../tileCache.js';
+import { createTileCache } from '../../tileCache.js';
+import { createLru } from '../../../../data/lru.js';
 import { decodeCoverageTileSliced, decodePictures } from './decode.js';
 import { createPanoramaxSource } from './source.js';
 import { createPanoramaxViewer } from './viewer.js';
 import { msg } from '../../../../i18n/index.js';
 import {
   COLORS,
-  COVERAGE_LINES_BELOW_M,
   COVERAGE_TUNING,
-  COVERAGE_Z11_BELOW_M,
-  COVERAGE_Z12_BELOW_M,
-  COVERAGE_Z13_BELOW_M,
-  COVERAGE_Z14_BELOW_M,
+  COVERAGE_ZOOMS,
   GONE_MESSAGE,
-  LINE_CLICK_HINT,
   LINE_CLICK_RADIUS_MAX_M,
   LINE_CLICK_RADIUS_PER_HEIGHT,
   NEAREST_LIMIT,
@@ -67,24 +69,6 @@ const COVERAGE_TILE_CACHE_SIZE = 16;
 const PICTURE_LIST_CACHE_SIZE = 32;
 
 /**
- * Sequence lines at z10–14 below 60 km; above, nothing is drawn (the hint
- * says to zoom in).
- */
-export function panoramaxZoomFor(heightM) {
-  if (!Number.isFinite(heightM) || heightM > COVERAGE_LINES_BELOW_M)
-    return null;
-  return heightM <= COVERAGE_Z14_BELOW_M
-    ? 14
-    : heightM <= COVERAGE_Z13_BELOW_M
-      ? 13
-      : heightM <= COVERAGE_Z12_BELOW_M
-        ? 12
-        : heightM <= COVERAGE_Z11_BELOW_M
-          ? 11
-          : 10;
-}
-
-/**
  * The imagery filter for lines. A line is dated by its sequence's first
  * day, so a sequence still growing may hide under "since" while its newer
  * pictures can be opened; a line with no camera type or no day is kept (a
@@ -112,7 +96,7 @@ export function pictureTilesAround(point) {
   const home = pictureTileOf(point);
   const box = tileBounds(home.x, home.y, home.z);
   const near = (lon, lat) =>
-    metresBetween(point, { lon, lat }) <= PICTURE_TILE_EDGE_M;
+    approxDistanceM(point, { lon, lat }) <= PICTURE_TILE_EDGE_M;
   // Near both edges at once where tiles are narrow (high latitudes).
   const dxs = [0];
   if (near(box.west, point.lat)) dxs.push(-1);
@@ -310,7 +294,7 @@ export function createPanoramaxProvider({
       const coverage = createLineCoverage({
         state,
         fetchTile: (tile, options) => coverageTiles.get(tile, options),
-        zoomFor: panoramaxZoomFor,
+        zoomFor: (heightM) => zoomForHeight(heightM, COVERAGE_ZOOMS),
         colors: COLORS,
         pickPrefix: PICK_PREFIX.sequence,
         renderKey: 'panoramax-coverage',
@@ -432,7 +416,7 @@ export function createPanoramaxProvider({
         for (const item of items) {
           const photo = remember(item);
           if (!photo) continue;
-          const metres = metresBetween(point, photo);
+          const metres = approxDistanceM(point, photo);
           if (metres > radius) continue;
           if (!best || metres < best.metres) best = { photo, metres };
         }
@@ -469,11 +453,11 @@ export function createPanoramaxProvider({
           pictureLists.clear();
         },
 
-        destroy(cesiumViewer) {
+        destroy() {
           coverage.detach();
           coverage.clear();
           coverage.unblock();
-          cones.destroy(cesiumViewer);
+          cones.destroy();
         },
 
         /** The filter changed: redraw. Each draw reads it from the context. */
@@ -546,7 +530,9 @@ export function createPanoramaxProvider({
           const filter = context.getFilter();
           // Only the lookup the click itself asked for (the same point).
           const wanted =
-            preferred && metresBetween(preferred, point) < 1 ? preferred : null;
+            preferred && approxDistanceM(preferred, point) < 1
+              ? preferred
+              : null;
           preferred = null;
           const ask = (collections, radius = NEAREST_RADIUS_M) =>
             source.nearestItems(

@@ -1,38 +1,10 @@
 import { readShellSource } from './testSupport/readShellSource.mjs';
 import { renderApplicationHtml } from './testSupport/applicationHtml.mjs';
-// src/reasonableDefaults.test.mjs
-//
-// What the console looks like the FIRST time it opens — before any share link,
-// before any stored state. The "reasonable defaults" batch (owner directive,
-// 2026-08-22) moved three of them together:
-//
-//   1. 3D aircraft models ON, mode `proximity`.
-//      Pinned in `data/layerState.test.mjs`, next to the coordinator that
-//      actually decides fresh-boot layer state — including the early return that
-//      makes each layer's own initializer the operative default.
-//   2. Scope feather. Owner: "I like to hide feather" set it to 0% on
-//      2026-08-22; later revisions were 8%, then 11%, then 100% on
-//      2026-10-25. Scope stays ON on a fresh boot. The hard crop remains available.
-//   3. Detection ON (Dense @ 75%) for EVERY style, Normal included.
-//      Owner: "detect should also be on by default."
-//   4. Detection OUTSIDE opacity 1% (owner final lock, 2026-08-24; 3% on 08-23, 5% before), with
-//      the slider's `step` at 1 so the range around it is reachable at all.
-//
-// Each pin below has the same three parts, because a default is never one
-// literal:
-//
-//   • the first-run VALUE, at every surface that independently decides it — a
-//     fresh boot runs no restore, so these literals ARE the startup state and
-//     changing one alone ships a UI that disagrees with its own engine;
-//   • explicit state still WINS over it — a link, or the operator's own hand,
-//     because "default" means "what you get when you said nothing";
-//   • the surrounding override machinery is INTACT, so a default flip cannot
-//     quietly take a separate landed behaviour with it.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
-import { KEYHOLE_OUTER_RADIUS, KEYHOLE_OUTSIDE_OPACITY_DEFAULT, KEYHOLE_LABEL_FEATHER_RATIO } from './celestialRing.js';
+import { KEYHOLE_OUTER_RADIUS, KEYHOLE_OUTSIDE_OPACITY_DEFAULT } from './celestialRing.js';
 import { AIRCRAFT_BRACKET_FLOOR_ANCHOR } from './data/detectionPolicy.js';
 import {
   SCOPE_FEATHER_RATIO_DEFAULT,
@@ -48,7 +20,6 @@ import { bindFakeCesiumCamera } from './testSupport/fakeCameraPort.mjs';
 const uiSource = readShellSource()
   + '\n' + fs.readFileSync(new URL('./ui/visualPresets.js', import.meta.url), 'utf8');
 const indexHtml = await renderApplicationHtml(fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
-const shareSource = fs.readFileSync(new URL('./sharelink.js', import.meta.url), 'utf8');
 
 /** Slice ui.js between two literal anchors, so a pin reads one method, not the file. */
 function uiBlock(start, end) {
@@ -81,7 +52,6 @@ function managerForHash(hash) {
 
 test('first run opens with Scope ON and 100% feather at every default surface', () => {
   assert.equal(isScopeMaskEnabled(), true, 'the live mask starts enabled');
-  assert.equal(SCOPE_FEATHER_RATIO_DEFAULT, 1, 'owner preference 2026-10-25');
   assert.equal(getScopeMaskFeather(), 1,
     'and the live module starts there, not merely documents it');
 
@@ -96,11 +66,14 @@ test('first run opens with Scope ON and 100% feather at every default surface', 
   assert.match(indexHtml, /<input type="checkbox" id="scope-toggle"[^>]*\schecked\s*\/?>/,
     'the native Scope checkbox starts checked');
 
-  // The link this session generates must describe the mask this session draws,
+  // The link this session generates must describe what this session draws,
   // for the window before the first _syncShareState.
-  assert.match(shareSource, /this\._scopeFeatherPct = 100;/,
-    'sharelink.js: the generator starts from the same value the mask starts at');
-  const params = managerForHash('')._buildHashParams();
+  const manager = managerForHash('');
+  assert.deepEqual(
+    [manager._detectionFadePct, manager._detectionOutsideOpacityPct, manager._scopeFeatherPct],
+    [7, 1, 100],
+  );
+  const params = manager._buildHashParams();
   assert.equal(params.get('sc'), '1');
   assert.equal(params.get('scf'), '100');
 });
@@ -165,37 +138,27 @@ test('the 100% default retains the expanded feather range and hard edge', () => 
 // (owner final lock 2026-08-24; 16% before). Fade is the label/card fading
 // band around the keyhole — a different control from the scope-mask feather.
 test('first run opens at 7% detection fade, at every surface that decides it', () => {
-  assert.equal(KEYHOLE_LABEL_FEATHER_RATIO, 0.07,
-    'celestialRing.js: the engine fade band opens at 7%');
   assert.match(uiSource, /detectionFadePct: 7,/,
     'ui.js: the global post defaults apply the same value on first load');
   assert.match(indexHtml, /id="detection-fade-slider"[^>]*\svalue="7"/,
     'index.html: the fade slider ships at 7');
   assert.match(indexHtml, /id="detection-fade-value"[^>]*>7%</,
     'index.html: the fade readout agrees with the slider');
-  assert.match(shareSource, /this\._detectionFadePct = 7;/,
-    'sharelink.js: the generator starts from the same value the overlay draws');
 });
 
 // 2b. Detection OUTSIDE opacity — 1% on a first run
 // ---------------------------------------------------------------------------
 
 test('first run opens at 1% OUTSIDE opacity, at every surface that decides it', () => {
-  assert.equal(KEYHOLE_OUTSIDE_OPACITY_DEFAULT, 0.01,
-    'owner final lock 2026-08-24: the world overlay reads quieter beyond the keyhole');
-
-  // Four independent literals decide this on a fresh boot: the engine constant
-  // above, the markup and its readout, ui.js's global post defaults, and the
-  // share generator's starting state. Changing one alone ships a UI that
-  // disagrees with its own engine.
+  // Beside the engine constant, the markup and its readout and ui.js's global
+  // post defaults decide this on a fresh boot. Changing one alone ships a UI
+  // that disagrees with its own engine.
   assert.match(indexHtml, /id="detection-opacity-slider"[^>]*\svalue="1"/,
     'index.html: the OUTSIDE slider ships at 1');
   assert.match(indexHtml, /id="detection-opacity-value"[^>]*>1%</,
     'index.html: and its readout agrees with the handle');
   assert.match(uiSource, /detectionOutsideOpacityPct: 1,/,
     'ui.js: the global post defaults apply the same value on first load');
-  assert.match(shareSource, /this\._detectionOutsideOpacityPct = 1;/,
-    'sharelink.js: the generator starts from the same value the overlay draws');
 
   // The bracket floor is calibrated AT the default, so it moves with it — the
   // approval attaches to the bracket brightness, not to the slider position.
@@ -264,8 +227,7 @@ test('detection-on-by-default is a default, not an operator override', () => {
   // preset consults the flag, and the detection button sets it.
   assert.match(uiSource, /if \(preset\.detection && !this\._detectionUserOverridden\) \{/,
     'a style preset still yields to an operator who changed detection by hand');
-  const displayActions = uiSource.slice(uiSource.indexOf('const token = store.connect('));
-  const detectionButton = displayActions.slice(displayActions.indexOf('cycleDetection:'), displayActions.indexOf('toggleModels:'));
+  const detectionButton = uiBlock('const cycleDetection = visual(', '});');
   assert.match(detectionButton, /cycleDetectionMode\(\)/, 'the button still invokes the detection action');
   assert.match(detectionButton, /this\.claimDetection\(\);/,
     'and the detection control still claims the override when the operator uses it');

@@ -2,6 +2,7 @@
 // and publishes them to subscribers; Core's mission components render them.
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { bindRenderer } from '../../render/rendererOf.js';
 import { createPanel } from './panel.js';
 import { createState } from './state.js';
 
@@ -11,6 +12,14 @@ function fixture() {
   });
   state._enabled = true;
   const calls = [];
+  const viewer = {};
+  bindRenderer(viewer, {
+    camera: {
+      pose: () => ({ height: 1000 }),
+      flyToBounds: (bounds) => calls.push(['preview', bounds.center]),
+    },
+  });
+  state._viewer = viewer;
   const parts = {
     overlays: {
       shortMissionLabel: (name) => name,
@@ -20,7 +29,6 @@ function fixture() {
       missionRosterEntries: (launches) =>
         launches.map((launch, index) => ({ launch, index })),
       missionPathPresentation: () => ({ orbit: 'LEO', ascent: 'ESTIMATED' }),
-      previewMissionFromRoster: (launch) => calls.push(['preview', launch.id]),
     },
     model: {
       missionMarkerCss: () => 'rgb(1, 2, 3)',
@@ -52,6 +60,8 @@ const launch = (id, extra = {}) => ({
   status: 'Go',
   launchSite: 'Unknown launch site',
   launchTime: '2026-11-01T10:00:00Z',
+  lon: 0,
+  lat: 0,
   payloads: [],
   recoveryStages: [],
   ...extra,
@@ -87,7 +97,7 @@ test('the panel publishes only once the layer starts presenting', () => {
 
 test('an unchanged roster keeps its view and the preview; a changed one drops it', async () => {
   const { state, panel, views, calls } = fixture();
-  state._launches = [launch('a'), launch('b')];
+  state._launches = [launch('a'), launch('b', { lon: -80.6, lat: 28.5 })];
   panel.createMissionPanel();
   panel.renderMissionRoster();
   const published = views.length;
@@ -98,7 +108,7 @@ test('an unchanged roster keeps its view and the preview; a changed one drops it
   assert.equal(views.length, published);
   assert.equal(state._hoveredRosterLaunchId, 'b');
   await new Promise((resolve) => setTimeout(resolve, 160));
-  assert.deepEqual(calls.at(-1), ['preview', 'b']);
+  assert.deepEqual(calls.at(-1), ['preview', { lon: -80.6, lat: 28.5 }]);
   state._launches = [launch('b'), launch('a')];
   panel.renderMissionRoster();
   assert.equal(state._hoveredRosterLaunchId, null);

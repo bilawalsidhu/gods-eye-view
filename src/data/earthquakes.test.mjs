@@ -15,7 +15,7 @@ import {
   mapAnalystRecord,
   selectEarthquakeOverlayCohort,
 } from './earthquakes.js';
-import { DataLayerManager } from './manager.js';
+import { DataLayerManager } from '../testSupport/dataLayerManager.mjs';
 import {
   getRenderGovernorDiagnostics,
   installRenderGovernor,
@@ -28,11 +28,11 @@ import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
 const discsOf = (draw) => draw.find('earthquakes:');
 
 const FULL_RAW = {
-  id: 'us7000abcd',
+  usgsId: 'us7000abcd',
   mag: 5.2,
   place: '42 km SW of Anchorage, Alaska',
   time: 1_753_600_000_000,
-  depth: 41.7,
+  depthKm: 41.7,
   lat: 61.02,
   lon: -150.41,
 };
@@ -51,13 +51,13 @@ test('earthquake analyst record: full record maps every contract field', () => {
 });
 
 test('earthquake analyst record: missing USGS id falls back to index-based id', () => {
-  assert.equal(mapAnalystRecord({ ...FULL_RAW, id: null }, 3).id, 'QUAKE-0003');
-  assert.equal(mapAnalystRecord({ ...FULL_RAW, id: '  ' }, 41).id, 'QUAKE-0041');
+  assert.equal(mapAnalystRecord({ ...FULL_RAW, usgsId: null }, 3).id, 'QUAKE-0003');
+  assert.equal(mapAnalystRecord({ ...FULL_RAW, usgsId: '  ' }, 41).id, 'QUAKE-0041');
   assert.equal(mapAnalystRecord(undefined).id, 'QUAKE-0000');
 });
 
 test('earthquake analyst record: missing fields become null, never NaN/undefined', () => {
-  const r = mapAnalystRecord({ id: 'us1', mag: NaN, depth: undefined, place: '' }, 0);
+  const r = mapAnalystRecord({ usgsId: 'us1', mag: NaN, depthKm: undefined, place: '' }, 0);
   assert.equal(r.magnitude, null);
   assert.equal(r.depthKm, null);
   assert.equal(r.place, null);

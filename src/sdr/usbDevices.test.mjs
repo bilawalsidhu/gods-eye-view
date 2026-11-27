@@ -8,6 +8,7 @@ import {
   sameSdrDevice,
   selectAuthorizedSdrDevice,
 } from './usbDevices.js';
+import { memoryStorage } from '../testSupport/memoryStorage.mjs';
 
 const RTL_FILTERS = [
   { vendorId: 0x0bda, productId: 0x2832 },
@@ -34,15 +35,6 @@ const genericDongle = {
   serialNumber: '00000001',
 };
 const unrelated = { vendorId: 0x1234, productId: 0x5678, productName: 'Other' };
-
-function memoryStorage() {
-  const values = new Map();
-  return {
-    values,
-    getItem: (key) => (values.has(key) ? values.get(key) : null),
-    setItem: (key, value) => values.set(key, String(value)),
-  };
-}
 
 test('ADS-B mode prefers the 1090 MHz channel of a dual-channel board', () => {
   const devices = [unrelated, flyCatcherUat, flyCatcherAdsb];

@@ -15,7 +15,7 @@ import { RAIL_SELECTED_OVERLAY_SOURCE_ID } from './policy.js';
 import { publicRailCatalog } from '../../data/railFeeds.js';
 import { pointAtS } from '../../data/railPaths.js';
 import { fleetModelFakes } from '../../testSupport/fleetModelFakes.mjs';
-import { PLACED_WAKE_MS } from '../transit/movement.js';
+import { PLACED_WAKE_MS } from '../../data/transitMovement.js';
 
 const M_PER_DEG = 111_320;
 const LAT = 42.36;

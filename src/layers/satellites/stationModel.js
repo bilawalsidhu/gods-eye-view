@@ -292,7 +292,7 @@ export function createStationModel(
       // hull, so the model goes while the Cockpit rides the station.
       cockpitHidden:
         spec.hideInCockpit &&
-        Boolean(parts.cockpit?._cockpitHeld?.()) &&
+        Boolean(parts.cockpit._cockpitHeld()) &&
         _trackedOnStation(),
     });
   }

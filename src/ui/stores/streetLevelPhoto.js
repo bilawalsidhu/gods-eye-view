@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { markRaw, shallowRef } from 'vue';
+import { presented } from './presented.js';
 
 /**
  * The Street Level photo viewer (KartaView, Panoramax) as its view renders
@@ -17,12 +17,7 @@ export const useStreetLevelPhotoStore = defineStore(
      * published; `actions.supersede()` tells the others they are not drawn
      * (see `ViewerAdapter.subscribeView` in src/layers/streetLevel/registry.js).
      */
-    const photo = shallowRef(null);
-
-    /** @param {?object} next A fresh presentation; every publish re-renders. */
-    function publish(next) {
-      photo.value = next && markRaw(next);
-    }
+    const [photo, publish] = presented();
 
     return { photo, publish };
   },

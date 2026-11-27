@@ -1,5 +1,3 @@
-import path from 'node:path';
-
 import { openAqProxy } from './openAq.js';
 import { airQualityFieldProxy } from './airQualityField.js';
 import { openSkyProxy } from './aircraft/opensky.js';
@@ -46,7 +44,7 @@ import { layerCountsEndpoint } from './common/layerCounts.js';
 /**
  * Construct the local provider plugins in their established order.
  * `realtime` configures OpenAI; `gemini` explicitly opts into Gemini Live.
- * `nominatimStorageDir` binds an owned absolute directory before construction;
+ * `nominatimStorageDir` is the absolute directory the geocode cache binds;
  * omission retains the durable per-source cache and policy state.
  */
 function localProviderPlugins({
@@ -54,12 +52,6 @@ function localProviderPlugins({
   gemini,
   nominatimStorageDir = NOMINATIM_CACHE_DIR,
 } = {}) {
-  if (
-    typeof nominatimStorageDir !== 'string' ||
-    !nominatimStorageDir.trim() ||
-    !path.isAbsolute(nominatimStorageDir)
-  )
-    throw new TypeError('nominatimStorageDir must be an absolute directory');
   const countReaders = {};
   function withCount(layerId, provider) {
     countReaders[layerId] = provider.api.readLayerCount;

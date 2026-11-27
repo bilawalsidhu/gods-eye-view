@@ -77,7 +77,7 @@ export function createTransitLayer({
       /** Deselect the selected vehicle, as a click on the map does. */
       clearSelection() {
         parts.selection.clearSelection();
-        services.render.governorRequestRender?.('transit-selection');
+        services.render.governorRequestRender('transit-selection');
         return true;
       },
     },

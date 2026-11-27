@@ -17,15 +17,16 @@ export function createControls({ state: layerState, services, parts, source }) {
         : (index + step + entries.length) % entries.length;
     parts.panel.selectMissionAt(entries[next].index);
     // Stepped from the Data Layers row: the panel opens, as for a globe pick.
-    const id = layerState._selectedLaunchId;
-    for (const listener of [...(layerState._globePickListeners || [])]) {
+    notifyGlobePick(layerState._selectedLaunchId);
+  }
+
+  /** Tell the globe-pick listeners that mission `id` was picked. */
+  function notifyGlobePick(id) {
+    for (const listener of [...layerState._globePickListeners]) {
       try {
         listener(id);
       } catch (error) {
-        console.warn(
-          '[Data:RocketLaunches] mission step listener failed',
-          error,
-        );
+        console.warn('[Data:RocketLaunches] globe pick listener failed', error);
       }
     }
   }
@@ -178,5 +179,5 @@ export function createControls({ state: layerState, services, parts, source }) {
     });
   }
 
-  return { methods, watchRowControls };
+  return { methods, watchRowControls, notifyGlobePick };
 }

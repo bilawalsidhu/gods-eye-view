@@ -8,6 +8,7 @@
 // the card); until it loads, or without one, the card shows a tile in the
 // severity colour with the category icon.
 
+import { drawCover, roundedRectPath } from '../../overlays/worldOverlayDraw.js';
 import { WORLD_OVERLAY_STYLE } from '../../overlays/worldOverlayTokens.js';
 import { NEWS_SEVERITY } from './model.js';
 import { paintMarker } from './sprites.js';
@@ -64,16 +65,6 @@ function picture(url, onLoad) {
   return entry;
 }
 
-function roundRect(ctx, x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
-}
-
 /** `text` in at most `lines` lines of `width`, the last cut with an ellipsis. */
 export function wrapLines(ctx, text, width, lines) {
   const words = String(text || '')
@@ -105,24 +96,14 @@ export function wrapLines(ctx, text, width, lines) {
   return out.slice(0, lines);
 }
 
-/** Cover-fit an image into a box. */
-function drawCover(ctx, image, x, y, w, h) {
-  const iw = image.naturalWidth || image.width;
-  const ih = image.naturalHeight || image.height;
-  if (!iw || !ih) return;
-  const s = Math.max(w / iw, h / ih);
-  const sw = w / s;
-  const sh = h / s;
-  ctx.drawImage(image, (iw - sw) / 2, (ih - sh) / 2, sw, sh, x, y, w, h);
-}
-
 function paint(canvas, view, look, pic) {
   const ctx = canvas.getContext('2d');
   ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
   ctx.clearRect(0, 0, CARD_W, CARD_H);
   const color = (NEWS_SEVERITY[look.severity] || NEWS_SEVERITY[0]).color;
 
-  roundRect(ctx, 0.5, 0.5, CARD_W - 1, CARD_H - 1, WORLD_OVERLAY_STYLE.radius);
+  ctx.beginPath();
+  roundedRectPath(ctx, 0.5, 0.5, CARD_W - 1, CARD_H - 1);
   ctx.fillStyle = WORLD_OVERLAY_STYLE.selectedBackground;
   ctx.fill();
   ctx.strokeStyle = WORLD_OVERLAY_STYLE.border;
@@ -130,7 +111,8 @@ function paint(canvas, view, look, pic) {
   ctx.stroke();
   // Severity down the left edge.
   ctx.save();
-  roundRect(ctx, 0.5, 0.5, CARD_W - 1, CARD_H - 1, WORLD_OVERLAY_STYLE.radius);
+  ctx.beginPath();
+  roundedRectPath(ctx, 0.5, 0.5, CARD_W - 1, CARD_H - 1);
   ctx.clip();
   ctx.fillStyle = color;
   ctx.fillRect(0, 0, EDGE, CARD_H);
@@ -139,7 +121,8 @@ function paint(canvas, view, look, pic) {
   const px = PAD + EDGE;
   const pw = CARD_W - px - PAD;
   ctx.save();
-  roundRect(ctx, px, PAD, pw, PIC_H, 3);
+  ctx.beginPath();
+  roundedRectPath(ctx, px, PAD, pw, PIC_H, 3);
   ctx.clip();
   if (pic?.state === 'ok') {
     try {

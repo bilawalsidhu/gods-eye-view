@@ -11,7 +11,8 @@
 // headless. Run with: npm test
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DataLayerManager, layerFeedState } from './manager.js';
+import { DataLayerManager } from '../testSupport/dataLayerManager.mjs';
+import { layerFeedState } from './feedState.js';
 import { presentLayerToggle } from '../ui/layerPanel.js';
 import {
   contextSnapshotLayerIds,
@@ -2565,8 +2566,7 @@ test('periodic rejection preserves a module-specific error and recovers independ
     name: 'Satellites',
     icon: '',
     source: 'test',
-    updateInterval: 0,
-    refreshInterval: 300000,
+    updateInterval: 300000,
     init() {},
     enable() {},
     disable() {},

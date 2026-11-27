@@ -561,7 +561,7 @@ const settle = async () => {
  */
 function createCableHarness({
   source = deferredSource().source,
-  mapStackEventTarget = null,
+  subscribeMapStack = null,
 } = {}) {
   const hostCalls = [];
   // The sweep gate's motion-fallback clock is FROZEN here and advanced only by
@@ -584,7 +584,7 @@ function createCableHarness({
       },
     }),
     source,
-    mapStackEventTarget,
+    subscribeMapStack,
     sweepClock: () => clockMs,
   });
   const preRender = new Set();
@@ -798,13 +798,11 @@ test('cables, landing pins and references draw as their entities did', async () 
 
 test('a map-stack change re-drapes the cable lines once, and destroy detaches the listener', async () => {
   const listeners = new Map();
-  const eventTarget = {
-    addEventListener: (name, fn) => listeners.set(name, fn),
-    removeEventListener: (name, fn) => {
-      if (listeners.get(name) === fn) listeners.delete(name);
-    },
+  const subscribeMapStack = (fn) => {
+    listeners.set('gev:map-stack-changed', fn);
+    return () => listeners.delete('gev:map-stack-changed');
   };
-  const env = await loadedHarness({ mapStackEventTarget: eventTarget });
+  const env = await loadedHarness({ subscribeMapStack });
   // The harness scene has no globe → both at init (safe unknown fallback).
   assert.equal(env.set('lines').spec.clampTo, 'both');
   const listener = listeners.get('gev:map-stack-changed');

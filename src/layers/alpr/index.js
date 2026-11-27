@@ -1,4 +1,5 @@
 import { isFollowing } from '../../data/followed.js';
+import { createUnavailableRetry } from '../../data/unavailableRetry.js';
 import { isUnavailableCapability } from '../../sources/capability.js';
 import { cameraOf, drawOf, findFrame } from '../../render/rendererOf.js';
 import {
@@ -10,7 +11,6 @@ import {
 import {
   snapAlprBox,
   boxContains,
-  alprRetryDelayMs,
   validateAlprSnapshot,
   alprCredit,
 } from './model.js';
@@ -103,24 +103,9 @@ export function createAlprCamerasLayer({ source, services } = {}) {
     governorRequestRender('alpr-status');
   }
 
-  function scheduleUnavailableRetry() {
-    if (!state.enabled) return;
-    clearTimeout(state.retryTimer);
-    state.retryDelayMs = alprRetryDelayMs(state.retryDelayMs);
-    state.retryAt = Date.now() + state.retryDelayMs;
-    state.retryTimer = setTimeout(() => {
-      state.retryTimer = null;
-      state.retryAt = 0;
-      if (state.enabled && !state.loading) loadCameras();
-    }, state.retryDelayMs);
-  }
-
-  function clearUnavailableRetry({ resetBackoff = true } = {}) {
-    clearTimeout(state.retryTimer);
-    state.retryTimer = null;
-    state.retryAt = 0;
-    if (resetBackoff) state.retryDelayMs = 0;
-  }
+  const retry = createUnavailableRetry(state, () => loadCameras());
+  const scheduleUnavailableRetry = () => retry.schedule();
+  const clearUnavailableRetry = retry.clear;
 
   /** Whether accepted records already answer `box` without a request. */
   function canReuse(box) {
@@ -291,7 +276,6 @@ export function createAlprCamerasLayer({ source, services } = {}) {
     // English in layer state; the layer row translates it.
     source: source.label || msg('Mapped camera locations'),
     updateInterval: 0,
-    statsRefreshInterval: 1000,
     init(viewer) {
       if (state.viewer) throw new Error('ALPR layer is already initialized');
       state.viewer = viewer;
@@ -479,8 +463,6 @@ export function createAlprCamerasLayer({ source, services } = {}) {
 export {
   snapAlprBox,
   boxContains,
-  destinationPointDeg,
-  alprRetryDelayMs,
   isAlprSurveillanceType,
   normalizeAlprNode,
   buildOverpassQuery,

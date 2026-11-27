@@ -14,6 +14,11 @@ export const NO_IMAGERY_HOST = msg(
   'Hidden by this map source · choose a globe map',
 );
 
+/** The guidance a host that cannot take draped imagery stands for, else null. */
+export function imageryHostStatus(host) {
+  return host.kind === 'none' ? NO_IMAGERY_HOST : null;
+}
+
 const NONE = Object.freeze({ collection: null, kind: 'none' });
 
 /**

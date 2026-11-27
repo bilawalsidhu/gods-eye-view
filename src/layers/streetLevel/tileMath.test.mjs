@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  coverageZoomForHeight,
   latToTileY,
   lonToTileX,
   normalizeBbox,
@@ -9,7 +8,9 @@ import {
   tileLocalToLonLat,
   tilesForBbox,
   wrapLon,
+  zoomForHeight,
 } from './tileMath.js';
+import { COVERAGE_ZOOMS } from './providers/mapillary/policy.js';
 
 test('lon/lat to tile matches the Sacramento reference tile', () => {
   assert.equal(lonToTileX(-121.4944, 14), 2662);
@@ -54,13 +55,13 @@ test('tilesForBbox orders from the centre outwards and honours the cap', () => {
   assert.equal(full.length, 160);
 });
 
-test('coverageZoomForHeight steps from coarse to z14 as the camera descends', () => {
-  assert.equal(coverageZoomForHeight(100_000), null);
-  assert.equal(coverageZoomForHeight(30_000), 11);
-  assert.equal(coverageZoomForHeight(8_000), 12);
-  assert.equal(coverageZoomForHeight(3_000), 13);
-  assert.equal(coverageZoomForHeight(500), 14);
-  assert.equal(coverageZoomForHeight(Number.NaN), null);
+test('zoomForHeight steps from coarse to z14 as the camera descends', () => {
+  assert.equal(zoomForHeight(100_000, COVERAGE_ZOOMS), null);
+  assert.equal(zoomForHeight(30_000, COVERAGE_ZOOMS), 11);
+  assert.equal(zoomForHeight(8_000, COVERAGE_ZOOMS), 12);
+  assert.equal(zoomForHeight(3_000, COVERAGE_ZOOMS), 13);
+  assert.equal(zoomForHeight(500, COVERAGE_ZOOMS), 14);
+  assert.equal(zoomForHeight(Number.NaN, COVERAGE_ZOOMS), null);
 });
 
 test('longitude 180 is the last column, so a world view keeps the eastern hemisphere', () => {
@@ -137,4 +138,19 @@ test('wrapLon wraps longitudes and their differences into [-180, 180]', () => {
   assert.ok(Math.abs(wrapLon(359.9998) - -0.0002) < 1e-9);
   assert.ok(Math.abs(wrapLon(540.5) - -179.5) < 1e-9);
   assert.ok(Number.isNaN(wrapLon(NaN)));
+});
+
+const keysOf = (tiles) => tiles.map((tile) => `${tile.x}/${tile.y}/${tile.z}`);
+
+test('a polar view across the date line ranks 24 distinct tiles', () => {
+  // The halves of [-10, 60, -20, 85] share a column at z3.
+  const keys = keysOf(tilesForBbox([-10, 60, -20, 85], 3));
+  assert.equal(keys.length, 24);
+  assert.equal(new Set(keys).size, 24);
+});
+
+test('a limit is not spent on repeats', () => {
+  const keys = keysOf(tilesForBbox([-10, 60, -20, 85], 3, { limit: 16 }));
+  assert.equal(keys.length, 16);
+  assert.equal(new Set(keys).size, 16);
 });

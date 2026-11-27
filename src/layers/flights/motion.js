@@ -22,6 +22,7 @@ import {
 import {
   add,
   clamp,
+  clone,
   copyInto,
   distance,
   lerpInto,
@@ -43,6 +44,7 @@ import {
   corridorPathLatLon,
 } from '../../data/motionModel.js';
 import { placeLiveAircraft } from './placed.js';
+import { approxDistanceKm } from '../../data/approxDistance.js';
 import {
   modelVisualAnchor,
   modelAnchorWorld,
@@ -71,10 +73,7 @@ import {
   aircraftMotionRegime,
   createMotionRegime,
   fixEpochMs,
-  fixPosition,
-  copyPosition,
   historyFix,
-  julianAt,
   fixSpeedMps,
   fixTrackDeg,
   staleCoastSeconds,
@@ -811,7 +810,7 @@ export function createMotion({
       !(
         Number.isFinite(state.heldM) &&
         state.heldCell &&
-        parts.queries._approxDistanceKm(
+        approxDistanceKm(
           cell.lat,
           cell.lon,
           state.heldCell.lat,
@@ -1146,12 +1145,8 @@ export function createMotion({
       if (!Number.isFinite(info.rawLat) || !Number.isFinite(info.rawLon))
         continue;
       if (
-        parts.queries._approxDistanceKm(
-          viewerLat,
-          viewerLon,
-          info.rawLat,
-          info.rawLon,
-        ) > DISPLAY_CORRIDOR_RADIUS_KM
+        approxDistanceKm(viewerLat, viewerLon, info.rawLat, info.rawLon) >
+        DISPLAY_CORRIDOR_RADIUS_KM
       )
         continue;
       const dr = _deadReckon(icao24, flightState._scratchCorridorPos);
@@ -1202,15 +1197,16 @@ export function createMotion({
     }
   }
   /** The display instant `epochMs` as a Julian date, for `_motionRegime`. */
-  const _displayTimeAt = (epochMs, result) => julianAt(epochMs, result);
+  const _displayTimeAt = (epochMs, result) =>
+    julianFromEpochMs(epochMs, result);
 
   return {
     _refloorStaleGroundedContacts,
     _deadReckon,
     _displayTimeAt,
     _fixEpochMs: fixEpochMs,
-    _fixPosition: fixPosition,
-    _copyPosition: copyPosition,
+    _fixPosition: fromDegrees,
+    _copyPosition: clone,
     _historyFix: historyFix,
     _motionRegime,
     _signalLost,
@@ -1227,9 +1223,6 @@ export function createMotion({
     _trackedDisplayCourse,
     _resetTrackedDisplay,
     _heldDisplayFloorM,
-    _adoptHeldFloorM,
-    _dropHeldFloor,
-    _seedExpired,
     _retireDisplayFloorState,
     _floorGroundedDisplayPosition,
     _collectDisplayCorridorCells,

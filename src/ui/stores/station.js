@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { markRaw, shallowRef } from 'vue';
+import { presented } from './presented.js';
 import { createOwners } from './owners.js';
 
 /**
@@ -12,12 +12,7 @@ import { createOwners } from './owners.js';
  */
 export const useStationStore = defineStore('gev-station', () => {
   /** The presented section; null while no station is selected. */
-  const view = shallowRef(null);
-
-  /** @param {?object} next A fresh presentation; every publish re-renders. */
-  function publish(next) {
-    view.value = next && markRaw(next);
-  }
+  const [view, publish] = presented();
 
   const { connect, detach, act } = createOwners();
 

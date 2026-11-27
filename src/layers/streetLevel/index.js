@@ -2,7 +2,6 @@ import { createState } from './state.js';
 import { createMarker } from './marker.js';
 import { createCameraFraming } from './cameraFraming.js';
 import { createCredits } from './credits.js';
-import { createPickRouter } from './pickRouter.js';
 import { createSelection } from './selection.js';
 import { createViewerHost } from './viewerHost.js';
 import { subscribePhotoViewers } from './photoViewers.js';
@@ -15,12 +14,8 @@ import {
   keyAlternatives,
   summarizeCoverage,
 } from './uiState.js';
-import {
-  canvasSize,
-  groundUnderCamera,
-  metresBetween,
-  viewCentre,
-} from './view.js';
+import { canvasSize, groundUnderCamera, viewCentre } from './view.js';
+import { approxDistanceM } from '../../data/approxDistance.js';
 import { toLonLatH } from '../../geo/index.js';
 import { findCamera, findQuery } from '../../render/rendererOf.js';
 import { isPickedWorldPosition } from '../../data/scenePick.js';
@@ -31,7 +26,6 @@ import {
   keyStatusLabel,
   NEAREST_RADIUS_M,
   NEAREST_RADIUS_MAX_M,
-  POSITION_PICK_ID,
   STREET_LEVEL_LAYER_ID,
 } from './policy.js';
 
@@ -72,9 +66,6 @@ export function createStreetLevelLayer({
   parts.credits = createCredits();
   parts.marker = createMarker(context);
   parts.framing = createCameraFraming(context);
-  parts.router = createPickRouter(() => state.providers.values(), {
-    positionId: POSITION_PICK_ID,
-  });
   parts.viewerHost = createViewerHost(context);
   parts.hasSelectedSequence = () =>
     [...state.providers.values()].some(
@@ -197,7 +188,7 @@ export function createStreetLevelLayer({
       if (state.enabled && entry.on && providerAvailable(entry))
         parts.credits.show(state.viewer, entry.def);
       else {
-        parts.credits.hide(state.viewer, entry.def);
+        parts.credits.hide(entry.def);
         parts.viewerHost.unmount(entry.def.id);
       }
     }
@@ -282,7 +273,7 @@ export function createStreetLevelLayer({
   function deactivate(entry) {
     if (!heldViewers.has(entry.def.id)) parts.viewerHost.unmount(entry.def.id);
     entry.instance.deactivate();
-    parts.credits.hide(state.viewer, entry.def);
+    parts.credits.hide(entry.def);
   }
 
   /** The nearest-image lookup in flight; any newer user action aborts it. */
@@ -366,9 +357,8 @@ export function createStreetLevelLayer({
   }
 
   const litIds = () =>
-    [...state.providers]
-      .filter(([, entry]) => entry.on)
-      .map(([id]) => id)
+    activeEntries()
+      .map((entry) => entry.def.id)
       .join();
 
   /**
@@ -404,9 +394,7 @@ export function createStreetLevelLayer({
     const asked = [...state.providers.keys()].filter(
       (id) => switches.get(id) === true,
     );
-    const current = [...state.providers]
-      .filter(([, entry]) => entry.on)
-      .map(([id]) => id);
+    const current = activeEntries().map((entry) => entry.def.id);
     if (asked.length)
       return asked.find((id) => current.includes(id)) ?? asked[0];
     return current.find((id) => switches.get(id) !== false) ?? null;
@@ -436,27 +424,34 @@ export function createStreetLevelLayer({
   const listedEntries = () =>
     [...state.providers.values()].filter((entry) => providerAvailable(entry));
 
+  /** A provider's name, switch and key state, from its coverage `stats`. */
+  function entryStatus(entry, stats) {
+    return {
+      id: entry.def.id,
+      name: entry.def.name,
+      on: entry.on,
+      configured: entry.status ? entry.status.configured === true : null,
+      // A rejected key gates the provider exactly like a missing one.
+      keyRequired: stats.keyRequired === true || stats.keyRejected === true,
+      keyRejected: stats.keyRejected === true,
+      groundClick: entry.def.groundClick === true,
+      error: stats.error || null,
+    };
+  }
+
   function providerSnapshots() {
     return listedEntries().map((entry) => {
       const stats = entry.instance.coverageStats();
       return {
-        id: entry.def.id,
-        name: entry.def.name,
+        ...entryStatus(entry, stats),
         label: entry.def.label,
-        on: entry.on,
-        configured: entry.status ? entry.status.configured === true : null,
-        // A rejected key gates the provider exactly like a missing one.
-        keyRequired: stats.keyRequired === true || stats.keyRejected === true,
-        keyRejected: stats.keyRejected === true,
         requiresKeyId: entry.def.requiresKeyId || null,
         loading: stats.loading === true,
         count: stats.count || 0,
         hint: hintFor(entry, stats),
-        error: stats.error || null,
         color: entry.def.colors.coverage,
         coverageLabel: entry.def.coverageLabel || null,
         sinceBasis: entry.def.sinceBasis === 'upload' ? 'upload' : 'capture',
-        groundClick: entry.def.groundClick === true,
         filters: [...filtersOf(entry.def)],
       };
     });
@@ -518,7 +513,6 @@ export function createStreetLevelLayer({
         .join(' · ');
     },
     updateInterval: 0,
-    statsRefreshInterval: 1000,
     /** The key the switched-on providers share (or null), for the layer row. */
     get requiresKeyId() {
       const on = activeEntries();
@@ -539,18 +533,10 @@ export function createStreetLevelLayer({
     providerStatus(providerId) {
       const entry = state.providers.get(providerId);
       if (!entry) return null;
-      const stats = entry.instance.coverageStats();
       return {
-        id: entry.def.id,
-        name: entry.def.name,
-        on: entry.on,
-        configured: entry.status ? entry.status.configured === true : null,
-        keyRequired: stats.keyRequired === true || stats.keyRejected === true,
-        keyRejected: stats.keyRejected === true,
-        groundClick: entry.def.groundClick === true,
+        ...entryStatus(entry, entry.instance.coverageStats()),
         billed: entry.def.billedPerImage === true,
         available: providerAvailable(entry),
-        error: stats.error || null,
       };
     },
     getSourceAvailability() {
@@ -595,7 +581,7 @@ export function createStreetLevelLayer({
       parts.viewerHost.unmount();
       for (const entry of state.providers.values()) entry.instance.deactivate();
       syncGroundClickReady();
-      parts.credits.hideAll(state.viewer);
+      parts.credits.hideAll();
       parts.selection.uninstall();
       parts.marker.setVisible(false);
       notify();
@@ -695,7 +681,6 @@ export function createStreetLevelLayer({
 
     // ── Public surface used by the panel ────────────────────────────────
     subscribe(listener) {
-      if (typeof listener !== 'function') return () => {};
       state.listeners.add(listener);
       return () => state.listeners.delete(listener);
     },
@@ -768,7 +753,7 @@ export function createStreetLevelLayer({
         if (!armed.point) radiusM ??= armed.radiusM;
         else if (
           centre === undefined ||
-          (centre && metresBetween(centre, armed.point) <= ARMED_REACH_M)
+          (centre && approxDistanceM(centre, armed.point) <= ARMED_REACH_M)
         ) {
           point = armed.point;
           radiusM ??= armed.radiusM;
@@ -829,14 +814,13 @@ export function createStreetLevelLayer({
               : { signal, radiusM: radius },
           );
         } catch (error) {
-          if (callerSignal?.aborted) return retired();
           // Overtaken: whatever replaced it owns the panel, errors included.
+          // A caller's abort aborts this lookup too.
           if (signal.aborted) return retired();
           // One provider failing (no key, offline) must not hide the others.
           lastError = error;
           continue;
         }
-        if (callerSignal?.aborted) return retired();
         if (signal.aborted) return retired();
         if (!state.enabled) break;
         // Switched off, or its map left, while it looked: try the next.

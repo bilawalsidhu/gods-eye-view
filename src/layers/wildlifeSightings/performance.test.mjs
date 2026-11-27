@@ -92,11 +92,7 @@ import {
   DENSE_CONTINENT_CELLS,
   DENSE_CONTINENT_ROWS,
 } from './renderPerformanceFixtures.mjs';
-import {
-  WILDLIFE_MOVE_END_BUDGET_MS,
-  WILDLIFE_WORK_UNIT,
-  createWildlifeWorkQueue,
-} from './performance.js';
+import { WILDLIFE_WORK_UNIT, createWildlifeWorkQueue } from './performance.js';
 
 test('dense continental moveEnd has a deterministic linear operation budget and reuses decoded metadata/coordinates', () => {
   const h = denseContinentalRendering();
@@ -226,7 +222,6 @@ test('performance marks cover each render phase and leave no accumulated entries
         .filter((entry) => entry.name.startsWith('wildlife-sightings:')),
       [],
     );
-    assert.equal(WILDLIFE_MOVE_END_BUDGET_MS, 4);
   } finally {
     observer.disconnect();
     h.destroy();

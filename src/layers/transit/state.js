@@ -41,7 +41,6 @@ export function createState({ services }) {
   state._enabled = false;
   state._generation = 0;
 
-  state._cameraChangedAttached = false;
   /** Removes the camera port listener; null when not listening. */
   state._cameraChangedOff = null;
   /** Removes the one-shot look after the camera listener's first tick. */

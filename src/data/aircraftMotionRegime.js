@@ -1,4 +1,3 @@
-import { fromDegrees } from '../geo/ellipsoid.js';
 import {
   julianFromEpochMs,
   julianLessThan,
@@ -41,27 +40,9 @@ export function fixTrackDeg(fix, info, fields) {
     : (info && info[fields.track]) || 0;
 }
 
-/**
- * The instant `epochMs` as a Julian date (into `result` when given), for
- * `aircraftMotionRegime`'s `renderTime`.
- */
-export function julianAt(epochMs, result) {
-  return julianFromEpochMs(epochMs, result);
-}
-
 /** A history fix's time in epoch ms: its `epochMs`, else its `time`'s. */
 export function fixEpochMs(fix) {
   return Number.isFinite(fix.epochMs) ? fix.epochMs : julianToEpochMs(fix.time);
-}
-
-/** A feed fix's ECEF position, from its degrees and render altitude. */
-export function fixPosition(lonDeg, latDeg, heightM) {
-  return fromDegrees(lonDeg, latDeg, heightM);
-}
-
-/** A copy of a fix position, for a trail that keeps it. */
-export function copyPosition(position) {
-  return clone(position);
 }
 
 /**
@@ -70,7 +51,7 @@ export function copyPosition(position) {
  */
 export function historyFix(epochMs, position, velocity, track) {
   return {
-    time: julianAt(epochMs),
+    time: julianFromEpochMs(epochMs),
     epochMs,
     position: clone(position),
     velocity,
@@ -83,7 +64,7 @@ export function historyFix(epochMs, position, velocity, track) {
  * a repeated report's new speed or course, `synthesizeForwardKinematicsFix`)
  * rather than a report.
  */
-export const isSyntheticFix = (fix) => Number.isFinite(fix?.reportEpochMs);
+const isSyntheticFix = (fix) => Number.isFinite(fix?.reportEpochMs);
 
 /**
  * Put a new report at the end of a contact's history: forward synthetic
@@ -108,7 +89,7 @@ export function newestReport(history) {
 }
 
 /** The curve a contact is drawn along between two history fixes, or null. */
-export function historyCurve(a, b) {
+function historyCurve(a, b) {
   return fixCurveCached(
     a.position,
     fixEpochMs(a),

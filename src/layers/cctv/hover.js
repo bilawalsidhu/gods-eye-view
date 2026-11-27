@@ -112,9 +112,6 @@ export function createHover({ state: layerState, services, parts, source }) {
   }
   return {
     handleHoverMove,
-    cancelHoverRelease,
-    scheduleHoverRelease,
     clearHoverCard,
-    hoverFetchCardFrame,
   };
 }

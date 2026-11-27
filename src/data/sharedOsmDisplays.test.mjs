@@ -76,11 +76,10 @@ test('voice route geometry introduces the shared OSM credit', (t) => {
 test('Directions introduces the shared OSM credit when the requested route draws', async (t) => {
   const v = viewer(t, { draw: fakeDrawPort() });
   t.mock.method(globalThis, 'fetch', async () => Response.json({ ok: true, geometry: [[0, 0], [0.01, 0.01]], steps: [] }));
-  const layer = createDirectionsLayer({ source: createDirectionsSource(), services: {
+  const layer = createDirectionsLayer({ source: createDirectionsSource(), overlayHost: { setEntries: noop, setVisible: noop, clearSource: noop }, services: {
     credits: { showOsmCredit, hideOsmCredit }, input, camera: {},
-    overlays: { setOverlayEntries: noop, setOverlaySourceVisible: noop, clearOverlaySource: noop },
     render: { governorRequestRender: noop, holdContinuousRender: noop, releaseContinuousRender: noop },
-    sprites: {},
+    sprites: { spriteDrawOrder: () => 0 },
     picking: { registerPickOwner: noop, unregisterPickOwner: noop },
     ground: { warmGroundFloor: noop, resolveGroundFloorCells: async () => {} },
   } });

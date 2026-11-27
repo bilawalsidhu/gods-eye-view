@@ -862,26 +862,28 @@ for (const kind of ['card', 'label']) {
       });
       const area = createDroneAirspaceLayer({
         source: {
-          getSnapshot: async () => [
-            {
-              stableId: '310',
-              name: 'Fixture area',
-              typeCode: 'P',
-              type: 'Prohibited',
-              lowerAltitude: 'SFC',
-              upperAltitude: '18000',
-              polygons: [
-                [
+          getSnapshot: async () => ({
+            rows: [
+              {
+                stableId: '310',
+                name: 'Fixture area',
+                typeCode: 'P',
+                type: 'Prohibited',
+                lowerAltitude: 'SFC',
+                upperAltitude: '18000',
+                polygons: [
                   [
-                    [-153.4, 59.9],
-                    [-153.2, 59.9],
-                    [-153.2, 60.1],
-                    [-153.4, 59.9],
+                    [
+                      [-153.4, 59.9],
+                      [-153.2, 59.9],
+                      [-153.2, 60.1],
+                      [-153.4, 59.9],
+                    ],
                   ],
                 ],
-              ],
-            },
-          ],
+              },
+            ],
+          }),
         },
         overlayHost: host,
         inputFor: () => input.input,

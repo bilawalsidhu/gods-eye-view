@@ -31,29 +31,6 @@ export function activateCctvCameraFromWorldClick(
 }
 
 /**
- * Register the UI focus-request listener and return an idempotent disposer that
- * removes the exact callback reference supplied to addEventListener.
- * @param {EventTarget|Object} eventTarget - Window-like event target.
- * @param {(event: Event) => void} listener - Stable listener callback.
- * @returns {() => void} Listener disposer.
- */
-export function registerCctvFocusRequestListener(eventTarget, listener) {
-  if (
-    !eventTarget?.addEventListener ||
-    !eventTarget?.removeEventListener ||
-    typeof listener !== 'function'
-  )
-    return () => {};
-  eventTarget.addEventListener(CCTV_FOCUS_REQUEST_EVENT, listener);
-  let disposed = false;
-  return () => {
-    if (disposed) return;
-    disposed = true;
-    eventTarget.removeEventListener(CCTV_FOCUS_REQUEST_EVENT, listener);
-  };
-}
-
-/**
  * Route one CCTV world-click request through StyleManager's existing explicit
  * focus policy, preserving tracking release and cockpit refusal behavior.
  * @param {CustomEvent|Object} event - Focus-request event.
@@ -63,13 +40,7 @@ export function registerCctvFocusRequestListener(eventTarget, listener) {
  */
 export function routeCctvFocusRequest(event, runExplicitFocus, focusCamera) {
   const cameraId = event?.detail?.cameraId;
-  if (
-    typeof cameraId !== 'string' ||
-    !cameraId ||
-    typeof runExplicitFocus !== 'function'
-  ) {
-    return false;
-  }
+  if (typeof cameraId !== 'string' || !cameraId) return false;
   return runExplicitFocus(
     () => cameraId,
     (selectedId) =>

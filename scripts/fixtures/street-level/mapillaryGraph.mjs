@@ -27,7 +27,7 @@ export const THUMB_HOST = 'qa-fixture.mapillary.com';
 
 const METRES_PER_DEG_LAT = 110_540;
 
-/** Ground distance in metres, as the app's metresBetween. */
+/** Ground distance in metres (equirectangular), close to the app's approxDistanceM. */
 export function metresApart(a, b) {
   const lat = (((a.lat + b.lat) / 2) * Math.PI) / 180;
   return Math.hypot(

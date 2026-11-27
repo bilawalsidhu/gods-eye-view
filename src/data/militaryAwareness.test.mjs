@@ -1,33 +1,28 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import militaryAwarenessLayer, {
-  _getAwarenessNavigationStateForTest,
-  _getAwarenessPanelRendersForTest,
-  awarenessClearMatchesSubject,
-  awarenessNeedsContinuousRender,
+import { createApplicationAwareness } from '../app/layers/militaryAwareness.js';
+import {
   awarenessRefreshDecision,
   awarenessRefreshIntervalMs,
   awarenessRefreshRequired,
-  awarenessResultsAreLive,
   buildAwarenessContextSnapshot,
-  canNavigateAwarenessNext,
   contactsWindowFromSnapshot,
   contextTargetFlyToAllowed,
-  summarizeInstallationViewport,
+} from '../layers/awareness/model.js';
+import { awarenessClearMatchesSubject } from '../layers/awareness/subject.js';
+import { canNavigateAwarenessNext } from '../layers/awareness/navigation.js';
+import {
   findCompatibleHistoryIndex,
-  AWARENESS_QUERY_LIMIT,
   historySubjectSnapshot,
-} from './militaryAwareness.js';
-import flightsLayer, {
-  _setTrackedFlightRefreshStateForTest,
-} from './flights.js';
+} from '../layers/awareness/history.js';
+import { summarizeInstallationViewport } from '../layers/awareness/queries.js';
+import { AWARENESS_QUERY_LIMIT } from '../layers/awareness/index.js';
+import flightsLayer from './flights.js';
 import militaryFlightsLayer, {
   _setTrackedMilitaryRefreshStateForTest,
 } from './militaryFlights.js';
-import aisLiveVesselsLayer, {
-  _setVesselStateForTest,
-} from './aisLiveVessels.js';
+import aisLiveVesselsLayer from './aisLiveVessels.js';
 import militaryInstallationsLayer from './militaryInstallations.js';
 import {
   _resetRenderGovernorForTest,
@@ -40,6 +35,7 @@ import {
   getAwarenessNavigationTargets,
 } from './militaryAwarenessEngine.js';
 import {
+  awarenessResultsAreLive,
   formatAwarenessCount,
   presentAwarenessDistance,
 } from '../layers/awareness/panel.js';
@@ -51,6 +47,20 @@ import { fakeSceneFrame } from '../testSupport/fakeCesiumScene.mjs';
 import { bindRenderer, rendererOf } from '../render/rendererOf.js';
 import { entityFollowTarget, followedOf } from './followed.js';
 import { fakeDrawPort } from '../testSupport/fakeDrawPort.mjs';
+
+const { _setTrackedFlightRefreshStateForTest } = flightsLayer.testing;
+const { _setVesselStateForTest } = aisLiveVesselsLayer.testing;
+const militaryAwarenessLayer = createApplicationAwareness({
+  flights: flightsLayer,
+  military: militaryFlightsLayer,
+  vessels: aisLiveVesselsLayer,
+  installations: militaryInstallationsLayer,
+});
+const {
+  _getAwarenessNavigationStateForTest,
+  _getAwarenessPanelRendersForTest,
+  awarenessNeedsContinuousRender,
+} = militaryAwarenessLayer.testing;
 
 const AWARENESS_DEPENDENCIES = [
   'flights',

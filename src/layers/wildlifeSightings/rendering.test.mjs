@@ -151,7 +151,11 @@ function harness(rows = [base], extra = {}) {
         refreshAmbient() {},
         publishSelected() {},
         refreshContexts() {},
+        photoCardsChanged() {},
+        notify() {},
+        syncCredits() {},
       },
+      controls: { notify() {} },
     },
   });
   rendering.init();

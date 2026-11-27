@@ -127,9 +127,6 @@ export function onPlacePacksLoadingChange(listener) {
   return () => loadingListeners.delete(listener);
 }
 
-/** Test seam: count pack loads (lazy-loading contract). */
-export const placePackLoads = { divisions: 0, places: 0 };
-
 /** The zoom from which the view names the populated place it shows. */
 export const NEAR_PLACE_MIN_ZOOM = 8;
 
@@ -230,7 +227,6 @@ const loadPlaces = createRetryableLoader(
 
 /** Divisions grouped by country code; rings decoded per country on demand. */
 async function readDivisions() {
-  placePackLoads.divisions += 1;
   const pack = await loadBundledJson(PACKS.divisions);
   const decimals = pack.meta?.decimals ?? 3;
   const byCountry = new Map();
@@ -267,7 +263,6 @@ async function divisionAt(code, lat, lon) {
 }
 
 async function readPopulatedPlaces() {
-  placePackLoads.places += 1;
   const pack = await loadBundledJson(PACKS.places);
   return (pack.places || []).filter(
     (row) =>

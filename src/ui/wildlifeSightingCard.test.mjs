@@ -144,7 +144,14 @@ function fixture(
       picking: { clickCard: () => hit },
     },
     parts: {
-      rendering: { refreshSelection() {}, requestRender() {} },
+      rendering: {
+        refreshSelection() {},
+        requestRender() {},
+        beginBatch() {},
+        endBatch() {},
+        hasPhotoCard: () => false,
+        setPhotoCardVisibility() {},
+      },
     },
   });
   const layer = {

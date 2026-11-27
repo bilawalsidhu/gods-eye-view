@@ -6,10 +6,10 @@ import {
   approximateSurfaceDistanceM,
   classifyGoogleMilitaryPlace,
   installationSourceLabel,
-  installationResponseSaturated,
-  installationSurfaceHeightM,
   installationWithinViewport,
-} from './militaryInstallations.js';
+} from '../layers/installations/model.js';
+import { installationResponseSaturated } from '../layers/installations/source.js';
+import { installationSurfaceHeightM } from './militaryInstallations.js';
 import militaryInstallationsLayer from './militaryInstallations.js';
 import {
   _clearMeshFloorCellsForTest,
@@ -841,17 +841,17 @@ test('zoom-out aborts an active installation request and returns non-loading gui
 // while its own endpoint served hundreds of features. The backoff progression
 // is a pure exported helper so it pins without booting the layer (the full
 // layer needs a Cesium viewer and interaction handlers).
-import { installationRetryDelayMs } from './militaryInstallations.js';
+import { unavailableRetryDelayMs } from './unavailableRetry.js';
 import { framePortFor } from '../testSupport/fakeFramePort.mjs';
 
 test('the unavailable retry backs off 30s to a 240s ceiling and restarts clean', () => {
-  assert.equal(installationRetryDelayMs(0), 30000, 'first failure retries in 30s');
-  assert.equal(installationRetryDelayMs(undefined), 30000, 'no prior delay means the minimum');
-  assert.equal(installationRetryDelayMs(30000), 60000, 'each failure doubles');
-  assert.equal(installationRetryDelayMs(60000), 120000);
-  assert.equal(installationRetryDelayMs(120000), 240000, 'the ceiling is four minutes');
-  assert.equal(installationRetryDelayMs(240000), 240000, 'and it stays there');
-  assert.equal(installationRetryDelayMs(-5), 30000, 'garbage restarts at the minimum');
+  assert.equal(unavailableRetryDelayMs(0), 30000, 'first failure retries in 30s');
+  assert.equal(unavailableRetryDelayMs(undefined), 30000, 'no prior delay means the minimum');
+  assert.equal(unavailableRetryDelayMs(30000), 60000, 'each failure doubles');
+  assert.equal(unavailableRetryDelayMs(60000), 120000);
+  assert.equal(unavailableRetryDelayMs(120000), 240000, 'the ceiling is four minutes');
+  assert.equal(unavailableRetryDelayMs(240000), 240000, 'and it stays there');
+  assert.equal(unavailableRetryDelayMs(-5), 30000, 'garbage restarts at the minimum');
 });
 
 test('a merged installation stays visible when only its second fragment intersects', () => {

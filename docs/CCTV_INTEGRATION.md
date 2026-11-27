@@ -118,8 +118,8 @@ provider's terms explicitly allow it.
 
 ## 4. Add focused regression coverage
 
-Add provider tests under `src/data/` following the existing CCTV test naming
-and fixtures. Cover at least:
+Add provider tests under `server/providers/cctv/` following the existing CCTV
+test naming and fixtures. Cover at least:
 
 - representative valid catalog rows and their normalized output;
 - missing or invalid IDs, coordinates, and frame URLs;
@@ -128,9 +128,9 @@ and fixtures. Cover at least:
 - timeout, oversized, malformed, and unavailable upstream responses; and
 - the frame or live-media content type the provider actually serves.
 
-Use `src/data/cctvProxy.test.mjs` for shared proxy/media behavior and
-`src/data/cctvCatalogCap.test.mjs` for shared catalog allocation. For a
-browser-only source, verify native playback, denied canvas pixel access, the
+Use `server/providers/cctv/proxy.test.mjs` for shared proxy/media behavior and
+`server/providers/cctv/catalogCap.test.mjs` for shared catalog allocation. For
+a browser-only source, verify native playback, denied canvas pixel access, the
 paused second-player overlay, and its cleanup separately from proxy tests. Run
 the focused provider and proxy tests, then the standard checks from
 [CONTRIBUTING.md](../CONTRIBUTING.md) that apply to the change. For runtime

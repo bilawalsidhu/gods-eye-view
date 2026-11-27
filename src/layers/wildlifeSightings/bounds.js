@@ -1,7 +1,7 @@
 // Shared by browser viewport queries and the provider's cache-key validation.
 export const WILDLIFE_MAX_VIEW_DEGREES = 40;
 
-const cleanDegree = (value) => Math.round(value * 1e8) / 1e8;
+export const cleanDegree = (value) => Math.round(value * 1e8) / 1e8;
 const spanOf = (box) => Math.max(box.north - box.south, box.east - box.west);
 
 /** Snap non-crossing boxes outward to one canonical grid. Validate the final

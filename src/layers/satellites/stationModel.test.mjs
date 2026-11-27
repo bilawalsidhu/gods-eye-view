@@ -94,6 +94,8 @@ function fixture(t) {
       satelliteVisualsVisible: (enabled, requested) =>
         Boolean(enabled) && Boolean(requested),
     },
+    cockpit: { _cockpitHeld: () => false },
+    stationPanel: { _syncStationPanel() {} },
   };
   parts.rendering = createRendering({
     state,

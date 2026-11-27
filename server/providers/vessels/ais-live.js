@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
-import { createAisStreamAdapter } from '../../../src/data/aisStreamAdapter.js';
-import { parseSilenceTimeoutEnv } from '../../../src/data/aisWatchdog.js';
+import { createAisStreamAdapter } from './ais-stream-adapter.js';
+import { parseSilenceTimeoutEnv } from './ais-watchdog.js';
 import { clampInt } from '../common/query.js';
 import {
   AISSTREAM_CACHE_MAX,
@@ -32,7 +32,7 @@ const AISSTREAM_DEFAULT_MESSAGE_TYPES = [
   // Buoys, beacons and other aids to navigation (AIS message 21).
   'AidsToNavigationReport',
 ];
-// Watchdog budgets (policy lives in src/data/aisWatchdog.js). Silence is
+// Watchdog budgets (policy lives in ais-watchdog.js). Silence is
 // REPORTED quickly and ACTED ON slowly: a dead feed must read as dead within
 // ~2 min, but recycling the socket is throttled so recovery can never become a
 // reconnect cycle against AISStream's one-connection-per-key limit.
@@ -54,7 +54,7 @@ const AISSTREAM_TICK_MS = 15_000;
 /**
  * @type {ReturnType<typeof createAisStreamAdapter>|null}
  * Module-lifetime: it owns the socket-generation namespace, which must never
- * restart across a dev-server reload (see aisStreamAdapter.js ownership rules).
+ * restart across a dev-server reload (see ais-stream-adapter.js ownership rules).
  */
 let _aisAdapter = null;
 /** @type {{silenceWatch:boolean,reportMs:number,recycleMs:number,url:string}|null} */
@@ -189,7 +189,7 @@ export function aisLiveProxy() {
  *
  * Node's built-in WebSocket cannot be used here: it has no terminate(), and
  * its close() waits forever for a close frame a black-holed peer never sends
- * (verified in src/data/aisWatchdogTransport.test.mjs). A socket parked in
+ * (verified in ais-watchdog-transport.test.mjs). A socket parked in
  * CLOSING keeps holding AISStream's single per-key connection, which is how
  * the reverted watchdog wedged.
  *

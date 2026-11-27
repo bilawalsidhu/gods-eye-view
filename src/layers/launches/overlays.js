@@ -13,212 +13,227 @@ import {
   ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_OPTIONS,
   ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_OPTIONS,
 } from './policy.js';
+import { tangentPoint } from './paths.js';
 
 /** The ellipsoid's largest radius, metres. */
 const MAX_RADIUS = Math.max(WGS84.radii.x, WGS84.radii.y, WGS84.radii.z);
 
-export function createOverlays({ state: layerState, services, parts, source }) {
-  /**
-   * Resolve whether a surface mission anchor is safely on the camera-facing
-   * side of Earth. The small positive limb margin prevents labels anchored just
-   * beyond the horizon from leaking through the hidden globe.
-   * @param {{x: number, y: number, z: number}} cameraPosition Camera world position.
-   * @param {{x: number, y: number, z: number}} markerPosition Mission anchor world position.
-   * @param {number} [limbMargin] Additional normalized horizon clearance.
-   * @returns {boolean} Whether the marker belongs on the visible hemisphere.
-   */
-
-  function missionAnchorHorizonVisible(
-    cameraPosition,
-    markerPosition,
-    limbMargin = 0.012,
-  ) {
-    if (!cameraPosition || !markerPosition) return false;
-    const cameraMagnitude = magnitude(cameraPosition);
-    if (!Number.isFinite(cameraMagnitude) || cameraMagnitude <= MAX_RADIUS) {
-      return false;
-    }
-    const limbThreshold = MAX_RADIUS / cameraMagnitude;
-    return (
-      dot(normalize(cameraPosition), normalize(markerPosition)) >
-      limbThreshold + limbMargin
-    );
+/**
+ * Resolve whether a surface mission anchor is safely on the camera-facing
+ * side of Earth. The small positive limb margin prevents labels anchored just
+ * beyond the horizon from leaking through the hidden globe.
+ * @param {{x: number, y: number, z: number}} cameraPosition Camera world position.
+ * @param {{x: number, y: number, z: number}} markerPosition Mission anchor world position.
+ * @param {number} [limbMargin] Additional normalized horizon clearance.
+ * @returns {boolean} Whether the marker belongs on the visible hemisphere.
+ */
+export function missionAnchorHorizonVisible(
+  cameraPosition,
+  markerPosition,
+  limbMargin = 0.012,
+) {
+  if (!cameraPosition || !markerPosition) return false;
+  const cameraMagnitude = magnitude(cameraPosition);
+  if (!Number.isFinite(cameraMagnitude) || cameraMagnitude <= MAX_RADIUS) {
+    return false;
   }
+  const limbThreshold = MAX_RADIUS / cameraMagnitude;
+  return (
+    dot(normalize(cameraPosition), normalize(markerPosition)) >
+    limbThreshold + limbMargin
+  );
+}
 
-  /**
-   * Resolve launch-anchor visibility for overview and selected-mission views.
-   * @param {{x: number, y: number, z: number}} cameraPosition Camera world position.
-   * @param {{x: number, y: number, z: number}} markerPosition Mission anchor world position.
-   * @param {string} markerId Mission represented by this anchor.
-   * @param {string|null} selectedLaunchId Explicitly selected mission.
-   * @returns {boolean} Whether the launch anchor should render.
-   */
+/**
+ * Resolve launch-anchor visibility for overview and selected-mission views.
+ * @param {{x: number, y: number, z: number}} cameraPosition Camera world position.
+ * @param {{x: number, y: number, z: number}} markerPosition Mission anchor world position.
+ * @param {string} markerId Mission represented by this anchor.
+ * @param {string|null} selectedLaunchId Explicitly selected mission.
+ * @returns {boolean} Whether the launch anchor should render.
+ */
+export function missionAnchorVisible(
+  cameraPosition,
+  markerPosition,
+  markerId,
+  selectedLaunchId = null,
+) {
+  if (selectedLaunchId && markerId !== selectedLaunchId) return false;
+  return missionAnchorHorizonVisible(cameraPosition, markerPosition);
+}
 
-  function missionAnchorVisible(
-    cameraPosition,
-    markerPosition,
-    markerId,
-    selectedLaunchId = null,
-  ) {
-    if (selectedLaunchId && markerId !== selectedLaunchId) return false;
-    return missionAnchorHorizonVisible(cameraPosition, markerPosition);
-  }
+function shortMissionLabel(name, maxLength = 24) {
+  const text = String(name || 'Unnamed mission')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' | ')[0];
+  const compact = text.split(' — ')[0].trim();
+  return compact.length > maxLength
+    ? `${compact.slice(0, maxLength - 1).trimEnd()}…`
+    : compact;
+}
 
-  function shortMissionLabel(name, maxLength = 24) {
-    const text = String(name || 'Unnamed mission')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .split(' | ')[0];
-    const compact = text.split(' — ')[0].trim();
-    return compact.length > maxLength
-      ? `${compact.slice(0, maxLength - 1).trimEnd()}…`
-      : compact;
-  }
+/**
+ * Reduce generic launch-complex names to their identifying pad or area suffix.
+ * @param {string|null} launchSite Launch Library pad name.
+ * @returns {string|null} Compact launch-site identifier.
+ */
+export function compactLaunchSiteName(launchSite) {
+  const text = String(launchSite || '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!text || /^(unknown|unavailable|n\/a)$/i.test(text)) return null;
+  const genericPrefix =
+    /^(?:orbital\s+launch\s+pad|space\s+launch\s+complex|launch\s+(?:area|complex|pad|site))\s*[-·:]?\s*/i;
+  const compact = text.replace(genericPrefix, '').trim();
+  return compact || null;
+}
 
-  /**
-   * Reduce generic launch-complex names to their identifying pad or area suffix.
-   * @param {string|null} launchSite Launch Library pad name.
-   * @returns {string|null} Compact launch-site identifier.
-   */
-
-  function compactLaunchSiteName(launchSite) {
-    const text = String(launchSite || '')
-      .replace(/\s+/g, ' ')
-      .trim();
-    if (!text || /^(unknown|unavailable|n\/a)$/i.test(text)) return null;
-    const genericPrefix =
-      /^(?:orbital\s+launch\s+pad|space\s+launch\s+complex|launch\s+(?:area|complex|pad|site))\s*[-·:]?\s*/i;
-    const compact = text.replace(genericPrefix, '').trim();
-    return compact || null;
-  }
-
-  /**
-   * Build the source-owned launch-site marker presentation. Overview markers
-   * compete in the bounded ambient-label domain; the selected mission moves to
-   * the protected selected lane and gains the former launch-site detail line.
-   * @param {object} launch Normalized Launch Library mission.
-   * @param {object|function():object} position Existing display position.
-   * @param {boolean} [selected=false] Whether the mission owns the selected view.
-   * @returns {object}
-   */
-
-  function createRocketMissionMarkerOverlayEntry(
-    launch,
+/**
+ * Build the source-owned launch-site marker presentation. Overview markers
+ * compete in the bounded ambient-label domain; the selected mission moves to
+ * the protected selected lane and gains the former launch-site detail line.
+ * @param {object} launch Normalized Launch Library mission.
+ * @param {object|function():object} position Existing display position.
+ * @param {boolean} [selected=false] Whether the mission owns the selected view.
+ * @returns {object}
+ */
+export function createRocketMissionMarkerOverlayEntry(
+  launch,
+  position,
+  selected = false,
+) {
+  const mission = shortMissionLabel(launch?.name, 26).toUpperCase();
+  const siteName = compactLaunchSiteName(launch?.launchSite);
+  const launchTimeMs = Date.parse(launch?.launchTime);
+  const details = selected
+    ? [
+        siteName
+          ? t('LAUNCH SITE · {site}', {
+              site: shortMissionLabel(siteName, 20).toUpperCase(),
+            })
+          : t('LAUNCH SITE'),
+      ]
+    : [];
+  return {
+    id: `launch:${launch?.id}`,
     position,
-    selected = false,
-  ) {
-    const mission = shortMissionLabel(launch?.name, 26).toUpperCase();
-    const siteName = compactLaunchSiteName(launch?.launchSite);
-    const launchTimeMs = Date.parse(launch?.launchTime);
-    const details = selected
-      ? [
-          siteName
-            ? t('LAUNCH SITE · {site}', {
-                site: shortMissionLabel(siteName, 20).toUpperCase(),
-              })
-            : t('LAUNCH SITE'),
-        ]
-      : [];
-    return {
-      id: `launch:${launch?.id}`,
-      position,
-      variant: 'label',
-      title: mission,
-      details,
-      accent: '#22e6e6',
-      priority: selected
-        ? Number.MAX_SAFE_INTEGER
-        : Number.isFinite(launchTimeMs)
-          ? Math.floor(launchTimeMs / 1000)
-          : 0,
-      selected,
-      protected: selected,
-      paintLane: selected ? 'selected' : 'ambient-label',
-      collisionGroup: 'ambient-label',
-      interactive: true,
-      distanceScale: {
-        near: 1000,
-        nearValue: 1.08,
-        far: 20_000_000,
-        farValue: 0.78,
-      },
-      gapPx: 12,
-      verticalOnly: true,
-      placement: 'above',
-      edgeFade: 'keyhole',
-      horizonCull: true,
-      terrainOcclusion: false,
-    };
-  }
+    variant: 'label',
+    title: mission,
+    details,
+    accent: '#22e6e6',
+    priority: selected
+      ? Number.MAX_SAFE_INTEGER
+      : Number.isFinite(launchTimeMs)
+        ? Math.floor(launchTimeMs / 1000)
+        : 0,
+    selected,
+    protected: selected,
+    paintLane: selected ? 'selected' : 'ambient-label',
+    collisionGroup: 'ambient-label',
+    interactive: true,
+    distanceScale: {
+      near: 1000,
+      nearValue: 1.08,
+      far: 20_000_000,
+      farValue: 0.78,
+    },
+    gapPx: 12,
+    verticalOnly: true,
+    placement: 'above',
+    edgeFade: 'keyhole',
+    horizonCull: true,
+    terrainOcclusion: false,
+  };
+}
 
-  /**
-   * Build one protected label belonging to the selected mission's trajectory,
-   * live payload position, or orbit. Copy is already source-formatted by the
-   * caller; newline semantics become explicit host detail rows.
-   * @param {object} input
-   * @param {string} input.id Stable mission-element identity.
-   * @param {object|function():object} input.position Existing cached position.
-   * @param {string} input.text Former native-label text, including newlines.
-   * @param {string} input.accent Source-owned label color.
-   * @param {number} [input.priority=0] Protected placement order.
-   * @param {number} [input.gapPx=8] Anchor-to-label gap.
-   * @returns {object}
-   */
-
-  function createRocketMissionElementOverlayEntry({
-    id,
+/**
+ * Build one protected label belonging to the selected mission's trajectory,
+ * live payload position, or orbit. Copy is already source-formatted by the
+ * caller; newline semantics become explicit host detail rows.
+ * @param {object} input
+ * @param {string} input.id Stable mission-element identity.
+ * @param {object|function():object} input.position Existing cached position.
+ * @param {string} input.text Former native-label text, including newlines.
+ * @param {string} input.accent Source-owned label color.
+ * @param {number} [input.priority=0] Protected placement order.
+ * @param {number} [input.gapPx=8] Anchor-to-label gap.
+ * @returns {object}
+ */
+export function createRocketMissionElementOverlayEntry({
+  id,
+  position,
+  text,
+  accent,
+  priority = 0,
+  gapPx = 8,
+}) {
+  const [title, ...details] = String(text || '').split('\n');
+  return {
+    id: String(id),
     position,
-    text,
+    variant: 'label',
+    title,
+    details,
     accent,
-    priority = 0,
-    gapPx = 8,
-  }) {
-    const [title, ...details] = String(text || '').split('\n');
-    return {
-      id: String(id),
-      position,
-      variant: 'label',
-      title,
-      details,
-      accent,
-      priority,
-      selected: true,
-      protected: true,
-      paintLane: 'selected',
-      collisionGroup: 'ambient-label',
-      interactive: false,
-      gapPx,
-      verticalOnly: true,
-      placement: 'above',
-      edgeFade: 'keyhole',
-      horizonCull: true,
-      terrainOcclusion: false,
-    };
-  }
+    priority,
+    selected: true,
+    protected: true,
+    paintLane: 'selected',
+    collisionGroup: 'ambient-label',
+    interactive: false,
+    gapPx,
+    verticalOnly: true,
+    placement: 'above',
+    edgeFade: 'keyhole',
+    horizonCull: true,
+    terrainOcclusion: false,
+  };
+}
 
-  /** Keep the newest ambient mission markers with stable identity tie-breaking. */
+/** Keep the newest ambient mission markers with stable identity tie-breaking. */
+export function selectRocketMissionMarkerOverlayCohort(
+  entries,
+  limit = ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT,
+) {
+  const cap = Math.max(
+    0,
+    Math.min(
+      ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT,
+      Math.floor(Number(limit) || 0),
+    ),
+  );
+  if (!Array.isArray(entries) || cap === 0) return [];
+  return entries
+    .slice()
+    .sort(
+      (a, b) =>
+        b.priority - a.priority || String(a.id).localeCompare(String(b.id)),
+    )
+    .slice(0, cap);
+}
 
-  function selectRocketMissionMarkerOverlayCohort(
-    entries,
-    limit = ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT,
-  ) {
-    const cap = Math.max(
-      0,
-      Math.min(
-        ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT,
-        Math.floor(Number(limit) || 0),
-      ),
-    );
-    if (!Array.isArray(entries) || cap === 0) return [];
-    return entries
-      .slice()
-      .sort(
-        (a, b) =>
-          b.priority - a.priority || String(a.id).localeCompare(String(b.id)),
-      )
-      .slice(0, cap);
-  }
+/**
+ * Resolve the one permitted screen-space replay overlay state.
+ * @param {object} input Overlay state.
+ * @param {boolean} input.replayActive Whether replay owns the camera.
+ * @param {boolean} input.ascending Whether the replay marker is on ascent.
+ * @param {boolean} input.countdownActive Whether the T-minus hold is active.
+ * @returns {'countdown'|'ascent'|'orbit'|null}
+ */
+export function replayOverlayMode({
+  replayActive,
+  ascending,
+  countdownActive,
+  preCountdownActive = false,
+}) {
+  if (!replayActive) return null;
+  if (preCountdownActive) return null;
+  if (countdownActive) return 'countdown';
+  return ascending ? 'ascent' : 'orbit';
+}
 
+export function createOverlays({ state: layerState, services, parts, source }) {
   function missionHoverReticleImage() {
     if (layerState._missionHoverReticleImage)
       return layerState._missionHoverReticleImage;
@@ -250,27 +265,6 @@ export function createOverlays({ state: layerState, services, parts, source }) {
     context.stroke();
     layerState._missionHoverReticleImage = canvas;
     return canvas;
-  }
-
-  /**
-   * Resolve the one permitted screen-space replay overlay state.
-   * @param {object} input Overlay state.
-   * @param {boolean} input.replayActive Whether replay owns the camera.
-   * @param {boolean} input.ascending Whether the replay marker is on ascent.
-   * @param {boolean} input.countdownActive Whether the T-minus hold is active.
-   * @returns {'countdown'|'ascent'|'orbit'|null}
-   */
-
-  function replayOverlayMode({
-    replayActive,
-    ascending,
-    countdownActive,
-    preCountdownActive = false,
-  }) {
-    if (!replayActive) return null;
-    if (preCountdownActive) return null;
-    if (countdownActive) return 'countdown';
-    return ascending ? 'ascent' : 'orbit';
   }
 
   /**
@@ -335,17 +329,17 @@ export function createOverlays({ state: layerState, services, parts, source }) {
 
   function clearMissionOverlaySources() {
     layerState._selectedMissionOverlayTimeText = null;
-    layerState._missionOverlayHost.clearSource(
+    services.overlays.clearOverlaySource(
       ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID,
     );
-    layerState._missionOverlayHost.setVisible(
+    services.overlays.setOverlaySourceVisible(
       ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID,
       false,
     );
-    layerState._missionOverlayHost.clearSource(
+    services.overlays.clearOverlaySource(
       ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_ID,
     );
-    layerState._missionOverlayHost.setVisible(
+    services.overlays.setOverlaySourceVisible(
       ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_ID,
       false,
     );
@@ -360,10 +354,10 @@ export function createOverlays({ state: layerState, services, parts, source }) {
       ? layerState._missionOverlayRecords.get(layerState._selectedLaunchId)
       : null;
     if (selectedRecord) {
-      layerState._missionOverlayHost.clearSource(
+      services.overlays.clearOverlaySource(
         ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID,
       );
-      layerState._missionOverlayHost.setVisible(
+      services.overlays.setOverlaySourceVisible(
         ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID,
         false,
       );
@@ -379,12 +373,12 @@ export function createOverlays({ state: layerState, services, parts, source }) {
           ),
         );
       }
-      layerState._missionOverlayHost.setEntries(
+      services.overlays.setOverlayEntries(
         ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_ID,
         entries,
         ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_OPTIONS,
       );
-      layerState._missionOverlayHost.setVisible(
+      services.overlays.setOverlaySourceVisible(
         ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_ID,
         true,
       );
@@ -396,10 +390,10 @@ export function createOverlays({ state: layerState, services, parts, source }) {
       return;
     }
 
-    layerState._missionOverlayHost.clearSource(
+    services.overlays.clearOverlaySource(
       ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_ID,
     );
-    layerState._missionOverlayHost.setVisible(
+    services.overlays.setOverlaySourceVisible(
       ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_ID,
       false,
     );
@@ -420,12 +414,12 @@ export function createOverlays({ state: layerState, services, parts, source }) {
         return entry;
       }),
     );
-    layerState._missionOverlayHost.setEntries(
+    services.overlays.setOverlayEntries(
       ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID,
       entries,
       ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_OPTIONS,
     );
-    layerState._missionOverlayHost.setVisible(
+    services.overlays.setOverlaySourceVisible(
       ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID,
       true,
     );
@@ -526,13 +520,9 @@ export function createOverlays({ state: layerState, services, parts, source }) {
     };
     let vehicleRotation = 0;
     if (replayActive && !state.countdownActive) {
-      const tangentStep = Math.max(0.002, 0.8 / Math.max(2, path.length - 1));
-      const forwardProgress = Math.min(1, state.phaseProgress + tangentStep);
-      const backwardProgress = Math.max(0, state.phaseProgress - tangentStep);
-      const useForward = forwardProgress > state.phaseProgress;
-      const tangentPosition = parts.paths.samplePath(
+      const { position: tangentPosition, forward: useForward } = tangentPoint(
         path,
-        useForward ? forwardProgress : backwardProgress,
+        state.phaseProgress,
       );
       const tangentWindowPosition = tangentPosition
         ? query.project(tangentPosition)

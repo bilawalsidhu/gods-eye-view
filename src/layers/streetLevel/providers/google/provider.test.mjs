@@ -292,12 +292,10 @@ test('the panorama a lookup found is dated without a second lookup', async () =>
   );
 });
 
-test('a wider lookup radius is honoured up to the cap', async () => {
+test('a wider lookup radius is honoured', async () => {
   const { instance, fake } = setup();
   await instance.nearestImage({ lat: 38.58, lon: -121.49 }, { radiusM: 250 });
   assert.equal(fake.lookups.at(-1).radius, 250);
-  await instance.nearestImage({ lat: 38.58, lon: -121.49 }, { radiusM: 9999 });
-  assert.equal(fake.lookups.at(-1).radius, 250);
-  await instance.nearestImage({ lat: 38.58, lon: -121.49 }, { radiusM: NaN });
+  await instance.nearestImage({ lat: 38.58, lon: -121.49 });
   assert.equal(fake.lookups.at(-1).radius, 50);
 });

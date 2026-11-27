@@ -1,12 +1,4 @@
-import { drawOf } from '../../render/rendererOf.js';
 import { FIRMS_OVERLAY_SOURCE_ID } from '../../data/firmsLabels.js';
-
-/**
- * The layer's shape sets start with this; each layer has its own
- * (`firms:1:cells`, …), so several can share a renderer.
- */
-export const FIRMS_CELL_SET_PREFIX = 'firms';
-let instances = 0;
 
 export function createLifecycle({
   layerState,
@@ -38,19 +30,15 @@ export function createLifecycle({
       if (layerState._destroyed) return;
       layerState._viewer = viewer;
       layerState._panel = panel ?? layerState._panel;
-      layerState._cells = drawOf(viewer).shapes({
-        id: `${FIRMS_CELL_SET_PREFIX}:${++instances}:cells`,
-        clampTo: 'both',
-        show: false,
-      });
+      layerState._initialized = true;
     },
 
     async enable(viewer) {
       if (layerState._destroyed) return;
       layerState._enabled = true;
       layerState._viewer = viewer;
-      if (!layerState._cells) this.init(viewer);
-      if (layerState._cells) layerState._cells.show = true;
+      if (!layerState._initialized) this.init(viewer);
+      layerState._visibility.show = true;
       // The GPU culls the far side each frame, so retained rows are right
       // for wherever the camera went while the layer was off.
       if (layerState._icons) layerState._icons.show = !layerState._standIn;
@@ -103,7 +91,7 @@ export function createLifecycle({
       layerState._loading = false;
       layerState._enabled = false;
       components.selection.clearFireSelection();
-      if (layerState._cells) layerState._cells.show = false;
+      layerState._visibility.show = false;
       if (layerState._icons) layerState._icons.show = false;
       layerState._heatImagery?.setShow(false);
       overlayHost.clearSource(FIRMS_OVERLAY_SOURCE_ID);
@@ -126,8 +114,8 @@ export function createLifecycle({
       components.viewport.removeMoveEndWatcher();
       components.selection.removeClickHandler();
       unregisterPickOwner(id);
-      layerState._cells?.dispose();
-      layerState._cells = null;
+      layerState._initialized = false;
+      layerState._visibility.show = false;
       components.rendering.removeDetectionCollections(viewer);
       components.selection.clearContextRegistrations();
       clearSelectedEntityContextForLayer(id);
@@ -141,29 +129,15 @@ export function createLifecycle({
       layerState._heatImagery?.destroy();
       layerState._heatImagery = null;
       layerState._heatRaster = null;
-      layerState._handoffHeat = -1;
       layerState._imageryHost = null;
-      layerState._count = 0;
-      layerState._totalCount = 0;
       layerState._panel = null;
-      layerState._cellCount = 0;
-      layerState._lastUpdate = null;
-      layerState._at = null;
-      layerState._keyRequired = false;
-      layerState._stale = false;
-      layerState._error = null;
-      layerState._currentLodId = null;
       overlayHost.clearSource(FIRMS_OVERLAY_SOURCE_ID);
       overlayHost.setVisible(FIRMS_OVERLAY_SOURCE_ID, false);
-      layerState._currentLodIndex = -1;
-      layerState._lastViewRect = null;
       layerState._selectedFire = null;
       layerState._standIn = null;
       layerState._labelCandidates = [];
-      layerState._labelLodDistance = 0;
       layerState._pickIndexById.clear();
       layerState._fireByCardId.clear();
-      layerState._camSnapValid = false;
     },
   };
 

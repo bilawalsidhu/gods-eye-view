@@ -8,58 +8,50 @@ import {
   TRANSIT_MODE_ICON,
   transitRouteLabel,
 } from '../../data/transitFeeds.js';
-import { displayMotion, playbackPosition } from './movement.js';
-import { roundHeadingDegrees } from '../../data/headingDegrees.js';
+import { displayMotion, playbackPosition } from '../../data/transitMovement.js';
+import {
+  SELECTED_VEHICLE_OVERLAY_SOURCE_OPTIONS,
+  createSelectedVehicleOverlayEntry,
+  lastReportText,
+  motionText,
+  reportAgeText,
+  reportedMotionText,
+  vehicleIdText,
+} from '../../data/transitPolicy.js';
+// AI tools (src/tools/queries/mobility.js) import this module, so no i18n here:
+// the card copy takes `t` from the caller (selection.js); without it, English.
+import { englishText, msg } from '../../i18n/marker.js';
 
 export const TRANSIT_SELECTED_OVERLAY_SOURCE_ID = 'transit-selected';
-export const TRANSIT_SELECTED_OVERLAY_SOURCE_OPTIONS = Object.freeze({
-  cohortLimit: 1,
-  collisionCapacity: 0,
-  moving: true,
-});
+export const TRANSIT_SELECTED_OVERLAY_SOURCE_OPTIONS =
+  SELECTED_VEHICLE_OVERLAY_SOURCE_OPTIONS;
+
+// Activation, feed aging and the ground gate are shared with Rail.
+export {
+  ACTIVATION_ENTER_ALTITUDE_M,
+  ACTIVATION_EXIT_ALTITUDE_M,
+  CAMERA_DEBOUNCE_MS,
+  CAMERA_PERCENTAGE_CHANGED,
+  FEED_EVICT_AFTER_MS,
+  FEED_STALE_AFTER_MS,
+  HEIGHT_SAMPLE_MAX_ALTITUDE_M,
+  MISSED_POLLS_TO_DROP,
+  RANGE_SLACK_KM,
+  VEHICLE_MAX_FIX_AGE_MS,
+  aggregateTransitFeedHealth,
+  isStaleVehicleFix,
+  vehicleFixAgeMs,
+  vehicleReportTimeMs,
+} from '../../data/transitPolicy.js';
 
 // --- Polling / activation ---
 /** Poll interval (ms). */
 export const TRANSIT_POLL_MS = 15_000;
-// Between fixes, movement.js plays a vehicle back a feed-derived lag behind real time.
-/** Camera altitude (m) above which the layer idles: a national fleet still reads at 3,000 km. */
-export const ACTIVATION_ALTITUDE_M = 3_000_000;
-export const ACTIVATION_ENTER_ALTITUDE_M = ACTIVATION_ALTITUDE_M - 150_000;
-export const ACTIVATION_EXIT_ALTITUDE_M = ACTIVATION_ALTITUDE_M + 150_000;
-/** Debounce (ms) for camera-change proximity checks. */
-export const CAMERA_DEBOUNCE_MS = 340;
-/** The `changed` threshold this layer's camera listener asks for. */
-export const CAMERA_PERCENTAGE_CHANGED = 0.05;
-/** Extra coverage radius (km) granted to a feed that is already active, so it does not flap at the edge. */
-export const RANGE_SLACK_KM = 40;
+// Between fixes, `src/data/transitMovement.js` plays a vehicle back a feed-derived lag behind real time.
 /** Hard cap on rendered vehicles across all active feeds. */
 export const MAX_VEHICLES_TOTAL = 15_000;
-/** A vehicle absent from this many consecutive polls is removed. */
-export const MISSED_POLLS_TO_DROP = 2;
-
-// --- Age policy ---
-/**
- * Oldest fix still drawn, in ms. Past this a vehicle is REMOVED, not merely
- * skipped on arrival: a feed that stops answering must not leave the last
- * snapshot frozen on the globe pretending to be live traffic.
- */
-export const VEHICLE_MAX_FIX_AGE_MS = 10 * 60_000;
-/** A feed with no successful poll for this long reads as stale in the panel. */
-export const FEED_STALE_AFTER_MS = 90_000;
-/**
- * A feed with no successful poll for this long has its vehicles dropped. It is
- * deliberately shorter than VEHICLE_MAX_FIX_AGE_MS so a dead feed empties even
- * when its last snapshot carried optimistic timestamps.
- */
-export const FEED_EVICT_AFTER_MS = 5 * 60_000;
 
 // --- Ground anchoring ---
-/**
- * Above this camera altitude (m) a few metres of terrain are invisible, so the
- * fleet renders on the ellipsoid and no floor cells are warmed. A national view
- * must not queue a country's worth of ground lookups.
- */
-export const HEIGHT_SAMPLE_MAX_ALTITUDE_M = 60_000;
 /**
  * Floor cells warmed per poll. The shared resolver batches and chunks, but the
  * bound belongs here: a metropolitan fleet is hundreds of vehicles and only the
@@ -212,115 +204,6 @@ export function interpolatedVehiclePosition(entry, now) {
   return { lat: to.lat, lon: to.lon, settled: true };
 }
 
-/**
- * When a fix was REPORTED, in ms, from the best timestamp available.
- *
- * The ordering questions — is this fix newer than the one we drew, how much
- * time passed between them — need an absolute time, not an age. Same ladder as
- * the age helper: the vehicle's own stamp, else the snapshot's fetch time.
- *
- * @param {object} record Normalized vehicle record.
- * @param {number|null} [fetchedAtMs] Snapshot fetch time.
- * @returns {number} Report time in ms.
- */
-export function vehicleReportTimeMs(record, fetchedAtMs = null) {
-  const seconds = Number(record?.timestamp);
-  if (Number.isFinite(seconds) && seconds > 0) return seconds * 1000;
-  if (Number.isFinite(fetchedAtMs)) return fetchedAtMs;
-  return Date.now();
-}
-
-/**
- * Age of a vehicle's reported fix in ms, from the best timestamp available.
- *
- * The proxy already resolves the ladder (the vehicle's own timestamp, else the
- * feed header's, else fetch time) and says which it used. A record that somehow
- * arrives with no usable timestamp at all is aged from the snapshot's fetch
- * time, never from "now" — treating an unstamped fix as fresh is exactly how a
- * ten-minute-old bus gets drawn as live.
- *
- * @param {object} record Normalized vehicle record.
- * @param {number} nowMs
- * @param {number|null} [fetchedAtMs] Snapshot fetch time.
- * @returns {number} Age in ms (never negative).
- */
-export function vehicleFixAgeMs(record, nowMs, fetchedAtMs = null) {
-  const seconds = Number(record?.timestamp);
-  if (Number.isFinite(seconds) && seconds > 0) {
-    return Math.max(0, nowMs - seconds * 1000);
-  }
-  if (Number.isFinite(fetchedAtMs)) return Math.max(0, nowMs - fetchedAtMs);
-  return 0;
-}
-
-/**
- * Whether a feed fix is too old to draw.
- * @param {object} record Normalized vehicle record.
- * @param {number} nowMs
- * @param {number|null} [fetchedAtMs] Snapshot fetch time.
- * @returns {boolean}
- */
-export function isStaleVehicleFix(record, nowMs, fetchedAtMs = null) {
-  return vehicleFixAgeMs(record, nowMs, fetchedAtMs) > VEHICLE_MAX_FIX_AGE_MS;
-}
-
-/**
- * Roll per-feed poll health into the one honest row state the layer panel reads.
- *
- * One stale feed beside a fresh one is DEGRADED because only part of the view is live.
- *
- * @param {Array<{stale:boolean, error:string|null, retryInSec?:number|null,
- *   upstreamAt:number|null, loading:boolean}>} statuses
- * @param {number} nowMs
- * @returns {{stale:boolean, degraded:boolean, error:string|null, retryInSec:number|null,
- *   loading:boolean, staleFeeds:number}}
- */
-export function aggregateTransitFeedHealth(statuses, nowMs) {
-  const list = Array.isArray(statuses) ? statuses : [];
-  if (list.length === 0) {
-    return {
-      stale: false,
-      degraded: false,
-      error: null,
-      retryInSec: null,
-      loading: false,
-      staleFeeds: 0,
-    };
-  }
-  // Age is measured from when the OPERATOR last answered, never from when this
-  // browser last received bytes — the proxy replays its cached copy on a fixed
-  // cadence during an outage, and that cadence is not freshness.
-  const isStale = (status) =>
-    status.stale === true ||
-    (Number.isFinite(status.upstreamAt) &&
-      nowMs - status.upstreamAt > FEED_STALE_AFTER_MS);
-  const staleFeeds = list.filter(isStale).length;
-  const failing = list.find((status) => status.error) || null;
-  const error = failing?.error || null;
-  return {
-    stale: staleFeeds === list.length,
-    degraded: (staleFeeds > 0 && staleFeeds < list.length) || Boolean(error),
-    error,
-    retryInSec: Number.isFinite(failing?.retryInSec)
-      ? failing.retryInSec
-      : null,
-    loading: list.some((status) => status.loading),
-    staleFeeds,
-  };
-}
-
-// AI tools (src/tools/queries/mobility.js) import this module, so no i18n here:
-// the card copy takes `t` from the caller (selection.js); without it, English.
-const msg = (text) => text;
-
-/** English {placeholder} interpolation, the default `t` of the card copy. */
-function englishText(text, values) {
-  if (!values) return text;
-  return text.replace(/\{([A-Za-z0-9_]+)\}/g, (literal, name) =>
-    Object.hasOwn(values, name) ? String(values[name]) : literal,
-  );
-}
-
 /** GTFS-realtime OccupancyStatus in words. */
 function occupancyText(occupancy, t) {
   switch (occupancy) {
@@ -377,44 +260,17 @@ export function buildTransitSelectionCopy(
   // An operator's own mode word (feed.modeWords) is a name and stays as is.
   const kindWord = transitModeWord(mode, feed, t);
   const details = [`${kindWord} · ${feed.name} · ${feed.region}`];
-  const motion = [];
   // What the SCREEN is doing leads, because that is what the reader can check.
-  const shown = entry ? displayMotion(entry, nowMs) : null;
-  if (shown?.word === 'STOPPED')
-    motion.push(t('Stopped', { context: 'vehicle motion' }));
-  else if (shown?.word === 'NO FIX') motion.push(t('No recent fix'));
-  else if (shown?.word === 'WAITING') motion.push(t('Waiting for update'));
-  else if (shown) motion.push(t('Moving'));
-  if (motion.length) details.push(motion.join(' · '));
-  const reportedMotion = [];
-  if (Number.isFinite(record.speedMps))
-    reportedMotion.push(
-      t('reported {speed} km/h', { speed: Math.round(record.speedMps * 3.6) }),
-    );
-  if (Number.isFinite(record.bearing))
-    reportedMotion.push(
-      t('reported hdg {heading}°', {
-        heading: roundHeadingDegrees(record.bearing),
-      }),
-    );
-  // The operator's own claim, kept as a REPORT rather than as the live state.
-  // It describes the moment of the report, which the display may not have
-  // reached yet; presenting it as "now" is what put STOPPED on a moving metro.
+  const motion = motionText(entry, nowMs, t);
+  if (motion) details.push(motion);
   const state = [];
-  if (record.status === 'STOPPED_AT' && record.stopId)
-    state.push(
-      t('Last report: stopped at stop {stop}', { stop: record.stopId }),
-    );
-  else if (record.status === 'INCOMING_AT' && record.stopId)
-    state.push(
-      t('Last report: arriving at stop {stop}', { stop: record.stopId }),
-    );
-  else if (record.status === 'IN_TRANSIT_TO' && record.stopId)
-    state.push(t('Last report: next stop {stop}', { stop: record.stopId }));
+  const lastReport = lastReportText(record, t);
+  if (lastReport) state.push(lastReport);
   if (record.occupancy && record.occupancy !== 'NO_DATA_AVAILABLE') {
     state.push(occupancyText(record.occupancy, t));
   }
-  if (reportedMotion.length) details.push(reportedMotion.join(' · '));
+  const reportedMotion = reportedMotionText(record, t);
+  if (reportedMotion) details.push(reportedMotion);
   if (state.length) details.push(state.join(' · '));
   // Underground services are drawn on the surface directly above themselves.
   // That is a deliberate choice — a train nobody can see is not worth drawing —
@@ -422,39 +278,11 @@ export function buildTransitSelectionCopy(
   if (UNDERGROUND_MODES.has(mode)) {
     details.push(t('Shown at street level · depth not in the feed'));
   }
-  details.push(
-    `${t('Vehicle {vehicle}', { vehicle: record.id })}${record.label && record.label !== record.id ? ` · ${record.label}` : ''}`,
-  );
-  const ageS = Math.round(
-    (Number.isFinite(entry?.sample?.latestReportAgeMs)
-      ? entry.sample.latestReportAgeMs
-      : vehicleFixAgeMs(record, nowMs, fetchedAtMs)) / 1000,
-  );
-  // Seconds through 89s, then whole minutes. Rounding 90s up would skip
-  // "1 min" and call a minute-and-a-half-old report two minutes old.
-  const reported =
-    ageS < 90
-      ? t('Reported {seconds} s ago', { seconds: ageS })
-      : t('Reported {minutes} min ago', { minutes: Math.floor(ageS / 60) });
-  // A time the feed did not give for THIS vehicle is labelled, so the card
-  // never presents a borrowed or inferred time as the vehicle's own report.
-  const ownTime =
-    Number.isFinite(record.timestamp) &&
-    record.timestamp > 0 &&
-    (!record.timestampSource || record.timestampSource === 'vehicle');
-  // How far behind real time the display is running, said separately from
-  // how old the newest report is: the two are different facts.
-  const lagS = Number.isFinite(entry?.sample?.actualDelayMs)
-    ? Math.max(0, Math.round(entry.sample.actualDelayMs / 1000))
-    : null;
-  const behind =
-    lagS === null
-      ? ''
-      : ` · ${t('shown {seconds} s behind', { seconds: lagS })}`;
+  details.push(vehicleIdText(record, t));
   details.splice(
-    motion.length ? 2 : 1,
+    motion ? 2 : 1,
     0,
-    (ownTime ? reported : t('{reported} (feed time)', { reported })) + behind,
+    reportAgeText(record, entry, nowMs, fetchedAtMs, t),
   );
   if (entry?.track?.count) {
     const duration = Math.max(
@@ -481,28 +309,12 @@ export function buildTransitSelectionCopy(
  * @returns {object|null}
  */
 export function createTransitSelectedOverlayEntry(key, position, copy, mode) {
-  if (!key || !position) return null;
-  return {
-    id: String(key),
+  return createSelectedVehicleOverlayEntry(
+    key,
     position,
-    variant: 'selected',
-    selected: true,
-    protected: true,
-    paintLane: 'selected',
-    collisionGroup: 'ambient-card',
-    priority: Number.MAX_SAFE_INTEGER,
-    title: copy.title,
-    details: copy.details,
-    accent: TRANSIT_MODE_COLORS[mode] || TRANSIT_MODE_COLORS.unknown,
-    interactive: false,
-    anchorRadiusPx: 9,
-    minAnchorGapPx: 11,
-    verticalOnly: true,
-    placement: 'above',
-    edgeFade: 'keyhole',
-    horizonCull: true,
-    terrainOcclusion: false,
-  };
+    copy,
+    TRANSIT_MODE_COLORS[mode] || TRANSIT_MODE_COLORS.unknown,
+  );
 }
 
 /** Modes that ordinarily run below the street, drawn on the surface above themselves. */
@@ -640,22 +452,8 @@ export function transitDetectionMetric(
   feed = null,
 ) {
   const kind = transitModeAbbr(mode, feed);
-  const state = transitVehicleState(entry, nowMs);
+  // What the screen shows it doing, not the feed's `current_status`: that
+  // dates the report while the display still animates the segment before it.
+  const state = displayMotion(entry, nowMs).word;
   return state ? `${kind} ${state}` : kind;
-}
-
-/**
- * What the vehicle is doing right now, in as few characters as it takes —
- * judged on what the screen is showing, not on what the feed claims.
- *
- * The word follows the displayed motion. The newest record's `current_status` describes
- * the moment of a report the display is still animating towards.
- * Its claim is kept, verbatim and dated, on the selected card.
- *
- * @param {object} entry Vehicle runtime entry.
- * @param {number} [nowMs]
- * @returns {string}
- */
-function transitVehicleState(entry, nowMs = Date.now()) {
-  return displayMotion(entry, nowMs).word;
 }

@@ -1,4 +1,5 @@
 import { FLEET_MODEL_POLICY } from '../../layers/flights/policy.js';
+import { appAssetUrl } from './overlayHost.js';
 
 /**
  * The fleet-model service the Vessels, Transit and Rail layers draw their 3D
@@ -11,8 +12,7 @@ import { FLEET_MODEL_POLICY } from '../../layers/flights/policy.js';
  */
 export function fleetModelServices({
   display = null,
-  resolveAsset = (url) =>
-    `${import.meta.env?.BASE_URL || '/'}${url.replace(/^\//, '')}`,
+  resolveAsset = appAssetUrl,
 } = {}) {
   if (!display) return null;
   return Object.freeze({ display, policy: FLEET_MODEL_POLICY, resolveAsset });

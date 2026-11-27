@@ -48,10 +48,7 @@ function isExplicitLayerIntentOrigin(origin) {
 function cancelPendingLayerRestore(entry, origin, reason) {
   if (!isExplicitLayerIntentOrigin(origin)) return;
   try {
-    (
-      entry.module?.cancelPendingRestore ||
-      entry.module?.cancelPendingTrackingRestore
-    )?.({ origin, reason });
+    entry.module?.cancelPendingTrackingRestore?.({ origin, reason });
   } catch (error) {
     console.warn(
       `[Data] ${entry.module?.id || 'layer'} pending restore cancellation error:`,
@@ -613,15 +610,9 @@ export class LayerLifecycle {
   }
 
   _armUpdateLoop(layerId, entry) {
-    const configuredRefreshInterval = Number(entry.module.refreshInterval);
     const updateInterval = Number(entry.module.updateInterval);
-    const refreshInterval =
-      configuredRefreshInterval > 0
-        ? configuredRefreshInterval
-        : updateInterval > 0
-          ? updateInterval
-          : 0;
-    if (refreshInterval > 0) {
+    const intervalMs = updateInterval > 0 ? updateInterval : 0;
+    if (intervalMs > 0) {
       const visibilityDocument = this._visibilityTarget;
       let intervalId = null;
       let dueAt = 0;
@@ -637,13 +628,13 @@ export class LayerLifecycle {
       // deadline; otherwise the old phase would skip its next tick.
       const schedule = () => {
         clearInterval(intervalId);
-        dueAt = Date.now() + refreshInterval;
-        intervalId = setInterval(onInterval, refreshInterval);
+        dueAt = Date.now() + intervalMs;
+        intervalId = setInterval(onInterval, intervalMs);
         entry.intervalId = intervalId;
       };
       const onInterval = () => {
         if (!canPoll()) return;
-        dueAt = Date.now() + refreshInterval;
+        dueAt = Date.now() + intervalMs;
         void this._runPeriodicUpdate(layerId, entry);
       };
       const onVisibilityChange = () => {
@@ -1151,8 +1142,8 @@ export class LayerLifecycle {
       }
 
       // Manager-owned periodic refresh work has one normalized loading/error
-      // contract. Camera-driven layers may keep updateInterval=0 and opt into
-      // a slower data fetch with refreshInterval.
+      // contract. Camera-driven layers keep updateInterval=0; a layer that
+      // also polls sets updateInterval.
       this._armUpdateLoop(layerId, entry);
       signal?.removeEventListener('abort', cancelEnable);
     }
@@ -2029,12 +2020,11 @@ export class LayerLifecycle {
     { origin = 'programmatic', reason = 'cancelled' } = {},
   ) {
     const entry = this.layers.get(layerId);
-    const cancel =
-      entry?.module?.cancelPendingRestore ||
-      entry?.module?.cancelPendingTrackingRestore;
-    if (typeof cancel !== 'function') return false;
+    const module = entry?.module;
+    if (typeof module?.cancelPendingTrackingRestore !== 'function')
+      return false;
     try {
-      cancel.call(entry.module, { origin, reason });
+      module.cancelPendingTrackingRestore({ origin, reason });
       return true;
     } catch (error) {
       console.warn(

@@ -22,7 +22,7 @@ import {
   thumbnailOrder,
   utcDay,
   validateBox,
-  viewTooLargeMessage,
+  sizeRefusal,
   viirsCandidates,
   wvsSnapshotUrl,
 } from './model.js';
@@ -105,7 +105,7 @@ test('validateBox refuses polar, degenerate, invalid and oversized boxes, and ac
   );
   assert.equal(validateBox({ west: 0, south: 0, east: 8, north: 8 }).ok, true);
   assert.equal(
-    viewTooLargeMessage(2400),
+    sizeRefusal('View', 2400),
     'View is 2,400 km wide · limit 1,000 km',
   );
   // Latitudes are ordered; longitudes are never swapped.
@@ -547,4 +547,32 @@ test('boxFromPin returns the short-arc box for a pin near the dateline', () => {
   const high = boxFromPin(-179.99, 60);
   spanOk(high);
   assert.ok(high.west > high.east);
+});
+
+test('missing imagery edges do not turn into invented zero coordinates', () => {
+  for (const value of [null, undefined, '', ' ', false, true]) {
+    const box = { west: value, south: 0, east: 1, north: 1 };
+    assert.equal(validateBox(box).ok, false);
+    assert.equal(validateBox(box).reason, 'invalid');
+    assert.equal(boxCentre(box), null);
+  }
+  assert.equal(validateBox({ west: 0, south: 0, east: 1, north: 1 }).ok, true);
+  assert.equal(
+    validateBox({ west: '0', south: '0', east: '1', north: '1' }).ok,
+    true,
+  );
+});
+
+test('every edge and every box entry point refuses a missing edge', async () => {
+  const blanks = [null, undefined, '', ' ', false, [], {}];
+  for (const edge of ['west', 'south', 'east', 'north']) {
+    for (const value of blanks) {
+      const box = { west: 1, south: 1, east: 2, north: 2, [edge]: value };
+      assert.equal(validateBox(box).ok, false, `${edge}=${String(value)}`);
+      // Share-link integers and Cesium radians are converted per edge.
+      assert.equal(dequantizeBox(box), null, `share ${edge}`);
+      assert.equal(boxFromRectangle(box), null, `radians ${edge}`);
+    }
+  }
+  assert.ok(dequantizeBox({ west: 0, south: 0, east: 100000, north: 100000 }));
 });

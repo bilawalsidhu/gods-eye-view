@@ -4,9 +4,9 @@ import assert from 'node:assert/strict';
 import {
   CCTV_WORLD_CLICK_FOCUS_DURATION_SEC,
   CCTV_FOCUS_REQUEST_EVENT,
-  registerCctvFocusRequestListener,
   routeCctvFocusRequest,
 } from './cctvFocusRequest.js';
+import { registerFocusRequestListener } from './worldFocus.js';
 
 test('UI CCTV request route uses the explicit focus policy with the clicked id', () => {
   const calls = [];
@@ -46,7 +46,11 @@ test('UI CCTV focus listener registration disposes the exact added callback once
   };
   const listener = () => {};
 
-  const dispose = registerCctvFocusRequestListener(target, listener);
+  const dispose = registerFocusRequestListener(
+    target,
+    CCTV_FOCUS_REQUEST_EVENT,
+    listener,
+  );
   dispose();
   dispose();
 
@@ -60,7 +64,7 @@ test('UI CCTV focus listener registration disposes the exact added callback once
   const uiSource = readShellSource();
   assert.match(
     uiSource,
-    /_removeCctvRequestFocusListener = registerCctvFocusRequestListener\([\s\S]+this\._cctvRequestFocusHandler/,
+    /_removeCctvRequestFocusListener = registerFocusRequestListener\(\s*window,\s*CCTV_FOCUS_REQUEST_EVENT,[\s\S]+this\._cctvRequestFocusHandler/,
   );
   assert.match(uiSource, /this\._removeCctvRequestFocusListener\?\.\(\)/);
 });

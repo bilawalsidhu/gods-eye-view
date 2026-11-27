@@ -12,6 +12,7 @@ export function createLifecycle({
   source,
 }) {
   const { registerPickOwner, unregisterPickOwner } = services.picking;
+  const { setOverlaySourceVisible } = services.overlays;
 
   /** Stop listening to the camera, if the layer is. */
   function detachCamera() {
@@ -34,10 +35,10 @@ export function createLifecycle({
 
     /**
      * Initialize the bikeshare layer. Makes the station draw sets on the
-     * viewer's renderer (`drawOf`), resets all internal state, and installs
-     * the click handler. Called once during app bootstrap. Given a Cesium
-     * viewer with no renderer bound, the caller loads
-     * the package's `./render/cesium/unbound` export first.
+     * viewer's renderer (`drawOf`) and installs the click handler. Called
+     * once during app bootstrap. Given a Cesium viewer with no renderer
+     * bound, the caller loads the package's `./render/cesium/unbound` export
+     * first.
      * @param {object} viewer - The viewer the layer draws on.
      */
     init(viewer, { panel = null } = {}) {
@@ -45,32 +46,7 @@ export function createLifecycle({
       layerState._viewer = viewer;
       layerState._panel = panel;
 
-      layerState._enabled = false;
-      layerState._cameraDebounceTimer = null;
-      detachCamera();
-      layerState._altitudeGateEnabled = false;
-      layerState._proximityGeneration = 0;
-
-      layerState._activeCityIds = new Set();
-      layerState._cityRuntime = new Map();
-      layerState._stationInfoCache = new Map();
-      layerState._statusCache = new Map();
-      layerState._inFlightInfo = new Map();
-      layerState._inFlightStatus = new Map();
-      layerState._stationRenderMap = new Map();
-      layerState._clickSubscription = null;
-      layerState._selectedKey = null;
-      layerState._count = 0;
-      layerState._lastUpdate = null;
-      layerState._loading = false;
-      layerState._loadingOps = 0;
-      layerState._failedCityIds.clear();
-      layerState._limitWarned = false;
-
-      layerState._overlayHost.setVisible(
-        BIKESHARE_SELECTED_OVERLAY_SOURCE_ID,
-        false,
-      );
+      setOverlaySourceVisible(BIKESHARE_SELECTED_OVERLAY_SOURCE_ID, false);
 
       parts.selection._installClickHandler(viewer);
 
@@ -88,10 +64,7 @@ export function createLifecycle({
       layerState._enabled = true;
       layerState._failedCityIds.clear();
       layerState._stationSet.show = true;
-      layerState._overlayHost.setVisible(
-        BIKESHARE_SELECTED_OVERLAY_SOURCE_ID,
-        true,
-      );
+      setOverlaySourceVisible(BIKESHARE_SELECTED_OVERLAY_SOURCE_ID, true);
       parts.selection._installClickHandler(viewer);
       // Pick ownership: station point ids are string render-map keys.
       registerPickOwner(
@@ -124,10 +97,7 @@ export function createLifecycle({
       clearTimeout(layerState._cameraDebounceTimer);
       layerState._cameraDebounceTimer = null;
       parts.selection._clearSelection();
-      layerState._overlayHost.setVisible(
-        BIKESHARE_SELECTED_OVERLAY_SOURCE_ID,
-        false,
-      );
+      setOverlaySourceVisible(BIKESHARE_SELECTED_OVERLAY_SOURCE_ID, false);
 
       layerState._clickSubscription?.();
       layerState._clickSubscription = null;
@@ -151,10 +121,7 @@ export function createLifecycle({
       if (layerState._enabled) this.disable();
       else {
         parts.selection._clearSelection();
-        layerState._overlayHost.setVisible(
-          BIKESHARE_SELECTED_OVERLAY_SOURCE_ID,
-          false,
-        );
+        setOverlaySourceVisible(BIKESHARE_SELECTED_OVERLAY_SOURCE_ID, false);
         layerState._clickSubscription?.();
         layerState._clickSubscription = null;
         document.removeEventListener('keydown', parts.selection._onKeyDown);

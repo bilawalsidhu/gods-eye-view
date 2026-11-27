@@ -3,14 +3,14 @@ import {
   RAIL_CATEGORIES,
   getRegisteredRailFeed,
 } from '../../data/railFeeds.js';
-import { aggregateTransitFeedHealth } from '../transit/policy.js';
 import {
   ACTIVATION_ENTER_ALTITUDE_M,
   FEED_STALE_AFTER_MS,
   RAIL_CATEGORY_COLORS,
   RAIL_CATEGORY_LABELS,
+  aggregateTransitFeedHealth,
   normalizeRailCategories,
-  trainReportTimeMs,
+  vehicleReportTimeMs,
 } from './policy.js';
 
 /**
@@ -175,7 +175,7 @@ export function createControls({ state, parts, timetable }) {
           operator: feed?.name || null,
           region: feed?.region || null,
           positionSource: word(record.positionSource),
-          observedMs: trainReportTimeMs(record, entry.fetchedAt),
+          observedMs: vehicleReportTimeMs(record, entry.fetchedAt),
         });
       }
       return result;
