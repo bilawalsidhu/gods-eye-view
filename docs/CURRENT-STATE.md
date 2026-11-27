@@ -6428,6 +6428,20 @@ Shipped locales: **en** (source and fallback), **ar**, **de**, **es**, **fr**, *
   `data-i18n-title` / `-aria-label` / `-placeholder` (that attribute's English
   value). English has no catalog; every other locale is
   `src/i18n/locales/<code>.json`, and a missing entry falls back to English.
+- **Catalogs load on demand.** Each catalog is a chunk of its own: the page
+  loads the one for the language it starts in before the first view renders
+  (`startPageLocale`), and another when the user picks it. `setLocale` and
+  `switchLocale` apply a language once its catalog is loaded; when choices
+  follow one another faster than catalogs load, the last one wins (an
+  earlier switch resolves `'superseded'`, whatever the later one does), and
+  a catalog that fails to load keeps the current language. A startup
+  catalog that fails or takes over 4 s starts the page in English; until
+  the language applies, `<html data-locale-pending>` hides the loading
+  screen's status text. The build fails if
+  a catalog is in a chunk the page loads at startup, or shares a chunk
+  (`build/localeChunks.js`). `npm test` loads every catalog first
+  (`src/testSupport/loadCatalogs.mjs`), so a test's `setLocale` applies at
+  once.
 - **Locale choice.** `?lang=` → stored choice (`gev:locale:v1`) →
   `navigator.languages` → English. Any `pt` tag (`pt-BR`, `pt-PT`) selects `pt`. Chinese tags default to `zh-CN`; Traditional Chinese tags
   select `zh-Hant`. Explicit `Hans` selects `zh-CN` regardless of region. `?lang=` is not stored, and share links drop
@@ -6437,9 +6451,11 @@ Shipped locales: **en** (source and fallback), **ar**, **de**, **es**, **fr**, *
   `?lang=` (keeps it only when storage is blocked) and switches in place:
   views re-render, code that published translated text words it again through
   `onLocaleChange`, and `<html lang>`/`dir` and the page's `data-i18n` markup
-  follow. Nothing is lost; a toast already on screen keeps its words.
+  follow, once the new language's catalog has loaded; until then the page
+  stays in its current language. Nothing is lost; a toast already on screen
+  keeps its words.
   An application that offers the language elsewhere (a menu) uses the
-  `./i18n` entry (`src/i18n/page.js`): `startPageLocale` at boot,
+  `./i18n` entry (`src/i18n/page.js`): `await startPageLocale` at boot,
   `followPageLocale` for the markup and `switchLocale`, which does what a
   picker choice does, with `localePicker: false`.
 - **Right to left.** Arabic (`ar`) and Hebrew (`he`) are in `RTL_LOCALES`, so

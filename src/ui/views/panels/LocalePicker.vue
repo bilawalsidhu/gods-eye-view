@@ -94,10 +94,11 @@ function close({ restoreFocus = false } = {}) {
   if (restoreFocus) button.value?.$el.focus({ preventScroll: true });
 }
 
-// The list is closed on screen before the shell switches.
+// The list is closed on screen before the shell switches. Choosing the shown
+// language goes to the shell too: it changes nothing, unless another
+// language is still loading, which it cancels.
 async function choose(code) {
   close({ restoreFocus: true });
-  if (code === props.current) return;
   await nextTick();
   props.onSelect(code);
 }
