@@ -1,5 +1,6 @@
 import {
   FLOOR_REREAD_ATTEMPTS,
+  FLOOR_REREAD_MAX_ATTEMPTS,
   FLOOR_REREAD_MS,
   FLOOR_WARM_PER_POLL,
   TRANSIT_POLL_MS,
@@ -14,6 +15,9 @@ import {
   withinViewBounds,
 } from './policy.js';
 import { heightsOf } from '../../queries/heights.js';
+import { readFix } from '../../data/contactPlayback.js';
+
+const POSE_KEYS = ['lon', 'lat', 'height', 'heading', 'pitch', 'roll'];
 
 /** Surface preparation off the render path, shared by markers and history. */
 export function createHeight({ state, services, parts }) {
@@ -36,128 +40,121 @@ export function createHeight({ state, services, parts }) {
     return parts.rendering.cameraHeightM() <= HEIGHT_SAMPLE_MAX_ALTITUDE_M;
   }
 
-  // --- Loaded-terrain heights ---
-  // A terrain height casts a ray against the mesh of the tile drawn under the
-  // point. The fleet asks for every fix of every trail on each reread, so the
-  // answers are kept per point and re-read on a time budget; see policy.js.
   const terrainPoint = { lon: 0, lat: 0 };
   const AGAINST_TERRAIN = Object.freeze({ against: 'terrain' });
   /** Point key → `{ h, at }`: the height read there and when. */
   const terrainHeights = new Map();
-  /** Floor-cell key → the last height read anywhere in that cell. */
+  /** Floor cell → the last height read anywhere in that cell. */
   const terrainCells = new Map();
   let terrainWindowAt = -Infinity;
   let terrainReadMs = 0;
+  let terrainMarkerMs = 0;
   let terrainRefreshMs = 0;
   // Per need (history, path): the oldest read among the points this window
-  // left for later, and the bound the next window re-reads up to.
+  // left for later; the next window re-reads only points read within the
+  // reuse time of it.
   const terrainDeferredAt = [Infinity, Infinity];
   const terrainRefreshUpTo = [Infinity, Infinity];
-  /** Points a pass left unread or due a re-read; see rereadFloors. */
+  /** Drawn points a pass left unread or due a re-read; see rereadFloors. */
   let terrainWaiting = 0;
+  let passing = false;
+  /** Whether the last terrainHeight call left its point for a later window. */
+  let terrainDeferred = false;
   /** When the camera last moved or the globe was last loading tiles. */
   let terrainChangedAt = -Infinity;
-  let cameraLon = NaN,
-    cameraLat = NaN,
-    cameraHeight = NaN;
-  const terrainStats = { reads: 0, reused: 0, deferred: 0, borrowed: 0 };
+  const cameraSeen = {};
   /** The globe's `surfaceVersion` the kept heights were read from. */
   let terrainSurfaceRead = null;
 
-  /** A number unique to a point on a `scale`-per-degree grid. */
-  function gridKey(lat, lon, scale) {
+  /** A number unique to a point on a 1e-5° grid. */
+  function gridKey(lat, lon) {
     return (
-      (Math.round(lat * scale) + 90 * scale) * (360 * scale + 1) +
-      Math.round(lon * scale) +
-      180 * scale
+      (Math.round(lat * 1e5) + 9e6) * 36000001 + Math.round(lon * 1e5) + 18e6
     );
+  }
+
+  function dropOldestQuarter(map) {
+    let drop = TERRAIN_HEIGHT_CACHE_MAX >> 2;
+    for (const old of map.keys()) {
+      map.delete(old);
+      if (--drop <= 0) break;
+    }
   }
 
   function clearTerrainHeights() {
     terrainHeights.clear();
     terrainCells.clear();
     terrainWindowAt = -Infinity;
-    terrainReadMs = terrainRefreshMs = 0;
     terrainDeferredAt.fill(Infinity);
-    terrainRefreshUpTo.fill(Infinity);
-    terrainWaiting = 0;
-    terrainChangedAt = -Infinity;
-    cameraLon = cameraLat = cameraHeight = NaN;
+    for (const key of POSE_KEYS) cameraSeen[key] = NaN;
+  }
+
+  /** A drawn point waits for a read: a pass comes back for it. */
+  function wait(need) {
+    if (need === TERRAIN_NEED.HISTORY) return;
+    terrainWaiting++;
+    if (
+      !passing &&
+      !state._floorTimer &&
+      state._floorAttempts <= FLOOR_REREAD_MAX_ATTEMPTS
+    )
+      state._floorTimer = setTimeout(rereadFloors, FLOOR_REREAD_MS);
   }
 
   /**
    * The loaded terrain's height at a point, or undefined when it is not
-   * known yet. A point read within the reuse time answers from memory, and
-   * so does one read after the camera and the globe's tiles had settled: the
-   * surface under it cannot have changed since. Past
-   * the window's budget a held point keeps its last height and a new point
-   * borrows its floor cell's. `need` (TERRAIN_NEED) ranks the request: a
-   * vehicle's own position is read regardless, since a marker without a
-   * height is not drawn; the path a marker is drawn along comes next; a trail
-   * nobody is looking at takes what is left. Requests come in the same order
-   * every pass, so re-reads go to the longest-held points first: otherwise
-   * the first few would be re-read forever and the rest never.
+   * known yet; reuse and budgets are in policy.js. Requests come in the same
+   * order every pass, so a window re-reads only points read within the reuse
+   * time of the longest-waiting one: otherwise the first few would be re-read
+   * forever and the rest never.
    */
-  function terrainHeight(lat, lon, need) {
+  function terrainHeight(lat, lon, cell, need) {
+    terrainDeferred = false;
     const now = performance.now();
     if (now - terrainWindowAt >= TERRAIN_READ_WINDOW_MS) {
       for (let i = 0; i < terrainDeferredAt.length; i++) {
-        terrainRefreshUpTo[i] = terrainDeferredAt[i];
+        terrainRefreshUpTo[i] = terrainDeferredAt[i] + TERRAIN_HEIGHT_FRESH_MS;
         terrainDeferredAt[i] = Infinity;
       }
       terrainWindowAt = now;
-      terrainReadMs = terrainRefreshMs = 0;
-      // The globe redraws a point from another tile only after the camera
-      // moves or a tile arrives.
+      terrainReadMs = terrainMarkerMs = terrainRefreshMs = 0;
       const camera = parts.rendering.cameraPose();
       if (
         !parts.rendering.terrainSettled() ||
-        camera?.lon !== cameraLon ||
-        camera?.lat !== cameraLat ||
-        camera?.height !== cameraHeight
+        POSE_KEYS.some((key) => camera?.[key] !== cameraSeen[key])
       ) {
         terrainChangedAt = now;
-        cameraLon = camera?.lon;
-        cameraLat = camera?.lat;
-        cameraHeight = camera?.height;
+        for (const key of POSE_KEYS) cameraSeen[key] = camera?.[key];
       }
     }
-    const key = gridKey(lat, lon, 1e5);
+    const key = gridKey(lat, lon);
     const held = terrainHeights.get(key);
     if (
       held &&
       (now - held.at < TERRAIN_HEIGHT_FRESH_MS ||
         held.at >= terrainChangedAt + TERRAIN_SETTLE_MS)
-    ) {
-      terrainStats.reused++;
+    )
       return held.h;
-    }
-    const cellKey = gridKey(lat, lon, 1e3);
     const marker = need === TERRAIN_NEED.MARKER;
-    // History may use a quarter of each budget; the path the rest.
     const share = need === TERRAIN_NEED.HISTORY ? 0.25 : 1;
-    const affordable =
-      marker && !held
-        ? true
-        : terrainReadMs < TERRAIN_READ_BUDGET_MS * (marker ? 1 : share) &&
-          (!held ||
-            marker ||
-            (terrainRefreshMs < TERRAIN_REFRESH_BUDGET_MS * share &&
-              held.at <= terrainRefreshUpTo[need]));
+    const trailSpent =
+      terrainReadMs - Math.max(0, terrainMarkerMs - TERRAIN_READ_BUDGET_MS / 2);
+    const affordable = marker
+      ? !held || terrainReadMs < TERRAIN_READ_BUDGET_MS
+      : trailSpent < TERRAIN_READ_BUDGET_MS * share &&
+        (!held ||
+          (terrainRefreshMs < TERRAIN_REFRESH_BUDGET_MS * share &&
+            held.at <= terrainRefreshUpTo[need]));
     if (!affordable) {
-      terrainStats.deferred++;
+      wait(need);
       if (held) {
         if (!marker && held.at < terrainDeferredAt[need])
           terrainDeferredAt[need] = held.at;
-        terrainWaiting++;
         return held.h;
       }
-      const borrowed = terrainCells.get(cellKey);
-      if (borrowed !== undefined) {
-        terrainStats.borrowed++;
-        return borrowed;
-      }
-      terrainWaiting++;
+      const borrowed = terrainCells.get(cell);
+      if (borrowed !== undefined) return borrowed;
+      terrainDeferred = true;
       return undefined;
     }
     terrainPoint.lon = lon;
@@ -168,25 +165,21 @@ export function createHeight({ state, services, parts }) {
     );
     const spent = performance.now() - now;
     terrainReadMs += spent;
+    if (marker) terrainMarkerMs += spent;
     if (held) terrainRefreshMs += spent;
-    terrainStats.reads++;
     // A tile that left the globe keeps the height it gave.
     if (rendered === null) return held?.h;
     if (held) {
       held.h = rendered;
       held.at = now;
     } else {
-      if (terrainHeights.size >= TERRAIN_HEIGHT_CACHE_MAX) {
-        let drop = TERRAIN_HEIGHT_CACHE_MAX >> 2;
-        for (const old of terrainHeights.keys()) {
-          terrainHeights.delete(old);
-          if (--drop <= 0) break;
-        }
-        terrainCells.clear();
-      }
+      if (terrainHeights.size >= TERRAIN_HEIGHT_CACHE_MAX)
+        dropOldestQuarter(terrainHeights);
       terrainHeights.set(key, { h: rendered, at: now });
     }
-    terrainCells.set(cellKey, rendered);
+    if (terrainCells.size >= TERRAIN_HEIGHT_CACHE_MAX)
+      dropOldestQuarter(terrainCells);
+    terrainCells.set(cell, rendered);
     return rendered;
   }
 
@@ -196,7 +189,7 @@ export function createHeight({ state, services, parts }) {
    * @param {number} lon
    * @param {?object} [entry] The vehicle, for a fixture floor.
    * @param {number} [need] How much the answer matters; see TERRAIN_NEED.
-   * @returns {{cell: string, height: number|null, prior: number|null}}
+   * @returns {{cell: string, height: number|null, prior: number|null, deferred?: true}}
    */
   function requestHeight(lat, lon, entry = null, need = TERRAIN_NEED.PATH) {
     const coarse = coarseFloorCoord(lat, lon);
@@ -205,23 +198,26 @@ export function createHeight({ state, services, parts }) {
       entry?.qaFloorM ?? state._qaFixtureFloors?.get(entry?.key);
     if (Number.isFinite(fixtureFloor))
       return { cell, height: fixtureFloor, prior: null };
+    let deferred = false;
     // On a terrain globe, use the loaded surface under the marker. This reads
     // tiles already loaded and does not launch a terrain request.
     const globe = parts.rendering.globeSurface();
+    // A height belongs to the surface it was read from; the version moves
+    // with the terrain provider, the globe shown or hidden, and the 3D tilesets
+    // shown. Read on every request, hidden or flat included, so no change
+    // between two reads is missed.
+    const surface = parts.rendering.surfaceVersion();
+    if (surface !== terrainSurfaceRead) {
+      clearTerrainHeights();
+      terrainSurfaceRead = surface;
+    }
     if (globe !== 'none') {
-      // A height belongs to the surface it was read from; the version moves
-      // on every terrain swap and globe show or hide. Checked before the
-      // flat-globe answer, so terrain → flat → terrain starts afresh too.
-      const surface = parts.rendering.surfaceVersion();
-      if (surface !== terrainSurfaceRead) {
-        clearTerrainHeights();
-        terrainSurfaceRead = surface;
-      }
       if (globe === 'flat')
         return { cell, height: GROUND_FLOOR_LIFT_M, prior: null };
-      const rendered = terrainHeight(lat, lon, need);
+      const rendered = terrainHeight(lat, lon, cell, need);
       if (Number.isFinite(rendered))
         return { cell, height: rendered + GROUND_FLOOR_LIFT_M, prior: null };
+      deferred = terrainDeferred;
     }
     const floor = cachedGroundFloor(lat, lon);
     if (Number.isFinite(floor)) {
@@ -233,7 +229,7 @@ export function createHeight({ state, services, parts }) {
       return { cell, height: null, prior: 0 };
     }
     const neighbour = neighborFloorM(coarse);
-    return {
+    const answer = {
       cell,
       height: null,
       // A neighbouring floor is a coarse prior, never a clearance guarantee.
@@ -241,11 +237,15 @@ export function createHeight({ state, services, parts }) {
         ? neighbour + GROUND_FLOOR_LIFT_M
         : null,
     };
+    // Left for a later window, not missed: nothing to warm.
+    if (deferred) answer.deferred = true;
+    return answer;
   }
 
   /** A vehicle no longer rendered needs nothing released: cells are shared. */
   function releaseVehicle() {}
 
+  const newestFix = {};
   let cellCursors = new WeakMap();
   let budgetAt = -Infinity;
   let demUsed = new Set(),
@@ -253,6 +253,7 @@ export function createHeight({ state, services, parts }) {
   function rereadFloors() {
     state._floorTimer = null;
     if (!state._enabled) return;
+    passing = true;
     terrainWaiting = 0;
     const onGround = nearGround(),
       candidates = [];
@@ -269,12 +270,21 @@ export function createHeight({ state, services, parts }) {
     );
     // Every vehicle's own position before any trail: the first trails of a
     // pass must not spend the budget the last markers are waiting on.
-    for (const entry of entries) {
-      const newest = entry.fixes.at(-1);
-      if (newest)
-        requestHeight(newest.lat, newest.lon, entry, TERRAIN_NEED.MARKER);
-    }
-    for (const entry of entries) {
+    const markers = entries.map((entry) => {
+      const fix = entry.track?.count
+        ? readFix(entry.track, entry.track.count - 1, newestFix)
+        : null;
+      return (
+        fix && {
+          lat: fix.lat,
+          lon: fix.lon,
+          answer: requestHeight(fix.lat, fix.lon, entry, TERRAIN_NEED.MARKER),
+        }
+      );
+    });
+    for (const [i, entry] of entries.entries()) {
+      const newest = markers[i];
+      if (!newest) continue;
       const cells = new Map();
       const collect = (point, answer) => {
         if (!onGround) return;
@@ -285,7 +295,7 @@ export function createHeight({ state, services, parts }) {
         if (held) {
           held.lat = point.lat;
           held.lon = point.lon;
-        } else
+        } else if (!answer.deferred)
           cells.set(answer.cell, {
             lat: point.lat,
             lon: point.lon,
@@ -294,13 +304,7 @@ export function createHeight({ state, services, parts }) {
           });
       };
       parts.trails.prepareEntry(entry, collect);
-      const newest = entry.fixes.at(-1);
-      const answer = requestHeight(
-        newest.lat,
-        newest.lon,
-        entry,
-        TERRAIN_NEED.MARKER,
-      );
+      const { answer } = newest;
       entry.heightCell = answer.cell;
       // The selected vehicle's path also offers its history, newest segment
       // first; the vehicle's own cell is read where its newest fix is.
@@ -381,12 +385,15 @@ export function createHeight({ state, services, parts }) {
     for (const entry of entries) parts.trails.prepareEntry(entry);
     parts.rendering.requestVisibility();
     governorRequestRender('transit-floor');
-    // A pass that ran out of terrain budget before reaching every point
-    // comes back for the rest. Each pass reads its budget, and points stop
-    // falling due once the terrain settles, so this ends.
-    const waiting = terrainWaiting;
-    terrainWaiting = 0;
-    if (state._floorAttempts++ < FLOOR_REREAD_ATTEMPTS || waiting > 0)
+    passing = false;
+    // A pass that left a drawn point waiting for a terrain read comes back
+    // for it, up to FLOOR_REREAD_MAX_ATTEMPTS: a camera that never stops
+    // keeps points falling due.
+    const attempt = state._floorAttempts++;
+    if (
+      attempt < FLOOR_REREAD_ATTEMPTS ||
+      (terrainWaiting > 0 && attempt < FLOOR_REREAD_MAX_ATTEMPTS)
+    )
       state._floorTimer = setTimeout(rereadFloors, FLOOR_REREAD_MS);
   }
 
@@ -427,7 +434,5 @@ export function createHeight({ state, services, parts }) {
     anchorFloors,
     rereadFloors,
     clear,
-    /** Terrain read counters since the layer was created, for checks. */
-    terrainStats: () => ({ ...terrainStats, held: terrainHeights.size }),
   };
 }

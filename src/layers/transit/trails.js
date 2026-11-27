@@ -65,7 +65,7 @@ export function createTrails({ state, services, parts, source }) {
       b = {};
     let vertices = 0,
       signature = '';
-    const floor = (point, need = TERRAIN_NEED.PATH) => {
+    const floor = (point, need) => {
       const answer = parts.height.requestHeight(
         point.lat,
         point.lon,

@@ -75,12 +75,19 @@ export const HEIGHT_SAMPLE_MAX_ALTITUDE_M = 60_000;
 export const FLOOR_WARM_PER_POLL = 300;
 /** How soon after a warm the layer looks again to see which cells landed. */
 export const FLOOR_REREAD_MS = 900;
-/** Re-reads before a poll's cycle gives up and waits for the next poll. */
+/** Re-reads every poll's cycle makes. */
 export const FLOOR_REREAD_ATTEMPTS = 6;
 /**
+ * Re-reads a cycle may go on to while a drawn point (a marker, or the path
+ * it is drawn along) still waits for a terrain read; undrawn history never
+ * extends it. Under a poll's worth, so a camera that never stops leaves the
+ * cycle idle before the next poll.
+ */
+export const FLOOR_REREAD_MAX_ATTEMPTS = 12;
+/**
  * Terrain heights read from the globe's loaded surface are kept per point
- * (1e-5°, about a metre): one read is a ray cast against the mesh of the tile
- * drawn there, not a table lookup, and a fleet asks for every trail fix on
+ * (1e-5°, about a metre): one read is a ray cast against the finest terrain mesh
+ * loaded there, not a table lookup, and a fleet asks for every trail fix on
  * every reread. While the camera moves or tiles load, a kept height is reused
  * this long before the point is read again.
  */
@@ -96,7 +103,8 @@ export const TERRAIN_READ_WINDOW_MS = 200;
 /**
  * Milliseconds of terrain reads in one window. Past it a point never read
  * takes the last height read in its ~111 m floor cell, or waits for a later
- * pass; a vehicle's own position is read regardless.
+ * pass. A vehicle's position with no kept height is read regardless, and
+ * marker reads take at most half of the budget from trail points.
  */
 export const TERRAIN_READ_BUDGET_MS = 16;
 /**
@@ -109,10 +117,10 @@ export const TERRAIN_REFRESH_BUDGET_MS = 12;
  * a past fix of a vehicle that is not selected (its trail is not drawn) and
  * may use a quarter of each budget; PATH is the stretch a marker is drawn
  * along, or any fix of the selected vehicle; MARKER is a vehicle's own
- * position, read even when the window's budget is spent.
+ * position, read even past the window's budget while it has no kept height.
  */
 export const TERRAIN_NEED = Object.freeze({ HISTORY: 0, PATH: 1, MARKER: 2 });
-/** Points kept; the oldest quarter is dropped past it. */
+/** Points kept, and floor cells; the oldest quarter of either is dropped past it. */
 export const TERRAIN_HEIGHT_CACHE_MAX = 60_000;
 
 // --- Rendering ---
