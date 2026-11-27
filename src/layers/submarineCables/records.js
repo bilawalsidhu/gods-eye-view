@@ -122,6 +122,70 @@ export function cableRepresentativePoint(feature) {
   return best || reference;
 }
 
+/**
+ * Fields a feature's facts never set: the record's own, those that identify
+ * an item elsewhere (data/entityContext.js KEY_FIELDS), and those a record's
+ * readers act on rather than list (source line, title, warnings, framing,
+ * age).
+ * Fields ending in `AtMs` (a moment's age) are left out too.
+ */
+const RESERVED_FACTS = new Set([
+  'id',
+  'name',
+  'feature',
+  'lat',
+  'lon',
+  'parts',
+  'planned',
+  'icao24',
+  'mmsi',
+  'noradId',
+  'usgsId',
+  'key',
+  'source',
+  // What readers act on, not list: title, warnings, framing and age.
+  'label',
+  'title',
+  'emergency',
+  'tsunami',
+  'warning',
+  'alert',
+  'advisory',
+  'obscured',
+  'altitudeM',
+  'pinHeightM',
+  'timeMs',
+  'observedMs',
+]);
+
+/**
+ * What a feature's data says of it beyond what the layer draws: the plain
+ * words, numbers and yes/no values of its `facts` property (`{owners:
+ * 'A, B', lengthKm: 6605, description: '…', wikipedia: 'en:MAREA'}`), kept
+ * on the item's record. Other properties are the layer's to draw by, never
+ * facts.
+ */
+function featureFacts(feature) {
+  const out = {};
+  const facts = feature?.properties?.facts;
+  if (!facts || typeof facts !== 'object' || Array.isArray(facts)) return out;
+  for (const [field, value] of Object.entries(facts)) {
+    if (
+      RESERVED_FACTS.has(field) ||
+      field.startsWith('__') ||
+      field.endsWith('AtMs')
+    )
+      continue;
+    if (
+      (typeof value === 'string' && value.trim()) ||
+      (typeof value === 'number' && Number.isFinite(value)) ||
+      typeof value === 'boolean'
+    )
+      out[field] = value;
+  }
+  return out;
+}
+
 /** Records built from one pair of fetched collections, kept with them. */
 const built = new WeakMap();
 
@@ -133,7 +197,9 @@ const built = new WeakMap();
  * lines it is drawn as: `parts` lists points along every line of every
  * feature (cableLinePoints), so Nearby and In View find it by its nearest
  * stretch. Ids are prefixed by what they are, since a cable and a landing
- * can share TeleGeography's id. Built once per fetched dataset, then
+ * can share TeleGeography's id. A record also carries its (first)
+ * feature's `facts` (featureFacts). Built once
+ * per fetched dataset, then
  * reused; `parts` and its points are frozen and shared between calls.
  * @param {object} state The cable layer's state.
  * @param {number} [maxCount]
@@ -164,6 +230,7 @@ export function cableAnalystRecords(state, maxCount = Infinity) {
         continue;
       }
       const record = {
+        ...featureFacts(feature),
         id: `cable:${cable}`,
         name: featureLabel(feature) || null,
         feature: 'cable',
@@ -186,6 +253,7 @@ export function cableAnalystRecords(state, maxCount = Infinity) {
       if (!at || landingIds.has(feature.id)) continue;
       landingIds.add(feature.id);
       records.list.push({
+        ...featureFacts(feature),
         id: `landing:${feature.id}`,
         name: featureLabel(feature) || null,
         feature: 'landing point',

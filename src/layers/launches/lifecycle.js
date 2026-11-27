@@ -223,8 +223,9 @@ export function createLifecycle({
   let uncover = worldClock.register(clockSource);
 
   const methods = {
-    init(viewer) {
+    init(viewer, { panel = null } = {}) {
       layerState._viewer = viewer;
+      parts.controls?.watchRowControls?.(panel);
       uncover ??= worldClock.register(clockSource);
       layerState._enabled = false;
       parts.panel.createMissionPanel();
@@ -383,6 +384,7 @@ export function createLifecycle({
     },
 
     async destroy(viewer) {
+      parts.controls?.watchRowControls?.(null);
       hover?.destroy();
       uncover?.();
       uncover = null;

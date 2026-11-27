@@ -90,8 +90,8 @@ test('candidate text follows in-place enrichment without freezing identity or po
   assert.equal(first.sourceId, 'abc123');
   f.place(new Cesium.Cartesian3(4, 5, 6));
   assert.equal(f.queries.getDetectableObjects()[0], first);
-  assert.deepEqual(first.position, f.drawn());
-  assert.deepEqual(first.position, { x: 4, y: 5, z: 6 });
+  assert.deepEqual({ ...first.position }, f.drawn());
+  assert.deepEqual({ ...first.position }, { x: 4, y: 5, z: 6 });
   assert.equal(f.formats(), 1);
   f.info.callsign = ' NEW456 ';
   assert.equal(f.queries.getDetectableObjects()[0].id, 'NEW456');
@@ -140,14 +140,14 @@ test('candidate collection resolves models once and keeps handoffs live', (t) =>
   assert.deepEqual(f.queries.getDetectableObjects(), []);
   record.ready = true;
   assert.equal(f.queries.getDetectableObjects()[0], candidate);
-  assert.deepEqual(candidate.position, { x: 10, y: 20, z: 30 });
+  assert.deepEqual({ ...candidate.position }, { x: 10, y: 20, z: 30 });
   placeAt(record, new Cesium.Cartesian3(40, 50, 60));
   f.queries.getDetectableObjects();
-  assert.deepEqual(candidate.position, { x: 40, y: 50, z: 60 });
+  assert.deepEqual({ ...candidate.position }, { x: 40, y: 50, z: 60 });
   showModel(record, false);
   assert.deepEqual(f.queries.getDetectableObjects(), []);
   f.show(true);
-  assert.deepEqual(f.queries.getDetectableObjects()[0].position, f.drawn());
+  assert.deepEqual({ ...f.queries.getDetectableObjects()[0].position }, f.drawn());
   assert.equal(get.mock.callCount(), 6);
   showModel(record, true);
   assert.equal(f.parts.rendering._modelOwnsVisual('abc123'), true);
@@ -184,4 +184,40 @@ test('tracked ownership and live anchors remain independent of fleet models', ()
   f.flightState._trackedModel = modelRecord({ ready: true, show: true });
   f.parts.tracking._trackedModelRegimeActive = () => false;
   assert.equal(f.parts.rendering._modelOwnsVisual('abc123', null), false);
+});
+
+test('repeated collection with nothing moved hands back the same array, objects and vectors', () => {
+  const f = fixture();
+  const first = f.queries.getDetectableObjects();
+  const [candidate] = first;
+  const position = candidate.position;
+  for (let i = 0; i < 5; i++) {
+    const again = f.queries.getDetectableObjects();
+    assert.equal(again, first, 'one result array, refilled');
+    assert.equal(again.length, 1);
+    assert.equal(again[0], candidate, 'one object per contact');
+    assert.equal(
+      again[0].position,
+      position,
+      'its position vector rewritten in place',
+    );
+  }
+  assert.deepEqual({ ...position }, { x: 1, y: 2, z: 3 });
+  // Moving rewrites the same vector; it does not hand out a new one.
+  f.place(new Cesium.Cartesian3(7, 8, 9));
+  assert.equal(f.queries.getDetectableObjects()[0].position, position);
+  assert.deepEqual({ ...position }, { x: 7, y: 8, z: 9 });
+  // The id list is read as kept, not copied per call.
+  let copies = 0;
+  const ids = f.flightState._icons.ids;
+  f.flightState._icons.ids = () => {
+    copies++;
+    return ids();
+  };
+  for (let i = 0; i < 5; i++) f.queries.getDetectableObjects();
+  assert.equal(copies, 0);
+  // Hidden, the same (now empty) array comes back.
+  f.flightState._icons.show = false;
+  assert.equal(f.queries.getDetectableObjects(), first);
+  assert.equal(first.length, 0);
 });

@@ -156,16 +156,33 @@ async function open(page, hash = '') {
   );
 }
 
-const libraryRows = (page) =>
-  page.evaluate(() =>
-    [...document.querySelectorAll('#data-toggles [data-library-entry]')].map(
-      (row) => ({
-        id: row.dataset.libraryEntry,
-        on: row.querySelector('.data-toggle-btn')?.classList.contains('active'),
-        count: row.querySelector('.data-count')?.textContent,
-      }),
-    ),
-  );
+/**
+ * Open Data Layers before reading its rows: they repaint while it is
+ * displayed, and it starts collapsed.
+ */
+const openDataLayers = (page) =>
+  page.evaluate(() => {
+    const panel = document.getElementById('data-panel');
+    if (panel?.classList.contains('collapsed'))
+      panel.querySelector('[data-collapse-target="data-panel"]')?.click();
+  });
+
+// The rows paint on the frame after a layer changes: read them after one.
+const libraryRows = async (page) => {
+  await openDataLayers(page);
+  return page.evaluate(async () => {
+    await new Promise((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(resolve)),
+    );
+    return [
+      ...document.querySelectorAll('#data-toggles [data-library-entry]'),
+    ].map((row) => ({
+      id: row.dataset.libraryEntry,
+      on: row.querySelector('.data-toggle-btn')?.classList.contains('active'),
+      count: row.querySelector('.data-count')?.textContent,
+    }));
+  });
+};
 
 try {
   const page = await browser.newPage();
@@ -210,8 +227,8 @@ try {
   await step(
     'Browse opens a labelled modal with addable entries first and packs last',
     async () => {
+      await openDataLayers(page);
       await page.evaluate(() => {
-        document.getElementById('data-panel')?.classList.remove('collapsed');
         document.getElementById('data-library-browse').click();
       });
       const dialog = await page.$eval('#data-library', (node) => ({
@@ -434,9 +451,7 @@ try {
     async () => {
       const chip =
         '#data-toggles [data-layer-id="lib-eia-power-plants"] [data-chip-id="zoom"]';
-      await page.evaluate(() =>
-        document.getElementById('data-panel')?.classList.remove('collapsed'),
-      );
+      await openDataLayers(page);
       // The icons work while the layer is off; Zoom switches it back on.
       await page.evaluate(() =>
         window.__godsEyeView.dataManager.setEnabled(
@@ -508,8 +523,8 @@ try {
     async () => {
       await page.evaluate(() => {
         window.__gevDataLibrary.browser.close();
-        document.getElementById('data-panel')?.classList.remove('collapsed');
       });
+      await openDataLayers(page);
       const chip =
         '#data-toggles [data-layer-id="lib-eia-power-plants"] [data-chip-id="remove"]';
       await page.evaluate(() =>

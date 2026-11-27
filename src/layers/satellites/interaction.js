@@ -20,7 +20,7 @@ export function createInteraction({
     if (parts.cockpit?._cockpitHeld()) return;
     if (layerState._enabled && e.key === 'Escape' && layerState._trackedNorad) {
       parts.tracking._cancelPendingTrackingRestore();
-      parts.tracking._clearTracking(false, { origin: 'user' });
+      parts.tracking._clearTracking(false, { origin: 'user', globeView: true });
     }
   }
 
@@ -126,10 +126,14 @@ export function createInteraction({
         if (pickedId && isOwnedByOtherLayer('satellites', pickedId)) return;
       }
 
-      // Clicked empty space — deselect
+      // Clicked empty space — deselect, back to the globe view when the
+      // camera was following it.
       if (layerState._trackedNorad) {
         parts.tracking._cancelPendingTrackingRestore();
-        parts.tracking._clearTracking(false, { origin: 'user' });
+        parts.tracking._clearTracking(false, {
+          origin: 'user',
+          globeView: true,
+        });
       }
     });
 

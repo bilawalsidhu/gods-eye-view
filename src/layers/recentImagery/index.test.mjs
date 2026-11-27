@@ -154,7 +154,8 @@ function fixture({
   bindFakeCesiumCamera(viewer, ports(viewer));
   const reasons = [];
   layer.subscribe((snapshot, reason) => reasons.push(reason));
-  layer.init(viewer);
+  const panel = { invalidations: 0, invalidate: () => panel.invalidations++ };
+  layer.init(viewer, { panel });
   if (controller) layer.attachMapStackController(controller);
   const dataManager = fakeDataManager({ layer });
   layer.attachDataManager(dataManager);
@@ -186,6 +187,7 @@ function fixture({
     hostState,
     viewer,
     reasons,
+    panel,
     timers,
     toolCalls,
     ready,
@@ -1104,10 +1106,9 @@ test('ZOOM IN: an oversized box or view flies top-down to its centre at the heig
 
 test('alpha, split and visible range notify without re-rendering the row', async () => {
   const f = fixture();
-  let rowRenders = 0;
-  f.layer.setRowControlsListener(() => rowRenders++);
   await f.ready();
-  const rows = rowRenders;
+  f.layer.takePanelChanges();
+  const invalidations = f.panel.invalidations;
   f.layer.setAlpha(0.4);
   assert.deepEqual(f.renderer.calls.at(-1), ['alpha', 'b', 0.4]);
   assert.equal(f.owned().a.alpha, 1, 'the fake keeps the look it was given');
@@ -1118,7 +1119,14 @@ test('alpha, split and visible range notify without re-rendering the row', async
     f.thumbnails.retained.at(-1).includes(f.snap().focus.key),
     'the current focus remains in the retained refinement intent',
   );
-  assert.equal(rowRenders, rows);
+  // The panels are told, and what they take back are light changes only:
+  // the readout updates the slider and the strip in place, and the row's
+  // controls are unchanged, so nothing is rebuilt.
+  assert.ok(f.panel.invalidations > invalidations);
+  const changes = f.layer.takePanelChanges();
+  assert.ok(changes.has('alpha') && changes.has('split'));
+  assert.equal(changes.has('state'), false, 'no change rebuilds the readout');
+  assert.equal(f.layer.takePanelChanges().size, 0, 'taking clears them');
   assert.deepEqual(f.reasons.slice(-2), ['alpha', 'split']);
   f.layer.setAlpha('bad');
   assert.equal(f.snap().alpha, 0.4);
