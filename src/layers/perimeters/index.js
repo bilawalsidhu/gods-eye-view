@@ -66,7 +66,7 @@ const validAnchor = (anchor) =>
  * its own (`fire-perimeters:1:…`), so several can share a renderer. Picks
  * name them as `Hit.set`.
  */
-export const PERIMETER_SET_PREFIX = 'fire-perimeters';
+const PERIMETER_SET_PREFIX = 'fire-perimeters';
 let instances = 0;
 
 /**

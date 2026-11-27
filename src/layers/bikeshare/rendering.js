@@ -31,7 +31,7 @@ import { drawOf } from '../../render/rendererOf.js';
  * its own (`bikeshare:1:stations`, `bikeshare:1:selected`), so several can
  * share a renderer. Picks name them as `Hit.set`.
  */
-export const BIKESHARE_SET_ID = 'bikeshare';
+const BIKESHARE_SET_ID = 'bikeshare';
 
 /** A covered city's marker id: its registry id under this prefix. */
 export const COVERAGE_ID_PREFIX = 'city:';

@@ -5,7 +5,7 @@ import { formatAge } from '../wildlifeSightings/photoText.js';
 export const PERIMETER_OVERLAY_SOURCE_ID = 'fire-perimeters';
 
 /** CSS accent for a perimeter card by containment progress. */
-export function containmentAccent(containedPct) {
+function containmentAccent(containedPct) {
   if (!Number.isFinite(containedPct) || containedPct <= 0) return '#ff3b30';
   if (containedPct < 50) return '#ff7a00';
   if (containedPct < 100) return '#ffb300';
