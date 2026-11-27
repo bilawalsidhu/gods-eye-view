@@ -9,21 +9,13 @@ import { applyInfraredAlpha } from './infraredAlpha.js';
 
 export const MAX_MOSAIC_BYTES = 4 * 1024 * 1024;
 
-/** Apply the display transfer once to a decoded image; `flipY` draws a
- * bottom-up image back upright. */
-export function processInfraredImage(
-  image,
-  mode,
-  createCanvas,
-  { flipY = false } = {},
-) {
+/** Apply the display transfer once to a decoded image. */
+export function processInfraredImage(image, mode, createCanvas) {
   const canvas = createCanvas();
   canvas.width = image.width;
   canvas.height = image.height;
   const context = canvas.getContext('2d');
-  if (flipY) context.setTransform(1, 0, 0, -1, 0, image.height);
   context.drawImage(image, 0, 0);
-  if (flipY) context.setTransform(1, 0, 0, 1, 0, 0);
   applyInfraredTransfer(context, canvas, mode);
   return canvas;
 }
