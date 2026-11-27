@@ -53,8 +53,6 @@ import { groundVehiclePartState } from '../../data/modelPartDrivers.js';
 
 /** How often the trains near enough for a model are gathered again (wall ms). */
 const MODEL_CANDIDATES_MS = 500;
-/** Each category's colour (CSS), painted where a train model marks it. */
-const CATEGORY_TINTS = RAIL_CATEGORY_COLORS;
 
 const SPRITE_PX = 64;
 /** Icon tints (0..1 channels); frozen, so sharing one is safe. */
@@ -967,7 +965,8 @@ export function createRendering({ state, services, parts }) {
         railCategory: entry.category,
         railMode: entry.railMode,
       });
-      item.tint = CATEGORY_TINTS[entry.category] || CATEGORY_TINTS.local;
+      item.tint =
+        RAIL_CATEGORY_COLORS[entry.category] || RAIL_CATEGORY_COLORS.local;
     }
     item.position = entry.marker.position;
     item.headingDeg = Number.isFinite(entry.courseDeg) ? entry.courseDeg : 0;
@@ -1077,12 +1076,9 @@ export function createRendering({ state, services, parts }) {
     showMarkers,
     clearMarkers,
     destroyMarkers,
-    flushMarkers,
     removeMarker,
-    markerShown,
     startFrames,
     stopFrames,
-    cameraPose,
     addMarker,
     paint,
     paintAll,
@@ -1092,7 +1088,6 @@ export function createRendering({ state, services, parts }) {
     cancelWake,
     schedulePlayback,
     syncRenderHold,
-    onPreRender,
     warmFloors,
     applyCategoryVisibility,
     categoryShown,
