@@ -358,10 +358,7 @@ function harness(
     destroy() {
       destroyed++;
     },
-    getDiagnostics: () => ({
-      entities: applied.at(-1)?.storms.length || 0,
-      timerActive: false,
-    }),
+    getDiagnostics: () => ({ items: applied.at(-1)?.storms.length || 0 }),
   };
   const layer = createCyclonesLayer({
     feed,
@@ -901,7 +898,6 @@ test('advisory selection uses accessible row descriptors and shared camera hando
   assert.equal(h.navigation.length, 4);
   assert.equal(h.opened.length, 1);
   assert.equal(h.layer.getStats().count, 0);
-  assert.equal(h.layer.getDiagnostics().timerActive, false);
   h.layer.destroy();
   assert.equal(h.destroyed, 1);
 });

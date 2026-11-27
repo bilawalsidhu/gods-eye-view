@@ -320,11 +320,9 @@ export function createCycloneRendering({ viewer, overlayHost }) {
     getDiagnostics() {
       return {
         ...counts,
-        // One display: the committed advisory's sets, and the items in them.
-        dataSources: Number(committed),
-        entities: itemCount,
+        // One display: the items in the committed advisory's sets.
+        items: itemCount,
         selectedId: selected,
-        timerActive: false,
       };
     },
   };
