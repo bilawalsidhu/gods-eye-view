@@ -1,0 +1,37 @@
+{
+  "id": "vegagerdin-road-weather",
+  "kind": "dataset",
+  "family": "weather",
+  "title": "Iceland road weather stations (Vegagerðin)",
+  "provider": "Vegagerðin",
+  "description": "About 200 live roadside weather stations across Iceland reporting air and pavement temperature, wind speed, gusts and traffic counts.",
+  "icon": "◈",
+  "maintainer": "github:git-crackin",
+  "coverage": { "countries": ["IS"], "bbox": [-25, 63, -13, 67] },
+  "source": {
+    "format": "json",
+    "url": "https://gagnaveita.vegagerdin.is/api/vedur2014_1",
+    "query": { "format": "json" },
+    "columns": { "lat": "Breidd", "lon": "Lengd" },
+    "fetch": "proxied",
+    "cacheSeconds": 300,
+    "maxBytes": 1048576,
+    "maxFeatures": 500
+  },
+  "display": {
+    "color": "#38bdf8",
+    "label": "Nafn",
+    "fields": ["Hiti", "Vindhradi", "Veghiti", "Dags"],
+    "rank": { "field": "Vindhradi", "order": "desc" }
+  },
+  "licence": {
+    "name": "CC BY 4.0 (Vegagerðin open data)",
+    "url": "https://www.vegagerdin.is/vegagerdin/gagnasafn/vefthjonustur/terms-and-conditions"
+  },
+  "attribution": {
+    "text": "Vegagerðin (Icelandic Road and Coastal Administration) — Road weather stations",
+    "url": "https://www.vegagerdin.is/vegagerdin/gagnasafn/vefthjonustur"
+  },
+  "status": "community",
+  "reviewed": "2026-11-24"
+}
