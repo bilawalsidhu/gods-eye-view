@@ -14,12 +14,17 @@ import { createPlaceSearch } from '../search/placeSearch.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
-import {
-  resolveAnnotationTarget as resolveTarget,
-  selectFootprint,
-  refineScope,
-  isGroundsLikeAsk,
-} from './annotationResolver.js';
+import { resolveAnnotationTarget as resolveTarget } from './annotationResolver.js';
+import { createAnnotationResolver } from './resolver.js';
+import { applicationServices } from '../services/application.js';
+import { normalizeOverpassFeatures } from '../sources/overpassFeaturesRecords.js';
+
+const resolver = createAnnotationResolver({
+  featureSource: applicationServices.features,
+});
+const { refineScope, isGroundsLikeAsk } = resolver;
+const selectFootprint = (elements, ...args) =>
+  resolver.selectFootprint(normalizeOverpassFeatures(elements), ...args);
 
 // Build a square way of ~`areaM2` centred `dLatM`/`dLonM` metres from an anchor,
 // in Overpass `out geom` element shape ({ tags, geometry: [{lat,lon}...] }).
