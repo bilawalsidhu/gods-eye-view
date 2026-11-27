@@ -17,13 +17,13 @@
 /** Metres per degree of latitude (and of longitude at the equator). */
 const M_PER_DEG = 111_320;
 /** Coverage grid cell (m). A track within about one cell is already drawn. */
-export const NETWORK_CELL_M = 40;
+const NETWORK_CELL_M = 40;
 /** Sample spacing when walking a shape for coverage (m). */
 const NETWORK_STEP_M = 40;
 /** Uncovered stretches shorter than this are jitter beside a drawn track (m). */
 export const NETWORK_MIN_RUN_M = 200;
 /** Douglas-Peucker tolerance for the drawn stretches (m). */
-export const NETWORK_SIMPLIFY_M = 10;
+const NETWORK_SIMPLIFY_M = 10;
 /** Grid key offset, so negative cell indices stay distinct. */
 const KEY_OFFSET = 2 ** 21;
 

@@ -52,7 +52,7 @@ export function pathWindowM(dtMs) {
  * Arc a train must move before it tells which way it runs (m); a standing
  * train's GPS jitter stays within it.
  */
-export const DIRECTION_MIN_M = 15;
+const DIRECTION_MIN_M = 15;
 
 /**
  * The direction after one more arc position `s`: once `s` is DIRECTION_MIN_M

@@ -13,7 +13,7 @@ import { transitStyleProfile } from '../../data/transitPresetStyle.js';
 
 // Final Cesium batching uses 3,152 bytes per two-lane edge.
 // The 1,278-instance body plus 64 bytes/instance reserve stays below 2 MiB.
-export const TRAIL_VERTEX_LIMIT = 640;
+const TRAIL_VERTEX_LIMIT = 640;
 const STEP_M = 25;
 
 /** Shared prepared paths. Floors are aligned to work with Google 3D tiles. */

@@ -20,7 +20,7 @@ import { vesselIdFromEntry } from './cards.js';
  * How far a follow camera starts from a ship, metres: a ship sits on the
  * sea, so it is framed as an aircraft on the ground is (behind and above).
  */
-export const VESSEL_FOLLOW_RANGE_M = 3000;
+const VESSEL_FOLLOW_RANGE_M = 3000;
 
 export function createSelection({
   vesselState,

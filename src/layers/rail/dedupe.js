@@ -38,7 +38,7 @@ import { greatCircleKm } from '../../geoDistance.js';
  * Copies farther apart than this are different trains (km): two copies of
  * one train at one moment differ only by where each feed reports it.
  */
-export const MATCH_RADIUS_KM = 15;
+const MATCH_RADIUS_KM = 15;
 /**
  * Copies with the same number match up to this far apart (km): two feeds
  * report one train at different moments, and one polled every few minutes

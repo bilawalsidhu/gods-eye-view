@@ -43,13 +43,13 @@ export const SCHEDULE_RETRY_MS = 10 * 60_000;
  * A live train without a known trip id may be matched to a run from this
  * long before its departure (waiting at the origin)...
  */
-export const MATCH_BEFORE_MS = 5 * 60_000;
+const MATCH_BEFORE_MS = 5 * 60_000;
 /** ...to this long after its arrival, at the terminus. */
-export const MATCH_AFTER_MS = 2 * 60_000;
+const MATCH_AFTER_MS = 2 * 60_000;
 /** A live train without a known trip id matches a run this close (m). */
 export const MATCH_NEAREST_MAX_M = 3_000;
 /** How long a nearest-run match is kept before it is looked for again (ms). */
-export const MATCH_KEEP_MS = 60_000;
+const MATCH_KEEP_MS = 60_000;
 
 /**
  * How long a schedule pack waits after its nth failure in a row (ms).
