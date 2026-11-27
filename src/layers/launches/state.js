@@ -127,8 +127,6 @@ export function createState() {
 
   state._selectedMissionOverlayTimeText = null;
 
-  state._missionZoomAnchorRemover = null;
-
   state._missionZoomAnchorId = null;
 
   state._launchPadZoneItem = null;

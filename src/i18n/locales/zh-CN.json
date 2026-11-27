@@ -831,7 +831,6 @@
   "LIFTOFF · {mission}": "点火升空 · {mission}",
   "ASCENT REPLAY · {mission}": "上升回放 · {mission}",
   "ASCENT ESTIMATE · {mission}": "上升估算 · {mission}",
-  "STAGE RE-ENTRY / RECOVERY · {mission}": "子级再入 / 回收 · {mission}",
   "ORBIT REPLAY · {mission}": "轨道回放 · {mission}",
   "PAUSED · {title}": "已暂停 · {title}",
   "UNSPECIFIED": "未指明",

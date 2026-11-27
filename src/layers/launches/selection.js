@@ -87,10 +87,7 @@ export function createSelection({
     layerState._selectedLaunchId = launchId;
     layerState._explicitSelection = Boolean(launchId && isolate);
     if (launchId) layerState._animationStarts.set(launchId, Date.now());
-    if (!launchId && layerState._viewer) {
-      stopMissionZoomAnchor();
-      parts.rendering.selectLaunchEntity(null);
-    }
+    if (!launchId && layerState._viewer) stopMissionZoomAnchor();
     if (!layerState._missionSets) return;
     parts.rendering.isolateMission(launchId);
     parts.orbitRendering.syncMissionOrbitPrimitiveVisibility();
@@ -99,9 +96,6 @@ export function createSelection({
   }
 
   function stopMissionZoomAnchor() {
-    if (layerState._missionZoomAnchorRemover)
-      layerState._missionZoomAnchorRemover();
-    layerState._missionZoomAnchorRemover = null;
     layerState._missionZoomAnchorId = null;
     if (!layerState._replayCameraLaunchId)
       findCamera(layerState._viewer)?.release();
@@ -130,7 +124,6 @@ export function createSelection({
     // its dot or the layer row's arrows, is selected without flying to it.
     if (cockpitActive()) return;
     stopMissionZoomAnchor();
-    parts.rendering.selectLaunchEntity(launch.id);
     const camera = cameraOf(layerState._viewer);
     const orbitPositions = parts.rendering.projectedOrbitPath(launch.id);
     const launchPosition = fromDegrees(launch.lon, launch.lat);
@@ -176,7 +169,6 @@ export function createSelection({
     if (!layerState._viewer || !launch || !layerState._enabled) return;
     parts.replay.stopMissionReplay();
     stopMissionZoomAnchor();
-    parts.rendering.selectLaunchEntity(launch.id);
     layerState._cameraReleased = false;
     cameraOf(layerState._viewer).flyToBounds(
       { center: { lon: launch.lon, lat: launch.lat }, radius: 0 },

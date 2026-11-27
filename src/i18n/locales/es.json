@@ -827,7 +827,6 @@
   "LIFTOFF · {mission}": "DESPEGUE · {mission}",
   "ASCENT REPLAY · {mission}": "REPETICIÓN DEL ASCENSO · {mission}",
   "ASCENT ESTIMATE · {mission}": "ESTIMACIÓN DEL ASCENSO · {mission}",
-  "STAGE RE-ENTRY / RECOVERY · {mission}": "REENTRADA / RECUPERACIÓN DE ETAPA · {mission}",
   "ORBIT REPLAY · {mission}": "REPETICIÓN EN ÓRBITA · {mission}",
   "PAUSED · {title}": "EN PAUSA · {title}",
   "T minus {seconds}": "T menos {seconds}",

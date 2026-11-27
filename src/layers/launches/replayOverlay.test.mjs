@@ -185,8 +185,9 @@ test('the replay overlay sits where the query port projects the vehicle, facing 
   try {
     parts.createReplayVehicleOverlay();
     const occluder = { isPointVisible: () => true };
-    assert.equal(parts.updateReplayVehicleOverlay(occluder), 'ascent');
+    parts.updateReplayVehicleOverlay(occluder);
     const view = state._replayVehicleOverlay;
+    assert.match(view.title, /ASCENT REPLAY/);
     assert.equal(view.visible, true);
     assert.equal(
       view.transform,
@@ -195,7 +196,7 @@ test('the replay overlay sits where the query port projects the vehicle, facing 
     assert.equal(view.rotation, '90deg', 'the path heads right on screen');
     assert.equal(projected.length, 2, 'vehicle and tangent point');
     behindEye = true;
-    assert.equal(parts.updateReplayVehicleOverlay(occluder), null);
+    parts.updateReplayVehicleOverlay(occluder);
     assert.equal(
       state._replayVehicleOverlay.visible,
       false,

@@ -444,7 +444,7 @@ export function createOverlays({ state: layerState, services, parts, source }) {
       !layerState._selectedLaunchId
     ) {
       hideReplayVehicleOverlay();
-      return null;
+      return;
     }
     const launch = layerState._launches.find(
       (item) => item.id === layerState._selectedLaunchId,
@@ -452,7 +452,7 @@ export function createOverlays({ state: layerState, services, parts, source }) {
     const track = layerState._replayTracks.get(layerState._selectedLaunchId);
     if (!launch || !track) {
       hideReplayVehicleOverlay();
-      return null;
+      return;
     }
     const replayActive = layerState._replayCameraLaunchId === launch.id;
     const state = track.getReplayState();
@@ -466,7 +466,7 @@ export function createOverlays({ state: layerState, services, parts, source }) {
       track.lastOverlayWindowPosition = null;
       track.lastOverlayMode = null;
       hideReplayVehicleOverlay();
-      return null;
+      return;
     }
     const path = state.ascending ? track.ascentPath : track.animatedOrbitPath;
     // No scene.sampleHeight() on this post-render path. Periodic height probes make
@@ -475,13 +475,13 @@ export function createOverlays({ state: layerState, services, parts, source }) {
     const position = parts.paths.samplePath(path, state.phaseProgress);
     if (!position || !occluder.isPointVisible(position)) {
       hideReplayVehicleOverlay();
-      return null;
+      return;
     }
     const query = findQuery(layerState._viewer);
     const windowPosition = query?.project(position) ?? null;
     if (!windowPosition) {
       hideReplayVehicleOverlay();
-      return null;
+      return;
     }
     const canvas = canvasOf(layerState._viewer);
     if (
@@ -491,7 +491,7 @@ export function createOverlays({ state: layerState, services, parts, source }) {
       windowPosition.y > canvas.clientHeight + 100
     ) {
       hideReplayVehicleOverlay();
-      return null;
+      return;
     }
     // The replay camera already targets this position. Smooth only the untracked close-up
     // pad marker because a second filter makes the replay vehicle lag the camera.
@@ -580,16 +580,12 @@ export function createOverlays({ state: layerState, services, parts, source }) {
               { mission },
             );
       detail = parts.policyHelpers.formatMissionEventTime(state.eventTime);
-    } else if (mode === 'recovery') {
-      title = t('STAGE RE-ENTRY / RECOVERY · {mission}', { mission });
-      detail = parts.policyHelpers.formatMissionEventTime(state.eventTime);
     } else if (mode === 'orbit') {
       title = t('ORBIT REPLAY · {mission}', { mission });
       detail = parts.policyHelpers.formatMissionEventTime(state.eventTime);
     }
     if (layerState._replayPaused) title = t('PAUSED · {title}', { title });
     presentReplayVehicleOverlay({ ...frame, title, detail });
-    return mode;
   }
   return {
     missionAnchorHorizonVisible,

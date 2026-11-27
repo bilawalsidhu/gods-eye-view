@@ -49,12 +49,6 @@ export function createRendering({
   /** Items to write at the next flush, by set name. */
   const pending = new Map();
 
-  /** A launch's marker colour. */
-  function markerColor(launch) {
-    const [r, g, b, a] = parts.model.missionMarkerColor(launch);
-    return [r, g, b, a];
-  }
-
   const recordKey = (set, id) => `${set}\u0000${id}`;
 
   /** Queue `item` for its set, replacing one queued under its id. */
@@ -198,12 +192,6 @@ export function createRendering({
   function launchMarkerAt(position) {
     return Boolean(launchIdFromPicks(missionHitsAt(position)));
   }
-
-  /**
-   * Note the selected launch site. Nothing draws it differently; the
-   * selected mission is the layer's own (`_selectedLaunchId`).
-   */
-  function selectLaunchEntity() {}
 
   /**
    * Show only the selected mission's items, or every site marker and
@@ -353,7 +341,7 @@ export function createRendering({
       satelliteName: satelliteTrack?.name || '',
       noradId: satelliteTrack?.noradId || '',
     };
-    const color = markerColor(launch);
+    const color = parts.model.missionMarkerColor(launch);
     addItem(
       'sites',
       {
@@ -800,7 +788,6 @@ export function createRendering({
     launchIdFromPicks,
     missionHitsAt,
     launchMarkerAt,
-    selectLaunchEntity,
     isolateMission,
     projectedOrbitPath,
     updateMissionFrame,
