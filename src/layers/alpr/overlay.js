@@ -3,10 +3,9 @@ import {
   MARKER_ICON_SIZE,
   SELECTED_MARKER_ICON_SIZE,
   MARKER_FLOOR_LIFT_M,
-  REMEMBERED_ANCHORS,
+  REMEMBERED_SURFACE_ANSWERS,
   SURFACE_BELOW_FLOOR_M,
   SURFACE_ABOVE_FLOOR_M,
-  SURFACE_SAMPLES_PER_FRAME,
 } from './policy.js';
 import {
   MARKER_IMAGE,
@@ -19,7 +18,12 @@ import {
 } from './visuals.js';
 import { alprMarkers } from './markerState.js';
 import { distance, fromDegrees, toLonLatH } from '../../geo/index.js';
-import { cameraOf, findQuery, rendererOf } from '../../render/rendererOf.js';
+import {
+  cameraOf,
+  findGlobe,
+  findQuery,
+  rendererOf,
+} from '../../render/rendererOf.js';
 
 const nextAnimationFrame = (step) =>
   typeof requestAnimationFrame === 'function'
@@ -51,10 +55,11 @@ export function createAlprOverlay({
     destroyed = false,
     lastCamera = null,
     sampling = false;
-  // Rendered-surface answers by camera id. A marker is dropped when its
-  // camera leaves the view or the layer is turned off; keeping the answers on
-  // markers meant every return sampled the same cameras again.
+  // Depth-sample answers by camera id: they outlive the markers, which go
+  // when a camera leaves the view or the layer is turned off.
   const surfaceAnswers = new Map();
+  /** Cameras whose anchor sample missed: they wait for the others' turn. */
+  const missed = new Set();
   const requestPaint = () => {
     if (!destroyed && state.enabled) lane?.requestPaint();
   };
@@ -98,7 +103,6 @@ export function createAlprOverlay({
       nativeVisible(carrier, true);
     }
     markers.flush();
-    surfaceAnswers.clear();
     state.lastAnchorSampleAt = 0;
     retryUntil = Date.now() + 15000;
     requestPaint();
@@ -112,85 +116,112 @@ export function createAlprOverlay({
       height,
       checked,
     });
-    if (surfaceAnswers.size > REMEMBERED_ANCHORS)
+    if (surfaceAnswers.size > REMEMBERED_SURFACE_ANSWERS)
       surfaceAnswers.delete(surfaceAnswers.keys().next().value);
   }
 
   /**
-   * Rendered surface height under a camera. A drawn globe answers from its
-   * terrain; only photoreal tiles need a depth sample, which renders depth
-   * and compiles its shaders on first use (a freeze of up to 1.9 s at load).
-   * A miss is tiles still streaming.
+   * Height under a camera now: its terrain, or a depth sample of the drawn
+   * surface, which renders depth (and compiles shaders on first use). A miss
+   * is tiles still streaming. The markers are no ground: a sample sees
+   * through them.
    */
-  function surfaceHeight(record) {
+  function heightAt(record, against) {
     const query = findQuery(state.viewer);
     if (!query) return null;
     const point = { lon: record.longitude, lat: record.latitude };
-    if (globeShown())
-      return query.sampleHeightNow(point, { against: 'terrain' });
-    if (!canSampleHeight()) return null;
-    return query.sampleHeightNow(point, { exclude: [markers.icons?.id] });
+    return against === 'terrain'
+      ? query.sampleHeightNow(point, { against: 'terrain' })
+      : query.sampleHeightNow(point, { exclude: [markers.icons?.id] });
   }
 
-  /** Whether the surface under a camera can be read at all. */
   function canReadSurface() {
     return (
       Boolean(findQuery(state.viewer)) && (globeShown() || canSampleHeight())
     );
   }
 
-  /** The anchor a paint can have without sampling, or null while it waits for one. */
+  /** A cached, remembered, floor or terrain anchor (no depth sample), or null. */
   function anchorFor(record, carrier) {
     const cached = alprMarkers.read(carrier)?.canvasPosition;
     if (cached) return cached;
+    const floor = floorHeightAt(record.latitude, record.longitude);
     const answer = surfaceAnswers.get(record.id);
     if (
       answer?.latitude === record.latitude &&
       answer.longitude === record.longitude
     ) {
-      setAnchor(record, carrier, answer.height);
-      const marker = alprMarkers.write(carrier);
-      if (answer.checked) marker.surfaceCheckedFor = marker.canvasPosition;
-      return marker.canvasPosition;
+      surfaceAnswers.delete(record.id);
+      // An unchecked answer stands in only until the floor resolves, a
+      // checked one only within the floor window.
+      if (
+        answer.checked
+          ? withinFloorWindow(answer.height - MARKER_FLOOR_LIFT_M, record)
+          : floor === null
+      ) {
+        surfaceAnswers.set(record.id, answer);
+        setAnchor(record, carrier, answer.height);
+        const marker = alprMarkers.write(carrier);
+        if (answer.checked) marker.surfaceCheckedFor = marker.canvasPosition;
+        return marker.canvasPosition;
+      }
     }
     // A floor-placed marker anchors where its native badge sits. A marker
     // still waiting for its floor reads the globe's terrain while the globe
     // is drawn (hidden under photoreal tiles, its height is not what shows),
-    // or on photoreal tiles waits for sampleAnchors().
-    let height;
-    const floor = services.groundFloor.cachedGroundFloor(
-      record.latitude,
-      record.longitude,
-    );
-    if (validAlprGroundHeight(floor)) height = floor + MARKER_FLOOR_LIFT_M;
-    else if (globeShown())
-      height = findQuery(state.viewer)?.sampleHeightNow(
-        { lon: record.longitude, lat: record.latitude },
-        { against: 'terrain' },
-      );
+    // or waits for a depth sample in sampleAnchors().
+    const height = floor ?? (globeShown() ? heightAt(record, 'terrain') : null);
     if (!validAlprGroundHeight(height)) return null;
     setAnchor(record, carrier, height);
     return alprMarkers.read(carrier)?.canvasPosition;
   }
 
   /**
-   * Whether the renderer samples the drawn surface's height (Cesium needs
-   * depth textures). Without, nothing is depth-sampled, and a marker with no
-   * floor yet anchors on the terrain.
+   * Whether the renderer can depth-sample the drawn surface (Cesium needs
+   * depth textures).
    */
   function canSampleHeight() {
     const capabilities = rendererOf(state.viewer)?.capabilities;
     return !capabilities || capabilities.has('sampleHeight');
   }
 
+  /** Whether the globe port says its surface is drawn; undefined if it cannot. */
+  function globeVisible() {
+    return findGlobe(state.viewer)?.isGlobeVisible?.();
+  }
+
   /** Whether the globe surface is drawn; true where the renderer cannot say. */
   function globeShown() {
-    return rendererOf(state.viewer)?.globe?.isGlobeVisible?.() !== false;
+    return globeVisible() !== false;
+  }
+
+  /**
+   * Whether the drawn surface is depth-sampled: photoreal tiles, or a scene
+   * that cannot say whether it draws a globe.
+   */
+  function depthSampled() {
+    return globeVisible() !== true && canSampleHeight();
   }
 
   function floorHeightAt(latitude, longitude) {
     const floor = services.groundFloor.cachedGroundFloor(latitude, longitude);
     return validAlprGroundHeight(floor) ? floor + MARKER_FLOOR_LIFT_M : null;
+  }
+
+  /**
+   * Whether a surface height is within the floor window; any height is
+   * while the floor is unknown.
+   */
+  function withinFloorWindow(surface, record) {
+    const floor = services.groundFloor.cachedGroundFloor(
+      record.latitude,
+      record.longitude,
+    );
+    return (
+      !validAlprGroundHeight(floor) ||
+      (surface >= floor - SURFACE_BELOW_FLOOR_M &&
+        surface <= floor + SURFACE_ABOVE_FLOOR_M)
+    );
   }
 
   function setAnchor(record, carrier, height) {
@@ -206,23 +237,24 @@ export function createAlprOverlay({
 
   /** Whether the visible photoreal tiles (or globe) have finished streaming. */
   function surfaceSettled() {
-    const globe = rendererOf(state.viewer)?.globe;
+    const globe = findGlobe(state.viewer);
     // The globe's terrain while it is shown, otherwise the shown 3D tiles.
-    // A viewer with no renderer of its own cannot say; its samples are
-    // still checked against the floor.
+    // A viewer with no globe port cannot say; its samples are still checked
+    // against the floor.
     return !globe || globe.isSettled('surface');
   }
 
   /**
    * Sample the rendered surface for the overlay cameras, outside the paint.
    *
-   * A camera with no floor yet gets its anchor from a sample. An anchored one
-   * is checked against the surface once: floors come from ~111 m cells, so on
-   * a slope a badge could float or sink by tens of metres. Checks run only
-   * while the camera is still and tiles have settled, and samples far outside
-   * the floor prior (a roof or a streaming tile) are rejected. Each frame
-   * takes SURFACE_SAMPLES_PER_FRAME samples, so no frame carries the whole
-   * cohort; sampling inside paint() put up to six depth renders in one frame.
+   * A camera with no floor yet gets its anchor from a depth sample. An
+   * anchored one is checked against the surface once: floors come from
+   * ~111 m cells, so on a slope a badge could float or sink by tens of
+   * metres. Checks run only while the camera is still and tiles have
+   * settled, and a sample far outside the floor window (a roof or a
+   * streaming tile) puts the badge on its floor. Each frame takes one
+   * sample, so no frame carries the whole cohort; a camera whose sample
+   * missed waits until the others have had theirs.
    */
   function sampleAnchors() {
     sampling = false;
@@ -237,7 +269,8 @@ export function createAlprOverlay({
       direction: { ...pose.direction },
     };
     const canSample = canReadSurface();
-    let samples = SURFACE_SAMPLES_PER_FRAME,
+    const depth = depthSampled();
+    let sampled = false,
       pending = false,
       progressed = false,
       moved = false;
@@ -247,15 +280,18 @@ export function createAlprOverlay({
       if (!carrier || alprMarkers.read(carrier)?.canvasPosition) continue;
       // The floor may have resolved since the paint that found none.
       if (anchorFor(record, carrier)) moved = true;
-      else if (!canSample || samples <= 0) pending = true;
+      else if (!depth || sampled || missed.has(record.id)) pending = true;
       else {
-        samples -= 1;
-        const sample = surfaceHeight(record);
+        sampled = true;
+        const sample = heightAt(record);
         if (validAlprGroundHeight(sample)) {
           setAnchor(record, carrier, sample);
           rememberSurface(record, sample, false);
           moved = progressed = true;
-        } else pending = true;
+        } else {
+          missed.add(record.id);
+          pending = true;
+        }
       }
     }
     for (const record of records) {
@@ -264,41 +300,42 @@ export function createAlprOverlay({
       const anchor = marker?.canvasPosition;
       if (!anchor || !canSample || marker.surfaceCheckedFor === anchor)
         continue;
-      if (!still || !surfaceSettled() || samples <= 0) {
+      if (sampled || !still || !surfaceSettled()) {
         pending = true;
         continue;
       }
-      samples -= 1;
-      progressed = true;
-      const sample = surfaceHeight(record);
+      sampled = progressed = true;
+      let sample = depth ? heightAt(record) : null;
+      const fromDepth = validAlprGroundHeight(sample);
+      if (!fromDepth && globeShown()) sample = heightAt(record, 'terrain');
       let height = toLonLatH(anchor)?.height;
-      const floor = services.groundFloor.cachedGroundFloor(
-        record.latitude,
-        record.longitude,
-      );
-      const accepted =
-        validAlprGroundHeight(sample) &&
-        (!validAlprGroundHeight(floor) ||
-          (sample >= floor - SURFACE_BELOW_FLOOR_M &&
-            sample <= floor + SURFACE_ABOVE_FLOOR_M));
-      if (accepted && Math.abs(sample + MARKER_FLOOR_LIFT_M - height) > 1) {
-        height = sample + MARKER_FLOOR_LIFT_M;
+      const target = !validAlprGroundHeight(sample)
+        ? height
+        : withinFloorWindow(sample, record)
+          ? sample + MARKER_FLOOR_LIFT_M
+          : floorHeightAt(record.latitude, record.longitude);
+      if (Math.abs(target - height) > 1) {
+        height = target;
         setAnchor(record, carrier, height);
         moved = true;
       }
       // setAnchor rewrote the same record, so this is the new anchor.
       marker.surfaceCheckedFor = marker.canvasPosition;
-      // A surface that did not answer is asked again after a rebuild.
-      if (validAlprGroundHeight(sample)) rememberSurface(record, height, true);
+      // Only depth answers are kept: a drawn globe's terrain is read again,
+      // as finer tiles load. One that did not answer is asked after a rebuild.
+      if (fromDepth) rememberSurface(record, height, true);
       if (carrier.id === state.selectedId)
         marker.displayPosition = marker.canvasPosition;
     }
+    // Every waiting camera has had its turn: those that missed go again.
+    if (!sampled) missed.clear();
     if (moved) requestPaint();
-    if (!pending || Date.now() >= retryUntil) return;
-    // Take the next ration on the next frame; when nothing could be sampled
-    // (camera moving, tiles streaming, no floor yet) look again in 250 ms.
+    if (!pending) return;
+    // The next sample on the next frame; when nothing could be sampled
+    // (camera moving, tiles streaming, no floor yet) look again in 250 ms,
+    // for 15 s after the view changed. A later paint still queues one.
     if (progressed) scheduleSampling();
-    else if (!retryTimer)
+    else if (!retryTimer && Date.now() < retryUntil)
       retryTimer = setTimeout(() => {
         retryTimer = null;
         scheduleSampling();
@@ -306,7 +343,7 @@ export function createAlprOverlay({
   }
 
   function scheduleSampling() {
-    if (sampling || destroyed) return;
+    if (sampling) return;
     sampling = true;
     requestFrame(sampleAnchors);
   }
@@ -412,16 +449,18 @@ export function createAlprOverlay({
       hits.push({ id: record.id, x: origin.x, y: origin.y, radius: size / 2 });
     }
     markers.flush();
-    // Anchors still to find or to check are sampled after this paint, a few
-    // per frame, never inside it.
-    if (waiting && !retryTimer && Date.now() < retryUntil) scheduleSampling();
+    // Unfound or unchecked anchors are sampled after the paint, never in it.
+    if (waiting && !retryTimer) scheduleSampling();
   }
 
   return {
     init() {
       destroyed = false;
       removeMapListener = services.overlays?.subscribeMapStack?.((event) => {
-        if (event.detail?.status !== 'ready' || !state.enabled) return;
+        if (event.detail?.status !== 'ready') return;
+        // The old surface's answers go even while the layer is off.
+        surfaceAnswers.clear();
+        if (!state.enabled) return;
         // Same-regime provider changes also invalidate absolute placements.
         onSurfaceChange();
         resetAnchors();

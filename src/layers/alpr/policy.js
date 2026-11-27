@@ -66,11 +66,9 @@ export const MAX_CANVAS_FRUSTUMS = 64;
 /** Metres a floor-placed marker sits above its resolved ground cell. */
 export const MARKER_FLOOR_LIFT_M = 1.5;
 
-/** Rendered-surface samples one frame may take (on photoreal tiles each is a
- * depth render of several milliseconds, so they are spread over frames). */
-export const SURFACE_SAMPLES_PER_FRAME = 1;
-/** Surface answers kept by camera id, so a refresh or re-enable asks nothing. */
-export const REMEMBERED_ANCHORS = 2048;
+/** Depth-sample answers kept by camera id, so a refresh or re-enable samples
+ * nothing again. */
+export const REMEMBERED_SURFACE_ANSWERS = 2048;
 
 /** Accepted rendered-surface window around a floor cell (a cut or an embankment
  * sits within it; a rooftop or an unstreamed tile usually does not). */

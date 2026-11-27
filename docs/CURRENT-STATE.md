@@ -2091,14 +2091,16 @@ Overlay anchors start on the same floor and write marker properties only on
 change. Once the camera is still and tiles have settled, each overlay anchor is
 replaced once by the rendered surface under it (accepted only within -30/+40 m
 of the floor cell), so badges do not float or sink on slopes; wedge corners
-follow their own floor cells instead of staying level with the apex. The
-surface is read outside the overlay paint, one camera per frame: a terrain
-globe answers from its terrain (`sampleHeightNow` against `terrain`) and only
-photoreal tiles are depth-sampled. Answers are kept per camera
-until the map source changes, so a refresh or turning the layer off and on
-samples nothing again. Unknown bearings never acquire a wedge. The selected
-card's `DIRECTION` wraps after rounding to whole degrees, so a mapped bearing
-of 359.5° or more reads `0°` rather than `360°`. The row reads
+follow their own floor cells instead of staying level with the apex. A sample
+outside that window leaves the badge on its floor. Depth samples run outside
+the overlay paint, one per frame, and only on photoreal tiles (or where the
+renderer cannot say whether a globe is drawn). A drawn globe answers from its
+terrain (`sampleHeightNow` against `terrain`), read again whenever a badge is
+rebuilt. Depth-sample answers are kept per camera (up to 2,048) until the map
+source changes, even while the layer is off, so a refresh or turning the layer
+off and on samples nothing again. Unknown bearings never acquire a wedge. The
+selected card's `DIRECTION` wraps after rounding to whole degrees, so a mapped
+bearing of 359.5° or more reads `0°` rather than `360°`. The row reads
 `N nearby · M on screen`; when every loaded camera is outside the view it adds
 "None on screen — nearby cameras are outside the view" instead of looking
 unloaded. `scripts/qa-alpr-journey.mjs` drives an Austin journey with ALPR off,

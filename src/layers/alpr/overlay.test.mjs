@@ -11,7 +11,13 @@ import {
 import { alprMarkers, createAlprMarkerSet } from './markerState.js';
 import { fakeDrawPort } from '../../testSupport/fakeDrawPort.mjs';
 import { bindFakeCesiumScene } from '../../testSupport/fakeCesiumScene.mjs';
-import { rendererOf } from '../../render/rendererOf.js';
+import {
+  rendererOf,
+  provideUnboundCamera,
+  provideUnboundGlobe,
+  provideUnboundQuery,
+} from '../../render/rendererOf.js';
+import { MAX_CANVAS_FRUSTUMS, REMEMBERED_SURFACE_ANSWERS } from './policy.js';
 
 function harness(t, count = 2, { floor = null } = {}) {
   const previousImage = globalThis.Image;
@@ -27,19 +33,23 @@ function harness(t, count = 2, { floor = null } = {}) {
     longitude: -97,
     directionDeg: 90,
   }));
+  let floorAt = typeof floor === 'function' ? floor : () => floor;
   const drawPort = fakeDrawPort();
   const markers = createAlprMarkerSet();
   markers.attach(drawPort.icons({ id: 'alpr-cameras:test:markers' }));
   const iconSet = drawPort.set('alpr-cameras:test:markers');
-  for (const record of records)
-    Object.assign(alprMarkers.write(markers.add(record.id)), {
-      record,
-      position: Cesium.Cartesian3.fromDegrees(
-        record.longitude,
-        record.latitude,
-      ),
-    });
-  markers.flush();
+  const build = () => {
+    for (const record of records)
+      Object.assign(alprMarkers.write(markers.add(record.id)), {
+        record,
+        position: Cesium.Cartesian3.fromDegrees(
+          record.longitude,
+          record.latitude,
+        ),
+      });
+    markers.flush();
+  };
+  build();
   const state = {
     enabled: true,
     selectedId: null,
@@ -49,7 +59,7 @@ function harness(t, count = 2, { floor = null } = {}) {
       scene: { globe: { show: true, getHeight: () => 150 } },
     },
   };
-  const { unbind } = bindFakeCesiumScene(state.viewer, { draw: drawPort });
+  const ports = bindFakeCesiumScene(state.viewer, { draw: drawPort });
   let paint,
     mapListener,
     active,
@@ -60,7 +70,10 @@ function harness(t, count = 2, { floor = null } = {}) {
     state,
     requestFrame: (step) => frames.push(step),
     services: {
-      groundFloor: { cachedGroundFloor: () => floor },
+      groundFloor: {
+        cachedGroundFloor: (latitude, longitude) =>
+          floorAt(latitude, longitude),
+      },
       overlays: {
         registerPaintLane(_lane, painter) {
           paint = painter;
@@ -92,7 +105,7 @@ function harness(t, count = 2, { floor = null } = {}) {
     if (previousImage === undefined) delete globalThis.Image;
     else globalThis.Image = previousImage;
     Cesium.SceneTransforms.worldToWindowCoordinates = project;
-    unbind();
+    ports.unbind?.();
   });
   const draw = [];
   const ctx = {
@@ -118,16 +131,25 @@ function harness(t, count = 2, { floor = null } = {}) {
     overlay,
     markers,
     iconSet,
+    ports,
     /** A marker's carrier, and the icon last sent for it. */
     carrier: (id) => markers.get(id),
     icon: (id) => iconSet.items.get(id),
     draw,
     paint: (occluder) => paint({ ctx, width: 800, height: 600, occluder }),
-    /** Run the sampling step queued for the next animation frame, if any. */
+    /** Run the steps queued for the next frame, as a browser would. */
     frame() {
-      const step = frames.shift();
-      step?.();
-      return Boolean(step);
+      const steps = frames.splice(0);
+      for (const step of steps) step();
+      return steps.length > 0;
+    },
+    setFloor(value) {
+      floorAt = typeof value === 'function' ? value : () => value;
+    },
+    /** Drop the markers and build them again, as turning the layer on does. */
+    rebuildMarkers() {
+      markers.clear();
+      build();
     },
     mapChanged() {
       mapListener({ detail: { status: 'ready' } });
@@ -353,8 +375,6 @@ test('a still view replaces floor anchors with the rendered surface, within the 
 });
 
 test('a paint never samples the surface; frames take one sample each', (t) => {
-  // Sampling inside paint() put up to six depth renders into one frame, and
-  // the first of them compiles shaders: a freeze of 0.8 to 1.9 s at load.
   t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
   const h = harness(t, 8);
   const sampled = photoreal(h);
@@ -363,12 +383,14 @@ test('a paint never samples the surface; frames take one sample each', (t) => {
   h.paint();
   assert.equal(sampled.length, 0, 'no sample inside a paint');
   assert.equal(h.draw.length, 0, 'unanchored cameras keep their native badge');
+  const paints = h.paints;
   for (let taken = 1; taken <= 8; taken++) {
     assert.equal(h.frame(), true);
     assert.equal(sampled.length, taken, 'one sample per frame');
   }
   for (const record of h.records)
     assert.ok(Math.abs(anchorHeight(h, record.id) - 172) < 0.01);
+  assert.ok(h.paints > paints, 'a found anchor asks for a paint');
   h.paint();
   assert.ok(h.draw.length > 0, 'anchored cameras paint on the overlay');
 });
@@ -407,16 +429,7 @@ test('surface answers outlive rebuilt markers and a re-enable, until the map cha
   // Turning the layer off drops the markers; turning it on builds new ones.
   const rebuild = () => {
     h.overlay.clear();
-    h.markers.clear();
-    for (const record of h.records)
-      Object.assign(alprMarkers.write(h.markers.add(record.id)), {
-        record,
-        position: Cesium.Cartesian3.fromDegrees(
-          record.longitude,
-          record.latitude,
-        ),
-      });
-    h.markers.flush();
+    h.rebuildMarkers();
     h.overlay.sync(h.records);
     h.paint();
     settle(t, h);
@@ -507,4 +520,228 @@ test('without height sampling no sample is spent, and the terrain anchors only w
       shown ? 'anchored on the terrain' : 'no terrain under hidden globe',
     );
   }
+});
+
+/** Turn the layer off, then on again: markers are built afresh. */
+function toggle(h, between = () => {}) {
+  h.state.enabled = false;
+  h.overlay.clear();
+  h.markers.clear();
+  between();
+  h.state.enabled = true;
+  h.rebuildMarkers();
+  h.overlay.sync(h.records);
+  h.paint();
+}
+
+const near = (value, expected) =>
+  value !== null && Math.abs(value - expected) < 0.01;
+
+test('an unchecked answer is restored on a rebuild and checked once more', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+  const h = harness(t, 1);
+  const sampled = photoreal(h);
+  h.overlay.sync(h.records);
+  h.paint();
+  assert.equal(h.frame(), true);
+  assert.equal(sampled.length, 1);
+  assert.ok(near(anchorHeight(h, 'camera:0'), 172), 'anchored by the sample');
+  toggle(h);
+  assert.ok(near(anchorHeight(h, 'camera:0'), 172), 'restored, not sampled');
+  assert.equal(sampled.length, 1);
+  settle(t, h);
+  assert.equal(sampled.length, 2, 'one check');
+  assert.ok(near(anchorHeight(h, 'camera:0'), 173.5));
+});
+
+test('surface answers keep the cameras used last', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+  const h = harness(t, REMEMBERED_SURFACE_ANSWERS + 1, { floor: 150 });
+  const sampled = photoreal(h);
+  const answer = (from, to) => {
+    h.overlay.sync(h.records.slice(from, to));
+    h.paint();
+    settle(t, h, 2 * MAX_CANVAS_FRUSTUMS);
+  };
+  for (let i = 0; i < REMEMBERED_SURFACE_ANSWERS; i += MAX_CANVAS_FRUSTUMS)
+    answer(i, i + MAX_CANVAS_FRUSTUMS);
+  assert.equal(sampled.length, REMEMBERED_SURFACE_ANSWERS);
+  h.rebuildMarkers();
+  answer(0, 1);
+  assert.equal(sampled.length, REMEMBERED_SURFACE_ANSWERS, 'camera:0 restored');
+  // One answer more drops the camera used longest ago: camera:1, not camera:0.
+  answer(REMEMBERED_SURFACE_ANSWERS, REMEMBERED_SURFACE_ANSWERS + 1);
+  h.rebuildMarkers();
+  answer(0, 2);
+  assert.equal(sampled.length, REMEMBERED_SURFACE_ANSWERS + 2);
+  const last = Cesium.Math.toDegrees(sampled.at(-1).latitude);
+  assert.equal(Math.round((last - 30) * 10000), 1, 'camera:1 is asked again');
+});
+
+test('a map change heard while the layer is off drops the old surface answers', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+  const h = harness(t, 1, { floor: 150 });
+  photoreal(h);
+  const scene = h.state.viewer.scene;
+  h.overlay.sync(h.records);
+  h.paint();
+  settle(t, h);
+  assert.ok(near(anchorHeight(h, 'camera:0'), 173.5), 'photoreal answer');
+  let reads = 0;
+  scene.globe.getHeight = () => (reads++, 152);
+  toggle(h, () => {
+    scene.globe.show = true;
+    h.mapChanged();
+  });
+  settle(t, h);
+  assert.ok(reads > 0, 'the new terrain is read');
+  assert.ok(near(anchorHeight(h, 'camera:0'), 153.5));
+});
+
+test('a drawn globe is read again on a rebuild, as finer terrain loads', (t) => {
+  // A terrain globe can change under a camera with no map change: a finer
+  // tile, or real terrain replacing a flat fallback.
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+  const h = harness(t, 1, { floor: 150 });
+  const sampled = photoreal(h);
+  const scene = h.state.viewer.scene;
+  scene.globe.show = true;
+  let terrain = 150;
+  scene.globe.getHeight = () => terrain;
+  h.overlay.sync(h.records);
+  h.paint();
+  settle(t, h);
+  assert.ok(near(anchorHeight(h, 'camera:0'), 151.5));
+  terrain = 165;
+  toggle(h);
+  settle(t, h);
+  assert.ok(near(anchorHeight(h, 'camera:0'), 166.5));
+  assert.equal(sampled.length, 0, 'never depth-sampled');
+});
+
+test('a surface sample outside the floor window is never restored as the anchor', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+  // A roof sampled before the floor resolved, checked or not.
+  for (const checked of [true, false]) {
+    const h = harness(t, 1);
+    photoreal(h, () => 400);
+    h.overlay.sync(h.records);
+    h.paint();
+    if (checked) settle(t, h);
+    else h.frame();
+    assert.ok(near(anchorHeight(h, 'camera:0'), checked ? 401.5 : 400));
+    h.setFloor(150);
+    toggle(h);
+    assert.ok(near(anchorHeight(h, 'camera:0'), 151.5), 'the floor');
+    settle(t, h);
+    assert.ok(near(anchorHeight(h, 'camera:0'), 151.5), 'the roof is rejected');
+  }
+});
+
+test('a rejected sample puts the badge on its floor, and that is remembered', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+  const h = harness(t, 1);
+  const sampled = photoreal(h, () => 400);
+  h.overlay.sync(h.records);
+  h.paint();
+  h.frame();
+  assert.ok(near(anchorHeight(h, 'camera:0'), 400), 'provisional');
+  h.setFloor(150);
+  settle(t, h);
+  assert.ok(near(anchorHeight(h, 'camera:0'), 151.5));
+  const taken = sampled.length;
+  toggle(h);
+  settle(t, h);
+  assert.ok(near(anchorHeight(h, 'camera:0'), 151.5));
+  assert.equal(sampled.length, taken, 'nothing sampled again');
+});
+
+test('a camera whose sample keeps missing does not take every sample', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+  // camera:0, nearest, and camera:1 have no floor; camera:2 has one.
+  const index = (latitude) => Math.round((latitude - 30) * 10000);
+  const h = harness(t, 3, {
+    floor: (latitude) => (index(latitude) === 2 ? 150 : null),
+  });
+  const sampled = photoreal(
+    h,
+    (latitude) => [undefined, 172, 165][index(latitude)],
+  );
+  h.overlay.sync(h.records);
+  h.paint();
+  let most = 0;
+  for (let i = 0; i < 60; i++) {
+    const before = sampled.length;
+    if (!h.frame()) t.mock.timers.tick(250);
+    most = Math.max(most, sampled.length - before);
+  }
+  assert.equal(most, 1, 'one sample per frame at most');
+  assert.ok(near(anchorHeight(h, 'camera:1'), 173.5), 'anchored and checked');
+  assert.ok(near(anchorHeight(h, 'camera:2'), 166.5), 'checked');
+});
+
+test('a paint after the retry window still queues a sample', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+  const h = harness(t, 1, { floor: 150 });
+  const sampled = photoreal(h);
+  let settled = false;
+  rendererOf(h.state.viewer).globe.isSettled = () => settled;
+  h.overlay.sync(h.records);
+  h.paint();
+  settle(t, h, 200); // tiles stream for longer than the 15 s window
+  assert.equal(sampled.length, 0);
+  settled = true;
+  h.paint();
+  settle(t, h, 20);
+  assert.equal(sampled.length, 1);
+  assert.ok(near(anchorHeight(h, 'camera:0'), 173.5));
+});
+
+test('a globe port that cannot say whether the globe is drawn depth-samples, as without one', (t) => {
+  // A Cesium scene made with `globe: false`: photoreal tiles only.
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+  const h = harness(t, 2, {
+    floor: (latitude) => (latitude > 30.00005 ? 150 : null),
+  });
+  const scene = h.state.viewer.scene;
+  h.state.viewer.camera.directionWC = Cesium.Cartesian3.UNIT_X;
+  scene.globe = undefined;
+  scene.sampleHeightSupported = true;
+  scene.sampleHeight = () => 172;
+  rendererOf(h.state.viewer).globe = { isSettled: () => true };
+  h.overlay.sync(h.records);
+  h.paint();
+  settle(t, h);
+  assert.ok(near(anchorHeight(h, 'camera:0'), 173.5), 'the floorless camera');
+  assert.ok(near(anchorHeight(h, 'camera:1'), 173.5), 'the floor anchor');
+});
+
+test('a viewer no renderer is bound to reads its globe port too', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+  const h = harness(t, 1, { floor: 150 });
+  const viewer = h.state.viewer;
+  const { query, camera } = h.ports;
+  h.ports.unbind();
+  h.ports.unbind = null;
+  const only = (port) => (host) =>
+    host === viewer ? { port, dispose() {} } : null;
+  provideUnboundQuery(only(query));
+  provideUnboundCamera(only(camera));
+  provideUnboundGlobe(
+    only({ isGlobeVisible: () => false, isSettled: () => true }),
+  );
+  t.after(() => {
+    provideUnboundQuery(null);
+    provideUnboundCamera(null);
+    provideUnboundGlobe(null);
+  });
+  viewer.camera.directionWC = Cesium.Cartesian3.UNIT_X;
+  viewer.scene.globe.show = false;
+  viewer.scene.globe.getHeight = () => 145; // the hidden terrain
+  viewer.scene.sampleHeightSupported = true;
+  viewer.scene.sampleHeight = () => 172; // the shown tiles
+  h.overlay.sync(h.records);
+  h.paint();
+  settle(t, h);
+  assert.ok(near(anchorHeight(h, 'camera:0'), 173.5));
 });
