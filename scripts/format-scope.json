@@ -1739,7 +1739,6 @@
   "src/layers/weather/shellPlacement.js",
   "src/ui/inViewMemo.test.mjs",
   "src/layers/wind/valueAt.test.mjs",
-  "src/layers/weather/valueAt.test.mjs",
   "src/layers/gnss/valueAt.test.mjs",
   "src/layers/recentImagery/valueAt.test.mjs",
   "src/layers/airQuality/valueAt.test.mjs",
