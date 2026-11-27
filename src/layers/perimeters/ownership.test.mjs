@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createFirePerimetersLayer, perimeterAnchorDegrees } from './index.js';
-import { PERIMETER_EDGES, PERIMETER_FILL, PERIMETER_HALO } from './drawing.js';
+import { PERIMETER_EDGE, PERIMETER_FILL, PERIMETER_HALO } from './drawing.js';
 import { firePerimeterSnapshot } from './records.js';
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { LayerLifecycle } from '../../data/lifecycle.js';
@@ -151,9 +151,8 @@ function snap(fires, { pieces, ...rest } = {}) {
   };
 }
 const tick = () => new Promise((done) => setTimeout(done, 0));
-const edgeStyle = (band) => PERIMETER_EDGES[band].style;
 
-test("each piece draws as a clamped fill, and its fire's edge as a draped line over a halo, by age", async () => {
+test("each piece draws as a clamped fill, and its fire's edge as a draped line over a halo, whatever its age", async () => {
   const shifted = ring.map(([lon, lat]) => [lon + 0.2, lat]);
   const hole = [
     [-108.08, 35.22],
@@ -210,14 +209,12 @@ test("each piece draws as a clamped fill, and its fire's edge as a draped line o
   assert.deepEqual(fill.geometry.rings[0][1], { lon: -108.0, lat: 35.2 });
   const line = h.lines().items.get('fire-perimeter:2026-NMGNF-000123:line:1');
   assert.equal(line.mode, 'draped');
-  // Grown in the last 24 h: it glows.
-  assert.equal(line.widthPx, PERIMETER_EDGES[0].widthPx);
-  assert.deepEqual(line.style, edgeStyle(0));
-  assert.equal(line.style.kind, 'glow');
+  assert.equal(line.widthPx, PERIMETER_EDGE.widthPx);
+  assert.deepEqual(line.style, PERIMETER_EDGE.style);
   const halo = h.halos().items.get('fire-perimeter:2026-NMGNF-000123:halo:1');
   assert.deepEqual(halo.positions, line.positions, 'a halo under each line');
   assert.deepEqual(halo.style, PERIMETER_HALO.style);
-  assert.ok(halo.widthPx > PERIMETER_EDGES[1].widthPx);
+  assert.ok(halo.widthPx > PERIMETER_EDGE.widthPx);
   assert.equal(line.positions.length, hole.length, 'the hole is outlined too');
   assert.ok(Number.isFinite(line.positions[0].x), 'lines take ECEF');
   assert.equal(
@@ -225,13 +222,9 @@ test("each piece draws as a clamped fill, and its fire's edge as a draped line o
     3,
     'the outline as given, not the polygon',
   );
-  // Aged at the snapshot's moment, not now: 30 h and unknown are burned;
-  // every fill is the one fill.
-  for (const id of [
-    'fire-perimeter:other:line:0',
-    'fire-perimeter:other:line:1',
-  ])
-    assert.deepEqual(h.lines().items.get(id).style, edgeStyle(1));
+  // A piece 30 h old, or of unknown age, draws as the newest does.
+  for (const item of h.lines().items.values())
+    assert.deepEqual(item.style, PERIMETER_EDGE.style);
   for (const item of h.fills().items.values())
     assert.deepEqual(item.fill, PERIMETER_FILL);
   assert.equal(h.layer.getStats().count, 2);
@@ -417,7 +410,7 @@ test('a selected fire keeps its card while listed, even with no pieces left', as
   );
   await h.layer.update();
   h.clicks.handler({ position: { x: 10, y: 10 } });
-  current = snap([fire], { pieces: [] });
+  current = snap([fire], { pieces: [], revision: 'r2' });
   await h.layer.update();
   assert.equal(h.fills().items.size, 0);
   const [card] = h.overlay.entries.get('fire-perimeters');
@@ -783,7 +776,7 @@ test('historical analyst records hold no time after the moment shown', async () 
   h.layer.destroy();
 });
 
-test('the layer redraws on a new revision or a change of age band, and only then', async () => {
+test('the layer redraws on a new revision, and only then', async () => {
   const at = Date.UTC(2025, 7, 1, 12);
   const other = { ...fire, id: 'other' };
   let current = snap([fire, other], {
@@ -794,33 +787,22 @@ test('the layer redraws on a new revision or a change of age band, and only then
   const writes = () => [h.fills().writes, h.lines().writes];
   await h.layer.update();
   assert.deepEqual(writes(), [1, 1]);
-  // Same revision, feed reordered, facts changed, still in the same band.
+  // Same revision, feed reordered, facts changed, a day on.
   current = {
     ...current,
-    at: at + 4 * HOUR,
+    at: at + 24 * HOUR,
     fires: [{ ...other, containedPct: 100 }, fire],
   };
   await h.layer.update();
   assert.deepEqual(writes(), [1, 1]);
-  // The new piece turns 24 h old.
-  current = { ...current, at: at + 22 * HOUR };
-  await h.layer.update();
-  assert.deepEqual(writes(), [1, 1]);
-  current = { ...current, at: at + 23 * HOUR };
-  await h.layer.update();
-  assert.deepEqual(writes(), [2, 2]);
-  assert.deepEqual(
-    h.lines().items.get('fire-perimeter:2026-NMGNF-000123:line:0').style,
-    edgeStyle(1),
-  );
   current = { ...current, revision: 'changed' };
   await h.layer.update();
-  assert.deepEqual(writes(), [3, 3]);
+  assert.deepEqual(writes(), [2, 2]);
   // A source without a revision is drawn every time.
   current = { ...current, revision: undefined };
   await h.layer.update();
   await h.layer.update();
-  assert.deepEqual(writes(), [5, 5]);
+  assert.deepEqual(writes(), [4, 4]);
   current = snap([]);
   await h.layer.update();
   assert.equal(h.fills().items.size, 0);
@@ -852,9 +834,9 @@ test('a malformed snapshot is an error, not an empty map', async () => {
   h.layer.destroy();
 });
 
-test('the legend counts fires by their last growth at the moment shown, with the source note', async () => {
+test('the legend is one row, the burned area of every fire, with the source note', async () => {
   const at = Date.UTC(2025, 7, 1, 12);
-  const ages = [0, 5.9, 6, 23.9, 24, 71.9, 72, null, -1];
+  const ages = [0, 23.9, 72, null, -1];
   const h = harness({
     getSnapshot: async () =>
       snap(
@@ -869,22 +851,14 @@ test('the legend counts fires by their last growth at the moment shown, with the
   await h.layer.update();
   const controls = h.layer.getRowControls();
   assert.deepEqual(controls.chips, []);
-  assert.deepEqual(
-    controls.legend.map(({ label, color, count }) => [label, color, count]),
-    [
-      ['Growing (24 h)', '#ffb07a', 4],
-      ['Burned', '#f2541b', 5],
-    ],
-  );
-  assert.equal(
-    controls.legend[0].blurb,
-    'A glowing edge grew in the last 24 hours.',
-  );
+  assert.deepEqual(controls.legend, [
+    { label: 'Burned area', color: '#f2541b', count: 5 },
+  ]);
   assert.equal(controls.info, 'Perimeters are simplified to about 100 m.');
   h.layer.destroy();
   assert.deepEqual(
     h.layer.getRowControls().legend.map(({ count }) => count),
-    [0, 0],
+    [0],
   );
   assert.equal(h.layer.getRowControls().info, undefined);
 });
@@ -1003,54 +977,6 @@ test('a WFIGS fire without poly_DateCurrent redraws when its outline moves', asy
     } finally {
       Date.now = realNow;
     }
-  }
-});
-
-const legendCounts = (layer) =>
-  layer.getRowControls().legend.map((entry) => entry.count);
-const edgeBands = (h) =>
-  [...h.lines().items.values()].map((item) =>
-    PERIMETER_EDGES.findIndex(({ style }) => style.kind === item.style.kind),
-  );
-
-test('the live legend counts a fire in the band its drawn piece shows', async () => {
-  const T = Date.UTC(2026, 10, 20, 12);
-  const realNow = Date.now;
-  let now = T;
-  Date.now = () => now;
-  try {
-    const born = T - (23 * 60 + 59) * 60000;
-    const f = { ...fire, lastGrowthTime: born };
-    let fail = false;
-    const h = harness({
-      getSnapshot: async () => {
-        if (fail) throw new Error('down');
-        return snap([f], { pieces: [pieceOf(f.id, { born })] });
-      },
-    });
-    assert.equal(await h.layer.update(h.viewer), true);
-    assert.deepEqual(edgeBands(h), [0]);
-    assert.deepEqual(legendCounts(h.layer), [1, 0]);
-    // Two minutes later the panel repaints (another layer toggled): no refresh.
-    now = T + 2 * 60000;
-    assert.deepEqual(edgeBands(h), [0], 'the edge still glows');
-    assert.deepEqual(
-      legendCounts(h.layer),
-      [1, 0],
-      'the legend must count the fire where the map shows it',
-    );
-    // A failed refresh keeps the glowing picture; the legend must agree.
-    fail = true;
-    assert.equal(await h.layer.update(h.viewer), false);
-    assert.deepEqual(edgeBands(h), [0]);
-    assert.deepEqual(legendCounts(h.layer), [1, 0]);
-    // A successful refresh moves both to burned.
-    fail = false;
-    assert.equal(await h.layer.update(h.viewer), true);
-    assert.deepEqual(edgeBands(h), [1]);
-    assert.deepEqual(legendCounts(h.layer), [0, 1]);
-  } finally {
-    Date.now = realNow;
   }
 });
 

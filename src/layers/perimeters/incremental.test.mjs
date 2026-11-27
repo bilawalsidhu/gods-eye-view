@@ -9,7 +9,7 @@ import {
   snapshot,
   harness,
   FILL,
-  edgeOf,
+  EDGE,
   LINE_MIN_VERTICES,
   SQUARE_VERTICES,
 } from '../../testSupport/perimeterLayerHarness.mjs';
@@ -44,13 +44,13 @@ test('a read with nothing changed writes nothing', async () => {
   again.layer.destroy();
 });
 
-test("a piece that turns 24 h old changes its fire's edge, and nothing else", async () => {
+test('every fire draws in one fill and one edge, whatever its age; time passing redraws nothing', async () => {
   const fires = [fireAt('a', -120, 38), fireAt('b', -119, 39)];
   let at = AT;
   const pieces = [
     piece('a', 'old', AT - 100 * HOUR, { lon: -121 }),
-    piece('a', 'young', AT - 23 * HOUR, { count: 2 }),
-    piece('b', 'other', AT - 2 * HOUR, { lon: -119, lat: 39 }),
+    piece('a', 'young', AT - HOUR, { count: 2 }),
+    piece('b', 'unknown', null, { lon: -119, lat: 39 }),
   ];
   const h = harness(() => snapshot(fires, pieces, { at }));
   await h.layer.update();
@@ -62,43 +62,22 @@ test("a piece that turns 24 h old changes its fire's edge, and nothing else", as
   assert.equal(ours(':fills').length, 1);
   assert.equal(ours(':halos').length, 1);
   assert.equal(ours(':lines').length, 1);
-  const lines = () => h.items('lines');
-  assert.deepEqual(
-    lines().get('fire-perimeter:a:young:line:1').style,
-    edgeOf(0),
-    'growing',
-  );
-  assert.deepEqual(lines().get('fire-perimeter:a:old:line:0').style, edgeOf(1));
-  const before = h.items('fills');
-  h.writes.length = 0;
-  // Two hours on, `young` is 25 h old: burned. The fills are left alone.
-  at += 2 * HOUR;
-  await h.layer.update();
-  assert.deepEqual(
-    h.writes.map(({ set, call }) => [set, call]),
-    [
-      [ours(':halos')[0], 'set'],
-      [ours(':lines')[0], 'set'],
-    ],
-  );
-  assert.deepEqual(
-    lines().get('fire-perimeter:a:young:line:1').style,
-    edgeOf(1),
-  );
-  assert.deepEqual(
-    lines().get('fire-perimeter:b:other:line:0').style,
-    edgeOf(0),
-  );
-  for (const [id, item] of h.items('fills')) {
-    assert.deepEqual(item.fill, FILL, 'one fill, whatever its age');
-    assert.equal(item.set, before.get(id).set);
+  for (const item of h.items('fills').values())
+    assert.deepEqual(item.fill, FILL);
+  for (const item of h.items('lines').values()) {
+    assert.deepEqual(item.style, EDGE.style);
+    assert.equal(item.widthPx, EDGE.widthPx);
   }
+  h.writes.length = 0;
+  at += 100 * HOUR;
+  await h.layer.update();
+  assert.deepEqual(h.writes, []);
   h.layer.destroy();
 });
 
 test("one fire's change writes only its own items, and its own edge sets", async () => {
   const fires = [fireAt('a', -120, 38), fireAt('b', -119, 39)];
-  let at = AT;
+  const at = AT;
   // Each fire's edge more than half a group's room: a group each.
   const count = Math.ceil(LINE_MIN_VERTICES / 2 / SQUARE_VERTICES) + 1;
   let pieces = [
@@ -133,12 +112,11 @@ test("one fire's change writes only its own items, and its own edge sets", async
           assert.ok(id.startsWith(`fire-perimeter:${fire}:`), id);
       } else assert.ok(ofFire.has(set), set);
   };
-  // `b` grows, loses a piece, and a piece of it turns 24 h old; `a` stays.
+  // `b` grows and loses a piece; `a` stays.
   for (const step of [
     () =>
       (pieces = [...pieces, piece('b', 'b3', at, { lon: -118.8, lat: 39.2 })]),
     () => (pieces = pieces.filter(({ id }) => id !== 'b1')),
-    () => (at += 20 * HOUR),
   ]) {
     h.writes.length = 0;
     step();
@@ -348,11 +326,9 @@ test('a snapshot without piece ids is drawn whole every time it changes', async 
   assert.deepEqual(calls(), whole);
   h.writes.length = 0;
   await h.layer.update();
-  assert.deepEqual(calls(), [], 'the same revision and bands');
   at += 20 * HOUR;
   await h.layer.update();
-  assert.deepEqual(calls(), whole, 'a band changed: all drawn again');
-  h.writes.length = 0;
+  assert.deepEqual(calls(), [], 'the same revision, a day on');
   revision = 'r2';
   await h.layer.update();
   assert.deepEqual(calls(), whole);
@@ -425,13 +401,10 @@ test('a click on a piece drawn by id selects its own fire, through the stub pick
     },
   });
   await h.layer.update();
-  // A day on, both edges burned, and a new piece: the picks still find
-  // their fire.
+  // A day on, and a new piece: the picks still find their fire.
   at += 24 * HOUR;
   pieces = [...pieces, piece('b', 'pb2', at, { lon: -119.95 })];
   await h.layer.update();
-  for (const id of ['fire-perimeter:a:pa:line:0', 'fire-perimeter:b:pb:line:0'])
-    assert.deepEqual(h.items('lines').get(id).style, edgeOf(1));
   h.renderer.camera.setView({
     destination: { lon: -119.9, lat: 38.005, height: 20000 },
   });

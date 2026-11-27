@@ -1,7 +1,7 @@
 /** The Fire Perimeters layer on the stub renderer, for its draw-set tests. */
 import { createFirePerimetersLayer } from '../layers/perimeters/index.js';
 import {
-  PERIMETER_EDGES,
+  PERIMETER_EDGE,
   PERIMETER_FILL,
 } from '../layers/perimeters/drawing.js';
 import { bindRenderer } from '../render/rendererOf.js';
@@ -110,5 +110,4 @@ export function harness(read, extra = {}) {
 }
 
 export const FILL = PERIMETER_FILL;
-/** The style of a fire's edge in `band`. */
-export const edgeOf = (band) => PERIMETER_EDGES[band].style;
+export const EDGE = PERIMETER_EDGE;

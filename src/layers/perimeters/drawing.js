@@ -7,32 +7,19 @@ import { hexColor } from '../../render/color.js';
 import { msg } from '../../i18n/index.js';
 import { outerEdges } from './edges.js';
 
-const HOUR_MS = 3600000;
-
-/**
- * The ages a fire's edge is drawn by, newest first: growing (the last 24
- * hours) glows, the rest is burned. A piece of unknown birth, or born after
- * the moment shown, counts as burned; the legend counts fires by
- * `lastGrowthTime` the same way. `color` is the legend's: the glow, and
- * the burned fill.
- */
-export const PERIMETER_AGE_BANDS = Object.freeze(
-  [
-    { upToMs: 24 * HOUR_MS, color: '#ffb07a', label: msg('Growing (24 h)') },
-    { upToMs: Infinity, color: '#f2541b', label: msg('Burned') },
-  ].map((band) => Object.freeze(band)),
-);
+/** The legend's one row: the burned area, in the fill's colour. */
+export const PERIMETER_LEGEND = Object.freeze({
+  color: '#f2541b',
+  label: msg('Burned area'),
+});
 
 /** Every piece's fill, whatever its age. */
 export const PERIMETER_FILL = hexColor('#f2541b', 0.47);
-/** A fire's edge by its age band, and the dark halo under every edge. */
-export const PERIMETER_EDGES = Object.freeze([
-  {
-    widthPx: 8,
-    style: { kind: 'glow', color: hexColor('#ffb07a', 1), power: 0.35 },
-  },
-  { widthPx: 2.5, style: { kind: 'solid', color: hexColor('#ff7b3a', 1) } },
-]);
+/** Every fire's edge, and the dark halo under it. */
+export const PERIMETER_EDGE = Object.freeze({
+  widthPx: 2.5,
+  style: { kind: 'solid', color: hexColor('#ff7b3a', 1) },
+});
 export const PERIMETER_HALO = {
   widthPx: 6.5,
   style: { kind: 'solid', color: hexColor('#160904', 0.7) },
@@ -119,8 +106,8 @@ export function createPerimeterDrawing({ draw, prefix, show }) {
   /** Each fire's edge as drawn: `{lines, halos, vertices}`, by fire id. */
   const edges = new Map();
   /**
-   * Each drawn piece by key: `{fireId, band, base, fills, polygons,
-   * outline, vertices, chunk}`, with its valid rings and lines in degrees.
+   * Each drawn piece by key: `{fireId, base, fills, polygons, outline,
+   * vertices, chunk}`, with its valid rings and lines in degrees.
    */
   const drawn = new Map();
   let markers = null;
@@ -139,7 +126,7 @@ export function createPerimeterDrawing({ draw, prefix, show }) {
   }
 
   /** A piece's valid parts and fills, its fills named by `nextId()`. */
-  function pieceParts(piece, band, base, nextId) {
+  function pieceParts(piece, base, nextId) {
     const polygons = (
       Array.isArray(piece.polygons) ? piece.polygons : []
     ).filter(
@@ -162,7 +149,6 @@ export function createPerimeterDrawing({ draw, prefix, show }) {
       for (const ring of rings) vertices += ring.length;
     return {
       fireId: piece.fireId,
-      band,
       base,
       fills,
       polygons,
@@ -174,7 +160,7 @@ export function createPerimeterDrawing({ draw, prefix, show }) {
 
   /**
    * A fire's edge: its pieces' lines (`list`, in snapshot order) cut to its
-   * outer edge (edges.js), in each piece's band, with a halo under each.
+   * outer edge (edges.js), with a halo under each.
    * `idOf(part, kind)` names each, `kind` `'line:'` or `'halo:'`.
    */
   function fireEdge(list, idOf) {
@@ -184,13 +170,12 @@ export function createPerimeterDrawing({ draw, prefix, show }) {
     let vertices = 0;
     for (const [index, part] of list.entries()) {
       const meta = { fireId: part.fireId };
-      const edge = PERIMETER_EDGES[part.band] ?? PERIMETER_EDGES.at(-1);
       for (const run of runs[index]) {
         const positions = run.map(([lon, lat]) => fromDegrees(lon, lat));
         vertices += positions.length;
         for (const [into, look, kind] of [
           [halos, PERIMETER_HALO, 'halo:'],
-          [lines, edge, 'line:'],
+          [lines, PERIMETER_EDGE, 'line:'],
         ])
           into.push({
             id: idOf(part, kind),
@@ -242,7 +227,7 @@ export function createPerimeterDrawing({ draw, prefix, show }) {
    * `…:<fire>:halo:<n>`. After `drawChanges`, call `dropPerimeters()`
    * first.
    */
-  function drawAll(pieces, bands) {
+  function drawAll(pieces) {
     const counts = new Map();
     const nextId = (fireId, kind) => {
       const key = `${kind}${fireId}`;
@@ -253,9 +238,7 @@ export function createPerimeterDrawing({ draw, prefix, show }) {
     const byFire = new Map();
     const fills = [];
     for (const [index, piece] of pieces.entries()) {
-      const part = pieceParts(piece, bands[index], null, () =>
-        nextId(piece.fireId, ''),
-      );
+      const part = pieceParts(piece, null, () => nextId(piece.fireId, ''));
       fills.push(...part.fills);
       if (!byFire.has(piece.fireId)) byFire.set(piece.fireId, []);
       byFire.get(piece.fireId).push(part);
@@ -284,13 +267,13 @@ export function createPerimeterDrawing({ draw, prefix, show }) {
    * order puts it: after every drawn piece, into the newest fill set (see
    * `FILL_SHARE`); ahead of a drawn piece, into that piece's set, then
    * written whole in the snapshot's order (a later piece draws over an
-   * earlier). A fire with a piece added, gone or changed in band has its
+   * earlier). A fire with a piece added or gone has its
    * edge drawn again, in its group's sets only (see `LINE_SHARE`). Items
    * are named `fire-perimeter:<fire>:<piece>:<n>` (fills), `…:line:<n>` and
-   * `…:halo:<n>`, `<piece>` URI-encoded. Returns the pieces added,
-   * recoloured and removed.
+   * `…:halo:<n>`, `<piece>` URI-encoded. Returns the pieces added and
+   * removed.
    */
-  function drawChanges(pieces, bands, keys) {
+  function drawChanges(pieces, keys) {
     const listed = new Set(keys);
     // Fires whose edge is drawn again.
     const dirty = new Set();
@@ -324,25 +307,15 @@ export function createPerimeterDrawing({ draw, prefix, show }) {
       after[index] = next;
       next = drawn.get(keys[index])?.chunk ?? next;
     }
-    let recoloured = 0;
     const fresh = [];
     let total = 0;
     for (const chunk of chunks) total += chunk.vertices;
     for (const [index, piece] of pieces.entries()) {
       const key = keys[index];
-      const band = bands[index];
-      const part = drawn.get(key);
-      if (part) {
-        if (part.band === band) continue;
-        // Only its edge shows its age.
-        part.band = band;
-        dirty.add(part.fireId);
-        recoloured += 1;
-        continue;
-      }
+      if (drawn.has(key)) continue;
       const base = `${PICK_PREFIX}${piece.fireId}:${encodeURIComponent(piece.id)}:`;
       let n = 0;
-      const made = pieceParts(piece, band, base, () => `${base}${n++}`);
+      const made = pieceParts(piece, base, () => `${base}${n++}`);
       fresh.push({ index, key, part: made });
       total += made.vertices;
       dirty.add(piece.fireId);
@@ -395,7 +368,7 @@ export function createPerimeterDrawing({ draw, prefix, show }) {
       else chunk.set.upsert(edit.drawn);
     }
     if (dirty.size) drawEdges(dirty, keys);
-    return { added: fresh.length, recoloured, removed };
+    return { added: fresh.length, removed };
   }
 
   /** Draw the edges of the `dirty` fires again, in their groups' sets. */

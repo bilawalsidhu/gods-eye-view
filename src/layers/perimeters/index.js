@@ -7,7 +7,7 @@ import {
   buildIncidentCard,
 } from './cards.js';
 import {
-  PERIMETER_AGE_BANDS,
+  PERIMETER_LEGEND,
   createPerimeterDrawing,
   perimeterMarkerPx,
 } from './drawing.js';
@@ -25,13 +25,7 @@ export {
 export { createWfigsPerimeterSource } from './source.js';
 export * from './cards.js';
 export * from './inciweb.js';
-export { PERIMETER_AGE_BANDS, PERIMETER_MARKER_FROM_M } from './drawing.js';
-
-function perimeterAgeBand(time, atMs) {
-  const last = PERIMETER_AGE_BANDS.length - 1;
-  if (!Number.isFinite(time) || time > atMs) return last;
-  return PERIMETER_AGE_BANDS.findIndex(({ upToMs }) => atMs - time < upToMs);
-}
+export { PERIMETER_LEGEND, PERIMETER_MARKER_FROM_M } from './drawing.js';
 
 const validAnchor = (anchor) =>
   Number.isFinite(anchor?.lon) && Number.isFinite(anchor?.lat);
@@ -62,15 +56,14 @@ const INCIWEB_INDEX_TTL_MS = 6 * 3600000;
 
 /**
  * Own one fire-perimeter display, its refresh lifecycle, and click selection.
- * Each fire draws as one fill with a bright edge over a dark halo, the edge
- * glowing where it grew in the last 24 hours (`PERIMETER_AGE_BANDS`); from
- * far off, as a flame marker sized by its acres, named at middle zoom
- * (`PERIMETER_MARKER_FROM_M`, `PERIMETER_LABEL_RANGE_M`).
+ * Each fire draws as one fill with a bright edge over a dark halo, whatever
+ * the age of its parts; from far off, as a flame marker sized by its acres,
+ * named at middle zoom (`PERIMETER_MARKER_FROM_M`, `PERIMETER_LABEL_RANGE_M`).
  *
  * `source.getSnapshot({signal})` resolves to the snapshot the layer draws
  * (records.js `firePerimeterSnapshot` builds it from WFIGS):
- * - `at`: the moment shown, epoch ms, or null for now. Ages, colours and the
- *   legend count from it.
+ * - `at`: the moment shown, epoch ms, or null for now. The card's ages count
+ *   from it.
  * - `fetchedAt` (epoch ms or null) and `stale`: a stale snapshot is dated by
  *   its `fetchedAt`.
  * - `revision`: for a snapshot drawn whole (see `pieces[].id`), a string
@@ -78,24 +71,24 @@ const INCIWEB_INDEX_TTL_MS = 6 * 3600000;
  *   revision is redrawn on every read.
  * - `note`: text the layer row shows with the legend, or null.
  * - `fires`: `id` (string), `anchor` (`{lon, lat}` degrees, where the card
- *   stands), `lastGrowthTime` (epoch ms or null; the legend counts by it) and
+ *   stands), `lastGrowthTime` (epoch ms or null) and
  *   the card facts (`name`, `acres`, `containedPct`, `state`,
  *   `discoveredTime`, `updatedTime`, …). A fire without an id or anchor is
  *   dropped. A fire may have no pieces: it keeps its card, marker, label and
  *   legend count.
  * - `pieces`: `fireId` (a listed fire's id; any other piece is dropped),
- *   `born` (epoch ms or null; whether its edge glows), `polygons` (each
+ *   `born` (epoch ms or null; not drawn), `polygons` (each
  *   `[outer, ...holes]`, rings of `[lon, lat]`) and `outline` (lines of
  *   `[lon, lat]` drawn as the fire's edge, apart from the fill, so a piece
  *   cut from a larger area has no line along the cut). A piece's line where
  *   another piece of its fire has a ring through the same two points (newer
  *   growth cut from the area around it) runs inside the fire and is not
  *   drawn (edges.js). Optional `id`: a string, unique among its fire's
- *   pieces, that the source changes with any edit
- *   of the piece's `polygons` or `outline`. A new `revision` alone does
- *   not redraw a piece with an id. With an id on every piece, a read redraws
- *   only the fills added or removed since the last, in snapshot order, and
- *   the edges of the fires they or a change of age touched. A piece without
+ *   pieces, that the source changes with any edit of the piece's `polygons`
+ *   or `outline`. A new `revision` alone does not redraw a piece with an
+ *   id. With an id on every piece, a read redraws only the fills added or
+ *   removed since the last, in snapshot order, and the edges of their
+ *   fires. A piece without
  *   an id, or with an id repeated within its fire or holding a lone UTF-16
  *   surrogate, has the snapshot drawn whole.
  *
@@ -117,8 +110,7 @@ export function createFirePerimetersLayer({
   let _viewer = null;
   let _request = null;
   let _linkRequest = null;
-  // What the sets show when drawn whole: the revision and each piece's age
-  // band (null on the id path).
+  // The revision the sets show when drawn whole (null on the id path).
   let _drawnKey = null;
   let _draw = null;
   let _setPrefix = null;
@@ -130,9 +122,6 @@ export function createFirePerimetersLayer({
   // The moment the snapshot shows (null: now), and the source's legend note.
   let _at = null;
   let _note = null;
-  // The moment the drawn colours were computed at; the legend counts at it
-  // too, so it matches the map between reads.
-  let _bandsAt = null;
   // The proxy's last snapshot, served while WFIGS is unreachable.
   let _stale = false;
   let _lastError = null;
@@ -511,8 +500,6 @@ export function createFirePerimetersLayer({
         const pieces = snapshot.pieces.filter((piece) =>
           fires.has(piece?.fireId),
         );
-        const atMs = shownAt();
-        const bands = pieces.map((piece) => perimeterAgeBand(piece.born, atMs));
         // Pieces by id when every one has its own: `<fire>\n<piece id>`.
         // An empty snapshot stays in the current mode.
         // Both modes clear their sets.
@@ -530,7 +517,6 @@ export function createFirePerimetersLayer({
         )
           keys = null;
         _fireById = fires;
-        _bandsAt = atMs;
         try {
           if (keys) {
             if (_byPieceId !== true) {
@@ -538,27 +524,21 @@ export function createFirePerimetersLayer({
               _byPieceId = true;
             }
             // Compared piece by piece: nothing unchanged is written.
-            const { added, recoloured, removed } = _drawing.drawChanges(
-              pieces,
-              bands,
-              keys,
-            );
+            const { added, removed } = _drawing.drawChanges(pieces, keys);
             _drawnKey = null;
-            if (added || recoloured || removed)
+            if (added || removed)
               console.log(
-                `[Data:FirePerimeters] Drew ${added} new, ${recoloured} recoloured and ${removed} removed of ${pieces.length} pieces of ${fires.size} fires`,
+                `[Data:FirePerimeters] Drew ${added} new and ${removed} removed of ${pieces.length} pieces of ${fires.size} fires`,
               );
           } else {
             const drawKey =
-              typeof snapshot.revision === 'string'
-                ? `${snapshot.revision}\n${bands.join('')}`
-                : null;
+              typeof snapshot.revision === 'string' ? snapshot.revision : null;
             if (drawKey === null || drawKey !== _drawnKey) {
               if (_byPieceId !== false) {
                 _drawing.dropPerimeters();
                 _byPieceId = false;
               }
-              _drawing.drawAll(pieces, bands);
+              _drawing.drawAll(pieces);
               _drawnKey = drawKey;
               console.log(
                 `[Data:FirePerimeters] Drew ${pieces.length} pieces of ${fires.size} fires`,
@@ -607,7 +587,6 @@ export function createFirePerimetersLayer({
       _byPieceId = null;
       _drawnKey = null;
       _at = null;
-      _bandsAt = null;
       _note = null;
       _inciwebIndex = [];
       _indexFetchedAt = 0;
@@ -650,20 +629,15 @@ export function createFirePerimetersLayer({
     },
 
     getRowControls() {
-      const atMs = _bandsAt;
-      const counts = PERIMETER_AGE_BANDS.map(() => 0);
-      for (const fire of _fireById.values())
-        counts[perimeterAgeBand(fire.lastGrowthTime, atMs)]++;
       return {
         chips: [],
-        legend: PERIMETER_AGE_BANDS.map((band, index) => ({
-          label: t(band.label),
-          color: band.color,
-          count: counts[index],
-          ...(index === 0
-            ? { blurb: t('A glowing edge grew in the last 24 hours.') }
-            : {}),
-        })),
+        legend: [
+          {
+            label: t(PERIMETER_LEGEND.label),
+            color: PERIMETER_LEGEND.color,
+            count: _fireById.size,
+          },
+        ],
         ...(_note ? { info: t(_note) } : {}),
       };
     },
