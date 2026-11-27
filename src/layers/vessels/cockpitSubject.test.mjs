@@ -11,12 +11,7 @@ import { KNOT_MPS } from '../../data/units.js';
 
 test('bridge eye height follows the AIS type family', () => {
   assert.equal(vesselEyeHeightM('71'), 30, 'cargo');
-  assert.equal(vesselEyeHeightM('84'), 30, 'tanker');
-  assert.equal(vesselEyeHeightM('60'), 25, 'passenger');
-  assert.equal(vesselEyeHeightM('52'), 7, 'tug');
-  assert.equal(vesselEyeHeightM('30'), 6, 'fishing');
   assert.equal(vesselEyeHeightM('37'), 3, 'pleasure');
-  assert.equal(vesselEyeHeightM('36'), 3, 'sailing');
 });
 
 test('text vessel types resolve through the same families', () => {

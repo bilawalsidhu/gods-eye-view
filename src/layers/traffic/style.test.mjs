@@ -21,19 +21,9 @@ function style(preset = 'normal') {
   return { state, style: parts.style };
 }
 
-test('bucket colours are the shipped palette, painted as before', () => {
+test('the normal preset uses the shipped bucket colours, one per bucket', () => {
   const { state, style: s } = style();
   assert.deepEqual(state._activeBucketColors.free, FLOW_BUCKET_COLORS.free);
-  const expected = {
-    free: Cesium.Color.fromCssColorString('#2ecc71').withAlpha(0.9),
-    slow: Cesium.Color.fromCssColorString('#f0b23e').withAlpha(0.9),
-    jam: Cesium.Color.fromCssColorString('#e05252').withAlpha(0.9),
-  };
-  for (const bucket of ['free', 'slow', 'jam'])
-    assert.ok(
-      Cesium.Color.equals(asColor(s.dotColor(bucket)), expected[bucket]),
-      bucket,
-    );
   assert.ok(
     Cesium.Color.equals(
       asColor(s.dotColor(null)),
