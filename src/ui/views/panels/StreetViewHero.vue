@@ -62,7 +62,7 @@ const pausedReason = computed(() =>
       : pinned.isPinned(props.card.key)
         ? t('{layer} off', { layer: t('Street Level') })
         : ''
-    : layerOn.value && !providerOn.value && cards.fromPin
+    : layerOn.value && !providerOn.value
       ? t('Source off')
       : '',
 );
@@ -121,10 +121,8 @@ watch(
     failure.value = null;
     brokenStill.value = '';
     if (!layerOn.value || !photoId.value) return;
-    if (!providerOn.value) {
-      if (!cards.fromPin && cards.card?.key === props.card.key) cards.clear();
-      return;
-    }
+    // Its source switched off: the card stays and says so (pausedReason); it opens again with its source.
+    if (!providerOn.value) return;
     if (open.value || billed.value) return;
     void openThisPhoto();
   },

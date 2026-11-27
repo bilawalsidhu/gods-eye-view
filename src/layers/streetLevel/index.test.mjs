@@ -523,7 +523,7 @@ test('a provider withdraws only the error it reported', async (t) => {
     /Open Context to view street-level imagery/,
   );
 });
-test('a successful line lookup stops playback before opening the picked photo', async (t) => {
+test('a line lookup stops playback whether or not it finds a photo', async (t) => {
   const { lookups, nearestImage } = slowLookups();
   const provider = posingProvider({ nearestImage });
   const create = provider.create;
@@ -542,13 +542,34 @@ test('a successful line lookup stops playback before opening the picked photo', 
   const miss = layer.openNearest(point, options);
   lookups[0].answer.resolve(null);
   assert.equal(await miss, false);
-  assert.deepEqual(playback, []);
+  assert.deepEqual(playback, [['playing']]);
 
   const found = layer.openNearest(point, options);
   lookups[1].answer.resolve('picked');
   assert.equal(await found, true);
-  assert.deepEqual(playback, [['playing']]);
+  assert.deepEqual(playback, [['playing'], ['playing']]);
   assert.equal(layer.settledPhotoId(), 'mapillary:picked');
+});
+
+test('a line click on the sky opens nothing and stops playback, keeping the photo', async (t) => {
+  const provider = posingProvider({});
+  const create = provider.create;
+  let stops = 0;
+  provider.create = (context) => {
+    const instance = create(context);
+    instance.viewer.stopPlayback = () => stops++;
+    return instance;
+  };
+  const { layer } = await enabledLayer(t, [provider]);
+  layer.attachViewerHost({});
+  assert.equal(await layer.openImage('mapillary', 'playing'), true);
+  provider.context().actions.cancelNearest();
+  assert.equal(stops, 1);
+  assert.equal(
+    layer.settledPhotoId(),
+    'mapillary:playing',
+    'the photo stays open',
+  );
 });
 
 test('an older nearest lookup that answers late cannot replace a newer one', async (t) => {

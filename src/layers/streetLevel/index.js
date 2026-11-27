@@ -162,6 +162,7 @@ export function createStreetLevelLayer({
           releaseCardPhotoOwner(undefined, KEEP_OPEN_PHOTO);
           abortNearest();
           parts.viewerHost.cancelPending();
+          if (state.street.open) parts.viewerHost.stopPlayback();
           state.street.loading = false;
           notify();
         },
@@ -755,6 +756,9 @@ export function createStreetLevelLayer({
     releaseCardPhotoOwner(callerSignal, KEEP_OPEN_PHOTO);
     abortNearest();
     parts.viewerHost.cancelPending();
+    // A new lookup is the person's next step: a sequence playing in the open
+    // photo stops now, whether or not this lookup finds a photo.
+    if (state.street.open) parts.viewerHost.stopPlayback();
     // The lookup is the request; the photo it opens is not a second one.
     const requestId = ++state.photoRequests;
     const lookup = new AbortController();
@@ -817,8 +821,6 @@ export function createStreetLevelLayer({
       if (proceed && proceed() !== true) return retired();
       nearestLookup = null;
       callerSignal?.removeEventListener('abort', onCallerAbort);
-      // A sequence playing in the replaced photo would step past this one.
-      if (state.street.open) parts.viewerHost.stopPlayback();
       // The caller's signal and its proceed() still count while the
       // viewer mounts and loads.
       const imageOptions = { frame, requestId, request: false, origin };

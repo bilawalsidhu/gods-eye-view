@@ -433,3 +433,33 @@ test('a pinned photo keeps its saved credit while Street Level is off', async (t
     'Panoramax · Image by Ana · Licence Ouverte 2.0',
   );
 });
+
+test('a card whose source is switched off stays with “Source off”, and opens again with its source', async (t) => {
+  const id = 'kartaview:A';
+  const { host, street, asked, cards } = mountHero(t, id, {
+    alreadyOpen: true,
+  });
+  cards.card = {
+    key: `street-level:${id}`,
+    layerId: 'street-level',
+    identity: { layerId: 'street-level', id },
+  };
+  const publish = (active) =>
+    street.publish({
+      enabled: true,
+      error: null,
+      providers: [{ id: 'kartaview', active }],
+      viewer: { open: false, photo: null },
+    });
+  publish(false);
+  await nextTick();
+  assert.equal(cards.card?.key, `street-level:${id}`, 'the card stays');
+  assert.match(
+    host.querySelector('.paused-chip')?.getAttribute('aria-label') ?? '',
+    /Source off/,
+  );
+  assert.deepEqual(asked, []);
+  publish(true);
+  await nextTick();
+  assert.deepEqual(asked, [id], 'with its source back the photo opens again');
+});
