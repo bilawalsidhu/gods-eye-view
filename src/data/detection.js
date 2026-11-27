@@ -911,10 +911,10 @@ function _drawScanlines(width, height, nowMs) {
   _ctx.restore();
 }
 
-// Corner-bracket geometry (appendCornerBracket) and label composition
-// (composeLabel) now live in detectionDraw.js. _drawOverlay batches brackets by
-// tier color + radial-opacity band and draws labels as one background fill plus
-// two text passes, avoiding per-object strokes while preserving keyhole fading.
+// Corner-bracket geometry (appendCornerBracket) lives in detectionDraw.js.
+// _drawOverlay batches brackets by tier color + radial-opacity band and draws
+// labels as one background fill plus two text passes, avoiding per-object
+// strokes while preserving keyhole fading.
 
 /**
  * Draws the top-left status banner showing the current mode, visible/source counts,

@@ -36,7 +36,7 @@ import {
   clearAwarenessEchoField,
   setAwarenessEchoField,
 } from '../awarenessEcho.js';
-import { composeLabel, resolveTier } from './detectionDraw.js';
+import { resolveTier } from './detectionDraw.js';
 import {
   createFakeDepthScene,
   createFakeGl,
@@ -1379,9 +1379,6 @@ test('a transit vehicle is a contact: box, route, mode and operator on the share
     assert.ok(env.ctx.calls.some(([name, , color, width]) => name === 'stroke' && color === '#5EF08A' && width === 1.25));
     assert.ok(env.ctx.calls.some(([name, , color, width]) => name === 'stroke' && color === '#05080C' && width === 3.25));
     assert.ok(!env.detectionCtx.calls.some(([name, , color]) => name === 'stroke' && color === '#5EF08A'));
-    // The operator travels on the object for the two-tier card form, which is
-    // where `klass` is read; the host's track label does not paint it.
-    assert.equal(composeLabel(objects[0]).secondary, 'MBTA · BUS 34 KM/H');
     // The selected vehicle carries its own fuller card, so detection must not
     // label it a second time.
     assert.equal(

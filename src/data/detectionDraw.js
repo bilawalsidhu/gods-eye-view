@@ -2,18 +2,13 @@
  * @module detectionDraw
  * @description Pure, renderer-agnostic helpers for the detection overlay.
  *
- * Deliberately free of Cesium and DOM dependencies so the label composition,
- * metric formatting, glyph-width estimation, fade ramp, and corner-bracket
- * geometry can be unit-tested in isolation — and reused verbatim by a future
- * GPU/MSDF renderer. The Canvas2D overlay (detection.js) imports these and
- * supplies the actual drawing surface.
+ * Deliberately free of Cesium and DOM dependencies so the metric formatting,
+ * glyph-width estimation, fade ramp, and corner-bracket geometry can be
+ * unit-tested in isolation. The Canvas2D overlay (detection.js) imports these
+ * and supplies the actual drawing surface.
  */
 import { formatNumber, t } from '../i18n/index.js';
 
-/** @constant {number} Max characters shown for a label's primary (id) line. */
-const MAX_PRIMARY = 18;
-/** @constant {number} Max characters shown for a label's secondary (class · metric) line. */
-const MAX_SECONDARY = 26;
 /** @constant {number} Metres-to-feet conversion factor. */
 const M_TO_FT = 3.28084;
 
@@ -53,23 +48,6 @@ export function formatKnots(knots) {
 export function monoTextWidth(text, charWidth) {
   if (!text) return 0;
   return text.length * charWidth;
-}
-
-/**
- * Composes a detection label into a two-tier structure: a bright primary line
- * (the id/callsign) and a dimmer secondary line ("class · metric"). Missing
- * class/metric collapse the secondary to '' so the label degrades to id-only.
- * @param {{id?: string, klass?: string, metric?: string}} obj - Label source fields.
- * @returns {{primary: string, secondary: string}} Truncated label lines.
- */
-export function composeLabel(obj) {
-  const src = obj || {};
-  const primary = String(src.id || '').slice(0, MAX_PRIMARY);
-  const parts = [src.klass, src.metric]
-    .map((s) => (s == null ? '' : String(s).trim()))
-    .filter((s) => s.length > 0);
-  const secondary = parts.join(' · ').slice(0, MAX_SECONDARY);
-  return { primary, secondary };
 }
 
 /**
@@ -142,41 +120,9 @@ export function resolveTier(obj) {
 }
 
 /**
- * Computes the geometry of a two-tier label "card": overall width/height plus
- * the text baselines, sized so the second line and its descenders always fit
- * (the clipping bug in the throwaway spike). Pure layout — the renderer draws
- * the rounded rect, accent bar, and text from these numbers.
- * @param {string} primary - Bright first line (id/callsign).
- * @param {string} secondary - Dim second line (class · metric); '' collapses to one line.
- * @param {number} charWidth - Monospace glyph advance, px.
- * @returns {{w: number, h: number, idBase: number, subBase: number, textX: number, hasSec: boolean}}
- */
-export function measureLabelCard(primary, secondary, charWidth) {
-  const padX = 6;
-  const padY = 4;
-  const lineH = 11;
-  const ASC = 8; // cap height above the first baseline
-  const DESC = 3; // descender depth below the last baseline
-  const accentW = 3; // left accent bar width
-  const accentGap = 4; // gap between accent bar and text (doubles as left pad)
-  const hasSec = !!(secondary && secondary.length);
-  const wId = monoTextWidth(primary, charWidth);
-  const wSub = hasSec ? monoTextWidth(secondary, charWidth) : 0;
-  const textW = Math.max(wId, wSub);
-  const w = Math.ceil(accentW + accentGap + textW + padX);
-  const idBase = padY + ASC;
-  const subBase = hasSec ? idBase + lineH : 0;
-  const lastBase = hasSec ? subBase : idBase;
-  const h = lastBase + DESC + padY;
-  const textX = accentW + accentGap;
-  return { w, h, idBase, subBase, textX, hasSec };
-}
-
-/**
  * Computes the geometry of a SINGLE-LINE track label: callsign (bright) followed
  * on the same baseline by a dim altitude/metric micro-field. This is the
- * persistent label — type is carried by the platform icon, not text — replacing
- * the two-line card for the ambient majority of tracks.
+ * persistent label — type is carried by the platform icon, not text.
  * @param {string} primary - Callsign / id (bright).
  * @param {string} micro - Short metric, e.g. flight level digits or '14kn' ('' = none).
  * @param {number} charWidth - Monospace glyph advance for the primary text, px.
