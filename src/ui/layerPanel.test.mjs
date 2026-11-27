@@ -147,7 +147,6 @@ test('readout rows contain only toggles and metadata; ordinary rows retain contr
     'weather-cyclones',
     'other',
   ];
-  let refresh;
   const layers = ids.map((id) => ({
     id,
     name: id,
@@ -164,9 +163,6 @@ test('readout rows contain only toggles and metadata; ordinary rows retain contr
     setEnabled: (...args) => calls.push(args),
     setLayerParams: (...args) => calls.push(args),
     hasRowControls: () => true,
-    subscribeRowControls: (_id, callback) => {
-      refresh = callback;
-    },
     getRowControls: (id) => ({
       readout: id !== 'other',
       summary: { status: 'Loading' },
@@ -211,7 +207,6 @@ test('readout rows contain only toggles and metadata; ordinary rows retain contr
       { opacity: 'light' },
       { origin: 'user' },
     ]);
-    assert.equal(typeof refresh, 'function');
   } finally {
     panel.destroy();
     document.body.replaceChildren();
@@ -242,7 +237,6 @@ test('the Recent Imagery readout mounts in its rail body like the weather readou
     setEnabled() {},
     setLayerParams() {},
     hasRowControls: () => false,
-    subscribeRowControls() {},
     getRowControls: () => null,
   });
   try {
@@ -397,7 +391,6 @@ async function utilitiesFixture({
     setLayerParams() {},
     getRowControls: () => null,
     hasRowControls: () => false,
-    subscribeRowControls: () => () => {},
   });
   panel.mount(container);
   const headings = (root) =>
@@ -766,7 +759,7 @@ test('a language change renders rows the equality check would otherwise skip', a
   }
 });
 
-test('while the page is hidden a refresh still defers to onHiddenRefresh', async () => {
+test('while the page is hidden an invalidation waits, and paints once the page is shown', async () => {
   const sizes = installFakeResizeObserver();
   const { container, panel, layers, restore } = await utilitiesFixture();
   const hidden = Object.getOwnPropertyDescriptor(document, 'hidden');
@@ -776,18 +769,18 @@ test('while the page is hidden a refresh still defers to onHiddenRefresh', async
     get: () => pageHidden,
   });
   try {
-    let deferred = 0;
-    panel.onHiddenRefresh = () => deferred++;
     const renders = countRenders(panel);
     sizes.report(container, 240, 600);
     layers.find(({ id }) => id === 'flights').enabled = true;
-    panel._refreshTogglePanel();
-    assert.equal(deferred, 1);
+    panel.invalidate('flights');
+    panel.paintPending();
     assert.deepEqual(renders, []);
     pageHidden = false;
-    panel._refreshTogglePanel();
-    assert.equal(deferred, 1);
+    // What the page's return calls (LayerPresentation.flushVisible).
+    panel.paintPending();
     assert.equal(renders.length, 1);
+    panel.paintPending();
+    assert.equal(renders.length, 1, 'nothing left pending');
     assert.ok(
       container
         .querySelector('[data-layer-id="flights"] .data-toggle-btn')
@@ -906,4 +899,182 @@ test('a chip count is shortened like the row count', async () => {
     ['10.7K', '42', undefined],
   );
   assert.equal(chips[0].swatch, '#fff', 'the rest of the chip passes through');
+});
+
+// ── The scheduler: one paint per frame, nothing while hidden ───────────────
+
+/** A panel over plain layer descriptors, with a clock the test moves. */
+async function schedulerFixture({ layers: specs }) {
+  const { LayerPanel } = await import('./layerPanel.js');
+  document.body.replaceChildren();
+  const container = document.body.appendChild(document.createElement('div'));
+  container.id = 'data-toggles';
+  const recentBody = document.body.appendChild(document.createElement('div'));
+  recentBody.id = 'recent-imagery-panel-body';
+  const listeners = new Set();
+  const weatherClock = {
+    getState: () => ({ mode: 'latest', timeline: [], products: [] }),
+    subscribe(callback) {
+      listeners.add(callback);
+      return () => listeners.delete(callback);
+    },
+  };
+  const layers = specs.map((spec) => ({
+    icon: '*',
+    source: 'S',
+    enabled: true,
+    showInTogglePanel: true,
+    stats: {},
+    name: spec.id,
+    ...spec,
+  }));
+  const reads = new Map();
+  const panel = new LayerPanel({
+    weatherClock,
+    getLayers: () => layers,
+    isEnabled: (id) =>
+      layers.find((layer) => layer.id === id)?.enabled === true,
+    setEnabled() {},
+    setLayerParams() {},
+    hasRowControls: () => true,
+    getRowControls: (id) => {
+      reads.set(id, (reads.get(id) ?? 0) + 1);
+      return layers.find((layer) => layer.id === id).controls?.() ?? null;
+    },
+  });
+  const readout = { updates: 0, update() {}, destroy() {} };
+  readout.update = () => readout.updates++;
+  panel.attachRecentImagery(() => readout);
+  panel.mount(container);
+  const frame = () =>
+    new Promise((resolve) =>
+      requestAnimationFrame(() => setTimeout(resolve, 0)),
+    );
+  await frame();
+  reads.clear();
+  return {
+    container,
+    panel,
+    layers,
+    reads,
+    readout,
+    frame,
+    tick: () => {
+      for (const callback of [...listeners]) callback();
+    },
+    restore() {
+      panel.destroy();
+      document.body.replaceChildren();
+    },
+  };
+}
+
+test('invalidations before a frame share it, and an unchanged row is not rendered again', async () => {
+  let label = 'One';
+  const f = await schedulerFixture({
+    layers: [{ id: 'flights', controls: () => ({ info: label }) }],
+  });
+  try {
+    const renders = countRenders(f.panel);
+    for (let i = 0; i < 100; i++) f.panel.invalidate('flights');
+    assert.deepEqual(renders, [], 'invalidate never paints');
+    await f.frame();
+    assert.equal(f.reads.get('flights'), 1, 'one frame reads the row once');
+    assert.deepEqual(renders, [], 'the row it read is the one shown');
+    label = 'Two';
+    f.panel.invalidate('flights');
+    f.panel.invalidate('flights');
+    await f.frame();
+    assert.equal(renders.length, 1);
+    assert.equal(
+      f.container.querySelector('.data-toggle-controls-info').textContent,
+      'Two',
+    );
+    await f.frame();
+    assert.equal(renders.length, 1, 'nothing is left pending');
+  } finally {
+    f.restore();
+  }
+});
+
+test('a hidden list stays owed across invalidations and paints exactly once when shown', async () => {
+  const sizes = installFakeResizeObserver();
+  let label = 'One';
+  const f = await schedulerFixture({
+    layers: [{ id: 'flights', controls: () => ({ info: label }) }],
+  });
+  try {
+    const renders = countRenders(f.panel);
+    sizes.report(f.container, 0, 0);
+    for (const next of ['Two', 'Three', 'Four']) {
+      label = next;
+      f.panel.invalidate('flights');
+      await f.frame();
+    }
+    assert.deepEqual(renders, [], 'nothing paints while hidden');
+    sizes.report(f.container, 240, 600);
+    await f.frame();
+    await f.frame();
+    assert.equal(renders.length, 1, 'one catch-up paint');
+    assert.equal(
+      f.container.querySelector('.data-toggle-controls-info').textContent,
+      'Four',
+      'the catch-up shows the latest row',
+    );
+  } finally {
+    f.restore();
+    sizes.restore();
+  }
+});
+
+test('a layer that follows the time is read again when it moves; others are not', async () => {
+  let minute = 0;
+  const f = await schedulerFixture({
+    layers: [
+      {
+        id: 'wind',
+        followsTime: true,
+        controls: () => ({ info: `minute ${minute}` }),
+      },
+      { id: 'flights', controls: () => ({ info: 'static' }) },
+    ],
+  });
+  try {
+    const renders = countRenders(f.panel);
+    for (let step = 1; step <= 3; step++) {
+      minute = step;
+      f.tick();
+      f.tick();
+      await f.frame();
+      assert.equal(renders.length, step, `step ${step} paints once`);
+    }
+    assert.equal(f.reads.get('wind'), 3, 'the follower is read once a step');
+    assert.equal(f.reads.get('flights') ?? 0, 0, 'the other row is not read');
+    f.layers[0].enabled = false;
+    f.panel.invalidate();
+    await f.frame();
+    const after = renders.length;
+    f.tick();
+    await f.frame();
+    assert.equal(renders.length, after, 'an off follower is not read again');
+  } finally {
+    f.restore();
+  }
+});
+
+test('the Recent Imagery readout updates on its layer invalidation, once per frame', async () => {
+  const f = await schedulerFixture({
+    layers: [{ id: 'recent-imagery' }, { id: 'flights' }],
+  });
+  try {
+    f.readout.updates = 0;
+    for (let i = 0; i < 10; i++) f.panel.invalidate('recent-imagery');
+    await f.frame();
+    assert.equal(f.readout.updates, 1);
+    f.panel.invalidate('flights');
+    await f.frame();
+    assert.equal(f.readout.updates, 1, 'another layer does not update it');
+  } finally {
+    f.restore();
+  }
 });

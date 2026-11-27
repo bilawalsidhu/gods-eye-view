@@ -914,7 +914,6 @@
   "src/data/gtfsRealtime.test.mjs",
   "src/data/transit.js",
   "src/data/transit.test.mjs",
-  "src/layers/transit/controls.js",
   "src/layers/transit/height.js",
   "src/layers/transit/index.js",
   "src/layers/transit/ingestion.js",

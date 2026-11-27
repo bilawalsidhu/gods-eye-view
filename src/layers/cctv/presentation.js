@@ -348,6 +348,8 @@ export function createPresentation({
   /** Dispatches the current UI state to all registered subscriber callbacks. */
 
   function notifyListeners() {
+    // Loading progress and its end show in the layer row too.
+    layerState._panel?.invalidate();
     const payload = uiState();
     for (const callback of layerState._listeners) {
       try {

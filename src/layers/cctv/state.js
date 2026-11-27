@@ -151,6 +151,9 @@ export function createState({ services }) {
 
   layerState._geoQueue = [];
 
+  /** @type {{ invalidate: () => void } | null} the panels' handle, from init */
+  layerState._panel = null;
+
   layerState._geoQueueTimer = 0;
 
   layerState._geoLoading = false;

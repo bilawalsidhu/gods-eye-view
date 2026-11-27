@@ -184,8 +184,7 @@ test('STARLINK reports loading, then ACTIVE only once the points exist', async (
   const refreshes = [];
   try {
     globalThis.fetch = async () => ({ ok: true, text: async () => DENSE_TLE });
-    _setDenseCatalogStateForTest({});
-    satellitesLayer.setRowControlsListener(() => refreshes.push(satellitesLayer.getRowControls()));
+    _setDenseCatalogStateForTest({ panel: { invalidate: () => refreshes.push(satellitesLayer.getRowControls()) } });
 
     satellitesLayer.setParams({ catalog: 'dense' });
     // The param flips synchronously, but the shell has not arrived yet — the
@@ -220,9 +219,8 @@ test('a failed STARLINK load reverts the mode rather than leaving an active chip
   console.warn = () => {};
   try {
     globalThis.fetch = async () => ({ ok: false, status: 502 });
-    _setDenseCatalogStateForTest({});
     let pushes = 0;
-    satellitesLayer.setRowControlsListener(() => { pushes += 1; });
+    _setDenseCatalogStateForTest({ panel: { invalidate: () => { pushes += 1; } } });
 
     satellitesLayer.setParams({ catalog: 'dense' });
     const settled = await settleChip();

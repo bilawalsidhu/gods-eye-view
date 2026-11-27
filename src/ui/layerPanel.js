@@ -271,6 +271,19 @@ export function presentLayerToggle(layer) {
   };
 }
 
+/** The layers the Weather rail readout shows. */
+const WEATHER_PANEL_IDS = Object.freeze([
+  'wind',
+  'weather-radar',
+  'weather-satellite',
+  'weather-lightning',
+  'weather-cyclones',
+  'air-quality',
+]);
+const RECENT_IMAGERY_ID = 'recent-imagery';
+/** Marks the scene time as moved among the dirty layer ids. */
+const TIME = Symbol('time');
+
 /**
  * Layer rows over supplied state and actions. The standard row container's Finder
  * takes precedence over an explicit Finder or the private default.
@@ -283,8 +296,6 @@ export class LayerPanel {
     setLayerParams,
     getRowControls,
     hasRowControls,
-    subscribeRowControls,
-    onHiddenRefresh = () => {},
     weatherClock,
     finder,
   }) {
@@ -297,14 +308,23 @@ export class LayerPanel {
     this.setLayerParams = setLayerParams;
     this._rowControlsFor = getRowControls;
     this.hasRowControls = hasRowControls;
-    this.subscribeRowControls = subscribeRowControls;
-    this.onHiddenRefresh = onHiddenRefresh;
     this._generation = 0;
     this._removers = [];
     this._destroyed = false;
     /** @type {Map<string, HTMLElement>} lists of their own, by element id */
     this._groupContainers = new Map();
-    this._cancelRowControlsRefresh = null;
+    // The scheduler: layers whose row or readout may have changed since the
+    // last paint (`invalidate`), painted together on the next frame.
+    /** @type {Set<string | symbol>} */
+    this._dirty = new Set();
+    this._dirtyAll = false;
+    /** @type {(() => void) | null} cancels the frame asked for */
+    this._cancelFrame = null;
+    /** @type {Set<string> | 'all' | null} ids a skipped paint left unpresented */
+    this._stale = null;
+    /** @type {string[]} layers whose row text follows the scene time */
+    this._timeFollowers = [];
+    this._offTime = null;
     this._recentImageryFactory = null;
     this._recentImageryPanel = null;
     this._rows = [];
@@ -342,6 +362,11 @@ export class LayerPanel {
       this._groupContainers.set(containerId, element);
     }
     this._watchRowLists();
+    // The panel follows the scene time once, for every layer that declares
+    // its row or readout follows it; no layer pushes a repaint per time step.
+    this._offTime?.();
+    this._offTime =
+      this.weatherClock?.subscribe?.(() => this._onTimeMoved()) ?? null;
     this._weatherPanel?.destroy();
     this._weatherPanel = createWeatherPanel({
       clock: this.weatherClock,
@@ -415,26 +440,104 @@ export class LayerPanel {
     for (const remove of this._openingRemovers.splice(0)) remove();
   }
   /**
-   * Paint now the rows a refresh skipped while their panel was not displayed.
+   * Paint now what a panel being shown owes: the rows a refresh skipped while
+   * their list was not displayed, and whatever a frame was about to paint.
    * Whatever shows a panel calls this first (see `rail/panelContent.js`); a
-   * no-op when no list concerned is owed. Only the owed lists inside `panel`
-   * are painted, or with `displayedOnly` only the owed lists that have a
-   * layout box now; the others stay owed.
+   * no-op when nothing concerned is owed or pending. Only the lists inside
+   * `panel` count as shown, or with `displayedOnly` only the owed lists that
+   * have a layout box now; the others stay owed.
    * @param {{ displayedOnly?: boolean, panel?: Element | null }} [options]
    */
   flushOwedRows({ displayedOnly = false, panel = null } = {}) {
-    if (this._owedLists.size === 0 || this._destroyed) return;
-    const shown = [...this._owedLists].filter((element) =>
-      displayedOnly
-        ? element.getClientRects?.().length > 0
-        : !panel || panel.contains(element),
-    );
+    if (this._destroyed) return;
+    const pending = this._hasPending();
+    const shown = displayedOnly
+      ? [...this._owedLists].filter(
+          (element) => element.getClientRects?.().length > 0,
+        )
+      : [...this._displayWatches.keys()].filter(
+          (element) =>
+            (pending || this._owedLists.has(element)) &&
+            (!panel || panel.contains(element)),
+        );
     if (shown.length === 0) return;
-    // These lists are being shown: a refresh before the observer's next
-    // report paints them rather than owing them again.
+    // These lists are being shown: a paint before the observer's next report
+    // paints them rather than owing them again.
     for (const element of shown)
       this._displayWatches.get(element)?.assumeShown();
-    this._paint({ whileShown: true });
+    this._dirtyAll = true;
+    this.paintPending();
+  }
+
+  /**
+   * A layer's row or rail readout may have changed. Nothing paints now: the
+   * changes made before the next frame are painted together then, only on
+   * the surfaces that are displayed, and a surface that is not keeps them
+   * owed until it is. With no id, every layer.
+   * @param {string} [layerId]
+   */
+  invalidate(layerId) {
+    if (this._destroyed) return;
+    if (typeof layerId === 'string' || layerId === TIME)
+      this._dirty.add(layerId);
+    else this._dirtyAll = true;
+    if (this._cancelFrame) return;
+    const frame = () => {
+      this._cancelFrame = null;
+      this.paintPending();
+    };
+    if (typeof requestAnimationFrame === 'function') {
+      const id = requestAnimationFrame(frame);
+      this._cancelFrame = () => cancelAnimationFrame(id);
+    } else {
+      const id = setTimeout(frame, 0);
+      this._cancelFrame = () => clearTimeout(id);
+    }
+  }
+
+  /**
+   * Paint now what was invalidated since the last paint. While the page is
+   * hidden it stays pending; the page's return calls this again.
+   */
+  paintPending() {
+    if (this._destroyed) return;
+    this._cancelFrame?.();
+    this._cancelFrame = null;
+    if (!this._hasPending() || !this._toggleContainer) return;
+    if (typeof document !== 'undefined' && document.hidden) return;
+    const only = this._dirtyAll ? null : new Set(this._dirty);
+    this._dirtyAll = false;
+    this._dirty.clear();
+    this._paint({ whileShown: true, only });
+    if (!only || WEATHER_PANEL_IDS.some((id) => only.has(id)) || only.has(TIME))
+      this._refreshWeatherPanel();
+    if (!only || only.has('news')) this._refreshNewsPanel();
+    if (!only || only.has(RECENT_IMAGERY_ID))
+      this._recentImageryPanel?.update?.();
+  }
+
+  _hasPending() {
+    return this._dirtyAll || this._dirty.size > 0;
+  }
+
+  /** Every layer's row and readout, painted now (a remount, a test). */
+  _refreshTogglePanel() {
+    this._dirtyAll = true;
+    this.paintPending();
+  }
+
+  /** The scene time moved: the rows and readouts that follow it are dirty. */
+  _onTimeMoved() {
+    if (this._destroyed) return;
+    let dirty = false;
+    for (const id of this._timeFollowers)
+      if (this.isEnabled(id)) {
+        this._dirty.add(id);
+        dirty = true;
+      }
+    // The Weather readout's frame time and ages are read from the time.
+    if (WEATHER_PANEL_IDS.some((id) => this.isEnabled(id))) dirty = true;
+    if (dirty) this.invalidate(TIME);
   }
   _isDisplayed(element) {
     return this._displayWatches.get(element)?.shown() ?? true;
@@ -443,8 +546,11 @@ export class LayerPanel {
     this._generation++;
     // New bindings render every list again.
     this._paintedRows = new Map();
-    this._cancelRowControlsRefresh?.();
-    this._cancelRowControlsRefresh = null;
+    this._cancelFrame?.();
+    this._cancelFrame = null;
+    this._dirty.clear();
+    this._dirtyAll = false;
+    this._stale = null;
     for (const remove of this._removers.splice(0)) remove();
   }
   destroy() {
@@ -453,6 +559,8 @@ export class LayerPanel {
     this._releaseBindings();
     this._unwatchRowLists();
     this._owedLists.clear();
+    this._offTime?.();
+    this._offTime = null;
     this._weatherPanel?.destroy();
     this._weatherPanel = null;
     this._newsPanel?.destroy();
@@ -482,6 +590,7 @@ export class LayerPanel {
       .sort((a, b) => panelPosition(a) - panelPosition(b));
     this._rows = [];
     this._rowViews = new Map();
+    this._timeFollowers = [];
     let previousGroup = '';
     for (const layer of layers) {
       if (!layer.showInTogglePanel) continue;
@@ -497,15 +606,7 @@ export class LayerPanel {
       previousGroup = container ? '' : group;
       const readout = Boolean(this._rowControlsFor(layer.id)?.readout);
       const controls = this.hasRowControls(layer.id);
-      if (controls) {
-        // A layer whose controls settle asynchronously (a chunked catalog load
-        // that can also fail) pushes a re-render through this; nothing else
-        // would repaint the row before its next scheduled refresh.
-        const unsubscribe = this.subscribeRowControls(layer.id, () =>
-          this._scheduleRowControlsRefresh(),
-        );
-        if (unsubscribe) this._removers.push(unsubscribe);
-      }
+      if (layer.followsTime) this._timeFollowers.push(layer.id);
       this._rows.push({
         key: layer.id,
         id: layer.id,
@@ -535,19 +636,25 @@ export class LayerPanel {
    * `whileShown`, a list that is not displayed is left as it is and owed a
    * repaint for when it is displayed again.
    */
-  _paint({ whileShown = false } = {}) {
+  _paint({ whileShown = false, only = null } = {}) {
     if (this._destroyed || !this._toggleContainer) return;
     const containers = [
       this._toggleContainer,
       ...this._groupContainers.values(),
     ];
+    // Rows a skipped paint did not present are presented with these.
+    const stale = this._stale;
+    const present =
+      !only || stale === 'all' ? null : new Set([...only, ...(stale ?? [])]);
     if (
       whileShown &&
       !containers.some((element) => this._isDisplayed(element))
     ) {
       for (const element of containers) this._owedLists.add(element);
+      this._stale = present ?? 'all';
       return;
     }
+    this._stale = null;
     const layers = new Map(this.getAll().map((layer) => [layer.id, layer]));
     // Each list renders its own rows: Data Layers, and any group's own list.
     const lists = new Map([[null, []]]);
@@ -557,7 +664,11 @@ export class LayerPanel {
       if (row.heading) item = { key: row.key, heading: t(row.heading) };
       else {
         const layer = layers.get(row.id);
-        if (layer) this._rowViews.set(row.id, this._presentRow(row, layer));
+        if (
+          layer &&
+          (!present || present.has(row.id) || !this._rowViews.has(row.id))
+        )
+          this._rowViews.set(row.id, this._presentRow(row, layer));
         item = this._rowViews.get(row.id);
       }
       if (item) lists.get(row.container ?? null).push(item);
@@ -804,43 +915,11 @@ export class LayerPanel {
       this.setLayerParams(id, item.params, { origin: 'user' });
   }
 
-  _scheduleRowControlsRefresh() {
-    if (this._destroyed || this._cancelRowControlsRefresh) return;
-    const refresh = () => {
-      this._cancelRowControlsRefresh = null;
-      if (!this._destroyed) this._refreshTogglePanel();
-    };
-    if (typeof requestAnimationFrame === 'function') {
-      const frame = requestAnimationFrame(refresh);
-      this._cancelRowControlsRefresh = () => cancelAnimationFrame(frame);
-    } else {
-      const timer = setTimeout(refresh, 0);
-      this._cancelRowControlsRefresh = () => clearTimeout(timer);
-    }
-  }
-
-  /** Synchronously flush a pending row-controls refresh, including in tests. */
-  _flushRowControlsRefresh() {
-    if (this._destroyed || !this._cancelRowControlsRefresh) return;
-    this._cancelRowControlsRefresh();
-    this._cancelRowControlsRefresh = null;
-    this._refreshTogglePanel();
-  }
-
   _refreshWeatherPanel() {
     this._weatherPanel?.update(
       this.getAll()
         .filter(
-          (layer) =>
-            layer.enabled &&
-            [
-              'wind',
-              'weather-radar',
-              'weather-satellite',
-              'weather-lightning',
-              'weather-cyclones',
-              'air-quality',
-            ].includes(layer.id),
+          (layer) => layer.enabled && WEATHER_PANEL_IDS.includes(layer.id),
         )
         .map((layer) => ({
           id: layer.id,
@@ -848,20 +927,6 @@ export class LayerPanel {
           ...this._rowControlsFor(layer.id),
         })),
     );
-  }
-
-  _refreshTogglePanel() {
-    if (this._destroyed || !this._toggleContainer) return;
-    // Skip DOM churn while hidden; visibilitychange (main.js) triggers one
-    // refresh on return. (perf wave 2)
-    if (typeof document !== 'undefined' && document.hidden) {
-      this.onHiddenRefresh();
-      return;
-    }
-    // A collapsed panel's rows repaint when it opens.
-    this._paint({ whileShown: true });
-    this._refreshWeatherPanel();
-    this._refreshNewsPanel();
   }
 
   /** Feed the News rail panel the view the news layer publishes while on. */

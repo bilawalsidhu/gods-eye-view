@@ -36,8 +36,9 @@ export function createLifecycle({ state, services, parts, timetable }) {
     source: 'GTFS-RT',
 
     /** Create the train icon set. Called once at bootstrap. */
-    init(viewer) {
+    init(viewer, { panel = null } = {}) {
       state._viewer = viewer;
+      state._panel = panel;
       parts.rendering.createMarkers(viewer);
       state._enabled = false;
       state._overlayHost.setVisible(RAIL_SELECTED_OVERLAY_SOURCE_ID, false);
@@ -131,7 +132,7 @@ export function createLifecycle({ state, services, parts, timetable }) {
       parts.routes.destroy();
       parts.rendering.destroyMarkers();
       state._overlayHost.clearSource(RAIL_SELECTED_OVERLAY_SOURCE_ID);
-      state._dataManager = null;
+      state._panel = null;
       state._viewer = null;
     },
   };

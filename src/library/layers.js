@@ -167,7 +167,8 @@ export function createLibraryDatasetLayer(
   let truncated = false;
   let loaded = 0;
   let extent = null;
-  let rowListener = null;
+  /** @type {{ invalidate: () => void } | null} the panels' handle, from init */
+  let panel = null;
   let legendCounts = null;
   // Live data: features older than the source's cacheSeconds are loaded
   // again, on the next enable and on the manager's refresh tick while the
@@ -187,7 +188,7 @@ export function createLibraryDatasetLayer(
     loaded = result.features.length;
     extent = featureExtent(result.features);
     if (colorBy) legendCounts = countColorKeys(result.features);
-    rowListener?.();
+    panel?.invalidate();
   }
   const colorBy = entry.display.colorBy || null;
   const layer = createLocalGeoJsonLayer(
@@ -214,6 +215,7 @@ export function createLibraryDatasetLayer(
     },
     services,
   );
+  const init = layer.init;
   const enable = layer.enable;
   const disable = layer.disable;
   const destroy = layer.destroy;
@@ -225,6 +227,10 @@ export function createLibraryDatasetLayer(
   return Object.assign(layer, {
     libraryEntryId: entry.id,
     refreshInterval: maxAgeMs,
+    init(viewer, options = {}) {
+      panel = options.panel ?? null;
+      return init(viewer, options);
+    },
     async enable(viewer, ...rest) {
       on = true;
       registerDynamicCredit(viewer, libraryCredit(entry));
@@ -283,9 +289,6 @@ export function createLibraryDatasetLayer(
         onRemove,
         colorByLegend(entry.display, legendCounts),
       ),
-    setRowControlsListener(listener) {
-      rowListener = typeof listener === 'function' ? listener : null;
-    },
   });
 }
 

@@ -3,7 +3,18 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { assertSameNode } from '../testSupport/domAssert.mjs';
 import { setLocale } from '../i18n/index.js';
-import { createWeatherPanel } from './weatherPanel.js';
+import { createWeatherPanel as createView } from './weatherPanel.js';
+
+/**
+ * The view, driven as the layer panel drives it: the view never follows the
+ * clock, and the fixture's `state()` reads it again with the same entries,
+ * as the layer panel does when the scene time moves.
+ */
+function createWeatherPanel(options, ...rest) {
+  const view = createView(options, ...rest);
+  if (view && options?.drive) options.drive(view);
+  return view;
+}
 import { railDocumentFixture as railFixture } from './railTestFixture.mjs';
 import { createAirQualityLayer } from '../layers/airQuality/index.js';
 import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
@@ -46,6 +57,7 @@ function fixture() {
     selector === '#weather-panel-count' ? count : collapse;
   f.container.closest = () => panel;
   const listeners = new Set();
+  let readAgain = () => {};
   const calls = [];
   let state = {
     mode: 'latest',
@@ -68,9 +80,19 @@ function fixture() {
     calls,
     listeners,
     clock,
+    drive(view) {
+      const update = view.update;
+      let entries = null;
+      view.update = (next) => {
+        entries = next;
+        return update(next);
+      };
+      readAgain = () => entries && update(entries);
+    },
     state: (next) => {
       state = { ...state, ...next };
       for (const fn of listeners) fn(state);
+      readAgain();
     },
   };
 }

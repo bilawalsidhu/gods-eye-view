@@ -221,7 +221,9 @@ export function createCyclonesLayer({
     icon: '◉',
     source: SOURCE,
     updateInterval: 300_000,
-    init(nextViewer) {
+    init(nextViewer, { panel = null } = {}) {
+      // The panels' handle: invalidated when the row or readout changed.
+      listener = panel ? () => panel.invalidate() : null;
       viewer = nextViewer;
       rendering = createRendering({ viewer, overlayHost });
     },
@@ -516,9 +518,6 @@ export function createCyclonesLayer({
         ),
       };
       return controls;
-    },
-    setRowControlsListener(value) {
-      listener = typeof value === 'function' ? value : null;
     },
     /**
      * Snapshot loaded active storms as plain JSON-safe records for the analyst

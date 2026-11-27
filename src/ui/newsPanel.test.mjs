@@ -1,6 +1,7 @@
 import '../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { nextTick } from 'vue';
 import { setLocale } from '../i18n/index.js';
 import { createNewsPanel } from './newsPanel.js';
 import { installFakeResizeObserver } from '../testSupport/fakeResizeObserver.mjs';
@@ -483,7 +484,7 @@ test('the panel names the window the server serves', () => {
   );
 });
 
-test('a clip waits behind its picture and plays, on request, in the open card', () => {
+test('a clip waits behind its picture and plays, on request, in the open card', async () => {
   const { news, panel } = fixture();
   const clipped = report('clip', {
     event: {
@@ -517,14 +518,10 @@ test('a clip waits behind its picture and plays, on request, in the open card', 
   );
   assert.equal(video.getAttribute('preload'), 'none');
   assert.ok(video.hasAttribute('controls'));
-  // An expired link leaves the card without the clip.
+  // An expired link leaves the card without the clip; the card drops it
+  // itself, on Vue's next tick, with no new view from the layer.
   video.dispatchEvent(new Event('error'));
-  news.update(
-    view({
-      items: [feedCardView(clipped, NOW)],
-      selected: feedCardView(clipped, NOW),
-    }),
-  );
+  await nextTick();
   assert.equal(panel.querySelector('.news-card.is-open video') === null, true);
   news.destroy();
 });
