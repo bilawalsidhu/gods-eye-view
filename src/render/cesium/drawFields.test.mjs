@@ -318,8 +318,8 @@ test('real Cesium builds the two-texture material, the opaque-pass appearance an
     /material\.alpha = c\.a \* mix\(1\.0, key, cloudKey_\d+\) \* alpha_\d+ \* step\(1\.5, float\(imageDimensions_\d+\.x\)\);/,
     'the uniform is renamed, the material field is not',
   );
-  // The cloud key infraredAlpha.js applies to the globe's draped imagery:
-  // brightest channel, 2.2 power, the shared thresholds.
+  // The renderer may not import src/layers, so the shader copies
+  // INFRARED_ALPHA_T0/T1. This keeps them equal.
   assert.ok(
     shader.includes(
       `float key = smoothstep(${INFRARED_ALPHA_T0.toFixed(2)}, ${INFRARED_ALPHA_T1.toFixed(2)}, pow(max(c.r, max(c.g, c.b)), 2.2));`,
@@ -502,10 +502,14 @@ test('a raster shell keeps drawing its rectangle until a new one is drawn whole'
     0.6,
     'a new rectangle keeps the cloud key',
   );
+  field.update({ cloudKey: 0.2 });
+  assert.equal(old.appearance.material.uniforms.cloudKey, 0.2);
+  assert.equal(staged.appearance.material.uniforms.cloudKey, 0.2);
   h.render();
   assert.equal(old.destroyed, true, 'swapped in one frame');
   assert.deepEqual(h.live(), [staged]);
   assert.equal(staged.appearance.material.uniforms.alpha, 1);
+  assert.equal(staged.appearance.material.uniforms.cloudKey, 0.2);
   assert.equal(drawn, 2);
   // Back to the drawn rectangle before a staged one is drawn: it goes.
   field.update({ rectangle: RECT });

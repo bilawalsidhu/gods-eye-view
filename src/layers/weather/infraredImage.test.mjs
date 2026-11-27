@@ -34,51 +34,29 @@ function canvas() {
   return output;
 }
 
-test('with transfer off an infrared frame is drawn and never read back', async () => {
-  const drawn = [];
-  const createCanvas = () => {
-    const output = {};
-    output.getContext = () => ({
-      drawImage: (image) => drawn.push(image),
-      getImageData: () => {
-        throw new Error('the frame was read back on the page');
-      },
-      putImageData: () => {
-        throw new Error('the frame was rewritten on the page');
-      },
-    });
-    return output;
-  };
+test('Full mode draws an infrared frame without reading its pixels', async () => {
+  const createCanvas = () => ({
+    getContext: () => ({
+      drawImage() {},
+      getImageData: () => assert.fail('the frame was read back on the page'),
+      putImageData: () => assert.fail('the frame was rewritten on the page'),
+    }),
+  });
   const size = { width: 4096, height: 2048 };
-  const image = { ...size, close() {} };
-  const options = {
-    signal: new AbortController().signal,
-    mode: 'filtered',
-    size,
-    maxBytes: 1024,
-    createCanvas,
-    transfer: false,
-  };
-  const fetched = await acquireWeatherImage(
+  const { texture } = await acquireWeatherImage(
     'clouds-regional',
     '2026-09-15T20:00:00.000Z',
     {
-      ...options,
-      fetchImpl: async () => ({
-        ok: true,
-        headers: new Headers(),
-        arrayBuffer: async () => new ArrayBuffer(1),
-      }),
-      decodeImage: async () => image,
+      signal: new AbortController().signal,
+      mode: 'full',
+      size,
+      maxBytes: 1024,
+      createCanvas,
+      fetchImpl: async () => new Response(new Uint8Array([1])),
+      decodeImage: async () => ({ ...size, close() {} }),
     },
   );
-  assert.equal(fetched.texture.width, 4096);
-  const supplied = { ...size };
-  await acquireWeatherImage('clouds-regional', '2026-09-15T20:00:00.000Z', {
-    ...options,
-    frameSource: { getImage: async () => supplied },
-  });
-  assert.deepEqual(drawn, [image, supplied]);
+  assert.equal(texture.width, 4096);
 });
 
 test('decoded pixels are processed once on a same-sized canvas', () => {
@@ -93,14 +71,12 @@ test('decoded pixels are processed once on a same-sized canvas', () => {
     [194, 0, 0, 149],
     'half-strength filter retains a midpoint haze',
   );
-  assert.deepEqual(
-    [...processInfraredImage(image, 0, canvas).pixels],
-    [194, 0, 0, 200],
-  );
-  assert.deepEqual(
-    [...processInfraredImage(image, 'full', canvas).pixels],
-    [194, 0, 0, 200],
-  );
+  for (const mode of [0, 'full'])
+    assert.equal(
+      processInfraredImage(image, mode, canvas).pixels,
+      undefined,
+      'no key: the pixels are never read back',
+    );
 });
 
 test('flipY draws a bottom-up image upright, then restores the transform', () => {
@@ -390,3 +366,36 @@ test('cancellation reaches the frame source, and a frame that arrives after it i
 async function flushMicrotasks() {
   for (let i = 0; i < 5; i++) await Promise.resolve();
 }
+
+test('a supplied frame from another origin is refused before it reaches the renderer', async () => {
+  const createCanvas = () => {
+    let readable = true;
+    return {
+      getContext: () => ({
+        drawImage: (image) => {
+          if (image.tainted) readable = false;
+        },
+        getImageData: () => {
+          if (!readable) throw new DOMException('tainted', 'SecurityError');
+          return { data: new Uint8ClampedArray(4) };
+        },
+        putImageData() {},
+      }),
+    };
+  };
+  for (const product of ['radar', 'clouds-regional']) {
+    const tainted = pixels(4096, 2048);
+    tainted.tainted = true;
+    await assert.rejects(
+      acquireWeatherImage(product, 't', {
+        signal: new AbortController().signal,
+        mode: 'full',
+        size: { width: 4096, height: 2048 },
+        createCanvas,
+        frameSource: { getImage: async () => tainted },
+      }),
+      { name: 'SecurityError' },
+    );
+    assert.equal(tainted.closes, 1, 'and still released');
+  }
+});

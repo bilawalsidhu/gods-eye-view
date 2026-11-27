@@ -102,15 +102,15 @@ optional:
   `paused`; `rasterShell` replaces `detailWindow` with
   `detail: {image, rectangle}`, a sharper image drawn in place of the base
   one, takes `cloudKey` (0..1, the infrared cloud key applied as it draws,
-  changed without a rebuild), and says how shells stack, blend and update. `FieldHandle.on('drawn')`
-  says once per spec or `update` that it is drawn, never while hidden. These
-  change `fields` itself rather than add to it, so the renderer follows
-  them where it lists `fields`. The Cesium adapter lists `fields` and
-  draws `rasterShell` and `windStreamlines`. It reads the grid's samples as
-  points, the first column at `rectangle.west` and the first row at
-  `rectangle.north`, rows running south. Over the whole globe its paths
-  wrap east and west; over part of it they seed inside the rectangle,
-  equal-area, and stop at its edges.
+  changed without a rebuild), and says how shells stack, blend and update.
+  `FieldHandle.on('drawn')` says once per spec or `update` that it is drawn,
+  never while hidden. These change `fields` itself rather than add to it, so
+  the renderer follows them where it lists `fields`. The Cesium adapter
+  lists `fields` and draws `rasterShell` and `windStreamlines`. It reads the
+  grid's samples as points, the first column at `rectangle.west` and the
+  first row at `rectangle.north`, rows running south. Over the whole globe
+  its paths wrap east and west; over part of it they seed inside the
+  rectangle, equal-area, and stop at its edges.
 - `ModulationSector` gains `radius` and `floor` and says what it modulates:
   icons, points and models dimmed toward `floor` outside the band, the map,
   lines and shapes as they are, picks unchanged. Its pass is named

@@ -1783,7 +1783,11 @@ for (const kind of ['globe']) {
     const full = h.rendering.setFrame(clouds, times[0], { infrared: 'full' });
     await flush();
     const tile = await h.providers[1].requestImage(0, 0, 0);
-    assert.deepEqual([...tile.source.pixels], [194, 100, 0, 200]);
+    assert.equal(
+      tile.source.pixels,
+      undefined,
+      'Full never reads the mosaic back',
+    );
     now = 500;
     h.settle();
     assert.equal(await full, true);

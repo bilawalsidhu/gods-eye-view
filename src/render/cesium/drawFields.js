@@ -23,9 +23,6 @@
  *   new is uploaded.
  * - `liftM` scales the shell about the Earth's centre, so every shell
  *   rises alike and keeps its order.
- * - `cloudKey` is applied in the fragment shader to the image as it was
- *   given, so a 4096×2048 frame is never read back and rewritten on the
- *   page, and a change of it is one uniform, not a new image.
  */
 import * as Cesium from 'cesium';
 import { listenerList, uncaught } from './common.js';
@@ -40,10 +37,9 @@ const shellHeights = new WeakMap();
 // Cesium binds a 1×1 white texture to an image uniform until its first upload:
 // draw nothing until the full-extent image has arrived, and sample the detail
 // image only once it has arrived. The window is west, south, east, north in the
-// full-extent image's texture coordinates. `cloudKey` blends alpha toward
-// the infrared cloud key: smoothstep(0.40, 0.70) of the brightest channel to
-// the power 2.2, the curve src/layers/weather/infraredAlpha.js applies to the
-// globe's draped imagery.
+// full-extent image's texture coordinates. The cloud key's 0.40 and 0.70 copy
+// INFRARED_ALPHA_T0/T1 (src/layers/weather/infraredAlpha.js), which the
+// renderer may not import. drawFields.test.mjs keeps them equal.
 const MATERIAL_SOURCE = `czm_material czm_getMaterial(czm_materialInput materialInput)
 {
   czm_material material = czm_getDefaultMaterial(materialInput);
@@ -253,7 +249,6 @@ export function createShellSurface({
       material.uniforms.alpha = value;
       ask();
     },
-    /** How much of the infrared cloud key applies, 0–1. */
     setCloudKey(value) {
       if (destroyed || material.uniforms.cloudKey === value) return;
       material.uniforms.cloudKey = value;

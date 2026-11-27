@@ -1170,6 +1170,32 @@ test('full-extent and detail images share one byte budget; prefetch warms both',
   wide.shell.clear();
 });
 
+test('a warmed infrared frame and its detail fit any filter strength', async () => {
+  const h = harness({
+    product: 'clouds-regional',
+    camera: camera(-100, 35, -98, 36),
+  });
+  assert.equal(await show(h, times[0], { infrared: 100 }), true);
+  await flush();
+  h.render();
+  assert.equal(h.fetches.length, 2);
+  assert.equal(
+    await h.shell.prefetch(snapshot('clouds-regional'), times[1]),
+    true,
+  );
+  assert.equal(h.fetches.length, 4);
+  assert.equal(h.decoded.length, 4);
+  assert.equal(await show(h, times[1], { infrared: 40 }), true);
+  await flush();
+  h.render();
+  assert.equal(h.fetches.length, 4, 'neither image is fetched again');
+  assert.equal(h.decoded.length, 4, 'nor decoded again');
+  assert.equal(h.shell.getDiagnostics().mosaic.cached, true);
+  assert.equal(h.shell.getDiagnostics().shell.detail.ready, true);
+  assert.equal(h.material().uniforms.cloudKey, 0.4);
+  h.shell.clear();
+});
+
 test('global infrared keeps one full-extent image; detail images halve for small texture limits', async () => {
   const view = camera(-100, 35, -98, 36);
   const clouds = harness({ product: 'clouds', camera: view });

@@ -187,8 +187,7 @@ export function createWeatherShell({
   const visible = () => !hidden && !suspended();
   const boundsKey = ({ west, south, east, north }) =>
     `${west},${south},${east},${north}`;
-  // One image per time and window: the infrared mode is the field's
-  // `cloudKey`, applied as it draws, not pixels.
+  // One image per time and window, whatever the strength (`cloudKey`).
   const cacheKey = (time, box = null) =>
     box ? `${time}|${boundsKey(box)}` : time;
   const wantedDetail = () =>
@@ -288,8 +287,7 @@ export function createWeatherShell({
     }
     const result = await acquireWeatherImage(product, time, {
       signal,
-      // The renderer applies the infrared transfer (`cloudKey`).
-      transfer: false,
+      mode: 'full', // drawn as decoded; see cacheKey
       size: box ? detailSize : size,
       bbox: box,
       maxBytes: MAX_IMAGE_BYTES,
@@ -575,7 +573,7 @@ export function createWeatherShell({
         const box =
           view && viewBounds === boundsKey(snapshot.bounds) ? view : null;
         const coarse = cacheKey(time);
-        const key = box ? cacheKey(time, box) : coarse;
+        const key = cacheKey(time, box);
         if (prefetchJob?.key === key || prefetchedKey === key) return false;
         cancelPrefetch();
         job = { key, controller: new AbortController() };
