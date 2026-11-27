@@ -3,6 +3,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
+import { assertSameNode } from '../testSupport/domAssert.mjs';
+import { installFakeResizeObserver } from '../testSupport/fakeResizeObserver.mjs';
 
 test('panel presentation places Transit and Rail between Street Traffic and Bike Share in Movement', () => {
   const source = readFileSync(
@@ -366,14 +368,19 @@ test('the Weather readout receives enabled air-quality alongside weather layers'
 });
 
 // Directions renders in the Utilities panel's list; Data Layers keeps the rest.
-async function utilitiesFixture({ withUtilities = true } = {}) {
+async function utilitiesFixture({
+  withUtilities = true,
+  prepare = (list) => document.body.append(list),
+  prepareUtilities = (list) => document.body.append(list),
+} = {}) {
   const { LayerPanel } = await import('./layerPanel.js');
   document.body.replaceChildren();
-  const container = document.body.appendChild(document.createElement('div'));
+  const container = document.createElement('div');
+  prepare(container);
   container.id = 'data-toggles';
   const utilities = document.createElement('div');
   utilities.id = 'utilities-toggles';
-  if (withUtilities) document.body.append(utilities);
+  if (withUtilities) prepareUtilities(utilities);
   const layers = ['radio', 'directions', 'flights'].map((id) => ({
     id,
     name: id,
@@ -441,6 +448,375 @@ test('a refresh updates the Directions row in the Utilities list', async () => {
     assert.ok(toggle().classList.contains('active'));
   } finally {
     restore();
+  }
+});
+
+// Each list the panel renders, counted per container.
+function countRenders(panel) {
+  const renders = [];
+  const render = panel._renderRows;
+  panel._renderRows = function (container, ...rest) {
+    renders.push(container);
+    return render.call(this, container, ...rest);
+  };
+  return renders;
+}
+
+test('a refresh skips a row list that is not displayed and repaints it once, current, when it is', async () => {
+  const sizes = installFakeResizeObserver();
+  const { container, utilities, panel, layers, restore } =
+    await utilitiesFixture();
+  try {
+    const renders = countRenders(panel);
+    const active = (root, id) =>
+      root
+        .querySelector(`[data-layer-id="${id}"] .data-toggle-btn`)
+        .classList.contains('active');
+    sizes.report(container, 0, 0);
+    sizes.report(utilities, 0, 0);
+    layers.find(({ id }) => id === 'flights').enabled = true;
+    panel._refreshTogglePanel();
+    layers.find(({ id }) => id === 'directions').enabled = true;
+    panel._refreshTogglePanel();
+    assert.deepEqual(renders, [], 'no list is rendered while not displayed');
+    assert.equal(active(container, 'flights'), false);
+
+    sizes.report(container, 240, 600);
+    assert.equal(renders.length, 1, 'one render when Data Layers opens');
+    assertSameNode(renders[0], container);
+    assert.equal(active(container, 'flights'), true, 'with the latest rows');
+    assert.equal(active(utilities, 'directions'), false, 'still owed');
+
+    sizes.report(utilities, 240, 40);
+    assert.equal(renders.length, 2);
+    assertSameNode(renders[1], utilities);
+    assert.equal(active(utilities, 'directions'), true);
+
+    // Shown again with nothing owed, or refreshed with the same rows: no render.
+    sizes.report(container, 0, 0);
+    sizes.report(container, 240, 600);
+    panel._refreshTogglePanel();
+    assert.equal(renders.length, 2, 'unchanged rows are not rendered again');
+    layers.find(({ id }) => id === 'radio').enabled = true;
+    panel._refreshTogglePanel();
+    assert.equal(renders.length, 3, 'changed rows render');
+    assertSameNode(renders[2], container);
+    assert.equal(active(container, 'radio'), true);
+  } finally {
+    restore();
+    sizes.restore();
+  }
+});
+
+test('filtering a list a refresh skipped filters its latest rows', async () => {
+  const sizes = installFakeResizeObserver();
+  const { container, utilities, panel, layers, restore } =
+    await utilitiesFixture();
+  try {
+    const shown = () =>
+      [...container.querySelectorAll('[data-layer-id]')]
+        .filter((row) => !row.classList.contains('is-filtered'))
+        .map((row) => row.dataset.layerId);
+    sizes.report(container, 0, 0);
+    sizes.report(utilities, 0, 0);
+    layers.find(({ id }) => id === 'flights').enabled = true;
+    panel._refreshTogglePanel();
+    panel.finder.select({ show: 'on' });
+    assert.deepEqual(shown(), ['flights']);
+    panel.finder.select({ show: 'all' });
+    assert.deepEqual(shown(), ['flights', 'radio']);
+  } finally {
+    restore();
+    sizes.restore();
+  }
+});
+
+test('a row read right after its panel is presented open sees current rows', async () => {
+  const sizes = installFakeResizeObserver();
+  const { flushPanelContent } = await import('./rail/panelContent.js');
+  // Data Layers' list inside its panel, as LayerPanelsView renders it.
+  const panelEl = document.createElement('div');
+  panelEl.id = 'data-panel';
+  panelEl.dataset.panelId = 'data-panel';
+  const { container, utilities, panel, layers, restore } =
+    await utilitiesFixture({
+      prepare: (list) => {
+        panelEl.append(list);
+        document.body.append(panelEl);
+      },
+    });
+  try {
+    const renders = countRenders(panel);
+    sizes.report(container, 0, 0);
+    sizes.report(utilities, 0, 0);
+    layers.find(({ id }) => id === 'flights').enabled = true;
+    panel._refreshTogglePanel();
+    assert.deepEqual(renders, []);
+    // What the panel chrome does as it opens Data Layers, before the
+    // ResizeObserver reports it displayed.
+    flushPanelContent(panelEl);
+    assert.ok(
+      container
+        .querySelector('[data-layer-id="flights"] .data-toggle-btn')
+        .classList.contains('active'),
+    );
+    const flushed = renders.length;
+    assert.ok(flushed >= 1);
+    flushPanelContent(panelEl);
+    sizes.report(container, 240, 600);
+    assert.equal(renders.length, flushed, 'nothing owed, nothing rendered');
+    panel.destroy();
+    flushPanelContent(panelEl);
+    assert.equal(renders.length, flushed, 'destroy releases the flush');
+  } finally {
+    restore();
+    sizes.restore();
+  }
+});
+
+test('a mode that shows the panels again repaints owed rows before anything reads them', async () => {
+  const sizes = installFakeResizeObserver();
+  const { SceneControls } = await import('./sceneControls.js');
+  const panelEl = document.createElement('div');
+  panelEl.id = 'data-panel';
+  panelEl.dataset.panelId = 'data-panel';
+  const { container, utilities, panel, layers, restore } =
+    await utilitiesFixture({
+      prepare: (list) => {
+        panelEl.append(list);
+        document.body.append(panelEl);
+      },
+    });
+  const active = (id) =>
+    container
+      .querySelector(`[data-layer-id="${id}"] .data-toggle-btn`)
+      .classList.contains('active');
+  try {
+    // Scene playback hides the panels; a refresh meanwhile is owed.
+    SceneControls.prototype.setPlaybackActive.call({ destroyed: false }, true);
+    sizes.report(container, 0, 0);
+    sizes.report(utilities, 0, 0);
+    layers.find(({ id }) => id === 'flights').enabled = true;
+    panel._refreshTogglePanel();
+    assert.equal(active('flights'), false);
+    // Leaving playback shows them again: the rows are current at once.
+    SceneControls.prototype.setPlaybackActive.call({ destroyed: false }, false);
+    assert.equal(active('flights'), true);
+    // A refresh before the observer's next report paints rather than owes.
+    layers.find(({ id }) => id === 'radio').enabled = true;
+    panel._refreshTogglePanel();
+    assert.equal(active('radio'), true);
+  } finally {
+    document.body.classList.remove('scene-playback-mode');
+    restore();
+    sizes.restore();
+  }
+});
+
+test('a layout pass repaints owed rows only where a list is displayed', async () => {
+  const sizes = installFakeResizeObserver();
+  const { flushDisplayedPanelContent } = await import('./rail/panelContent.js');
+  const panelEl = document.createElement('div');
+  panelEl.id = 'data-panel';
+  panelEl.dataset.panelId = 'data-panel';
+  const { container, utilities, panel, layers, restore } =
+    await utilitiesFixture({
+      prepare: (list) => {
+        panelEl.append(list);
+        document.body.append(panelEl);
+      },
+    });
+  try {
+    const renders = countRenders(panel);
+    sizes.report(container, 0, 0);
+    sizes.report(utilities, 0, 0);
+    layers.find(({ id }) => id === 'flights').enabled = true;
+    panel._refreshTogglePanel();
+    // Nothing has a layout box: the pass leaves the rows owed.
+    container.getClientRects = () => [];
+    utilities.getClientRects = () => [];
+    flushDisplayedPanelContent();
+    assert.deepEqual(renders, []);
+    // A class showed Data Layers before the observer reported it.
+    container.getClientRects = () => [{}];
+    flushDisplayedPanelContent();
+    assert.equal(renders.length, 1);
+    assertSameNode(renders[0], container);
+    assert.ok(
+      container
+        .querySelector('[data-layer-id="flights"] .data-toggle-btn')
+        .classList.contains('active'),
+    );
+  } finally {
+    restore();
+    sizes.restore();
+  }
+});
+
+/** Data Layers and Utilities lists, each inside its own panel. */
+function twoPanels() {
+  const panelOf = (id) => {
+    const panelEl = document.createElement('div');
+    panelEl.id = id;
+    panelEl.dataset.panelId = id;
+    return panelEl;
+  };
+  const dataPanel = panelOf('data-panel');
+  const utilitiesPanel = panelOf('utilities-panel');
+  return {
+    dataPanel,
+    utilitiesPanel,
+    prepare: (list) => {
+      dataPanel.append(list);
+      document.body.append(dataPanel);
+    },
+    prepareUtilities: (list) => {
+      utilitiesPanel.append(list);
+      document.body.append(utilitiesPanel);
+    },
+  };
+}
+
+test('opening one panel paints and marks displayed only the lists inside it', async () => {
+  const sizes = installFakeResizeObserver();
+  const { flushPanelContent } = await import('./rail/panelContent.js');
+  const panels = twoPanels();
+  const { container, utilities, panel, layers, restore } =
+    await utilitiesFixture(panels);
+  try {
+    const renders = countRenders(panel);
+    sizes.report(container, 0, 0);
+    sizes.report(utilities, 0, 0);
+    layers.find(({ id }) => id === 'flights').enabled = true;
+    panel._refreshTogglePanel();
+    assert.deepEqual(renders, []);
+    // The panel chrome opens Data Layers; Utilities stays collapsed.
+    flushPanelContent(panels.dataPanel);
+    assert.equal(renders.length, 1);
+    assertSameNode(renders[0], container);
+    // Utilities was not shown: later refreshes still skip it.
+    layers.find(({ id }) => id === 'directions').enabled = true;
+    panel._refreshTogglePanel();
+    assert.ok(
+      renders.every((element) => element === container),
+      'the collapsed Utilities list is never rendered',
+    );
+    // Opening Utilities paints it then, current.
+    flushPanelContent(panels.utilitiesPanel);
+    assert.ok(renders.includes(utilities));
+    assert.ok(
+      utilities
+        .querySelector('[data-layer-id="directions"] .data-toggle-btn')
+        .classList.contains('active'),
+    );
+  } finally {
+    restore();
+    sizes.restore();
+  }
+});
+
+test('a layout pass presents no rows when no displayed list is owed', async () => {
+  const sizes = installFakeResizeObserver();
+  const { flushDisplayedPanelContent } = await import('./rail/panelContent.js');
+  const panels = twoPanels();
+  const { container, utilities, panel, layers, restore } =
+    await utilitiesFixture(panels);
+  try {
+    // Data Layers is open and current; Utilities is collapsed and owed.
+    sizes.report(container, 240, 600);
+    sizes.report(utilities, 0, 0);
+    layers.find(({ id }) => id === 'flights').enabled = true;
+    panel._refreshTogglePanel();
+    container.getClientRects = () => [{}];
+    utilities.getClientRects = () => [];
+    let presented = 0;
+    const present = panel._presentRow;
+    panel._presentRow = function (...args) {
+      presented++;
+      return present.apply(this, args);
+    };
+    flushDisplayedPanelContent();
+    flushDisplayedPanelContent();
+    assert.equal(presented, 0);
+  } finally {
+    restore();
+    sizes.restore();
+  }
+});
+
+test('a language change renders rows the equality check would otherwise skip', async () => {
+  const { setLocale } = await import('../i18n/index.js');
+  const { container, panel, restore } = await utilitiesFixture();
+  try {
+    const renders = countRenders(panel);
+    panel._refreshTogglePanel();
+    assert.deepEqual(renders, [], 'unchanged rows are skipped');
+    const heading = () =>
+      container.querySelector('.data-layer-group-heading').textContent.trim();
+    assert.equal(heading(), 'Movement');
+    await setLocale('fr');
+    assert.ok(renders.length >= 1, 'the new language renders');
+    assert.notEqual(heading(), 'Movement');
+    const after = renders.length;
+    panel._refreshTogglePanel();
+    assert.equal(renders.length, after, 'and is then the rows shown');
+  } finally {
+    await setLocale('en');
+    restore();
+  }
+});
+
+test('while the page is hidden a refresh still defers to onHiddenRefresh', async () => {
+  const sizes = installFakeResizeObserver();
+  const { container, panel, layers, restore } = await utilitiesFixture();
+  const hidden = Object.getOwnPropertyDescriptor(document, 'hidden');
+  let pageHidden = true;
+  Object.defineProperty(document, 'hidden', {
+    configurable: true,
+    get: () => pageHidden,
+  });
+  try {
+    let deferred = 0;
+    panel.onHiddenRefresh = () => deferred++;
+    const renders = countRenders(panel);
+    sizes.report(container, 240, 600);
+    layers.find(({ id }) => id === 'flights').enabled = true;
+    panel._refreshTogglePanel();
+    assert.equal(deferred, 1);
+    assert.deepEqual(renders, []);
+    pageHidden = false;
+    panel._refreshTogglePanel();
+    assert.equal(deferred, 1);
+    assert.equal(renders.length, 1);
+    assert.ok(
+      container
+        .querySelector('[data-layer-id="flights"] .data-toggle-btn')
+        .classList.contains('active'),
+    );
+  } finally {
+    if (hidden) Object.defineProperty(document, 'hidden', hidden);
+    else delete document.hidden;
+    restore();
+    sizes.restore();
+  }
+});
+
+test("destroy and remount disconnect the row lists' observers", async () => {
+  const sizes = installFakeResizeObserver();
+  const { container, utilities, panel, restore } = await utilitiesFixture();
+  try {
+    const first = [...sizes.watching(container), ...sizes.watching(utilities)];
+    assert.equal(first.length, 2);
+    panel.mount(container);
+    assert.ok(first.every((observer) => observer.disconnected));
+    const second = [...sizes.watching(container), ...sizes.watching(utilities)];
+    assert.equal(second.length, 2);
+    panel.destroy();
+    assert.ok(second.every((observer) => observer.disconnected));
+    assert.deepEqual(sizes.watching(container), []);
+  } finally {
+    restore();
+    sizes.restore();
   }
 });
 

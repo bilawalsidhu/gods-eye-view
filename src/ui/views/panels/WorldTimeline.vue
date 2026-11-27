@@ -92,6 +92,9 @@ watch(
 );
 onBeforeUnmount(() => clearTimeout(waitTimer));
 const span = computed(() => time.value.span);
+// Whether the bar shows. The template reads this rather than `time`, which is
+// a new value at every clock tick: hidden, the bar is not drawn again for one.
+const visible = computed(() => Boolean(time.value.supported && span.value));
 // Where the handle is, or null with no track.
 const at = computed(() => {
   if (!span.value) return null;
@@ -401,7 +404,7 @@ const onKey = (event) => {
 </script>
 
 <template>
-  <div v-if="time.supported && time.span" id="world-timeline" v-root-class="{ 'has-world-timeline': true }" role="group" :aria-label="t('World time')"
+  <div v-if="visible" id="world-timeline" v-root-class="{ 'has-world-timeline': true }" role="group" :aria-label="t('World time')"
     ><UiButton class="world-timeline-play" :label="time.playing ? t('Pause') : t('Play')" @click="store.togglePlay()"
       ><UiIcon :name="time.playing ? 'pause' : 'play_arrow'" :size="20" /></UiButton
     ><UiSelect class="gev-field gev-field--compact world-timeline-speed" :aria-label="t('Play speed')" :title="t('Play speed')" :options="speeds" :model-value="speed" @update:model-value="store.setSpeed($event)"

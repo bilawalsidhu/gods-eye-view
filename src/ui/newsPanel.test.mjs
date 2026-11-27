@@ -3,6 +3,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { setLocale } from '../i18n/index.js';
 import { createNewsPanel } from './newsPanel.js';
+import { installFakeResizeObserver } from '../testSupport/fakeResizeObserver.mjs';
+import { flushPanelContent } from './rail/panelContent.js';
 import {
   NEWS_CATEGORIES,
   NEWS_SEVERITY,
@@ -164,6 +166,44 @@ test('the panel shows the last 24 h as event cards and opens once', () => {
   assert.equal(opened(), 1);
   news.destroy();
   assert.equal(panel.hidden, true);
+});
+
+test('a feed body that is not displayed is not repainted, and repaints once, current, when it is', () => {
+  const sizes = installFakeResizeObserver();
+  try {
+    const { news, panel } = fixture();
+    const body = document.getElementById('news-panel-body');
+    const cards = () => panel.querySelectorAll('.news-readout__feed .news-card');
+    sizes.report(body, 0, 0);
+    news.update(view());
+    assert.equal(cards().length, 0, 'not painted while collapsed');
+    assert.equal(panel.hidden, false);
+    assert.equal(document.getElementById('news-panel-count').textContent, '2');
+    sizes.report(body, 280, 400);
+    assert.equal(cards().length, 2, 'painted when displayed');
+    const [observer] = sizes.watching(body);
+    news.destroy();
+    assert.equal(observer.disconnected, true);
+  } finally {
+    sizes.restore();
+  }
+});
+
+test('presenting the panel open paints the owed feed at once', () => {
+  const sizes = installFakeResizeObserver();
+  try {
+    const { news, panel } = fixture();
+    const body = document.getElementById('news-panel-body');
+    const cards = () => panel.querySelectorAll('.news-readout__feed .news-card');
+    sizes.report(body, 0, 0);
+    news.update(view());
+    assert.equal(cards().length, 0);
+    flushPanelContent(panel);
+    assert.equal(cards().length, 2);
+    news.destroy();
+  } finally {
+    sizes.restore();
+  }
 });
 
 test('a card click flies there; open, it links the source and closes', () => {

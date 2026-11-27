@@ -8,6 +8,8 @@ import { railDocumentFixture as railFixture } from './railTestFixture.mjs';
 import { createAirQualityLayer } from '../layers/airQuality/index.js';
 import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
 import { onAqiPeriods } from '../testSupport/airQualityViewer.mjs';
+import { installFakeResizeObserver } from '../testSupport/fakeResizeObserver.mjs';
+import { flushPanelContent } from './rail/panelContent.js';
 const ticks = ['2026-09-22T01:00:00Z', '2026-09-22T01:05:00Z'];
 const wind = {
   id: 'wind',
@@ -276,6 +278,60 @@ test('count, hidden-empty and first-appearance expansion survive remount and own
   other.update([wind]);
   assert.equal(expanded.clicks(), 1);
   other.destroy();
+});
+
+test('a body that is not displayed is not repainted, and repaints once, current, when it is', () => {
+  const sizes = installFakeResizeObserver();
+  try {
+    const f = fixture();
+    const view = createWeatherPanel(f);
+    sizes.report(f.container, 0, 0);
+    view.update([wind]);
+    assert.equal(card(f, 'wind'), null, 'not painted while collapsed');
+    // The panel still appears, counts and opens on first appearance.
+    assert.equal(f.panel.hidden, false);
+    assert.equal(f.count.textContent, '1');
+    assert.equal(f.clicks(), 1);
+    view.update([wind, radar]);
+    f.state({ mode: 'latest' });
+    assert.equal(card(f, 'wind'), null);
+    f.writes();
+    sizes.report(f.container, 280, 400);
+    assert.ok(f.writes() > 0);
+    assert.ok(card(f, 'wind'), 'painted when displayed');
+    assert.ok(card(f, 'weather-radar'), 'with the latest products');
+    f.writes();
+    sizes.report(f.container, 280, 300);
+    assert.equal(f.writes(), 0, 'nothing owed, nothing painted');
+    const [observer] = sizes.watching(f.container);
+    view.destroy();
+    assert.equal(observer.disconnected, true);
+  } finally {
+    sizes.restore();
+  }
+});
+
+test('presenting the panel open paints the owed readout at once', () => {
+  const sizes = installFakeResizeObserver();
+  try {
+    const f = fixture();
+    const view = createWeatherPanel(f);
+    sizes.report(f.container, 0, 0);
+    view.update([wind]);
+    view.update([wind, radar]);
+    assert.equal(card(f, 'weather-radar'), null);
+    // The panel chrome presents it open before any size report.
+    flushPanelContent(f.panel);
+    assert.ok(card(f, 'wind'));
+    assert.ok(card(f, 'weather-radar'), 'with the latest products');
+    f.writes();
+    flushPanelContent(f.panel);
+    sizes.report(f.container, 280, 400);
+    assert.equal(f.writes(), 0, 'nothing owed, nothing painted');
+    view.destroy();
+  } finally {
+    sizes.restore();
+  }
 });
 
 test('a stored or shared collapse choice is not overridden on first appearance', () => {
