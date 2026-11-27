@@ -241,16 +241,6 @@ export function createQueries({
     /** @type {number} Polling interval in ms between API fetches */
     updateInterval: POLL_INTERVAL_MS,
 
-    /** @deprecated Compatibility alias for {@link enable}. */
-    show(viewer) {
-      this.enable(viewer);
-    },
-
-    /** @deprecated Compatibility alias for {@link disable}. */
-    hide(viewer) {
-      this.disable(viewer);
-    },
-
     /**
      * Live layer params.
      * `models3d` toggles 3D glTF jet-model rendering for the FLEET: when on, military
