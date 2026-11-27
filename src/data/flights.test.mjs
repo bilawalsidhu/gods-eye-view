@@ -2763,3 +2763,20 @@ test('display floor: two contacts on the same cell get their own outputs', () =>
   );
   assert.ok(Math.abs(_floorCarto(a).height - _floorCarto(b).height) < 0.05);
 });
+
+test('destroying the layer empties the result array detection last read', () => {
+  seedLabelContact({ callsign: 'KEEP1', registration: 'N1KP' });
+  const list = flightsLayer.getDetectableObjects({ maxCount: 50 });
+  assert.ok(list.length > 0, 'the contact was collected');
+  const previousDocument = globalThis.document;
+  globalThis.document ??= new EventTarget();
+  const { log } = console;
+  console.log = () => {};
+  try {
+    flightsLayer.destroy({ camera: { positionCartographic: null }, scene: {} });
+  } finally {
+    console.log = log;
+    if (previousDocument === undefined) delete globalThis.document;
+  }
+  assert.equal(list.length, 0, 'no contact stays reachable through it');
+});

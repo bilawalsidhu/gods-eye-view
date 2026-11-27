@@ -15,9 +15,10 @@ import {
   copyInto,
   toDegrees,
   vec,
+  Vec3,
 } from '../geo/vector.js';
 import { fromRadians, toCartographicRadians } from '../geo/ellipsoid.js';
-import { horizonFrom, liftedForHorizon } from '../geo/horizon.js';
+import { horizonFrom, liftedForHorizonInto } from '../geo/horizon.js';
 import { createIconBook } from '../render/motion/iconBook.js';
 import { motionCourse, motionPosition } from '../render/motion/iconMotion.js';
 import {
@@ -40,6 +41,8 @@ import { TIMELINE_UNSEEN_MS } from '../time/timelineFixes.js';
 
 /** Raster size of the cockpit contact pip (cockpitContactDot.js draws 16 px). */
 const COCKPIT_DOT_PX = 16;
+/** The lifted point a horizon test judges, rewritten per contact per frame. */
+const _horizonScratch = new Vec3();
 /** Fleet glyphs keep the established close-range 3× scale. */
 /** A contact icon's size before its scale, CSS px. */
 const FLEET_ICON_SIZE_PX = 20;
@@ -156,6 +159,8 @@ export function createContactIcons(drawSet = null, { capabilities } = {}) {
     has: (id) => book.has(id),
     /** The drawn ids, in the order first drawn. */
     ids: () => book.ids(),
+    /** The drawn ids as one kept array, for per-frame readers (`iconBook.idList`). */
+    idList: () => book.idList(),
     item: (id) => book.item(id),
     /**
      * Until when (epoch ms on the display clock) an id's motion holds:
@@ -165,10 +170,7 @@ export function createContactIcons(drawSet = null, { capabilities } = {}) {
     /** The ids whose motion ran out by `t`, to plan afresh. */
     due: (t) => book.due(t),
     /** Where an id is drawn at `t` (into `result` when given), or null. */
-    position(id, t, result) {
-      const p = book.position(id, t);
-      return p && result ? copyInto(p, result) : p;
-    },
+    position: (id, t, result) => book.position(id, t, result),
     course: (id, t) => book.course(id, t),
     shown: (id) => book.item(id)?.show !== false && !unseen.has(id),
     focus: (id) => book.focus(id),
@@ -646,7 +648,10 @@ export function createAircraftIcons({
    * when drawn below it). No camera, no horizon.
    */
   function _aboveHorizon(position, occluder) {
-    return !occluder || occluder.isPointVisible(liftedForHorizon(position));
+    return (
+      !occluder ||
+      occluder.isPointVisible(liftedForHorizonInto(position, _horizonScratch))
+    );
   }
 
   /**

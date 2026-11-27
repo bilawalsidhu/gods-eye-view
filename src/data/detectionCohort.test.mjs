@@ -42,3 +42,27 @@ test('incumbents are admitted before stronger new contenders', () => {
   assert.equal(selected[0]._cohortSourceId, 'incumbent');
   assert.equal(selected.length, 64);
 });
+
+test('the identity hash is FNV-1a over layer, NUL and source, without joining them', () => {
+  const reference = (layerId, sourceId) => {
+    const text = `${String(layerId)}\u0000${String(sourceId)}`;
+    let hash = 2166136261;
+    for (let i = 0; i < text.length; i++) {
+      hash ^= text.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    return hash >>> 0;
+  };
+  for (const [layerId, sourceId] of [
+    ['flights', 'abc123'],
+    ['satellites', 25544],
+    ['', ''],
+    ['transit', 'é✈️ line 7'],
+    ['cctv', null],
+    ['vessels', 0],
+  ])
+    assert.equal(
+      stableIdentityHash(layerId, sourceId),
+      reference(layerId, sourceId),
+    );
+});
