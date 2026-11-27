@@ -47,15 +47,32 @@ function resolvedParams(overrides) {
   return { ..._params, ...overrides };
 }
 
-function focusTargetEmphasisResolved(
+/**
+ * Pure focus decision for one ambient sprite.
+ *
+ * `previouslyCompeting` is state, not tuning: it expands the exit edge by
+ * `hysteresisPx` without moving the entry edge. Farther sprites dim fully;
+ * nearer treatment deliberately remains a runtime tuning choice.
+ *
+ * @param {{x:number,y:number}|null} spriteScreenPosition
+ * @param {number} spriteCameraDistance
+ * @param {object|null} target
+ * @param {typeof DEFAULT_FOCUS_DEEMPHASIS_PARAMS} tuning Full tuning, as getFocusDeemphasisParams() returns.
+ * @param {boolean} [previouslyCompeting=false]
+ * @param {number} [spriteHalfWidthPx=0] Ambient visual half-width.
+ * @param {number} [spriteHalfHeightPx=spriteHalfWidthPx] Ambient visual half-height.
+ * @param {boolean} [previouslyFarther=previouslyCompeting] Prior distance-side state.
+ * @returns {number} Target emphasis in [dimFloor, 1].
+ */
+export function focusTargetEmphasis(
   spriteScreenPosition,
   spriteCameraDistance,
   target,
   tuning,
-  previouslyCompeting,
-  spriteHalfWidthPx,
-  spriteHalfHeightPx,
-  previouslyFarther,
+  previouslyCompeting = false,
+  spriteHalfWidthPx = 0,
+  spriteHalfHeightPx = spriteHalfWidthPx,
+  previouslyFarther = previouslyCompeting,
 ) {
   if (!target?.screenRect || !spriteScreenPosition) return 1;
   if (
@@ -107,7 +124,16 @@ function focusTargetEmphasisResolved(
   return 1;
 }
 
-function smoothFocusEmphasisResolved(current, target, elapsedMs, tuning) {
+/**
+ * Pure time-based easing step. Attack means motion toward de-emphasis;
+ * release means restoration toward full emphasis.
+ * @param {number} current
+ * @param {number} target
+ * @param {number} elapsedMs
+ * @param {typeof DEFAULT_FOCUS_DEEMPHASIS_PARAMS} tuning Full tuning, as getFocusDeemphasisParams() returns.
+ * @returns {number}
+ */
+export function smoothFocusEmphasis(current, target, elapsedMs, tuning) {
   const from = clamp(
     Number.isFinite(current) ? current : 1,
     tuning.dimFloor,
@@ -162,11 +188,6 @@ export function setFocusDeemphasisParams(patch = {}) {
 /** @returns {typeof DEFAULT_FOCUS_DEEMPHASIS_PARAMS} Current runtime tuning. */
 export function getFocusDeemphasisParams() {
   return _params;
-}
-
-/** Restore production defaults. Primarily useful for deterministic QA. */
-export function resetFocusDeemphasisParams() {
-  _params = { ...DEFAULT_FOCUS_DEEMPHASIS_PARAMS };
 }
 
 /**
@@ -310,60 +331,6 @@ export function getFocusTarget() {
 }
 
 /**
- * Pure focus decision for one ambient sprite.
- *
- * `previouslyCompeting` is state, not tuning: it expands the exit edge by
- * `hysteresisPx` without moving the entry edge. Farther sprites dim fully;
- * nearer treatment deliberately remains a runtime tuning choice.
- *
- * @param {{x:number,y:number}|null} spriteScreenPosition
- * @param {number} spriteCameraDistance
- * @param {object|null} target
- * @param {Partial<typeof DEFAULT_FOCUS_DEEMPHASIS_PARAMS>} [params]
- * @param {boolean} [previouslyCompeting=false]
- * @param {number} [spriteHalfWidthPx=0] Ambient visual half-width.
- * @param {number} [spriteHalfHeightPx=spriteHalfWidthPx] Ambient visual half-height.
- * @param {boolean} [previouslyFarther=previouslyCompeting] Prior distance-side state.
- * @returns {number} Target emphasis in [dimFloor, 1].
- */
-export function focusTargetEmphasis(
-  spriteScreenPosition,
-  spriteCameraDistance,
-  target,
-  params,
-  previouslyCompeting = false,
-  spriteHalfWidthPx = 0,
-  spriteHalfHeightPx = spriteHalfWidthPx,
-  previouslyFarther = previouslyCompeting,
-) {
-  const tuning = resolvedParams(params);
-  return focusTargetEmphasisResolved(
-    spriteScreenPosition,
-    spriteCameraDistance,
-    target,
-    tuning,
-    previouslyCompeting,
-    spriteHalfWidthPx,
-    spriteHalfHeightPx,
-    previouslyFarther,
-  );
-}
-
-/**
- * Pure time-based easing step. Attack means motion toward de-emphasis;
- * release means restoration toward full emphasis.
- * @param {number} current
- * @param {number} target
- * @param {number} elapsedMs
- * @param {Partial<typeof DEFAULT_FOCUS_DEEMPHASIS_PARAMS>} [params]
- * @returns {number}
- */
-export function smoothFocusEmphasis(current, target, elapsedMs, params) {
-  const tuning = resolvedParams(params);
-  return smoothFocusEmphasisResolved(current, target, elapsedMs, tuning);
-}
-
-/**
  * Advance one sprite's persistent focus state. The caller owns the eventual
  * color write so focus can compose with freshness/horizon alpha at one site.
  * @param {object} sprite Stable billboard/point primitive identity.
@@ -419,13 +386,13 @@ export function advanceSpriteFocus(
   // retarget and, paired with range hysteresis, prevents boundary chatter
   // from continually restarting at 1.0.
   const oldElapsedMs = Math.max(0, nowMs - state.transitionStartMs);
-  const current = smoothFocusEmphasisResolved(
+  const current = smoothFocusEmphasis(
     state.transitionFrom,
     state.desired,
     oldElapsedMs,
     tuning,
   );
-  const desired = focusTargetEmphasisResolved(
+  const desired = focusTargetEmphasis(
     screenPosition,
     cameraDistance,
     target,
@@ -441,7 +408,7 @@ export function advanceSpriteFocus(
     state.desired = desired;
   }
   const elapsedMs = Math.max(0, nowMs - state.transitionStartMs);
-  const next = smoothFocusEmphasisResolved(
+  const next = smoothFocusEmphasis(
     state.transitionFrom,
     desired,
     elapsedMs,
