@@ -8,10 +8,10 @@ import { UNKNOWN_LAUNCH_STATUS } from './model.js';
 
 // Landing endpoints carry an English accuracy code (the panel and the map
 // entity compare it); only the text shown in the stage table is translated.
-// The downrange estimate arrives already translated.
 function accuracyLabel(accuracy) {
   if (accuracy === 'CONFIRMED') return t('CONFIRMED');
   if (accuracy === 'PAD / RTLS') return t('PAD / RTLS');
+  if (accuracy === 'EST. DOWNRANGE') return t('EST. DOWNRANGE');
   return accuracy;
 }
 

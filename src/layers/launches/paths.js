@@ -22,7 +22,6 @@ import {
   vec,
 } from '../../geo/vector.js';
 import { lerp, mod } from './geometry.js';
-import { t } from '../../i18n/index.js';
 import {
   EARTH_ROTATION_RAD_PER_SEC,
   PROJECTED_ASCENT_ROTATION_SEC,
@@ -454,7 +453,7 @@ export function createPaths({ state: layerState, services, parts, source }) {
     return {
       lat: toDegrees(lat),
       lon: toDegrees(negativePiToPi(lon)),
-      accuracy: t('EST. DOWNRANGE'),
+      accuracy: 'EST. DOWNRANGE',
     };
   }
 
