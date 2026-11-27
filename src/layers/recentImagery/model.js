@@ -22,7 +22,6 @@ const KM_PER_DEG_LAT = 111.32;
 const QUANTUM = 100000;
 const DAY_MS = 86_400_000;
 const PRODUCT_ORDER = ['S30', 'L30', 'VIIRS'];
-const MONTHS = 'Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.split(' ');
 
 /** The two imagery slots a comparison drapes. */
 export const SLOT_IDS = ['a', 'b'];
@@ -296,11 +295,6 @@ export function boxFromDegrees(rectangle) {
   return mapBox(rectangle, (degrees) => degrees);
 }
 
-/** Degrees box from a radians rectangle (Cesium `Rectangle` shape). */
-export function boxFromRectangle(rectangle) {
-  return mapBox(rectangle, (radians) => (Number(radians) * 180) / Math.PI);
-}
-
 /** Degrees box → signed integers at degrees × 100000 (the share-link form). */
 export function quantizeBox(box) {
   return mapBox(normalizeBox(box), (value) => Math.round(value * QUANTUM));
@@ -342,12 +336,6 @@ export function utcDay(value) {
 /** UTC midnight of a `YYYY-MM-DD` day in epoch ms, for locale formatting; null otherwise. */
 export function dayTime(day) {
   return isValidDay(day) ? Date.parse(`${day}T00:00:00Z`) : null;
-}
-
-/** `Sep 18` for a `YYYY-MM-DD` day; '' otherwise. */
-export function shortDay(day) {
-  const match = /^\d{4}-(\d{2})-(\d{2})$/.exec(String(day || ''));
-  return match ? `${MONTHS[Number(match[1]) - 1]} ${Number(match[2])}` : '';
 }
 
 /** `17:12` (UTC) for an ISO timestamp; '' when unparseable. */

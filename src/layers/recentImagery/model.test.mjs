@@ -5,7 +5,6 @@ import {
   boxFromPin,
   lonSpanDeg,
   nonCrossingBoxes,
-  boxFromRectangle,
   boxSideKm,
   coverageFor,
   boxCentre,
@@ -18,7 +17,6 @@ import {
   parseCandidateKey,
   quantizeBox,
   rankLatest,
-  shortDay,
   thumbnailOrder,
   utcDay,
   validateBox,
@@ -196,15 +194,7 @@ test('boxFromPin builds a 10 km square within 2% at any latitude and refuses wha
   assert.equal(boxFromPin(0, 85.04).north, 85.0511, 'clamped, still valid');
 });
 
-test('rectangles convert from radians and the share-link quantization round-trips', () => {
-  const box = boxFromRectangle({
-    west: -Math.PI / 2,
-    south: 0,
-    east: -Math.PI / 4,
-    north: Math.PI / 6,
-  });
-  assert.ok(Math.abs(box.west + 90) < 1e-9 && Math.abs(box.north - 30) < 1e-9);
-  assert.equal(boxFromRectangle(null), null);
+test('the share-link quantization round-trips', () => {
   const ints = quantizeBox({
     west: -97.812345678,
     south: 30.2,
@@ -233,8 +223,6 @@ test('days and candidate keys are real UTC calendar days', () => {
   });
   assert.equal(parseCandidateKey('X30:2026-09-10'), null);
   assert.equal(parseCandidateKey('S30:2026-02-30'), null);
-  assert.equal(shortDay('2026-09-18'), 'Sep 18');
-  assert.equal(shortDay('nope'), '');
 });
 
 test('granules group into one candidate per product and UTC day, newest first', () => {
@@ -574,9 +562,8 @@ test('every edge and every box entry point refuses a missing edge', async () => 
     for (const value of blanks) {
       const box = { west: 1, south: 1, east: 2, north: 2, [edge]: value };
       assert.equal(validateBox(box).ok, false, `${edge}=${String(value)}`);
-      // Share-link integers and Cesium radians are converted per edge.
+      // Share-link integers are converted per edge.
       assert.equal(dequantizeBox(box), null, `share ${edge}`);
-      assert.equal(boxFromRectangle(box), null, `radians ${edge}`);
     }
   }
   assert.ok(dequantizeBox({ west: 0, south: 0, east: 100000, north: 100000 }));
