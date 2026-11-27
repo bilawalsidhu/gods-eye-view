@@ -9,20 +9,20 @@ import { outerEdges } from './edges.js';
 
 /** The legend's one row: the burned area, in the fill's colour. */
 export const PERIMETER_LEGEND = Object.freeze({
-  color: '#f2541b',
+  color: '#ff5a1f',
   label: msg('Burned area'),
 });
 
 /** Every piece's fill, whatever its age. */
-export const PERIMETER_FILL = hexColor('#f2541b', 0.47);
+export const PERIMETER_FILL = hexColor('#ff5a1f', 0.62);
 /** Every fire's edge, and the dark halo under it. */
 export const PERIMETER_EDGE = Object.freeze({
-  widthPx: 2.5,
-  style: { kind: 'solid', color: hexColor('#ff7b3a', 1) },
+  widthPx: 3.5,
+  style: { kind: 'solid', color: hexColor('#ffb347', 1) },
 });
 export const PERIMETER_HALO = {
-  widthPx: 6.5,
-  style: { kind: 'solid', color: hexColor('#160904', 0.7) },
+  widthPx: 8,
+  style: { kind: 'solid', color: hexColor('#160904', 0.75) },
 };
 
 /**
@@ -56,13 +56,13 @@ const LINE_SHARE = 8;
 export const LINE_MIN_VERTICES = 6000;
 
 /** Marker sizes, CSS pixels: by acres, from 100 acres up to a million. */
-const MARKER_PX = Object.freeze({ min: 14, max: 34, unknown: 16 });
+const MARKER_PX = Object.freeze({ min: 22, max: 44, unknown: 24 });
 /**
  * Markers show from this eye distance out, metres; nearer, the perimeter
  * takes over. Labels (`PERIMETER_LABEL_RANGE_M`) show from here too.
  */
-export const PERIMETER_MARKER_FROM_M = 120_000;
-const FLAME_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="80" viewBox="0 0 64 80"><path d="M33 3c4 14 21 23 21 45a22 22 0 0 1-44 0c0-11 6-18 11-23 0 8 4 13 9 15-3-13 0-25 3-37z" fill="#f2541b" stroke="#160904" stroke-width="4" stroke-linejoin="round"/><path d="M32 40c4 6 11 10 11 18a11 11 0 0 1-22 0c0-7 5-11 11-18z" fill="#ffd3ad"/></svg>`;
+export const PERIMETER_MARKER_FROM_M = 80_000;
+const FLAME_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="80" viewBox="0 0 64 80"><path d="M33 3c4 14 21 23 21 45a22 22 0 0 1-44 0c0-11 6-18 11-23 0 8 4 13 9 15-3-13 0-25 3-37z" fill="#ff5a1f" stroke="#160904" stroke-width="4" stroke-linejoin="round"/><path d="M32 40c4 6 11 10 11 18a11 11 0 0 1-22 0c0-7 5-11 11-18z" fill="#ffd27a"/></svg>`;
 const FLAME = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(FLAME_SVG)}`;
 
 const PICK_PREFIX = 'fire-perimeter:';

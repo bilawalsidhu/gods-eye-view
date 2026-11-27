@@ -852,7 +852,7 @@ test('the legend is one row, the burned area of every fire, with the source note
   const controls = h.layer.getRowControls();
   assert.deepEqual(controls.chips, []);
   assert.deepEqual(controls.legend, [
-    { label: 'Burned area', color: '#f2541b', count: 5 },
+    { label: 'Burned area', color: '#ff5a1f', count: 5 },
   ]);
   assert.equal(controls.info, 'Perimeters are simplified to about 100 m.');
   h.layer.destroy();
