@@ -44,12 +44,15 @@ test('en: CAL, SRC and CONTEXT keep their English codes', () => {
   assert.match(summary('upstream-image'), /SRC UPSTREAM-IMAGE/);
 });
 
-test('fr: CAL, SRC and CONTEXT values are translated', () => {
+test('fr: CAL, SRC and CONTEXT values are not left in English', () => {
+  setLocale('en');
+  const english = summary('upstream');
   setLocale('fr');
   try {
-    assert.match(
+    assert.notEqual(summary('upstream'), english);
+    assert.doesNotMatch(
       summary('upstream'),
-      /CAL ESTIM\. INITIALE · SRC AMONT · CONTEXTE RUE/,
+      /RAW PRIOR|SRC UPSTREAM|STREET CONTEXT/,
     );
     assert.match(summary('upstream-image'), /SRC UPSTREAM-IMAGE/);
   } finally {

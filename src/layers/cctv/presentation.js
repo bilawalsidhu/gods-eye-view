@@ -30,7 +30,7 @@ const SOURCE_KIND_LABELS = Object.freeze({
 });
 
 /** CAL badge id ('raw-prior') as the summary shows it; unknown ids stay codes. */
-export function summaryCalLabel(badge) {
+function summaryCalLabel(badge) {
   const key = String(badge || '');
   return CAL_BADGE_LABELS[key]
     ? t(CAL_BADGE_LABELS[key])
@@ -38,7 +38,7 @@ export function summaryCalLabel(badge) {
 }
 
 /** Source kind ('image', 'snapshot') for the summary; HLS, MJPEG… stay codes. */
-export function summarySourceLabel(kind) {
+function summarySourceLabel(kind) {
   const key = String(kind || 'image').toLowerCase();
   return SOURCE_KIND_LABELS[key]
     ? t(SOURCE_KIND_LABELS[key])
@@ -46,7 +46,7 @@ export function summarySourceLabel(kind) {
 }
 
 /** View band id ('street', 'city'…) as the HUD names it. */
-export function summaryViewBandLabel(band) {
+function summaryViewBandLabel(band) {
   switch (band) {
     case 'street':
       return t('STREET', { context: 'view band' });
