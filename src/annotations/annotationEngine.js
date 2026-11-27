@@ -341,7 +341,6 @@ export function createAnnotationEngine({
       anno.ring = null;
       anno.polygons = null;
       anno.footprintKind = null;
-      anno.outlineCredit = null;
       anno.outlineUnavailable = true;
       renderer.update(anno);
     }
@@ -560,7 +559,6 @@ export function createAnnotationEngine({
                 anno.footprintKind = dup.footprintKind || null;
                 anno.buildingHeight = dup.buildingHeight || null;
                 anno.synthesized = Boolean(dup.synthesized);
-                anno.outlineCredit = dup.outlineCredit || null;
                 anno.anchor = { ...dup.anchor };
               }
               if (anno.ring?.length >= 3 && anno.footprintKind === 'building') {
@@ -1107,7 +1105,6 @@ export function createAnnotationEngine({
         anno.ring = fp.ring;
         anno.polygons = fp.polygons || null;
         anno.footprintKind = fp.footprintKind || null;
-        anno.outlineCredit = fp.outlineCredit || null;
         anno.buildingHeight = fp.buildingHeight || null;
         anno.synthesized = Boolean(fp.synthesized);
         // Re-center on the footprint centroid, as the inline path always did.
@@ -1248,7 +1245,6 @@ export function createAnnotationEngine({
           anno.ring = null;
           anno.polygons = null;
           anno.footprintKind = null;
-          anno.outlineCredit = null;
           renderer.add(anno);
           if (installRecord) installRecord.accepted = true;
         } catch {
@@ -1540,7 +1536,6 @@ export function createAnnotationEngine({
             : 'drawn'
           : 'voice',
       footprintKind: resolved.footprintKind || null, // 'building' | 'area'
-      outlineCredit: resolved.outlineCredit || null,
       buildingHeight: resolved.buildingHeight || null, // meters, for extruded volume
       synthesized: Boolean(resolved.synthesized), // approximate buffered area → dashed render
       // Progressive outline: the anchor is placed, the footprint is still resolving —

@@ -4643,5 +4643,7 @@
   "Low-cost sensor": "Sensore a basso costo",
   "{name} · sensor": "{name} · sensore",
   "Reference monitor": "Strumento di riferimento",
-  "Needs {envVars} — add one in Provider Settings": "Richiede {envVars}: aggiungine una in Impostazioni provider"
+  "Needs {envVars} — add one in Provider Settings": "Richiede {envVars}: aggiungine una in Impostazioni provider",
+  "CABLE \u00b7 {name}": "CAVO · {name}",
+  "LANDING POINT \u00b7 {name}": "PUNTO DI APPRODO · {name}"
 }

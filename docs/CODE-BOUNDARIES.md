@@ -494,6 +494,12 @@ explicit visual/panel actions. `ui/context/policy` exposes the existing pure
 mode and restoration rules. No source transport or renderer is imported by
 these components; initial state and action results retain their existing shape.
 
+`ui/context/card` lets a custom layer open and close the Context panel's item
+card, and hear when the map selection changes
+(`openContextCard`, `closeContextCard`, `onMapSelectionChanged`). It imports
+nothing: the app's Context connects the card and the selection to it when it
+starts, and until then nothing opens and nothing is heard.
+
 ## Cockpit controls
 
 `ui/cockpit` supplies the Cockpit controller and Display portal. Camera updates,

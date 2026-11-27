@@ -1795,7 +1795,8 @@
       "src/data/youtubeApi.js",
       "src/data/youtubeLivePlayer.js",
       "src/ui/liveControls.js",
-      "src/data/viewSheet.js"
+      "src/data/viewSheet.js",
+      "src/ui/contextCard.js"
     ],
     "external": [
       "cesium",
@@ -4053,7 +4054,14 @@
       "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js",
       "src/geoDistance.js",
-      "src/data/viewSheet.js"
+      "src/data/viewSheet.js",
+      "src/data/trackedCamera.js",
+      "src/time/worldClock.js",
+      "src/navigationPolicy.js",
+      "src/geo/julian.js",
+      "src/data/followed.js",
+      "src/geo/geodesic.js",
+      "src/data/clickSelect.js"
     ],
     "external": ["cesium", "kdbush"]
   },
@@ -5764,7 +5772,8 @@
       "src/layers/airQuality/units.js",
       "src/data/aircraftViews.js",
       "src/data/aircraftViews.json",
-      "src/data/viewSheet.js"
+      "src/data/viewSheet.js",
+      "src/ui/contextCard.js"
     ],
     "external": [
       "hls.js",
@@ -8788,6 +8797,11 @@
   "rail-paths": {
     "exports": ["./layers/rail/paths"],
     "modules": ["src/data/railPaths.js"],
+    "external": []
+  },
+  "context-card": {
+    "exports": ["./ui/context/card"],
+    "modules": ["src/ui/contextCard.js"],
     "external": []
   }
 }

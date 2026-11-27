@@ -306,10 +306,8 @@ test('Esri construction fallback reports and attributes the source actually rend
 test('one Esri tile failure stays put, two fall back, and stale errors cannot replace a selection', async () => {
   const env = publicFixture();
   await env.controller.setStack('esri-imagery');
-  assert.deepEqual(
-    [...env.credits],
-    [{ text: 'Powered by Esri', href: 'https://www.esri.com', inline: true }],
-  );
+  // Esri is credited once, by its imagery layer; the source adds none.
+  assert.equal(env.credits.size, 0);
   const errorEvent = env.providers.get('esri-imagery').errorEvent;
   errorEvent.raise();
   await settle();

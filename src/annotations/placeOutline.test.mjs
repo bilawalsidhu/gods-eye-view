@@ -68,11 +68,6 @@ function assertBundledArea(resolved, label) {
   assert.equal(resolved.label, label);
   assert.equal(resolved.footprintKind, 'area');
   assert.equal(resolved.synthesized, false);
-  assert.equal(
-    resolved.outlineCredit || null,
-    null,
-    'bundled data is not an OSM outline',
-  );
   assert.equal(resolved.resolveOutline, undefined, 'drawn at once');
   assert.deepEqual(resolved.ring[0], resolved.ring.at(-1), 'ring closed');
   assert.ok(resolved.polygons.length >= 1);
@@ -193,7 +188,8 @@ test('a geocoded city or neighborhood upgrades to the bundled outline', async ()
   controller.abort();
   await assert.rejects(pending, { name: 'AbortError' });
   assert.deepEqual(
-    credits,
+    // The renderer's own CesiumJS credit aside.
+    credits.filter((credit) => !credit.html.includes('CesiumJS')),
     [],
     'a cancelled bundled continuation cannot mutate viewer credits',
   );
@@ -605,11 +601,6 @@ test('a campus ask reaches the campus, not the Census place of its town', async 
     const outline = await resolved.resolveOutline();
     assert.deepEqual(outline.ring, campus, ask);
     assert.equal(
-      outline.outlineCredit,
-      null,
-      'an injected outline is not inferred OSM',
-    );
-    assert.equal(
       rungs.asked[0].scope,
       'compound',
       `${ask}: past the Census rung`,
@@ -723,7 +714,6 @@ test('configured OSM geometry retains its origin through inline, deferred and ca
     });
     const outline = deferFootprint ? await result.resolveOutline() : result;
     assert.equal(outline.footprintKind, 'building');
-    assert.equal(outline.outlineCredit, 'osm');
     assert.deepEqual(outline.ring, ring);
   }
   assert.equal(calls, 1, 'cached geometry retains its original provider');

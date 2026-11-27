@@ -61,7 +61,14 @@ export function createState({ sweepClock, overlayHost }) {
 
   state._referenceRecords = [];
 
+  /** The cable or landing point a click named, `{ kind, featureId }`, or null:
+   * its name card shows until a click lands elsewhere. */
+  state._selected = null;
+
   state._clickSubscription = null;
+
+  /** Off for the name card's side of the one map selection. */
+  state._selectionYield = null;
 
   state._preRenderRemover = null;
 

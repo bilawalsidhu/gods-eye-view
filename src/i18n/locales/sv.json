@@ -4538,5 +4538,7 @@
   "Low-cost sensor": "Lågkostnadssensor",
   "{name} · sensor": "{name} · sensor",
   "Reference monitor": "Referensinstrument",
-  "Needs {envVars} — add one in Provider Settings": "Kräver {envVars} – lägg till en av dem i Leverantörsinställningar"
+  "Needs {envVars} — add one in Provider Settings": "Kräver {envVars} – lägg till en av dem i Leverantörsinställningar",
+  "CABLE \u00b7 {name}": "KABEL · {name}",
+  "LANDING POINT \u00b7 {name}": "LANDNINGSPUNKT · {name}"
 }
