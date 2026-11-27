@@ -2,10 +2,6 @@ import * as Cesium from 'cesium';
 import { applyModelAtmosphereWorkaround } from '../../app/atmosphereCompat.js';
 import { frameRateCap } from '../../renderGovernor.js';
 import { preloadImageryAhead } from './imageryLookAhead.js';
-import {
-  guardDegenerateRotation,
-  installRenderRecovery,
-} from './renderRecovery.js';
 import { StarrySky } from './starrySky.js';
 
 /**
@@ -48,6 +44,30 @@ export function limitZoomOut(viewer) {
       camera.positionCartographic?.height ?? 0,
     );
   });
+}
+
+/**
+ * Make `camera.rotate` skip an axis that is zero or not finite, and an angle
+ * that is not finite. With the pointer on the centre of a whole-globe view,
+ * Cesium's wheel zoom (`ScreenSpaceCameraController` `handleZoom`) can ask
+ * for a turn about a zero axis, and `rotate` throws from
+ * `Scene.initializeFrame`, stopping the render loop. The zoom still moves the
+ * camera in after the skipped turn.
+ * @param {Cesium.Camera} camera
+ */
+export function guardDegenerateRotation(camera) {
+  const rotate = camera.rotate;
+  camera.rotate = function (axis, angle) {
+    if (axis) {
+      const magnitudeSquared = Cesium.Cartesian3.magnitudeSquared(axis);
+      if (
+        !(magnitudeSquared > 0 && magnitudeSquared < Infinity) ||
+        (angle !== undefined && !Number.isFinite(angle))
+      )
+        return;
+    }
+    return rotate.call(this, axis, angle);
+  };
 }
 
 // Dev convenience: expose the app's Cesium instance for console/preview probing
@@ -125,11 +145,8 @@ export function createApplicationViewer({
     if (globalThis.matchMedia?.('(pointer: coarse)').matches)
       viewer.scene.screenSpaceCameraController.zoomFactor *= 3;
     limitZoomOut(viewer);
-    // Cesium's wheel zoom can hand the camera a zero rotation axis and stop
-    // the render loop for good; and whatever else stops it, restart it rather
-    // than leave the globe dead until a reload. See renderRecovery.js.
+    // Cesium's wheel zoom can ask for a turn about a zero axis.
     guardDegenerateRotation(viewer.camera);
-    installRenderRecovery(viewer);
     // A narrow view carried along an orbit outruns the imagery under it.
     preloadImageryAhead(viewer);
     // Before any tile builds a draw command: Cesium's per-vertex model

@@ -72,7 +72,6 @@ test('every private field the app reaches is still declared by the installed Ces
     [ENGINE, 'Scene/CreditDisplay.js', '_currentCesiumCredit'],
     [ENGINE, 'Scene/Material.js', '_textures'],
     [ENGINE, 'Scene/Model/CustomShader.js', '_textureManager'],
-    [ENGINE, 'Scene/ScreenSpaceCameraController.js', '_aggregator'],
   ];
   const missing = fields.filter(
     ([root, file, field]) =>

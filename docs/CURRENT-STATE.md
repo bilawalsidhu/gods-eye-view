@@ -3631,6 +3631,11 @@ keeps it by default for other callers.
 
 Pitfalls:
 
+- With the pointer on the centre of a whole-globe view, Cesium's wheel zoom
+  can ask `Camera.rotate` for a turn about a zero axis, which throws from
+  `Scene.initializeFrame` and stops the loop. `createApplicationViewer()`
+  makes the camera skip that turn (`guardDegenerateRotation()` in
+  `src/render/cesium/applicationViewer.js`).
 - An error thrown outside Scene's error handling (a frame listener, `onTick`,
   a resize) stops the loop without a `renderError`. The notice wraps the
   widget's `render()` and `resize()` and raises it as one, once even with

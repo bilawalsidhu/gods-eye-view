@@ -100,6 +100,7 @@
   "src/app/mapLifecycle.test.mjs",
   "src/app/startupCamera.test.mjs",
   "src/render/cesium/applicationViewer.js",
+  "src/render/cesium/applicationViewer.test.mjs",
   "src/sky/icrf.js",
   "src/app/atmosphereCompat.test.mjs",
   "src/standalone/application.js",

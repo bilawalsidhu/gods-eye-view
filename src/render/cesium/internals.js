@@ -58,15 +58,6 @@ export function closeRenderLoopLatch(viewer) {
 }
 
 /**
- * Drop the camera input a failed frame left queued. Cesium has no public way
- * to; `renderRecovery.js` restarts the render loop without it.
- * @param {object} controller Cesium ScreenSpaceCameraController.
- */
-export function resetCameraInput(controller) {
-  controller?._aggregator?.reset?.();
-}
-
-/**
  * Whether the widget's render loop is marked running. The render failure
  * notice keeps it marked while a frame it wraps throws, so a Retry before the
  * loop's queued frame starts no second loop.
