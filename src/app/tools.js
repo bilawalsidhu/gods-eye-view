@@ -75,7 +75,7 @@ export function createApplicationTools({
   defer,
 }) {
   const { viewer, renderer, tileset, mapStackController, operations } = scene;
-  const { styleManager, weatherEffects, cockpitCloudEffects } = controls;
+  const { styleManager, cockpitCloudEffects } = controls;
   const { dataManager } = data;
   const sceneDirector = new SceneDirector(viewer, styleManager, dataManager, {
     dataPacks: { overlayHost, ...sceneDataPacks },
@@ -319,7 +319,6 @@ export function createApplicationTools({
       sceneDirector,
       mapStackController,
       annotations,
-      weatherEffects,
       cockpitCloudEffects,
       getRenderGovernorDiagnostics,
       surfaceServices: operations.surface,
