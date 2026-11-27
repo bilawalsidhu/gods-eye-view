@@ -111,19 +111,11 @@ export function getKeyholeGeometry(width, height) {
 }
 
 /**
- * Compute the radial opacity for a callout's visual center. Text remains fully
- * opaque inside the keyhole and fades linearly to the configured outside-opacity
- * floor through a band derived from the live keyhole radius.
+ * Compute keyhole opacity from geometry already cached by a hot render loop.
+ * Text remains fully opaque inside the keyhole and fades linearly to the
+ * configured outside-opacity floor through a band derived from the live
+ * keyhole radius.
  */
-export function keyholeLabelAlpha(labelX, labelY, width, height) {
-  return keyholeLabelAlphaFromGeometry(
-    labelX,
-    labelY,
-    getKeyholeGeometry(width, height),
-  );
-}
-
-/** Compute keyhole opacity from geometry already cached by a hot render loop. */
 export function keyholeLabelAlphaFromGeometry(labelX, labelY, geometry) {
   if (
     !geometry ||
