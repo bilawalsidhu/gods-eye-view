@@ -15,7 +15,6 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as Cesium from 'cesium';
 import {
-  activeCameraMotionId,
   getActiveCameraMotion,
   initCameraVerbs,
   interruptCameraMotion,
@@ -265,17 +264,17 @@ test('tracking event keeps legacy yaw and an untracked globe rotation active', (
     moveCamera({ motion: 'rotate', direction: 'right', mode: 'continuous' }).ok,
     true,
   );
-  const yawId = activeCameraMotionId();
+  const yawId = getActiveCameraMotion()?.motionId ?? 0;
   followEntity(viewer, { id: 'aircraft' });
-  assert.equal(activeCameraMotionId(), yawId);
+  assert.equal(getActiveCameraMotion()?.motionId ?? 0, yawId);
   followEntity(viewer, null);
   assert.equal(
     moveCamera({ motion: 'rotate_globe', mode: 'continuous' }).ok,
     true,
   );
-  const globeId = activeCameraMotionId();
+  const globeId = getActiveCameraMotion()?.motionId ?? 0;
   followEntity(viewer, null);
-  assert.equal(activeCameraMotionId(), globeId);
+  assert.equal(getActiveCameraMotion()?.motionId ?? 0, globeId);
 });
 
 test('replaced viewer releases the old tracking listener without duplicate subscriptions', (t) => {
@@ -290,9 +289,9 @@ test('replaced viewer releases the old tracking listener without duplicate subsc
     moveCamera({ motion: 'rotate_globe', mode: 'continuous' }).ok,
     true,
   );
-  const id = activeCameraMotionId();
+  const id = getActiveCameraMotion()?.motionId ?? 0;
   followEntity(first.viewer, { id: 'stale-aircraft' });
-  assert.equal(activeCameraMotionId(), id);
+  assert.equal(getActiveCameraMotion()?.motionId ?? 0, id);
   followEntity(next.viewer, { id: 'new-aircraft' });
   assert.equal(getActiveCameraMotion(), null);
   assert.equal(hasRenderHold(), false);
@@ -515,9 +514,9 @@ test('new navigation can cancel globe rotation before setting a new destination'
 test('replacement motion rejects a stale globe owner cancellation', (t) => {
   const { camera, tick } = harness(t);
   moveCamera({ motion: 'rotate_globe', mode: 'continuous' });
-  const globeId = activeCameraMotionId();
+  const globeId = getActiveCameraMotion()?.motionId ?? 0;
   moveCamera({ motion: 'rotate', direction: 'left', mode: 'continuous' });
-  const yawId = activeCameraMotionId();
+  const yawId = getActiveCameraMotion()?.motionId ?? 0;
   assert.notEqual(yawId, globeId);
   assert.equal(interruptCameraMotionIfActive(globeId).wasActive, false);
   assert.equal(getActiveCameraMotion()?.kind, 'rotate');

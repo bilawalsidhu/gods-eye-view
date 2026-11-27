@@ -982,13 +982,6 @@ function listenForFrames() {
 }
 
 /**
- * @returns {number} Id of the running motion, or 0 when the camera is idle.
- */
-export function activeCameraMotionId() {
-  return _active?.motionId || 0;
-}
-
-/**
  * Stop a motion only while it is still the one running. A feature that owns a
  * flight calls this on clear/teardown: if the user (or voice, or a tracked
  * entity) has since taken the camera, the newer motion is left alone.
