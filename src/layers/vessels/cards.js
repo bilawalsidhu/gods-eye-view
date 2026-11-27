@@ -244,15 +244,10 @@ export function createCards({
   return {
     updateSelectedVesselHud,
     resetSelectedVesselHud,
-    trimHudValue,
     buildVesselCard,
     buildSelectedVesselCard,
     vesselOverlayEntryId,
-    vesselTypeShort,
     cardScreenSeparated,
     displayVesselName,
-    formatSpeed,
-    formatHeading,
-    formatPositionTime,
   };
 }

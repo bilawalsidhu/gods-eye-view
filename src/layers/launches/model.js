@@ -231,9 +231,6 @@ export function createModel({ state: layerState, services, parts, source }) {
 
   return {
     finiteCoordinate,
-    normalizePayloadFlights,
-    normalizeLanding,
-    normalizeRecoveryStages,
     missionMarkerColor,
     missionMarkerCss,
     normalizeRocketLaunches,

@@ -200,7 +200,6 @@ export function createSelection({
     focusFullGlobe,
     setSelectedMission,
     stopMissionZoomAnchor,
-    startMissionZoomAnchor,
     focusMission,
     focusLaunchSite,
   };

@@ -330,12 +330,8 @@ export function createIngestion({
   return {
     shouldRetryAfterActiveTle,
     clearPostTleRetry,
-    schedulePostTleRetry,
-    ensureActiveTleLookup,
     captureSatelliteDependency,
     restoreSatelliteDependency,
-    performMissionUpdate,
-    requestMissionUpdate,
     methods,
   };
 }

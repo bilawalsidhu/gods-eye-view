@@ -224,12 +224,7 @@ export function createViewport({ state: layerState, services, parts, source }) {
     );
   }
   return {
-    getCameraAltitude,
-    getViewBounds,
-    getFetchCenter,
     getBoundsCenter,
-    distanceKm,
-    boundsOverlap,
     clampBounds,
     onCameraChanged,
   };

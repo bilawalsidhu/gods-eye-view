@@ -35,8 +35,6 @@ function harness({ placement = null, following = false } = {}) {
     removeRecordPrimitives(record) {
       primitives.push(['remove', record.id]);
     },
-    shipIcon: () => 'icon',
-    shipScale: () => 1,
     syncRecordIcon() {},
     updateVisibility() {},
   };

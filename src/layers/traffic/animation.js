@@ -365,9 +365,7 @@ export function createAnimation({
   return {
     spawnDotsForRoad,
     animate,
-    maybeStopLight,
     clearDots,
     syncRenderDemand,
-    flushDots,
   };
 }

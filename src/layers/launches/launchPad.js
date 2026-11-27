@@ -175,10 +175,7 @@ export function createLaunchPad({
   }
   return {
     hideLaunchPadZone,
-    removeLaunchPadZonePrimitive,
-    createLaunchPadZonePrimitive,
     initLaunchPadZonePrimitive,
     destroyLaunchPadZonePrimitive,
-    updateLaunchPadZone,
   };
 }
