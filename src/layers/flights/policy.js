@@ -239,8 +239,9 @@ export const FLOOR_FAR_EVERY_TICKS = 12;
 // concurrent requests, dispatches dripped ≥ENRICH_DISPATCH_GAP_MS apart
 // (≤5/s — adsbdb is a free community API; the dev-server proxy additionally
 // caches successful and 404 responses per key for 24 hours, so later sessions
-// may refresh them). Each key is requested at most once per
-// session. Priority jobs (tracked plane, model-eligible planes) jump the
+// may refresh them). Each key is requested at most once per session, except
+// that a temporary failure can be retried after ENRICH_RETRY_COOLDOWN_MS.
+// Priority jobs (tracked plane, model-eligible planes) jump the
 // queue; the ambient fleet sweep (below) fills the back at poll cadence.
 // ---------------------------------------------------------------------------
 

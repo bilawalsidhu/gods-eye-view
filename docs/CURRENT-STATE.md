@@ -9901,8 +9901,9 @@ on purpose:
   backfill.
 - **Enrichment.** Only the selected aircraft (type + route) and aircraft
   about to render as models (type) are looked up, through the Flights
-  source's cached adsbdb proxy with the same once-per-session, four-in-flight,
-  200 ms drip rules.
+  source's cached adsbdb proxy and the same queue as Flights. Each key is
+  requested once per session, with retries after 60 s for temporary failures.
+  Up to four requests run in flight, dispatched 200 ms apart.
 
 A marker drops once its newest position is 60 s old; an aircraft is forgotten
 after 60 s without a message. Clicking a marker opens a readout card (ICAO,

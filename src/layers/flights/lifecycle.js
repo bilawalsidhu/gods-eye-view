@@ -206,8 +206,7 @@ export function createLifecycle({
     destroy(viewer) {
       flightState.timeline?.stop();
       flightState.lifetime.abort();
-      flightState._enrichActive = 0;
-      flightState._enrichLastDispatchMs = 0;
+      flightState._enrich.reset();
       parts.controller._abortActiveUpdates();
       parts.rendering._stopPace(); // direct-destroy path (perf wave 2 fix)
       parts.tracking._clearTracking();
@@ -262,13 +261,6 @@ export function createLifecycle({
       flightState._displayCourse.clear();
       flightState._groundSnap.clear();
       flightState._displayFloorState.clear();
-      flightState._enrichQueue.length = 0;
-      flightState._enrichSeen.clear();
-      flightState._enrichRetryAfter.clear();
-      if (flightState._enrichDripTimer) {
-        clearTimeout(flightState._enrichDripTimer);
-        flightState._enrichDripTimer = null;
-      }
       flightState.records.missingPolls.clear();
       flightState._focusEvidenceIds.clear();
       flightState.feed._count = 0;

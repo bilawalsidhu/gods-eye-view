@@ -114,15 +114,15 @@ test('aborted enrichment cannot write into a later lifecycle or decrement its ac
     () => writes++,
   );
   await Promise.resolve();
-  assert.equal(flightState._enrichActive, 1);
+  assert.equal(flightState._enrich.active, 1);
   flightState.lifetime.abort();
   flightState.lifetime = new AbortController();
-  flightState._enrichActive = 0;
+  flightState._enrich.reset();
   resolve({ found: true });
   await new Promise((done) => setImmediate(done));
   assert.equal(signal.aborted, true);
   assert.equal(writes, 0);
-  assert.equal(flightState._enrichActive, 0);
+  assert.equal(flightState._enrich.active, 0);
 });
 
 test('a synchronous enrichment failure stays bounded and releases its slot', async () => {
@@ -143,7 +143,7 @@ test('a synchronous enrichment failure stays bounded and releases its slot', asy
     enrichment._enqueueEnrich('test', {}, () => assert.fail()),
   );
   await new Promise((done) => setImmediate(done));
-  assert.equal(flightState._enrichActive, 0);
+  assert.equal(flightState._enrich.active, 0);
 });
 
 test('voice context reads a track that rounds to north as 0°, not 360°', () => {
@@ -355,7 +355,7 @@ test('a military aircraft or a converted TR-3B is never looked up for a photo', 
   enrichment._requestPhotoEnrichment('AE1234');
   await new Promise((done) => setImmediate(done));
   assert.deepEqual(queries, []);
-  assert.equal(flightState._enrichSeen.size, 0);
+  assert.equal(flightState._enrich.seen.size, 0);
   flightState.lifetime.abort();
 });
 
@@ -469,7 +469,7 @@ test('a failed lookup is asked again only after its cool-down', async (t) => {
   enrichment._requestTypeEnrichment('a0f1bb');
   await settle();
   assert.equal(queries.length, 2, 'an answer is final');
-  assert.equal(flightState._enrichActive, 0);
+  assert.equal(flightState._enrich.active, 0);
   flightState.lifetime.abort();
 });
 
@@ -505,7 +505,7 @@ test('a "not found" answer is never asked again', async (t) => {
   enrichment._requestPhotoEnrichment('a0f1bb');
   await settle();
   assert.equal(queries.length, 2);
-  assert.equal(flightState._enrichRetryAfter.size, 0);
+  assert.equal(flightState._enrich.retryAfter.size, 0);
   flightState.lifetime.abort();
 });
 
@@ -523,8 +523,8 @@ test('a lookup cut off by the layer’s teardown schedules no retry', async (t) 
   flightState.lifetime.abort();
   release();
   await settle();
-  assert.equal(flightState._enrichRetryAfter.size, 0);
-  assert.equal(flightState._enrichSeen.has('t:a0f1bb'), true);
+  assert.equal(flightState._enrich.retryAfter.size, 0);
+  assert.equal(flightState._enrich.seen.has('t:a0f1bb'), true);
 });
 
 test('a permanent refusal is final; a timeout, rate limit, outage or authorization refusal cools down', async (t) => {
@@ -568,8 +568,8 @@ test('a permanent refusal is final; a timeout, rate limit, outage or authorizati
     ['aaaaa3', 'aaaaa4', 'aaaaa5', 'aaaaa6', 'aaaaa7', 'aaaaa8'],
     'a 404 and an unsupported lookup are never asked again',
   );
-  assert.equal(flightState._enrichSeen.has('t:aaaaa1'), true);
-  assert.equal(flightState._enrichRetryAfter.has('t:aaaaa1'), false);
+  assert.equal(flightState._enrich.seen.has('t:aaaaa1'), true);
+  assert.equal(flightState._enrich.retryAfter.has('t:aaaaa1'), false);
   flightState.lifetime.abort();
 });
 

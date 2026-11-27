@@ -1,3 +1,4 @@
+import { createEnrichmentQueue } from './enrichmentQueue.js';
 import { FlightRecords } from './records.js';
 import { createFlightFeed } from './ingestion.js';
 import { worldTimeFor } from '../../time/worldClock.js';
@@ -325,21 +326,10 @@ export function createFlightState({ source, services }) {
 
   flightState._displayCourse = new Map();
 
-  flightState._enrichActive = 0;
-
-  flightState._enrichLastDispatchMs = 0;
-
-  /** @type {ReturnType<typeof setTimeout>|null} pending drip wake-up */
-
-  flightState._enrichDripTimer = null;
-
-  flightState._enrichQueue = [];
-
-  flightState._enrichSeen = new Set();
-
-  /** Lookup key -> epoch ms before which a failed lookup is not asked again. */
-
-  flightState._enrichRetryAfter = new Map();
+  flightState._enrich = createEnrichmentQueue({
+    source: () => flightState.feed._source,
+    signal: () => flightState.lifetime.signal,
+  });
 
   flightState._enrichAmbientBudget = ENRICH_AMBIENT_BUDGET_CEIL;
 
