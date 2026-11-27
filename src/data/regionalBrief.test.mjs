@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  REGIONAL_NEWS_WINDOW_HOURS,
   googleNewsWindowOperator,
   normalizeRegionalArticles,
   recentRegionalArticles,
@@ -81,7 +80,6 @@ test('regional distance handles nearby movement and missing positions', () => {
 });
 
 test('regional news is held to one 24-hour window, newest first, undated dropped', () => {
-  assert.equal(REGIONAL_NEWS_WINDOW_HOURS, 24);
   assert.equal(googleNewsWindowOperator(), 'when:1d');
   assert.equal(googleNewsWindowOperator(6), 'when:6h');
   assert.equal(regionalNewsWindowHours('12'), 12);

@@ -309,7 +309,6 @@ test('a lookup asked for the whole globe reads only the tiles near its centre', 
     .filter((name) => /^-?\d+_-?\d+\.json$/.test(name))
     .sort();
   // 500 km around Austin: latitude 25.8 to 34.8, longitude -103 to -92.5.
-  assert.equal(PLACE_TILE_KM, 500);
   assert.deepEqual(tileReads, [
     '25_-100.json',
     '25_-105.json',

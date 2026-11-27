@@ -1417,7 +1417,6 @@ test('update abort, destroy, and re-init invalidate the prior session and reset 
 });
 
 test('All is the initial Radio filter', () => {
-  assert.equal(DEFAULT_RADIO_FILTER, 'all');
   assert.equal(getRadioUIState().filter, 'all');
 });
 

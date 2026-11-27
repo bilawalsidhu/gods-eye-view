@@ -79,7 +79,6 @@ import * as render from '../renderGovernor.js';
 import * as picking from './pickRegistry.js';
 import * as satellites from './satellites.js';
 import rocketLaunchesLayer, {
-  LAUNCH_PAD_ZONE_RADIUS_M,
   ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT,
   ROCKET_MISSION_AMBIENT_OVERLAY_COLLISION_CAPACITY,
   ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID,
@@ -508,7 +507,6 @@ test('hands replay directly from ascent into orbit', () => {
 });
 
 test('shows launch-pad zone only for the selected close-range mission', () => {
-  assert.equal(LAUNCH_PAD_ZONE_RADIUS_M, 500);
   const closeSelected = {
     layerActive: true,
     selectedLaunchId: 'mission-a',

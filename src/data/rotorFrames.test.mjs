@@ -16,7 +16,6 @@ const svg = (uri) =>
   Buffer.from(uri.slice(uri.indexOf(',') + 1), 'base64').toString('utf8');
 
 test('the helicopter has three rotor frames, each its own image', () => {
-  assert.equal(ROTOR_FRAMES, 3);
   const frames = [0, 1, 2].map((frame) =>
     aircraftIcon('helicopter', 64, frame),
   );

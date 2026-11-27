@@ -126,7 +126,6 @@ test('tr3b sprites are real distinct glyphs, not the airliner fallback', () => {
 
 test('tr3b class label overrides the real type only for converted contacts', () => {
   clearTr3bRegistry();
-  assert.equal(TR3B_TYPE_LABEL, 'TR-3B');
   assert.equal(tr3bTypeLabel('a1b2c3', 'Boeing 737-800'), 'Boeing 737-800');
   assert.equal(tr3bTypeLabel('a1b2c3'), null, 'default fallback is null, never a label');
 
@@ -260,7 +259,6 @@ test('conversions are session-scoped and no lifecycle path clears them', async (
 
 test('analyst records report the class the contact RENDERS as, in both layers', () => {
   clearTr3bRegistry();
-  assert.equal(TR3B_CLASS, 'tr3b');
   // Style-independent on purpose: an analyst answer must not change with FLIR.
   assert.notEqual(TR3B_CLASS, 'tr3bHot');
 

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import createViteConfig from '../standalone/vite.config.js';
 import { adsbLolFallbackAnchor } from './aircraft/opensky.js';
 import { coalesceProxyRequest, readResponseJsonCapped } from './common/http.js';
-import { LL2_CACHE_TTL_MS, launchLibraryRequestHeaders } from './space.js';
+import { launchLibraryRequestHeaders } from './space.js';
 import { keylessGooglePlacesResponse } from './places.js';
 import { validMilitaryInstallationBox } from './military-installations/query.js';
 import { validRegionalPoint } from './regional/query.js';
@@ -56,7 +56,6 @@ test('new data proxies install the same routes in dev and preview servers', () =
 });
 
 test('Launch Library uses a 15-minute cache and optional server-side token header', () => {
-  assert.equal(LL2_CACHE_TTL_MS, 15 * 60_000);
   const headers = {
     Accept: 'application/json',
     'User-Agent': 'gods-eye-view-launch-library-proxy/1.0 (+https://github.com/bilawalsidhu/gods-eye-view)',

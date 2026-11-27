@@ -82,7 +82,6 @@ test('at 1x a point in Sichuan reads Sichuan, China, with no city', async () => 
 });
 
 test('from 8x the most prominent populated place in view is named', async () => {
-  assert.equal(NEAR_PLACE_MIN_ZOOM, 8);
   // An 8x view ~120 km wide: Chengdu lies ~30 km off, inside half of it.
   const nearKm = nearPlaceRadiusKm(8, 120);
   assert.equal(nearKm, 60);

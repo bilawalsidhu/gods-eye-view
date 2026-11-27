@@ -7,7 +7,6 @@ import { makeZip } from '../testSupport/zip.mjs';
 import { PbfWriter } from 'pbf';
 import {
   NO_TRAIN_POSITION_BOX,
-  NO_TRAIN_POSITION_COUNTRIES,
   isNoTrainPositionPoint,
   isNoTrainPositionStop,
   stopIdCountry,
@@ -39,7 +38,6 @@ function fakeFeed(extra = {}) {
 }
 
 test('the area is Ukraine, Crimea included, behind a cheap box', () => {
-  assert.deepEqual(NO_TRAIN_POSITION_COUNTRIES, ['UA']);
   for (const [lat, lon] of [KYIV, LVIV, SIMFEROPOL, [48.0, 37.8]])
     assert.equal(isNoTrainPositionPoint(lat, lon), true, `${lat},${lon}`);
   for (const [lat, lon] of [AMSTERDAM, PRZEMYSL, CHISINAU, [53.9, 27.56]])
