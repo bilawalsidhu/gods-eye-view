@@ -448,7 +448,6 @@ export function createMotion({
     } else flightState._drPrevRawStepSec = 0;
     copyInto(raw, flightState._drPrevRaw);
     copyInto(display, flightState._drPrevDisplay);
-    flightState._drPrevMs = nowMs;
     flightState._drPrevWorldMs = worldMs;
     flightState._drReconcileValid = true;
     flightState._cachedDRPosition = display;

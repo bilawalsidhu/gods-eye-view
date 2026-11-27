@@ -200,8 +200,6 @@ export function createFlightState({ source, services }) {
 
   flightState._scratchNearbyPos = { x: 0, y: 0, z: 0 };
 
-  flightState._scratchSonarScreen = { x: 0, y: 0 };
-
   flightState._scratchDrRaw = { x: 0, y: 0, z: 0 };
 
   flightState._scratchWarmupTime = { dayNumber: 0, secondsOfDay: 0 };
@@ -292,8 +290,6 @@ export function createFlightState({ source, services }) {
   /** The raw position's last step, and that frame's length (s; 0 for none). */
   flightState._drPrevRawStep = { x: 0, y: 0, z: 0 };
   flightState._drPrevRawStepSec = 0;
-
-  flightState._drPrevMs = 0;
 
   /** World time of that frame: the wall clock live, the cursor following the clock. */
   flightState._drPrevWorldMs = 0;
