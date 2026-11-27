@@ -149,6 +149,55 @@ for (const [name, files, pattern] of [
   });
 }
 
+test('a data layer never imports the panel UI, its stores or Vue', (t) => {
+  for (const [from, source, pattern] of [
+    [
+      'src/layers/demo/index.js',
+      "import { LayerPanel } from '../../ui/layerPanel.js';",
+      /Data layer imports panel UI: src\/ui\/layerPanel\.js/,
+    ],
+    [
+      'src/layers/demo/controls.js',
+      "import { createWeatherPanel } from '../../ui/weatherPanel.js';",
+      /Data layer imports panel UI: src\/ui\/weatherPanel\.js/,
+    ],
+    [
+      'src/library/demo.js',
+      "import { useDemoStore } from '../ui/stores/demo.js';",
+      /Data layer imports panel UI: src\/ui\/stores\/demo\.js/,
+    ],
+    [
+      'src/layers/demo/index.js',
+      "import { h, render } from 'vue';",
+      /Data layer imports Vue: vue/,
+    ],
+  ]) {
+    const { root, write } = fixture(t);
+    write('src/ui/layerPanel.js');
+    write('src/ui/weatherPanel.js');
+    write('src/ui/stores/demo.js');
+    write(from, source);
+    assert.throws(() => checkImportDirections(root), pattern, from);
+  }
+  // The panel UI may import what it likes; a layer may import other UI
+  // helpers (units, labels).
+  const { root, write } = fixture(t);
+  write('src/ui/unitLabels.js');
+  write('src/layers/demo/index.js', "import '../../ui/unitLabels.js';");
+  write('src/ui/layerPanel.js', "import '../layers/demo/index.js';");
+  assert.equal(checkImportDirections(root).modules, 4);
+});
+
+test('an allowance for an import that is gone fails until it is removed', (t) => {
+  const { root, write } = fixture(t);
+  write('src/ui/stores/windInspection.js');
+  write('src/layers/wind/inspectionMarker.js');
+  assert.throws(
+    () => checkImportDirections(root),
+    /Remove the panel UI allowance no import needs: src\/layers\/wind\/inspectionMarker\.js -> src\/ui\/stores\/windInspection\.js/,
+  );
+});
+
 test('self package imports cannot evade portable ownership', (t) => {
   const { root, write } = fixture(t, { './view': './src/ui/view.js' });
   write('src/sources/demo.js', "import '@gods-eye-view/core/view';");
