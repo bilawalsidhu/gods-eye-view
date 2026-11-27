@@ -131,7 +131,6 @@ function pointInRingXY(ring, lon, lat) {
   return inside;
 }
 
-const wrap180 = (lon) => ((((lon + 180) % 360) + 360) % 360) - 180;
 const wrap360 = (lon) => {
   const wrapped = lon % 360;
   return wrapped < 0 ? wrapped + 360 : wrapped;
@@ -268,30 +267,6 @@ export function multiPolygonCounts(coordinates) {
     parts: multi.length,
     holes: multi.reduce((sum, polygon) => sum + polygon.length - 1, 0),
   };
-}
-
-/** Mean of the largest part's outer ring vertices, wrapped to −180..180. */
-export function areaAnchor(coordinates) {
-  const multi = normalizeMultiPolygon(coordinates);
-  if (!multi) return null;
-  let best = null;
-  let bestArea = -1;
-  for (const polygon of multi) {
-    const ring = unwrapRing(polygon[0]);
-    const area = ringAreaKm2(ring);
-    if (area > bestArea) {
-      bestArea = area;
-      best = ring;
-    }
-  }
-  let lon = 0;
-  let lat = 0;
-  const pts = best.slice(0, -1);
-  for (const [x, y] of pts) {
-    lon += x;
-    lat += y;
-  }
-  return { lon: wrap180(lon / pts.length), lat: lat / pts.length };
 }
 
 // ── Display copies ────────────────────────────────────────────
