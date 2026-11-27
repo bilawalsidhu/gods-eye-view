@@ -7851,6 +7851,49 @@ test('a video quad keeps frames coming while it plays, read anew at a new size',
     }
   }));
 
+test('a quad given another canvas asks for the frames that bind it, then none', () =>
+  withImageClasses(() => {
+    const scene = fakeScene();
+    let renders = 0;
+    scene.requestRender = () => (renders += 1);
+    const part = createCesiumDraw({
+      scene,
+      report: (error) => assert.fail(error),
+    });
+    const set = part.port.quads({ id: 'monitors' });
+    const quad = (canvas) => ({
+      id: 'q',
+      center: { x: 6378137, y: 0, z: 0 },
+      orientation: { x: 0, y: 0, z: 0, w: 1 },
+      size: [16, 9],
+      source: { canvas },
+      alpha: 0.95,
+    });
+    set.set([quad({ width: 4, height: 4 })]);
+    for (let i = 0; i < 5; i++) {
+      part.beforeRender();
+      part.afterRender();
+    }
+    const next = { width: 4, height: 4 };
+    renders = 0;
+    set.upsert([quad(next)]);
+    // Each frame asked for draws once, as the render loop would.
+    let drawn = 0;
+    while (renders > 0 && drawn < 100) {
+      renders -= 1;
+      drawn += 1;
+      part.beforeRender();
+      part.afterRender();
+    }
+    assert.equal(
+      scene.added[0].get(0).appearance.material.uniforms.image,
+      next,
+    );
+    assert.ok(drawn >= 2 && drawn <= 4, `${drawn} frames drawn`);
+    assert.equal(renders, 0, 'and then it is idle');
+    set.dispose();
+  }));
+
 test('meshes draw their triangles in the frame at their origin', () =>
   withImageClasses(() => {
     const scene = fakeScene();

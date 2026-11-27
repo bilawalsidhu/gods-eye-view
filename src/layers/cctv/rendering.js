@@ -261,8 +261,8 @@ export function createRendering({
       !layerState._viewer ||
       !focusPassIsNeeded(target, layerState._activeFocusStyleCount)
     )
-      return false;
-    if (nowMs - layerState._lastFocusStyleAt < 80) return false;
+      return;
+    if (nowMs - layerState._lastFocusStyleAt < 80) return;
     layerState._lastFocusStyleAt = nowMs;
     const query = findQuery(layerState._viewer);
     const eye = findCamera(layerState._viewer)?.pose()?.position;
@@ -276,8 +276,6 @@ export function createRendering({
       cameraDistanceFor: (position) => distance(eye, position),
     });
     layerState._activeFocusStyleCount = result.activeCount;
-    // Whether an icon was restyled, so the caller can ask for a frame.
-    return result.writes > 0;
   }
 
   /**

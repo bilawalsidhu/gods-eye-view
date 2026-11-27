@@ -1,3 +1,3 @@
-- A still-image CCTV camera no longer keeps the scene rendering 60 times a
-  second. Only a video feed holds continuous rendering; a still redraws when a
-  new image arrives (mazy1998, #1710).
+- A CCTV camera no longer keeps the scene rendering 60 times a second. A
+  still redraws the scene when a new image reaches the monitor plane, and a
+  video feed draws only while it plays (mazy1998, #1710).

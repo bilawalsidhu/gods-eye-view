@@ -2,219 +2,148 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createProjection } from './projection.js';
 import { createFrames } from './frames.js';
-import {
-  PROJECTION_SWAP_RENDER_MS,
-  PROJECTION_TEXTURE_SWAP_MS,
-} from './policy.js';
 
-/** The projection loop on a hand-cranked clock, with the render governor's calls recorded. */
-function harness(t, { video = false, showProjection = true } = {}) {
-  let clock = 1000;
-  const frames = [];
+/**
+ * The real projection loop and frames on a hand-cranked 60 Hz clock, the
+ * active camera's runtime already made; what reaches the plane and every
+ * render call are recorded.
+ */
+function harness(t, runtime) {
+  let clock = 1_000_000;
+  const queue = [];
   const original = {
     now: performance.now,
+    dateNow: Date.now,
     request: globalThis.requestAnimationFrame,
     cancel: globalThis.cancelAnimationFrame,
+    document: globalThis.document,
   };
   performance.now = () => clock;
-  globalThis.requestAnimationFrame = (step) => frames.push(step);
-  globalThis.cancelAnimationFrame = () => frames.splice(0);
+  Date.now = () => clock;
+  globalThis.requestAnimationFrame = (step) => queue.push(step);
+  globalThis.cancelAnimationFrame = () => queue.splice(0);
+  const ctx = new Proxy(
+    {},
+    {
+      get: (_, key) =>
+        key === 'createLinearGradient'
+          ? () => ({ addColorStop() {} })
+          : () => {},
+      set: () => true,
+    },
+  );
+  globalThis.document = {
+    hidden: false,
+    createElement: () => ({ getContext: () => ctx }),
+  };
   t.after(() => {
     performance.now = original.now;
+    Date.now = original.dateNow;
     globalThis.requestAnimationFrame = original.request;
     globalThis.cancelAnimationFrame = original.cancel;
+    if (original.document === undefined) delete globalThis.document;
+    else globalThis.document = original.document;
   });
 
-  const holds = new Set();
-  const calls = { hold: 0, requests: 0, draws: 0 };
-  const record = {
-    camera: { id: 'cam-1' },
-    projection: { video: video ? {} : null, mode: video ? 'video' : 'image' },
-  };
-  const scene = { needed: true, swap: false, restyled: false };
   const state = {
     _viewer: {},
     _enabled: true,
-    _showProjection: showProjection,
+    _showProjection: true,
     _projectionRaf: 0,
     _projectionEntities: [],
+    _healthById: new Map([
+      ['cam-1', { status: 'offline', message: 'offline' }],
+    ]),
+    _activeCameraId: 'cam-1',
   };
-  const projection = createProjection({
+  const record = {
+    camera: { id: 'cam-1', name: 'X', city: 'Y' },
+    projection: {
+      mode: 'image',
+      video: null,
+      ctx,
+      canvas: {},
+      image: {},
+      imageLoading: true,
+      imageReady: false,
+      drawnImageStamp: -1,
+      canvasStamp: 0,
+      plane: { id: 'p', show: true },
+      ...runtime,
+    },
+  };
+  const written = [];
+  const renders = [];
+  const parts = {
+    model: {
+      projectionLoopIsNeeded: () => true,
+      safeNumber: (v, f) => (Number.isFinite(v) ? v : f),
+    },
+    rendering: { refreshCctvFocusStyles() {} },
+    selection: { getActiveRecord: () => record },
+    drawSets: { writePlane: (plane) => written.push(plane.source) },
+  };
+  parts.frames = createFrames({ state, services: {}, parts, source: {} });
+  parts.projection = createProjection({
     state,
     services: {
       render: {
-        holdContinuousRender(owner) {
-          calls.hold++;
-          holds.add(owner);
-        },
-        releaseContinuousRender: (owner) => holds.delete(owner),
-        governorRequestRender: () => calls.requests++,
+        holdContinuousRender: (owner) => renders.push(['hold', owner]),
+        releaseContinuousRender: (owner) => renders.push(['release', owner]),
+        governorRequestRender: (owner) => renders.push(['request', owner]),
       },
     },
-    parts: {
-      model: { projectionLoopIsNeeded: () => scene.needed },
-      rendering: { refreshCctvFocusStyles: () => scene.restyled },
-      selection: { getActiveRecord: () => record },
-      frames: {
-        drawProjectionFrame: () => calls.draws++,
-        refreshProjectionTextures() {
-          const swapped = scene.swap;
-          scene.swap = false;
-          return swapped;
-        },
-      },
-    },
+    parts,
     source: {},
   });
   return {
-    projection,
-    state,
-    record,
-    scene,
-    holds,
-    calls,
-    /** Run `count` animation frames 16 ms apart; returns the frames requested in them. */
-    run(count = 1) {
-      const before = calls.requests;
-      for (let i = 0; i < count; i++) {
-        clock += 16;
-        frames.shift()?.();
+    projection: parts.projection,
+    runtime: record.projection,
+    written,
+    renders,
+    /** Run `seconds` of 60 Hz animation frames. */
+    run(seconds) {
+      for (let i = 0; i < 60 * seconds; i++) {
+        clock += 1000 / 60;
+        queue.shift()?.();
       }
-      return calls.requests - before;
-    },
-    advance(ms) {
-      clock += ms;
-    },
-    get queued() {
-      return frames.length;
     },
   };
 }
 
-test('a still-image camera never holds the continuous render loop', (t) => {
+test('stills reach the plane with no render asked by the projection loop', (t) => {
+  // A camera whose first still is pending: its placeholder is repainted and
+  // swapped onto the plane about once a second.
   const h = harness(t);
   h.projection.startProjectionLoop();
-  h.run(600);
-  assert.equal(h.calls.hold, 0);
-  assert.equal(h.holds.size, 0);
-  assert.equal(h.calls.draws, 600, 'the loop still polls for a new still');
-  assert.equal(h.queued, 1, 'and stays armed');
+  h.run(10);
+  assert.ok(h.written.length >= 5, 'the placeholder reaches the plane');
+  assert.ok(h.written.every((source) => source.canvas));
+  // The plane's set asks for the frames a new canvas needs (draw.test.mjs).
+  assert.deepEqual(h.renders, []);
 });
 
-test('a new still on the plane is rendered, then the scene goes idle again', (t) => {
-  const h = harness(t);
-  h.projection.startProjectionLoop();
-  // Arming the loop (activation, projection shown) renders its first frames.
-  assert.ok(h.run(5) === 5);
-  h.advance(PROJECTION_SWAP_RENDER_MS);
-  assert.equal(h.run(120), 0, 'an unchanged still asks for no frame');
-
-  h.scene.swap = true;
-  assert.equal(h.run(1), 1, 'the tick that swaps the image asks for a frame');
-  const settling = Math.floor(PROJECTION_SWAP_RENDER_MS / 16) - 2;
-  assert.equal(h.run(settling), settling, 'and so do the ticks while it binds');
-  h.advance(PROJECTION_SWAP_RENDER_MS);
-  assert.equal(h.run(120), 0);
-  assert.equal(h.holds.size, 0);
-});
-
-test('activating another camera while the loop runs renders its first frames', (t) => {
-  const h = harness(t);
-  h.projection.startProjectionLoop();
-  h.advance(PROJECTION_SWAP_RENDER_MS * 2);
-  assert.equal(h.run(10), 0);
-  h.projection.startProjectionLoop();
-  assert.equal(h.run(10), 10);
-  assert.equal(h.queued, 1, 'still one loop');
-});
-
-test('a video camera holds continuous render until it stops being video', (t) => {
-  const h = harness(t, { video: true });
-  h.projection.startProjectionLoop();
-  h.run(3);
-  assert.deepEqual([...h.holds], ['cctv-projection']);
-  assert.equal(h.calls.draws, 0, 'Cesium updates the video texture itself');
-  // The stream failed over to stills.
-  h.record.projection.video = null;
-  h.run(1);
-  assert.equal(h.holds.size, 0);
-  h.record.projection.video = {};
-  h.run(1);
-  assert.deepEqual([...h.holds], ['cctv-projection']);
-  h.projection.stopProjectionLoop();
-  assert.equal(h.holds.size, 0);
-});
-
-test('a focus fade asks for a frame only on the ticks that restyle an icon', (t) => {
-  const h = harness(t, { showProjection: false });
-  h.projection.startProjectionLoop();
-  h.advance(PROJECTION_SWAP_RENDER_MS * 2);
-  assert.equal(h.run(10), 0);
-  h.scene.restyled = true;
-  assert.equal(h.run(4), 4);
-  h.scene.restyled = false;
-  assert.equal(h.run(10), 0);
-  assert.equal(h.holds.size, 0);
-});
-
-test('the loop releases and stops when it has no work', (t) => {
-  const h = harness(t, { video: true });
+test('a video feed is left to the renderer; failing over, the still reaches the plane', (t) => {
+  const video = { readyState: 0, videoWidth: 0, videoHeight: 0 };
+  const h = harness(t, {
+    mode: 'video',
+    video,
+    plane: { id: 'p', show: true, source: { video } },
+  });
   h.projection.startProjectionLoop();
   h.run(2);
-  h.scene.needed = false;
-  h.run(1);
-  assert.equal(h.holds.size, 0);
-  assert.equal(h.state._projectionRaf, 0);
-  assert.equal(h.queued, 0);
-});
-
-test('refreshProjectionTextures reports whether it put a new image on the plane', (t) => {
-  const previousDocument = globalThis.document;
-  globalThis.document = {
-    createElement: () => ({
-      getContext: () => ({ clearRect() {}, drawImage() {} }),
-    }),
-  };
-  t.after(() => {
-    if (previousDocument === undefined) delete globalThis.document;
-    else globalThis.document = previousDocument;
-  });
-  const frames = createFrames({
-    state: {},
-    services: {},
-    parts: {
-      model: { safeNumber: (value, fallback) => value ?? fallback },
-      projection: {
-        setPlaneSource(runtime, source) {
-          runtime.plane.source = source;
-        },
-      },
-    },
-    source: {},
-  });
-  const runtime = {
-    mode: 'image',
-    canvas: {},
-    canvasStamp: 1,
-    plane: { show: true, source: null },
-  };
-  const record = { projection: runtime };
-  assert.equal(frames.refreshProjectionTextures(record), true);
-  const first = runtime.plane.source.canvas;
-  assert.ok(first);
-  // Unchanged canvas: nothing to render.
-  runtime.lastTextureSwapAt -= PROJECTION_TEXTURE_SWAP_MS;
-  assert.equal(frames.refreshProjectionTextures(record), false);
-  assert.equal(runtime.plane.source.canvas, first);
-  runtime.canvasStamp = 2;
-  assert.equal(frames.refreshProjectionTextures(record), true);
-  assert.notEqual(runtime.plane.source.canvas, first);
-  runtime.plane.show = false;
-  runtime.canvasStamp = 3;
-  runtime.lastTextureSwapAt -= PROJECTION_TEXTURE_SWAP_MS;
-  assert.equal(frames.refreshProjectionTextures(record), false);
-  assert.equal(
-    frames.refreshProjectionTextures({ projection: { mode: 'video' } }),
-    false,
+  assert.deepEqual(h.written, [], 'the loop leaves the video on the plane');
+  // As the feed's onFailure in projection.js does.
+  h.runtime.video = null;
+  h.runtime.mode = 'image';
+  h.projection.setPlaneSource(h.runtime, { canvas: h.runtime.canvas });
+  h.written.length = 0;
+  h.run(2);
+  assert.ok(h.written.length > 0, 'a repainted still is swapped on');
+  assert.ok(
+    h.written.every(
+      (source) => source.canvas && source.canvas !== h.runtime.canvas,
+    ),
   );
+  assert.deepEqual(h.renders, []);
 });
