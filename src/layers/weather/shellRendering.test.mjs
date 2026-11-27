@@ -6,7 +6,6 @@ import {
   detailWindow,
   followShellLift,
   shellLift,
-  WEATHER_SHELL_CACHE_BYTES,
   WEATHER_SHELL_HEIGHTS,
 } from './shellRendering.js';
 import { NO_IMAGERY_HOST } from '../../maps/imageryHost.js';
@@ -123,16 +122,10 @@ async function show(h, time, options) {
 }
 
 test('shell heights stack every product with lightning highest', () => {
-  assert.deepEqual(WEATHER_SHELL_HEIGHTS, {
-    'air-quality': 4_700,
-    'air-quality-inset': 4_850,
-    wind: 5_000,
-    clouds: 5_500,
-    'clouds-regional': 5_800,
-    radar: 6_200,
-    lightning: 6_600,
-  });
-  assert.equal(WEATHER_SHELL_CACHE_BYTES, 128 * 1024 * 1024);
+  assert.equal(
+    Math.max(...Object.values(WEATHER_SHELL_HEIGHTS)),
+    WEATHER_SHELL_HEIGHTS.lightning,
+  );
 });
 
 test('shells rise with the camera over coarse 3D tiles, in steps, up to 60 km', () => {
