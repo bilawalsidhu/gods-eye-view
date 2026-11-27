@@ -2233,8 +2233,8 @@ endpoints; standalone entries provide scene services and the satellite dependenc
 The satellites layer draws through the renderer's draw port and no longer
 reaches Cesium: the dots are one point set moved in a single write a frame, the
 tracked satellite's dot a set of its own drawn where the follow camera framed
-it, and the orbit rings a line set dimmed behind the globe and turned with the
-Earth each second. A caller handing it a Cesium viewer, with no
+it, and the orbit rings a line set hidden by the Earth behind it (no part drawn
+through the globe) and turned with the Earth each second. A caller handing it a Cesium viewer, with no
 renderer bound, loads the `./render/cesium/unbound` export once first.
 
 The ISS (NORAD 25544, by number, not name) is drawn as NASA's 3D model within
