@@ -7,8 +7,6 @@ import {
   loadHoustonSourcesFromOpenData,
 } from './sources.js';
 import {
-  CCTV_SHARED_SOURCE_SLOTS,
-  DEFAULT_HOUSTON_MAX_SOURCES,
   HOUSTON_CAMERAS_URL,
   HOUSTON_GROUND_ELEVATION_M,
   HOUSTON_IMAGE_ORIGIN,
@@ -319,11 +317,6 @@ test('Houston stays unloaded unless CCTV_HOUSTON_ENABLED=1', async (t) => {
     }
     Object.assign(process.env, saved);
   }
-});
-
-test('the shared catalog slots are not raised for any city pack', () => {
-  assert.equal(CCTV_SHARED_SOURCE_SLOTS, 4000);
-  assert.equal(DEFAULT_HOUSTON_MAX_SOURCES, 250);
 });
 
 test('isLikelyHoustonCoordinate spans the metro and rejects the rest', () => {

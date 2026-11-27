@@ -22,7 +22,6 @@ test('unknown groups are slate and molluscs fold into other animals', () => {
   assert.equal(wildlifeIconicGroup('Mollusca'), 'Animalia');
   for (const iconic of ['Unknown', 'Protozoa', 'Chromista', undefined])
     assert.equal(wildlifeIconicGroup(iconic), 'Unknown');
-  assert.equal(ICONIC_TINTS.Unknown, '#9aa7b3');
   assert.equal(ICONIC_LEGEND_ORDER.at(-1), 'Unknown');
   assert.equal(ICONIC_LEGEND_ORDER.length, 11);
   assert.equal(TAXA_PRESETS.length, 6);

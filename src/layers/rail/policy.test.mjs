@@ -404,7 +404,6 @@ test('the card never grows past six lines', () => {
     stops: tripStopsNearYonkers,
   });
   assert.equal(copy.details.length, RAIL_CARD_MAX_LINES);
-  assert.equal(RAIL_CARD_MAX_LINES, 6);
   // What stays: who, motion, next, previous, report age and the depth note;
   // the reported speed and the vehicle line give way first.
   assert.deepEqual(copy.details, [

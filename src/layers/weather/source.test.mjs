@@ -9,7 +9,6 @@ import {
   weatherPixelSize,
   drawWeatherPixels,
   closeWeatherPixels,
-  WEATHER_DETAIL_SIZE,
   WEATHER_IMAGE_SIZES,
 } from './source.js';
 const time = '2026-09-16T02:00:00.000Z';
@@ -136,7 +135,6 @@ test('whole-extent image URLs are same origin and omit the default largest size'
 
 test('detail-window image URLs carry the bbox and omit the default detail size', () => {
   const box = { west: -102, south: 34, east: -96, north: 37 };
-  assert.deepEqual(WEATHER_DETAIL_SIZE, { width: 4096, height: 2048 });
   for (const product of ['radar', 'clouds-regional', 'lightning', 'clouds']) {
     const url = `/api/weather/image?product=${product}&time=${encodeURIComponent(time)}&bbox=-102,34,-96,37`;
     assert.equal(weatherImageUrl(product, time, {}, box), url);

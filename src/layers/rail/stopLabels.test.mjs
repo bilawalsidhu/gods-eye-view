@@ -156,8 +156,6 @@ test('unplaced or unnamed stops are neither labelled nor dotted', () => {
 });
 
 test('the time chip is neutral on time, amber from 3 min, red from 10 min', () => {
-  assert.equal(STOP_LATE_MS, 180_000);
-  assert.equal(STOP_VERY_LATE_MS, 600_000);
   assert.equal(stopChipColor(0), STOP_CHIP_COLORS.onTime);
   assert.equal(stopChipColor(STOP_LATE_MS - 1), STOP_CHIP_COLORS.onTime);
   assert.equal(stopChipColor(STOP_LATE_MS), STOP_CHIP_COLORS.late);

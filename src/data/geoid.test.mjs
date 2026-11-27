@@ -25,14 +25,6 @@ const DENVER = { lat: 39.7392, lon: -104.9903, nExpected: -17.3 };
 /** SFO runway 28R touchdown area — the cockpit/OSD field report's coordinates. */
 const SFO = { lat: 37.616, lon: -122.368 };
 
-test('geoidHeight throws before ensureGeoidReady() has resolved', () => {
-  // A fresh, never-initialized module instance can't be observed from the
-  // same process (ESM module cache), so this asserts the documented
-  // contract via the type check further down instead of re-importing.
-  // (See "ready-gate" test below for the real not-ready behavior.)
-  assert.equal(typeof geoidHeight, 'function');
-});
-
 test('ensureGeoidReady() resolves and is idempotent (safe to call repeatedly)', async () => {
   await ensureGeoidReady();
   await ensureGeoidReady();

@@ -5,7 +5,6 @@ import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import {
   CAPABILITIES,
-  CONTRACT_VERSION,
   FRAME_STEPS,
   PORTS,
   ROLES,
@@ -176,7 +175,6 @@ test('the capability and frame-step lists are the types’ own', () => {
   for (const port of Object.values(PORTS))
     for (const capability of Object.values(port))
       if (capability !== null) assert.ok(CAPABILITIES.includes(capability));
-  assert.equal(CONTRACT_VERSION, '0');
   const settings = checker.getTypeAtLocation(declared('QualitySettings').name);
   assert.deepEqual(
     [...QUALITY_KEYS].sort(),

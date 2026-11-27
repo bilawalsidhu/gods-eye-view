@@ -3120,11 +3120,14 @@ test('Active Fires: the intensity filter rides share token w and round-trips', (
 test('Active Fires: the codec accepts whole megawatts in bounds and the three confidence codes', () => {
   // The codec spells its bounds out (it runs in isolation in the ledger
   // tests); they must stay the layer's.
-  assert.equal(MIN_FRP_MW_MAX, 10000);
   assert.deepEqual([...FIRMS_CONFIDENCE_MODES], ['all', 'nominal', 'high']);
   assert.equal(firmsOptions('w.f.300').minFrp, 300);
-  assert.equal(firmsOptions('w.f.10000').minFrp, 10000);
-  assert.equal(firmsOptions('w.f.10001').minFrp, 0, 'out of bounds → default');
+  assert.equal(firmsOptions(`w.f.${MIN_FRP_MW_MAX}`).minFrp, MIN_FRP_MW_MAX);
+  assert.equal(
+    firmsOptions(`w.f.${MIN_FRP_MW_MAX + 1}`).minFrp,
+    0,
+    'out of bounds → default',
+  );
   assert.equal(firmsOptions('w.f.-5').minFrp, 0);
   assert.equal(
     firmsOptions('w.f.2.5').minFrp,

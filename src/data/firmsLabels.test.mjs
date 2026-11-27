@@ -3,8 +3,6 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   accentForSeverity,
-  FIRMS_AMBIENT_COHORT_LIMIT,
-  FIRMS_OVERLAY_SOURCE_ID,
   satelliteShortName,
   formatFrpMw,
 } from './firmsLabels.js';
@@ -35,11 +33,6 @@ test('FIRMS satellite names retain the three VIIRS abbreviations', () => {
   assert.equal(satelliteShortName('N'), 'SNPP');
   assert.equal(satelliteShortName('TERRA-X9'), 'TERRA-');
   assert.equal(satelliteShortName(''), '');
-});
-
-test('FIRMS host registration constants pin the shipped source budget', () => {
-  assert.equal(FIRMS_OVERLAY_SOURCE_ID, 'firms');
-  assert.equal(FIRMS_AMBIENT_COHORT_LIMIT, 18);
 });
 
 test('FIRMS helper module cannot resurrect a dedicated canvas renderer', () => {

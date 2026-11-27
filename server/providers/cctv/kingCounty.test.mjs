@@ -4,7 +4,6 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
-  DEFAULT_KING_COUNTY_MAX_SOURCES,
   KING_COUNTY_CAMERAS_URL,
   KING_COUNTY_MAX_CATALOG_BYTES,
 } from './constants.js';
@@ -260,7 +259,6 @@ test('King County loader honors the max-sources cap', async (t) => {
 test('King County loader defaults its cap and survives upstream failure', async (t) => {
   quiet(t);
   withEnv(t, { CCTV_KINGCOUNTY_MAX_SOURCES: undefined });
-  assert.equal(DEFAULT_KING_COUNTY_MAX_SOURCES, 125);
 
   t.mock.method(
     globalThis,

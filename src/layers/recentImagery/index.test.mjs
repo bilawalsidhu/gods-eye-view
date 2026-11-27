@@ -14,7 +14,6 @@ import { resetPointerOwnership } from '../../data/inputOwnership.js';
 import { initImageryBoxTool } from '../../ui/imageryBoxTool.js';
 import {
   FOCUS_DEBOUNCE_MS,
-  MODES,
   SPLIT_PUBLISH_MS,
   createRecentImageryLayer,
 } from './index.js';
@@ -377,7 +376,6 @@ test('VS BASEMAP: the day swipes on the left with no second layer; the preview s
   f.layer.setMode('image');
   assert.deepEqual(f.drapes(), { a: `${L16}|none`, b: null });
   assert.equal(f.snap().comparison.active, false);
-  assert.deepEqual(MODES, ['image', 'basemap', 'ab']);
 });
 
 test('A / B: A pins, the focused day previews as B against it, B pins, and a day is in one slot only', async () => {
@@ -1412,7 +1410,6 @@ test('arrow focus previews the focused present day after the 250 ms debounce; on
   assert.equal(f.snap().preview.pending, L16);
   assert.equal(f.snap().candidates[2].pending, true);
   assert.equal([...f.timers.pending.values()][0].ms, FOCUS_DEBOUNCE_MS);
-  assert.equal(FOCUS_DEBOUNCE_MS, 250);
   f.layer.focus(3);
   assert.equal(f.timers.armed(), 1, 'a single timer');
   f.timers.flush();

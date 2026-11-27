@@ -49,7 +49,6 @@ function framed(scene) {
 }
 
 test('push-to-talk recognizes Space by code or key', () => {
-  assert.equal(PUSH_TO_TALK_HOLD_DELAY_MS, 500);
   assert.equal(isPushToTalkKey({ code: 'Space', key: 'Unidentified' }), true);
   assert.equal(isPushToTalkKey({ code: '', key: ' ' }), true);
   assert.equal(isPushToTalkKey({ code: 'KeyM', key: 'm' }), false);

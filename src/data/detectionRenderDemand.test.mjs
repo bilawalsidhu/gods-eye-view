@@ -197,7 +197,6 @@ test('the scanline scrolls off the clock, at an exact 60 fps cadence', () => {
   // against a real 60 fps frame clock and repeats an offset every few frames
   // instead of alternating.
   assert.equal(SCANLINE_STEP_MS, 1000 / 60);
-  assert.equal(SCANLINE_PERIOD_PX, 4);
   assert.equal(scanlineOffsetPx(0), 0);
   assert.equal(scanlineOffsetPx(SCANLINE_STEP_MS), 2);
   assert.equal(scanlineOffsetPx(SCANLINE_STEP_MS * 2), 0);

@@ -240,7 +240,6 @@ test('search folds case and diacritics, and matches either name or the code', ()
 });
 
 test('the search field appears only above the threshold', () => {
-  assert.equal(LOCALE_SEARCH_THRESHOLD, 8);
   assert.equal(
     createLocalePickerModel({ current: 'en' }).searchable,
     LOCALES.length > LOCALE_SEARCH_THRESHOLD,

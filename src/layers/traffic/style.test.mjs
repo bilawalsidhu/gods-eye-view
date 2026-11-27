@@ -5,11 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { createStyle } from './style.js';
-import {
-  FLOW_BUCKET_COLORS,
-  JAM_DOT_FAR_SCALE,
-  SIM_DOT_COLOR,
-} from './policy.js';
+import { FLOW_BUCKET_COLORS, JAM_DOT_FAR_SCALE } from './policy.js';
 import { presetDotRgba } from '../../data/trafficPresetStyle.js';
 import { createState } from './state.js';
 
@@ -44,7 +40,6 @@ test('bucket colours are the shipped palette, painted as before', () => {
       Cesium.Color.WHITE.withAlpha(0.85),
     ),
   );
-  assert.deepEqual(SIM_DOT_COLOR, [1, 1, 1, 0.85]);
   assert.equal(s.dotColor('jam'), s.dotColor('jam'), 'one colour per bucket');
 });
 

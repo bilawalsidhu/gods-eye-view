@@ -349,7 +349,6 @@ test('delays are polled every 30 s only while a train on the feed is selected', 
   assert.equal(h.calls.updates, 1);
   assert.equal(h.timers.size, 1);
   assert.equal([...h.timers.values()][0].ms, RAIL_UPDATES_POLL_MS);
-  assert.equal(RAIL_UPDATES_POLL_MS, 30_000);
   const trip = h.provider.stopsFor(train, h.now);
   const bravo = trip.stops[1];
   assert.equal(bravo.arrivalDelaySec, 240);

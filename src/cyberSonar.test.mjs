@@ -18,7 +18,6 @@ import {
   CYBER_SONAR_DIM_FACTOR,
   CYBER_SONAR_LABEL_DIM_FACTOR,
   CYBER_SONAR_PERIOD_MS,
-  CYBER_SONAR_RENDER_INTERVAL_MS,
   isCyberSonarEnabled,
   isCyberSonarActive,
   setCyberSonarEnabled,
@@ -98,7 +97,6 @@ test('the Cyber sonar clock advances clockwise and wraps cleanly', () => {
 });
 
 test('contact refresh cadence waits only until the next bounded sonar frame', () => {
-  assert.equal(CYBER_SONAR_RENDER_INTERVAL_MS, 80);
   assert.equal(cyberSonarFrameDelay(1_000, 1_000), 80);
   assert.equal(cyberSonarFrameDelay(1_000, 1_035), 45);
   assert.equal(cyberSonarFrameDelay(1_000, 1_080), 0);

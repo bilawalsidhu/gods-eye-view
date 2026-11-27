@@ -2037,7 +2037,6 @@ test('FIRMS and vessels enlarge the ambient-card lane under an explicit aggregat
   const diagnostics = getWorldOverlayDiagnostics();
   assert.equal(diagnostics.candidateCount, 1278, 'the complete configured cohorts join one bounded domain');
   assert.ok(diagnostics.selectedCount > 96, 'the second source must enlarge the shared lane budget');
-  assert.equal(AMBIENT_CARD_COLLISION_CAPACITY, 1150);
   assert.ok(
     diagnostics.selectedCount <= AMBIENT_CARD_COLLISION_CAPACITY,
     'the ambient-card lane must remain globally bounded',

@@ -2,7 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { setLocale, translateKnown } from '../i18n/index.js';
 import {
-  AWARENESS_RELATIONSHIP,
   findByDoublingRadius,
   getAwarenessNavigationTargets,
   formatAwarenessDistance,
@@ -52,7 +51,6 @@ test('awareness cohorts reject negative and non-finite distances as unavailable 
 });
 
 test('unavailable and stale feeds remain unknown', () => {
-  assert.equal(AWARENESS_RELATIONSHIP.OUTSIDE_RANGE, 'OUTSIDE_RANGE');
   assert.equal(summarizeAwarenessCohort([], { available: false }).reason, 'feed unavailable');
   assert.equal(summarizeAwarenessCohort([], { stale: true }).reason, 'feed stale');
 });

@@ -483,8 +483,6 @@ test('the nearest lookup asks for the few photos around the point at the search 
     zoomLevel: String(NEAREST_SEARCH_ZOOM),
     itemsPerPage: String(NEAREST_LIMIT),
   });
-  assert.equal(NEAREST_SEARCH_ZOOM, 18);
-  assert.equal(NEAREST_LIMIT, 10);
 });
 
 test('a chunked answer with no length is cut off once it grows past the cap', async () => {

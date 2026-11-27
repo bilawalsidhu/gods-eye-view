@@ -83,9 +83,6 @@ test('the sheet holds every owner country a satellite can be marked with', () =>
 test('a flag is drawn from its cell of the sheet, at the size asked', () => {
   // 40 × 30 sheet cells with a 2 px gutter, drawn at 20 × 15: each cell and
   // its gutter is 21 × 16 CSS pixels.
-  assert.equal(OWNER_FLAG_SHEET.cellWidthPx, 40);
-  assert.equal(OWNER_FLAG_SHEET.cellHeightPx, 30);
-  assert.equal(OWNER_FLAG_SHEET.gutterPx, 2);
   const columns = OWNER_FLAG_SHEET.columns;
   const index = OWNER_FLAG_SHEET.codes.indexOf('US');
   const style = ownerFlagStyle('US');

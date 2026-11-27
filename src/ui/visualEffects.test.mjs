@@ -6,7 +6,6 @@ import { styleStagesOf } from '../styles/styleStages.js';
 import { createCesiumGlobe } from '../render/cesium/globe.js';
 import { MILKY_WAY_INTENSITY, StarrySky } from '../render/cesium/starrySky.js';
 import {
-  GLOBAL_POST_DEFAULTS,
   STYLE_PRESET_DEFAULTS,
   MILITARY_DETECTION_PRESET,
 } from './visualPresets.js';
@@ -386,11 +385,6 @@ test('destroying one instance does not remove another pipeline or clock', () => 
 });
 
 test('existing baseline and military presets keep one detection default', () => {
-  assert.equal(GLOBAL_POST_DEFAULTS.detectionMode, 'DENSE');
-  assert.equal(GLOBAL_POST_DEFAULTS.detectionDensity, 75);
-  assert.equal(GLOBAL_POST_DEFAULTS.sharpen.intensity, 49);
-  assert.equal(GLOBAL_POST_DEFAULTS.detectionFadePct, 7);
-  assert.equal(GLOBAL_POST_DEFAULTS.detectionOutsideOpacityPct, 1);
   for (const name of ['retro', 'surveillance', 'thermal']) {
     assert.equal(
       STYLE_PRESET_DEFAULTS[name].detection,

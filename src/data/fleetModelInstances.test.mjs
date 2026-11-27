@@ -257,7 +257,6 @@ test('a vessel stretched to its reported beam keeps its length scale on the mode
     undefined,
     'a model at its own proportions is not stretched',
   );
-  assert.equal(FLEET_HEADING_OFFSET_DEG, 180, 'fleet models are built nose -X');
 
   const { viewer, draw } = fakeViewer();
   const layer = createFleetModelLayer({

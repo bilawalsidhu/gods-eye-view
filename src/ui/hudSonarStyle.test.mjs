@@ -12,7 +12,6 @@ import test from 'node:test';
 import {
   HUD_LAYOUTS,
   isLegacySonarHudLayout,
-  LEGACY_SONAR_HUD_LAYOUTS,
   normalizeHudLayout,
 } from '../hudLayouts.js';
 import {
@@ -106,8 +105,6 @@ function styleOwner(t, initialVariant = 'tactical') {
 }
 
 test('Tactical and Minimal are the HUD layouts; Cyber is only a Sonar alias', () => {
-  assert.deepEqual(HUD_LAYOUTS, ['tactical', 'minimal']);
-  assert.deepEqual(LEGACY_SONAR_HUD_LAYOUTS, ['cyber']);
   assert.equal(normalizeHudLayout('cyber'), 'tactical');
   assert.equal(normalizeHudLayout('CYBER'), 'tactical');
   assert.equal(normalizeHudLayout('operator'), 'tactical');

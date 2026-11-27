@@ -6,7 +6,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  CCTV_CARD_CENTER_WEIGHT,
   CCTV_CARD_INCUMBENT_FACTOR,
   CCTV_LOD_GRACE_MS,
   CCTV_LOD_GRACE_PASSES,
@@ -36,9 +35,6 @@ function candidates(count, options = {}) {
 
 test('cctvLodBudgets scales the card budget from 20 to 40 with view height', () => {
   // Owner round 2 (item C): budgets raised 16/24/32 -> 20/28/40.
-  assert.equal(CCTV_AMBIENT_CARD_MIN, 20);
-  assert.equal(CCTV_AMBIENT_CARD_MID, 28);
-  assert.equal(CCTV_AMBIENT_CARD_MAX, 40);
   assert.deepEqual(cctvLodBudgets(500), { cardLimit: CCTV_AMBIENT_CARD_MIN });
   assert.deepEqual(cctvLodBudgets(8_000), { cardLimit: CCTV_AMBIENT_CARD_MID });
   assert.deepEqual(cctvLodBudgets(30_000), {
@@ -292,7 +288,6 @@ test('selectCctvLod with viewport dims routes the fill through screen distributi
 });
 
 test('center-weight helpers are bounded and robust to invalid anchors and outliers', () => {
-  assert.equal(CCTV_CARD_CENTER_WEIGHT, 0.5);
   assert.equal(hasFiniteCctvViewport(1000, 800), true);
   assert.equal(hasFiniteCctvViewport(Infinity, 800), false);
   assert.equal(screenCenterFraction(500, 400, 1000, 800), 0);

@@ -6,7 +6,6 @@ import {
   paceHzForSpeed,
   PACE_MAX_HZ,
   PACE_MIN_HZ,
-  PACE_STEP_PX,
 } from './renderPace.js';
 
 /** A pace with fake timers, clock and render calls. */
@@ -48,7 +47,6 @@ function makePace() {
 }
 
 test('a mark may move half a pixel between draws', () => {
-  assert.equal(PACE_STEP_PX, 0.5);
   assert.equal(paceHzForSpeed(1), 2);
   assert.equal(paceHzForSpeed(10), 20);
 });

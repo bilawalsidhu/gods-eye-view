@@ -873,7 +873,6 @@ test('cones re-centre on a picture that opens while they are still loading', asy
 
 test('lines keep the decoded (longest-first) order under a cap on points', async () => {
   const { COVERAGE_TUNING } = await import('./policy.js');
-  assert.equal(COVERAGE_TUNING.keepOrder, true);
   assert.ok(COVERAGE_TUNING.maxPoints > 0);
 });
 

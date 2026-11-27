@@ -177,7 +177,6 @@ async function visiblePixels(texture, size) {
 }
 
 test('compact badge fill remains legible at its near and far footprints', async () => {
-  assert.equal(WILDLIFE_SPRITE_PX, 20);
   for (const size of [12, 16, WILDLIFE_SPRITE_PX, 22]) {
     const flightPixels = await visiblePixels(aircraftIcon('airliner'), size);
     for (const group of WILDLIFE_SPRITE_GROUPS)

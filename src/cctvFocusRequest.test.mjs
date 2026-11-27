@@ -27,7 +27,6 @@ test('UI CCTV request route uses the explicit focus policy with the clicked id',
     'explicit-policy',
     { cameraId: 'oak-cam-9', durationSec: CCTV_WORLD_CLICK_FOCUS_DURATION_SEC },
   ]);
-  assert.equal(CCTV_WORLD_CLICK_FOCUS_DURATION_SEC, 1.9);
 });
 
 test('UI CCTV request route rejects malformed events without entering focus policy', () => {

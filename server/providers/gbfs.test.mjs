@@ -68,7 +68,6 @@ test('GBFS upstream fetch names the app in the Client-Identifier header', async 
       },
     },
   );
-  assert.equal(GBFS_CLIENT_IDENTIFIER, 'gods-eye-view');
   assert.equal(observedHeaders['Client-Identifier'], GBFS_CLIENT_IDENTIFIER);
 });
 

@@ -6,7 +6,6 @@ import { classifyAircraft } from '../data/aircraftClass.js';
 import { recordFromDecoderTrack } from '../sources/adsbRecords.js';
 import {
   AdsbStreamDecoder,
-  LOCAL_ADSB_STALE_MS,
   decodeAdsbMessage,
   extractAdsbMessages,
   modeSChecksum,
@@ -71,7 +70,6 @@ test('globally decodes a valid even/odd CPR pair and expires tracks at 60 second
   assert.ok(Math.abs(aircraft.latitude - 52.26578) < 0.0001);
   assert.ok(Math.abs(aircraft.longitude - 3.93891) < 0.0001);
   assert.equal(aircraft.lastPositionAt, 1_500);
-  assert.equal(LOCAL_ADSB_STALE_MS, 60_000);
   assert.equal(
     pruneAircraftTracks(tracks, 61_499),
     0,

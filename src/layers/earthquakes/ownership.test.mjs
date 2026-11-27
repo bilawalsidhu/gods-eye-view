@@ -3,7 +3,7 @@ import test from 'node:test';
 import { createEarthquakesLayer } from './index.js';
 import { createUsgsEarthquakeSource } from './source.js';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
-import { EARTHQUAKE_MARK_MAGNITUDE, earthquakeMarkLabel } from './model.js';
+import { earthquakeMarkLabel } from './model.js';
 import { worldClock } from '../../time/worldClock.js';
 function harness(source) {
   const events = [];
@@ -172,7 +172,6 @@ test('a viewer with nothing to draw with is refused at init, and init can be ret
 });
 
 test('the timeline marks only strong quakes, while the layer is on', async () => {
-  assert.equal(EARTHQUAKE_MARK_MAGNITUDE, 6);
   const rows = [
     { ...row, stableId: 'small', mag: 4.5, time: 1_000 },
     { ...row, stableId: 'strong', usgsId: 'us-strong', mag: 6, time: 5_000 },

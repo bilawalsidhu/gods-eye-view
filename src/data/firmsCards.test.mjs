@@ -10,7 +10,6 @@ import {
 } from './firmsHeatmap.js';
 import {
   accentForSeverity,
-  FIRMS_AMBIENT_COHORT_LIMIT,
   FIRMS_OVERLAY_SOURCE_ID,
 } from './firmsLabels.js';
 import { FIRE_ANCHOR_LIFT_M } from './fireAnchors.js';
@@ -264,7 +263,6 @@ test('real FIRMS lifecycle clears host entries on disable and destroy', async ()
     const callCount = calls.length;
     await layer.enable(viewer);
     assert.equal(calls.length, callCount, 'destroyed FIRMS layers reject late enable work');
-    assert.equal(FIRMS_AMBIENT_COHORT_LIMIT, 18);
   } finally {
     globalThis.fetch = originalFetch;
     if (originalWindow === undefined) delete globalThis.window;

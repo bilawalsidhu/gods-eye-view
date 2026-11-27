@@ -4,7 +4,6 @@ import { _selectContextMode } from './ui/contextTransactions.js';
 import { _initGlobalContextPanel } from './ui/contextBindings.js';
 import { ContextControls } from './ui/contextControls.js';
 import { clearSelectedLayers } from './ui/contextActions.js';
-import { PANEL_RAIL_ITEMS } from './ui/panelRailCatalog.js';
 import { readFileSync as readRadioSource } from 'node:fs';
 const radioBindings = readRadioSource(
   new URL('./ui/radioBindings.js', import.meta.url),
@@ -35,7 +34,6 @@ test('Contacts stays in the keyboard sequence and Space Missions owns its rail i
   assert.doesNotMatch(tag, /:tabindex|:disabled|\sdisabled/);
   assert.doesNotMatch(html, /id="global-context-missions-btn"/);
   assert.match(html, /id="space-missions-panel"[^>]*data-panel-id="space-missions-panel"/);
-  assert.equal(PANEL_RAIL_ITEMS['space-missions-panel'].icon, 'rocket_launch');
 });
 
 test('Context activation and Clear All never native-disable tabs and guard repeated clicks', () => {

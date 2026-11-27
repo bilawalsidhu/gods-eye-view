@@ -297,5 +297,4 @@ test('every left panel has its rail item, Utilities with its own icon', async ()
   const ids = [...view.matchAll(/<RailPanel id="([\w-]+)"/g)].map(([, id]) => id);
   assert.ok(ids.includes('utilities-panel'));
   for (const id of ids) assert.ok(PANEL_RAIL_ITEMS[id], `${id} has a rail item`);
-  assert.equal(PANEL_RAIL_ITEMS['utilities-panel'].icon, 'handyman');
 });

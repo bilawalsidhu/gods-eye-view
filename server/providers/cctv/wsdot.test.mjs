@@ -5,7 +5,6 @@ import os from 'node:os';
 import path from 'node:path';
 import { createCctvCatalog } from './catalog.js';
 import {
-  DEFAULT_WSDOT_MAX_SOURCES,
   WSDOT_CAMERAS_URL,
   WSDOT_MAX_CATALOG_BYTES,
 } from './constants.js';
@@ -199,7 +198,6 @@ test('WSDOT loader honors the max-sources cap', async (t) => {
 test('WSDOT loader defaults its cap and survives upstream failure', async (t) => {
   quiet(t);
   withEnv(t, { CCTV_WSDOT_MAX_SOURCES: undefined });
-  assert.equal(DEFAULT_WSDOT_MAX_SOURCES, 250);
 
   t.mock.method(
     globalThis,

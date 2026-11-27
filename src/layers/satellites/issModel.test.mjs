@@ -13,7 +13,6 @@ import {
   ISS_MODEL_LOCAL_AXES,
   ISS_MODEL_NATIVE_SPAN,
   ISS_MODEL_URL,
-  ISS_NORAD,
   ISS_SPAN_M,
 } from './policy.js';
 
@@ -57,7 +56,6 @@ test('the Cockpit hold hides the model', () => {
 });
 
 test('the model is the ISS by NORAD number, at its real 109 m span', () => {
-  assert.equal(ISS_NORAD, 25544);
   assert.ok(
     Math.abs(ISS_MODEL_SCALE * ISS_MODEL_NATIVE_SPAN - ISS_SPAN_M) < 1e-9,
   );

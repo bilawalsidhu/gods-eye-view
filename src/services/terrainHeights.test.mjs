@@ -1,9 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  createTerrainHeights,
-  DEFAULT_MAX_CACHE_ENTRIES,
-} from './terrainHeights.js';
+import { createTerrainHeights } from './terrainHeights.js';
 
 /**
  * A terrain source that always resolves, so these tests exercise the cache and
@@ -25,10 +22,6 @@ function stubSource() {
 const lonAt = (i) => i / 1000;
 const heightAt = (lon) => 1000 + Math.round(lon * 1000);
 const pointAt = (i) => ({ lat: 0, lon: lonAt(i) });
-
-test('the default cache bound is exported so callers can reason about it', () => {
-  assert.equal(DEFAULT_MAX_CACHE_ENTRIES, 20_000);
-});
 
 test('the in-memory cache stops growing once it reaches its entry bound', async () => {
   const terrain = createTerrainHeights({

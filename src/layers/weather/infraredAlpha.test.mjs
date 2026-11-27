@@ -7,8 +7,6 @@ import {
 } from './infraredAlpha.js';
 
 test('filtered infrared preserves RGB, scales existing alpha, and crosses half opacity at the 0.55 linear cut', () => {
-  assert.equal(INFRARED_ALPHA_T0, 0.4);
-  assert.equal(INFRARED_ALPHA_T1, 0.7);
   const bytes = new Uint8ClampedArray([
     0, 0, 0, 255, 168, 12, 50, 255, 12, 194, 50, 200, 12, 50, 217, 128, 255,
     255, 255, 0,

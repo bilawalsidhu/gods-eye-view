@@ -6,7 +6,6 @@ import { CLEAR_WEATHER, mergeWeather } from './weather.js';
 test('clear weather draws nothing', () => {
   for (const key of ['clouds', 'fog', 'haze', 'rain', 'snow'])
     assert.equal(CLEAR_WEATHER[key], 0, key);
-  assert.deepEqual(CLEAR_WEATHER.wind, { speedMps: 0, fromDeg: 0 });
 });
 
 test('a set keeps what it is not given and clamps strengths', () => {

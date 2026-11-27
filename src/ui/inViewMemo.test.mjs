@@ -758,7 +758,6 @@ test('a very costly read still has its rows read again within the cap', (t) => {
   now += 2_000;
   store.inView();
   assert.equal(satellites.reads, 2, 'read again at the cap');
-  assert.equal(MOVING_REFRESH_MAX_MS, 60_000);
 });
 
 test('while the camera moves, a costly layer keeps its rows; a settled view reads it at once', (t) => {

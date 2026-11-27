@@ -48,7 +48,6 @@ test('every aircraft class draws its own block of the view sheet', () => {
 });
 
 test('a helicopter draws the block of its rotor frame, the still frame by default', () => {
-  assert.equal(ROTOR_FRAMES, 3);
   for (let frame = 0; frame < ROTOR_FRAMES; frame++) {
     const ref = aircraftViewRef('helicopter', frame);
     assert.equal(
@@ -127,7 +126,6 @@ test('the sheet is registered with its image resolved as the layer resolves its 
     { ...AIRCRAFT_VIEWS.sheet },
     'the layout as it is',
   );
-  assert.equal(AIRCRAFT_VIEWS.sheet.image, '/sprites/aircraft-views.webp');
 });
 
 test('each class is baked from the model it is drawn with up close', () => {

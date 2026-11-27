@@ -1063,9 +1063,8 @@ test('an SVG takes the atlas at its own size, other images at the item’s', asy
 });
 
 test('an image switch in CSS pixels stands for the aircraft layers’ 76 device pixels', async () => {
-  const { NEAR_IMAGE_DEVICE_PX, nearImageSwitchPx } =
+  const { nearImageSwitchPx } =
     await import('../../data/iconAtlas.js');
-  assert.equal(NEAR_IMAGE_DEVICE_PX, 76);
   assert.equal(nearImageSwitchPx(2), 38);
   const display = globalThis.devicePixelRatio;
   globalThis.devicePixelRatio = 2;

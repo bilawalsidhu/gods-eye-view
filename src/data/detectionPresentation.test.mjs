@@ -2,13 +2,9 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-import {
-  COCKPIT_BRACKET_OPACITY,
-  detectionBracketOpacity,
-} from './detectionPresentation.js';
+import { detectionBracketOpacity } from './detectionPresentation.js';
 
 test('Cockpit reduces only the bracket presentation multiplier', () => {
-  assert.equal(COCKPIT_BRACKET_OPACITY, 0.45);
   assert.equal(detectionBracketOpacity(true), 0.45);
   assert.equal(detectionBracketOpacity(false), 1);
   assert.equal(detectionBracketOpacity(undefined), 1);

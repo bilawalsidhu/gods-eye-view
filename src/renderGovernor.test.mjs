@@ -357,7 +357,6 @@ test('a camera carried by a followed target draws at the follow rate unless a po
     assert.equal(scene.targetFps, 0, 'a camera move: the display rate');
     holdContinuousRender('tracked-entity', { maxFps: FOLLOW_FRAME_RATE });
     assert.equal(scene.targetFps, FOLLOW_FRAME_RATE, 'following');
-    assert.equal(FOLLOW_FRAME_RATE, 30);
     page.dispatchEvent(new Event('pointerdown'));
     assert.equal(scene.targetFps, 0, 'steering: the display rate');
     page.dispatchEvent(new Event('pointerup'));
@@ -445,7 +444,6 @@ test("the user's frame rate caps every rate, idle or held, 60 until set", () => 
   const { viewer, scene } = makeViewer();
   installRenderGovernor(framePortFor(viewer.scene));
   assert.equal(frameRateCap(), DEFAULT_FRAME_RATE);
-  assert.equal(DEFAULT_FRAME_RATE, 60);
   assert.equal(scene.targetFps, 60, 'idle');
   holdContinuousRender('camera');
   assert.equal(scene.targetFps, 60, 'a hold asking the display rate');

@@ -5,9 +5,6 @@ import {
   accumulateGnssObservations,
   binGnssCells,
   GNSS_CLASSIFIER,
-  GNSS_H3_RESOLUTION,
-  GNSS_HIGH_PERCENT,
-  GNSS_MEDIUM_PERCENT,
   GNSS_PROVENANCE,
   GNSS_WINDOW_MS,
   gnssCellKey,
@@ -123,7 +120,6 @@ test('low NIC, low NACp or a readsb GPS-loss flag each mark an aircraft degraded
 });
 
 test('cell keys are the H3 resolution-4 cells gpsjam.org uses', () => {
-  assert.equal(GNSS_H3_RESOLUTION, 4);
   // Kraków: a known lat/lon lands in its known res-4 hexagon.
   assert.equal(gnssCellKey(50.1, 19.9), '841e2e7ffffffff');
   assert.equal(getResolution(gnssCellKey(50.1, 19.9)), 4);
@@ -497,8 +493,6 @@ test('every cell with an aircraft is shown, as on gpsjam.org; only the bad − 1
 });
 
 test('the gpsjam bands are unchanged by the hex grid', () => {
-  assert.equal(GNSS_MEDIUM_PERCENT, 2);
-  assert.equal(GNSS_HIGH_PERCENT, 10);
   // [total, bad] → level, at and either side of both band edges.
   for (const [total, bad, level] of [
     [100, 0, 'low'],

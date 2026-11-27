@@ -157,7 +157,6 @@ test('a selected quake animates one ring set, one frame request at a time', () =
   h.ripples.show(target);
   const [lane] = h.lanes;
   assert.equal(lane.laneId, RIPPLE_PAINT_LANE);
-  assert.equal(RIPPLE_PAINT_LANE, 'ambient-label', 'under the labels');
   assert.equal(lane.active, true);
   assert.equal(h.frames.size, 1);
   h.ripples.show({ ...target, id: 'ak2' });

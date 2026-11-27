@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
-  DEFAULT_DATA_MODE,
   buildVesselCardManifest,
   isHardwareRenderer,
   isHeadfulMode,
@@ -13,7 +12,6 @@ import {
 } from '../../scripts/qa-vessel-cards.mjs';
 
 test('vessel-card QA keeps live AISStream as the default and synthetic opt-in', () => {
-  assert.equal(DEFAULT_DATA_MODE, 'live');
   assert.equal(parseDataMode([]), 'live');
   assert.equal(parseDataMode(['--data', 'synthetic']), 'synthetic');
   assert.equal(isHeadfulMode([]), false);

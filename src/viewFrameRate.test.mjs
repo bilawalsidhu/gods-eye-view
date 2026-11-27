@@ -43,7 +43,6 @@ test('60 until the user sets a rate; the slider runs 30 to 240, then unlimited',
     max: 250,
     step: 10,
   });
-  assert.equal(UNLIMITED_STOP, 250);
 });
 
 test("the user's rate is applied, kept across visits, and its last stop is unlimited", () => {

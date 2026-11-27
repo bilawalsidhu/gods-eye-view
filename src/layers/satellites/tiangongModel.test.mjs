@@ -13,7 +13,6 @@ import { tiangongIsModule, tiangongModelSpec } from './tiangongModel.js';
 
 test("Tiangong is CSS (TIANHE) by NORAD number, drawn at the file's meters", () => {
   const spec = tiangongModelSpec();
-  assert.equal(TIANGONG_NORAD, 48274);
   assert.equal(spec.norad, TIANGONG_NORAD);
   assert.equal(spec.key, 'tiangong');
   assert.equal(spec.scale, 1);

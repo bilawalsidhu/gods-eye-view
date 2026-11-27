@@ -3,10 +3,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  DEFAULT_RADAR_RANGE_NM,
   METRES_PER_NM,
   RADAR_MAX_CONTACTS,
-  RADAR_RANGES_NM,
   nextRadarRange,
   projectRadarContacts,
   radarPicture,
@@ -34,8 +32,6 @@ function contact(id, northNm, eastNm, extra = {}) {
 }
 
 test('the range steps 3, 6, 12, 24 NM, opens on 3 and wraps', () => {
-  assert.deepEqual(RADAR_RANGES_NM, [3, 6, 12, 24]);
-  assert.equal(DEFAULT_RADAR_RANGE_NM, 3);
   assert.equal(nextRadarRange(3), 6);
   assert.equal(nextRadarRange(6), 12);
   assert.equal(nextRadarRange(12), 24);

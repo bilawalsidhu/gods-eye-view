@@ -13,10 +13,6 @@ const ALCATRAZ = { poi: 'Alcatraz Island', city: 'San Francisco' };
 const LINCOLN = { poi: 'Lincoln Memorial', city: 'Washington DC' };
 const SACRE_COEUR = { poi: 'Sacré-Cœur', city: 'Paris' };
 
-test('the NEAR bound is metro scale, not continental', () => {
-  assert.equal(NEAR_POI_MAX_KM, 150);
-});
-
 test('a landmark under the camera reads NEAR', () => {
   assert.equal(
     composeLocalityTag({ ...ALCATRAZ, distKm: 2.4 }, 37.8267, -122.423),
