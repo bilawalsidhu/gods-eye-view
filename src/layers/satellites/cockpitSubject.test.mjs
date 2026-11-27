@@ -526,12 +526,12 @@ test('tracking without a Cockpit subject keeps its marks', async (t) => {
   assert.equal(f.state._cockpitHiddenPath, null);
 });
 
-/** A ring's drawn colour and behind-the-globe colour. */
+/** A ring's drawn colour, and whether it draws behind the Earth. */
 function ringColors(f, id) {
   const item = f.ring(id);
   return {
     color: [...item.style.color],
-    depthFail: [...item.depthFail.color],
+    behind: item.depthFail != null,
   };
 }
 
@@ -547,7 +547,11 @@ test('a Cockpit subject dims every other orbit ring and restores it exactly', as
   const iss = ringColors(f, ISS_NORAD);
   const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-9, `${a} vs ${b}`);
   near(iss.color[3], issBuilt.color[3] * COCKPIT_ORBIT_DIM_FACTOR);
-  near(iss.depthFail[3], issBuilt.depthFail[3] * COCKPIT_ORBIT_DIM_FACTOR);
+  assert.equal(
+    iss.behind,
+    false,
+    'a dimmed ring stays hidden behind the Earth',
+  );
   assert.deepEqual(iss.color.slice(0, 3), issBuilt.color.slice(0, 3));
   // What the draw port holds is what the ring says.
   const rings = drawnSet(f, ':rings');
