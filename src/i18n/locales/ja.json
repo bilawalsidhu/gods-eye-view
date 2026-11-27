@@ -4433,5 +4433,7 @@
   "Low-cost sensor": "低価格センサー",
   "{name} · sensor": "{name} · センサー",
   "Reference monitor": "基準測定器",
-  "Needs {envVars} — add one in Provider Settings": "{envVars}のいずれかが必要です。プロバイダー設定で追加してください"
+  "Needs {envVars} — add one in Provider Settings": "{envVars}のいずれかが必要です。プロバイダー設定で追加してください",
+  "CABLE \u00b7 {name}": "ケーブル · {name}",
+  "LANDING POINT \u00b7 {name}": "陸揚げ地点 · {name}"
 }

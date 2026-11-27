@@ -4044,7 +4044,14 @@
       "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js",
       "src/geoDistance.js",
-      "src/data/viewSheet.js"
+      "src/data/viewSheet.js",
+      "src/data/trackedCamera.js",
+      "src/time/worldClock.js",
+      "src/navigationPolicy.js",
+      "src/geo/julian.js",
+      "src/data/followed.js",
+      "src/geo/geodesic.js",
+      "src/data/clickSelect.js"
     ],
     "external": ["cesium", "kdbush"]
   },

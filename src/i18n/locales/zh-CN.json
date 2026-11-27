@@ -4433,5 +4433,7 @@
   "Low-cost sensor": "低成本传感器",
   "{name} · sensor": "{name} · 传感器",
   "Reference monitor": "参考监测仪",
-  "Needs {envVars} — add one in Provider Settings": "需要 {envVars}，请在服务商设置中添加其中一个"
+  "Needs {envVars} — add one in Provider Settings": "需要 {envVars}，请在服务商设置中添加其中一个",
+  "CABLE \u00b7 {name}": "海缆 · {name}",
+  "LANDING POINT \u00b7 {name}": "登陆点 · {name}"
 }

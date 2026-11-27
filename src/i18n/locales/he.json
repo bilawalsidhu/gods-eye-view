@@ -4643,5 +4643,7 @@
   "Low-cost sensor": "חיישן בעלות נמוכה",
   "{name} · sensor": "{name} · חיישן",
   "Reference monitor": "מכשיר ניטור ייחוס",
-  "Needs {envVars} — add one in Provider Settings": "דורש {envVars} — הוסף אחד מהם בהגדרות הספקים"
+  "Needs {envVars} — add one in Provider Settings": "דורש {envVars} — הוסף אחד מהם בהגדרות הספקים",
+  "CABLE \u00b7 {name}": "כבל · {name}",
+  "LANDING POINT \u00b7 {name}": "נקודת נחיתה · {name}"
 }
