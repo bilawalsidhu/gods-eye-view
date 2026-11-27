@@ -5,7 +5,7 @@ import {
 } from '../../data/railFeeds.js';
 import { aggregateTransitFeedHealth } from '../transit/policy.js';
 import {
-  ACTIVATION_ALTITUDE_M,
+  ACTIVATION_ENTER_ALTITUDE_M,
   FEED_STALE_AFTER_MS,
   RAIL_CATEGORY_COLORS,
   RAIL_CATEGORY_LABELS,
@@ -201,7 +201,7 @@ export function createControls({ state, parts, timetable }) {
         // through translateStatusMessage (ui/statusText.js), as Transit's.
         const note = state._altitudeGateOpen
           ? `No feed here yet · ${regionCount()} regions available`
-          : `Fly below ${Math.round(ACTIVATION_ALTITUDE_M / 1000).toLocaleString('en-US')} km to a covered region`;
+          : `Fly below ${Math.round(ACTIVATION_ENTER_ALTITUDE_M / 1000).toLocaleString('en-US')} km to a covered region`;
         return {
           count: 0,
           lastUpdate: state._lastUpdate,
