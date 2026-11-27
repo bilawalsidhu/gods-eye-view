@@ -231,6 +231,78 @@ test('draped lines are ground polylines; a rebuild keeps the old ones until the 
   assert.equal(scene.added.length, 0);
 });
 
+for (const kind of ['lines', 'shapes'])
+  test(`${kind}: the last ready ground draws through rebuilds queued before the next is ready`, () => {
+    const { scene, draw, frame } = drawOver();
+    const set = draw[kind]({ id: `queued-${kind}` });
+    const item = (id, color) =>
+      kind === 'lines'
+        ? {
+            id,
+            positions: [
+              { lon: 0, lat: 0 },
+              { lon: 1, lat: 1 },
+            ],
+            widthPx: 2,
+            mode: 'draped',
+            style: { kind: 'solid', color },
+          }
+        : {
+            id,
+            geometry: {
+              kind: 'ellipse',
+              center: { lon: 0, lat: 0 },
+              semiMajor: 1000,
+              semiMinor: 1000,
+            },
+            fill: color,
+            height: 'clampGround',
+          };
+    const groundsOf = (host) => {
+      const out = [];
+      for (let i = 0; i < host.length; i++) {
+        const part = host.get(i);
+        if (
+          part instanceof Cesium.GroundPrimitive ||
+          part instanceof Cesium.GroundPolylinePrimitive
+        )
+          out.push(part);
+      }
+      return out;
+    };
+    const ready = (host) => {
+      for (const ground of groundsOf(host))
+        Object.defineProperty(ground, 'ready', { value: true });
+    };
+    // Ground drawn now: shown and ready, in a host in the scene.
+    const drawn = () =>
+      scene.added.flatMap(groundsOf).filter((g) => g.show && g.ready);
+
+    set.set([item('a', '#ff0000')]);
+    const first = scene.added[0];
+    ready(first);
+    frame();
+    assert.deepEqual(drawn(), groundsOf(first));
+    // Rebuilds every frame, each before the one before it is ready.
+    set.set([item('a', '#00ff00'), item('b', '#00ff00')]);
+    frame();
+    set.set([item('a', '#0000ff'), item('c', '#0000ff')]);
+    frame();
+    set.upsert([item('d', '#0000ff')]);
+    frame();
+    set.remove(['c']);
+    frame();
+    assert.ok(scene.added.includes(first), 'the ready host stays');
+    assert.deepEqual(drawn(), groundsOf(first), 'and draws, alone');
+    assert.equal(scene.added.length, 2, 'beside the newest build only');
+    const newest = scene.added.find((host) => host !== first);
+    ready(newest);
+    frame();
+    assert.deepEqual(scene.added, [newest], 'gone once the newest is ready');
+    assert.deepEqual(drawn(), groundsOf(newest));
+    set.dispose();
+  });
+
 test('a draped outlined line keeps its outline in its own material', () =>
   withImageClasses(() => {
     const { scene, draw } = drawOver();
