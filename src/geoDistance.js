@@ -68,3 +68,25 @@ export function greatCircleKm(from, to) {
 export function greatCircleMeters(from, to) {
   return greatCircleKm(from, to) * 1000;
 }
+
+/**
+ * The circle a point lies deepest inside, or nearest outside of.
+ * @param {GeoPoint} point
+ * @param {ReadonlyArray<GeoPoint & {radiusKm: number}>} circles
+ * @param {(a: GeoPoint, b: GeoPoint) => number} [distance=greatCircleKm]
+ * @returns {{depthKm: number, km: number}} How far inside that circle's edge
+ *   the point is (negative: outside), and its distance from the centre.
+ *   `-Infinity`/`Infinity` for no circles.
+ */
+export function deepestCircle(point, circles, distance = greatCircleKm) {
+  let depthKm = -Infinity;
+  let km = Infinity;
+  for (const circle of circles) {
+    const d = distance(point, circle);
+    if (circle.radiusKm - d > depthKm) {
+      depthKm = circle.radiusKm - d;
+      km = d;
+    }
+  }
+  return { depthKm, km };
+}

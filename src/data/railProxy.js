@@ -465,7 +465,7 @@ export function railNaturalRequestsPerMinute(feeds = RAIL_FEED_REGISTRY) {
  * The process-wide admission cap (requests per admission window, all
  * operators): the natural load of every enabled feed, half again on top for
  * retries on the backoff ladder, never below the Transit proxy's own cap
- * (TRANSIT_ADMISSION_MAX_GLOBAL, 40). It is a backstop against a bug or a
+ * (TRANSIT_ADMISSION_MAX_GLOBAL, 64). It is a backstop against a bug or a
  * runaway client, not the protection an operator relies on: that is each
  * feed's freshness window and the per-feed admission count. Transit's fixed
  * cap alone sat below the natural load once the registry passed about ten

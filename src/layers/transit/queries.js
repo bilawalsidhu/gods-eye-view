@@ -282,7 +282,7 @@ export function createQueries({ state, parts }) {
           count: 0,
           lastUpdate: state._lastUpdate,
           error: null,
-          source: 'GTFS-RT',
+          source: 'GTFS-RT · Entur',
           status: 'zoom-in',
           statusMessage: note,
           coverage: note,
@@ -319,7 +319,7 @@ export function createQueries({ state, parts }) {
             ? `Loading ${active.map((feed) => feed.name).join(', ')}`
             : undefined,
         stale: health.stale,
-        source: 'GTFS-RT',
+        source: 'GTFS-RT · Entur',
         coverage,
         feeds: active.map((feed) => feed.id),
       };

@@ -219,6 +219,6 @@ test('the layer takes its panel handle from init, not a manager handle', () => {
 test('stats before enable are an honest zero, not a fake feed state', () => {
   const stats = transitLayer.getStats();
   assert.equal(stats.count, 0);
-  assert.equal(stats.source, 'GTFS-RT');
+  assert.equal(stats.source, 'GTFS-RT · Entur');
   assert.equal(stats.error, null);
 });

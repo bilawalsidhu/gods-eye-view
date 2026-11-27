@@ -81,7 +81,7 @@ export function createLifecycle({ state, services, parts }) {
     id: 'transit',
     name: 'Transit',
     icon: '🚌',
-    source: 'GTFS-RT',
+    source: 'GTFS-RT · Entur',
 
     /**
      * Create the point collection. Called once at bootstrap.
@@ -109,6 +109,7 @@ export function createLifecycle({ state, services, parts }) {
       state._error = null;
       state._limitWarned = false;
       state._altitudeGateOpen = false;
+      state._wideView = false;
       state._moving.clear();
       state._heightDirty.clear();
       state._rotationPose = null;
@@ -190,6 +191,7 @@ export function createLifecycle({ state, services, parts }) {
       parts.height.clear();
       parts.rendering.clearMarkers();
       state._altitudeGateOpen = false;
+      state._wideView = false;
       state._moving.clear();
       state._heightDirty.clear();
       state._rotationPose = null;

@@ -1,6 +1,6 @@
 import { createTransitHistory } from './transitHistoryStore.js';
 /**
- * GTFS-Realtime transit proxy for the Transit data layer.
+ * GTFS-Realtime and Entur Vehicles transit proxy for the Transit data layer.
  *
  * Only URLs registered in `src/data/transitFeeds.js` are ever fetched — the
  * browser names a registered id, never a URL. Pure request/cache mechanics
@@ -58,6 +58,9 @@ export async function fetchTransitFeed(
       signal,
       headers: transitUpstreamHeaders(feed, validators),
       redirect: 'manual',
+      ...(feed.request
+        ? { method: feed.request.method, body: feed.request.body }
+        : {}),
     });
     // Only a real redirect is followed. A 304 is the successful answer to our
     // own conditional request and has no Location; sending it round this loop
@@ -85,7 +88,7 @@ export async function fetchTransitFeed(
 }
 
 /**
- * Vite plugin: GTFS-Realtime VehiclePositions proxy for the Transit layer.
+ * Vite plugin: GTFS-Realtime VehiclePositions (and Entur Vehicles JSON) proxy for the Transit layer.
  *
  *   GET /api/transit/feeds              → public catalog (coverage + credit)
  *   GET /api/transit/vehicles/<feedId>  → decoded snapshot as JSON
@@ -94,7 +97,7 @@ export async function fetchTransitFeed(
  * names a registered id, never a URL (SECURITY.md). Redirects are resolved hop
  * by hop and must stay on the feed's own https origin. Bytes are capped at
  * TRANSIT_PROXY_MAX_BODY_BYTES and decoded server-side, so the browser never
- * parses protobuf. Per feed: 15 s memory cache, single-flight refresh, and
+ * parses protobuf or Entur's JSON. Per feed: 15 s memory cache, single-flight refresh, and
  * serve-stale-on-failure for up to 10 minutes (the launch-library pattern).
  * No disk cache — transit positions are worthless after a few minutes.
  *

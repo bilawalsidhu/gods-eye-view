@@ -229,12 +229,14 @@ export function createIngestion({ state, services, parts, source }) {
         record.routeId,
         record.id,
         record.routeType,
+        record.mode,
       );
       const modeInferred = !transitModeResolved(
         feed,
         record.routeId,
         record.id,
         record.routeType,
+        record.mode,
       );
       const routeType = transitModelRouteType(mode, record.routeType);
       // A stamp ahead of the fetch is a clock fault; the fetch time bounds it.

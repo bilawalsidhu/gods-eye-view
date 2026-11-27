@@ -48,6 +48,8 @@ export function createState({ services }) {
   state._cameraFirstTickOff = null;
   state._cameraDebounceTimer = null;
   state._altitudeGateOpen = false;
+  /** Whether the wide-view rule is on (hysteresis around WIDE_VIEW_ALTITUDE_M). */
+  state._wideView = false;
 
   /** @type {(() => void)|null} */
   state._preRenderRemove = null;

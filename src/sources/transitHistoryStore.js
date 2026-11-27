@@ -334,6 +334,7 @@ export function createTransitHistory({
           record.routeId,
           record.id,
           record.routeType,
+          record.mode,
         );
         const context = contextOf(record, mode);
         if (!context) continue;
