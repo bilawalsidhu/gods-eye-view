@@ -302,6 +302,7 @@
   "src/ui/cctvCalibration.js",
   "src/ui/cctvControls.js",
   "src/ui/cctvControls.test.mjs",
+  "src/ui/cctvFrameTime.test.mjs",
   "src/ui/cctvFrames.js",
   "src/ui/cctvPresentation.js",
   "scripts/qa-camera-controls.mjs",

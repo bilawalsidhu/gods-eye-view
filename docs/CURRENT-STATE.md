@@ -3372,6 +3372,16 @@ shown without a fade once it is decoded (or after one second if its decode never
 settles), so a new camera's preview is blank only while its frame loads. Disposal
 releases listeners, subscriptions, image handlers, summary timers and chip-hide timers.
 
+A camera source may give each frame's capture time: one that sets
+`framesCarryTime: true` answers its frame URLs with the time in milliseconds
+since the epoch in an `X-CCTV-Frame-Time` header (listed in
+`Access-Control-Expose-Headers` when the frames come from another origin). Its
+frames are then fetched rather than loaded as images, shown from an object URL
+of the bytes read, and the CCTV panel, the camera's card and its bigger view
+show that time as text (`2026-11-26 18:04:31Z`, UTC) with the picture. A frame
+without the header, or a source that does not set the flag, shows no time. A
+refresh that fails keeps the shown frame and its time.
+
 The panel opens when a camera becomes active and collapses when the layer is
 switched off, from its own switch or anywhere else. The panel chrome applies
 the collapse, so a panel the desktop accordion only folded has its saved and
