@@ -673,25 +673,13 @@ const defaultRow = computed(() => built.value.defaultIndex);
 // Enter runs nothing.
 const open = computed(() => focused.value && !dismissed.value && !voiceOn.value && (items.value.length > 0 || Boolean(strip.value)));
 
-// Photon's suggestions (place rows, the strip built on them and recent
-// chips that came from them) are OpenStreetMap data: its credit shows while
-// they do. Recent chips from the bundled packs credit Wikidata.
-const photonShown = computed(
-  () =>
-    open.value &&
-    ((placesFor.value === query.value.trim() && places.value.length > 0) ||
-      Boolean(strip.value?.chips.some((chip) => chip.source === 'photon'))),
-);
+// Recent chips from the bundled packs credit Wikidata.
 watch(
   () => open.value && Boolean(strip.value?.chips.some((chip) => chip.source === 'wikidata')),
   (shown) => {
     if (shown) controls.value?.creditPlaces?.();
   },
 );
-watch(photonShown, (shown) => controls.value?.creditSuggestions?.(shown));
-onBeforeUnmount(() => {
-  if (photonShown.value) controls.value?.creditSuggestions?.(false);
-});
 const noCommand = computed(() => focused.value && !dismissed.value && query.value.trim().startsWith('>') && !items.value.length);
 // An error stays in view while voice is on, even with the voice panel open.
 const showFeedback = computed(() => feedback.value && (focused.value || !assistantOpen.value || voiceOn.value));

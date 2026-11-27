@@ -9,7 +9,6 @@ import {
   ALPR_COLOR,
   ALPR_SELECTED_COLOR,
   SELECTED_MARKER_ICON_SIZE,
-  CREDIT_DISPLAY_MS,
   MARKER_FLOOR_LIFT_M,
 } from './policy.js';
 import { boxContains } from './model.js';
@@ -26,12 +25,7 @@ import {
 import { entityRecord, readEntityRecord } from '../../data/entityRecords.js';
 import { alprIconPosition, alprMarkers } from './markerState.js';
 import { horizonFrom } from '../../geo/horizon.js';
-import {
-  cameraOf,
-  canvasOf,
-  findCredits,
-  findQuery,
-} from '../../render/rendererOf.js';
+import { cameraOf, canvasOf, findQuery } from '../../render/rendererOf.js';
 
 /** A `#rrggbb` colour as `rgb(r,g,b)`, the form the readout card has always had. */
 function cssRgb(hex) {
@@ -318,7 +312,6 @@ export function createAlprPresentation({ state, services, source }) {
   }
 
   function clearRendered() {
-    hideOnMapCredit();
     floors.cancel();
     floorResolve = null;
     overlay.clear();
@@ -326,32 +319,6 @@ export function createAlprPresentation({ state, services, source }) {
     clampedMarkers.clear();
     markers.clear();
     removeEntityContextsForLayer(LAYER_ID);
-  }
-
-  function hideOnMapCredit() {
-    services.credits?.hideOsmCredit?.(state.viewer, LAYER_ID);
-    clearTimeout(state.creditTimer);
-    state.creditTimer = null;
-    state.creditOff?.();
-    state.creditOff = null;
-    governorRequestRender('alpr-credit');
-  }
-
-  function presentOnMapCredit() {
-    if (
-      state.enabled &&
-      source.attribution?.name === 'OpenStreetMap' &&
-      services.credits?.showOsmCredit
-    ) {
-      services.credits.showOsmCredit(state.viewer, LAYER_ID);
-      return;
-    }
-    if (!state.enabled || state.creditPresented || !state.credit) return;
-    state.creditPresented = true;
-    state.creditOff =
-      findCredits(state.viewer)?.addStatic(state.credit) ?? null;
-    state.creditTimer = setTimeout(hideOnMapCredit, CREDIT_DISPLAY_MS);
-    governorRequestRender('alpr-credit');
   }
 
   function renderRecords() {
@@ -488,9 +455,6 @@ export function createAlprPresentation({ state, services, source }) {
     overlay.sync(visible);
     markers.flush();
     if (selectedCarrier) services.overlays?.refreshReadout?.(selectedCarrier);
-    // Keep the on-map credit tied to displayed data, not loading or zoom prompts.
-    if (visible.length) presentOnMapCredit();
-    else hideOnMapCredit();
   }
 
   function focusNearest() {
@@ -610,8 +574,6 @@ export function createAlprPresentation({ state, services, source }) {
     destroyOverlay: () => overlay.destroy(),
     viewportBox,
     clearRendered,
-    hideOnMapCredit,
-    presentOnMapCredit,
     renderRecords,
     selectRecord,
     focusNearest,

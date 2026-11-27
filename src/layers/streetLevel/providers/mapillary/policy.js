@@ -59,7 +59,7 @@ export const COVERAGE_TUNING = Object.freeze({
 /** Per-sequence image cones after a sequence is selected. */
 export const SEQUENCE_IMAGES_LIMIT = 2000;
 
-/** On-globe credit: Mapillary imagery is CC BY-SA 4.0 and needs attribution. */
+/** Mapillary's credit, in Data attribution: its imagery is CC BY-SA 4.0 and needs attribution. */
 export const MAPILLARY_CREDIT_HTML =
   'Street Level: imagery © <a href="https://www.mapillary.com" target="_blank" rel="noopener">Mapillary</a> contributors, CC BY-SA 4.0';
 

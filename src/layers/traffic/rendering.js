@@ -279,11 +279,6 @@ export function createRendering({
         })
       : null;
     parts.retention.reconcile(filteredRoads, altitude, replace);
-    if (layerState._dots.length && filteredRoads.some((r) => !r.directFlow))
-      services.credits?.showOsmCredit?.(layerState._viewer, 'traffic', {
-        openMapTiles: true,
-      });
-    else services.credits?.hideOsmCredit?.(layerState._viewer, 'traffic');
     parts.model.recolorDotsInPlace(label);
 
     const renderMetrics = state

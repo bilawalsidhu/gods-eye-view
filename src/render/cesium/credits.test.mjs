@@ -4,8 +4,12 @@ import * as Cesium from 'cesium';
 import { createCesiumCredits, creditMarkup } from './credits.js';
 import { findCredits } from '../rendererOf.js';
 
-/** A credit display as Cesium keeps it: static credits and a frame's. */
-function fakeDisplay() {
+/**
+ * A credit display as Cesium keeps it: static credits and a frame's. The
+ * port lists CesiumJS through it; unless `cesiumListed`, the display keeps
+ * that one out, so the other tests read the display without it.
+ */
+function fakeDisplay({ cesiumListed = false } = {}) {
   const frame = { screen: [], lightbox: [] };
   const display = {
     _staticCredits: [],
@@ -15,6 +19,7 @@ function fakeDisplay() {
     },
     _currentCesiumCredit: undefined,
     addStaticCredit(credit) {
+      if (!cesiumListed && credit.html.includes('cesium.com/cesiumjs')) return;
       if (!display._staticCredits.some((c) => Cesium.Credit.equals(c, credit)))
         display._staticCredits.push(credit);
     },
@@ -71,6 +76,24 @@ function setup({ display = fakeDisplay() } = {}) {
     },
   };
 }
+
+test('Cesium’s logo is off the map and CesiumJS is in the list, until disposed', () => {
+  Cesium.CreditDisplay.cesiumCredit = new Cesium.Credit(
+    '<img src="/logo.png">',
+    true,
+  );
+  const t = setup({ display: fakeDisplay({ cesiumListed: true }) });
+  assert.equal(Cesium.CreditDisplay.cesiumCredit, undefined, 'no logo');
+  assert.deepEqual(t.port.list(), [
+    {
+      text: 'CesiumJS',
+      href: 'https://cesium.com/cesiumjs/',
+      inline: false,
+    },
+  ]);
+  t.part.dispose();
+  assert.deepEqual(t.display._staticCredits, []);
+});
 
 test('Cesium’s own credits are listed as plain data, the logo first', () => {
   const t = setup();

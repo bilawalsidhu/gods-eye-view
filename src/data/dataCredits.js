@@ -43,67 +43,6 @@ export const ACARTIA_CREDIT = Object.freeze({
     '<a href="https://www.bewhalewise.org" target="_blank" rel="noopener">Be Whale Wise</a>',
 });
 
-const osmDisplays = new WeakMap();
-
-/** The short inline OSM credits, as the renderer's credits port takes them. */
-const OSM_INLINE_CREDITS = Object.freeze({
-  osm: Object.freeze({
-    text: '© OpenStreetMap',
-    href: 'https://www.openstreetmap.org/copyright',
-    inline: true,
-  }),
-  tiles: Object.freeze({
-    text: '© OpenMapTiles',
-    href: 'https://openmaptiles.org',
-    inline: true,
-  }),
-});
-
-function updateOsmDisplay(viewer, state) {
-  const osm = state.owners.size > 0;
-  let tiles = false;
-  for (const usesTiles of state.owners.values()) tiles ||= usesTiles;
-  for (const [key, visible] of [
-    ['osm', osm],
-    ['tiles', tiles],
-  ]) {
-    if (Boolean(state.offs[key]) === visible) continue;
-    if (visible) {
-      // Looked up each time: a renderer bound later takes over.
-      const credits = findCredits(viewer);
-      if (credits) state.offs[key] = credits.addStatic(OSM_INLINE_CREDITS[key]);
-    } else {
-      state.offs[key]();
-      state.offs[key] = null;
-    }
-  }
-}
-
-/**
- * Keep one short inline credit, through the renderer's credits port, while
- * an OSM display owner has visible data.
- */
-export function showOsmCredit(viewer, owner, { openMapTiles = false } = {}) {
-  if (!owner || !findCredits(viewer)) return false;
-  let state = osmDisplays.get(viewer);
-  if (!state) {
-    state = { owners: new Map(), offs: { osm: null, tiles: null } };
-    osmDisplays.set(viewer, state);
-  }
-  if (state.owners.get(owner) === openMapTiles) return false;
-  state.owners.set(owner, openMapTiles);
-  updateOsmDisplay(viewer, state);
-  return true;
-}
-
-/** Release only this owner's credit; other displayed OSM sources retain theirs. */
-export function hideOsmCredit(viewer, owner) {
-  const state = osmDisplays.get(viewer);
-  if (!state?.owners.delete(owner)) return false;
-  updateOsmDisplay(viewer, state);
-  return true;
-}
-
 /** NYC DOT asks every application that uses its data to carry this
  * disclaimer verbatim (nyc.gov/html/dot/html/about/datafeeds.shtml). */
 export const NYC_DOT_DISCLAIMER =

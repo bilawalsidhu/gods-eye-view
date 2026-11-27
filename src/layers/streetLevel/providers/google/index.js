@@ -62,7 +62,8 @@ export function createGoogleProvider({
     requiresKeyId: GOOGLE_KEY_ID,
     pickPrefix: PICK_PREFIX.root,
     colors: COLORS,
-    credit: Object.freeze({ html: GOOGLE_CREDIT_HTML }),
+    // Google's attribution is shown on the map while its imagery is.
+    credit: Object.freeze({ html: GOOGLE_CREDIT_HTML, onMap: true }),
     groundClick: true,
     // Google's terms forbid Street View beside non-Google maps.
     requiresMapStack: GOOGLE_3D_MAP_STACK_ID,

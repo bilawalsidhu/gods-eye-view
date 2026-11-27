@@ -308,7 +308,7 @@ test('one Esri tile failure stays put, two fall back, and stale errors cannot re
   await env.controller.setStack('esri-imagery');
   assert.deepEqual(
     [...env.credits],
-    [{ text: 'Powered by Esri', href: 'https://www.esri.com', inline: true }],
+    [{ text: 'Powered by Esri', href: 'https://www.esri.com', inline: false }],
   );
   const errorEvent = env.providers.get('esri-imagery').errorEvent;
   errorEvent.raise();

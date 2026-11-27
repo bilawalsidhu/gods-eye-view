@@ -15,7 +15,10 @@ export interface Credit {
   linkText?: string;
   /** A logo, drawn in place of the text; the text names it. */
   logoUrl?: string;
-  /** Shown on the map itself, rather than in the expanded list. */
+  /**
+   * Shown on the map itself, rather than in the expanded list: only for a
+   * credit whose terms require the map (Google's, while its content shows).
+   */
   inline?: boolean;
 }
 

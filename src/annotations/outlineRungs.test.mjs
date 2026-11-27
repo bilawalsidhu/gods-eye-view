@@ -151,7 +151,6 @@ test('a street comes from tiles before the configured ladder, as merged ribbons'
   assert.equal(run.calls.base, 0, 'the ladder is not consulted');
   assert.deepEqual(run.calls.finished, ['street']);
   assert.deepEqual(credits, ['tiles']);
-  assert.equal(result.outlineCredit, 'tiles');
   assert.equal(tiles.asked[0].zoom, 14);
   assert.equal(nominatim.asks.length, 0, 'streets never reach Nominatim');
 });
@@ -234,7 +233,6 @@ test('"circle this building" picks the tile building at the point first', async 
     run,
   );
   assert.equal(result.footprintKind, 'building');
-  assert.equal(result.outlineCredit, 'tiles');
   assert.equal(run.calls.base, 0);
   assert.equal(nominatim.asks.length, 0);
   const primary = [square(CAPITOL.lat, CAPITOL.lon, 0.0002)];
@@ -339,7 +337,6 @@ test('named building tile fallbacks require the anchor in filled geometry', asyn
     ladder(UNAVAILABLE),
   );
   assert.equal(pointed.footprintKind, 'building');
-  assert.equal(pointed.outlineCredit, 'tiles');
 });
 
 test('a partial tile load that lost the point tile lets nothing stand in', async () => {
@@ -416,7 +413,6 @@ test('a city with no configured Overpass is outlined by Nominatim', async () => 
     run,
   );
   assert.deepEqual(result.ring, ring);
-  assert.equal(result.outlineCredit, 'osm');
   assert.equal(result.outlineSource, 'nominatim');
   assert.deepEqual(nominatim.asks[0], {
     query: 'Toulouse',
@@ -496,7 +492,6 @@ test('a Nominatim outline across the antimeridian still holds its anchor', async
     ladder(UNAVAILABLE),
   );
   assert.deepEqual(result.ring, ring, 'the outline is accepted, not refused');
-  assert.equal(result.outlineCredit, 'osm');
 });
 
 test('an empty Nominatim polygon list falls back without throwing', async () => {
@@ -600,7 +595,6 @@ test('an unnamed school landuse answers a school grounds ask from tiles', async 
   const school = await ask('Lincoln High School grounds');
   assert.equal(school.footprintKind, 'area');
   assert.deepEqual(school.polygons, [[schoolRing]]);
-  assert.equal(school.outlineCredit, 'tiles');
   assert.equal(
     await ask('Texas Capitol grounds'),
     UNAVAILABLE,
@@ -1026,10 +1020,6 @@ test('default settings: outline, street and building asks send nothing to Overpa
     target: 'this building',
   });
   assert.equal(building.outline?.footprintKind, 'building');
-  assert.equal(building.outline.outlineCredit, 'tiles');
-  assert.equal(street.outline.outlineCredit, 'tiles');
-  assert.equal(paris.outline.outlineCredit, 'osm');
-  assert.equal(park.outline.outlineCredit, 'osm');
 
   assert.ok(
     upstream.every((url) =>

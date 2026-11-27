@@ -297,19 +297,6 @@ export function createRendering({
     // Post-moveEnd debounced fetches commit after the camera settles; the
     // rebuilt markers need one frame in idle mode. (perf wave 2 fix)
     governorRequestRender('installations-render');
-    if (
-      layerState.records.some((r) =>
-        r.sources?.some((s) => s.name === 'OpenStreetMap'),
-      )
-    )
-      services.credits?.showOsmCredit?.(layerState.viewer, LAYER_ID, {
-        openMapTiles: layerState.records.some((r) =>
-          r.sources?.some(
-            (s) => s.name === 'OpenStreetMap' && s.id?.startsWith('tile:'),
-          ),
-        ),
-      });
-    else services.credits?.hideOsmCredit?.(layerState.viewer, LAYER_ID);
     const records = renderableRecords();
     const keys = new Map(
       records.map((record) => [record.id, renderKey(record)]),

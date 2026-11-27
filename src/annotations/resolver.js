@@ -120,8 +120,6 @@ export function createAnnotationResolver({
   outlineRungs = createOutlineRungs(),
 } = {}) {
   requireFeatureSource(featureSource);
-  const featureOutlineCredit =
-    featureSource.outlineCredit === 'osm' ? 'osm' : null;
   lifetime?.throwIfAborted();
 
   /**
@@ -869,7 +867,6 @@ export function createAnnotationResolver({
         footprintKind: fp.kind,
         buildingHeight: fp.heightM,
         synthesized: Boolean(fp.synthesized),
-        outlineCredit: fp.outlineCredit || null,
         ...(Array.isArray(fp.polygons) ? { polygons: fp.polygons } : {}),
         ...(fp.adminArea ? { adminArea: fp.adminArea } : {}),
         ...(fp.adminLevel ? { adminLevel: fp.adminLevel } : {}),
@@ -921,7 +918,6 @@ export function createAnnotationResolver({
     let outlineUnavailable = false;
     let synthesized = false; // true = buffered/approximate area, render dashed/feathered
     let polygons = null; // every part of a multi-part outline, when known
-    let outlineCredit = null;
     if (footprint && !deferFootprint) {
       const fp = await resolveOutline();
       outlineUnavailable = isUnavailableCapability(fp);
@@ -931,7 +927,6 @@ export function createAnnotationResolver({
         buildingHeight = fp.buildingHeight;
         synthesized = fp.synthesized;
         polygons = fp.polygons || null;
-        outlineCredit = fp.outlineCredit || null;
         // Re-center the anchor on the resolved footprint centroid.
         lat = fp.lat;
         lon = fp.lon;
@@ -959,7 +954,6 @@ export function createAnnotationResolver({
       source,
       synthesized,
       outlineUnavailable,
-      outlineCredit,
       ...(polygons ? { polygons } : {}),
       viewport: placeViewport,
       ...(footprint && deferFootprint ? { resolveOutline } : {}),
@@ -1591,7 +1585,6 @@ export function createAnnotationResolver({
         ring,
         kind: 'area',
         heightM: null,
-        outlineCredit: featureOutlineCredit,
       };
 
       // Scope sanity BEFORE caching: a city-suffixed neighborhood name ("Downtown San
@@ -1681,7 +1674,6 @@ export function createAnnotationResolver({
           ring: bestRing,
           kind: 'area',
           heightM: null,
-          outlineCredit: featureOutlineCredit,
         }
       : null;
   }
@@ -1730,7 +1722,6 @@ export function createAnnotationResolver({
           ring: bestRing,
           kind: 'area',
           heightM: null,
-          outlineCredit: featureOutlineCredit,
         };
         cacheWrite(footprintCache, cacheKey, fp);
         return fp;
@@ -1762,7 +1753,6 @@ export function createAnnotationResolver({
             ring: bufferCorridor(line, 11),
             kind: 'area',
             heightM: null,
-            outlineCredit: featureOutlineCredit,
           };
           cacheWrite(footprintCache, cacheKey, fp);
           return fp;
@@ -1905,7 +1895,6 @@ export function createAnnotationResolver({
           ring: ringLonLat,
           kind: 'area',
           heightM: null,
-          outlineCredit: featureOutlineCredit,
         };
         bestArea = areaM2;
         bestNameMatch = nameMatch;
@@ -2168,7 +2157,6 @@ export function createAnnotationResolver({
         best = {
           ring: closeRing(coords.map((p) => [p.lon, p.lat])),
           kind: isBuilding ? 'building' : 'area',
-          outlineCredit: featureOutlineCredit,
           heightM: isBuilding
             ? (element.heightM ??
               Math.max(10, Math.min(70, Math.sqrt(Math.max(1, areaM2)) * 0.6)))
