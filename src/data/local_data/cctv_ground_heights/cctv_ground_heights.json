@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "provider": "google-3d-tiles",
   "heightReference": "WGS84-ellipsoid",
-  "generatedAt": "2026-09-14T04:04:45.702Z",
+  "generatedAt": "2026-10-10T22:17:30.242Z",
   "cameras": {
     "5": {
       "poseHash": "p1-kyfez8",
@@ -4752,6 +4752,44 @@
         "tl": 121.24705285571119,
         "tm": 119.48628015427754,
         "tr": 113.91513134309676
+      }
+    },
+    "bucharest-cocor": {
+      "poseHash": "p1-1yv3uh6",
+      "status": "ok",
+      "misses": [],
+      "sampledAt": "2026-10-10T22:17:30.242Z",
+      "attempts": 1,
+      "mountGroundM": 112.01,
+      "supports": {
+        "bl": 127.86,
+        "bm": 108.83,
+        "br": 108.16,
+        "ml": 127.71,
+        "mc": 108.71,
+        "mr": 108.06,
+        "tl": 128.07,
+        "tm": 139.69,
+        "tr": 108.06
+      }
+    },
+    "bucharest-piata-romana": {
+      "poseHash": "p1-1wdbv8a",
+      "status": "ok",
+      "misses": [],
+      "sampledAt": "2026-10-10T22:17:30.242Z",
+      "attempts": 1,
+      "mountGroundM": 113.97,
+      "supports": {
+        "bl": 123.49,
+        "bm": 128.87,
+        "br": 123.35,
+        "ml": 123.47,
+        "mc": 113.83,
+        "mr": 132.89,
+        "tl": 125.32,
+        "tm": 121.49,
+        "tr": 125.03
       }
     },
     "ca-d11-x1234": {
