@@ -10054,7 +10054,10 @@ its paint loop. Camera deactivation destroys the decoder, and fatal playback
 errors revert to the labeled frame fallback. Camera changes clear the old panel
 frame. hls.js is imported only when an HLS camera starts. Two live sessions may
 coexist with at most eight independent consumer leases each; no-access lease
-expiry is 15 seconds. A viewer refused because every lease or session slot is
+expiry is 15 seconds. Opening a playlist needs the `hlsGrant` that
+`/api/cctv/sources` returns (one random value per server start); the camera
+source adds it to media URLs from the latest catalog read, and a playlist
+request without it gets 403 before any upstream pull. A viewer refused because every lease or session slot is
 taken gets 503 with `Retry-After: 2` and leaves the camera's health unchanged;
 so does its frame fallback, since an HLS camera without a snapshot has no frame
 of its own. That viewer's panel badge reads FALLBACK · DEGRADED and its meta

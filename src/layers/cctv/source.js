@@ -34,13 +34,17 @@ function frameUrlFor(
   if (snapshotOnly) params.set('snapshotOnly', '1');
   return `${FRAME_ENDPOINT}/${encodeURIComponent(camera.id)}?${params.toString()}`;
 }
-function mediaUrlFor(camera) {
-  return `${MEDIA_ENDPOINT}/${encodeURIComponent(camera.id)}?ts=${Math.floor(Date.now() / 15000)}`;
+function mediaUrlFor(camera, grant = '') {
+  const url = `${MEDIA_ENDPOINT}/${encodeURIComponent(camera.id)}?ts=${Math.floor(Date.now() / 15000)}`;
+  return grant ? `${url}&grant=${encodeURIComponent(grant)}` : url;
 }
 /** Supply catalog/health records and the existing registered camera URL families. */
 export function createCctvSource({
   fetchImpl = (...args) => globalThis.fetch(...args),
 } = {}) {
+  // The server needs this to open a live HLS session; it arrives with the
+  // catalog, which a foreign page can request but not read.
+  let hlsGrant = '';
   async function read(path, key, { signal } = {}) {
     signal?.throwIfAborted();
     const response = await fetchImpl(path, { cache: 'no-store', signal });
@@ -52,14 +56,16 @@ export function createCctvSource({
     return payload;
   }
   return {
-    getCatalog(options) {
-      return read('/api/cctv/sources', 'sources', options);
+    async getCatalog(options) {
+      const payload = await read('/api/cctv/sources', 'sources', options);
+      if (typeof payload.hlsGrant === 'string') hlsGrant = payload.hlsGrant;
+      return payload;
     },
     getHealth(options) {
       return read('/api/cctv/health', 'cameras', options);
     },
     getFrameUrl: frameUrlFor,
-    getMediaUrl: mediaUrlFor,
+    getMediaUrl: (camera) => mediaUrlFor(camera, hlsGrant),
     /** Read a registered frame and its provenance, including fallback frames. */
     async getFrame(camera, { signal } = {}) {
       signal?.throwIfAborted();

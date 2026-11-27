@@ -28,8 +28,9 @@ test('a capacity-refused viewer is not shown its fallback frame as live and ok',
     fetch: async (url) =>
       new Response(String(url).endsWith('.m3u8') ? PLAYLIST : 'abc'),
   });
+  const { hlsGrant } = JSON.parse((await call('/sources', SAME_ORIGIN)).body);
   const open = (id, index) =>
-    call(`/media/${id}?lease=${lease(index)}`, SAME_ORIGIN);
+    call(`/media/${id}?lease=${lease(index)}&grant=${hlsGrant}`, SAME_ORIGIN);
   // cam-c played earlier and was released: its row is live/ok.
   assert.equal((await open('cam-c', 0)).statusCode, 200);
   assert.equal(
