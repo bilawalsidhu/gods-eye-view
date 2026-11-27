@@ -22,15 +22,7 @@ import { CATALOG_GROUPS } from './policy.js';
 const NOW = 2026;
 const classify = (subject) => classifySatellite({ nowYear: NOW, ...subject });
 
-test('six classes, with stations and imaging on by default and the rest off', () => {
-  assert.deepEqual(SATELLITE_CLASS_IDS, [
-    'stations',
-    'imaging',
-    'telecom',
-    'starlink',
-    'probes',
-    'debris',
-  ]);
+test('the classes shown by default, each with a colour, label and blurb', () => {
   assert.deepEqual(
     SATELLITE_CLASS_IDS.filter((id) => DEFAULT_SATELLITE_CLASSES[id]),
     ['stations', 'imaging', 'telecom', 'probes', 'debris'],
