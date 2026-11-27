@@ -18,12 +18,7 @@ import {
 } from './policy.js';
 import { cameraOf, canvasOf, findCamera } from '../../render/rendererOf.js';
 
-export function createSelection({
-  state: layerState,
-  services,
-  parts,
-  source,
-}) {
+export function createSelection({ state: layerState, services, parts }) {
   const { getKeyholeGeometry } = services.geometry;
 
   /** @returns {boolean} Whether the flight started. */

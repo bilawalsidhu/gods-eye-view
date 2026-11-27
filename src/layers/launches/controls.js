@@ -1,6 +1,6 @@
 import { formatNumber, t } from '../../i18n/index.js';
 
-export function createControls({ state: layerState, services, parts, source }) {
+export function createControls({ state: layerState, parts, source }) {
   let unsubscribeRowControls = null;
 
   function cycleMission(step) {

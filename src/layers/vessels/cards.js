@@ -28,13 +28,7 @@ export function vesselIdFromEntry(entryId) {
   return text.startsWith('vessel:') ? text.slice('vessel:'.length) : '';
 }
 
-export function createCards({
-  vesselState,
-  services,
-  parts: components,
-  layer,
-  options,
-}) {
+export function createCards({ services, parts: components }) {
   function updateSelectedVesselHud(record) {
     // Pinned vessels missing from recent refreshes get a stale marker
     const stale = (record.missedRefreshes || 0) > 0;

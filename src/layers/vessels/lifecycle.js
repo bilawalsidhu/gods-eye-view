@@ -8,7 +8,6 @@ export function createLifecycle({
   services,
   parts: components,
   layer,
-  options,
 }) {
   const { state } = vesselState;
   const { releaseContinuousRender } = services.render;

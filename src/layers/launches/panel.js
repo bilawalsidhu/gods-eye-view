@@ -103,7 +103,7 @@ export function resolveMissionRosterPreviewLaunch(launches, launchId) {
   );
 }
 
-export function createPanel({ state: layerState, services, parts, source }) {
+export function createPanel({ state: layerState, parts }) {
   /**
    * Publish a fresh view unless it is the one already shown. The roster
    * carries its own signature, so a telemetry update compares the mission.

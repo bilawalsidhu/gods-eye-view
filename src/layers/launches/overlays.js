@@ -219,7 +219,7 @@ export function replayOverlayMode({
   return ascending ? 'ascent' : 'orbit';
 }
 
-export function createOverlays({ state: layerState, services, parts, source }) {
+export function createOverlays({ state: layerState, services, parts }) {
   function missionHoverReticleImage() {
     if (layerState._missionHoverReticleImage)
       return layerState._missionHoverReticleImage;

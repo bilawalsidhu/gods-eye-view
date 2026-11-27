@@ -412,7 +412,7 @@ export function buildMissionPaths(
   };
 }
 
-export function createPaths({ state: layerState, services, parts, source }) {
+export function createPaths() {
   function estimatedOrbitPeriodSeconds(orbitPath) {
     if (!orbitPath?.length) return 5400;
     const meanRadius =

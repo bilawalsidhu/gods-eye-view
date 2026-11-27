@@ -37,12 +37,7 @@ export function shouldRetryAfterActiveTle({
   );
 }
 
-export function createIngestion({
-  state: layerState,
-  services,
-  parts,
-  source,
-}) {
+export function createIngestion({ state: layerState, parts, source }) {
   function clearPostTleRetry() {
     if (layerState._retryTimer) clearTimeout(layerState._retryTimer);
     layerState._retryTimer = null;

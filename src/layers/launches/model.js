@@ -222,7 +222,7 @@ export function normalizeRocketLaunches(payload, now = new Date()) {
     );
 }
 
-export function createModel({ state: layerState, services, parts, source }) {
+export function createModel() {
   /** The marker colour as CSS, `rgb(r,g,b)`, for the mission panel. */
   function missionMarkerCss(launch) {
     const n = Number.parseInt(missionMarkerHex(launch).slice(1), 16);

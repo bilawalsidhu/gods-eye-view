@@ -165,7 +165,7 @@ export function replayState(
   };
 }
 
-export function createReplay({ state: layerState, services, parts, source }) {
+export function createReplay({ state: layerState, parts }) {
   /**
    * The replay controls as the mission panel shows them: the start button,
    * the transport with its pause toggle, and the speed slider.

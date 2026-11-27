@@ -164,12 +164,7 @@ function markerLaunchId(hit) {
   return hit.entryId.startsWith('launch:') ? hit.entryId.slice(7) : null;
 }
 
-export function createLifecycle({
-  state: layerState,
-  services,
-  parts,
-  source,
-}) {
+export function createLifecycle({ state: layerState, services, parts }) {
   const { holdContinuousRender, releaseContinuousRender } = services.render;
   const overlayAt = (position) =>
     services.overlays?.hitTestWorldOverlay?.(position?.x, position?.y);

@@ -66,12 +66,7 @@ function launchPadZoneImage() {
   return (zoneImage = { canvas, key: 'launch-pad-zone' });
 }
 
-export function createLaunchPad({
-  state: layerState,
-  services,
-  parts,
-  source,
-}) {
+export function createLaunchPad({ state: layerState, parts }) {
   function zoneSet() {
     return layerState._missionSets?.pad ?? null;
   }

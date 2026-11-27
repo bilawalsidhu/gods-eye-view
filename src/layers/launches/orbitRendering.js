@@ -78,12 +78,7 @@ function turned(p, angle) {
   return { x: c * p.x - s * p.y, y: s * p.x + c * p.y, z: p.z };
 }
 
-export function createOrbitRendering({
-  state: layerState,
-  services,
-  parts,
-  source,
-}) {
+export function createOrbitRendering({ state: layerState, parts }) {
   /** Pattern images by colour. */
   const patterns = new Map();
 

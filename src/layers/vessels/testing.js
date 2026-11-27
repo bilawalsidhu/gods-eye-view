@@ -1,13 +1,7 @@
 import { DEFAULT_AIS_RUNTIME } from './policy.js';
 import { createVesselIconBook } from './iconBook.js';
 
-export function createTesting({
-  vesselState,
-  services,
-  parts: components,
-  layer,
-  options,
-}) {
+export function createTesting({ vesselState, parts: components, layer }) {
   const { state } = vesselState;
   const aisLiveVesselsLayer = layer;
 
