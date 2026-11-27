@@ -43,7 +43,7 @@ import {
  */
 
 /** How often the status line's age is refreshed while the panel shows. */
-export const STATION_PANEL_TICK_MS = 1000;
+const STATION_PANEL_TICK_MS = 1000;
 
 /**
  * @param {{state: object, parts: object, stations: StationDescription[],

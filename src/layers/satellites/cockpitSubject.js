@@ -12,7 +12,7 @@ import { ISS_NORAD } from './policy.js';
 import { trackedStation } from './stationModels.js';
 
 /** The layer id a satellite subject carries through Cockpit events and state. */
-export const SATELLITE_COCKPIT_LAYER_ID = 'satellites';
+const SATELLITE_COCKPIT_LAYER_ID = 'satellites';
 
 /**
  * While the Cockpit rides a satellite, every other orbit ring (the ISS ring

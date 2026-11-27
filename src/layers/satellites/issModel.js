@@ -35,7 +35,7 @@ export const ISS_MODEL_SCALE = ISS_SPAN_M / ISS_MODEL_NATIVE_SPAN;
  * @param {{name?: string}|undefined} entry
  * @returns {boolean}
  */
-export function issIsModule(noradId, entry) {
+function issIsModule(noradId, entry) {
   return (
     noradId === ISS_NORAD ||
     noradId === ISS_NAUKA_NORAD ||

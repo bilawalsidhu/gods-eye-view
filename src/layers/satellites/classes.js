@@ -100,7 +100,7 @@ const DEBRIS_OBJECT_TYPES = new Set(['R/B', 'DEB']);
  * last) is not presumed debris. Years, not dates: the TLE designator, the
  * fallback when SATCAT has no launch date, carries only the year.
  */
-export const UNIDENTIFIED_GRACE_YEARS = 2;
+const UNIDENTIFIED_GRACE_YEARS = 2;
 /** SATCAT operational status: nonoperational, decayed. */
 const DEAD_STATUSES = new Set(['-', 'D']);
 /** SATCAT operational status left blank or unknown. */

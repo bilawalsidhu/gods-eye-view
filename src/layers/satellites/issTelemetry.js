@@ -51,7 +51,7 @@ export const ISS_TELEMETRY_GAMMA = Object.freeze([
 ]);
 
 /** The Ku-band dish: elevation and cross-elevation. */
-export const ISS_TELEMETRY_DISH = Object.freeze({
+const ISS_TELEMETRY_DISH = Object.freeze({
   elevation: 'Z1000014',
   crossElevation: 'Z1000015',
 });
