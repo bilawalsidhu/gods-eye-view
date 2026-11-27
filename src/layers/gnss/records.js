@@ -91,9 +91,6 @@ export function gnssProvenance({ windowMs = GNSS_WINDOW_MS } = {}) {
   });
 }
 
-/** Provenance at the default window. */
-export const GNSS_PROVENANCE = gnssProvenance();
-
 const HEX_PATTERN = /^~?[0-9a-f]{6}$/;
 
 const finite = (value) => typeof value === 'number' && Number.isFinite(value);
