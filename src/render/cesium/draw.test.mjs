@@ -5437,7 +5437,7 @@ test('the local ADS-B layer draws its aircraft, 978 MHz rings and trail head on 
   layer.init(viewer);
   await layer.enable();
   await layer.update();
-  assert.equal(layer.selectAircraft('abc123'), true);
+  assert.equal(layer.pickById('abc123', { center: false }), true);
 
   const hostOf = (suffix) =>
     scene.added.find((host) => host.drawSetId?.endsWith(suffix));

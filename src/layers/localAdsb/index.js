@@ -980,16 +980,6 @@ export function createLocalAdsbLayer({
     },
 
     /**
-     * Select a heard aircraft's marker and publish its readout card, exactly
-     * as a click does. The camera does not follow it.
-     * @param {string} icao Lowercase ICAO hex.
-     * @returns {boolean} Whether a fresh marker was selected.
-     */
-    selectAircraft(icao) {
-      return enabled && selectMarker(`${ENTITY_PREFIX}${icao}`);
-    },
-
-    /**
      * Select an aircraft by the id its card has (its marker id, ICAO hex
      * or callsign), as a click on it does; `center: false` leaves the
      * camera to the caller (a pick from a list frames it).

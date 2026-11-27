@@ -556,7 +556,8 @@ test('selecting an aircraft draws a magenta trail of the fixes the receiver hear
       ],
     });
     await layer.update();
-    if (second === 1) assert.equal(layer.selectAircraft('abc123'), true);
+    if (second === 1)
+      assert.equal(layer.pickById('abc123', { center: false }), true);
   }
   assert.equal(trails.length, 1);
   assert.equal(trails[0].options.color, '#ff4fd8');
@@ -595,7 +596,7 @@ test('the trail head runs from the last fix to the marker every frame, dimmed be
   t.after(() => layer.destroy());
   receiver.set({ aircraft: [record()] });
   await layer.update();
-  assert.equal(layer.selectAircraft('abc123'), true);
+  assert.equal(layer.pickById('abc123', { center: false }), true);
   // The head is the shared trail's head line.
   const trailSet = () => draw.find('trail:');
   const heads = () =>
@@ -685,7 +686,7 @@ test('adsbdb type, operator and route reach the card for the selected aircraft o
   });
   await layer.update();
   assert.deepEqual(queries, [], 'no request per contact');
-  assert.equal(layer.selectAircraft('a0b702'), true);
+  assert.equal(layer.pickById('a0b702', { center: false }), true);
   await new Promise((resolve) => setTimeout(resolve, 400));
   assert.deepEqual([...queries].sort(), ['route:EVC145', 'type:a0b702']);
   const entity = calls.carriers.get('local-adsb:a0b702');
@@ -699,7 +700,7 @@ test('adsbdb type, operator and route reach the card for the selected aircraft o
     readEntityRecord(entity)?.labelModel.details.at(-1),
     'Heard by your receiver · 1090 MHz · browser SDR',
   );
-  layer.selectAircraft('a0b702');
+  layer.pickById('a0b702', { center: false });
   await layer.update();
   assert.equal(queries.length, 2, 'each key is asked for once');
 });
@@ -805,9 +806,9 @@ test('selecting a marker publishes the readout card and eviction clears it', asy
   assert.equal(metadata.id, 'local-adsb:abc123');
   assert.equal(metadata.layerId, 'local-adsb');
   assert.equal(metadata.properties.icao, 'abc123');
-  assert.equal(layer.selectAircraft('abc123'), true);
+  assert.equal(layer.pickById('abc123', { center: false }), true);
   assert.deepEqual(calls.selected, ['local-adsb:abc123']);
-  assert.equal(layer.selectAircraft('ffffff'), false);
+  assert.equal(layer.pickById('ffffff', { center: false }), false);
 
   clock.now = 200_000;
   await layer.update();
