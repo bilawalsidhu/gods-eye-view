@@ -86,8 +86,6 @@ import {
 } from './model.js';
 import { SPRITE_SCALE, countSprite, markerSprite } from './sprites.js';
 import { CARD_H, CARD_W, eventCard } from './cards.js';
-export * from './model.js';
-export { createNewsSource } from './source.js';
 
 const FEED_UNAVAILABLE = msg('News feed unavailable');
 // The providers a server without a news pipeline reads each section from,
