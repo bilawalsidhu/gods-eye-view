@@ -375,6 +375,11 @@ function toggleCameraDock() {
 // moving item is now. Nothing on Pinned refreshes it. The card stays on
 // Inspect.
 const isPinned = computed(() => Boolean(card.value && pinned.isPinned(card.value.key)));
+// A drawn line's card names a point, not a photo: Pin waits for the photo it
+// opens, which moves the card on to that photo (entityContextBridge advance).
+const pinWaits = computed(() =>
+  !isPinned.value && card.value?.layerId === STREET_LEVEL_LAYER &&
+  Boolean(card.value.identity?.id?.startsWith('near:')));
 function pinImage(current) {
   if (current.layerId === 'wildlife-sightings' || locationWithheld.value || current.obscured || current.layerId === 'cctv') return {};
   if (current.layerId === 'street-level') return { still: store.layerModule('street-level')?.photo?.(current.identity?.id)?.still || '' };
@@ -382,7 +387,7 @@ function pinImage(current) {
 }
 function togglePin() {
   const current = card.value;
-  if (!current) return;
+  if (!current || pinWaits.value) return;
   if (pinned.isPinned(current.key)) return pinned.unpin(current.key);
   if (current.layerId === PLACE_LAYER) return pinned.pin(placePin(current.identity, shownTitle.value));
   pinned.pin({
@@ -667,7 +672,7 @@ watch(
               <UiButton v-else class="entity-card__action" :class="{ 'entity-card__action--primary': leadAction === 'fly' }" @click="flyTo">
                 <UiIcon name="my_location" :size="null" />{{ t('Fly to') }}
               </UiButton>
-              <UiButton class="entity-card__action entity-card__action--pin" :pressed="isPinned" pressed-class="entity-card__action--on" :title="isPinned ? t('Unpin from the Pinned tab') : t('Pin to the Pinned tab')" @click="togglePin">
+              <UiButton class="entity-card__action entity-card__action--pin" :pressed="isPinned" :disabled="pinWaits" pressed-class="entity-card__action--on" :title="isPinned ? t('Unpin from the Pinned tab') : t('Pin to the Pinned tab')" @click="togglePin">
                 <UiIcon name="keep" :size="null" />{{ isPinned ? t('Pinned') : t('Pin') }}
               </UiButton>
               <UiButton v-if="cameraDockKey" class="entity-card__action entity-card__action--dock" :pressed="cameraDocked" pressed-class="entity-card__action--on" :title="t('Dock this view bottom right')" @click="toggleCameraDock">

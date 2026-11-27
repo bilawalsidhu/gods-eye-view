@@ -1896,6 +1896,51 @@ test('a keyboard-picked coverage line keeps its feed, details and return focus w
   );
 });
 
+test('a coverage line’s card can be pinned once its photo has loaded, under the photo’s key', async (t) => {
+  const line = {
+    id: 'near:mapillary:30.300000,-97.740000:line',
+    name: 'Mapillary',
+    providerId: 'mapillary',
+    sequenceId: 'line',
+    ...HERE,
+  };
+  const photo = { id: 'mapillary:photo', name: 'Congress Avenue', ...HERE };
+  const { $, cards, pinia } = fixture(t, [
+    {
+      id: 'street-level',
+      name: 'Street Level',
+      enabled: true,
+      stats: { count: 0 },
+      module: {
+        getAnalystRecords: () => [photo],
+        getRecordsNear: () => [line],
+        getViewRecords: (_, area) => (area?.rect ? [line, photo] : [photo]),
+      },
+    },
+  ]);
+  cards.setView({
+    center: HERE,
+    heightM: 200_000,
+    rect: { west: -98, south: 29, east: -97, north: 31 },
+  });
+  await settleInspectorIndex();
+  $(
+    '.nearby-lists[aria-label="In view"] [data-row-key*="near:mapillary:"]',
+  ).click();
+  await nextTick();
+  await nextTick();
+  const pin = () => $('.entity-card__action--pin');
+  assert.equal(pin().disabled, true, 'a line names no photo yet');
+  cards.advance({ layerId: 'street-level', id: photo.id });
+  await nextTick();
+  assert.equal(pin().disabled, false);
+  pin().click();
+  assert.deepEqual(
+    usePinnedStore(pinia).pins.map((entry) => entry.key),
+    [`street-level:${photo.id}`],
+  );
+});
+
 test('globe search keeps successful matches visible when a layer cannot be read', async (t) => {
   t.mock.timers.enable({ apis: ['Date', 'setInterval'] });
   let recovered = false;
