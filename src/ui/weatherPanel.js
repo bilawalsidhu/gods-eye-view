@@ -16,6 +16,7 @@ const ORDER = [
   'weather-satellite',
   'weather-lightning',
   'air-quality',
+  'weather-aurora',
 ];
 const OBSERVED = new Set(ORDER.slice(2, 5));
 const utc = (time) =>
@@ -157,6 +158,7 @@ export function createWeatherPanel({
       'weather-radar': t('Rain radar'),
       'weather-satellite': t('Satellite clouds'),
       'weather-lightning': t('Lightning density'),
+      'weather-aurora': t('Aurora forecast'),
     };
     // While live, the newest frame and its age; at a past time, the timeline
     // time alone. The world timeline moves the time. Live, each product's
@@ -199,13 +201,14 @@ export function createWeatherPanel({
                 ? t('{detail} · synced', { detail })
                 : t('{detail} · nearest', { detail });
         }
-      } else if (id === 'wind') {
+      } else if (id === 'wind' || id === 'weather-aurora') {
         detail = t('Forecast · valid {valid} · issued {issued}', {
           valid: utc(summary.validTime),
           issued: utc(summary.issuedTime),
         });
         // Unless its source follows the timeline, wind stays at the live edge.
-        if (state.mode === 'history' && !clock?.follows?.(id))
+        // Aurora is a 30-minute nowcast with no history to follow.
+        if (id === 'wind' && state.mode === 'history' && !clock?.follows?.(id))
           detail = t('{detail} · Does not follow history', { detail });
       }
       const lines = [
@@ -294,7 +297,7 @@ export function createWeatherPanel({
         compact:
           summary.status ||
           summary.compact ||
-          (id === 'wind'
+          (id === 'wind' || id === 'weather-aurora'
             ? t('Forecast · valid {valid}', { valid: utc(summary.validTime) })
             : detail),
         compactStatus: Boolean(summary.status),

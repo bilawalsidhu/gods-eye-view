@@ -42,6 +42,7 @@ import { cycloneProxy } from './cyclones.js';
 import { windProxy } from './wind.js';
 import { libraryProxy } from './library.js';
 import { layerCountsEndpoint } from './common/layerCounts.js';
+import { auroraProxy } from './aurora.js';
 
 /**
  * Construct the local provider plugins in their established order.
@@ -93,6 +94,7 @@ function localProviderPlugins({
     googlePlacesContextProxy(),
     windProxy(),
     weatherProxy(),
+    auroraProxy(),
     cycloneProxy(),
     openAqProxy(),
     airQualityFieldProxy(),

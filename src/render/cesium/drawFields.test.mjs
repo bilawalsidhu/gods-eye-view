@@ -19,6 +19,21 @@ const windowOf = (primitive) => {
   return { x, y, z, w };
 };
 
+test('a shell far above the ground can ask for a coarser mesh', () => {
+  const cesium = createShellCesium();
+  const scene = createShellScene();
+  createShellSurface({
+    scene,
+    cesium,
+    rectangle: Cesium.Rectangle.MAX_VALUE,
+    height: 320_000,
+    granularityDegrees: 3.5,
+  });
+  const [primitive] = scene.primitives.items;
+  const geometry = primitive.options.geometryInstances.geometry.options;
+  assert.equal(geometry.granularity, Cesium.Math.toRadians(3.5));
+});
+
 test('surface builds a flat raised rectangle drawn in primitive order without depth writes', () => {
   const cesium = createShellCesium();
   const scene = createShellScene();
