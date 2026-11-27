@@ -8,9 +8,12 @@ import {
   UNIT_TEST_ROOTS,
   allocationTestArgs,
   assertCalibratedAllocationRuntime,
+  batchUnitTestFiles,
   buildUnitTestPlan,
+  defaultBatchCharLimit,
   discoverUnitTestFiles,
   isCalibratedAllocationRuntime,
+  runUnitTests,
 } from '../scripts/run-unit-tests.mjs';
 
 const repositoryRoot = fileURLToPath(new URL('..', import.meta.url));
@@ -111,4 +114,74 @@ test('npm test calibrates both supported engines while retaining off-range warni
   const runner = readFileSync(new URL('../scripts/run-unit-tests.mjs', import.meta.url), 'utf8');
   assert.match(runner, /GEV_REQUIRE_ALLOCATION_GATE/);
   assert.match(runner, /SKIPPED .*allocation microbenchmarks/);
+});
+
+test('batchUnitTestFiles splits large test lists within command-line limits', () => {
+  assert.equal(defaultBatchCharLimit('win32'), 16_384);
+  assert.equal(defaultBatchCharLimit('linux'), 131_072);
+
+  const files = [
+    'src/a.test.mjs',
+    'src/bb.test.mjs',
+    'src/ccc.test.mjs',
+    'src/very-long-test-filename-exceeding-limit.test.mjs',
+    'src/d.test.mjs',
+  ];
+  const batches = batchUnitTestFiles(files, { maxChars: 38 });
+  assert.deepEqual(batches, [
+    ['src/a.test.mjs', 'src/bb.test.mjs'],
+    ['src/ccc.test.mjs'],
+    ['src/very-long-test-filename-exceeding-limit.test.mjs'],
+    ['src/d.test.mjs'],
+  ]);
+  assert.deepEqual(batches.flat(), files);
+  assert.deepEqual(batchUnitTestFiles([], { maxChars: 38 }), []);
+  assert.throws(() => batchUnitTestFiles(files, { maxChars: 0 }), RangeError);
+  assert.throws(
+    () => batchUnitTestFiles(files, { maxChars: Number.NaN }),
+    RangeError,
+  );
+});
+
+test('runUnitTests batches parallel suites, runs every batch, and skips probes on failure', () => {
+  const files = [
+    'src/a.test.mjs',
+    'src/b.test.mjs',
+    'src/c.test.mjs',
+    ...ALLOCATION_TEST_FILES,
+  ];
+  const calls = [];
+  const status = runUnitTests({
+    files,
+    maxChars: 40,
+    run(args) {
+      calls.push(args);
+      return 0;
+    },
+  });
+  assert.equal(status, 0);
+  const parallelCalls = calls.filter((args) => args[0] === '--test');
+  assert.equal(parallelCalls.length, 2);
+  assert.deepEqual(
+    parallelCalls.flatMap((args) => args.slice(1)),
+    ['src/a.test.mjs', 'src/b.test.mjs', 'src/c.test.mjs'],
+  );
+  if (isCalibratedAllocationRuntime()) {
+    assert.deepEqual(
+      calls.slice(parallelCalls.length),
+      ALLOCATION_TEST_FILES.map(allocationTestArgs),
+    );
+  }
+
+  const failingCalls = [];
+  const failedStatus = runUnitTests({
+    files,
+    maxChars: 20,
+    run(args) {
+      failingCalls.push(args);
+      return failingCalls.length === 2 ? 1 : 0;
+    },
+  });
+  assert.equal(failedStatus, 1);
+  assert.equal(failingCalls.length, 3);
 });

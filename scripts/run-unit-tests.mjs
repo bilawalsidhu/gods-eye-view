@@ -74,6 +74,43 @@ export function allocationTestArgs(file) {
   return ['--expose-gc', '--test', '--test-concurrency=1', file];
 }
 
+/**
+ * Default per-spawn argument-character budget for unit-test batches.
+ *
+ * Windows CreateProcess limits the full command line to 32,767 characters;
+ * 16,384 leaves comfortable headroom for the Node binary path, flags, and quoting.
+ */
+export function defaultBatchCharLimit(platform = process.platform) {
+  return platform === 'win32' ? 16_384 : 131_072;
+}
+
+/** Partition test files into command-line-safe batches while preserving order. */
+export function batchUnitTestFiles(
+  files,
+  { maxChars = defaultBatchCharLimit() } = {},
+) {
+  if (!Number.isFinite(maxChars) || maxChars <= 0) {
+    throw new RangeError('maxChars must be a positive number');
+  }
+  const batches = [];
+  let batch = [];
+  let batchChars = 0;
+
+  for (const file of files) {
+    const cost = file.length + 3; // Account for quotes and separating space.
+    if (batch.length > 0 && batchChars + cost > maxChars) {
+      batches.push(batch);
+      batch = [];
+      batchChars = 0;
+    }
+    batch.push(file);
+    batchChars += cost;
+  }
+
+  if (batch.length > 0) batches.push(batch);
+  return batches;
+}
+
 /** Node flags every unit-test process receives. */
 export const UNIT_TEST_NODE_FLAGS = Object.freeze([
   // Single-file components compile on import.
@@ -90,9 +127,24 @@ function runTests(args) {
   return result.status ?? 1;
 }
 
-export function runUnitTests() {
-  const plan = buildUnitTestPlan(discoverUnitTestFiles());
-  const parallelStatus = runTests(['--test', ...plan.parallel]);
+export function runUnitTests({
+  files = discoverUnitTestFiles(),
+  run = runTests,
+  maxChars = defaultBatchCharLimit(),
+} = {}) {
+  const plan = buildUnitTestPlan(files);
+  const batches = batchUnitTestFiles(plan.parallel, { maxChars });
+  let parallelStatus = 0;
+  for (let index = 0; index < batches.length; index++) {
+    if (batches.length > 1) {
+      const count = batches[index].length;
+      console.log(
+        `[unit] Running batch ${index + 1}/${batches.length} (${count} ${count === 1 ? 'file' : 'files'})...`,
+      );
+    }
+    const status = run(['--test', ...batches[index]]);
+    if (status !== 0 && parallelStatus === 0) parallelStatus = status;
+  }
   if (parallelStatus !== 0) return parallelStatus;
 
   // The GC-bracketed budgets are calibrated on every supported Node major.
@@ -111,7 +163,7 @@ export function runUnitTests() {
     return 0;
   }
   for (const file of plan.serializedAllocations) {
-    const status = runTests(allocationTestArgs(file));
+    const status = run(allocationTestArgs(file));
     if (status !== 0) return status;
   }
   return 0;
