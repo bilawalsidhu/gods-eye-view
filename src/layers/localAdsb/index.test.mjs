@@ -345,7 +345,7 @@ test('local aircraft use their class silhouette at one size in magenta', async (
   assert.equal(detectable.type, 'AIR');
 });
 
-test('on a renderer that draws view sheets, local aircraft draw their view along their track; vehicles and masts stay flat', async (t) => {
+test('on a renderer that draws view sheets, local aircraft draw their view along their track, airport vehicles too; masts stay flat', async (t) => {
   const { aircraftViewRef } = await import('../../data/aircraftViews.js');
   const { AIRCRAFT_VIEWS } = await import('../../data/aircraftViews.js');
   const viewer = { scene: {} };
@@ -394,8 +394,10 @@ test('on a renderer that draws view sheets, local aircraft draw their view along
     'the rotor turns through the sheet',
   );
   const vehicle = iconOf(draw, 'local-adsb:a0c001');
-  assert.equal(vehicle.image, aircraftIcon('vehicle'));
-  assert.equal(vehicle.rotationMode, 'screen');
+  assert.equal(vehicle.image, aircraftViewRef('vehicle'));
+  assert.equal(vehicle.rotationMode, 'course');
+  assert.equal(vehicle.course, 90);
+  assert.deepEqual(vehicle.color, hexColor(VEHICLE_TINT_CSS));
   const mast = iconOf(draw, 'local-adsb:a0c003');
   assert.equal(mast.image, aircraftIcon('station'));
   assert.equal(mast.rotationMode, 'screen');

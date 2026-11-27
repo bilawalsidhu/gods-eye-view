@@ -23,7 +23,7 @@ test('viewLayout gives the aircraft sheet each ring’s first frame', () => {
   assert.equal(layout.frames, 302);
   assert.equal(layout.cellPx, 64);
   assert.equal(layout.columns, 64);
-  assert.equal(layout.rows, 57);
+  assert.equal(layout.rows, 62);
   assert.equal(layout.ringStepRad, 7.5 * RAD);
   assert.notEqual(layout.rings, AIRCRAFT_VIEWS.sheet.rings, 'a copy');
 });
@@ -71,7 +71,7 @@ test('viewLayout refuses a sheet it cannot draw', () => {
 
 test('viewUniforms packs the layout as the shader reads it', () => {
   const { grid, rings } = viewUniforms(layout);
-  assert.deepEqual(grid, [64, 57, 7.5 * RAD, 17]);
+  assert.deepEqual(grid, [64, 62, 7.5 * RAD, 17]);
   // Two rings a vector: each ring's frames and its first frame.
   assert.equal(rings.length, VIEW_RINGS_MAX / 2);
   const pairs = [];
@@ -86,7 +86,7 @@ test('AIRCRAFT_VIEWS is consistent: a block a subject, every block on the sheet'
   const { sheet, frames, subjects } = AIRCRAFT_VIEWS;
   assert.equal(frames, 302);
   assert.equal(sheet.cellPx * sheet.columns, 4096);
-  assert.equal(sheet.cellPx * sheet.rows, 3648);
+  assert.equal(sheet.cellPx * sheet.rows, 3968);
   for (const first of Object.values(subjects))
     assert.ok(first + frames <= sheet.columns * sheet.rows, 'on the sheet');
   assert.ok(Object.isFrozen(AIRCRAFT_VIEWS));

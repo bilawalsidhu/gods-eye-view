@@ -902,7 +902,7 @@ test('without view sheets the icons are the flat glyphs with their near image, a
   assert.equal(p1.rotationMode, 'course');
 });
 
-test('with view sheets, the TR-3B, airport vehicles and ground stations stay flat', (t) => {
+test('with view sheets, the TR-3B and ground stations stay flat and an airport vehicle draws its view', async (t) => {
   t.mock.timers.enable({ apis: ['Date'], now: WORLD_MS });
   const records = new Map([
     ['x1', { klass: 'airliner' }],
@@ -918,10 +918,10 @@ test('with view sheets, the TR-3B, airport vehicles and ground stations stay fla
     aircraftIcon('tr3b', FLEET_ICON_PX),
   );
   assert.ok(state._icons.item('x1').imageLod);
-  assert.equal(
-    state._icons.item('v1').image,
-    aircraftIcon('vehicle', FLEET_ICON_PX),
-  );
+  const { aircraftViewRef } = await import('./aircraftViews.js');
+  const vehicle = state._icons.item('v1');
+  assert.equal(vehicle.image, aircraftViewRef('vehicle'));
+  assert.equal(vehicle.rotationMode, 'course');
   const mast = state._icons.item('s1');
   assert.equal(mast.image, aircraftIcon('station', FLEET_ICON_PX));
   assert.equal(mast.rotationMode, 'screen');

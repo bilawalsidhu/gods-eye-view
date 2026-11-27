@@ -2,7 +2,7 @@
  "image": "aircraft-views.webp",
  "cellPx": 64,
  "columns": 64,
- "rows": 57,
+ "rows": 62,
  "ringStepDeg": 7.5,
  "rings": [
   1,
@@ -84,6 +84,11 @@
    "first": 3322,
    "model": "helicopters/generic_heli.glb",
    "radiusM": 7.556
+  },
+  "vehicle": {
+   "first": 3624,
+   "model": "other/car.glb",
+   "radiusM": 2.701
   }
  }
 }
