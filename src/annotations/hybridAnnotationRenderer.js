@@ -3,7 +3,7 @@ import { createWorldAnnotationRenderer } from './worldAnnotationRenderer.js';
 import { createScreenAnnotationRenderer } from './screenAnnotationRenderer.js';
 
 /**
- * Hybrid annotation renderer (Direction C — the recommended production blend).
+ * Hybrid annotation renderer.
  *
  * Routes each mark to the renderer that does it best:
  *   - `area` footprints  → WORLD-space, so the outline/fill drapes onto and

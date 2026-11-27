@@ -511,8 +511,8 @@ any other as a primitive a segment with a material of its own, recoloured
 and shown in place; an arrow's head on its last segment, a pattern keeping
 its image; the check `draw.lines.segmentStyles`), and image fills on clamped ellipses, cut finely so a
 round image (the launch pad zone's rim) runs round. A clamped colour fill
-whose geometry alone changes (an annotation's target ring, resized as the
-camera climbs) is drawn alone where it now is, in the same frame. A hidden
+whose geometry alone changes is drawn alone where it now is, in the same
+frame. A hidden
 line that cannot settle into a static batch leaves its polyline collection
 until it shows again, since the collection draws every line it holds.
 

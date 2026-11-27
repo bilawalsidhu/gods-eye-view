@@ -834,8 +834,7 @@ test('a clamped colour ring whose radius alone changes is drawn alone where it n
     const scene = fakeScene();
     const { draw, frame } = drawOver(scene);
     const set = draw.shapes({ id: 'rings' });
-    // The app follows the camera's height and sends the radius it wants, as
-    // annotation target rings do.
+    // The app resizes the ring each frame and sends the radius it wants.
     const ring = (radius, show = true) => ({
       id: 'ring',
       geometry: {
