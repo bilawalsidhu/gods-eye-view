@@ -1212,6 +1212,8 @@
   "occupancy|not accepting passengers": "乗車不可",
   "occupancy|not boardable": "乗車できません",
   "Route {route}": "路線 {route}",
+  "UNVERIFIED ROUTE": "経路未検証",
+  "Route {route} (unverified)": "経路 {route}（未検証）",
   "Vehicle {vehicle}": "車両 {vehicle}",
   "vehicle motion|Stopped": "停車中",
   "No recent fix": "最近の測位なし",

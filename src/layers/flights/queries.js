@@ -211,6 +211,7 @@ export function createQueries({
       route:
         info?.route && parts.tracking._routeIsPlausible(icao24, info.route)
           ? {
+              ...info.route,
               origin: { ...info.route.origin },
               destination: { ...info.route.destination },
             }

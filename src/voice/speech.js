@@ -822,12 +822,17 @@ function getEntityContext(result) {
   // answer to "what is this aircraft?" only; other questions about the
   // selection (altitude, speed, registration) answer from its properties.
   const route = routeText(properties);
+  const unverifiedRoute =
+    Boolean(route) && properties.routeVerification === 'unverified-reference';
+  const shownRoute = routeText(properties, SHOWN_ROUTE);
   const identityLine = sentence(
     [
       title,
       spokenLabel(properties.operator || '', 32) || 'operator unknown',
       spokenLabel(properties.type || '', 32) || 'type unknown',
-      route || 'no route on file',
+      unverifiedRoute
+        ? `${route} (unverified route)`
+        : route || 'no route on file',
     ].join(', '),
   );
   return {
@@ -841,8 +846,10 @@ function getEntityContext(result) {
               registration: spokenLabel(properties.registration, 16),
             })
           : null,
-        route
-          ? t('Route {route}', { route: routeText(properties, SHOWN_ROUTE) })
+        shownRoute
+          ? unverifiedRoute
+            ? t('Route {route} (unverified)', { route: shownRoute })
+            : t('Route {route}', { route: shownRoute })
           : null,
       ].filter(Boolean),
       sources: shownSources(selected.source),

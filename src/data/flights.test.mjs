@@ -817,7 +817,7 @@ test('real civil track path creates no native label and publishes every cached h
     );
     assert.deepEqual(readEntityRecord(entity)?.labelModel, {
       title: 'N12345 · FL350 · 486 kts',
-      details: ['TEST AIR · A320', 'AUS → LAX'],
+      details: ['TEST AIR · A320', 'AUS → LAX · UNVERIFIED ROUTE'],
       accent: '#39d0ff',
     });
     viewer.scene.preUpdate.raiseEvent();

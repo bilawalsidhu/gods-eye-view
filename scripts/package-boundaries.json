@@ -8314,6 +8314,7 @@
       "src/keySetupCore.mjs",
       "src/localRequestGate.mjs",
       "src/data/headingDegrees.js",
+      "src/data/aircraftMeta.js",
       "src/tools/index.js",
       "src/tools/catalog.js",
       "src/tools/schema.js",

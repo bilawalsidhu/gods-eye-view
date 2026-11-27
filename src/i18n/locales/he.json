@@ -1098,6 +1098,8 @@
   "occupancy|not accepting passengers": "אין העלאת נוסעים",
   "occupancy|not boardable": "אין אפשרות עלייה",
   "Route {route}": "קו {route}",
+  "UNVERIFIED ROUTE": "מסלול לא אומת",
+  "Route {route} (unverified)": "מסלול {route} (לא אומת)",
   "Vehicle {vehicle}": "רכב {vehicle}",
   "vehicle motion|Stopped": "בעצירה",
   "No recent fix": "אין קביעת מיקום אחרונה",

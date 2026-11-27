@@ -1905,6 +1905,8 @@
   "to {destination}": "a {destination}",
   "Registration {registration}": "Matrícula {registration}",
   "Route {route}": "Ruta {route}",
+  "UNVERIFIED ROUTE": "RUTA SIN VERIFICAR",
+  "Route {route} (unverified)": "Ruta {route} (sin verificar)",
   "View state": "Estado de la vista",
   "Marked {count} places": {
     "one": "{count} lugar marcado",

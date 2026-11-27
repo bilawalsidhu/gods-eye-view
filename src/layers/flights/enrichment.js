@@ -1,3 +1,4 @@
+import { routeProvenance } from '../../data/aircraftMeta.js';
 import { classifyAircraft } from '../../data/aircraftClass.js';
 import { findCamera } from '../../render/rendererOf.js';
 import { frustumPlanes, sphereOutside } from '../../geo/frustum.js';
@@ -184,27 +185,28 @@ export function createEnrichment({
   }
 
   function _requestRouteEnrichment(icao24) {
-    const cs = String(flightState.records.data.get(icao24)?.callsign || '')
+    const requested = flightState.records.data.get(icao24);
+    const association = requested?.routeAssociationVersion;
+    const cs = String(requested?.callsign || '')
       .trim()
       .toUpperCase();
     if (!/^[A-Z]{3}\d/.test(cs)) return; // airline-style callsigns only (LLL + digit); GA tails won't resolve
     _enqueueEnrich(
-      `r:${cs}`,
+      `r:${icao24}:${cs}:${association}`,
       { kind: 'route', id: cs },
       (data) => {
         const meta = flightState.records.data.get(icao24);
-        if (!meta) return;
-        // A late answer for a callsign the plane no longer flies is dropped.
-        if (
-          String(meta.callsign || '')
-            .trim()
-            .toUpperCase() !== cs
-        )
-          return;
+        // Only an answer for the current callsign association applies (records.js).
+        if (!meta || meta.routeAssociationVersion !== association) return;
         meta.routeCallsign = cs;
         meta.airline = data.airline || meta.airline;
-        if (data.origin && data.destination)
-          meta.route = { origin: data.origin, destination: data.destination };
+        if (data.origin && data.destination) {
+          meta.route = {
+            origin: data.origin,
+            destination: data.destination,
+            ...routeProvenance(data),
+          };
+        }
         if (icao24 === flightState._trackedIcao && flightState._trackedEntity)
           parts.tracking._updateTrackedLabelModel(icao24);
       },

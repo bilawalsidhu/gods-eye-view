@@ -1254,6 +1254,8 @@
   "occupancy|not accepting passengers": "não aceita passageiros",
   "occupancy|not boardable": "embarque indisponível",
   "Route {route}": "Linha {route}",
+  "UNVERIFIED ROUTE": "ROTA NÃO VERIFICADA",
+  "Route {route} (unverified)": "Rota {route} (não verificada)",
   "Vehicle {vehicle}": "Veículo {vehicle}",
   "vehicle motion|Stopped": "Parado",
   "No recent fix": "Sem posição recente",
