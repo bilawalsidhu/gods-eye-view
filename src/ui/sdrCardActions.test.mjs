@@ -1,4 +1,4 @@
-// src/ui/sdrCardActions.test.mjs — the local RTL-SDR card's controls call
+// src/ui/sdrCardActions.test.mjs — the Local SDR card's controls call
 // LocalSdrControls through the radio store, and its gain options read in the
 // page language with numeric values.
 import '../testSupport/registerDom.mjs';

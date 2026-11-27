@@ -102,9 +102,12 @@ function statusText(state) {
     );
     return `${state.message}${device} · ${iqStatus} · ${decoded}`;
   }
-  const detail = state.seeking
-    ? state.seekMessage
-    : state.seekMessage || state.message;
+  const detail =
+    state.status === 'error'
+      ? state.message
+      : state.seeking
+        ? state.seekMessage
+        : state.seekMessage || state.message;
   if (state.connected && fmActive) {
     const workerStatus =
       state.workerBlocks > 0

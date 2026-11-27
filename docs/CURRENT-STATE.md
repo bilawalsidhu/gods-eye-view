@@ -9849,11 +9849,14 @@ reception does not interrupt internet radio.
   locked while connecting, receiving or switching modes. On HackRF One, a
   failed FM retune, mode switch or gain change reports the error and closes
   the receiver. A HackRF USB control request that stalls times out after five
-  seconds. RTL-SDR reports operation errors and keeps the receiver open.
+  seconds. Each HackRF configuration first turns reception and antenna power
+  off, and closing turns AMP off. On RTL-SDR the same three failures report
+  the error and keep the receiver open.
 - **FM seek.** Seeking wraps across 87.5–108 MHz, covers both band edges and
   skips the starting station. Spectra carry a decoder epoch, so a retune or mode
   change rejects earlier output. HackRF One seek subtracts the IQ mean before
-  the FFT to suppress the centre spike. During FM reception, HackRF retunes
+  the FFT to suppress the centre spike. HackRF One ADS-B subtracts each
+  block's IQ mean before measuring pulse power. During FM reception, HackRF retunes
   write only the frequency, then discard buffered IQ before resetting the
   decoder. Manual tuning and failed scan retunes stop seeking. A station is
   reported as found after its final retune succeeds. FM seek integrates
@@ -9891,7 +9894,9 @@ reception does not interrupt internet radio.
 - **Devices.** An already-authorized receiver opens without the WebUSB
   picker. For RTL-SDR, ADS-B prefers a device whose product name matches ADS-B
   or 1090 (the 1090 MHz channel of a dual-channel board). FM avoids ADS-B/UAT
-  channels.
+  channels. With a receiver open, a mode switch moves to a different
+  authorized receiver of the same kind when selection prefers or remembers one
+  for the new mode.
   A device chosen in the picker is remembered per mode by vendor, product,
   product name and serial. RTL-SDR uses `gev:sdr:device:v1` and HackRF One uses
   `gev:sdr:hackrf:device:v1`. CHANGE DEVICE reopens the picker for the selected
@@ -9986,7 +9991,7 @@ addresses and upstream error text stay on the server. Unconfigured, it returns
 
 The browser session (`src/layers/localAdsb/feeds.js`) polls the route every
 second only while the layer is enabled and only while the route reports
-`configured`; the Local RTL-SDR card makes one probe request at startup to show
+`configured`; the Local SDR card makes one probe request at startup to show
 its read-only "Decoder feeds: 1090 live · 978 live" line. Feed records are
 rebased to the browser clock and kept up to 60 s after their last message.
 `mergeLocalAdsbRecords` merges both inputs by ICAO, keeping the newest position

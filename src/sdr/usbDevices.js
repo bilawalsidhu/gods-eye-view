@@ -9,24 +9,23 @@
  */
 
 export const SDR_DEVICE_STORAGE_KEY = 'gev:sdr:device:v1';
+export const HACKRF_DEVICE_STORAGE_KEY = 'gev:sdr:hackrf:device:v1';
 /** RTL2832U vendor/product pairs requested by the WebUSB RTL-SDR provider. */
 export const RTL_SDR_USB_FILTERS = Object.freeze([
   Object.freeze({ vendorId: 0x0bda, productId: 0x2832 }),
   Object.freeze({ vendorId: 0x0bda, productId: 0x2838 }),
 ]);
+/** HackRF One vendor/product pair requested through WebUSB. */
+export const HACKRF_ONE_USB_FILTERS = Object.freeze([
+  Object.freeze({ vendorId: 0x1d50, productId: 0x6089 }),
+]);
 const ADSB_PRODUCT_PATTERN = /ads.?b|1090/i;
 const NON_FM_PRODUCT_PATTERN = /ads.?b|1090|uat|978/i;
-const HACKRF_ONE_FILTER = Object.freeze({
-  vendorId: 0x1d50,
-  productId: 0x6089,
-});
 
-/** Request a HackRF One through the same WebUSB selection path as the RTL provider. */
-export function requestHackrfOne(webUsb) {
-  return webUsb.requestDevice({ filters: [HACKRF_ONE_FILTER] });
-}
-
-/** Resolve with the USB operation's outcome, or reject once `ms` elapses. */
+/**
+ * Reject once `ms` elapses, otherwise resolve or reject with the operation.
+ * The USB operation keeps running; only closing the device aborts it.
+ */
 export function withUsbDeadline(promise, ms, message) {
   let timer = null;
   const deadline = new Promise((_, reject) => {
@@ -85,10 +84,7 @@ export function sameSdrDevice(a, b) {
 export function sdrDeviceLabel(device) {
   const identity = sdrDeviceIdentity(device);
   if (!identity) return 'RTL-SDR';
-  if (identity.productName) return identity.productName;
-  return filterMatchesDevice(HACKRF_ONE_FILTER, identity)
-    ? 'HackRF One'
-    : 'RTL-SDR';
+  return identity.productName || 'RTL-SDR';
 }
 
 function filterMatchesDevice(filter, device) {
@@ -175,7 +171,7 @@ export function createSdrDeviceMemory(storage, key = SDR_DEVICE_STORAGE_KEY) {
 }
 
 /**
- * Wrap `navigator.usb` so the RTL-SDR provider reuses an authorized receiver
+ * Wrap `navigator.usb` so a receiver provider reuses an authorized device
  * for the current mode before asking WebUSB to show its picker.
  * @param {USB} webUsb Browser WebUSB object.
  * @param {object} [options]
@@ -197,7 +193,7 @@ export function createRememberingWebUsb(
     mapPickerError = (error) => error,
   } = {},
 ) {
-  if (!webUsb?.requestDevice) return webUsb;
+  if (!webUsb?.getDevices || !webUsb?.requestDevice) return webUsb;
   return new Proxy(webUsb, {
     get(target, property) {
       if (property === 'requestDevice') {
@@ -205,7 +201,7 @@ export function createRememberingWebUsb(
           const mode = getMode();
           const filters = Array.isArray(options.filters) ? options.filters : [];
           let device = null;
-          if (!consumeForcePicker() && target.getDevices) {
+          if (!consumeForcePicker()) {
             device = selectAuthorizedSdrDevice(await target.getDevices(), {
               filters,
               mode,

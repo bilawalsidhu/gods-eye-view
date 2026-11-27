@@ -213,7 +213,7 @@ magnifier is `UiSearchField`'s own span.
 The Space Missions panel's buttons (a mission's roster row, FOCUS,
 REPLAY ASCENT, the replay's pause, PREV, NEXT and SHOW ALL / DESELECT),
 the Contacts panel's (PREV, FOCUS, NEXT and a contact's row), the Radio
-panel's (Enable, PREV, PLAY, NEXT and STOP), the RTL-SDR card's (Connect,
+panel's (Enable, PREV, PLAY, NEXT and STOP), the Local SDR card's (Connect,
 Locate, Change device, FM, ADS-B, Tune and the two seeks) and the key
 setup's (the POWER UP chip, a key's REMOVE, the voice auth toggle and
 SAVE KEYS) are ghost `UiButton`s. Radio's Enable and the card's Connect,
@@ -532,7 +532,7 @@ slot whenever its view is drawn.
    store that RadioControls publishes to and whose controls it answers
    through the store's `connect`/`act` (the shared `createOwners()`; a
    refused station tag gets the kept tag back from `act`), and `SdrCard` the
-   local RTL-SDR card that LocalSdrControls publishes beside it and answers
+   Local SDR card that LocalSdrControls publishes beside it and answers
    the same way; fields a person edits take their value through
    `v-field-value`, which never writes a focused field;
    `RadioTuner` renders the directory tuner, where RadioControls keeps the

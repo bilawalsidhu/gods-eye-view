@@ -7,7 +7,7 @@ Translation source: abiyeenzo (#908).
 ## Style
 
 - Standard German that reads naturally in Germany, Austria and Switzerland; ß where it belongs (Straße, schließen), no Swiss ss.
-- No direct address: neither «Sie» nor «du». Actions and hints use the neutral infinitive: «Erneut versuchen», «Kamera anklicken zum Aktivieren», «Zuerst eine Aufnahme wählen», «Mikrofonzugriff erlauben und erneut versuchen». "Your" becomes the article or «eigene»: «Eigener RTL-SDR-Empfänger», «Die IP-Adresse ist für diesen Sender sichtbar».
+- No direct address: neither «Sie» nor «du». Actions and hints use the neutral infinitive: «Erneut versuchen», «Kamera anklicken zum Aktivieren», «Zuerst eine Aufnahme wählen», «Mikrofonzugriff erlauben und erneut versuchen». "Your" becomes the article or «eigene»: «Eigener SDR-Empfänger», «Die IP-Adresse ist für diesen Sender sichtbar».
 - Nouns are capitalized, as German requires; otherwise sentence case, not Title Case: "Live Flights" → «Live-Flüge», "Provider Settings" → «Anbieter-Einstellungen». UPPERCASE English stays UPPERCASE: «LIVE-DATEN AUS», «KEINE ENTWARNUNG». In UPPERCASE, ß is written SS: «SCHLIESSEN», «STRASSENEBENE».
 - Compounds are written as one word or with a hyphen next to a name, code or English term: «Datenebene», «Wetterkacheln», «TomTom-Schlüssel», «AIS-Schiffe», «Street-View-Fallback». Do not split them with spaces.
 - Short labels, chips and HUD readouts stay short. German runs about a third longer than English, so prefer a short word or a standard abbreviation with a period over a wrapped line: REICHW., GESCHW., NIEDERSCHL., SONST., NACHR., VERST., VGL., KAL., KOMM. (a bare «KOMM» reads as the imperative)

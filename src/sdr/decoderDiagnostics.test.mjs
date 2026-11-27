@@ -325,13 +325,13 @@ test('the real decoder computes spectra only when requested, with audio unchange
     }
     return bytes.buffer;
   };
-  const run = async (spectrum, firstId, removeSpectrumDc = false) => {
+  const run = async (spectrum, firstId, removeDc = false) => {
     thread.postMessage({
       type: 'configure',
       mode: 'fm',
       sampleRate: 2_048_000,
       tune: 1,
-      removeSpectrumDc,
+      removeDc,
     });
     // Retuning resets the decoder without dropping the HackRF correction.
     thread.postMessage({ type: 'reset', tune: 2 });

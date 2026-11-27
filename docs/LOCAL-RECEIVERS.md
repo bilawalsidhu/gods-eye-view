@@ -20,9 +20,10 @@ of the public one; both markers are drawn on purpose.
 
 ## Which to use
 
-- With an RTL-SDR or HackRF One in desktop Chrome or Edge, open **Radio → Local SDR**,
-  select the receiver and **ADS-B · 1090**, then press **Connect**. On HackRF One
-  you can adjust **LNA**, **VGA** and **AMP** during reception.
+- **An RTL-SDR or HackRF One, desktop Chrome or Edge:** use the browser SDR.
+  Open **Radio → Local SDR**, choose the receiver and **ADS-B · 1090**, then
+  press **CONNECT**. Nothing else to install. On HackRF One, **LNA**, **VGA**
+  and **AMP** can be changed during reception.
 - **A dual-band board, a Raspberry Pi feeder, or a dongle already used by a
   decoder:** use a decoder feed. A USB dongle can be opened by only one program
   at a time, so a dongle that dump1090 or dump978 owns cannot also be opened by

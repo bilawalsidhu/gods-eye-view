@@ -1,3 +1,5 @@
+const MAX_SPECTRUM_BINS = 2_048;
+
 function nextPowerOfTwo(value) {
   return 2 ** Math.floor(Math.log2(Math.max(2, value)));
 }
@@ -42,15 +44,15 @@ function fft(real, imag) {
 /**
  * Create an FFT-shifted dB power spectrum from interleaved unsigned 8-bit IQ.
  * @param {ArrayBuffer} buffer Interleaved I and Q samples.
- * @param {{maxBins?: number, removeDc?: boolean}} [options]
+ * @param {{removeDc?: boolean}} [options]
  * @returns {Float32Array} FFT bins in dB.
  */
-export function analyzeSpectrum(
-  buffer,
-  { maxBins = 2_048, removeDc = false } = {},
-) {
+export function analyzeSpectrum(buffer, { removeDc = false } = {}) {
   const iq = new Uint8Array(buffer);
-  const length = Math.min(nextPowerOfTwo(Math.floor(iq.length / 2)), maxBins);
+  const length = Math.min(
+    nextPowerOfTwo(Math.floor(iq.length / 2)),
+    MAX_SPECTRUM_BINS,
+  );
   const real = new Float32Array(length);
   const imag = new Float32Array(length);
   const sampleOffset = Math.max(0, Math.floor((iq.length / 2 - length) / 2));

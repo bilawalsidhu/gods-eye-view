@@ -2,12 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  HACKRF_ONE_USB_FILTERS,
   SDR_DEVICE_STORAGE_KEY,
   createRememberingWebUsb,
   createSdrDeviceMemory,
-  requestHackrfOne,
   sameSdrDevice,
-  sdrDeviceLabel,
   selectAuthorizedSdrDevice,
 } from './usbDevices.js';
 
@@ -50,10 +49,15 @@ test('HackRF One selection filters the picker and reuses the authorized receiver
       return hackrf;
     },
   });
-  assert.equal(await requestHackrfOne(usb), hackrf);
-  assert.equal(await requestHackrfOne(usb), hackrf);
+  assert.equal(
+    await usb.requestDevice({ filters: HACKRF_ONE_USB_FILTERS }),
+    hackrf,
+  );
+  assert.equal(
+    await usb.requestDevice({ filters: HACKRF_ONE_USB_FILTERS }),
+    hackrf,
+  );
   assert.equal(pickerCalls, 1);
-  assert.equal(sdrDeviceLabel(hackrf), 'HackRF One');
   assert.equal(
     selectAuthorizedSdrDevice([hackrf], { filters: RTL_FILTERS }),
     null,

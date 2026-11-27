@@ -7,7 +7,7 @@ import { createOwners } from './owners.js';
  * directory row, station card, transport, volume and playback line and the
  * Cockpit's compact radio controls (`renderRadioState()`), which Cockpit
  * utility popover is open, and the directory tuner, and publishes them here;
- * it keeps its listeners. LocalSdrControls publishes the local RTL-SDR card
+ * it keeps its listeners. LocalSdrControls publishes the Local SDR card
  * beside it, and the card's controls reach it through act().
  */
 export const useRadioStore = defineStore('gev-radio', () => {
@@ -19,10 +19,10 @@ export const useRadioStore = defineStore('gev-radio', () => {
     view.value = markRaw(next);
   }
 
-  /** The local RTL-SDR card; null until its controls first render. */
+  /** The Local SDR card; null until its controls first render. */
   const sdr = shallowRef(null);
 
-  /** @param {object} next A fresh presentation of the RTL-SDR card. */
+  /** @param {object} next A fresh presentation of the Local SDR card. */
   function publishSdr(next) {
     sdr.value = markRaw(next);
   }
@@ -43,7 +43,7 @@ export const useRadioStore = defineStore('gev-radio', () => {
     tuner.value = markRaw(next);
   }
 
-  // LocalSdrControls answers the RTL-SDR card's controls.
+  // LocalSdrControls answers the Local SDR card's controls.
   const { connect, detach, act } = createOwners();
 
   return {

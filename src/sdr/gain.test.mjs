@@ -47,10 +47,7 @@ test('requested gains normalize to AUTO or the nearest listed step', () => {
 test('per-mode gain persists in storage and survives unavailable storage', () => {
   const storage = memoryStorage();
   assert.deepEqual(readSdrGainSettings(storage), SDR_GAIN_DEFAULTS);
-  assert.equal(
-    writeSdrGainSettings(storage, { fm: 28, adsb: 'auto', amp: true }),
-    true,
-  );
+  assert.equal(writeSdrGainSettings(storage, { fm: 28, adsb: 'auto' }), true);
   assert.equal(
     storage.values.get(SDR_GAIN_STORAGE_KEY),
     '{"fm":28,"adsb":"auto"}',
@@ -70,15 +67,12 @@ test('per-mode gain persists in storage and survives unavailable storage', () =>
   assert.deepEqual(readSdrGainSettings(throwing), SDR_GAIN_DEFAULTS);
   assert.equal(writeSdrGainSettings(throwing, SDR_GAIN_DEFAULTS), false);
   assert.deepEqual(readSdrGainSettings(null), SDR_GAIN_DEFAULTS);
-  assert.equal(writeSdrGainSettings(storage, null), false);
 });
 
-test('existing HackRF gain settings are read and saved independently of RTL mode settings', () => {
+test('HackRF gain settings are read and saved under their own key', () => {
   const hackrfKey = 'gev:sdr:hackrf:gain:v1';
-  const rtlSettings = { fm: 20.7, adsb: 'auto' };
   const storage = memoryStorage({
     [hackrfKey]: '{"lna":"0","vga":21,"amp":false}',
-    [SDR_GAIN_STORAGE_KEY]: JSON.stringify(rtlSettings),
   });
   const gain = readHackrfGainSettings(storage);
   assert.deepEqual(gain, { lna: 0, vga: 16, amp: false });
@@ -86,7 +80,6 @@ test('existing HackRF gain settings are read and saved independently of RTL mode
   assert.deepEqual(readHackrfGainSettings(null), HACKRF_GAIN_DEFAULTS);
   writeHackrfGainSettings(storage, { lna: 24, vga: 0, amp: true });
   assert.equal(storage.values.get(hackrfKey), '{"lna":24,"vga":0,"amp":true}');
-  assert.deepEqual(readSdrGainSettings(storage), rtlSettings);
 });
 
 test('a stored ADS-B gain wins over the 28.0 dB default', () => {

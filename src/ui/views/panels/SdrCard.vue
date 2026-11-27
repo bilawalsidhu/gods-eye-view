@@ -32,7 +32,7 @@ const tune = () => act('tuneSdr', frequency.value.value);
   <p>{{ t('Chrome/Edge · WebUSB · one local tuner shared by FM and the Local ADS-B layer.') }}</p>
   <div class="sdr-gain-row">
     <label for="sdr-receiver-select">{{ t('Receiver') }}</label>
-    <UiSelect class="gev-field" id="sdr-receiver-select" :model-value="sdr?.receiverKind ?? 'rtl'" @update:model-value="act('selectSdrReceiver', $event)" :disabled="sdr?.receiverDisabled ?? true">
+    <UiSelect class="gev-field" id="sdr-receiver-select" hold :model-value="sdr?.receiverKind ?? 'rtl'" @update:model-value="act('selectSdrReceiver', $event)" :disabled="sdr?.receiverDisabled ?? true">
       <option value="rtl" translate="no">RTL-SDR</option>
       <option value="hackrf" translate="no">HackRF One</option>
     </UiSelect>

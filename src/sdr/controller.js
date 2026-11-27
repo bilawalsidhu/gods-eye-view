@@ -12,10 +12,11 @@ import {
   writeSdrGainSettings,
 } from './gain.js';
 import {
+  HACKRF_DEVICE_STORAGE_KEY,
+  HACKRF_ONE_USB_FILTERS,
   RTL_SDR_USB_FILTERS,
   createRememberingWebUsb,
   createSdrDeviceMemory,
-  requestHackrfOne,
   sameSdrDevice,
   sdrDeviceIdentity,
   sdrDeviceLabel,
@@ -48,7 +49,8 @@ const READ_SAMPLE_COUNT = 32_768;
 // short of the configured rate; queued reads keep a transfer pending meanwhile.
 const READ_PIPELINE_DEPTH = 4;
 const RATE_WINDOW_MS = 1_000;
-// Bulk reads and HackRF control requests use the same USB stall deadline.
+// Bulk reads, HackRF control requests and the buffer reset after an FM retune
+// share one USB stall deadline.
 const SDR_READ_STALL_MS = 5_000;
 // Decoder admission. Every block sent to the worker is numbered and must be
 // acknowledged; past these bounds the receiver stops with an overload error
@@ -142,7 +144,7 @@ async function forceCloseUsb(usbDevice) {
 }
 
 function closedUsbError() {
-  return Promise.reject(new Error('RTL-SDR session was closed'));
+  return Promise.reject(new Error('SDR session was closed'));
 }
 
 /**
@@ -166,8 +168,8 @@ function guardUsbDevice(usbDevice, isFenced) {
 
 /**
  * Wrap a WebUSB entry point for one acquisition: every `USBDevice` it hands
- * out is reported to `onDevice` and handed on guarded by `isFenced`. The
- * RTL-SDR provider opens and initializes the device inside `get()`, so this
+ * out is reported to `onDevice` and handed on guarded by `isFenced`. Each
+ * receiver provider opens and initializes its device inside `get()`, so this
  * is the only way to reach a device whose initialization failed before
  * `get()` returned it, and the only way to stop a selection that resolves
  * after the acquisition was abandoned from initializing that device.
@@ -182,8 +184,7 @@ function captureRequestedUsb(webUsb, { onDevice, isFenced }) {
           if (!usbDevice) return usbDevice;
           // A late selection belongs to no session: the device it names may
           // already be open for a newer one.
-          if (isFenced())
-            throw new Error('RTL-SDR device selection was abandoned');
+          if (isFenced()) throw new Error('SDR device selection was abandoned');
           onDevice(usbDevice);
           return guardUsbDevice(usbDevice, isFenced);
         };
@@ -321,7 +322,11 @@ const AUDIO_SUSPENDED_ON_MODE_SWITCH = msg(
 
 class UsbPickerCancelled extends Error {}
 
-/** A failed connection in English; errorState() shows it translated. */
+/**
+ * English text for a failed receiver operation; errorState() shows it
+ * translated. An unrecognized RTL-SDR error keeps its own text; on HackRF
+ * One it becomes `fallback`, or the connection failure.
+ */
 function describeConnectionError(error, receiverKind, fallback) {
   const receiver = RECEIVER_MESSAGES[receiverKind];
   const message = String(error?.message || error || '').trim();
@@ -394,7 +399,8 @@ export class SdrController {
    *   Builds the RTL-SDR provider around the selecting WebUSB wrapper.
    * @param {Storage|null} [options.storage] Gain and device preferences.
    * @param {USB|null} [options.webUsb] WebUSB entry point.
-   * @param {number} [options.readStallMs] Deadline for a bulk read or HackRF control request.
+   * @param {number} [options.readStallMs] Deadline for a bulk read, a HackRF
+   *   control request or the buffer reset after an FM retune.
    * @param {number} [options.closeTimeoutMs] Deadline for a graceful close.
    */
   constructor({
@@ -411,9 +417,9 @@ export class SdrController {
     this._storage = storage;
     this._gainByMode = readSdrGainSettings(storage);
     this._deviceMemory = createSdrDeviceMemory(storage);
-    const hackrfMemory = createSdrDeviceMemory(
+    this._hackrfDeviceMemory = createSdrDeviceMemory(
       storage,
-      'gev:sdr:hackrf:device:v1',
+      HACKRF_DEVICE_STORAGE_KEY,
     );
     this.state = {
       webUsbSupported,
@@ -519,7 +525,7 @@ export class SdrController {
       const webusb = captureRequestedUsb(
         createRememberingWebUsb(this._webUsb, {
           getMode: () => this.state.mode,
-          memory: hackrf ? hackrfMemory : this._deviceMemory,
+          memory: hackrf ? this._hackrfDeviceMemory : this._deviceMemory,
           consumeForcePicker: () => {
             const force = this._forcePicker;
             this._forcePicker = false;
@@ -540,7 +546,9 @@ export class SdrController {
       return {
         device: null,
         async get() {
-          this.device = await requestHackrfOne(webusb);
+          this.device = await webusb.requestDevice({
+            filters: HACKRF_ONE_USB_FILTERS,
+          });
           return openHackrfOne(this.device, { controlTimeoutMs });
         },
       };
@@ -566,6 +574,7 @@ export class SdrController {
       deviceLabel: null,
       status: this.state.webUsbSupported ? 'idle' : 'unsupported',
       errorText: null,
+      seekMessage: null,
       message: () => idleReceiverMessage(this.state.webUsbSupported),
     });
   }
@@ -975,7 +984,7 @@ export class SdrController {
       mode: this.state.mode,
       sampleRate: this.state.sampleRate,
       location: this.state.receiverLocation,
-      removeSpectrumDc: this.state.receiverKind === 'hackrf',
+      removeDc: this.state.receiverKind === 'hackrf',
     });
   }
 
@@ -1326,7 +1335,7 @@ export class SdrController {
       sequence: ++this._acquisitionSequence,
       usbDevices: new Set(),
       provider: null,
-      // The RTL2832U its get() returned, once it has.
+      // The receiver its get() returned, once it has.
       device: null,
       ended: false,
       // Superseded: from here on its provider cannot reach the hardware.
@@ -1401,7 +1410,7 @@ export class SdrController {
         withUsbDeadline(
           forceCloseUsb(usbDevice),
           this._closeTimeoutMs,
-          'RTL-SDR USB close timed out',
+          'SDR USB close timed out',
         ).catch((error) => {
           console.warn('[SDR] USB close did not settle:', error);
         }),
@@ -1411,7 +1420,7 @@ export class SdrController {
 
   /**
    * Close everything an acquisition that will not become a session opened:
-   * the RTL2832U it returned (a superseded connect), or only the raw WebUSB
+   * the receiver it returned (a superseded connect), or only the raw WebUSB
    * device a failed `get()` left open. A raw device that another session
    * has reopened meanwhile is left alone. Bounded; never throws.
    */
@@ -1435,7 +1444,7 @@ export class SdrController {
             mayForceClose: (usbDevice) => !claimedElsewhere(usbDevice),
           });
       }
-      // Without an RTL2832U (a failed get()), every raw device is closed
+      // Without a receiver (a failed get()), every raw device is closed
       // directly; with one, its own raw device was handled above.
       const remaining = [...usbDevices].filter(
         (usbDevice) =>
@@ -1490,7 +1499,7 @@ export class SdrController {
         await withUsbDeadline(
           Promise.all(older.map((acquisition) => acquisition.settled)),
           this._closeTimeoutMs * 3,
-          'RTL-SDR acquisition did not settle',
+          'SDR acquisition did not settle',
         );
       } catch {
         for (const acquisition of older) {
@@ -1505,7 +1514,7 @@ export class SdrController {
   /**
    * Cut an acquisition that a newer connect stopped waiting for off the
    * hardware: its provider's WebUSB calls already reject (it was abandoned),
-   * and an RTL2832U it returned is detached from the shared `USBDevice`, so
+   * and a receiver it returned is detached from the shared `USBDevice`, so
    * a graceful close still running for it cannot close the newer session's
    * device. Its cleanup still closes the device unless someone else owns it.
    */
@@ -1553,7 +1562,7 @@ export class SdrController {
       await withUsbDeadline(
         graceful,
         this._closeTimeoutMs,
-        'RTL-SDR close timed out',
+        'SDR close timed out',
       );
       return;
     } catch (error) {
@@ -1567,7 +1576,7 @@ export class SdrController {
       await withUsbDeadline(
         forceCloseUsb(usbDevice),
         this._closeTimeoutMs,
-        'RTL-SDR USB close timed out',
+        'SDR USB close timed out',
       );
     } catch (error) {
       console.warn('[SDR] USB close did not settle:', error);
@@ -1664,7 +1673,11 @@ export class SdrController {
         const kind = this.state.receiverKind;
         const message =
           kind === 'hackrf' && error?.name !== 'TimeoutError'
-            ? describeConnectionError(error, kind)
+            ? describeConnectionError(
+                error,
+                kind,
+                RECEIVER_MESSAGES.hackrf.streamStopped,
+              )
             : RECEIVER_MESSAGES[kind].streamStopped;
         this._setState({ connected: false, ...errorState(message) });
         await this.stop({ preserveMessage: true });
@@ -1691,11 +1704,7 @@ export class SdrController {
     // A different authorized receiver preferred for this mode (the 1090 MHz
     // channel of a dual-channel board, or a device remembered for the mode)
     // takes over: reopen through selection instead of retuning this one.
-    if (
-      this.state.receiverKind === 'rtl' &&
-      nextMode !== this.state.mode &&
-      this._deviceIdentity
-    ) {
+    if (nextMode !== this.state.mode && this._deviceIdentity) {
       const preferred = await this._preferredDevice(nextMode);
       if (!this._owns(token, device)) return false;
       if (preferred && !sameSdrDevice(preferred, this._deviceIdentity)) {
@@ -1715,7 +1724,12 @@ export class SdrController {
     });
     try {
       if (nextMode === 'fm' && !(await this._ensureAudio())) {
-        throw new Error(AUDIO_SUSPENDED_ON_MODE_SWITCH);
+        // A failed switch closes HackRF One, so only Connect resumes it.
+        throw new Error(
+          this.state.receiverKind === 'hackrf'
+            ? AUDIO_SUSPENDED_ON_CONNECT
+            : AUDIO_SUSPENDED_ON_MODE_SWITCH,
+        );
       }
       // A stall teardown, stop() or reconnect during the switch supersedes
       // it: that path owns the published state, never "streaming" from here.
@@ -1738,23 +1752,42 @@ export class SdrController {
       return true;
     } catch (error) {
       if (!this._owns(token, device)) return false;
-      console.warn('[SDR] Mode switch failed:', error);
-      this._setState(
-        errorState(describeConnectionError(error, this.state.receiverKind)),
-      );
-      if (this.state.receiverKind === 'hackrf')
-        await this.stop({ preserveMessage: true });
-      return false;
+      return this._failOperation(error, 'Mode switch');
     }
   }
 
-  /** The authorized receiver selection would open for a mode, if any. */
+  /**
+   * Report a failed receiver operation. HackRF One also closes: after a failed
+   * USB request its state is unknown.
+   * @param {unknown} error
+   * @param {string} label What failed, for the console.
+   * @param {string} [fallback] English text for an unrecognized HackRF One error.
+   * @returns {Promise<false>}
+   */
+  async _failOperation(error, label, fallback) {
+    console.warn(`[SDR] ${label} failed:`, error);
+    const receiverKind = this.state.receiverKind;
+    this._setState(
+      errorState(describeConnectionError(error, receiverKind, fallback)),
+    );
+    if (receiverKind === 'hackrf') await this.stop({ preserveMessage: true });
+    return false;
+  }
+
+  /**
+   * The authorized receiver of the selected kind that selection would open
+   * for a mode, if any.
+   */
   async _preferredDevice(mode) {
+    const hackrf = this.state.receiverKind === 'hackrf';
     try {
       return selectAuthorizedSdrDevice(await this._webUsb?.getDevices?.(), {
-        filters: RTL_SDR_USB_FILTERS,
+        filters: hackrf ? HACKRF_ONE_USB_FILTERS : RTL_SDR_USB_FILTERS,
         mode,
-        remembered: this._deviceMemory.get(mode),
+        remembered: (hackrf
+          ? this._hackrfDeviceMemory
+          : this._deviceMemory
+        ).get(mode),
       });
     } catch {
       return null;
@@ -1766,7 +1799,9 @@ export class SdrController {
    * @param {'auto'|number|string} value `'auto'` or a gain in dB.
    * @param {object} [options]
    * @param {'fm'|'adsb'} [options.mode] Mode to configure; defaults to current.
-   * @returns {Promise<'auto'|number|null>} Applied setting, or null if invalid.
+   * @returns {Promise<'auto'|number|null>} Applied setting; null when the
+   *   value is invalid, the gain write fails, or HackRF One is selected (it
+   *   uses setHackrfGain()).
    */
   async setGain(value, { mode = this.state.mode } = {}) {
     if (this.state.receiverKind === 'hackrf') return null;
@@ -1834,18 +1869,11 @@ export class SdrController {
       });
     } catch (error) {
       if (!this._owns(token, device)) return false;
-      console.warn('[SDR] HackRF One gain change failed:', error);
-      this._setState(
-        errorState(
-          describeConnectionError(
-            error,
-            'hackrf',
-            RECEIVER_MESSAGES.hackrf.gainFailed,
-          ),
-        ),
+      return this._failOperation(
+        error,
+        'HackRF One gain change',
+        RECEIVER_MESSAGES.hackrf.gainFailed,
       );
-      await this.stop({ preserveMessage: true });
-      return false;
     }
   }
 
@@ -1869,7 +1897,6 @@ export class SdrController {
     if (this.state.mode !== 'fm' && !(await this.setMode('fm'))) return false;
     const token = this._sessionToken;
     const device = this._device;
-    const receiverKind = this.state.receiverKind;
     if (!this._owns(token, device)) return false;
     // Spectra are dropped from here until the worker takes this tag, so a
     // retune that fails part-way never has them read at the wrong frequency.
@@ -1907,10 +1934,7 @@ export class SdrController {
       return true;
     } catch (error) {
       if (!this._owns(token, device)) return false;
-      console.warn('[SDR] FM retune failed:', error);
-      this._setState(errorState(describeConnectionError(error, receiverKind)));
-      if (receiverKind === 'hackrf') await this.stop({ preserveMessage: true });
-      return false;
+      return this._failOperation(error, 'FM retune');
     }
   }
 
@@ -2116,6 +2140,7 @@ export class SdrController {
             errorText: null,
           }),
       snr: null,
+      seekMessage: null,
       samplesPerSecond: 0,
       workerBlocks: 0,
       iqLevelDbfs: null,

@@ -9,6 +9,7 @@ const REQUEST = {
   SET_AMP: 17,
   SET_LNA_GAIN: 19,
   SET_VGA_GAIN: 20,
+  SET_ANTENNA_ENABLE: 23,
 };
 const RX_ENDPOINT = 1;
 const MODE_OFF = 0;
@@ -43,8 +44,12 @@ function pairOfUint32(first, second) {
   return data;
 }
 
-/** Open a selected WebUSB device for reception. Drain reads before reconfiguring. */
-export async function openHackrfOne(device, { controlTimeoutMs = 5_000 } = {}) {
+/**
+ * Claim a HackRF One for reception; every control request is bounded by
+ * `controlTimeoutMs`. Callers must drain pending reads before configure(),
+ * setCenterFrequency() or setRxGain().
+ */
+export async function openHackrfOne(device, { controlTimeoutMs }) {
   await claim(device);
   let receiving = false;
   let closing = null;
@@ -115,7 +120,11 @@ export async function openHackrfOne(device, { controlTimeoutMs = 5_000 } = {}) {
   return {
     async configure({ sampleRate, frequencyHz, gain }) {
       if (closing) throw new Error('HackRF One is closed');
-      await stopRx();
+      // Another program may have left the board transmitting or powering the
+      // antenna port; reception never needs either.
+      await write(REQUEST.SET_MODE, { value: MODE_OFF });
+      receiving = false;
+      await write(REQUEST.SET_ANTENNA_ENABLE, { value: 0 });
       await write(REQUEST.SET_SAMPLE_RATE, {
         data: pairOfUint32(sampleRate, 1),
       });
@@ -166,7 +175,10 @@ export async function openHackrfOne(device, { controlTimeoutMs = 5_000 } = {}) {
     },
 
     close() {
-      closing ??= stopRx().finally(() => device?.close());
+      // AMP is a firmware-wide setting the next program inherits: leave it off.
+      closing ??= stopRx()
+        .then(() => write(REQUEST.SET_AMP, { value: 0 }))
+        .finally(() => device?.close());
       return closing;
     },
   };

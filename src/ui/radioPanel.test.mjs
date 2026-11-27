@@ -252,7 +252,7 @@ function sdrReceiver() {
   };
 }
 
-test('the RTL-SDR card renders what LocalSdrControls presents', async (t) => {
+test('the Local SDR card renders what LocalSdrControls presents', async (t) => {
   const { $, owner } = fixture(t);
   const receiver = sdrReceiver();
   const controls = new LocalSdrControls({ document, receiver, store: owner.store });
@@ -314,7 +314,7 @@ test('the RTL-SDR card renders what LocalSdrControls presents', async (t) => {
   assert.equal(panel.classList.contains('sdr-connected'), false);
 });
 
-test('focused RTL-SDR fields keep what the person typed or picked', async (t) => {
+test('focused Local SDR fields keep what the person typed or picked', async (t) => {
   const { $, owner, render } = fixture(t);
   const receiver = sdrReceiver();
   let feeds = { configured: null, polling: false, feeds: [] };

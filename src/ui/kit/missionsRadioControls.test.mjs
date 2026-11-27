@@ -1,9 +1,9 @@
 // The space missions, Contacts, Radio and provider settings controls are the
 // kit's: none of their views hand-writes a <button>, a Material Symbols span,
-// a select or a checkbox. Radio's Enable, the RTL-SDR card's Connect and its
+// a select or a checkbox. Radio's Enable, the Local SDR card's Connect and its
 // FM and ADS-B modes are pressed toggles with `active`; Radio's Play and the
 // card's Locate keep their own `active` class, since their words change
-// with their state rather than saying they are pressed. The RTL-SDR card's
+// with their state rather than saying they are pressed. The Local SDR card's
 // FM frequency stays a native number field (the kit has none), and the radio
 // tuner's range stays native: its owner moves the handle back to the
 // selected station on a drag's first input without changing the slot.

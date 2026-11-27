@@ -15,7 +15,10 @@ test('HackRF releases USB if claiming its interface fails', async () => {
       closed = true;
     },
   };
-  await assert.rejects(openHackrfOne(device), /claim failed/);
+  await assert.rejects(
+    openHackrfOne(device, { controlTimeoutMs: 1_000 }),
+    /claim failed/,
+  );
   assert.equal(closed, true);
 });
 
@@ -48,7 +51,7 @@ test('HackRF configures the wire protocol and returns transferable unsigned IQ',
     },
     close: async () => calls.push('close'),
   };
-  const rx = await openHackrfOne(device);
+  const rx = await openHackrfOne(device, { controlTimeoutMs: 1_000 });
   await assert.rejects(rx.readSamples(2), /not receiving/);
   await rx.configure({
     sampleRate: 2_048_000,
@@ -60,6 +63,8 @@ test('HackRF configures the wire protocol and returns transferable unsigned IQ',
   assert.deepEqual(calls, [
     'open',
     ['claim', 0],
+    [1, 0, 0, null],
+    [23, 0, 0, null],
     [6, 0, 0, [2_048_000, 1]],
     [7, 1_750_000 & 0xffff, 1_750_000 >>> 16, null],
     [16, 0, 0, [98, 500_000]],
@@ -75,14 +80,18 @@ test('HackRF configures the wire protocol and returns transferable unsigned IQ',
     gain: HACKRF_GAIN_DEFAULTS,
   });
   assert.deepEqual(
-    calls[9],
+    calls[11],
     [1, 0, 0, null],
     'stop reception before reconfiguring',
   );
-  assert.deepEqual(calls[12], [16, 0, 0, [1090, 0]]);
+  assert.deepEqual(calls[15], [16, 0, 0, [1090, 0]]);
   device.transferIn = async () => ({ status: 'stall' });
   await assert.rejects(rx.readSamples(2), /IQ transfer failed/);
   await Promise.all([rx.close(), rx.close()]);
-  assert.deepEqual(calls.slice(-2), [[1, 0, 0, null], 'close']);
+  assert.deepEqual(calls.slice(-3), [
+    [1, 0, 0, null],
+    [17, 0, 0, null],
+    'close',
+  ]);
   assert.equal(calls.filter((call) => call === 'close').length, 1);
 });

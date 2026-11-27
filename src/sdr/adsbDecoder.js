@@ -524,8 +524,20 @@ function preambleContrast(power, offset) {
   return contrast;
 }
 
-/** Extract CRC-valid 112-bit ADS-B messages from unsigned 8-bit interleaved IQ. */
-export function extractAdsbMessages(buffer, sampleRate = 2_000_000) {
+/**
+ * Extract CRC-valid 112-bit ADS-B messages from unsigned 8-bit interleaved IQ.
+ * With `removeDc`, pulse power is measured around the buffer's IQ mean instead
+ * of 127.5: Mode S frames fill a small part of a block, so the mean is the
+ * receiver's DC offset.
+ * @param {ArrayBuffer} buffer Interleaved I and Q samples.
+ * @param {number} [sampleRate]
+ * @param {{removeDc?: boolean}} [options]
+ */
+export function extractAdsbMessages(
+  buffer,
+  sampleRate = 2_000_000,
+  { removeDc = false } = {},
+) {
   if (
     !(buffer instanceof ArrayBuffer) ||
     Math.abs(sampleRate - 2_000_000) > 30_000
@@ -533,10 +545,22 @@ export function extractAdsbMessages(buffer, sampleRate = 2_000_000) {
     return [];
   const iq = new Uint8Array(buffer);
   const sampleCount = Math.floor(iq.length / 2);
+  let centerI = 127.5;
+  let centerQ = 127.5;
+  if (removeDc && sampleCount) {
+    let sumI = 0;
+    let sumQ = 0;
+    for (let index = 0; index < sampleCount; index += 1) {
+      sumI += iq[index * 2];
+      sumQ += iq[index * 2 + 1];
+    }
+    centerI = sumI / sampleCount;
+    centerQ = sumQ / sampleCount;
+  }
   const power = new Float32Array(sampleCount);
   for (let index = 0; index < sampleCount; index += 1) {
-    const i = iq[index * 2] - 127.5;
-    const q = iq[index * 2 + 1] - 127.5;
+    const i = iq[index * 2] - centerI;
+    const q = iq[index * 2 + 1] - centerQ;
     power[index] = i * i + q * q;
   }
 
@@ -577,7 +601,7 @@ export class AdsbStreamDecoder {
     this._carry = new Uint8Array(0);
   }
 
-  extract(buffer, sampleRate = 2_000_000) {
+  extract(buffer, sampleRate = 2_000_000, options = {}) {
     if (!(buffer instanceof ArrayBuffer)) return [];
     const incoming = new Uint8Array(buffer);
     let combined = incoming;
@@ -589,6 +613,6 @@ export class AdsbStreamDecoder {
     this._carry = combined.slice(
       Math.max(0, combined.length - STREAM_CARRY_BYTES),
     );
-    return extractAdsbMessages(combined.buffer, sampleRate);
+    return extractAdsbMessages(combined.buffer, sampleRate, options);
   }
 }

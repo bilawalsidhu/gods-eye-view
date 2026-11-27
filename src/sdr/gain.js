@@ -43,12 +43,9 @@ export const HACKRF_GAIN_STEPS_DB = Object.freeze({
 /** Accept only hardware-supported settings. Select inputs provide strings. */
 export function normalizeHackrfGain(stage, value) {
   if (stage === 'amp') return typeof value === 'boolean' ? value : null;
-  if (
-    !Object.hasOwn(HACKRF_GAIN_STEPS_DB, stage) ||
-    (typeof value !== 'number' && !(typeof value === 'string' && value.trim()))
-  )
-    return null;
-  const gain = Number(value);
+  if (!Object.hasOwn(HACKRF_GAIN_STEPS_DB, stage)) return null;
+  const gain =
+    typeof value === 'string' && value.trim() ? Number(value) : value;
   return HACKRF_GAIN_STEPS_DB[stage].includes(gain) ? gain : null;
 }
 
@@ -131,7 +128,6 @@ export function readSdrGainSettings(storage) {
  * @returns {boolean} Whether the write succeeded.
  */
 export function writeSdrGainSettings(storage, settings) {
-  if (settings == null) return false;
   return writeSettings(storage, SDR_GAIN_STORAGE_KEY, {
     fm: settings.fm,
     adsb: settings.adsb,
