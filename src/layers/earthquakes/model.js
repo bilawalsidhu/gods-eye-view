@@ -130,7 +130,7 @@ export function createEarthquakeOverlayEntry({
 }
 
 /** Where USGS publishes one event's page, its event id appended. */
-export const USGS_EVENT_PAGE_URL =
+const USGS_EVENT_PAGE_URL =
   'https://earthquake.usgs.gov/earthquakes/eventpage/';
 
 /**
@@ -241,14 +241,14 @@ export function describeEarthquake(
  * USGS's magnitude classes, weakest first: minor (under 4; the feed starts
  * at M2.5), light, moderate, strong, major, great (8 and up).
  */
-export const EARTHQUAKE_SEVERITY_LEVELS = 6;
+const EARTHQUAKE_SEVERITY_LEVELS = 6;
 
 /**
  * A magnitude's USGS class, 0 (minor) to 5 (great).
  * @param {number} magnitude
  * @returns {number}
  */
-export function earthquakeSeverityLevel(magnitude) {
+function earthquakeSeverityLevel(magnitude) {
   const mag = Number(magnitude);
   if (!Number.isFinite(mag) || mag < 4) return 0;
   return Math.min(EARTHQUAKE_SEVERITY_LEVELS - 1, Math.floor(mag) - 3);
@@ -309,7 +309,7 @@ export const EARTHQUAKE_RIPPLE_RINGS = 6;
 /** How long one contour line takes from the marker to the disc's edge. */
 export const EARTHQUAKE_RIPPLE_PERIOD_MS = 4800;
 /** Every this many lines one is an index contour, drawn heavier. */
-export const EARTHQUAKE_INDEX_CONTOUR_EVERY = 3;
+const EARTHQUAKE_INDEX_CONTOUR_EVERY = 3;
 
 /**
  * How far a contour line dents in from the circle, as a share of its

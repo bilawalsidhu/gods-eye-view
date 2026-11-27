@@ -28,9 +28,9 @@ const QUALIFYING_TYPES = new Set(['adsb_icao', 'mlat']);
 /** Restrict to decoded DO-260A/B quality fields; readsb does not decode v3 quality as v3. */
 const QUALIFYING_VERSIONS = new Set([1, 2]);
 /** NIC below 7: containment radius of 0.2 NM or more (below the US 91.227 ADS-B Out minimum). GEV threshold. */
-export const GNSS_NIC_THRESHOLD = 7;
+const GNSS_NIC_THRESHOLD = 7;
 /** NACp below 8: position uncertainty of 93 m or more (below the US 91.227 minimum). GEV threshold. */
-export const GNSS_NACP_THRESHOLD = 8;
+const GNSS_NACP_THRESHOLD = 8;
 /** Positions older than this are not current evidence of the local sky. */
 const MAX_POSITION_AGE_S = 60;
 /** H3 resolution of the cells, gpsjam.org's grid: hexagons of about 1,770 km² (22.6 km edge). */
@@ -42,10 +42,10 @@ export const GNSS_MEDIUM_PERCENT = 2;
 export const GNSS_HIGH_PERCENT = 10;
 
 /** Primary cell state: what the data shows (low navigation accuracy). */
-export const GNSS_ANOMALY_STATE = 'navigation-integrity-anomaly';
-export const GNSS_NOMINAL_STATE = 'nominal';
+const GNSS_ANOMALY_STATE = 'navigation-integrity-anomaly';
+const GNSS_NOMINAL_STATE = 'nominal';
 /** Secondary, unvalidated reading of an anomaly cell. */
-export const GNSS_INTERPRETATION = 'suspected-gnss-interference';
+const GNSS_INTERPRETATION = 'suspected-gnss-interference';
 
 /** The per-aircraft rule; GEV-defined and not validated against known events. */
 export const GNSS_CLASSIFIER = Object.freeze({

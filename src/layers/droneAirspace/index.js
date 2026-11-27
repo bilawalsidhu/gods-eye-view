@@ -17,7 +17,7 @@ export { createDroneAirspaceSource } from './source.js';
 export * from './cards.js';
 
 /** Fill/line colour for a zone by TYPE_CODE, as a renderer colour `[r, g, b, a]`. */
-export function droneAirspaceColor(typeCode) {
+function droneAirspaceColor(typeCode) {
   return cssColor(droneAirspaceAccent(typeCode));
 }
 
@@ -28,7 +28,7 @@ const ringDegrees = (ring) => ring.map(([lon, lat]) => ({ lon, lat }));
  * own (`drone-airspace:1:fills`, …), so several can share a renderer. Picks
  * name them as `Hit.set`.
  */
-export const DRONE_AIRSPACE_SET_PREFIX = 'drone-airspace';
+const DRONE_AIRSPACE_SET_PREFIX = 'drone-airspace';
 let instances = 0;
 
 /**

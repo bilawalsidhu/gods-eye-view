@@ -34,10 +34,9 @@ import {
 import { inputFor as defaultInputFor } from '../../input/dispatcher.js';
 export * from './catalog.js';
 export * from './records.js';
-export { readGhostMapsKml } from './kml.js';
 export { createGhostMapsSource } from './source.js';
 
-export const GHOSTMAPS_LAYER_ID = 's2-ghostmaps';
+const GHOSTMAPS_LAYER_ID = 's2-ghostmaps';
 export const GHOSTMAPS_OVERLAY_SOURCE_ID = 's2-ghostmaps';
 const PICK_PREFIX = 'ghostmaps:';
 const STORAGE_KEY = 'gev.ghostmaps.products';

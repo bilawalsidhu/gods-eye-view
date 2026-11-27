@@ -22,8 +22,8 @@ export * from './eras.js';
 export * from './period.js';
 export { createShipwrecksSource } from './source.js';
 
-export const SHIPWRECKS_LAYER_ID = 'shipwrecks';
-export const SHIPWRECKS_OVERLAY_SOURCE_ID = 'shipwrecks';
+const SHIPWRECKS_LAYER_ID = 'shipwrecks';
+const SHIPWRECKS_OVERLAY_SOURCE_ID = 'shipwrecks';
 const PICK_PREFIX = 'shipwreck:';
 const MAX_CARD_LINES = 14;
 /** Wrecks not refreshed for this long leave the map (the proxy's own limit). */
@@ -60,7 +60,7 @@ export function markerPixelSize(casualties) {
  * @param {string} color CSS colour.
  * @returns {string}
  */
-export function wreckMarkerImage(color) {
+function wreckMarkerImage(color) {
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" width="144" height="144" viewBox="0 0 36 36">` +
     `<circle cx="18" cy="18" r="16" fill="${color}" stroke="#ffffff" stroke-width="2"/>` +

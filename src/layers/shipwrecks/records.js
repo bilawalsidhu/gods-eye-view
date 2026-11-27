@@ -13,7 +13,7 @@ export const EMODNET_WFS_URL =
 export const EMODNET_PAGE_URL =
   'https://emodnet.ec.europa.eu/en/human-activities';
 
-export const SHIPWRECK_SOURCES = Object.freeze(['emodnet', 'wikidata']);
+const SHIPWRECK_SOURCES = Object.freeze(['emodnet', 'wikidata']);
 
 /**
  * Wikidata (CC0): shipwreck items that have at least one Wikipedia article,

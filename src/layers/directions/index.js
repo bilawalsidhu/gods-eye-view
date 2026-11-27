@@ -30,14 +30,14 @@ import {
 import { distanceParts } from '../../data/distanceFormat.js';
 
 export const DIRECTIONS_STEP_OVERLAY_SOURCE_ID = 'directions-step';
-export const DIRECTIONS_STEP_OVERLAY_SOURCE_OPTIONS = Object.freeze({
+const DIRECTIONS_STEP_OVERLAY_SOURCE_OPTIONS = Object.freeze({
   cohortLimit: 1,
   collisionCapacity: 0,
   moving: false,
 });
 /** The A and B letters above the endpoint markers. */
 export const DIRECTIONS_MARKER_OVERLAY_SOURCE_ID = 'directions-markers';
-export const DIRECTIONS_MARKER_OVERLAY_SOURCE_OPTIONS = Object.freeze({
+const DIRECTIONS_MARKER_OVERLAY_SOURCE_OPTIONS = Object.freeze({
   cohortLimit: 2,
   collisionCapacity: 0,
   moving: false,
@@ -114,7 +114,7 @@ export const STEP_ANCHOR_SLOW_RETRY_MS = 2000;
 /** Re-reads at the quick gap before backing off. */
 export const STEP_ANCHOR_FAST_ATTEMPTS = 5;
 /** How often the row repaints the highlighted step while FLY is running (ms). */
-export const FLIGHT_PROGRESS_MS = 250;
+const FLIGHT_PROGRESS_MS = 250;
 
 // ---------------------------------------------------------------------------
 // Display text in the page's language. The proxy's English `instruction` stays

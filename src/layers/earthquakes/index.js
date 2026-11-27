@@ -38,8 +38,8 @@ const msg = (text) => text;
  * own (`earthquakes:1`, …), so several can share a renderer. Picks name it
  * as `Hit.set`.
  */
-export const EARTHQUAKE_DISC_SET_ID = 'earthquakes';
-export const EARTHQUAKES_LAYER_ID = 'earthquakes';
+const EARTHQUAKE_DISC_SET_ID = 'earthquakes';
+const EARTHQUAKES_LAYER_ID = 'earthquakes';
 /** The overlay source the clicked quake's detail card is shown in. */
 export const EARTHQUAKE_CARD_SOURCE_ID = 'earthquake-card';
 /** A disc's item id is this prefix and the event's stable id. */

@@ -29,7 +29,7 @@ import {
  * (`submarine-cables:1:lines`, …), so several can share a renderer. Picks
  * name them as `Hit.set`.
  */
-export const CABLE_SET_PREFIX = 'submarine-cables';
+const CABLE_SET_PREFIX = 'submarine-cables';
 let layers = 0;
 
 const BLACK_OUTLINE = [0, 0, 0, 0.65];

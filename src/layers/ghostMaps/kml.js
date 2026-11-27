@@ -4,8 +4,8 @@
 // either an image packed in the same KMZ or the layer's own marker.
 import { kmlColor } from './records.js';
 
-export const MAX_GHOSTMAPS_FEATURES = 20_000;
-export const MAX_GHOSTMAPS_POSITIONS = 250_000;
+const MAX_GHOSTMAPS_FEATURES = 20_000;
+const MAX_GHOSTMAPS_POSITIONS = 250_000;
 
 const childrenNamed = (el, name) =>
   [...(el?.children || [])].filter((child) => child.localName === name);
@@ -23,7 +23,7 @@ function number(el, fallback) {
 }
 
 /** `lon,lat[,alt] lon,lat ...` → [[lon, lat], ...]; invalid tuples are dropped. */
-export function parseKmlCoordinates(value) {
+function parseKmlCoordinates(value) {
   const out = [];
   for (const tuple of String(value ?? '')
     .trim()
