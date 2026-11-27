@@ -1,9 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  MapStackController,
-  photorealUnavailableReason,
-} from './mapStackController.js';
+import { MapStackController } from './mapStackController.js';
+import { photorealUnavailableReason } from './maps/availability.js';
 
 test('missing photoreal credentials explain both supported setup routes', () => {
   assert.match(

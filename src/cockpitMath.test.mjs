@@ -25,13 +25,15 @@ import {
   normalizeHeading,
   relativeBearing,
   resolveCockpitContextReadout,
-  resolveHudRailLayout,
   resolveTrackedAircraftInfo,
   slewHeading,
   speedRulerStep,
   speedRulerTicks,
 } from './cockpitMath.js';
-import { bandBesideMidpointObstacles } from './ui/panelRailGeometry.js';
+import {
+  bandBesideMidpointObstacles,
+  resolveHudRailLayout,
+} from './ui/panelRailGeometry.js';
 
 test('cockpit presentation updates are throttled independently of camera frames', () => {
   assert.equal(cockpitUiUpdateDue(1000, 0, 100), true);

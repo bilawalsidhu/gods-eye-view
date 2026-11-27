@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as Cesium from 'cesium';
-import { MAP_STACKS } from '../mapStackController.js';
+import { MAP_STACKS } from '../maps/catalog.js';
 import { fromDegrees, toLonLatH } from '../geo/ellipsoid.js';
 import { bindRenderer } from '../render/rendererOf.js';
 import {

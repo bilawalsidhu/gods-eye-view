@@ -30,7 +30,7 @@ import {
   knownRadioLocation,
   normalizeStackId,
 } from './gevActions.js';
-import { MAP_STACKS } from '../mapStackController.js';
+import { MAP_STACKS } from '../maps/catalog.js';
 import { KEY_REJECTED_MESSAGE } from '../layers/streetLevel/providers/google/policy.js';
 import { GEV_REALTIME_TOOLS } from '../../server/providers/openai/tools.js';
 import { presentResult } from './resultDisplay.js';
