@@ -45,11 +45,7 @@ for (const locale of ['es', 'ru']) {
   test(`${locale}: selected fire card follows the UI language`, () => {
     setLocale(locale);
     try {
-      assert.notEqual(
-        t('Older or unknown'),
-        'Older or unknown',
-        'legend is translated',
-      );
+      assert.notEqual(t('Burned'), 'Burned', 'legend is translated');
       const card = buildIncidentCard(row, now, {
         link: 'https://inciweb.example',
       });

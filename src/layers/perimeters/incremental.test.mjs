@@ -8,9 +8,10 @@ import {
   piece,
   snapshot,
   harness,
-  fillOf,
-  lineOf,
-  SET_SIZES,
+  FILL,
+  edgeOf,
+  LINE_MIN_VERTICES,
+  SQUARE_VERTICES,
 } from '../../testSupport/perimeterLayerHarness.mjs';
 
 test('a read with nothing changed writes nothing', async () => {
@@ -18,7 +19,7 @@ test('a read with nothing changed writes nothing', async () => {
   let at = AT;
   const pieces = [
     piece('a', 'p1', AT - HOUR),
-    piece('a', 'p2', AT - 30 * HOUR),
+    piece('a', 'p2', AT - 30 * HOUR, { lon: -120.5 }),
   ];
   const h = harness(() => snapshot(fires, pieces, { at }));
   await h.layer.update();
@@ -43,66 +44,166 @@ test('a read with nothing changed writes nothing', async () => {
   again.layer.destroy();
 });
 
-test('a piece that changes band is recoloured in its own two sets, and nothing else is written', async () => {
+test("a piece that turns 24 h old changes its fire's edge, and nothing else", async () => {
   const fires = [fireAt('a', -120, 38), fireAt('b', -119, 39)];
   let at = AT;
   const pieces = [
-    piece('a', 'still', AT - 100 * HOUR, { lon: -121, count: SET_SIZES.lines }),
-    piece('a', 'young', AT - 5 * HOUR, { count: 2 }),
-    piece('a', 'old', AT - 40 * HOUR),
+    piece('a', 'old', AT - 100 * HOUR, { lon: -121 }),
+    piece('a', 'young', AT - 23 * HOUR, { count: 2 }),
     piece('b', 'other', AT - 2 * HOUR, { lon: -119, lat: 39 }),
   ];
   const h = harness(() => snapshot(fires, pieces, { at }));
   await h.layer.update();
-  const sets = h.renderer.testing
-    .sets()
-    .filter((id) => id.startsWith('fire-perimeters:'));
-  const fillSets = sets.filter((id) => id.endsWith(':fills'));
-  const lineSets = sets.filter((id) => id.endsWith(':lines'));
-  assert.equal(fillSets.length, 1);
-  assert.equal(lineSets.length, 2);
+  const ours = (kind) =>
+    h.renderer.testing
+      .sets()
+      .filter((id) => id.startsWith('fire-perimeters:') && id.endsWith(kind));
+  // Small fires: one set of each kind.
+  assert.equal(ours(':fills').length, 1);
+  assert.equal(ours(':halos').length, 1);
+  assert.equal(ours(':lines').length, 1);
+  const lines = () => h.items('lines');
+  assert.deepEqual(
+    lines().get('fire-perimeter:a:young:line:1').style,
+    edgeOf(0),
+    'growing',
+  );
+  assert.deepEqual(lines().get('fire-perimeter:a:old:line:0').style, edgeOf(1));
   const before = h.items('fills');
   h.writes.length = 0;
-  // Two hours on, `young` is 7 h old: band 1; the rest keep theirs.
+  // Two hours on, `young` is 25 h old: burned. The fills are left alone.
   at += 2 * HOUR;
   await h.layer.update();
-  const young = [...before.values()].filter(({ id }) =>
-    id.startsWith('fire-perimeter:a:young:'),
-  );
-  assert.equal(young.length, 2);
   assert.deepEqual(
-    h.writes.map(({ set, call, ids }) => [set, call, ids]),
+    h.writes.map(({ set, call }) => [set, call]),
     [
-      [
-        fillSets[0],
-        'upsert',
-        ['fire-perimeter:a:young:0', 'fire-perimeter:a:young:1'],
-      ],
-      [
-        lineSets[1],
-        'upsert',
-        ['fire-perimeter:a:young:line:0', 'fire-perimeter:a:young:line:1'],
-      ],
+      [ours(':halos')[0], 'set'],
+      [ours(':lines')[0], 'set'],
     ],
   );
-  const fills = h.items('fills');
-  const lines = h.items('lines');
-  assert.deepEqual(fills.get('fire-perimeter:a:young:0').fill, fillOf(1));
   assert.deepEqual(
-    lines.get('fire-perimeter:a:young:line:1').style.color,
-    lineOf(1),
+    lines().get('fire-perimeter:a:young:line:1').style,
+    edgeOf(1),
   );
-  assert.deepEqual(fills.get('fire-perimeter:a:old:0').fill, fillOf(2));
-  assert.deepEqual(fills.get('fire-perimeter:b:other:0').fill, fillOf(0));
-  // Recoloured where it is: the same set, the same geometry.
-  const was = before.get('fire-perimeter:a:young:0');
-  const now = fills.get('fire-perimeter:a:young:0');
-  assert.equal(now.set, was.set);
-  assert.deepEqual(now.geometry, was.geometry);
+  assert.deepEqual(
+    lines().get('fire-perimeter:b:other:line:0').style,
+    edgeOf(0),
+  );
+  for (const [id, item] of h.items('fills')) {
+    assert.deepEqual(item.fill, FILL, 'one fill, whatever its age');
+    assert.equal(item.set, before.get(id).set);
+  }
   h.layer.destroy();
 });
 
-test('a new piece is only upserted, and a piece gone only removed', async () => {
+test("one fire's change writes only its own items, and its own edge sets", async () => {
+  const fires = [fireAt('a', -120, 38), fireAt('b', -119, 39)];
+  let at = AT;
+  // Each fire's edge more than half a group's room: a group each.
+  const count = Math.ceil(LINE_MIN_VERTICES / 2 / SQUARE_VERTICES) + 1;
+  let pieces = [
+    piece('a', 'a1', AT - 30 * HOUR, { count }),
+    piece('b', 'b1', AT - 30 * HOUR, { lon: -119, lat: 39, count }),
+    piece('b', 'b2', AT - 5 * HOUR, { lon: -118.9, lat: 39.1 }),
+  ];
+  const h = harness(() => snapshot(fires, pieces, { at }));
+  await h.layer.update();
+  const edgeSetsOf = (fire) =>
+    new Set(
+      [...h.items('halos').values(), ...h.items('lines').values()]
+        .filter(({ id }) => id.startsWith(`fire-perimeter:${fire}:`))
+        .map(({ set }) => set),
+    );
+  const ofA = edgeSetsOf('a');
+  const ofB = edgeSetsOf('b');
+  assert.equal(ofA.size, 2, 'a halo set and a line set');
+  assert.equal(ofB.size, 2);
+  assert.equal(
+    [...ofA].some((set) => ofB.has(set)),
+    false,
+  );
+  const fills = new Set([...h.items('fills').values()].map(({ set }) => set));
+  /** Every write is to `fire`'s edge sets, or of its own fills only. */
+  const onlyOf = (fire, ofFire) => {
+    assert.ok(h.writes.length > 0);
+    for (const { set, call, ids } of h.writes)
+      if (fills.has(set)) {
+        assert.notEqual(call, 'set', 'no fill set written whole');
+        for (const id of ids)
+          assert.ok(id.startsWith(`fire-perimeter:${fire}:`), id);
+      } else assert.ok(ofFire.has(set), set);
+  };
+  // `b` grows, loses a piece, and a piece of it turns 24 h old; `a` stays.
+  for (const step of [
+    () =>
+      (pieces = [...pieces, piece('b', 'b3', at, { lon: -118.8, lat: 39.2 })]),
+    () => (pieces = pieces.filter(({ id }) => id !== 'b1')),
+    () => (at += 20 * HOUR),
+  ]) {
+    h.writes.length = 0;
+    step();
+    await h.layer.update();
+    onlyOf('b', ofB);
+  }
+  // And `a` growing writes `a` alone.
+  h.writes.length = 0;
+  pieces.push(piece('a', 'a2', at, { lon: -120.1, lat: 38.2 }));
+  await h.layer.update();
+  onlyOf('a', ofA);
+  h.layer.destroy();
+});
+
+test("a fire's edge leaves out a line newer growth was cut along", async () => {
+  const fires = [fireAt('a', -120, 38)];
+  const square = (lon) => [
+    [lon, 38],
+    [lon + 0.01, 38],
+    [lon + 0.01, 38.01],
+    [lon, 38.01],
+    [lon, 38],
+  ];
+  const old = {
+    id: 'old',
+    fireId: 'a',
+    born: AT - 50 * HOUR,
+    polygons: [[square(-120)]],
+    outline: [square(-120)],
+  };
+  // Growth east of it, cut from the area around it: its ring runs along
+  // the old east side; its line is the new edge only.
+  const grown = square(-119.99);
+  const growth = {
+    id: 'growth',
+    fireId: 'a',
+    born: AT - HOUR,
+    polygons: [[grown]],
+    outline: [grown.slice(0, 4)],
+  };
+  const h = harness(() => snapshot(fires, [old, growth]));
+  await h.layer.update();
+  const runs = [...h.items('lines').values()].map(({ id, positions }) => [
+    id,
+    positions.length,
+  ]);
+  // The old square's east side runs inside the fire now: its line is cut
+  // there, leaving its south side, and its north and west sides.
+  assert.deepEqual(runs, [
+    ['fire-perimeter:a:old:line:0', 2],
+    ['fire-perimeter:a:old:line:1', 3],
+    ['fire-perimeter:a:growth:line:0', 4],
+  ]);
+  assert.deepEqual(
+    [...h.items('halos').keys()],
+    [
+      'fire-perimeter:a:old:halo:0',
+      'fire-perimeter:a:old:halo:1',
+      'fire-perimeter:a:growth:halo:0',
+    ],
+  );
+  h.layer.destroy();
+});
+
+test('a new fill is only upserted, a fill gone only removed; the edge is drawn again', async () => {
   const fires = [fireAt('a', -120, 38)];
   let pieces = [piece('a', 'p1', AT - HOUR)];
   const h = harness(() => snapshot(fires, pieces));
@@ -110,23 +211,22 @@ test('a new piece is only upserted, and a piece gone only removed', async () => 
   h.writes.length = 0;
   pieces = [...pieces, piece('a', 'p 2/b', AT, { lon: -120.5 })];
   await h.layer.update();
-  assert.deepEqual(
-    h.writes.map(({ call, ids }) => [call, ids]),
-    [
-      ['upsert', ['fire-perimeter:a:p%202%2Fb:0']],
-      ['upsert', ['fire-perimeter:a:p%202%2Fb:line:0']],
-    ],
-  );
+  const calls = () => h.writes.map(({ call, ids }) => [call, ids]);
+  const edge = (...pieceIds) => [
+    ['set', pieceIds.map((id) => `fire-perimeter:a:${id}:halo:0`)],
+    ['set', pieceIds.map((id) => `fire-perimeter:a:${id}:line:0`)],
+  ];
+  assert.deepEqual(calls(), [
+    ['upsert', ['fire-perimeter:a:p%202%2Fb:0']],
+    ...edge('p1', 'p%202%2Fb'),
+  ]);
   h.writes.length = 0;
   pieces = pieces.slice(1);
   await h.layer.update();
-  assert.deepEqual(
-    h.writes.map(({ call, ids }) => [call, ids]),
-    [
-      ['remove', ['fire-perimeter:a:p1:0']],
-      ['remove', ['fire-perimeter:a:p1:line:0']],
-    ],
-  );
+  assert.deepEqual(calls(), [
+    ['remove', ['fire-perimeter:a:p1:0']],
+    ...edge('p%202%2Fb'),
+  ]);
   assert.deepEqual(
     [...h.items('fills').keys()],
     ['fire-perimeter:a:p%202%2Fb:0'],
@@ -136,81 +236,96 @@ test('a new piece is only upserted, and a piece gone only removed', async () => 
   pieces = [];
   await h.layer.update();
   assert.deepEqual(h.writes, []);
-  assert.equal(h.items('fills').size, 0);
-  assert.equal(h.items('lines').size, 0);
+  for (const kind of ['fills', 'halos', 'lines'])
+    assert.equal(h.items(kind).size, 0);
   h.layer.destroy();
 });
 
-test('a set that loses and gains pieces in one read is written once, whole', async () => {
+test('a fill set that loses and gains pieces in one read is written once, whole', async () => {
   const fires = [fireAt('a', -120, 38)];
-  let pieces = [piece('a', 'p1', AT - HOUR), piece('a', 'p2', AT - HOUR)];
+  let pieces = [
+    piece('a', 'p1', AT - HOUR),
+    piece('a', 'p2', AT - HOUR, { lon: -120.5 }),
+  ];
   const h = harness(() => snapshot(fires, pieces));
   await h.layer.update();
   h.writes.length = 0;
-  pieces = [pieces[1], piece('a', 'p3', AT)];
+  pieces = [pieces[1], piece('a', 'p3', AT, { lon: -121 })];
   await h.layer.update();
   assert.deepEqual(
-    h.writes.map(({ call, ids }) => [call, ids]),
-    [
-      ['set', ['fire-perimeter:a:p2:0', 'fire-perimeter:a:p3:0']],
-      ['set', ['fire-perimeter:a:p2:line:0', 'fire-perimeter:a:p3:line:0']],
-    ],
+    h.writes
+      .filter(({ set }) => set.endsWith(':fills'))
+      .map(({ call, ids }) => [call, ids]),
+    [['set', ['fire-perimeter:a:p2:0', 'fire-perimeter:a:p3:0']]],
   );
   h.layer.destroy();
 });
 
-test('new pieces start a new set once the newest is full, drawn over the older', async () => {
-  const fires = [fireAt('a', -120, 38)];
-  const per = SET_SIZES.lines;
-  let pieces = [piece('a', 'p1', AT - HOUR, { count: per })];
+test("new fills go into the newest fill set until it holds a share of the fills; each fire's edge joins the smallest group with room", async () => {
+  // A fire whose edge takes nearly a group's room.
+  const most = LINE_MIN_VERTICES / SQUARE_VERTICES - 5;
+  const fires = ['a', 'b', 'c', 'd'].map((id, i) => fireAt(id, -120 + i, 38));
+  let pieces = [
+    piece('a', 'a1', AT, { lon: -120, count: most }),
+    piece('b', 'b1', AT, { lon: -119, count: 10 }),
+  ];
   const h = harness(() => snapshot(fires, pieces));
+  const ours = (kind) =>
+    h.renderer.testing
+      .sets()
+      .filter((id) => id.startsWith('fire-perimeters') && id.endsWith(kind));
+  const lineSetOf = (id) => h.items('lines').get(id).set;
   await h.layer.update();
-  pieces = [...pieces, piece('a', 'p2', AT, { lon: -110 })];
-  h.writes.length = 0;
-  await h.layer.update();
-  const lineSets = h.renderer.testing
-    .sets()
-    .filter((id) => id.endsWith(':lines'));
-  assert.equal(lineSets.length, 2, 'the full set is left as it is');
-  assert.deepEqual(
-    h.writes.filter(({ set }) => set.endsWith(':lines')),
-    [{ set: lineSets[1], call: 'upsert', ids: ['fire-perimeter:a:p2:line:0'] }],
+  // `b`'s edge does not fit beside `a`'s: a group of its own.
+  assert.notEqual(
+    lineSetOf('fire-perimeter:a:a1:line:0'),
+    lineSetOf('fire-perimeter:b:b1:line:0'),
   );
-  // Its fills, under their own budget, still go in the one set.
+  assert.equal(ours(':lines').length, 2);
+  assert.equal(ours(':fills').length, 1, 'the fills fit one set');
+  const first = ours('');
+  h.writes.length = 0;
+  // The first fill set is full: `c` and `d`'s fills start a second. `c`'s
+  // edge fits beside `b`'s, the smaller; `d`'s fits nowhere.
+  pieces = [
+    ...pieces,
+    piece('c', 'c1', AT, { lon: -118, count: 400 }),
+    piece('d', 'd1', AT, { lon: -117, count: most }),
+  ];
+  await h.layer.update();
   assert.equal(
-    h.renderer.testing.sets().filter((id) => id.endsWith(':fills')).length,
-    1,
+    lineSetOf('fire-perimeter:c:c1:line:0'),
+    lineSetOf('fire-perimeter:b:b1:line:0'),
   );
-  h.layer.destroy();
-});
-
-test('a new fill set leaves the line sets alone: lines are at a higher draw order', async () => {
-  const fires = [fireAt('a', -120, 38)];
-  const full = SET_SIZES.fills;
-  let pieces = [piece('a', 'p1', AT - HOUR, { count: full })];
-  const h = harness(() => snapshot(fires, pieces));
-  const ours = () =>
-    h.renderer.testing.sets().filter((id) => id.startsWith('fire-perimeters'));
-  const kinds = () => ours().map((id) => id.split(':').at(-1));
-  await h.layer.update();
-  assert.deepEqual(kinds(), ['fills', 'lines']);
-  const [, firstLines] = ours();
-  h.writes.length = 0;
-  pieces = [...pieces, piece('a', 'p2', AT, { lon: -110 })];
-  await h.layer.update();
-  // Both kinds full: a set of each is made, the first line set untouched.
-  assert.deepEqual(kinds(), ['fills', 'lines', 'fills', 'lines']);
-  const [, lines, newFills, newLines] = ours();
-  assert.equal(lines, firstLines, 'not made again');
+  const made = ours('').filter((id) => !first.includes(id));
   assert.deepEqual(
-    h.writes.map(({ set, call, ids }) => [set, call, ids.length]),
-    [
-      [newFills, 'upsert', 1],
-      [newLines, 'upsert', 1],
-    ],
+    made.map((id) => id.split(':').at(-1)),
+    ['fills', 'halos', 'lines'],
+    'a fill set, and an edge group for d',
+  );
+  assert.equal(lineSetOf('fire-perimeter:d:d1:line:0'), made[2]);
+  assert.equal(h.items('fills').get('fire-perimeter:d:d1:0').set, made[0]);
+  // `a`'s edge sets are not written.
+  const ofA = new Set([
+    lineSetOf('fire-perimeter:a:a1:line:0'),
+    h.items('halos').get('fire-perimeter:a:a1:halo:0').set,
+  ]);
+  assert.equal(
+    h.writes.some(({ set }) => ofA.has(set)),
+    false,
   );
   const order = (id) => h.renderer.testing.setRecord(id).spec.drawOrder;
-  assert.deepEqual(ours().map(order), [0, 1, 0, 1]);
+  assert.deepEqual(
+    ours('')
+      .filter((id) => !id.endsWith(':markers'))
+      .map(order),
+    [0, 1, 2, 1, 2, 0, 1, 2],
+  );
+  // A fire gone leaves its group, and a group with nothing left goes; the
+  // second fill set keeps `c`'s fills.
+  pieces = pieces.filter(({ fireId }) => fireId !== 'd');
+  await h.layer.update();
+  assert.deepEqual(ours(''), [...first, made[0]]);
   h.layer.destroy();
 });
 
@@ -218,11 +333,15 @@ test('a snapshot without piece ids is drawn whole every time it changes', async 
   const fires = [fireAt('a', -120, 38)];
   let at = AT;
   let revision = 'r1';
-  const pieces = [piece('a', null, AT - 5 * HOUR), piece('a', null, AT - HOUR)];
+  const pieces = [
+    piece('a', null, AT - 5 * HOUR),
+    piece('a', null, AT - HOUR, { lon: -120.5 }),
+  ];
   const h = harness(() => snapshot(fires, pieces, { at, revision }));
   await h.layer.update();
   const whole = [
     ['set', ['fire-perimeter:a:0', 'fire-perimeter:a:1']],
+    ['set', ['fire-perimeter:a:halo:0', 'fire-perimeter:a:halo:1']],
     ['set', ['fire-perimeter:a:line:0', 'fire-perimeter:a:line:1']],
   ];
   const calls = () => h.writes.map(({ call, ids }) => [call, ids]);
@@ -230,7 +349,7 @@ test('a snapshot without piece ids is drawn whole every time it changes', async 
   h.writes.length = 0;
   await h.layer.update();
   assert.deepEqual(calls(), [], 'the same revision and bands');
-  at += 2 * HOUR;
+  at += 20 * HOUR;
   await h.layer.update();
   assert.deepEqual(calls(), whole, 'a band changed: all drawn again');
   h.writes.length = 0;
@@ -251,12 +370,15 @@ test('pieces with ids after pieces without start over in new sets, and back', as
   let pieces = [piece('a', null, AT)];
   const h = harness(() => snapshot(fires, pieces));
   await h.layer.update();
-  const first = h.renderer.testing.sets().filter((id) => id.startsWith('fire'));
+  // The markers stay; the perimeter sets start over.
+  const perimeters = () =>
+    h.renderer.testing
+      .sets()
+      .filter((id) => id.startsWith('fire') && !id.endsWith(':markers'));
+  const first = perimeters();
   pieces = [piece('a', 'p1', AT)];
   await h.layer.update();
-  const second = h.renderer.testing
-    .sets()
-    .filter((id) => id.startsWith('fire'));
+  const second = perimeters();
   assert.equal(
     first.some((id) => second.includes(id)),
     false,
@@ -266,8 +388,7 @@ test('pieces with ids after pieces without start over in new sets, and back', as
   await h.layer.update();
   assert.deepEqual([...h.items('fills').keys()], ['fire-perimeter:a:0']);
   h.layer.disable();
-  for (const id of h.renderer.testing.sets())
-    if (id.startsWith('fire')) assert.equal(h.sets.get(id).show, false);
+  for (const id of perimeters()) assert.equal(h.sets.get(id).show, false);
   h.layer.destroy();
   assert.deepEqual(
     h.renderer.testing.sets().filter((id) => id.startsWith('fire')),
@@ -286,7 +407,8 @@ test('a click on a piece drawn by id selects its own fire, through the stub pick
   const entries = [];
   const h = harness(() => snapshot(fires, pieces, { at }), {
     overlayHost: {
-      setEntries: (sourceId, list) => entries.push(...list),
+      setEntries: (sourceId, list) =>
+        sourceId === 'fire-perimeters' && entries.push(...list),
       setVisible() {},
       clearSource() {},
     },
@@ -303,13 +425,13 @@ test('a click on a piece drawn by id selects its own fire, through the stub pick
     },
   });
   await h.layer.update();
-  // Six hours on, both pieces recoloured, and a new piece: the picks still
-  // find their fire.
-  at += 6 * HOUR;
+  // A day on, both edges burned, and a new piece: the picks still find
+  // their fire.
+  at += 24 * HOUR;
   pieces = [...pieces, piece('b', 'pb2', at, { lon: -119.95 })];
   await h.layer.update();
-  for (const id of ['fire-perimeter:a:pa:0', 'fire-perimeter:b:pb:0'])
-    assert.deepEqual(h.items('fills').get(id).fill, fillOf(1));
+  for (const id of ['fire-perimeter:a:pa:line:0', 'fire-perimeter:b:pb:line:0'])
+    assert.deepEqual(h.items('lines').get(id).style, edgeOf(1));
   h.renderer.camera.setView({
     destination: { lon: -119.9, lat: 38.005, height: 20000 },
   });
@@ -330,21 +452,6 @@ test('a click on a piece drawn by id selects its own fire, through the stub pick
     assert.equal(entries.length, 1);
     assert.equal(entries[0].id, `fire-perimeter-card:${fireId}`);
   }
-  h.layer.destroy();
-});
-
-test('fill sets are written before line sets, so each line set takes its place above every fill set', async () => {
-  const fires = [fireAt('a', -120, 38)];
-  const pieces = [
-    piece('a', 'p1', AT - HOUR, { count: SET_SIZES.fills }),
-    piece('a', 'p2', AT, { lon: -110 }),
-  ];
-  const h = harness(() => snapshot(fires, pieces));
-  await h.layer.update();
-  const first = new Map();
-  for (const { set } of h.writes)
-    if (!first.has(set)) first.set(set, set.split(':').at(-1));
-  assert.deepEqual([...first.values()], ['fills', 'fills', 'lines', 'lines']);
   h.layer.destroy();
 });
 
