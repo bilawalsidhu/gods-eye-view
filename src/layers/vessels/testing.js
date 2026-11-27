@@ -1,5 +1,5 @@
 import { DEFAULT_AIS_RUNTIME } from './policy.js';
-import { createVesselIconBook } from './iconBook.js';
+import { createIconBook } from '../../render/motion/iconBook.js';
 
 export function createTesting({ vesselState, parts: components, layer }) {
   const { state } = vesselState;
@@ -37,7 +37,7 @@ export function createTesting({ vesselState, parts: components, layer }) {
     state.selectedRecord = options.selectedRecord || null;
     // `icons: null` leaves the layer to make its own draw set.
     state.icons =
-      options.icons === null ? null : options.icons || createVesselIconBook();
+      options.icons === null ? null : options.icons || createIconBook();
     state.trail = options.trail || null;
     state.trailId = options.trailId || null;
     state.trailPositions = Array.isArray(options.trailPositions)

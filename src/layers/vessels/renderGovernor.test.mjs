@@ -6,7 +6,7 @@ import { bindFakeCesiumScene } from '../../testSupport/fakeCesiumScene.mjs';
 import { layerPlacement } from '../../data/placementProvider.js';
 import * as Cesium from 'cesium';
 import { PACE_MAX_HZ, PACE_MIN_HZ } from '../../renderPace.js';
-import { createVesselIconBook } from './iconBook.js';
+import { createIconBook } from '../../render/motion/iconBook.js';
 
 // The layer must let the scene idle: it asks for frames for forced passes,
 // for vessels that move, and one trailing frame after the camera stops, and
@@ -761,7 +761,7 @@ test('a placement pass writes the vessels it moved to the set at once, not one a
   camera.positionWC = Cesium.Cartesian3.fromDegrees(4.05, 51.93, 20_000);
   camera.frustum = { fovy: 1 };
   const writes = [];
-  const icons = createVesselIconBook({
+  const icons = createIconBook({
     id: 'vessels',
     upsert: (list) => writes.push(list.map((item) => item.id)),
     remove: noop,

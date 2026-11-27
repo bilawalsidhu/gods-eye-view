@@ -19,7 +19,7 @@ import {
   rendererOf,
 } from '../../render/rendererOf.js';
 import { poseSignature } from '../../render/camera/poseSignature.js';
-import { createVesselIconBook } from './iconBook.js';
+import { createIconBook } from '../../render/motion/iconBook.js';
 import { hasRealName, vesselIdFromEntry } from './cards.js';
 import {
   VESSEL_LIFT_M,
@@ -285,7 +285,7 @@ export function createRendering({
     // with its first vessel.
     set.setColumns?.({ ids: [] });
     iconSet = set;
-    state.icons = createVesselIconBook(set, { capabilities });
+    state.icons = createIconBook(set, { capabilities });
     state.icons.show = state.feed.enabled;
   }
 

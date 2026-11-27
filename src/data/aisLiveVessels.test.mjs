@@ -23,7 +23,7 @@ import {
   presentSelectedVessel,
   subscribeSelectedVessel,
 } from '../hudReadouts.js';
-import { createVesselIconBook } from '../layers/vessels/iconBook.js';
+import { createIconBook } from '../render/motion/iconBook.js';
 import { bindRenderer } from '../render/rendererOf.js';
 import { entityFollowTarget } from '../data/followed.js';
 import { _resetSelectionForTest, claimSelection } from './clickSelect.js';
@@ -773,7 +773,7 @@ test('disable and destroy make abort-ignoring AIS responses inert', async () => 
 
 /** One vessel row in a fresh set, as the layer adds it, plus its record. */
 function focusFixture() {
-  const icons = createVesselIconBook();
+  const icons = createIconBook();
   icons.put({
     id: '353136000',
     size: [32, 32],
@@ -1241,7 +1241,7 @@ test('vessel interaction wire: CCTV-owned pick preserves vessel selection', () =
 
 test('vessel interaction wire: own-layer unkeyed record pick does not deselect', () => {
   // The layer's icon set, drawing the unkeyed row.
-  const icons = createVesselIconBook({
+  const icons = createIconBook({
     id: 'ais-vessels:test',
     upsert() {},
     remove() {},
@@ -2318,7 +2318,7 @@ test('vessel selection passes the opaque source reference to optional history', 
 });
 
 test('vessel focus wire skips hidden sprites at rest while a target is tracked', () => {
-  const icons = createVesselIconBook();
+  const icons = createIconBook();
   const records = Array.from({ length: 51 }, (_, i) => {
     const iconId = String(i);
     icons.put({ id: iconId, size: [32, 32], meta: { id: iconId } });

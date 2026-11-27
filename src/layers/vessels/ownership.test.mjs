@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createVesselLayer } from './index.js';
 import { createVesselState } from './state.js';
 import * as Cesium from 'cesium';
-import { createVesselIconBook } from './iconBook.js';
+import { createIconBook } from '../../render/motion/iconBook.js';
 import { liftedForHorizon } from '../../geo/horizon.js';
 import { bindFakeCesiumCamera } from '../../testSupport/fakeCameraPort.mjs';
 import { fakeDrawPort } from '../../testSupport/fakeDrawPort.mjs';
@@ -53,7 +53,7 @@ function services() {
 }
 function setup(source, options = {}, viewer = {}) {
   const layer = createVesselLayer({ source, services: services(), options });
-  const icons = createVesselIconBook();
+  const icons = createIconBook();
   if (viewer.camera)
     bindFakeCesiumCamera(viewer, { query: offscreen, draw: fakeDrawPort() });
   layer.testing._setVesselStateForTest({ viewer, icons });
