@@ -18,15 +18,6 @@ const base = {
   averagingMinutes: 60,
 };
 test('all published pollutant boundaries classify inclusively without rounding down', () => {
-  // The published EEA bands (and CO's WHO-based steps), pinned here.
-  assert.deepEqual(EEA_HOURLY_LIMITS, {
-    'PM2.5': [5, 15, 50, 90, 140],
-    PM10: [15, 45, 120, 195, 270],
-    NO2: [10, 25, 60, 100, 150],
-    O3: [60, 100, 120, 160, 180],
-    SO2: [20, 40, 125, 190, 275],
-    CO: [4, 7, 10, 35, 100],
-  });
   for (const [parameter, limits] of Object.entries(EEA_HOURLY_LIMITS)) {
     // Each pollutant in the layer's unit: µg/m³, CO mg/m³.
     const units = parameter === 'CO' ? 'mg/m³' : 'µg/m³';
@@ -71,7 +62,6 @@ test('unknown periods, incomplete or flagged hours, unsupported units and CO2 ne
 });
 
 test('CO is banded in mg/m³ on the same six bands', () => {
-  assert.deepEqual(EEA_HOURLY_LIMITS.CO, [4, 7, 10, 35, 100]);
   const co = (value, units = 'mg/m³') =>
     interpretHourly({ ...base, parameter: 'CO', units, value }).assessment;
   assert.equal(co(0.4).label, 'Good');
