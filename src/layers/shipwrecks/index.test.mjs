@@ -152,8 +152,10 @@ test('markers sit on the wreck: no eye offset, bigger toll drawn last', async ()
   await h.layer.update();
   const ids = h.markers.billboards.map((billboard) => billboard.id);
   assert.deepEqual(ids, ['shipwreck:none', 'shipwreck:small', 'shipwreck:big']);
-  for (const billboard of h.markers.billboards)
+  for (const billboard of h.markers.billboards) {
     assert.equal(billboard.eyeOffset, undefined);
+    assert.equal(billboard.height, 'absolute');
+  }
   assert.deepEqual(h.markers.billboards[2].size, [
     markerPixelSize(1500),
     markerPixelSize(1500),

@@ -175,7 +175,9 @@ export function createShipwrecksLayer({
           pos: position,
           image: _images[eraOf(record)],
           size: [size, size],
-          height: 'clampGround',
+          // Not 'clampGround': a terrain read per marker takes seconds for all
+          // wrecks. A wreck in a lake above sea level draws under the water.
+          height: 'absolute',
           disableDepthTest: Number.POSITIVE_INFINITY,
           show: true,
         },
