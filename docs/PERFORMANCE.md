@@ -6,6 +6,9 @@ specification and should not be used to predict performance on untested systems.
 The original capture artifacts are not included here, so this page records
 results rather than defining a runnable benchmark.
 
+For slowdowns found since, with their causes and fixes, see
+[PERFORMANCE-AUDIT-2026-11.md](PERFORMANCE-AUDIT-2026-11.md).
+
 ## Test context
 
 The baseline was captured on 22 August 2026 with these conditions:
