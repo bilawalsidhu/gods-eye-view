@@ -1,3 +1,3 @@
-- The earthquake layer and `get_earthquakes` now exclude events USGS classifies
-  as explosions, quarry blasts or other non-earthquake types, including events
-  reclassified on a later refresh (@ariannamethod, #1633).
+- Earthquake counts on the map, in the Context card and from `get_earthquakes`
+  exclude events USGS classifies as explosions, quarry blasts or other
+  non-earthquake types (@ariannamethod, #1633).

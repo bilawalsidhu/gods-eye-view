@@ -1,10 +1,5 @@
 # God's Eye View Current State
 
-The Earthquakes layer and `get_earthquakes` count M2.5+ USGS events classified
-as `earthquake`. A refresh removes an event if USGS reclassifies it as a
-quarry blast or another type. Records with an omitted or null event type keep
-the magnitude-only behavior. A malformed non-string type rejects the snapshot.
-
 An aircraft (civil or military) faces its reported ground track, else its
 true heading (readsb `true_heading`). With neither, it faces the way its own
 fixes went (`courseFromFixes`, `src/data/courseFromFixes.js`): the course runs
@@ -2485,7 +2480,9 @@ application supplies the overlay host and snapshot source. A caller handing
 it a Cesium viewer, with no renderer bound, loads the
 `./render/cesium/unbound` export once first. `depthColor` returns a renderer
 colour `[r, g, b, a]` and `depthAccent` its CSS. The standalone adapter keeps the existing USGS daily feed,
-M2.5+ filtering, static discs, magnitude labels and analyst records. Disabling or
+M2.5+ events USGS classifies as `earthquake` (a missing or null type falls back to
+magnitude; a non-string type is a malformed row), static discs, magnitude labels
+and analyst records. Disabling or
 destroying the layer cancels pending work and ignores late results. While on,
 the layer registers its quakes of magnitude 6 and up
 (`EARTHQUAKE_MARK_MAGNITUDE`) with the world clock as timeline marks, spanning

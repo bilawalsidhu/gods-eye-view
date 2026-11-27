@@ -94,7 +94,7 @@ test('earthquakes are filtered, ordered strongest first and capped', async () =>
 });
 
 test('get_earthquakes excludes a USGS explosion from counts and strongest-event selection', async () => {
-  // Observed USGS event uw62216847, alongside a smaller earthquake fixture.
+  // Real USGS event uw62216847 (M2.8 explosion).
   const explosion = {
     id: 'uw62216847',
     geometry: { type: 'Point', coordinates: [-119.422, 46.235, -0.2] },

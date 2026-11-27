@@ -364,7 +364,8 @@ test('malformed earthquake refresh preserves discs, overlays, count and timestam
       { ...good, geometry: { coordinates: [10, -91] } },
       { ...good, geometry: { coordinates: [null, 20] } },
       { ...good, properties: { mag: '4' } },
-      { ...good, properties: { mag: Infinity } }, good]) {
+      { ...good, properties: { mag: Infinity } },
+      { ...good, id: 'bad-type', properties: { mag: 4, type: {} } }, good]) {
       respond([good, bad]);
       assert.equal(await layer.update(viewer), false);
       assert.equal(discsOf(draw).items.size, 1);
@@ -382,6 +383,11 @@ test('malformed earthquake refresh preserves discs, overlays, count and timestam
     respond([good]);
     assert.equal(await layer.update(viewer), true);
     assert.equal(discsOf(draw).items.size, 1);
+    respond([{ ...good, properties: { mag: 4, type: 'quarry blast' } }]);
+    assert.equal(await layer.update(viewer), true);
+    assert.equal(discsOf(draw).items.size, 0);
+    assert.equal(layer.getStats().error, null);
+    assert.equal(publications.at(-1)[1].length, 0);
   } finally {
     globalThis.fetch = originalFetch;
     layer.destroy(viewer);

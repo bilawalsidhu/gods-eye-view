@@ -128,11 +128,15 @@ test('USGS quake counts follow the catalog event type when supplied', () => {
     'landslide',
     null,
     undefined,
+    '',
+    'unrecognized',
+    'Earthquake',
+    'earthquake ',
   ];
   const features = types.map((type, index) => ({
     id: String(index),
     geometry: { type: 'Point', coordinates: [10, 20, 5] },
-    properties: { mag: 2.5, ...(type === undefined ? {} : { type }) },
+    properties: { mag: 2.5, type },
   }));
   const rows = normalizeEarthquakeSnapshot({ features });
   assert.deepEqual(

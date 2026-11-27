@@ -27,8 +27,7 @@ export function normalizeEarthquakeSnapshot(geojson) {
       (mag != null && (!Number.isFinite(mag) || mag > 10))
     )
       return null;
-    // USGS all_day also carries explosions and other catalog event types.
-    // Older snapshots without a classification keep their magnitude-only behavior.
+    // all_day also carries explosions, quarry blasts etc.; a missing type falls back to magnitude alone.
     if (properties.type != null && properties.type !== 'earthquake') continue;
     // A missing magnitude cannot establish that this event meets M2.5+.
     if (mag == null || mag < 2.5) continue;

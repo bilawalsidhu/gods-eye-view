@@ -239,36 +239,3 @@ test('a strong quake with no place is labelled with its magnitude alone', () => 
     'M8.1 · Off the coast',
   );
 });
-
-test('a USGS reclassification removes a displayed quake on the next refresh', async () => {
-  const feature = {
-    id: 'reclassified',
-    geometry: { type: 'Point', coordinates: [30, 20, 3] },
-    properties: { mag: 3, type: 'earthquake' },
-  };
-  const source = createUsgsEarthquakeSource({
-    fetchImpl: async () => Response.json({ features: [feature] }),
-  });
-  const h = harness(source);
-  try {
-    assert.equal(await h.layer.update(h.viewer), true);
-    assert.deepEqual(
-      h.layer.getAnalystRecords().map((entry) => entry.id),
-      [feature.id],
-    );
-
-    feature.properties.type = { invalid: true };
-    assert.equal(await h.layer.update(h.viewer), false);
-    assert.equal(h.layer.getStats().error, 'Malformed USGS response');
-    assert.equal(h.layer.getStats().count, 1);
-
-    feature.properties.type = 'quarry blast';
-    assert.equal(await h.layer.update(h.viewer), true);
-    assert.equal(h.layer.getStats().count, 0);
-    assert.equal(h.draw.find('earthquakes:').items.size, 0);
-    assert.deepEqual(h.events.at(-1)[1], []);
-    assert.deepEqual(h.layer.getAnalystRecords(), []);
-  } finally {
-    h.layer.destroy();
-  }
-});
