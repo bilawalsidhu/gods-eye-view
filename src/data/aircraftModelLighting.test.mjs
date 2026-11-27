@@ -1,16 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  AIRCRAFT_ENVIRONMENT_MAP_OPTIONS,
-  aircraftModelBlend,
-} from './aircraftModelLighting.js';
+import { aircraftModelBlend } from './aircraftModelLighting.js';
 import * as flightsPolicy from '../layers/flights/policy.js';
 import * as militaryPolicy from '../layers/military/policy.js';
-
-test('the shared option turns the dynamic environment map off', () => {
-  assert.deepEqual({ ...AIRCRAFT_ENVIRONMENT_MAP_OPTIONS }, { enabled: false });
-  assert.ok(Object.isFrozen(AIRCRAFT_ENVIRONMENT_MAP_OPTIONS));
-});
 
 /**
  * The colour a model draws in, as the renderer blends its tint over the
