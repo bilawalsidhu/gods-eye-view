@@ -147,6 +147,40 @@ test('presents variable forecast horizon and uncertainty, never observation cert
   });
 });
 
+test('tells the panels its row changed through the handle its init receives', async () => {
+  const layer = createAuroraLayer({
+    feed: { getSnapshot: async () => normalizeOvation(payload()) },
+    createRendering: () => ({
+      setField() {},
+      setAlpha() {},
+      rehome() {},
+      clear() {},
+      destroy() {},
+      getDiagnostics: () => ({}),
+    }),
+    eventTarget: null,
+  });
+  assert.equal(layer.setRowControlsListener, undefined);
+  let invalidations = 0;
+  layer.init(
+    { imageryLayers: {}, scene: {} },
+    { panel: { invalidate: () => invalidations++ } },
+  );
+  layer.enable();
+  await layer.update();
+  // Loading starts, then the forecast lands.
+  assert.equal(invalidations, 2);
+  layer.setParams({ opacity: 'light' });
+  assert.equal(invalidations, 3);
+  layer.disable();
+  assert.equal(invalidations, 4);
+  // Destroying disables once more, then lets go of the handle.
+  layer.destroy();
+  assert.equal(invalidations, 5);
+  layer.setParams({ opacity: 'strong' });
+  assert.equal(invalidations, 5);
+});
+
 test('preserves the last valid raster when a later response is explicitly unavailable', async () => {
   const valid = normalizeOvation(payload());
   const unavailable = {

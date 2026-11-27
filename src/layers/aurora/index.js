@@ -66,7 +66,9 @@ export function createAuroraLayer({
     icon: '✦',
     source: 'NOAA SWPC OVATION · FORECAST',
     updateInterval: 5 * 60_000,
-    init(nextViewer) {
+    init(nextViewer, { panel = null } = {}) {
+      // The panels' handle: invalidated when the row or readout changed.
+      listener = panel ? () => panel.invalidate() : null;
       viewer = nextViewer;
       rendering = createRendering({ viewer, getHost });
       eventTarget?.addEventListener?.(
@@ -199,9 +201,6 @@ export function createAuroraLayer({
           'NOAA OVATION is a 30–90 minute model forecast. Lead time varies with solar-wind travel time. Darkness, clouds, local light pollution and model uncertainty affect actual visibility. Low probability is not an all-clear.',
         ),
       };
-    },
-    setRowControlsListener(value) {
-      listener = typeof value === 'function' ? value : null;
     },
     getStats() {
       return {
