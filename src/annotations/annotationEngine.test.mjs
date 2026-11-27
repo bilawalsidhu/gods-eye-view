@@ -2,7 +2,7 @@ import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
 import { createStandalonePlaceSearch } from '../standalone/placeSearch.js';
 // Voice-annotation resilience contract tests — pure logic, no network, no browser.
 //
-// Locks the 2026-07-21 field-test fixes:
+// Locks two resilience rules:
 //   1. A TRANSIENT (undefined) deferred-outline resolution is retried with backoff
 //      (the /api/overpass proxy caches the late completion, so a retry is nearly
 //      free) instead of silently leaving the mark a point forever. A DEFINITIVE
@@ -631,7 +631,7 @@ test('outline upgrade updates the rendered element in place without remove/add',
 // map therefore leaks a hold that NOTHING releases short of an explicit clear —
 // the idle governor is defeated for the rest of the session. The fresh path has
 // always guarded this; the duplicate-REPLACEMENT path did the renderer swap
-// outside the guard. (perf rebase 2026-08-17)
+// outside the guard.
 
 function throwingRendererHarness() {
   const calls = { add: 0, remove: 0 };

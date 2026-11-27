@@ -9,8 +9,7 @@ FROM node:24.22.2-slim@sha256:c86ecead9e55a5210ac1727de38a4ca840bf03dcaf34dc9749
 # Puppeteer is only used by the QA scripts; skip its ~150MB Chromium download.
 ENV PUPPETEER_SKIP_DOWNLOAD=1
 
-# `npm test` builds fixtures with `git init`, so the suite cannot run in a
-# container without it (71 failures on node:24-slim, all ENOENT on git).
+# `npm test` builds fixtures with `git init`, so the image needs git.
 RUN apt-get update   && apt-get install -y --no-install-recommends git   && rm -rf /var/lib/apt/lists/*
 # The repo is bind-mounted, so inside the container it can show an owner other
 # than the user the container runs as - always, on Docker Desktop. git then

@@ -29,20 +29,9 @@ export const gltfToPlacedAxes = (v) => [v[2] || 0, v[0] || 0, v[1] || 0];
  * posed it in) after the glTF axis turn (`gltfToPlacedAxes`), at the scale
  * it is drawn at.
  *
- * This exists because doing it by hand got it wrong. The anchors used to be
- * stored after a single glTF Y-up -> Z-up step (`[x, y, z]` -> `[x, -z, y]`) and
- * multiplied straight by the placement. That is only half of the turn: the
- * full one maps raw glTF `[x, y, z]` -> `[z, x, y]`. The aircraft's
- * longitudinal axis is raw glTF X, so the old conversion put the aft offset on
- * the RENDERED model's lateral axis — a 90-degree disagreement. Because the
- * placement carries the heading, both frames rotated together and the offset
- * came out sideways in world space, flipping which side it appeared on as the
- * course changed. Measured on the live rig at N/E/S/W plus a helicopter: the
- * old path put 81.47 m of a civil airliner's anchor entirely on cross-track
- * with 0 aft, at every heading; this path puts 81.47 m aft with 0 cross.
- *
- * The anchors are therefore stored in RAW glTF coordinates and turned here,
- * so exactly one convention stands between the table and the world.
+ * Anchors are stored in raw glTF coordinates. Apply the full turn ([x, y, z] → [z, x, y])
+ * here so exactly one convention stands between the table and the world. A single Y-up to
+ * Z-up turn would put the aft offset on the rendered model's lateral axis.
  *
  * @param {ArrayLike<number>|null|undefined} matrix Where the model is placed.
  * @param {readonly number[]} nativeAnchor Raw glTF `[x, y, z]` native-unit offset.

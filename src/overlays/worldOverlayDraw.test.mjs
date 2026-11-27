@@ -367,13 +367,8 @@ test('edge-clamped CCTV placements keep leaders vertical unless the anchor is ou
     leaderOffset: 16,
     verticalOnly: true,
   })[0];
-  // RE-SCOPED 2026-08-03. The old contract was `leadToX === 4` here: an anchor
-  // outside the (edge-clamped) card rect pulled the leader endpoint to the card,
-  // making the stub diagonal. That is branch-new — the shipped leader ran from
-  // the anchor's sx to the card edge at the SAME sx, unconditionally — and a
-  // slanted stub is exactly what reads as "this card is not attached to that
-  // camera". Vertical always, even when the card has been clamped sideways off
-  // its anchor.
+  // The leader stays vertical even when the card is clamped sideways off its anchor. A
+  // slanted stub makes the card look detached from its camera.
   assert.equal(offRectAnchor.leadFromX, 2);
   assert.equal(
     offRectAnchor.leadToX,

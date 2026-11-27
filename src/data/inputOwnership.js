@@ -164,15 +164,6 @@ export function isPointerFree() {
 }
 
 /**
- * @param {string} owner
- * @returns {boolean} True when a tool of that name is holding the pointer.
- */
-export function isPointerOwnedBy(owner) {
-  const name = normalizeOwner(owner);
-  return Boolean(name) && pointerOwner() === name;
-}
-
-/**
  * @param {PointerLease|null} lease
  * @returns {boolean} True when THIS lease is the live one.
  */
@@ -181,8 +172,8 @@ export function isLeaseCurrent(lease) {
 }
 
 /**
- * Drop any claim, telling no one. For tests and for application teardown,
- * which cannot rely on a half-disposed tool to release its own lease.
+ * Drop any claim, telling no one. Tests reset the pointer between cases without a tool
+ * releasing its own lease.
  * @returns {string|null} The owner that was holding it, if any.
  */
 export function resetPointerOwnership() {

@@ -58,15 +58,14 @@ export function presentCctvPanel(state, enabled) {
     : cameras.length;
   const activeId = state?.activeCameraId || '';
   const activeCamera = state?.activeCamera || null;
-  // Tri-state (viewshed design §3b): off → on (wireframes) → viewshed
+  // Tri-state: off → on (wireframes) → viewshed
   // (color-coded volumes). The click handler cycles; this renders.
   const coverage = state?.coverageMode || (state?.showCoverage ? 'on' : 'off');
   const autoHop = !!state?.autoHop;
   const showProjection = state?.showProjection !== false;
-  // CAL badge (cctv-v2 design §3b, amended by LOCKED §9.2 — panel-only, no
-  // in-world tint): three states from cctv.js's deriveCalBadge. Unsaved live
-  // edits show EDITED over the persisted state (viewshed design §3e): SAVE
-  // CAL promotes to CALIBRATED, RESET CAL clears.
+  // CAL badge (panel-only, no in-world tint): three states from the layer's
+  // deriveCalBadge. Unsaved live edits show EDITED over the persisted state. SAVE CAL
+  // promotes to CALIBRATED and RESET CAL clears.
   const badge = activeCamera?.calBadge || null;
   const dirty = !!activeCamera?.calDirty;
   return {

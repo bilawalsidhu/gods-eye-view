@@ -150,21 +150,9 @@ const BILL_NEAR_SCALE = 3.0;
 const BILL_FAR = 8000000;
 const BILL_FAR_SCALE = 0.5;
 /**
- * Query-string gate for the detection mode banner, mirroring `trafficDebug` in
- * `traffic.js` — the app's existing convention for a developer-only affordance.
- *
- * The banner ("DENSE VIS:15 SRC:1036 DENS:100% ELASTIC 0.4ms") is engine
- * telemetry, but it painted for every user: CRT/NVG/FLIR auto-enable detection,
- * so an orange debug readout was the first thing a visitor saw, colliding with
- * the cockpit callsign block. It is kept — the same numbers also ship
- * programmatically via `getDetectionDiagnostics()` — but now defaults OFF and
- * paints only under `?detectDebug=1`.
- *
- * Deliberately NOT also gated on `import.meta.env.DEV`, unlike `trafficDebug`:
- * that gate exists there so Vite can strip per-road timing instrumentation from
- * production builds. This banner installs no machinery, and being able to read
- * detection telemetry against a production build is the point of keeping it.
- *
+ * Whether `?detectDebug=1` enables the detection mode banner. This developer telemetry
+ * defaults off and works in production builds. The same numbers are always available
+ * through `getDetectionDiagnostics()`.
  * @param {string} search A `location.search` string.
  * @returns {boolean}
  */
@@ -187,14 +175,8 @@ const FADE_MS = DETECTION_ENABLE_FADE_MS;
 const GLOW_PX = DETECTION_STYLE.glowPx;
 
 /**
- * The clock the render-demand model runs on: monotonic, and the SAME source the
- * world-overlay host samples once per frame into `frame.timestamp`.
- *
- * Detection used to mix this with `Date.now()`, which meant the paint and the
- * "do I need another frame" question could land on different milliseconds inside
- * a single frame and disagree about whether an animation had finished. Every
- * timestamp that feeds a fade — this module's and the label arbiter's — now
- * comes from here or from `frame.timestamp`, which is the same clock.
+ * The monotonic clock the world-overlay host samples into `frame.timestamp`. Every
+ * timestamp that feeds a fade comes from here or from that frame sample.
  * @returns {number}
  */
 function _nowMs() {
@@ -888,18 +870,12 @@ function _paintDetectionLane(frame) {
     _lastDiagnostics.throttleSkipCount = _throttleSkipCount;
   }
   if (result.didSolve) _publishDiagnostics();
-  // Detection holds nothing, so a time-based animation has to ask for its own
-  // next frame. This chain is self-terminating BY CONSTRUCTION — every animation
-  // it covers ends (the enable fade closes, labels finish fading out) — which is
-  // exactly what makes it safe where the old blanket hold was not. On a parked
-  // scene with nothing animating it asks for nothing, and the governor stays
-  // idle. See `detectionRenderDemand.js`.
+  // Detection holds no continuous render. Each bounded animation requests its own next
+  // frame until it ends (see `detectionRenderDemand.js`).
   if (
     detectionNeedsFollowUpFrame({
       active: _mode !== MODE_OFF && !_suspended,
-      // The frame's OWN timestamp, not a fresh sample — re-reading the clock here
-      // is what dropped the terminal frame of a fade (paint at 219 ms, policy at
-      // 220 ms, and the settled alpha never painted).
+      // The frame's timestamp ends demand on the frame that paints the end of the fade.
       nowMs,
       enabledAtMs: _enableTime,
       fadeMs: FADE_MS,
@@ -952,18 +928,9 @@ function _collectDetectableObjects() {
 }
 
 /**
- * Draws a CRT-style scanline overlay across the entire canvas.
- *
- * The scroll offset comes from the CLOCK, not from `_frameCount`. Those look
- * identical while the scene is rendering — `SCANLINE_STEP_MS` is one 60 fps
- * frame — but they differ in what they DEMAND. A frame counter only advances if
- * something keeps rendering, so tying decorative texture to it meant detection
- * had to hold the scene in continuous mode forever to keep its own shimmer
- * alive. Off the clock, the pattern scrolls whenever the scene is rendering for
- * any real reason and simply rests on a parked view. The lines are always
- * painted; only the shimmer pauses.
- *
- * Opacity is controlled by the theme's scanline property.
+ * Draws CRT-style scanlines across the canvas at the theme's `scanline` opacity. The
+ * scroll offset follows the frame clock (`scanlineOffsetPx`), so the pattern rests on a
+ * parked scene without holding the render loop.
  * @param {number} width - Canvas width in pixels.
  * @param {number} height - Canvas height in pixels.
  * @param {number} nowMs - Wall-clock time of this frame.
@@ -1394,18 +1361,12 @@ function _drawOverlay(frame) {
   const objects = _collectDetectableObjects();
   const sampledCount = objects.length;
   if (objects.length === 0) {
-    // No detectable objects (e.g. DETECT on with no data layers enabled). Still
-    // paint so the overlay reads "armed, nothing in view" instead of a dead blank
-    // canvas (H3 silent-failure theme). The scanlines and focus ring carry that
-    // signal for everyone; the mode banner adds counts only under ?detectDebug=1.
-    // The frame is already cleared above.
+    // With nothing detectable, paint the scanlines and focus ring to show the overlay is
+    // armed. The mode banner adds counts under ?detectDebug=1.
     //
-    // Drop the replay buffer with it. Every other exit from this function
-    // rebuilds the buffer, but this one returns early — and because the
-    // callout lane repaints the last solve on frames the sensor lane skips,
-    // leaving rows here would strand the final callsigns on screen after the
-    // last data layer is switched off. The kept containers go with it: no
-    // paint refills them while nothing is detectable.
+    // Drop the replay buffer with it: the callout lane repaints the last solve on frames
+    // the sensor lane skips. Leftover rows would strand callsigns on screen. Release the
+    // kept containers too.
     _calloutCount = 0;
     _releaseKeptPaintState();
     _ctx.font = FONT;

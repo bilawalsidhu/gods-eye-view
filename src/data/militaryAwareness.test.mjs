@@ -1652,12 +1652,7 @@ test('awareness clears are scoped to the selected source layer', () => {
   assert.equal(awarenessClearMatchesSubject(subject, null), false);
 });
 
-// ===========================================================================
-// BEGIN Contact-readout presence block — fix/context-panel-next-subjects.
-// Integrators: this whole delimited block belongs to the Contact-panel
-// CONTACT LOST work. Keep it intact and keep any concurrent branch's own
-// additions at the END of the file, so the two never collide.
-// ===========================================================================
+// Contact-readout presence.
 
 /** Live/absent/unknown presence stub matching the layer `hasContact` contract. */
 function stubPresence(layer, verdict, restores) {
@@ -2054,10 +2049,6 @@ test('a deliberate source clear still fully clears the subject', () => {
     runtime.restore();
   }
 });
-
-// ===========================================================================
-// END Contact-readout presence block — fix/context-panel-next-subjects.
-// ===========================================================================
 
 test('cockpit blocks only non-aircraft Context camera flights', () => {
   const cockpitBody = {

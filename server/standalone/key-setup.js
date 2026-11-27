@@ -240,11 +240,8 @@ function keySetupEndpoint({ sourceRoot = defaultSourceRoot } = {}) {
   };
   return {
     name: 'gev-key-setup',
-    // serve AND not preview: `vite preview` resolves with command 'serve' too,
-    // so a bare apply:'serve' would still configure under preview. The endpoints
-    // only install via configureServer (never configurePreviewServer), so they
-    // are absent from preview today — but pinning apply here makes that a
-    // guarantee rather than an accident of which hook a future edit uses.
+    // Vite preview also uses command 'serve', so exclude preview here. The endpoints
+    // install only through configureServer.
     apply: (_config, { command, isPreview }) =>
       command === 'serve' && !isPreview,
     configureServer(server) {

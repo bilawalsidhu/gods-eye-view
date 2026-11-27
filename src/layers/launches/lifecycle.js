@@ -297,7 +297,7 @@ export function createLifecycle({
       layerState._sourceController.abort();
       layerState._sourceController = new AbortController();
       layerState._enabled = true;
-      holdContinuousRender('rocket-launches'); // per-frame animator (perf wave 2)
+      holdContinuousRender('rocket-launches'); // per-frame animator
       layerState._lifecycleToken++;
       layerState._postTleRetryCount = 0;
       try {
@@ -390,7 +390,7 @@ export function createLifecycle({
       uncover = null;
       hover = null;
       layerState._sourceController.abort();
-      releaseContinuousRender('rocket-launches'); // direct-destroy path (perf wave 2 fix)
+      releaseContinuousRender('rocket-launches'); // direct-destroy path
       layerState._enabled = false;
       layerState._lifecycleToken++;
       layerState._updateDirty = false;

@@ -21,14 +21,7 @@ export const TRANSIT_SELECTED_OVERLAY_SOURCE_OPTIONS = Object.freeze({
 // --- Polling / activation ---
 /** Poll interval (ms). */
 export const TRANSIT_POLL_MS = 15_000;
-/**
- * How a vehicle moves between fixes is delayed playback, not a glide: the
- * display clock runs a feed-derived lag behind real time and interpolates
- * between the two fixes bracketing it (`src/layers/transit/movement.js`).
- * A glide that started from the drawn position at receipt time and spanned the
- * report gap ran every second segment at 1.5x when MBTA vehicles reported
- * every ten seconds against this fifteen-second poll — buses plainly too fast.
- */
+// Between fixes, movement.js plays a vehicle back a feed-derived lag behind real time.
 /** Camera altitude (m) above which the layer idles: a national fleet still reads at 3,000 km. */
 export const ACTIVATION_ALTITUDE_M = 3_000_000;
 export const ACTIVATION_ENTER_ALTITUDE_M = ACTIVATION_ALTITUDE_M - 150_000;
@@ -132,12 +125,8 @@ export function withinViewBounds(bounds, at) {
  * Whether a gliding vehicle is near enough the view to be worth animating and
  * showing — judged on where it is NOW as well as where it is going.
  *
- * Testing only the destination hid a bus that was plainly on screen: a fix
- * arrives placing it just past the padded edge, and it disappeared from inside
- * the view instead of driving out of it, its glide thrown away in the same
- * frame. A vehicle counts as near the view while either end of its current
- * glide is inside the bounds, so it leaves the way a person expects — by
- * travelling out — and arrives the same way.
+ * A vehicle counts as near while either end of its current glide is inside the bounds, so
+ * it leaves the view by driving out of it.
  *
  * @param {{south:number,north:number,west:number,east:number}|null} bounds
  * @param {{to:{lat:number,lon:number}, from:{lat:number,lon:number}|null}} entry
@@ -155,11 +144,8 @@ export function vehicleNearView(bounds, entry) {
  * Longitude is a circle, so padding it has a ceiling: once the padded span
  * reaches 360° the rectangle is every longitude there is, and wrapping each
  * endpoint on its own would turn that into a narrow band pointing the wrong
- * way. A high oblique view over Europe spans about 166°, pads to well past a
- * full turn, and used to come back as -177.8°..-172.2° — five degrees of the
- * Pacific — which hid an entire national fleet that was plainly on screen. So
- * a padded span that closes the circle is reported as the whole circle, and
- * only a span that stays under it is wrapped.
+ * way. A padded span that closes the circle covers every longitude. Only smaller spans
+ * are wrapped.
  *
  * @param {{south:number,north:number,west:number,east:number}|null} rect
  * @param {number} [ratio=VIEW_MARGIN_RATIO]
@@ -281,10 +267,7 @@ export function isStaleVehicleFix(record, nowMs, fetchedAtMs = null) {
 /**
  * Roll per-feed poll health into the one honest row state the layer panel reads.
  *
- * `every(stale)` was the bug this replaces: with Boston fresh and Helsinki an
- * hour old, "not every feed is stale" read as nominal and the row claimed
- * everything was fine. One stale feed beside a fresh one is DEGRADED — the
- * view is part live and part not, and the row has to say so.
+ * One stale feed beside a fresh one is DEGRADED because only part of the view is live.
  *
  * @param {Array<{stale:boolean, error:string|null, retryInSec?:number|null,
  *   upstreamAt:number|null, loading:boolean}>} statuses
@@ -610,9 +593,8 @@ const DETECTION_ID_MAX_CHARS = 14;
 /**
  * Cut long route text with an ellipsis, so a reader can see it was cut.
  *
- * `Shuttle-Generic` used to reach the screen as `SHUTTLE-GENERI`, which does
- * not read as an abbreviation — it reads as a typo, or as a route that exists.
- * A trailing ellipsis costs one character and says plainly that there is more.
+ * A trailing ellipsis costs one character. Bare truncation reads as a typo or a different
+ * route.
  *
  * @param {string} text
  * @returns {string} Uppercase, at most DETECTION_ID_MAX_CHARS characters.
@@ -645,7 +627,7 @@ export function transitDetectionClass(mode, feed) {
  * shape), then what the vehicle is doing: a stopped bus reporting 0 km/h is
  * worth saying out loud, it is the most common state in a city at rush hour.
  *
- * @param {object} record Normalized vehicle record.
+ * @param {object} entry Vehicle runtime entry.
  * @param {string} mode Resolved transit mode.
  * @param {number} [nowMs]
  * @param {object|null} [feed] Registry entry, for its own mode vocabulary.
@@ -666,10 +648,8 @@ export function transitDetectionMetric(
  * What the vehicle is doing right now, in as few characters as it takes —
  * judged on what the screen is showing, not on what the feed claims.
  *
- * This used to read `current_status` straight out of the newest record, which
- * is how a metro came to glide across the owner's screen with STOPPED printed
- * beside it: the status describes the moment of the report, and the display is
- * still animating the segment before it. The feed is not lying; it is early.
+ * The word follows the displayed motion. The newest record's `current_status` describes
+ * the moment of a report the display is still animating towards.
  * Its claim is kept, verbatim and dated, on the selected card.
  *
  * @param {object} entry Vehicle runtime entry.

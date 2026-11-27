@@ -526,7 +526,7 @@ export function createAnnotationResolver({
         : typedScope;
     // Point-like targets (monuments/statues/memorials/…) resolve POINT-FIRST: only an
     // (almost) exactly-named, monument-scale polygon may replace the point; a nearby polygon
-    // sharing locality words must not (docs/field-test-rootcause-2026-06-30.md §1).
+    // sharing locality words must not.
     const pointLike = isPointLikeTarget(
       target,
       entityKind,
@@ -571,8 +571,7 @@ export function createAnnotationResolver({
       // dressing itself in a range-sized ring. Range-scale geometry deliberately
       // BYPASSES the compound/building scope caps and the centroid drift bound
       // below: the region IS the asked scope ("outline the Alps"), the 60 km²
-      // compound cap is for campuses (the meadow bug,
-      // docs/voice-engine-evaluation-2026-07-23.md §3), and a continental ring's
+      // compound cap is for campuses, and a continental ring's
       // centroid legitimately sits far from any anchor. Admin and street scopes
       // are excluded — "Texas" must keep resolving as an admin boundary.
       if (!isAdmin && scope !== 'street' && !around) {
@@ -661,7 +660,7 @@ export function createAnnotationResolver({
         // FIRST: a bundled neighborhood polygon (reliable, deterministic, OFFLINE — no live
         // Overpass). Covered neighborhoods (e.g. SF: Chinatown/Marina/Mission/Presidio)
         // resolve here instantly to a REAL boundary, sidestepping the slow/flaky live-Overpass
-        // path that times out and falls back to points (see docs/field-test-2-analysis.md).
+        // path that times out and falls back to points.
         const ext = await lookupNeighborhoodRing(lat, lon, matchName);
         signal?.throwIfAborted();
         if (ext) {
@@ -770,7 +769,7 @@ export function createAnnotationResolver({
         // primary footprint above returns the BUILDING (the dome) or null — neither is the grounds. The
         // real enclosing polygon (e.g. "Capitol Square", leisure=park) IS in OSM but only surfaces via a
         // radius sweep for NAMED non-building polygons, taking the SMALLEST that geometrically contains
-        // the point (research docs/compound-containment-research.md §1.4–1.5). So when a grounds-like
+        // the point. So when a grounds-like
         // query produced a building or no polygon, prefer that REAL enclosing outline; fall to a
         // synthesized disc only when OSM DEFINITIVELY has none.
         if (groundsLike && (fp === null || fp?.kind === 'building')) {
@@ -1560,7 +1559,7 @@ export function createAnnotationResolver({
     for (const cand of scored.slice(0, 4)) {
       // Client budget must OUTLAST the QL timeout (25 s) + proxy transit: aborting at
       // 16 s turned finishable region pivots (Sicilia's dense coastline) into permanent
-      // "transients" — every retry died the same death (field test 2026-07-23). The
+      // "transients" — every retry died the same death. The
       // outline is progressive, so a long budget blocks nothing; repeats are disk-cached.
       const relEls = await featureSource.getAreaGeometry(cand.el.id, {
         signal: signal,
@@ -1840,7 +1839,7 @@ export function createAnnotationResolver({
    * leisure=park). OSM has no deterministic "parent polygon" call and the canonical
    * compound name is rarely what the user utters ("grounds", not "Capitol Square"),
    * so SELECTION is by containment → smallest area, with a name-match only as a
-   * tiebreak BONUS (never a filter). See docs/compound-containment-research.md §1.4–1.5.
+   * tiebreak BONUS (never a filter).
    *
    * Modeled on fetchLocalMonument: a 12 s fail-fast (an enrichment, not worth blocking
    * narration — and narration no longer waits on it since outlines went progressive, so

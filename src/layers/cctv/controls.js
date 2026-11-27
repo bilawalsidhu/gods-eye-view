@@ -112,10 +112,10 @@ export function createControls({ state: layerState, services, parts, source }) {
             calibrationCfg.patch &&
             typeof calibrationCfg.patch === 'object'
           ) {
-            // Save-gated persistence (design §3e): a patch edits the LIVE pose
+            // Save-gated persistence: a patch edits the LIVE pose
             // only. The store — and the CALIBRATED badge's `calSource` — move
-            // exclusively on the explicit `save` action below. (§9.1 range-slider
-            // clamp override + B9b re-ground live inside applyCalibrationPatch.)
+            // exclusively on the explicit save action below. applyCalibrationPatch also
+            // handles the range-slider clamp override and re-ground.
             parts.calibration.applyCalibrationPatch(
               targetRecord,
               calibrationCfg.patch,

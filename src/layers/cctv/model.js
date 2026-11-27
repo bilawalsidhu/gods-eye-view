@@ -162,7 +162,7 @@ export function createModel({ state: layerState, services, parts, source }) {
   }
 
   /**
-   * Normalizes a coverage-mode request (viewshed design §3b). Accepts the three
+   * Normalizes a coverage-mode request. Accepts the three
    * mode strings plus booleans for `setParams({showCoverage})` back-compat
    * (true → 'on', false → 'off'); anything else keeps the current mode.
    * @param {*} value - Requested mode ('off'|'on'|'viewshed') or boolean.
@@ -204,7 +204,7 @@ export function createModel({ state: layerState, services, parts, source }) {
     if (typeof window === 'undefined') return null;
     try {
       // NB: the window.localStorage property ACCESS itself throws SecurityError
-      // under "block all cookies", so it has to live inside the try (M11).
+      // under "block all cookies", so it has to live inside the try.
       return window.localStorage || null;
     } catch {
       return null;
@@ -218,11 +218,6 @@ export function createModel({ state: layerState, services, parts, source }) {
    * On first call for a camera, captures the raw values as `basePose`.
    * Subsequent calls re-derive lat/lon/heading/pitch/fov/range by applying
    * calibration deltas to the frozen base pose.
-   *
-   * Note: the old score-based quality system (`confidenceFromScore`, seeded
-   * `camera.quality.score`) is retired — panel trust signal is now the 3-state
-   * CAL badge (`deriveCalBadge`, driven by `calSource`/`poseSource`), not a
-   * fabricated confidence score.
    *
    * @param {Object} camera - Mutable camera record.
    */
@@ -398,7 +393,7 @@ export function createModel({ state: layerState, services, parts, source }) {
    * front face reads correctly from the natural viewpoint (focusCamera flies the
    * viewer to look along the camera heading). Local +X = viewer-right, +Y =
    * frame-up, so the 16:9 texture maps upright and unmirrored. Static geometry —
-   * computed only on slider/save/activation, never per frame (§2b).
+   * computed only on slider/save/activation, never per frame.
    * @param {Object} camera - Camera pose.
    * @param {{x: number, y: number, z: number}} capCenterPos - Plane center in ECEF.
    * @returns {{x: number, y: number, z: number, w: number}} The quaternion.
@@ -443,7 +438,7 @@ export function createModel({ state: layerState, services, parts, source }) {
   }
 
   /**
-   * Card-frame pacer tick (owner finding 3): launches AT MOST one fetch per
+   * Card-frame pacer tick: launches AT MOST one fetch per
    * tick, with cardFetchPolicy deciding whether a launch is allowed. Cold fill
    * — any selected card still missing its FIRST frame — bursts up to 4
    * in-flight fetches at 250 ms spacing so arriving in a new area populates

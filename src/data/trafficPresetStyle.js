@@ -10,10 +10,9 @@
  * 0.72 / jam 0.49 — under NVG a jam renders DIMMER than free flow. CRT
  * keeps hue but its 5-px pixelation + dithering shred 4–6 px dots.
  *
- * Encoding per profile (owner verdict 2026-07-23 round 2: "just bright
- * dots" — a luminance RAMP failed in the field because dim free-flow dots
- * read as dark holes on NVG-bright roads; classification is the detection
- * brackets' job via `trafficBucketTier`, presence is the dots' job):
+ * Encoding per profile uses bright dots because a luminance ramp makes free-flow dots
+ * read as dark holes on NVG-bright roads. Brackets classify via `trafficBucketTier` and
+ * dots show presence:
  *  - `mono` (surveillance/NVG, thermal/FLIR, noir): every colored dot is a
  *    bright white core with a thin black halo (local contrast survives any
  *    luma mapping, including Ironbow where white stays the hottest end);

@@ -327,7 +327,7 @@ export class GevRealtimeController extends RealtimeFacade {
 
   // Fatal error path: tear the session down (stop tracks, close pc/dc, kill the
   // mic) BEFORE flipping the UI to ERROR, so we never sit in an ERROR state with
-  // a live hot mic behind it (H8). stop() itself bumps the epoch and clears the
+  // a live hot mic behind it. stop() itself bumps the epoch and clears the
   // grace timer; preserveStatus lets reportError own the final 'error' status.
   fatalError(source, error = null, extra = {}) {
     this.stop({ preserveStatus: true });
@@ -342,7 +342,7 @@ export class GevRealtimeController extends RealtimeFacade {
     } = options;
     // Bump the epoch so any start() awaiting a token/getUserMedia/SDP bails and
     // releases its own resources instead of promoting them onto a stopped
-    // controller (H7).
+    // controller.
     this._connection.invalidate();
     if (removeUi)
       this.lifetimeSignal?.removeEventListener('abort', this.lifetimeAbort);
@@ -353,7 +353,7 @@ export class GevRealtimeController extends RealtimeFacade {
     this.clearDisconnectGrace();
     // Guard against the dc.close() below re-entering our own error handlers while
     // we're intentionally tearing down (the close/error listeners bail on this
-    // flag) — H8.
+    // flag).
     this._connection.beginTeardown();
     this.debugLog('session.stop', {
       removeUi,

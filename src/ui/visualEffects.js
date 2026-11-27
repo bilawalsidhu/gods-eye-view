@@ -201,8 +201,8 @@ export class VisualEffects {
 
   /**
    * Sharpen runs only when it is on and its slider is above 0, as the style
-   * stages do: the pass costs the same at any amount (~1.5 ms GPU per frame
-   * on the Arc, 2026-10-24), and its gain still sharpened at 0.
+   * stages do: the pass costs about 1.5 ms GPU per frame at any amount, and its gain
+   * still sharpens at 0.
    */
   syncSharpenEnabled() {
     if (this.stopped || !this.postProcessReady) return;

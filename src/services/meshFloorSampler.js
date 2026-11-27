@@ -18,19 +18,14 @@ export function createMeshFloorSampler({
     cachedGroundFloor,
   } = groundFloor;
   signal?.throwIfAborted();
-  // src/data/meshFloorSampler.js — rendered-surface (mesh) floor sampling
-  // (field-test round 4, 2026-07-06).
-  //
-  // The visible world in the google-3d regime is the PHOTOGRAMMETRIC MESH,
-  // which sits above the Re:Earth bare-earth DEM (measured ~17 m at the Austin
-  // airport apron) — so DEM-floored sprites/trails still buried themselves in
-  // the mesh while 3D models (which groundSnap against the mesh) looked right.
+  // The visible photogrammetric mesh can sit above the Re:Earth bare-earth DEM in the
+  // google-3d regime.
   // This module samples the mesh height at the callers' points, a few probes
   // per coarse cell, and reports them to groundFloor.js, which keeps each
   // reading that passes its gate at its own point; cachedGroundFloor() then
   // answers mesh-first, from the reading nearest the asked point.
   //
-  // Rationing (the CCTV loading-jitter lesson): scene.sampleHeight forces
+  // Rationing: scene.sampleHeight forces
   // tile-load prioritization at the probe point, so sampling is (a) gated to
   // cells NEAR the viewer — where tiles are streamed and where an error is
   // visible at all, (b) capped per call, (c) at most MAX_PROBES_PER_CELL
@@ -45,10 +40,7 @@ export function createMeshFloorSampler({
   /** @constant {number} Max scene samples per call (one call per layer poll). */
   const MAX_SAMPLES_PER_CALL = 40;
   /** @constant {number} Only cells within this range of the viewer subpoint are
-   *  sampled. Round-5 hardening: tightened 40 → 15 km — beyond the streamed
-   *  fine-LOD area a probe returns COARSE-tile heights (not undefined), and the
-   *  one-shot latch made those permanent (owner round 5: grounded planes stuck
-   *  at a uniform wrong height). */
+   *  sampled. Beyond the streamed fine-LOD area a probe returns coarse-tile heights. */
   const MAX_SAMPLE_DIST_KM = 15;
   /** @constant {number} No sampling when the camera is above this height — the
    *  streamed LOD under a high camera is coarse everywhere, so every probe
@@ -66,12 +58,6 @@ export function createMeshFloorSampler({
   const _probedPoints = new Map();
   /** Scratch for probe coordinates (degrees). */
   const _scratchProbe = { lon: 0, lat: 0 };
-
-  // Regime tracking: mesh cells only apply while the photoreal (google-3d)
-  // stack renders. main.js re-dispatches MapStackController.onChange as this
-  // CustomEvent; the boot default is photoreal, matching groundFloor's initial
-  // preference. Module-scope listener: the module only loads in the browser
-  // bundle, and the subscription is idempotent for the app's lifetime.
 
   /**
    * True when the globe is hidden (the google-3d regime draws the mesh
@@ -124,11 +110,8 @@ export function createMeshFloorSampler({
     // Without depth-texture support every probe throws: nothing to latch.
     if (!heights?.supported().surface) return;
     if (!Array.isArray(points) || !points.length) return;
-    // Round-5 hardening (the CCTV projectionTilesReady lesson, ported late):
-    // while tiles are MID-STREAM a probe returns coarse-LOD heights — real
-    // numbers, wildly wrong — and the one-shot latch made them permanent.
-    // Only sample when the drawn tiles report they have settled AND the
-    // camera is low enough that the streamed LOD near it is fine-grained.
+    // While tiles are mid-stream a probe can return coarse heights. Sample only when
+    // tiles have settled and the camera is low enough to stream fine detail.
     let camH;
     try {
       camH = findCamera(viewer)?.pose().height;
@@ -177,34 +160,11 @@ export function createMeshFloorSampler({
       // gate a probe only throws mid-teardown, when every later cell would too.
       sampled += 1;
       if (height === null) continue; // tiles not loaded yet — no negative latch
-      // Round 5: a REAL Re:Earth prior is REQUIRED before any sample latches.
-      //  - A geoid-fallback prior (cached while the proxy was failing) is a
-      //    sea-level poison that rejected legitimate samples at elevated
-      //    fields (AUS: mesh 138 m vs poisoned −27 m prior → dropped forever).
-      //  - No prior at all means no way to tell a real surface from a
-      //    coarse-LOD/rooftop/aircraft mis-hit — the old sanity-only branch
-      //    latched a 37 m "surface" at Austin permanently. The DEM lands
-      //    within a poll (the same warm batch that queued this cell), so
-      //    waiting costs one poll, not correctness.
-      // 2026-08-21: a "provisional" tier that KEPT the reading when no prior
-      // existed was built here and then removed, because it was measured failing.
-      // Run twice against the real GPU at the same Austin apron with the proxy
-      // down, it recorded 122.1 m once and 20.6 m the next time — the second is a
-      // coarse-LOD read of ground that is really ~122 m, and it left the contact
-      // ~100 m under the mesh. The DEM requirement above is not a formality.
-      //
-      // Before reaching for the obvious gate: `tilesLoaded` / `allTilesLoaded` is
-      // NOT a resolution signal. It reports that the streaming queue has drained
-      // for the CURRENT camera's screen-space-error target, and a distant or high
-      // camera is entirely satisfied by coarse tiles — which is exactly the state
-      // that reported "loaded" during the measurement above. Gating harder on it
-      // buys nothing. A correct gate has to ask about the specific tile covering
-      // the sample point: walk the tileset tree to the tile containing the
-      // coordinate and require its `geometricError` to be below a threshold tied
-      // to the accuracy the caller needs, before trusting the sample. That is
-      // feasible and deliberately deferred — see the P2 in
-      // the project roadmap, which bundles it with the fly_route probe so
-      // one post-launch pass settles rendered-mesh sampling everywhere.
+      // Latch only against a real Re:Earth prior. A geoid fallback can reject valid
+      // samples at elevated fields. Without a prior, a coarse tile, rooftop or aircraft
+      // hit cannot be distinguished from the surface. Waiting for the DEM costs one poll.
+      // `tilesLoaded` can be satisfied by coarse tiles under a high camera. A resolution
+      // gate would need per-tile `geometricError`.
       const accepted = reportValidatedMeshFloorCell(p.lat, p.lon, height);
       // A spot counts as probed once the gate has judged it against a real
       // prior: accepted, or refused with the cell's DEM warm. A spot refused
@@ -225,8 +185,8 @@ export function createMeshFloorSampler({
     }
   }
 
-  // re-export for callers that want one import site
-
+  // Mesh cells apply only while the photoreal (google-3d) stack renders. The scene
+  // rebroadcasts stack changes as `gev:map-stack-changed` on `eventTarget`.
   const onStack = (event) => {
     const id = event?.detail?.activeId;
     if (id) setMeshFloorPreferred(id === 'photoreal');

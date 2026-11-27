@@ -57,4 +57,4 @@ Category:
 
 ## Docs
 
-- [ ] `docs/CURRENT-STATE.md` updated and a `changelog.d/<pr-number>-<slug>.md` fragment added, or this PR doesn't change runtime behaviour
+- [ ] A `changelog.d/<pr-number>-<slug>.md` fragment added and any `docs/CURRENT-STATE.md` statement this PR makes false corrected, or this PR doesn't change runtime behaviour

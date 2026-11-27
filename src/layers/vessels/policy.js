@@ -29,7 +29,7 @@ export const LABEL_GRID_PX = VESSEL_LABEL_GRID_PX;
 
 export const CARD_MIN_SEP_PX = 150;
 
-/** Trail hue for the selected vessel (PRD F4, pinned to the AIS teal-green family). */
+/** Trail hue for the selected vessel (AIS teal-green family). */
 
 export const TRAIL_COLOR = '#39ffd5';
 

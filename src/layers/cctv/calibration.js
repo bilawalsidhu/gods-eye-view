@@ -124,7 +124,7 @@ export function createCalibration({
    *
    * v2 entries carry provenance: `{ values: <7-field offsets>, source: 'manual',
    * savedAt: <epoch ms> }`. The v1 key (`CCTV_CALIBRATION_STORAGE_KEY_V1`) is
-   * NEVER read here — owner decision #3 (§9.3): wipe clean, no legacy import.
+   * never read: v1 values are not imported.
    *
    * @param {{getItem:function}|null} [storage] - Injectable storage (defaults
    *   to `window.localStorage`); lets the unit suite test this pure of a DOM.
@@ -144,7 +144,7 @@ export function createCalibration({
       for (const [cameraId, entry] of Object.entries(parsed)) {
         if (!cameraId || !entry || typeof entry !== 'object') continue;
         if (!entry.values || typeof entry.values !== 'object') continue;
-        // 'manual' is the only provenance v2 knows (§9.3 killed 'legacy'); a
+        // 'manual' is the only provenance v2 knows; a
         // malformed/foreign source string still normalizes to 'manual' rather
         // than surfacing an unrecognized value into the badge logic.
         map.set(cameraId, {
@@ -213,8 +213,7 @@ export function createCalibration({
   }
 
   /**
-   * Derives the panel CAL badge state for a camera (design §3b, as amended by
-   * the LOCKED §9.2 — panel-only, no in-world tint).
+   * Derives the panel CAL badge state for a camera (panel-only, no in-world tint).
    *
    * Three states:
    *  - 'calibrated' — a human explicitly saved a v2 calibration (`source:'manual'`).
@@ -222,8 +221,7 @@ export function createCalibration({
    *                   (`poseSource:'curated'`, file/env sources only).
    *  - 'raw-prior'  — everything else (all Austin Open Data today).
    *
-   * Pure — no scoring math, no raycasts. `confidenceFromScore` and score-based
-   * quality seeding are retired; this replaces them.
+   * Pure, with no scoring math or raycasts.
    * @param {{calSource?: string|null, poseSource?: string|null}} camera
    * @returns {'calibrated'|'curated'|'raw-prior'}
    */
@@ -235,9 +233,8 @@ export function createCalibration({
   }
 
   /**
-   * Applies a calibration patch to a record's IN-MEMORY pose (save-gated
-   * persistence, design §3e: no localStorage write here — only the explicit
-   * `calibration.save` action persists).
+   * Applies a calibration patch to a record's in-memory pose. Only the explicit
+   * `calibration.save` action persists it.
    *
    * Transient grade (gizmo mid-drag): recompute pose + frustum geometry only
    * (the cheap v2 path) with throttled notify — no ground re-arm, no frame
@@ -258,7 +255,7 @@ export function createCalibration({
       ...patch,
     });
     parts.model.ensureCameraPose(record.camera);
-    // §9.1: touching range takes manual control — clear the activation clamp.
+    // Touching range takes manual control — clear the activation clamp.
     if ('rangeScale' in patch) {
       record.probeClampRangeM = null;
       // A probe still to answer no longer lands.

@@ -94,8 +94,7 @@ export const DETECTION_PLATE_BAND = Object.freeze({ min: 0.5, max: 0.62 });
  * The plate exists to hold small mono text against sunlit imagery. Against the
  * horizon it has no job to do — there is nothing bright and busy to separate
  * the text from — and at full strength it reads as a row of dark boxes pasted
- * on an empty sky, which is the one place the pre-plate bare-text look was
- * already better (owner field call, 2026-08-21).
+ * on an empty sky, where bare text reads better.
  *
  * So the plate is SCALED here rather than replaced: every theme keeps its own
  * hue and its own relative weight, and the sky case lands at a whisper that is

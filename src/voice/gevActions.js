@@ -513,14 +513,14 @@ export function createGevActionRunner({
       }
     };
 
-    // Navigation tools interrupt any continuous camera motion (spec §1.1) —
+    // Navigation tools interrupt any continuous camera motion —
     // checked FIRST because each handler returns.
     if (name === 'zoom_to_globe') {
       interruptCameraMotion(`nav:${name}`);
     }
     // Explicit navigation while TRACKING supersedes the follow camera —
-    // otherwise the tracker drags the view back and "I flew there but can't
-    // do anything" (field finding). track_entity manages its own handoff.
+    // otherwise the tracker drags the view back to the followed entity. track_entity
+    // manages its own handoff.
     if (name === 'zoom_to_globe' && isFollowing(viewer)) {
       stopAllTracking(viewer, dataManager);
     }

@@ -521,25 +521,6 @@ export function createRendering({ state, services, parts }) {
     return floorAnswer;
   }
 
-  /**
-   * Height to draw a train at: the rendered terrain under it on a terrain
-   * globe, else the shared ground floor (which tracks the photorealistic mesh
-   * where one is loaded). Where that cell is not warm yet, a neighbouring
-   * cell's floor, else the floor this train last stood on, while the cell is
-   * warmed: a train running onto unsampled ground keeps its height instead of
-   * dropping to the ellipsoid, which lies tens to hundreds of metres under
-   * the photorealistic mesh (about 150 m around Chicago). Only a train with
-   * no floor yet, or a stop, stands on the ellipsoid, until its cell is warm.
-   * @param {number} lat
-   * @param {number} lon
-   * @param {{floorM?: number, key?: string}|null} [entry] the train, which
-   *   keeps its floor
-   * @param {boolean} [stop] a stop of the selected trip: its cell is warmed
-   *   first, however far from the camera
-   * @returns {{h: number, q: number}} The height, and how good it is: 3 the
-   *   rendered terrain, 2 the cell's floor, 1 a neighbouring cell's or the
-   *   train's last floor, 0 the ellipsoid. The same object every call.
-   */
   /** The last coarse cell asked for a stop (stops have no entry). */
   const stopCell = { kLat: NaN, kLon: NaN, cell: null };
 
@@ -566,6 +547,25 @@ export function createRendering({ state, services, parts }) {
     return memo.cell;
   }
 
+  /**
+   * Height to draw a train at: the rendered terrain under it on a terrain
+   * globe, else the shared ground floor (which tracks the photorealistic mesh
+   * where one is loaded). Where that cell is not warm yet, a neighbouring
+   * cell's floor, else the floor this train last stood on, while the cell is
+   * warmed: a train running onto unsampled ground keeps its height instead of
+   * dropping to the ellipsoid, which lies tens to hundreds of metres under
+   * the photorealistic mesh (about 150 m around Chicago). Only a train with
+   * no floor yet, or a stop, stands on the ellipsoid, until its cell is warm.
+   * @param {number} lat
+   * @param {number} lon
+   * @param {{floorM?: number, key?: string}|null} [entry] the train, which
+   *   keeps its floor
+   * @param {boolean} [stop] a stop of the selected trip: its cell is warmed
+   *   first, however far from the camera
+   * @returns {{h: number, q: number}} The height, and how good it is: 3 the
+   *   rendered terrain, 2 the cell's floor, 1 a neighbouring cell's or the
+   *   train's last floor, 0 the ellipsoid. The same object every call.
+   */
   function floorHeight(lat, lon, entry = null, stop = false) {
     if (globeShown()) {
       // The loaded terrain under the point: cache work, no request.

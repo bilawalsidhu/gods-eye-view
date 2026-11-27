@@ -73,7 +73,7 @@ export function createMilitarySnapshotRenderer({
     // Live, the display delay follows how late this delivery's reports are.
     if (!replace && !followsClock(flightState))
       noteDelivery(flightState, snapshot);
-    // Field-test fix (RS46): coarse floor cells to warm for the below-ground
+    // Coarse floor cells to warm for the below-ground
     // clamp — collected during the loop (low airborne contacts only),
     // batch-resolved once after it. Never a fetch inside the loop.
     const _floorWarmPoints = [];
@@ -178,11 +178,9 @@ export function createMilitarySnapshotRenderer({
           // Turn rate from the fix-track history — computed once per new fix
           // (≤5 samples), consumed by the extrapolation paths at tick rate.
           meta.turnRateDps = turnRateFromFixHistory(history.slice(-5));
-          // Trail accumulation is separate from the 5-fix DR history (PRD F2)
-          // so the visible trail keeps growing while tracked. Round 2
-          // (owner): ground traffic appends too — taxi history stays live
-          // after touchdown; _appendTrailFix floors grounded positions at
-          // the surface so the ground leg drapes instead of diving.
+          // Trail accumulation is separate from the 5-fix DR history so the visible trail
+          // keeps growing while tracked. Grounded contacts append too. _appendTrailFix
+          // floors their positions so the ground leg drapes.
           if (isTracked)
             tracking._appendTrailFix(
               motion._copyPosition(position),
@@ -259,15 +257,12 @@ export function createMilitarySnapshotRenderer({
       }
     }
 
-    // Field-test fix (RS46): one batch warm of the low-airborne floor cells
-    // collected above — fire-and-forget, single-flight, results read
-    // synchronously by NEXT poll's clamp (same contract as flights.js's
-    // grounded-surface warm).
+    // Warm the low-airborne floor cells in one fire-and-forget, single-flight batch. The
+    // next poll reads them synchronously.
     warmGroundFloor(_floorWarmPoints);
-    // Round 6: re-floor STALE grounded contacts (mirror of flights.js); the
-    // motion part owns the positions it rewrites.
+    // Re-floor stale grounded contacts. The motion part owns their positions.
     motion._refloorStaleGroundedContacts(currentIcaos);
-    // Round 4: sample the RENDERED mesh for those cells (a few probes per
+    // Sample the RENDERED mesh for those cells (a few probes per
     // cell, budget-capped, viewer-proximate, google-3d regime only), excluding
     // this layer's own icons/models from the probe.
     {
@@ -334,11 +329,11 @@ export function createMilitarySnapshotRenderer({
       }
 
       // If the tracked flight is truly gone, clear tracking BEFORE deleting
-      // its state (M3 ordering, keep it): teardown reads the maps this loop
+      // its state: teardown reads the maps this loop
       // is about to delete (icon restore, DR cache reset), and we must
       // never leave the camera mid-follow with stale tracking state. The
       // camera is then RELEASED IN PLACE — it stays where the follow left
-      // it, fully free (owner decision 2026-07-02: no overview flyTo).
+      // it, fully free, with no overview flyTo.
       if (icao24 === flightState._trackedIcao) {
         tracking._clearTracking(false, { evicted: true });
       }

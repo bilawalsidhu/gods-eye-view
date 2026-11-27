@@ -188,7 +188,7 @@ export function createTracking({
 
   /**
    * Fire-and-forget backfill from the server-side per-vessel ring buffer
-   * (PRD F3 — "recent path" since server boot, not voyage history). Older
+   * (the recent path since server boot, not voyage history). Older
    * samples are spliced AHEAD of the live accumulation, capped at
    * TRAIL_MAX_POINTS (newest kept). Any failure (404/timeout/malformed)
    * silently keeps the live-only trail.

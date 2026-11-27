@@ -544,14 +544,8 @@ export class ShellFacade {
   }
 
   /**
-   * Contacts-scoped detection (owner playtest 2026-08-18: "when you click on
-   * Contacts, detections should just turn on, and they should stay on in
-   * Cockpit or in third-person tracking inside Contacts").
-   *
-   * The scope is the CONTACTS SESSION, not Cockpit. Cockpit enter/exit and
-   * third-person tracking are moves WITHIN that session and deliberately do not
-   * touch detection — an earlier build hooked this to cockpit enter/exit, which
-   * is exactly what turned detections off when the owner left the cockpit.
+   * Entering Contacts turns detection on. Cockpit entry, exit and third-person tracking
+   * are moves within the Contacts session and leave detection on.
    *
    * Called from `_syncContextModeButtons`, the single funnel every
    * `_contextMode` mutation routes through, and gated on the transaction having
@@ -563,7 +557,7 @@ export class ShellFacade {
     return this._visualSettings._syncContactsDetection(...arguments);
   }
 
-  /** IR hot-target boost (owner playtest 2026-08-16): under the luminance-
+  /** IR hot-target boost: under the luminance-
    *  mapped NVG/FLIR looks the 3D fleets flip to flat white so contacts read
    *  HOT instead of vanishing mid-gray; restored when the look exits. The
    *  EFFECTIVE look is Cockpit's vision override while Cockpit is active
@@ -722,8 +716,8 @@ export class ShellFacade {
    *
    * Deliberately does NOT consult `_detectionUserOverridden` — the CALLER owns
    * that decision. The style path checks it (an explicit Sparse/Off must
-   * survive a style switch); Cockpit entry does not (owner: detection is on in
-   * the cockpit "regardless").
+   * survive a style switch). If detection is off when Contacts opens, Contacts
+   * applies the tactical preset even if the user explicitly turned detection off.
    * @param {{mode?: string, densityPct?: number}} det Preset detection config.
    * @returns {void}
    */
@@ -1147,7 +1141,7 @@ export class ShellFacade {
   }
 
   /**
-   * 500 ms DOM ticker for the traffic sync chip (was per-frame). It also
+   * 500 ms DOM ticker for the traffic sync chip. It also
    * polls the loading chip as a safety net: a camera-driven layer can flip
    * its own `stats.loading` without emitting a manager event, and that is
    * the one loading start the event path cannot see.
@@ -1159,15 +1153,10 @@ export class ShellFacade {
   /**
    * Self-stopping 60 ms ticker for the global loading chip.
    *
-   * The chip used to ride the style rAF loop, which perf wave 2 made
-   * self-stopping — leaving the chip frozen mid-state whenever no crossfade
-   * or animated shader was running (it would never reveal, never cross the
-   * long-load threshold, and never dwell out). Its reducer
-   * (src/loadingFeedback.js) is time-driven, so it needs real ticks; it is
-   * also pure DOM, so it takes NO governor hold and requests no render.
-   * Armed by _updateGlobalLoadingFeedback whenever loading leaves idle or a
-   * universal notice begins, and stops once both have settled.
-   * (rebase 2026-08-16: main's loading chip vs wave 2's stopped loop)
+   * The time-driven reducer in src/loadingFeedback.js needs its own ticks while the style
+   * loop is idle. DOM updates take no governor hold and request no render.
+   * _updateGlobalLoadingFeedback arms it when loading leaves idle or a universal notice
+   * begins. It stops when both settle.
    * @returns {void}
    */
   _armLoadingFeedbackTicker() {

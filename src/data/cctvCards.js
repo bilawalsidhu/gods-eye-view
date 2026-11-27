@@ -1,27 +1,19 @@
 /**
  * @module cctvCards
- * @description Screen-space thumbnail cards for the citywide ambient CCTV
- * tier (design: docs/superpowers/specs/2026-07-29-cctv-ambient-cards-design.md).
- * Replaces the rejected world-space static-plane ring with small canvas cards
- * anchored to each LOD-selected camera's screen position, showing its latest
- * paced static frame.
+ * @description Screen-space thumbnail cards for the citywide ambient CCTV tier. Small
+ * canvas cards show the latest paced static frame at each LOD-selected camera's screen
+ * position.
  *
- * The shared world-overlay host owns projection, collision, paint, and hit
- * rectangles. This module owns the source-side entry policy and every frame
- * lifecycle concern: fetching, stable slots, retry pacing, persistence, and
- * cache pruning.
+ * The shared world-overlay host owns projection, collision, paint and hit rectangles. The
+ * CCTV layer (src/layers/cctv/cards.js) selects cameras on moveEnd with LOD and grace,
+ * and fetches frames through the policy-gated pacer. This module owns the pure card
+ * policy helpers for decluttering, frame persistence, retry pacing and cache pruning. It
+ * supplies stable frame slots to the host.
  *
- * Division of labor mirrors vesselLabels: cctv.js OWNS selection and frame
- * fetching (moveEnd-driven LOD + grace + the policy-gated pacer: cold-fill
- * burst, then the 1-fetch/s steady gate — never per
- * frame); this module owns the pure card policy helpers (declutter, frame
- * persistence, retry pacing, cache pruning) and supplies ready-to-draw stable
- * frame-slot references to the host.
- *
- * Zero-flicker contract (owner requirement):
+ * Zero-flicker contract:
  * - An AMBIENT entry whose frame slot has no drawn frame yet (`stamp === 0`)
  *   renders NOTHING — no placeholder, no chip. The camera icon alone carries
- *   it. Sole documented exception (owner round 2, item B): a PINNED entry
+ *   it. Sole exception: a PINNED entry
  *   (hover-summoned, `entry.pinned === true`) paints its chrome immediately —
  *   explicit user gesture wants instant feedback — with an empty thumb area
  *   until its fast-tracked frame lands.
@@ -30,7 +22,7 @@
  *   card appears/updates on the next postRender without any entry rebuild.
  * - A failed fetch never clears a drawn frame (applyFrameResult persistence).
  *
- * Edge fade consistency (owner note): cards fade toward the screen edges via
+ * Edge fade consistency: cards fade toward the screen edges via
  * the SAME radial keyhole ramp the detection overlay uses
  * (keyholeLabelAlphaFromGeometry — opaque inside the central keyhole, linear
  * feather outward), multiplied with the shared distance ramp (cardAlpha).
@@ -48,9 +40,8 @@ export const CCTV_FRAME_CANVAS_W = 192;
 export const CCTV_FRAME_CANVAS_H = 108;
 /**
  * Min screen separation between accepted card anchors (greedy declutter).
- * Owner field test 2026-07-30: 130 read too sparse once the HUD safe-zone
- * filter started dropping cards as well. 112 still exceeds the card box width
- * (104 px) so accepted boxes cannot overlap. This is THE density knob.
+ * 112 px exceeds the 104 px card width, so accepted boxes cannot overlap. This controls
+ * card density.
  */
 export const CCTV_CARD_MIN_SEP_PX = 112;
 /** Ambient cards yield the top HUD band to mission text and controls. */
@@ -59,11 +50,9 @@ export const CCTV_CARD_SAFE_TOP_MAX_PX = 150;
 /** Bounded thumbnail cache (frame slots kept beyond the live card set). */
 export const CCTV_FRAME_CACHE_MAX = 96;
 
-// ─── Altitude scaling (owner field-test finding 5, 2026-07-29) ──────────────
-// Owner-decided curve: cards are full size at street level, "start to get
-// smaller" from ~1,800 m, "scale down progressively" to ~0.45 by 6,000 m,
-// keep shrinking slightly and alpha-fade out across 7,500→9,500 m, and are
-// fully hidden above that ("just the icons" at the highest zooms).
+// ─── Altitude scaling ──────────────
+// Full size at street level, cards shrink from ~1,800 m to ~0.45 at 6,000 m, keep
+// shrinking slightly and fade across 7,500–9,500 m. Above that they are hidden.
 export const CCTV_CARD_SCALE_FULL_M = 1_800;
 export const CCTV_CARD_SCALE_MID_M = 6_000;
 export const CCTV_CARD_FADE_START_M = 7_500;
@@ -71,7 +60,7 @@ export const CCTV_CARD_FADE_END_M = 9_500;
 export const CCTV_CARD_SCALE_AT_MID = 0.45;
 export const CCTV_CARD_SCALE_MIN = 0.35;
 
-// ─── Frame-fetch pacing (owner field-test finding 3, 2026-07-29) ────────────
+// ─── Frame-fetch pacing ────────────
 /** Steady-state global gate: one card-frame fetch per second. */
 export const CCTV_CARD_FETCH_STEADY_SPACING_MS = 1_000;
 /** Cold-fill burst spacing between fetch launches. */
@@ -172,9 +161,8 @@ export function declutterCctvCards(
 }
 
 /**
- * Altitude-driven card scale + opacity (owner field-test finding 5,
- * 2026-07-29 — curve constants above). Piecewise, monotonic non-increasing
- * in both channels:
+ * Altitude-driven card scale and opacity (curve constants above).
+ * Piecewise, monotonic non-increasing in both channels:
  *   - ≤1,800 m: full size, fully opaque.
  *   - 1,800→6,000 m: smoothstep shrink 1.0 → 0.45 (opaque).
  *   - 6,000→9,500 m: slight continued linear shrink 0.45 → 0.35; opaque
@@ -211,7 +199,7 @@ export function cardScaleForAltitude(cameraHeightM) {
 }
 
 /**
- * Cold-fill burst pacing policy (owner field-test finding 3, 2026-07-29), as
+ * Cold-fill burst pacing policy, as
  * a pure decision so the pacer tick stays trivially testable. While any
  * selected card still lacks its FIRST frame (`coldFill`), up to
  * `CCTV_CARD_FETCH_BURST_LIMIT` fetches may be in flight with

@@ -1,6 +1,5 @@
 /**
- * Idle render governor — the wave-2 flagship of the 2026-08-05 perf
- * investigation.
+ * Idle render governor.
  *
  * The problem: Cesium's default render loop repaints every vsync forever, so
  * the app burned ~60% GPU + ~54% of a core with ZERO layers enabled and a
@@ -16,8 +15,8 @@
  *   interpolation, traffic sim, satellite motion, tracked-entity follow,
  *   style crossfades, CCTV projection — registers a hold for exactly the
  *   lifetime of its scene-loop listener or animation. While one is active,
- *   behavior is byte-identical to pre-governor main: the locked
- *   interpolation/tracking invariants are preserved by construction.
+ *   behavior is the same as without the governor, preserving the
+ *   interpolation and tracking invariants.
  * - **Idle mode** (drawn on demand) when zero holds. The renderer draws
  *   on camera input and tile loads by itself; every other scene mutation
  *   must call `governorRequestRender()` for its one frame. Discrete

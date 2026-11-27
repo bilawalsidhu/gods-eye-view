@@ -1,4 +1,4 @@
-// Pure-logic unit tests for the voice-lifecycle size guards (Batch 11, M13).
+// Pure-logic unit tests for the voice-lifecycle size guards.
 // These helpers are DOM/WebRTC-free so they pin the screenshot down-scaling and
 // payload-byte estimation that keep an oversized dc.send from stranding a turn.
 import { test } from 'node:test';

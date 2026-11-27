@@ -97,25 +97,7 @@ import { withPlacePacks } from './placePacksLoading.js';
 import { preloadOwnerFlags } from './ownerFlag.js';
 import { flushAllPanelContent } from './rail/panelContent.js';
 
-/**
- * Central UI orchestrator for the God's Eye View application.
- *
- * Responsibilities:
- * - Visual controls and presets backed by the VisualEffects controller.
- * - Bloom and sharpen post-processing toggle/intensity control.
- * - Collapsible rail panels with their collapsed state kept in localStorage.
- * - CCTV panel: camera selection, coverage toggle, projection, calibration
- *   sliders, auto-hop, and summary typewriter effect.
- * - Preset cities and landmarks (the Omnibar's chips), QWERTY landmark keys,
- *   geocoding search, and inter-city world-jump transitions.
- * - Orbit controller integration for POI fly-around.
- * - Recording mode with safe-frame overlay and HUD mode switching.
- * - Share link encoding/decoding (delegates to ShareLinkManager).
- * - Detection overlay mode cycling and density tuning.
- * - Toast notification system.
- * - Intel HUD lifecycle and variant switching.
- */
-
+/** Builds the page's UI controllers and connects them to the scene, layers and share link. */
 export class StyleManager extends ShellFacade {
   /**
    * @param {object} viewer - The scene object the renderer draws.
@@ -856,10 +838,8 @@ export class StyleManager extends ShellFacade {
   }
 
   /**
-   * Wires up all primary UI event listeners: style buttons, keyboard shortcuts
-   * (1-8 style keys, H/O/V/F/D/C hotkeys, Escape), AI prompt input with
-   * debounce, bloom/sharpen/HUD toggles, detection density slider, and
-   * clean-view toggle.
+   * Binds keyboard shortcuts (1–6 style keys and H/O/V/F/D/C hotkeys) and the Display
+   * panel's controls through DisplayBindings.
    * @returns {void}
    */
   _initUI() {
@@ -1008,11 +988,9 @@ export class StyleManager extends ShellFacade {
   }
 
   /**
-   * Pushes the current visual state (bloom, sharpen, HUD, detection) to
-   * the ShareLinkManager so the URL hash stays in sync.
+   * Tells the share state that the visual settings changed, so the link follows them.
    * @returns {void}
    */
-
   _syncShareState() {
     if (this._disposed) return;
     this._shareState.publish({ type: 'settings-changed' });
@@ -1710,12 +1688,11 @@ export class StyleManager extends ShellFacade {
   // ── Shader transitions ────────────────────────
 
   /**
-   * Style animation loop — self-stopping (perf wave 2). Runs only while a
+   * Style animation loop — self-stopping. Runs only while a
    * crossfade is in flight or an animated (time-uniform) stage is visible,
    * holding continuous scene render for exactly that long. Re-armed by
    * _startTransition and by _setStageIntensity enabling an animated stage.
-   * The traffic sync chip no longer rides this loop — it has its own 500 ms
-   * interval (see _startTrafficChipTicker).
+   * The traffic sync chip has its own 500 ms interval (_startTrafficChipTicker).
    */
   _startAnimationLoop() {
     this._visualEffects.startAnimationLoop();
@@ -1883,21 +1860,9 @@ export class StyleManager extends ShellFacade {
   // ── HUD Toggle ───────────────────────────────
 
   /**
-   * Wires the HUD toggle button, initializes the default HUD variant to 'tactical',
-   * and sets up the detection mode cycle button.
+   * Shows the tactical HUD and wires the Cockpit Display toggle and portal.
    * @returns {void}
    */
-  /**
-   * Wires the DISPLAY-rail "3D" toggle to the flights layer's `models3d` param.
-   * ON by default in `proximity` mode (owner directive 2026-08-22): the fleet
-   * renders as 3D glTF models once the camera is zoomed in past the layer's
-   * altitude ceiling, and only the nearest MODEL_MAX in view are admitted, so
-   * the default costs nothing at globe scale. `all` is the deliberate opt-in;
-   * turning the toggle off returns the fleet to flat billboards. The TRACKED
-   * contact follows the same rule: selecting a contact never changes its form.
-   * @returns {void}
-   */
-
   _initHUDToggle() {
     this._setHudVariant('tactical');
     this.hud.setMode('on');
@@ -2029,7 +1994,7 @@ export class StyleManager extends ShellFacade {
     await this._contextControls.restoreForDisposal();
     // IR boost teardown BEFORE detaching the data manager: restore fog and
     // un-boost both aircraft layers so a surviving viewer or replacement
-    // manager doesn't inherit sensor state (review P2, 2026-08-16).
+    // manager doesn't inherit sensor state.
     this._visualSettings.releaseIrBoost();
     this._cockpitCoordinator.destroy();
     this._contextControls.disconnect();

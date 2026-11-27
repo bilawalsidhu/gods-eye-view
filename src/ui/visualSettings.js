@@ -343,7 +343,7 @@ export class VisualSettings {
         const state = this.getDetectionState();
         return { mode: state.detectionMode, densityPct: state.densityPct };
       },
-      // Owner playtest: the force-on lands on the tactical look the military
+      // The force-on lands on the tactical look the military
       // styles apply — the SAME preset object — not on whatever profile the
       // operator last happened to leave detection at.
       applyPreset: () => this._applyDetectionPreset(MILITARY_DETECTION_PRESET),
@@ -457,10 +457,10 @@ export class VisualSettings {
     );
     // Fog blends distant geometry toward an effectively-BLACK color in this
     // app (the Cesium globe is hidden), so beyond ~100 km every 3D aircraft
-    // fogs to a black silhouette — lighting and shaders can't reach past it
-    // (owner cockpit-FLIR field rounds, 2026-08-16). IR sensors see through
-    // haze, so the boost styles simply turn fog off; the prior state restores
-    // on exit. Transition-guarded so repeated syncs don't clobber the saved value.
+    // fogs to a black silhouette — lighting and shaders can't reach past it.
+    // IR sensors see through haze, so the boost styles simply turn fog off;
+    // the prior state restores on exit. Transition-guarded so repeated syncs
+    // don't clobber the saved value.
     // The globe's sky draws the fog; setting it asks for a frame.
     const sky = findGlobe(this.viewer)?.sky;
     if (sky && irBoost !== this._irBoostActive) {

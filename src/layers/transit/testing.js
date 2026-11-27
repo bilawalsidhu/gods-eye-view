@@ -3,14 +3,14 @@ import { canvasOf, findFrame } from '../../render/rendererOf.js';
 import { recordFix, updatePlayback, attachFloorToPlace } from './movement.js';
 import { seek, setRate, mergeHistory } from '../../data/contactPlayback.js';
 import { getRegisteredTransitFeed } from '../../data/transitFeeds.js';
+import { transitIconCacheSize } from '../../data/transitIcons.js';
+
 /**
  * Test seams. Each one reaches into THIS instance's state, so a test that
  * swaps the overlay host or inspects vehicles cannot leak into another layer.
  * @param {object} context
  * @returns {object}
  */
-import { transitIconCacheSize } from '../../data/transitIcons.js';
-
 export function createTesting({ state, parts }) {
   let stopProbe = null;
   /** Stop a running frame probe, resolving it with what it has. */

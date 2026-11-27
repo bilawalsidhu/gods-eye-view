@@ -40,8 +40,7 @@ export function createCards({ state: layerState, services, parts, source }) {
   }
 
   // ---------------------------------------------------------------------------
-  // Ambient card tier (2026-07-29 design — spec:
-  // docs/superpowers/specs/2026-07-29-cctv-ambient-cards-design.md)
+  // Ambient card tier
   // ---------------------------------------------------------------------------
 
   /** Returns (creating on demand) the stable frame slot for a camera id. */

@@ -3,6 +3,17 @@ import { t, msg } from '../../i18n/index.js';
 import { vesselCockpitInfo } from './cockpitSubject.js';
 import { vesselTypeCss } from '../../data/vesselLabels.js';
 import { greatCircleMeters } from '../../geoDistance.js';
+import {
+  AIS_DEGRADED_STATUSES,
+  AIS_HEALTHY_STATUSES,
+  AIS_STATUS_REASON,
+  REFRESH_MS,
+  FOCUS_EVIDENCE_DEV,
+  VESSEL_LIFT_M,
+  followsClock,
+} from './policy.js';
+import { VESSEL_OVERLAY_SOURCE_ID } from '../../data/vesselLabels.js';
+import { locateOnTrack } from '../../data/locate.js';
 
 // ingestion.js is a portable export (package.json) and writes English labels
 // into state; translate the known ones here, pass anything else through.
@@ -17,17 +28,6 @@ function localizeFeedLabel(raw) {
   const key = FEED_STATE_LABEL_KEYS[raw.trim()];
   return key ? t(key) : raw;
 }
-import {
-  AIS_DEGRADED_STATUSES,
-  AIS_HEALTHY_STATUSES,
-  AIS_STATUS_REASON,
-  REFRESH_MS,
-  FOCUS_EVIDENCE_DEV,
-  VESSEL_LIFT_M,
-  followsClock,
-} from './policy.js';
-import { VESSEL_OVERLAY_SOURCE_ID } from '../../data/vesselLabels.js';
-import { locateOnTrack } from '../../data/locate.js';
 
 const UUID_KEY =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -492,11 +492,6 @@ export function createQueries({
     },
 
     /**
-     * Get positions of all currently loaded vessels.
-     * @param {number} [maxCount=800] Maximum entries to return.
-     * @returns {Array<{ id: string, label: string, position: {x: number, y: number, z: number}, latitude: number, longitude: number }>}
-     */
-    /**
      * Whether this layer still carries a vessel, in O(1).
      *
      * Mirror of `flights.hasContact`: presence consumers must not infer absence
@@ -518,6 +513,11 @@ export function createQueries({
       return Boolean(recordFor(String(id).trim()));
     },
 
+    /**
+     * Get positions of all currently loaded vessels.
+     * @param {number} [maxCount=800] Maximum entries to return.
+     * @returns {Array<{ id: string, label: string, position: {x: number, y: number, z: number}, latitude: number, longitude: number }>}
+     */
     getAllPositions(maxCount = 800) {
       const result = [];
       const records = state.records.all;

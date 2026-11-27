@@ -125,11 +125,9 @@ export function createRendering({
    * The catalog's camera icons: an icon draw set, and the book the layer
    * reads them back from (`render/motion/iconBook.js`), each item a camera
    * by its id. Cameras hold still, so each item's motion is a hold at its
-   * mount. Items draw depth-test-free (field-test fix 2026-07-06: the old
-   * finite depth-test distance re-engaged at far zoom, where the COARSE
-   * far-LOD Google-3D mesh sits above the true ground and swallowed
-   * ground-anchored icons); the set culls the far side of the globe and
-   * refreshHorizonCulling thins the rest.
+   * mount. Items draw depth-test-free because a finite depth-test distance hides
+   * ground-anchored icons under the coarse far-LOD photoreal mesh. The set culls the far
+   * side of the globe and refreshHorizonCulling thins the rest.
    * The set stacks under the other sprite layers (`spriteDrawOrder`).
    * @param {object} viewer The layer's viewer.
    * @returns {string} The icon set's id.
@@ -895,7 +893,7 @@ export function createRendering({
       ) {
         parts.projection.ensureProjectionRuntime(record);
       }
-      // One live plane in the world at a time (§2c): only the active camera's
+      // One live plane in the world at a time: only the active camera's
       // far cap carries the monitor plane; idle neighbors get the faint
       // wireframe only.
       const planeShowing = !!(
@@ -908,7 +906,7 @@ export function createRendering({
       const inVisibleSet = coverageVisible.has(record.camera.id);
       // A synthetic bearing (headingConfidence 'low', no human calibration)
       // draws its wireframe dashed so a guessed facing is visibly provisional
-      // rather than rendering identically to a surveyed one (#639). Colors,
+      // rather than rendering identically to a surveyed one. Colors,
       // widths, and the active/idle emphasis are unchanged.
       const bearingEstimated = isHeadingEstimated(record.camera);
       for (const entity of record.coverageEntities || []) {
@@ -921,7 +919,7 @@ export function createRendering({
         );
         if (!entity.role) continue;
         // Viewshed mode swaps the cyan/green scheme for the camera's own hue so
-        // adjacent cones read as distinct coverage claims (design §3b); the
+        // adjacent cones read as distinct coverage claims; the
         // active camera keeps its width/alpha emphasis in both schemes.
         const hue = viewshedOn ? record.viewshedColors || null : null;
         entity.dashed = bearingEstimated;
@@ -992,7 +990,7 @@ export function createRendering({
    * Only the photoreal regime (the globe hidden under the tiles) can be
    * ready: on a globe stack the tiles are hidden, and the shared sampler can
    * only inspect tiles that are drawn, so a sample taken against them would
-   * silently miss (Task 5, spec §2). The tiles' readiness is the globe
+   * silently miss. The tiles' readiness is the globe
    * port's (`isSettled('tiles')`), true as well when no tiles are drawn.
    *
    * @returns {boolean} True when the regime is photoreal and its tiles in
@@ -1244,7 +1242,7 @@ export function createRendering({
    * is welded to the cone by construction. Called only where the wireframe
    * already rewrites (style refresh on mode/visible-set/active changes,
    * applyFrustumGeometry on pose edits) — no new update cadence, zero scene
-   * queries (viewshed design §3b).
+   * queries.
    * @param {Object} record - Camera record.
    * @param {boolean} isActive - Active camera gets the brighter fill.
    */

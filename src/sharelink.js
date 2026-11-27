@@ -101,11 +101,9 @@ export class ShareLinkManager {
     this._detectionDensity = 50;
     this._detectionAllocation = 'ELASTIC';
     this._detectionFadePct = 7;
-    // Mirrors KEYHOLE_OUTSIDE_OPACITY_DEFAULT in celestialRing.js and the
-    // slider's markup value (owner final lock 2026-08-24: 5 -> 3 -> 1). This is the
-    // state the link THIS session generates starts from, so it must match what
-    // the session actually renders; the `ko` PARSE fallback below is a separate
-    // question and deliberately stays at 5.
+    // The link this session generates follows the default in
+    // KEYHOLE_OUTSIDE_OPACITY_DEFAULT and the slider's markup value. The `ko` parse
+    // fallback stays at 5.
     this._detectionOutsideOpacityPct = 1;
     this._celestialRingEnabled = false;
     this._scopeEnabled = true;
@@ -114,7 +112,7 @@ export class ShareLinkManager {
     // default and leaves `sco` out of the link.
     this._scopeOpacityPct = 100;
     // null = the altitude-adaptive terminus (the default). A number pins the
-    // outside-fill opacity as a percent, 94..100. (`sce`, 2026-08-17)
+    // outside-fill opacity as a percent, 94..100. (`sce`)
     this._scopeTerminusPct = null;
     this._mapStack = 'photoreal';
     this._layerStateProvider = null;
@@ -277,26 +275,16 @@ export class ShareLinkManager {
         0,
         Math.min(40, Math.round(parseOr(params.get('kf'), 16))),
       ),
-      // Deliberately still 5 after the 2026-08-23 default moved to 3. Same rule
-      // as `scf` below: this is the PARSE fallback for a link that predates
-      // `ko`, and such a link was authored when 5 was what its author saw. Every
-      // link since carries `ko` explicitly, because the generator always writes
-      // the field — so nothing from the 5 % era depends on this number either
-      // way. The first-run default is a different question, answered in
-      // celestialRing.js.
+      // Links predating `ko` were authored when 5 was the default. Later links write `ko`
+      // explicitly. The first-run default lives in celestialRing.js.
       detectionOutsideOpacityPct: Math.max(
         0,
         Math.min(100, Math.round(parseOr(params.get('ko'), 5))),
       ),
       celestialRing: params.has('cr') ? params.get('cr') === '1' : false,
       scopeEnabled: params.has('sc') ? params.get('sc') === '1' : true,
-      // Deliberately still 35 through both later default moves (0 on
-      // 2026-08-22, 8 on 2026-08-23). This is the PARSE fallback for a link that
-      // predates `scf` entirely, and such a link was authored when 35 was what
-      // its author saw — restoring their view is the point of a share link. A
-      // link from the feather-0 era is unaffected either way: it carries
-      // `scf=0` explicitly, because the generator always writes the field. The
-      // first-run default is a different question, answered in scopeMask.js.
+      // Links predating `scf` were authored when 35 was the default. Restore that view.
+      // Later links write `scf` explicitly. The first-run default lives in scopeMask.js.
       // (`_scopeFeatherPct` in the constructor tracks the default: that one
       // mirrors live state for the link this session generates, so it must match
       // the mask, not the archive.)

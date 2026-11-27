@@ -164,17 +164,9 @@ export function createRendering({ state }) {
   }
 
   /**
-   * Clear the draw sets and forget the built items. Hiding them is NOT
-   * enough: thousands of hidden lines and markers keep costing memory long
-   * after the user toggled the layer off — that is the "everything gets
-   * sluggish after I turn layers off" report. The fetched JSON stays
-   * cached, so the next enable rebuilds without a network round trip or a
-   * re-parse.
-   */
-
-  /**
-   * Forget what was drawn; `clearSets: false` (destroy, where `detach`
-   * disposes the sets next) leaves the sets alone.
+   * Clear the draw sets and forget the built items. Hidden items still cost memory. The
+   * fetched JSON stays cached, so the next enable rebuilds without a fetch or re-parse.
+   * `clearSets: false` leaves the sets for detach to dispose during destroy.
    */
   function releaseDrawing({ clearSets = true } = {}) {
     state._referenceRecords = [];

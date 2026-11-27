@@ -1,15 +1,12 @@
-// src/data/geoid.test.mjs — EGM96 geoid-undulation lookup (docs/plans/2026-07-05-entity-height-datum-fix.md Task 1).
+// EGM96 geoid-undulation lookup.
 //
-// Locks the module's public interface (later tasks — aircraft altitude
-// correction, CCTV terrain fallback — call this verbatim):
+// Public interface:
 //   ensureGeoidReady(): Promise<void>   lazy-loads the grid on first call
 //   geoidHeight(latDeg, lonDeg): number N in metres; throws if not ready
 //   orthometricToEllipsoidal(hMslM, latDeg, lonDeg): number  hMslM + N
 //
-// Tolerance is loose (±2.5 m) by design: the bundled grid is EGM96 while the
-// plan's "Verified facts" reference values are Re:Earth's EGM2008 — the two
-// models differ by up to ~1 m, and the brief's own tolerance absorbs that
-// spread rather than asserting exact agreement.
+// The ±2.5 m tolerance allows for the difference between the bundled EGM96 grid and
+// Re:Earth's EGM2008 reference values (up to ~1 m).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {

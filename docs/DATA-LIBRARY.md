@@ -6,7 +6,7 @@ A viewer opens it from **DATA LAYERS ▸ Browse data library**, adds what they
 want, and the entry appears in the panel under **Library**. Nothing in the
 library is on until someone adds it.
 
-Runtime behaviour is described in [CURRENT-STATE.md](CURRENT-STATE.md#data-library--october-21-2026).
+Runtime behaviour is described in [CURRENT-STATE.md](CURRENT-STATE.md#data-library).
 This page is the authoring guide.
 
 ## The one rule: live sources only

@@ -191,7 +191,7 @@ export function createProjection({
    * <img> or <video> element depending on the feed type.
    *
    * The plane is the only projection representation (v2): the frustum's far cap,
-   * perpendicular to the view axis (§2b — never billboarded; a wall primitive
+   * perpendicular to the view axis (never billboarded; a wall primitive
    * can't pitch, the plane can). It is textured with the live frame: video
    * element direct, canvas double-buffer otherwise.
    *

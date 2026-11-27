@@ -204,12 +204,9 @@ export function createFlightSnapshotRenderer({
           // Turn rate from the fix-track history — computed once per new fix
           // (≤5 samples), consumed by the extrapolation paths at tick rate.
           meta.turnRateDps = turnRateFromFixHistory(history.slice(-5));
-          // Trail accumulation is separate from the 5-fix DR history (PRD F1)
-          // so the visible trail keeps growing while tracked. Ground traffic
-          // appends nothing — a touchdown freezes the existing trail.
-          // Round 2 (owner): ground traffic appends too — taxi history stays
-          // live after touchdown (grounded flights positions are already
-          // surface-clamped via the surfaceM chain, so the ground leg drapes).
+          // Trail accumulation is separate from the 5-fix DR history so the visible trail
+          // keeps growing while tracked. Grounded contacts append too. Their positions
+          // are surface-clamped so the ground leg drapes.
           if (isTracked)
             tracking._appendTrailFix(
               motion._copyPosition(position),
@@ -350,11 +347,11 @@ export function createFlightSnapshotRenderer({
       }
 
       // If the tracked flight is truly gone, clear tracking BEFORE deleting
-      // its state (M3 ordering, keep it): teardown reads the maps this loop
+      // its state: teardown reads the maps this loop
       // is about to delete (billboard restore, DR cache reset), and we must
       // never leave the camera mid-follow with stale tracking state. The
       // camera is then RELEASED IN PLACE — it stays where the follow left
-      // it, fully free (owner decision 2026-07-02: no overview flyTo).
+      // it, fully free, with no overview flyTo.
       if (icao24 === flightState._trackedIcao) {
         tracking._clearTracking(false, { evicted: true });
       }
@@ -385,26 +382,17 @@ export function createFlightSnapshotRenderer({
       viewerLonDeg,
     );
 
-    // Field-test round 3: one batch warm of the viewer-proximate low-contact
-    // floor cells collected in the loop (fire-and-forget, single-flight;
-    // read synchronously by NEXT poll's clamp — the military-layer pattern).
+    // Warm the viewer-proximate low-contact floor cells in one fire-and-forget,
+    // single-flight batch. The next poll reads them synchronously.
     warmGroundFloor(floorWarmPoints);
-    // Round 4: sample the RENDERED mesh for those same cells (a few probes
+    // Sample the RENDERED mesh for those same cells (a few probes
     // per cell, budget-capped, viewer-proximate, google-3d regime only). Own
     // billboards/models are excluded so a vertical probe can't land on an
     // aircraft instead of the pavement.
     rendering._sampleMeshFloor(floorWarmPoints, viewerLatDeg, viewerLonDeg);
 
-    // Round 5: the grounded exact-key warm that used to live here is gone —
-    // see the note where _warmGroundedAircraftSurfaceCache was removed. The
-    // viewer-proximate coarse warm + mesh sampler above cover everything
-    // whose height is actually visible.
-    // Round 6: re-floor STALE grounded contacts. A parked plane whose
-    // transponder went quiet stops receiving poll updates, so a floor that
-    // warms AFTER its last fix never applied — it sat frozen at the geoid
-    // (ATL verify: FFT4347 at −30.7 m, 305 m under the apron, forever).
-    // Grounded contacts are static, so lifting the stored fix + billboard
-    // in place is safe (the DR extrapolates a zero-velocity fix).
+    // Re-floor stale grounded contacts when a floor warms after their last fix. A parked
+    // contact does not move, so lifting its stored fix in place is safe.
     motion._refloorStaleGroundedContacts(currentIcaos);
 
     return { count: flightState._icons.count, ids: acceptedSnapshotIcaos };

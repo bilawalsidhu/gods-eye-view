@@ -181,21 +181,16 @@ export class FlightRecords {
 
     // on_ground surface prior: ONLY synchronous warm-cache reads here —
     // never a per-aircraft network fetch inside the poll loop (see the
-    // batch resolve call below, which fills this cache for NEXT poll). A
-    // Round 5 SIMPLIFICATION (owner directive: one floor, evenly applied):
-    // the grounded surface is the round-4 choke point and nothing else —
-    // rendered-mesh cell first, real (never fallback-poisoned) DEM cell
-    // second. The old exact-5-decimal warm chain is GONE: it minted a new
-    // key per parked-jitter poll for every grounded contact ON EARTH,
-    // hammering Re:Earth into the very failures that poisoned the cache.
+    // batch resolve call below, which fills this cache for the next poll). The shared
+    // floor uses the rendered-mesh cell first, then a real DEM cell. Per-position keys
+    // would mint a key on each parked-jitter poll.
     let surfaceM = null;
     if (onGround) {
       surfaceM = cachedGroundFloor(lat, lon); // mesh ?? real DEM (coarse cell)
       // Taxiing crosses into a fresh cold cell every poll — always one
       // step ahead of the warm batch — so fall back to LAST poll's cell
       // (warmed by last poll's batch; aprons are flat across adjacent
-      // 111 m cells). Round-5 verify caught taxiing contacts stuck at
-      // the geoid without this (round 2's lesson, at cell granularity).
+      // 111 m cells).
       if (
         surfaceM == null &&
         Number.isFinite(prevMeta?.rawLat) &&
@@ -282,14 +277,9 @@ export class FlightRecords {
       // so after a landing it still holds the approach altitude.
       renderAltitudeM = onGround ? 0 : alt;
     }
-    // Field-test fix (WAKE01/RS46 class, 2026-07-06; widened round 3):
-    // floor a low airborne contact's render height at the local coarse
-    // ground so it can never dive below the mesh. Round 3 (Austin
-    // fleet-underground): baro can read BELOW an elevated field — SWA696
-    // showed 450 ft at Austin's 542 ft field elevation — and rollout/taxi
-    // traffic that OpenSky hasn't flagged on_ground yet renders from that
-    // baro, so the whole fleet sat buried at AUS in 2D. Clamping every
-    // global contact would need unbounded terrain resolution; instead the
+    // Floor low airborne contacts at the local coarse ground. Baro can read below an
+    // elevated field, and rollout traffic still reported airborne renders from it.
+    // Clamping every global contact would need unbounded terrain resolution; instead the
     // clamp covers the TRACKED contact (always) plus every low contact
     // within GROUND_FLOOR_CLAMP_RADIUS_KM of the viewer — the only ones
     // whose burial is visible. Cells warm in one batch after the loop.
@@ -352,8 +342,8 @@ export class FlightRecords {
       estimated: observation.estimated === true,
       groundM: Number.isFinite(groundM) ? groundM : null,
       onGround,
-      // Round 7: sticky airborne history — the landed fast-cull only
-      // applies to contacts that actually flew this session.
+      // Sticky airborne history: the landed fast-cull only applies to contacts that flew
+      // this session.
       wasAirborne: prevMeta?.wasAirborne === true || !onGround,
       velocity: stickyNumber(velocity, prevMeta?.velocity, 0),
       // With no reported track or true heading, a moving contact faces the

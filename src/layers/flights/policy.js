@@ -111,13 +111,13 @@ export const TRACKED_BILLBOARD_SCALE_BY_DISTANCE = Object.freeze({
 });
 
 // ---------------------------------------------------------------------------
-// Track-history trail state (PRD WS-F F1/F4): a fading polyline behind the
+// Track-history trail state: a fading polyline behind the
 // tracked aircraft. The accumulation array is intentionally SEPARATE from
 // _positionHistory (capped at POSITION_HISTORY_LIMIT for drawing)
 // so the visible trail can grow to TRAIL_MAX_POINTS fixes.
 // ---------------------------------------------------------------------------
 
-/** @constant {string} Civilian trail hue (PRD F4, pinned). */
+/** @constant {string} Civilian trail hue. */
 
 export const TRAIL_COLOR = '#00d4ff';
 
@@ -126,7 +126,7 @@ export const TRAIL_COLOR = '#00d4ff';
 export const TRAIL_MAX_POINTS = 2000;
 
 // ---------------------------------------------------------------------------
-// Render-behind smoothing (PRD WS-C C2 — approved product decision): the fleet
+// Render-behind smoothing: the fleet
 // renders at now − the display delay so positions run BETWEEN two known
 // fixes instead of extrapolating ahead and snapping back when the next poll
 // lands. The delay follows how late the feed really is (data/displayDelay.js:

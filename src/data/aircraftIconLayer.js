@@ -43,9 +43,9 @@ import { TIMELINE_UNSEEN_MS } from '../time/timelineFixes.js';
 const COCKPIT_DOT_PX = 16;
 /** The lifted point a horizon test judges, rewritten per contact per frame. */
 const _horizonScratch = new Vec3();
-/** Fleet glyphs keep the established close-range 3× scale. */
 /** A contact icon's size before its scale, CSS px. */
 const FLEET_ICON_SIZE_PX = 20;
+/** Fleet glyphs' scale by camera distance: 3× close in, 0.5× at globe range. */
 const NORMAL_SCALE_BY_DISTANCE = Object.freeze({
   near: 1000,
   nearValue: 3.0,

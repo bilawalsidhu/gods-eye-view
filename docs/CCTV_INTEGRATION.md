@@ -143,8 +143,8 @@ successful frame is from the upstream camera by checking its content type and
 
 - Add the provider, endpoint, terms/license, required attribution, key status,
   caching behavior, and any restrictions to `DATA_SOURCES.md`.
-- Update the CCTV source section in `docs/CURRENT-STATE.md` when runtime
-  behavior, flags, caps, or fallback behavior changes.
+- Correct the CCTV source section in `docs/CURRENT-STATE.md` where runtime
+  behavior, flags, caps, or fallback behavior change.
 - Register in-app attribution through the existing source/provider credit
   fields; update `src/data/dataCredits.js` when the source needs a layer-level
   credit.

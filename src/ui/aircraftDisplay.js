@@ -59,6 +59,14 @@ export class AircraftDisplay {
     });
   }
 
+  /**
+   * Wires the Display panel's 3D toggle to the flights layer's models3d param.
+   * Proximity mode is on by default. Below the altitude ceiling it admits the
+   * nearest MODEL_MAX contacts in view, so models cost nothing at globe scale.
+   * All is opt-in. Off returns the fleet to flat billboards. Selecting a contact
+   * never changes its form.
+   * @returns {void}
+   */
   _initModels3dToggle() {
     if (!this._models3dBtn) return;
     this._syncModels3dButtonState();
@@ -81,10 +89,8 @@ export class AircraftDisplay {
 
   _syncModels3dButtonState() {
     // The lit/dark state is a colour to a sighted operator and nothing at all to
-    // a screen reader without aria-pressed, which the view renders with it. It
-    // matters more now that the button ships ACTIVE from markup (default-on,
-    // 2026-08-22): the very first thing assistive tech reported was an
-    // unpressed-looking control over an armed layer.
+    // a screen reader without aria-pressed, which the view renders with it. The button
+    // starts pressed because 3D models are on by default.
     this._models3dPressedShown = this._models3dEnabled;
     this._publishModels3d();
   }

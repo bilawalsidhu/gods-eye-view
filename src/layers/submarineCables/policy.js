@@ -45,19 +45,10 @@ export const CABLE_SWEEP_MOTION_PROBE_INTERVAL_MS = 2000;
 export const CABLE_SWEEP_MOTION_EPSILON_M = 250;
 
 /**
- * Phase-5 depth decision, REVISED 2026-08-18: Option 2. Cable reference text
- * now renders in the shared world-overlay host (horizon-cull + keyhole fade,
- * no per-label tile depth test), superseding the 2026-08-02 Option-1 native
- * `LabelGraphics` exception. The native path evaluated 2 `CallbackProperty`
- * channels per reference entity per frame (5,258 across the 2,629-reference
- * dataset) and re-batched a 160-label `LabelCollection` on every sweep — the
- * layer alone cost ~9.5 ms/frame during camera motion. The depth cue this
- * trades away (photoreal tiles occluding label TEXT at low, city-level
- * cameras) matches the sibling dams/datacenters sources, which shipped
- * host-composited under the same ruling; the anchor points/stems remain
- * drawn by the renderer and depth-tested. See
- * the world-overlay consolidation design notes ("Depth-testing
- * decision") for both dated decisions.
+ * Cable reference text uses the shared world-overlay host with horizon culling and
+ * keyhole fade, like dams and datacenters. The host skips per-label tile depth tests.
+ * Anchor points and stems remain renderer-drawn and depth-tested. Native labels cost
+ * about 9.5 ms/frame during camera motion.
  */
 
 export const CABLE_LABEL_DEPTH_DECISION = Object.freeze({
@@ -105,9 +96,7 @@ export const CABLE_PIN_SIZES = Object.freeze({
 export const CABLE_LINE_GRANULARITY_M = 9999;
 
 /**
- * Monotonic clock for the sweep gate's motion probe. A hoisted declaration:
- * the module's `export default createTeleGeographySubmarineCableLayer()`
- * runs before this point in source order.
+ * Monotonic clock for the sweep gate's motion probe.
  * @returns {number}
  */
 

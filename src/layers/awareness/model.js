@@ -126,12 +126,7 @@ export function createModel({ state: layerState, services, parts, source }) {
   /**
    * The per-layer counts the Contacts panel is showing, as one flat block.
    *
-   * Three honest numbers were reaching the operator at once: this cohort count
-   * (the panel), `analyst_query`'s count of CURRENTLY-LOADED records, and the
-   * layer-wide loaded total in the coverage note. After the camera dives to a
-   * tracked contact the flights layer reloads by viewport, so the loaded set can
-   * hold a fraction of the cohort — 8 against the panel's 42 in the field. The
-   * numbers are all correct and the disagreement still reads as chaos.
+   * The analyst quotes these counts so the spoken and shown numbers agree.
    *
    * Derived from the same snapshot the panel renders (`cohort.summary.count` via
    * `buildAwarenessContextSnapshot`), so the two cannot drift apart. A cohort

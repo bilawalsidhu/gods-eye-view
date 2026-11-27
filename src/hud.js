@@ -1,4 +1,3 @@
-import { applicationServices } from './services/application.js';
 /**
  * @module hud
  * @description Intelligence HUD Overlay — NRO/NGA Satellite Aesthetic.
@@ -18,6 +17,7 @@ import { applicationServices } from './services/application.js';
  *
  * Color theming is driven by the active shader mode via CSS custom properties.
  */
+import { applicationServices } from './services/application.js';
 
 import {
   dot,
@@ -34,10 +34,6 @@ import { greatCircleKm } from './geoDistance.js';
 import { forward as toMGRS } from 'mgrs';
 import { CITY_POIS } from './cityPois.js';
 import { worldTimeFor } from './time/worldClock.js';
-
-// The HUD stamps its readouts with the world time; its sun is the sky's.
-const hudTime = worldTimeFor('hud');
-const skyTime = worldTimeFor('sky');
 import { composeLocalityTag } from './hudLocality.js';
 import {
   hudAltitude,
@@ -76,6 +72,10 @@ import { localizeLayerName } from './ui/layerPanel.js';
 import { isEmbeddedInline } from './app/embed.js';
 import { openingPlaying } from './app/openingIntro.js';
 import { subscribeSelectedVessel } from './hudReadouts.js';
+
+// The HUD stamps its readouts with the world time; its sun is the sky's.
+const hudTime = worldTimeFor('hud');
+const skyTime = worldTimeFor('sky');
 
 /** Color palettes keyed by shader mode; applied as CSS custom properties. */
 const HUD_COLORS = {
@@ -231,17 +231,6 @@ const NEARBY_POINTS = Object.values(CITY_POIS).flatMap((city) =>
 );
 
 /**
- * Full-screen intelligence HUD overlay rendered on top of the map canvas.
- *
- * Displays MGRS/lat-lon, altitude and off-nadir readouts from the live
- * camera, UTC clocks, an approximate sun elevation, the selected vessel and a
- * semantic summary line built from the view and its data feeds, alongside
- * styling that is not sensor metadata: the classification banner, generated
- * mission, sensor and orbit identifiers, the fixed sensor strip, the REC blink
- * and the altitude-scaled GSD/NIIRS figures. Readouts update on independent
- * fixed cadences.
- */
-/**
  * The view's attributes on #intel-hud itself: shown or not, layout variant
  * and style colors. Stylesheets and layout elsewhere on the page read them.
  */
@@ -252,6 +241,17 @@ function pickFrame(view) {
   return Object.fromEntries(HUD_FRAME_KEYS.map((key) => [key, view[key]]));
 }
 
+/**
+ * Full-screen intelligence HUD overlay rendered on top of the map canvas.
+ *
+ * Displays MGRS/lat-lon, altitude and off-nadir readouts from the live
+ * camera, UTC clocks, an approximate sun elevation, the selected vessel and a
+ * semantic summary line built from the view and its data feeds, alongside
+ * styling that is not sensor metadata: the classification banner, generated
+ * mission, sensor and orbit identifiers, the fixed sensor strip, the REC blink
+ * and the altitude-scaled GSD/NIIRS figures. Readouts update on independent
+ * fixed cadences.
+ */
 export class IntelHUD {
   /**
    * @param {object} viewer - The scene the HUD sits over.

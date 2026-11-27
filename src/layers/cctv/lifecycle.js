@@ -212,7 +212,7 @@ export function createLifecycle({
     layerState._lastError = null;
     layerState._lastFocusStyleAt = 0;
     layerState._activeFocusStyleCount = 0;
-    // Task 5: the applied-regime tracker is record-set-scoped — a fresh init
+    // The applied-regime tracker is record-set-scoped — a fresh init
     // recomputes it against the then-current scene.
     layerState._lastAppliedRegime = null;
   }
@@ -251,7 +251,7 @@ export function createLifecycle({
         ? catalogFromSources
         : parts.catalog.seedCatalog();
 
-      // Viewshed color identity (design §3a): golden-angle hue over the
+      // Viewshed color identity: golden-angle hue over the
       // id-SORTED catalog index — deterministic across sessions for a stable
       // catalog, maximally separated for neighboring cameras.
       const hueIndexById = new Map(
@@ -281,7 +281,7 @@ export function createLifecycle({
         parts.model.ensureCameraPose(camera);
       }
 
-      // Task 5 (height-datum fix): batch ALL camera coords through the Re:Earth
+      // Batch ALL camera coords through the Re:Earth
       // ellipsoidal ground-prior resolver (network-cached — NOT a scene query;
       // the catalog's orthometric groundElevationM feeds the geoid fallback
       // chain). Bounded wait: a warm proxy cache resolves in milliseconds, so
@@ -321,7 +321,7 @@ export function createLifecycle({
           position,
           coverageEntities: [],
           projection: null,
-          // Task 5 (height-datum fix): regime-aware ground resolution state.
+          // Regime-aware ground resolution state.
           //   groundPrior — { ellipsoid, source } from the Re:Earth batch, or
           //     drawn-terrain with its read conditions for an unanswered camera.
           //   groundResolved  — PER-REGIME one-shot latch (regime key →
@@ -333,7 +333,7 @@ export function createLifecycle({
           //   groundSamples   — PER-REGIME resolved ground (regime key →
           //     metres): the accepted one-shot scene sample in google-3d, the
           //     mirrored prior in terrain-globe. Kept across re-arms as the
-          //     "has ever resolved" memory for the B9c mid-stream guard.
+          //     "has ever resolved" memory for the mid-stream guard.
           //   frustumPositions — cached Cartesians for pure recomputes (so
           //     plane placement never re-derives geometry it already has).
           groundPrior,
@@ -341,12 +341,12 @@ export function createLifecycle({
           groundSamples: {},
           frustumGeometry: null,
           frustumPositions: null,
-          // §9.1 activation obstruction probe result: effective-range clamp so
+          // Activation obstruction probe result: effective-range clamp so
           // the far-cap plane never clips into the tiles. Null = unclamped.
           // Reset + re-probed on every activation; cleared when the user takes
           // the range slider (slider overrides the clamp).
           probeClampRangeM: null,
-          // Viewshed (design §3a/§3b): per-camera color identity + the volume
+          // Viewshed: per-camera color identity + the volume
           // primitive handle (exists only in viewshed mode for the visible set).
           viewshedColors: viewshedColors(
             cameraHue(hueIndexById.get(camera.id) ?? 0),
@@ -363,7 +363,7 @@ export function createLifecycle({
       // No camera is picked here: enable() opens on the one nearest the
       // viewer, unless restored params selected one first.
 
-      // Task 5: if the prior batch lost init's bounded race, apply it post-hoc
+      // If the prior batch lost init's bounded race, apply it post-hoc
       // when it lands (pure recomputes — applyLateGroundPriors guards against
       // a torn-down/re-inited catalog).
       if (!priors) {
@@ -375,11 +375,9 @@ export function createLifecycle({
           .catch(() => {});
       }
 
-      // Task 5: track the surface regime the initial geometry was computed for
-      // and listen for map-stack changes (main.js re-dispatches
-      // MapStackController.onChange as this CustomEvent). The handler compares
-      // regimes itself, so 'switching'/'error' emissions and same-regime stack
-      // swaps (bing→osm) no-op.
+      // Track the surface regime used for initial geometry. src/app/scene.js dispatches
+      // this CustomEvent when the map stack changes. The handler ignores switching, error
+      // and same-regime emissions.
       layerState._lastAppliedRegime = parts.ground.currentSurfaceRegime();
       if (!layerState._mapStackListener && typeof window !== 'undefined') {
         layerState._mapStackListener = () =>
@@ -501,7 +499,7 @@ export function createLifecycle({
       )
         services.credits?.showOsmCredit?.(layerState._viewer, 'cctv');
       layerState._lastUpdate = Date.now();
-      // Pick-ownership (H2): camera icons use the camera id directly;
+      // Pick-ownership: camera icons use the camera id directly;
       // coverage polyline entities use `cctv-<cameraId>-<role>` entity ids.
       registerPickOwner('cctv', (pickedId) =>
         ownsCctvPick(pickedId, layerState._recordById, GIZMO_ID_PREFIX),
@@ -553,7 +551,7 @@ export function createLifecycle({
       parts.projection.stopProjectionLoop();
       parts.geometryQueue.stopGeometryLoadQueue();
       stopViewMotionTimer();
-      // Ambient cards tear down COMPLETELY on disable (owner design point 6):
+      // Ambient cards tear down COMPLETELY on disable:
       // source entries, pacer timer, in-flight handlers, and caches.
       parts.cards.teardownAmbientCards();
       parts.rendering.hideCctvVisuals();

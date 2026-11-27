@@ -180,7 +180,7 @@ export function createCatalog({ state: layerState, services, parts, source }) {
       );
       // Same floor as the pose model (model.js): the packs' 145/210 m ranges
       // are intentional, and inflating them to 220 m pushed the monitor
-      // plane's far edge into higher ground (owner field test 2026-09-13).
+      // plane's far edge into higher ground.
       const rangeM = parts.model.clamp(
         parts.model.safeNumber(source.rangeM, seed?.rangeM ?? 700),
         120,
@@ -206,7 +206,7 @@ export function createCatalog({ state: layerState, services, parts, source }) {
       const headingConfidence = String(
         source.headingConfidence || (seed ? 'high' : 'low'),
       ).toLowerCase();
-      // CAL badge input (design §3b passthrough): hand-authored file/env source
+      // CAL badge input: hand-authored file/env source
       // entries may carry poseSource:'curated'. Austin Open Data rows never set
       // this — they stay RAW PRIOR until a human manually calibrates them.
       const poseSource =

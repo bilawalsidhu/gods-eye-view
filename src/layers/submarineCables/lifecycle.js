@@ -103,9 +103,8 @@ export function createLifecycle({ state, parts, source, mapStackEventTarget }) {
       parts.rendering.detach();
       state._cachedCableJson = null;
       state._cachedLandingJson = null;
-      // hide() clears every published host entry and goes invisible while
-      // keeping the publisher reusable — the legacy layer supported re-init
-      // after destroy, and hidden publishers already drop late publishes.
+      // hide() clears every published host entry and goes invisible while keeping the
+      // publisher reusable. Hidden publishers drop late publishes.
       // Pinned by the direct-destroy host test: removing this line leaves a
       // visible overlay source with orphan labels.
       state._overlayPublisher.hide();

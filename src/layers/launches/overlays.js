@@ -475,12 +475,9 @@ export function createOverlays({ state: layerState, services, parts, source }) {
       return null;
     }
     const path = state.ascending ? track.ascentPath : track.animatedOrbitPath;
-    // Do not call scene.sampleHeight() from this post-render path. A selected
-    // mission can remain visible from globe range, and a periodic remote height
-    // probe forces Google Photorealistic 3D Tiles to reconsider its refinement
-    // set even though the camera is stationary. That presented as a one-second
-    // shrink/expand pulse across the globe. Replay follows its already-built,
-    // surface-safe Cartesian path and therefore needs no runtime pad sampling.
+    // No scene.sampleHeight() on this post-render path. Periodic height probes make
+    // photorealistic tiles re-refine while the camera is still. Replay follows its
+    // prebuilt surface-safe path.
     const position = parts.paths.samplePath(path, state.phaseProgress);
     if (!position || !occluder.isPointVisible(position)) {
       hideReplayVehicleOverlay();
@@ -502,11 +499,8 @@ export function createOverlays({ state: layerState, services, parts, source }) {
       hideReplayVehicleOverlay();
       return null;
     }
-    // The replay camera already targets this same frame-cached world position.
-    // Applying a second temporal filter here made the DOM vehicle trail the
-    // camera until the snap threshold was crossed, producing a repeating
-    // forward/back jump. Keep smoothing only for the non-tracked close-up pad
-    // marker, where the user can move the camera independently.
+    // The replay camera already targets this position. Smooth only the untracked close-up
+    // pad marker because a second filter makes the replay vehicle lag the camera.
     const renderedWindowPosition =
       !replayActive && track.lastOverlayMode === mode
         ? parts.replay.smoothReplayWindowPosition(

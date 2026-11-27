@@ -96,7 +96,7 @@ export function createLifecycle({
       parts.tracking._installClickHandler(viewer);
 
       // React to Military-layer toggles IMMEDIATELY (suppress/restore sweep)
-      // instead of waiting out the 30 s poll (M2).
+      // instead of waiting out the 30 s poll.
       if (!flightState._milActiveChangeUnsub) {
         flightState._milActiveChangeUnsub = onMilitaryLayerActiveChange(
           parts.tracking._onMilitaryActiveChange,
@@ -208,7 +208,7 @@ export function createLifecycle({
       flightState.lifetime.abort();
       flightState._enrich.reset();
       parts.controller._abortActiveUpdates();
-      parts.rendering._stopPace(); // direct-destroy path (perf wave 2 fix)
+      parts.rendering._stopPace(); // direct-destroy path
       parts.tracking._clearTracking();
       parts.tracking._destroyTrail();
       parts.tracking._cancelPendingTrackingRestore();

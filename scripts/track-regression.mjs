@@ -1,90 +1,19 @@
 #!/usr/bin/env node
 /**
- * track-regression.mjs
+ * Deterministic regression harness for 3D flight tracking.
  *
- * DETERMINISTIC regression harness for 3D flight TRACKING.
- *
- * Background: tracked-plane 3D has regressed FOUR times (flicker → freeze →
- * jitter → pull-out → cross-layer orphan), each fix sometimes revealing the
- * next. This script locks the invariants so they can't silently break again.
- *
- * It drives the REAL app (http://localhost:4173) in headless Chromium with the
- * same WebGL launch flags the existing Cesium render harness uses
- * (tools/cesium-render.mjs): --use-gl=angle / --use-angle=swiftshader.
- *
- * DETERMINISM: it does NOT depend on live OpenSky / adsb.lol / AISStream
- * (all optional or rate-limited in local QA). Instead it installs a persistent
- * `fetch` shim in the page that intercepts the poll endpoints and returns
- * SYNTHETIC aircraft positioned near the camera, in the EXACT upstream payload
- * shapes the layers parse:
- *   - flights  → GET /api/flights      → { states: [ <state-vector[]> ] }
- *   - military → GET /api/military  → { ac: [ <adsblol-aircraft{}> ] }
- *   - vessels  → GET /api/vessels     → connected, zero-row snapshot
- * The shim stays installed so the layers' setInterval pollers keep the
- * synthetic planes alive (under MISSING_POLL_LIMIT=3 so they're never pruned).
- *
- * The four invariants, each one assertion block:
- *   1. NO JITTER          — the tracked plane's 3D MODEL position and its
- *                           getDetectableObjects() (HUD/detection) position use
- *                           the SAME per-frame value. We sample both over ~30
- *                           frames and assert max|visual-centre−detectable| ≈ 0.
- *   2. NO PULL-OUT        — tracking plane B while tracking A must not fly the
- *                           camera to a high overview (deselect/switch never
- *                           moves the camera — it stays in the follow band).
- *   3. NO CROSS-LAYER     — tracking military then commercial (and vice versa)
- *      ORPHAN               clears the FIRST layer (its getTrackedInfo()===null),
- *                           via each layer's follow-changed listener (the follow
- *                           service, data/followed.js: onFollowChanged).
- *   4. INIT CLEAN         — app loads, all 12 layers present, no console errors,
- *                           [Detection] Initialized + [TrackedReadout] Initialized.
- *
- * Plus two pre-ship-audit (2026-07-01) regressions appended at the end:
- *   H1. CLICK-OWN-PLANE   — the tracked standalone model exposes its pick id,
- *                           and a real mouse click on the tracked plane is a
- *                           NO-OP (no deselect, no camera spike).
- *   M3. AGE-OUT RELEASE   — when the tracked plane's fixes stop arriving
- *                           it stays tracked (STALE, then SIGNAL LOST) until
- *                           10 min after its newest fix; then tracking clears
- *                           and the camera is RELEASED IN PLACE: the camera
- *                           follows nothing (data/followed.js), NO jump (owner decision 2026-07-02 —
- *                           the old ~80 km overview flyTo is gone).
- *
- * And the landing-ghost polish (2026-07-02): a LOW+SLOW (landed) plane that
- * vanishes from the feed is removed after ONE missed poll, while a cruise
- * plane keeps the full 3-poll grace (it absorbs real feed gaps); the tracked
- * readout carries a "· STALE" cue while a tracked plane coasts through its
- * missed-poll grace, and drops it when the plane reappears.
- *
- * And the ground-traffic feature (2026-07-03, owner reversal): present-but-
- * grounded planes render FULL-STRENGTH in the airborne tint pipeline
- * (white / amber-military; the day-1 gray mute was killed the same day) at
- * ×0.8 scale and stay detectable; the on_ground flip restyles the SAME
- * billboard in place (landing/takeoff transition — never a removal); a
- * grounded plane that then vanishes from the feed still fast-culls after one
- * missed poll (both layers; military keys off adsb.lol's alt_baro === "ground").
- * Ground billboards render depth-test-free (disableDepthTestDistance = ∞) so
- * the photoreal tile skin can't bury them up close; takeoff restores the test.
- *
- * And GROUND 3D (2026-07-03, owner decision LOCKED: "when I have 3D mode —
- * proximity or all — I want that respected regardless of whether a plane is
- * on the ground or in the air. No distinction."): a synthetic on_ground plane
- * is model-ELIGIBLE and gets a model under the existing cap (both layers); its
- * model matrix height reads the ONE-SHOT cached ground snap — a stubbed
- * scene.sampleHeight (qa-cctv-drift-b9b style) + the per-layer belly offset —
- * never the buried/floating feed altitude, and never re-samples per frame;
- * the TRACKED grounded plane gets the standalone tracked model too (the
- * owner's "tracked SWA143 at 0 kts showed a 2D billboard" case).
- *
- * And arrival-rotation freshness (2026-07-03 ground-polish): the nose is right
- * on the first settled frame after a camera move and on the first frame a
- * hidden contact is shown again. Both layers. (The CPU rotation passes that
- * once guaranteed it are gone: the icon sets turn every icon along its drawn
- * course on the GPU each frame, so the group reads the drawn rows.)
- *
- * The probes read what the app draws through its own seams: what the camera
- * follows through the follow service (data/followed.js), icons from the draw
- * port's icon sets as the renderer holds them, models by their `{set, id}`
- * pick ids.
+ * Runs the app in headless Chromium with the SwiftShader flags from
+ * tools/cesium-render.mjs. A persistent fetch shim supplies upstream-shaped aircraft on
+ * /api/flights and /api/military and an empty /api/vessels snapshot. Every layer must
+ * boot without console errors. The tracked model and its detectable position agree each
+ * frame. Switching planes keeps the camera close, tracking one layer clears the other,
+ * and clicking the tracked plane is a no-op. A plane whose fixes stop stays tracked until
+ * ten minutes after its newest fix, then releases the camera in place. Vanished landed
+ * planes are culled after one missed poll and cruising planes after three. Grounded
+ * planes stay detectable, draw full-strength and depth-test-free at ×0.8, and use
+ * one-shot ground snaps for models. The nose faces correctly on the first settled frame
+ * after a camera move or reveal. Probes read the follow service, draw-port icon sets and
+ * model pick ids ({set, id}).
  *
  * Run:  npm run test:track       (assumes dev server already up on :4173)
  *       node scripts/track-regression.mjs

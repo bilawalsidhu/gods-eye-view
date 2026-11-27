@@ -553,7 +553,7 @@ export function createTracking({
   }
 
   /**
-   * Fire-and-forget OpenSky /tracks backfill (PRD F1). On success, splices
+   * Fire-and-forget OpenSky /tracks backfill. On success, splices
    * waypoints strictly older than the oldest seeded fix AHEAD of the locally
    * accumulated fine segment, capped at TRAIL_MAX_POINTS (newest kept). Any
    * failure (404/429/timeout/malformed) silently keeps the local-only trail.
@@ -616,16 +616,9 @@ export function createTracking({
     }
     if (!parsed.length) return;
 
-    // Field-test fix (WAKE01 trail-underground, 2026-07-06 — mirror of
-    // militaryFlights.js): resolve the coarse ellipsoidal ground along the track
-    // and floor every waypoint at it so low baro segments never dive below the
-    // mesh; a no-baro waypoint (predominantly taxi/ground segments in /tracks)
-    // sits ON the surface when the floor is known.
-    // Round-2 fix (owner: "trails suddenly much shorter / not loading"): the
-    // resolve is BOUNDED (≤1.2 s), not a blocking await — a cold Re:Earth
-    // lookup across a long path could stall the paint for seconds-to-timeout.
-    // Paint with whatever cells are warm; the resolve keeps filling the cache
-    // in the background for the next paint/select.
+    // Resolve coarse ellipsoidal ground along the track and floor every waypoint at it. A
+    // no-baro or ground waypoint sits on the surface. Wait up to 1.2 s, then paint with
+    // the warm cells while the resolve keeps filling the cache for the next paint.
     await resolveGroundFloorCellsBounded(parsed);
     // Re-check the backfill token after the await (same guard as post-fetch):
     // tracking may have moved on while the terrain race was in flight.
@@ -696,11 +689,8 @@ export function createTracking({
    * Stop tracking the currently followed aircraft.
    *
    * Restores the hidden billboard, removes the tracked Entity, resets lerp
-   * state, and RELEASES the camera IN PLACE — no flyTo. Deselect used to fly
-   * an ~80 km pulled-back overview; the owner field-ruled that wrong
-   * (2026-07-02: "it randomly zooms way up and loses my context"). The camera
-   * now simply stays at its current position/orientation, immediately free to
-   * orbit/zoom. Applies to every deselect path: click-empty-space, Escape,
+   * state, and RELEASES the camera IN PLACE — no flyTo. The camera is immediately free to
+   * orbit or zoom. Applies to every deselect path: click-empty-space, Escape,
    * aged-out plane, layer disable, and voice stopTracking.
    *
    * @param {boolean} [skipViewerUntrack=false] - ANOTHER layer just grabbed the
@@ -1259,16 +1249,11 @@ export function createTracking({
     if (follow) _followTracked();
     else if (center) _centerTracked();
 
-    // Track-history trail (PRD F1): seed from local history + async backfill.
-    // Ground traffic draws NO trail (a taxi path is noise, not a track) — if the
-    // plane takes off while tracked, the on_ground→false transition in update()
-    // starts one.
     parts.enrichment._requestTypeEnrichment(icao24, true); // tracked plane — front of the enrichment queue
     parts.enrichment._requestRouteEnrichment(icao24);
     parts.enrichment._requestPhotoEnrichment(icao24);
-    // Round 2 (owner): grounded contacts get trails too — a landed-but-taxiing
-    // aircraft's history is retrievable on select. Grounded flights positions
-    // are already surface-clamped (the surfaceM chain), so seeds/appends drape.
+    // Seed the trail from local history and an async backfill. Grounded contacts get
+    // trails too. Their positions are surface-clamped, so the ground leg drapes.
     _startTrail(icao24);
 
     _publishTrackedSelection(icao24, origin);
@@ -1393,8 +1378,6 @@ export function createTracking({
       if (picked) {
         // Clicking the plane we're ALREADY tracking (its tracked billboard, its
         // 3D model, or any pick carrying its icao) — ignore, don't deselect.
-        // H1: the model used to have no pick id, so this fell through to
-        // "empty space" and deselected the very plane being tracked.
         // Its billboard and models are draw-set items keyed by icao, like its icons.
         // A second click on the selected plane follows it, as the card's
         // Follow does; a click on the followed plane keeps the follow
@@ -1429,7 +1412,7 @@ export function createTracking({
       // vessel, station, CCTV camera…) is not "empty space" — leave tracking
       // alone and let that layer handle it. resolvePickId String()-coerces the
       // heterogeneous pick ids (numeric NORAD ids, AIS record objects) so the
-      // registry predicates can recognize them (H2).
+      // registry predicates can recognize them.
       if (picked) {
         const pickedId = resolvePickId(picked);
         if (pickedId && isOwnedByOtherLayer('flights', pickedId)) return;

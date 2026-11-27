@@ -49,13 +49,9 @@ export function createViewport({ state: layerState, services, parts, source }) {
   }
 
   /**
-   * 'Temporarily unavailable' must mean temporarily: fetches otherwise fire only
-   * on enable and on camera moveEnd, so a parked camera whose first request died
-   * (one flaky Overpass mirror is enough) stayed unavailable forever while the
-   * proxy sat healthy while the layer refused to show its features. While the
-   * layer is enabled and
-   * unavailable, retry on a 30 s → 240 s backoff; any success, user-driven load,
-   * zoom-out, or disable cancels it.
+   * Fetches normally run on enable and moveEnd. While the layer is enabled and
+   * unavailable, retry on a 30 s → 240 s backoff. Success, a user-driven load, zoom-out
+   * or disable cancels it.
    */
 
   function scheduleUnavailableRetry(retryAfterMs = 0) {

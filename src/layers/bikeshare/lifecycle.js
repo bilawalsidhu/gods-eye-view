@@ -93,7 +93,7 @@ export function createLifecycle({
         true,
       );
       parts.selection._installClickHandler(viewer);
-      // Pick-ownership (H2): station point ids are string render-map keys.
+      // Pick ownership: station point ids are string render-map keys.
       registerPickOwner(
         'bikeshare',
         (pickedId) =>

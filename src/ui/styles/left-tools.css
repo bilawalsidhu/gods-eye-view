@@ -15,9 +15,8 @@
 }
 
 /* ── Expanded panel width ───────────────────────────────────────────────
-   Data Layers opens 15px wider than it used to (280 → 295px), and that is
-   the narrowest any side panel opens to; wider ones (Context, CCTV,
-   Authoring) keep their own width. */
+   Data Layers opens at 295px, the narrowest any side panel opens to. Wider
+   panels (Context, CCTV, Authoring) keep their own width. */
 :root {
   --side-panel-min-expanded-width: 295px;
 }

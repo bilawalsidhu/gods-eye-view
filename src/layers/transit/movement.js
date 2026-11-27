@@ -48,12 +48,8 @@ const COURSE_MIN_TRAVEL_M = 12;
 /** Maximum display-course change per second (deg). A bus is not a gyroscope. */
 const COURSE_MAX_RATE_DEG_PER_S = 120;
 /**
- * Longest stretch of elapsed time (s) one evaluation may spend. The limiter
- * used to bank the time since the course last CHANGED, so a vehicle that held
- * north for thirty seconds had thirty seconds of allowance and snapped through
- * a corner in one step. Elapsed time is now measured since the course was last
- * EVALUATED, and capped here so that even a first look after a long idle
- * sweeps visibly instead of snapping.
+ * Longest elapsed time (s) one evaluation may spend, measured since the course was last
+ * evaluated. Even the first look after a long idle sweeps visibly.
  */
 const COURSE_STEP_MAX_S = 0.25;
 

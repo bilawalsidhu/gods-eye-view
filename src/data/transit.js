@@ -27,8 +27,8 @@ const layer = createTransitLayer({
       neighborFloorM,
       warmGroundFloor,
     },
-    // The legacy sampler over the same legacy floor, so this standalone
-    // module warms its own mesh floors the way the application layer does.
+    // The module-scoped sampler shares the module-scoped floor (./groundFloor.js,
+    // ./meshFloorSampler.js), so standalone transit warms its own mesh floors.
     mesh: { sampleMeshFloorCells },
   },
 });

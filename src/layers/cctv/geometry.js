@@ -91,7 +91,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
   }
 
   /**
-   * V2 core geometry (design §2a): computes the pitched frustum pyramid — mount
+   * Computes the pitched frustum pyramid — mount
    * point, far-cap (monitor plane) center, and the 4 far-plane corners — purely
    * from the calibrated pose + a caller-supplied ground altitude. ZERO scene
    * queries: ground sampling happens in the caller (one-shot snap), and the
@@ -175,10 +175,8 @@ export function createGeometry({ state: layerState, services, parts, source }) {
     // support point with the largest deficit against the ground measured
     // under it (a 3×3 grid over the plane; see footprint.js). Points without
     // a measurement fall back to the ground at the mount, so with no
-    // footprint data the bottom edge still clears the mount's ground — the
-    // old center-only clamp left the bottom edge tens of metres underground
-    // (owner field test 2026-09-13). The rectangle stays rigid and the
-    // wireframe rays still terminate exactly on its corners.
+    // footprint data the bottom edge still clears the mount's ground. The rectangle stays
+    // rigid and the wireframe rays still terminate on its corners.
     // Two lifts: what the mount's own ground demands (always honoured), plus
     // whatever the measured footprint adds, capped so a building under the
     // far edge cannot send the plane into the sky.
@@ -241,7 +239,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
 
   /**
    * Resolves the obstruction probe's effective-range clamp just short of a hit,
-   * with the field-derived 12 m floor used by the original H6 monitor.
+   * with a 12 m floor.
    * @param {number} rangeM Nominal camera range.
    * @param {number} hitDistanceM Distance to the first obstruction.
    * @returns {number|null} Clamp range, or null when the hit does not shorten it.
@@ -359,7 +357,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
 
   /**
    * Refreshes a record's frustum geometry with a regime-aware, ONE-SHOT ground
-   * resolution (Task 5, spec §2). Per regime:
+   * resolution. Per regime:
    *
    *  - `terrain-globe` (any globe stack): `cachedGroundFloor` returns its DEM
    *    floor because mesh floors are regime-disabled. The exact Re:Earth prior
@@ -518,7 +516,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
   }
 
   /**
-   * §9.1 activation obstruction probe (LOCKED owner decision): on camera
+   * Activation obstruction probe: on camera
    * ACTIVATION only, cast ONE ray against the scene along the frustum axis
    * (mount → cap-center direction). If it hits the tiles closer than the pose
    * range, clamp the plane's effective range just short of the first hit so the

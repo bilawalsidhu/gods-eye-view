@@ -6,7 +6,7 @@ import {
   INFRARED_ALPHA_T1,
 } from './infraredAlpha.js';
 
-test('filtered infrared preserves RGB, scales existing alpha, and matches the old linear threshold', () => {
+test('filtered infrared preserves RGB, scales existing alpha, and crosses half opacity at the 0.55 linear cut', () => {
   assert.equal(INFRARED_ALPHA_T0, 0.4);
   assert.equal(INFRARED_ALPHA_T1, 0.7);
   const bytes = new Uint8ClampedArray([
@@ -20,7 +20,7 @@ test('filtered infrared preserves RGB, scales existing alpha, and matches the ol
     [result[3], result[7], result[11], result[15], result[19]],
     [0, 0, 98, 128, 0],
   );
-  // Cesium's old 0.55 hard cut falls between byte values 194 and 195.
+  // The 0.55 linear cut falls between byte values 194 and 195.
   assert.ok((194 / 255) ** 2.2 < 0.55);
   assert.ok((195 / 255) ** 2.2 > 0.55);
   const ramp = [];

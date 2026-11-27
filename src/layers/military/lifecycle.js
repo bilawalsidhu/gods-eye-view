@@ -191,7 +191,7 @@ export function createLifecycle({
       flightState.timeline?.stop();
       flightState.lifetime.abort();
       parts.controller._abortActiveUpdates();
-      parts.rendering._stopPace(); // direct-destroy path (perf wave 2 fix)
+      parts.rendering._stopPace(); // direct-destroy path
       parts.tracking._clearTracking();
       parts.tracking._destroyTrail();
       parts.tracking._cancelPendingTrackingRestore();

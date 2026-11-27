@@ -49,9 +49,9 @@ failure elsewhere. These questions guide review, not a mandatory questionnaire.
   regressions? Prefer fixes whose tests fail on the base. Test-only PRs should
   close a real coverage gap with deterministic fixtures and useful assertions.
   Inspect removed/skipped tests, weakened assertions, mocks, snapshots, and runner
-  changes. Update `CURRENT-STATE.md` and add a `changelog.d/<pr-number>-<slug>.md`
-  fragment (not an edit to `CHANGELOG.md`) for runtime changes, and
-  `DATA_SOURCES.md` for source changes.
+  changes. Correct `CURRENT-STATE.md` where the change makes it false, and add a
+  `changelog.d/<pr-number>-<slug>.md` fragment (not an edit to `CHANGELOG.md`)
+  for runtime changes, and `DATA_SOURCES.md` for source changes.
 
 ## 3. Choose execution proportionate to risk
 

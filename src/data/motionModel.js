@@ -66,7 +66,7 @@ export function courseBetweenCartesians(from, to, minChordM = 25) {
 }
 
 // ---------------------------------------------------------------------------
-// Low-speed course tuning (2026-07-03 field test: slow planes + helicopters).
+// Low-speed course tuning (slow planes and helicopters).
 // The interpolation chord is only trustworthy when the segment actually covers
 // ground: at hover the fix-to-fix chord is a few metres of GPS jitter (its
 // direction a pure random walk), and on a slow tight turn the chord STEPS by

@@ -29,13 +29,15 @@ export function createHeight({ state, services, parts }) {
     return parts.rendering.cameraHeightM() <= HEIGHT_SAMPLE_MAX_ALTITUDE_M;
   }
 
+  const terrainPoint = { lon: 0, lat: 0 };
+
   /**
    * The floor under a vehicle, and the best fallback if its own cell is cold.
    * @param {number} lat
    * @param {number} lon
+   * @param {object|null} [entry] The vehicle (its QA fixture floor and key).
    * @returns {{cell: string, height: number|null, prior: number|null}}
    */
-  const terrainPoint = { lon: 0, lat: 0 };
   function requestHeight(lat, lon, entry = null) {
     const coarse = coarseFloorCoord(lat, lon);
     const cell = `${coarse.lat},${coarse.lon}`;

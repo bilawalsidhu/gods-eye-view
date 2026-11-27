@@ -7,7 +7,6 @@ import {
   claimPointer,
   isLeaseCurrent,
   isPointerFree,
-  isPointerOwnedBy,
   pointerOwner,
   releasePointer,
   resetPointerOwnership,
@@ -32,8 +31,6 @@ test('the pointer starts free and a claim hands back a lease', () => {
   assert.ok(lease, 'a successful claim returns a lease, not a boolean');
   assert.equal(isPointerFree(), false);
   assert.equal(pointerOwner(), 'draw');
-  assert.equal(isPointerOwnedBy('draw'), true);
-  assert.equal(isPointerOwnedBy('directions'), false);
   assert.equal(isLeaseCurrent(lease), true);
 });
 
@@ -142,7 +139,7 @@ test('a claim needs a real owner id', () => {
   assert.equal(releasePointer(lease), true);
 });
 
-test('reset reports who was holding it, for teardown', () => {
+test('reset reports who was holding it', () => {
   assert.equal(resetPointerOwnership(), null);
   const lease = claimPointer('draw');
   assert.equal(resetPointerOwnership(), 'draw');

@@ -818,7 +818,7 @@ export class RealtimeTurns {
     }
     if (sentOutput && this.dc?.readyState === 'open') {
       // The viewport-image send is best-effort context. It must never block the
-      // response — a throw here would strand the turn at EXECUTING (M13). Guard
+      // response — a throw here would strand the turn at EXECUTING. Guard
       // it so queueResponseCreate always runs, image or not.
       try {
         await this.sendVisualContextIfUseful(lastResult);
@@ -1193,8 +1193,7 @@ export class RealtimeTurns {
           ...this.connectionDiagnostics(),
         });
         // Don't trap the whole session in 'error' for one bad response — the
-        // connection is still live. Recover to listening so the user can retry
-        // (mirrors the transient-blip philosophy, H8).
+        // connection is still live. Recover to listening so the user can retry.
         if (this.dc?.readyState === 'open') {
           this.setStatus('listening', t('Ask or command'));
         }

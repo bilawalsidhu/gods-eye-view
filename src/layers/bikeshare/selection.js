@@ -138,13 +138,6 @@ export function createSelection({
   }
 
   /**
-   * Install a screen-space click handler for station selection/deselection.
-   * Also registers a global keydown listener for Escape-to-deselect.
-   * Idempotent — does nothing if a handler is already installed.
-   * @param {object} viewer - The viewer the layer draws on.
-   */
-
-  /**
    * The covered city a marker id names, or null.
    * @param {unknown} id
    */
@@ -176,6 +169,12 @@ export function createSelection({
     else fly();
   }
 
+  /**
+   * Install a screen-space click handler for station selection/deselection.
+   * Also registers a global keydown listener for Escape-to-deselect.
+   * Idempotent — does nothing if a handler is already installed.
+   * @param {object} viewer - The viewer the layer draws on.
+   */
   function _installClickHandler(viewer) {
     if (layerState._clickSubscription) return;
 

@@ -2,30 +2,22 @@ import { creditFromMarkup } from '../render/creditMarkup.js';
 import { findCredits } from '../render/rendererOf.js';
 
 /**
- * Per-layer data attribution registered into Cesium's credit display.
+ * Per-layer data attribution registered through the renderer's credits port.
  *
- * Legal requirement (see DATA_SOURCES.md, findings H10/H11 in
- * docs/pre-ship-audit-2026-07-01.md): every third-party data layer this app can
+ * Legal requirement (see DATA_SOURCES.md): every third-party data layer this app can
  * display carries its own license and required attribution — ODbL (OSM
  * datacenters/dams, adsb.lol, Overpass roads), CC BY-NC-SA (TeleGeography
  * cables), NASA FIRMS, CelesTrak, USGS, City of Austin, Fintraffic (CC BY 4.0),
  * The MIT code license does NOT cover this data.
  *
- * These credits are registered ONCE at init as STATIC credits with
- * showOnScreen=false, so they live in the expandable bottom-left "Data
- * attribution" lightbox (Cesium's credit popover) rather than cluttering the
- * on-globe line. Always-present is intentional and reversible: the lightbox is
+ * Register static credits once at init in the "Data attribution" list. Always-present is
+ * intentional and reversible: the list is
  * the app's canonical attribution surface and DATA_SOURCES.md is the
  * machine-readable index. Strings are copied verbatim from DATA_SOURCES.md — if
  * you add a data source, add it there AND here.
  */
 
-/**
- * Attribution entries. `html` is the credit markup; keep it minimal and
- * link out where DATA_SOURCES.md provides a canonical URL. Order roughly
- * follows DATA_SOURCES.md (live sources, then bundled snapshots).
- * @type {{ key: string, html: string }[]}
- */
+/** OpenStreetMap map and place data credit. */
 export const OSM_CREDIT = {
   key: 'openstreetmap',
   html: 'Map and place data <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> (<a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener">ODbL</a>)',
@@ -111,6 +103,12 @@ export const NYC_DOT_DISCLAIMER =
   'NYC DOT and the City of New York make no representation as to the accuracy or usefulness of the information provided by this application or the information&#39;s suitability for any purpose and disclaim any liability for omissions or errors that may be contained therein. ' +
   'The public is advised to observe posted signage for compliance with applicable laws and regulations.';
 
+/**
+ * Attribution entries. `html` is the credit markup; keep it minimal and
+ * link out where DATA_SOURCES.md provides a canonical URL. Order roughly
+ * follows DATA_SOURCES.md (live sources, then bundled snapshots).
+ * @type {{ key: string, html: string }[]}
+ */
 export const DATA_CREDITS = [
   // ── Live sources ────────────────────────────────────────────────
   {

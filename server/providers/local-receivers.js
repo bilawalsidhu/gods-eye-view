@@ -3,7 +3,7 @@ import http from 'node:http';
 import https from 'node:https';
 import { Readable } from 'node:stream';
 import { coalesceProxyRequest, readResponseTextCapped } from './common/http.js';
-import { isLocalIpv4, parseTapAddress } from '../../src/data/tapAddress.js';
+import { isLocalIpv4, parseTapAddress } from './tapAddress.js';
 import { normalizeDump1090Aircraft } from '../../src/sources/adsbRecords.js';
 
 /**
@@ -15,7 +15,7 @@ import { normalizeDump1090Aircraft } from '../../src/sources/adsbRecords.js';
  *
  * The feed list comes only from the operator's `LOCAL_RECEIVER_FEEDS`
  * environment value; the browser never supplies an address. Every host must
- * pass the shared receiver-tap address rule (`src/data/tapAddress.js`:
+ * pass the shared receiver-tap address rule (`server/providers/tapAddress.js`:
  * loopback, RFC1918, `localhost`, `*.local`), the scheme must be http(s) and
  * the path must end in `aircraft.json`. Invalid entries are logged at startup,
  * reported as `invalid` and never fetched.

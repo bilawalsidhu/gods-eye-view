@@ -63,7 +63,7 @@ export function flowSpeedScale(level) {
  * Dot density multiplier for a traffic level — congestion means more cars on
  * the road, so slower roads pack more dots: 1/max(level, 0.4), capped at 2.5.
  *
- * With `jamBoost` (the jamViz density prototype) the same curve keeps
+ * With `jamBoost` (jamViz 'density', the live default) the same curve keeps
  * climbing through deep jams — 1/max(level, 0.25), capped at 4.0 — so
  * gridlock gets visibly denser while ordinary jams barely change. The two
  * curves are identical for level ≥ 0.4.

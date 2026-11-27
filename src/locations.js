@@ -366,10 +366,9 @@ export async function searchAndFlyTo(viewer, query, options = {}) {
     !options.forceClose &&
     (shouldFrameGeocodeViewport(navigationMode) || explicitOverview)
   ) {
-    // Natural regions (mountain ranges, deserts, seas) geocode as area-overview with
-    // enormous viewports — fitting the whole box flies the camera to space (owner field
-    // test 2026-07-23, "Rocky Mountains"). Frame a capped oblique swath over the center
-    // instead. Countries/states (region-overview) intentionally keep whole-place framing.
+    // Natural regions geocode as area-overview with enormous viewports. Fitting the whole
+    // box flies the camera to space, so frame a capped oblique swath over the center.
+    // Countries and states keep whole-place framing.
     const swath =
       navigationMode === 'area-overview' ? regionFramingPlan(viewport) : null;
     if (swath?.mode === 'swath') {
@@ -630,14 +629,12 @@ export const PLACE_VIEWPORT_MAX_SPAN_KM = 300;
  * Fraction of a viewport's diagonal that its own geocoded location may sit away
  * from the box centre before the box is judged NOT to be centred on the place.
  *
- * The 2026-08-20 QA hunt defect: "Tokyo" flew the camera ~977 km from Tokyo, out
- * over the open Pacific at 2,885 km altitude. Tokyo geocodes as
- * `administrative_area_level_1` (the prefecture), and Tokyo Metropolis owns the
- * Izu and Ogasawara chains ~1,000 km out to sea, so its bounding box is mostly
- * ocean and its centroid is nowhere near the city.
+ * A prefecture-level geocode can have a box that is mostly ocean. Tokyo Metropolis
+ * includes the Izu and Ogasawara chains ~1,000 km out, putting the centroid far from the
+ * city.
  *
  * Neither span nor offset alone separates that from a legitimately huge region;
- * the ratio does. Measured against the live Geocoding API (2026-08-20):
+ * the ratio does. Measured against the live Geocoding API:
  *
  *   gated    Tokyo      2,462 km box, anchor  977 km off  → ratio 0.397
  *            Hawaii     2,642 km box, anchor 1,204 km off → ratio 0.456
@@ -718,7 +715,7 @@ export function placeFramingViewport(
 }
 
 /**
- * Natural-region framing heuristic (owner field test 2026-07-23). Pure — exported
+ * Natural-region framing heuristic. Pure — exported
  * for unit tests. Given geocode {southwest,northeast} bounds, decide whether to
  * frame the full viewport or a capped oblique swath over the feature's center,
  * looking along the feature's long axis.

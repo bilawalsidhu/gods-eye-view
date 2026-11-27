@@ -81,8 +81,8 @@ Related keys (current versions):
 
 ---
 
-### Height-datum residuals (branch `feat/height-datum`, pending merge)
-Status: Open (owner-accepted 2026-07-08, documented)
+### Height-datum residuals
+Status: Open (accepted, documented)
 
 - **Cold-start floor latency:** at a freshly-visited airport, grounded/low aircraft
   float low for ~1–2 poll cycles (30–60 s) and rise as terrain floors resolve;

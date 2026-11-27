@@ -1,8 +1,8 @@
-// src/data/tapAddress.test.mjs
+// server/providers/tapAddress.test.mjs
 // Contract tests for the shared receiver-tap address check. Pure — no server.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isLocalIpv4, parseTapAddress, tapUrl } from './tapAddress.js';
+import { isLocalIpv4, parseTapAddress } from './tapAddress.js';
 
 test('parseTapAddress: accepts loopback and every RFC1918 range', () => {
   for (const address of [
@@ -128,20 +128,4 @@ test('isLocalIpv4: boundaries of each allowed range', () => {
   assert.ok(!isLocalIpv4('172.32.0.0'));
   assert.ok(!isLocalIpv4('126.255.255.255'));
   assert.ok(!isLocalIpv4('128.0.0.1'));
-});
-
-test('tapUrl: joins a parsed address with a module-supplied path', () => {
-  const address = parseTapAddress('192.168.1.1:8080');
-  assert.equal(
-    tapUrl(address, '/api/qmdl-manifest'),
-    'http://192.168.1.1:8080/api/qmdl-manifest',
-  );
-});
-
-test('tapUrl: refuses an unparsed address or a relative path', () => {
-  const address = parseTapAddress('192.168.1.1:8080');
-  assert.throws(() => tapUrl(null, '/x'), TypeError);
-  assert.throws(() => tapUrl({ origin: '' }, '/x'), TypeError);
-  assert.throws(() => tapUrl(address, 'api/status'), TypeError);
-  assert.throws(() => tapUrl(address, ''), TypeError);
 });

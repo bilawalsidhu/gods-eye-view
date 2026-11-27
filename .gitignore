@@ -1,10 +1,8 @@
 node_modules
 dist
-# Credential files. `.env` alone is not enough: Vite's loadEnv (see
-# server/standalone/vite.config.js) and scripts/setup-doctor.mjs both read the
-# full dotenv ladder — .env, .env.local, .env.<mode> and .env.<mode>.local —
-# so a key placed in any of them is live for the app. Only .env was ignored,
-# leaving the other three committable. .env.example is the tracked template.
+# Credential files: Vite's loadEnv (server/standalone/vite.config.js) and
+# scripts/setup-doctor.mjs read .env, .env.local, .env.<mode> and .env.<mode>.local.
+# .env.example is the tracked template.
 .env
 .env.*
 !.env.example
@@ -23,8 +21,6 @@ qa-artifacts/
 # Local Claude Code settings and preview configs.
 .claude/
 .DS_Store
-.gstack/
-3d-models/
 pinokio/ENVIRONMENT
 pinokio/.installed
 

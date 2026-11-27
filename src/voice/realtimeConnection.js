@@ -69,7 +69,7 @@ export class RealtimeConnection {
 
     // Claim this connect attempt. stop() (and any later start()) bump startEpoch,
     // so `epoch !== this.startEpoch` after any await means we were superseded and
-    // must abandon this attempt, releasing whatever it already acquired (H7).
+    // must abandon this attempt, releasing whatever it already acquired.
     if (this.lifetimeSignal?.aborted) return;
     const epoch = ++this.startEpoch;
     this.connectionAbort?.abort();
@@ -197,7 +197,7 @@ export class RealtimeConnection {
       });
       dataChannel.addEventListener('error', (event) => {
         // Skip if we're mid-teardown (the close we triggered) — otherwise a real
-        // channel error tears the session down so the mic doesn't stay live (H8).
+        // channel error tears the session down so the mic doesn't stay live.
         if (this._tearingDown || !ownsChannel()) return;
         this.fatalError(
           'Realtime data channel',
@@ -245,7 +245,7 @@ export class RealtimeConnection {
     } catch (error) {
       // A superseded attempt should die quietly — its resources are already
       // released by abandonStart / the newer start(), and surfacing its error
-      // would clobber the live session's status (H7).
+      // would clobber the live session's status.
       if (epoch !== this.startEpoch) {
         releaseStartResources({ localStream, localPc });
         return;
@@ -258,7 +258,7 @@ export class RealtimeConnection {
 
   // Returns true (and tears down the just-acquired resources) when this start()
   // attempt has been superseded by a newer start()/stop() — the caller must
-  // then `return` immediately without touching shared session state (H7).
+  // then `return` immediately without touching shared session state.
   abandonStart(epoch, resources) {
     if (epoch === this.startEpoch) return false;
     // These resources may or may not have been promoted onto `this` yet. If a
@@ -283,7 +283,7 @@ export class RealtimeConnection {
   // WebRTC connection-state transitions. 'failed' is a hard drop → fatal. But
   // 'disconnected' is often a momentary blip ICE recovers from on its own, so we
   // give it a grace window; only if it hasn't recovered do we escalate to fatal.
-  // A recovery to 'connected'/'completed' cancels the pending escalation (H8).
+  // A recovery to 'connected'/'completed' cancels the pending escalation.
   handleConnectionStateChange() {
     const state = this.pc?.connectionState;
     if (state === 'failed') {
@@ -332,7 +332,7 @@ export class RealtimeConnection {
     // If that throw escaped it would abort handleRealtimeEvent BEFORE
     // queueResponseCreate + setStatus('listening'), stranding the turn at
     // EXECUTING. Swallow it and signal failure so callers can fall through
-    // without the offending payload (M13).
+    // without the offending payload.
     try {
       this.dc.send(JSON.stringify(message));
       return true;

@@ -17,8 +17,7 @@ import {
  * trails, fires and camera geometry stand on — and the rendered-mesh sampler
  * from `surface.meshFloor`, so a mesh floor the application resolves for a
  * cell is the floor transit draws on, and a transit-only session warms its
- * own mesh floors. An earlier cut imported the legacy module-level singleton
- * instead and could not see either.
+ * own mesh floors.
  *
  * `displayParams` reads the Flights layer's DISPLAY-rail 3D preference, under
  * which nearby vehicles are drawn as fleet models.

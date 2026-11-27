@@ -1,9 +1,7 @@
 // src/contactsDetectionPolicy.js — Contacts-scoped detection policy.
 //
-// Owner playtest 2026-08-18: "when you click on Contacts, detections should just
-// turn on, and they should stay on in Cockpit or in third-person tracking inside
-// Contacts or inside Cockpit, both… when I leave the Cockpit, detections go off"
-// — that last part being the bug.
+// Activating Contacts turns detection on. It stays on during cockpit and third-person
+// tracking inside Contacts, including when leaving Cockpit.
 //
 // The scope is CONTACTS, not Cockpit. Three rules follow:
 //
@@ -93,9 +91,8 @@ export function contactsDetectionExitPlan(
  *
  * The engine is injected so this is the SAME code the UI runs and the tests
  * exercise, driven against the real `src/data/detection.js` in both. Turning on
- * applies the TACTICAL PRESET the military styles use — owner playtest: "I want
- * that as the default. It should just happen" — rather than restoring whatever
- * profile the operator last left detection at.
+ * applies the tactical preset used by military styles instead of restoring the operator's
+ * last detection profile.
  *
  * @param {object} input
  * @param {boolean} input.active Whether Contacts is now active.
@@ -168,10 +165,8 @@ export function shareableDetectionState({ owned, liveMode, liveDensityPct }) {
  * carries the SAVED snapshot, and once ownership is released it carries live
  * state. So the cache goes stale on any ownership transition, whether or not
  * the detection engine itself moved — and it does not always move. Exiting
- * while a military style owns detection produces `changed: false` (that style's
- * preset already matches what is on screen), which previously returned early
- * and left a copied link advertising the operator's pre-Contacts values while
- * the map showed Dense @ 75%.
+ * while a military style owns detection produces `changed: false`, and the cache must
+ * still be re-published.
  *
  * @param {object} input
  * @param {boolean} input.changed Whether the detection engine was touched.

@@ -1,10 +1,9 @@
 /**
  * @file Pure geometry helpers for the traffic layer's viewport fetch bounds.
  *
- * C4 fix (2026-07-16): `camera.computeViewRectangle()` spans toward the horizon
- * at oblique pitch, and centering the fetch box on the RECTANGLE MIDPOINT put
- * road fetches tens of km from what the user is actually looking at. The fetch
- * center is now derived from the camera's look-at ground point
+ * `camera.computeViewRectangle()` spans toward the horizon at oblique pitch, so its
+ * midpoint can sit tens of km from what the user looks at. The fetch center is derived
+ * from the camera's look-at ground point
  * (`camera.pickEllipsoid` at canvas center — the globe is hidden under Google
  * 3D tiles, so `scene.globe.pick` is not reliable), falling back to the camera
  * nadir, and pulled back toward nadir when the look-at point is beyond a

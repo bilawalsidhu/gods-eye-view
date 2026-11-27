@@ -3,7 +3,7 @@
  * neighborhood boundaries that OSM tags as label-nodes-only (Chinatown, the Marina, the
  * Mission, …). It sits AHEAD of the live-Overpass / synthesis path in the resolver, so
  * covered neighborhoods resolve instantly to a REAL boundary with no network dependency
- * (the live-Overpass path is slow/flaky for neighborhoods — see docs/field-test-2-analysis.md).
+ * (the live-Overpass path is slow and flaky for neighborhoods).
  *
  * Source-agnostic: each city is a `{name, geometry}` GeoJSON file in
  * `local_data/neighborhoods/`. Swap the file (e.g. to public-domain DataSF) without
@@ -26,10 +26,8 @@ const CITY_FILES = [
 ];
 
 /**
- * city id → memoized loader. Failures are NOT memoized: a transient
- * chunk-load error used to cache an empty array forever, silently demoting
- * every later neighborhood ask to the slow live-Overpass ladder for the rest
- * of the session, indistinguishably from "not in a covered city".
+ * City id → memoized loader. Retry transient chunk-load errors on the next request.
+ * Caching an empty result would send every later neighborhood lookup to live Overpass.
  * @type {Map<string, () => Promise<Array>>}
  */
 const _cityLoaders = new Map();
@@ -172,8 +170,8 @@ export async function lookupNeighborhoodRing(
   const feats = await loadCity(city);
   if (!feats.length) return null;
 
-  // Old/colloquial names whose DataSF taxonomy equivalent has a longer name
-  // (P0-2 swap): the word-subset matcher requires every feature-name word in
+  // Old/colloquial names whose DataSF taxonomy equivalent has a longer name. The
+  // word-subset matcher requires every feature-name word in
   // the query, so "Financial District" can never match "Financial
   // District/South Beach" without this. Exact-normalized-key aliases only —
   // no fuzzy aliasing.

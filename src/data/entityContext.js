@@ -1075,14 +1075,6 @@ function storeRecord(identity, { exact = false } = {}) {
   return null;
 }
 
-/**
- * The card for one item.
- * @param {object} dataManager
- * @param {{layerId: string, id?: string, label?: string, lat?: number|null, lon?: number|null, record?: object}} identity
- * @param {object} [options]
- * @param {number} [options.nowMs]
- * @returns {object|null} `{key, layerId, layerName, kind, icon, moving, title, lat, lon, facts, observedAgeMs, links, source}`
- */
 /** What a transponder code means when it is one of the emergency codes. */
 const EMERGENCY_SQUAWKS = Object.freeze({
   7500: msg('Hijack (squawk 7500)'),
@@ -1259,6 +1251,14 @@ function cardPhoto(dataManager, layerId, record) {
   };
 }
 
+/**
+ * The card for one item.
+ * @param {object} dataManager
+ * @param {{layerId: string, id?: string, label?: string, lat?: number|null, lon?: number|null, record?: object}} identity
+ * @param {object} [options]
+ * @param {number} [options.nowMs]
+ * @returns {object|null} `{key, layerId, layerName, kind, icon, moving, title, lat, lon, facts, observedAgeMs, links, source}`
+ */
 export function describeEntity(
   dataManager,
   identity,

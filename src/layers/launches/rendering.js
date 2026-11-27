@@ -497,10 +497,7 @@ export function createRendering({
         launch,
         ascentPath,
       );
-      // Camera tracking and the HTML replay overlay must use the exact same
-      // replay epoch within a frame; sampling Date.now() independently made
-      // the vehicle advance relative to the camera and then snap back on the
-      // next frame.
+      // Camera tracking and the replay overlay read one replay epoch per frame.
       let replayStateForFrame = null;
       const sampleReplayState = () =>
         parts.replay.replayState(

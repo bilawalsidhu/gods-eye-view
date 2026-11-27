@@ -35,20 +35,17 @@ export const GLOBE_EXIT_CLEARANCE_PX = 12;
 export const CELESTIAL_PLANE_EPSILON = 0.045;
 /** Responsive radial fade band used by every keyhole-aligned text overlay —
  * this is the Detection FADE (label/card fading), NOT the scope-mask feather
- * in scopeMask.js. 0.07 since the 2026-08-24 owner final lock (was 0.16). */
+ * in scopeMask.js. */
 export const KEYHOLE_LABEL_FEATHER_RATIO = 0.07;
 export const KEYHOLE_LABEL_FEATHER_MAX_RATIO = 0.4;
 /**
  * First-run OUTSIDE opacity for keyhole-aligned world overlays.
  *
- * 0.01 since 2026-08-24 (owner final lock; 0.03 on 08-23, 0.05 before). Keep in lockstep with
- * `#detection-opacity-slider`'s markup value AND readout in index.html,
- * `_detectionOutsideOpacityPct` in sharelink.js,
- * `GLOBAL_POST_DEFAULTS.detectionOutsideOpacityPct` in ui.js, and
- * `AIRCRAFT_BRACKET_FLOOR_ANCHOR` in detectionPolicy.js — a fresh boot applies
- * no restore, so those literals ARE the first-run state. NOT the `ko` PARSE
- * fallback, which stays at 5 on purpose: a link predating that field was
- * authored when 5 was what its author saw. Pinned in reasonableDefaults.test.mjs.
+ * The slider and readout in DisplayPanel.vue, sharelink.js and
+ * GLOBAL_POST_DEFAULTS.detectionOutsideOpacityPct in src/ui/visualPresets.js share this
+ * first-run default. AIRCRAFT_BRACKET_FLOOR_ANCHOR in detectionPolicy.js follows the
+ * default to preserve bracket brightness. Links predating `ko` keep their original 5%
+ * opacity.
  */
 export const KEYHOLE_OUTSIDE_OPACITY_DEFAULT = 0.01;
 
@@ -469,16 +466,13 @@ export class CelestialRing {
     this._initView(store);
     this._removePostRender =
       findFrame(viewer)?.on('postRender', () => this._draw()) ?? null;
-    // Pre-existing staleness fix (perf wave 2 review): the ephemeris was
-    // sampled once per visible-enable from the FROZEN app clock, so the
-    // sun/moon markers aged with the app. Resample real wall time each
-    // minute and request the one frame that repaints the ring.
+    // The ephemeris resamples wall time each minute and requests one frame to repaint the
+    // ring. The app clock may be frozen.
     this._ephemerisTimer = setInterval(() => {
       if (!this.enabled) return;
-      // Always mark dirty so a long-hidden interval can't serve stale
-      // sun/moon vectors on return — but only request the repaint frame
-      // while visible; the visibility-restore request (main.js) picks the
-      // dirty flag up immediately. (review finding)
+      // Mark dirty even while hidden so the sun/moon vectors stay current. Request the
+      // repaint only while visible. The visibility-restore frame (src/app/tools.js) picks
+      // up the dirty flag.
       this._ephemerisDirty = true;
       if (typeof document !== 'undefined' && document.hidden) return;
       governorRequestRender('celestial-ephemeris');
@@ -571,7 +565,7 @@ export class CelestialRing {
     // rendered frames — under the idle render governor an enable (or the
     // clearing disable) must request its frame or the ring never draws at
     // all. Camera motion covers every later repaint; the 60 s ephemeris
-    // timer requests its own. (perf wave 2 fix — owner playtest finding)
+    // timer requests its own.
     if (this.enabled !== wasEnabled) governorRequestRender('celestial-ring');
     if (!this.enabled) {
       this.visible = false;

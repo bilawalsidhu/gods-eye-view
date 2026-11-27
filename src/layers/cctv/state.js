@@ -172,7 +172,7 @@ export function createState({ services }) {
 
   layerState._tilesReadyReenqueued = false;
 
-  // Calibration ADJUST mode (viewshed/gizmo design §3c): while true, the active
+  // Calibration ADJUST mode: while true, the active
   // camera renders the direct-manipulation gizmo. Reset on layer disable.
 
   layerState._calibrationMode = false;
@@ -181,15 +181,15 @@ export function createState({ services }) {
 
   layerState._lastTransientNotifyAt = 0;
 
-  // Task 5: last surface regime the record geometry was recomputed for. The
+  // Last surface regime the record geometry was recomputed for. The
   // map-stack change listener compares the CURRENT regime (derived live from
   // whether the renderer shows the globe) against this so bing→osm switches (same 'terrain-globe'
   // regime) don't trigger a pointless full-catalog rewrite.
 
   layerState._lastAppliedRegime = null;
 
-  // Task 5: window listener handle for the 'gev:map-stack-changed' CustomEvent
-  // main.js dispatches from MapStackController's onChange (removed in destroy).
+  // Window listener for the 'gev:map-stack-changed' CustomEvent the scene dispatches
+  // (removed in destroy).
 
   layerState._mapStackListener = null;
 

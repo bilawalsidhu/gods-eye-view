@@ -2,13 +2,9 @@
  * Shared pick-ownership registry for the layers that read globe clicks
  * (src/input/dispatcher.js).
  *
- * Problem solved: each entity layer (commercial flights, military flights)
- * receives every LEFT_CLICK. When the user clicks a military aircraft while
- * a commercial flight is tracked, the commercial handler used to classify
- * the pick as "empty space" and clear tracking (with a camera flight) at the
- * same moment the military handler started tracking — two competing camera
- * commands. Layers now register a predicate so siblings can recognize picks
- * that belong to someone else and leave them alone.
+ * Each entity layer receives every click. A layer registers a predicate so its siblings
+ * recognize its picks and leave them alone. Otherwise selecting a military aircraft while
+ * tracking a commercial flight would issue two competing camera commands.
  */
 
 /**

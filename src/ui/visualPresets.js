@@ -20,12 +20,7 @@ export const STYLES = {
 /**
  * The tactical detection look: Dense at 75%.
  *
- * Owner playtest 2026-08-18: "detection mode… 75% weighted, with the 16% fade
- * and 5% outside, whatever we had. I want that as the default. It should just
- * happen." Fade and outside opacity live in GLOBAL_POST_DEFAULTS, so "whatever
- * we had" still needs nothing here — but they are 7% and 1% now, the outside
- * default having moved 5 → 3 → 1 as the owner locked final tuning after field trials (2026-08-24). What the quote asked for is the
- * baseline of the day, not the two numbers it happened to name.
+ * Fade and outside opacity live in GLOBAL_POST_DEFAULTS.
  *
  * ONE object, shared by the first-load baseline below, by every military style,
  * AND by the Contacts context mode (which OWNS detection while active and
@@ -45,8 +40,7 @@ export const GLOBAL_POST_DEFAULTS = {
   sharpen: { enabled: true, intensity: 49 },
   hudVariant: 'tactical',
   hudVisible: true,
-  // Detection is ON for EVERY style on a first run, Normal included (owner
-  // directive 2026-08-22: "detect should also be on by default"). It is the
+  // Detection is on for every style on a first run, Normal included. It is the
   // same preset object the military styles and Contacts already apply, so there
   // is one tactical look, not several that can drift.
   //

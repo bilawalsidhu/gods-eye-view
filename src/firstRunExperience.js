@@ -6,7 +6,7 @@ import { createSurfaceKeyboard } from './ui/surfaceKeyboard.js';
 // would spend optional API quotas, surprise returning operators, and fight share
 // links. A new visitor instead gets one compact, explicit choice after startup.
 //
-// SHOW POLICY (owner ruling, 2026-08-23). The launcher is NOT one-shot. A new
+// SHOW POLICY. The launcher is NOT one-shot. A new
 // operator needs the map explained more than once, so it returns every fresh
 // browser session until they say otherwise:
 //
@@ -43,7 +43,7 @@ export const FIRST_RUN_SESSION_KEY = 'gev:first-run-mission-session:v1';
 /*
  * MISSION → APP STATE, AND WHAT IT IS ALLOWED TO PERSIST
  * ─────────────────────────────────────────────────────────────────────────────
- * Owner ruling: picking a mission carries the same weight as clicking the
+ * Picking a mission carries the same weight as clicking the
  * toggles it represents — durable where those clicks are durable — but it must
  * never write a preference the visitor did not effectively choose by picking it.
  * Layer enablement IS durable in this app (`gev:layer-state:v2`, written by
@@ -91,7 +91,7 @@ export const FIRST_RUN_MISSIONS = Object.freeze({
   environmental: Object.freeze({
     kind: 'globe',
     // Live USGS earthquakes AND NASA FIRMS active fires. The launcher optimizes
-    // for the FULLY CONFIGURED experience (owner ruling, 2026-08-23): the tile
+    // for the FULLY CONFIGURED experience: the tile
     // promises both, so it turns on both, and the subcopy in index.html says so.
     //
     // Keyless, FIRMS says so: its layer row reads

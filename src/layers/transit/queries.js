@@ -55,12 +55,8 @@ export function createQueries({ state, parts }) {
   /**
    * A stable 32-bit hash of a vehicle key, mixed with the caller's seed.
    *
-   * Selection has to survive ordinary churn. Striding by position in the map
-   * meant that one bus leaving at the front renumbered every bus behind it, so
-   * a single removal swapped the whole labelled set for its neighbours —
-   * visible as every callout jumping one vehicle sideways. A hash of the key
-   * belongs to the vehicle, not to its place in a list, so a removal anywhere
-   * leaves every other vehicle's standing untouched.
+   * Ranking by a hash of the key preserves every other vehicle's standing when one is
+   * removed.
    *
    * @param {string} key
    * @param {number} seed
@@ -88,12 +84,9 @@ export function createQueries({ state, parts }) {
    * pass writes in place, so they are live without a copy; only the motion
    * word is re-read per paint, and only for the entries actually handed over.
    *
-   * Two older rules stand. Visibility is applied FIRST: sampling the whole
-   * fleet and then discarding the hidden ones meant a single visible bus in a
-   * fleet of five thousand could fall outside the sample and go unlabelled
-   * while the overlay had thousands of slots free. And selection among the
-   * visible is by hash, not by position, so the labelled set is stable as
-   * vehicles come and go. The selected vehicle is handed over with
+   * Apply visibility before sampling so a visible vehicle is never lost to a sample of
+   * the whole fleet. Select among visible vehicles by hash so the labelled set stays
+   * stable as vehicles come and go. The selected vehicle is handed over with
    * `skipLabel` — it has its own fuller card.
    *
    * @param {{maxCount?: number, seed?: number}} [options]

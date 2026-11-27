@@ -66,15 +66,9 @@ export function createQueries({
   function _likelyLanded(icao24) {
     const info = flightState.records.data.get(icao24);
     if (!info) return false;
-    // Round 7 (owner: "fewer planes than OpenSky's own map" + "parked planes
-    // never heal"): the fast cull only applies to contacts that were AIRBORNE
-    // this session — its original target, the post-LANDING ghost. OpenSky's
-    // ground coverage flaps constantly, so fast-culling every grounded contact
-    // put parked planes in an evict/re-enter churn: each re-entry was a
-    // brand-new contact with cold floor state (geoid-height first poll), so
-    // the apron looked half-empty AND perpetually sunken. First-seen-grounded
-    // contacts now ride the normal MISSING_POLL_LIMIT grace and keep their
-    // identity (and warmed floors) across feed flaps.
+    // Fast-cull only contacts seen airborne this session. A contact first seen grounded
+    // rides the normal MISSING_POLL_LIMIT grace and keeps its identity and warmed floors
+    // across ground-coverage flaps.
     if (info.wasAirborne !== true) return false;
     // Was airborne, then grounded, then VANISHED from the poll — landed ghost.
     if (info.onGround) return true;

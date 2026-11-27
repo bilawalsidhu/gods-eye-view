@@ -1,6 +1,5 @@
 /**
- * Camera verbs — the "spy satellite simulator" feel
- * (docs/superpowers/specs/2026-07-23-camera-verbs-fly-route-spec.md).
+ * Camera verbs — the "spy satellite simulator" feel.
  *
  * One motion at a time, driven per clock tick. `once` = bounded eased nudge;
  * `continuous` runs until move_camera{stop}, ANY manual camera input on the

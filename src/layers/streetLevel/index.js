@@ -48,6 +48,9 @@ const GROUND_RETRY_MS = 1000;
  */
 const ARMED_REACH_M = 1000;
 
+// "Since N days" counts back from the world time.
+const streetLevelTime = worldTimeFor(STREET_LEVEL_LAYER_ID);
+
 /**
  * The Street Level layer over imagery providers (contract in registry.js).
  * The core owns what they share: the filter and switches, the photo viewer
@@ -58,9 +61,6 @@ const ARMED_REACH_M = 1000;
  * the caller loads the package's `./render/cesium/unbound` export first.
  * @param {{providers: Array<import('./registry.js').StreetLevelProvider>, services?: object}} options
  */
-// "Since N days" counts back from the world time.
-const streetLevelTime = worldTimeFor(STREET_LEVEL_LAYER_ID);
-
 export function createStreetLevelLayer({
   providers: definitions,
   services = {},

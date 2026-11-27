@@ -77,8 +77,8 @@ export function createSelection({
         hit.set === state.icons?.setId &&
         state.icons.has(hit.id) === true;
 
-      // An own-layer row without a live map key is a strict no-op (FB-1
-      // residual). Trails carry no layer identity and hug their contacts, so any
+      // An own-layer row without a live map key is a strict no-op. Trails carry no layer
+      // identity and hug their contacts, so any
       // `gev-trail:*` pick is also a no-op. A pick a sibling layer owns (an
       // aircraft, a route, a cyclone) is that layer's: preserve the current
       // vessel selection and do not compete with its camera command. Every
@@ -278,7 +278,7 @@ export function createSelection({
     if (registerSelectedContext(record)) {
       selectEntityContext(record);
     }
-    // Track-history trail (PRD F3/F4): seed with the current position + async
+    // Track-history trail: seed with the current position + async
     // backfill from the source's recent track for this vessel.
     if (reuseTrail) {
       components.tracking.appendSelectedVesselTrailFix(record);

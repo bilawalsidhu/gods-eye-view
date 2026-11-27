@@ -410,24 +410,16 @@ const OPTION_GROUPS = Object.freeze({
     booleanOption('paused', 'p', false),
   ]),
   flights: Object.freeze([
-    // Owner directive 2026-08-22: the fleet's 3D models are DEFAULT-ON in
-    // PROXIMITY mode. Proximity is itself the altitude/count gate — models only
-    // materialize once the camera is close enough and only for the nearest
-    // contacts in view — so "on" costs nothing at globe scale, and an operator
-    // who wants every in-view plane still opts into `all` deliberately.
-    // This default must match _models3dEnabled/_models3dMode in both flight
-    // layers' state.js and in ui/aircraftDisplay.js. The fresh-boot path skips
-    // restoration entirely (see start() below), so nothing pushes this value
-    // into them. layerState.test.mjs checks the layers against it, and
-    // displayPanel.test.mjs checks the panel.
+    // Fleet 3D models default to proximity mode. Only nearby contacts get models once the
+    // camera is close, so the default costs nothing at globe scale.
     //
-    // `absentValue: false` is what keeps the flip out of links already in the
-    // wild. Schema v2 shipped with OFF as the omitted default, so `v=2&l=f`
-    // MEANS off — and it has to keep meaning that. Moving the default without
-    // this would have silently turned 3D on for every existing v2 link, and
-    // `v=2&l=f&lo=f.m.a` (an OFF link that remembered mode All) would have come
-    // back as ON+All. The price is that ON is now written explicitly (`f.e.1`)
-    // instead of ridden in on the omission; see `absentTokenValue`.
+    // Fresh boots skip restoration. This default must match both flight layers' state.js,
+    // src/ui/aircraftDisplay.js and the pressed state of #models3d-toggle in
+    // DisplayPanel.vue. layerState.test.mjs checks the layers and displayPanel.test.mjs
+    // checks the panel.
+    //
+    // In schema v2 an omitted models3d means off. absentValue: false preserves existing
+    // links, and on is written explicitly (f.e.1). See absentTokenValue.
     booleanOption('models3d', 'e', true, { absentValue: false }),
     enumOption('models3dMode', 'm', 'proximity', ['proximity', 'all'], {
       proximity: 'p',
