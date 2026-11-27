@@ -642,6 +642,12 @@ test('opening Missions keeps a followed aircraft, train or ISS and Back restores
     }
     back.click();
     await settle();
+    if (layerId === 'satellites')
+      assert.equal(
+        missions.mission,
+        null,
+        'Back lets the mission go with the list',
+      );
     assert.equal(
       $('#entity-card .entity-card__title').textContent,
       selected.title,

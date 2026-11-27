@@ -293,6 +293,11 @@ watch(() => missions.enabled, (enabled) => {
 });
 function returnToFollowedCard() {
   missionFollowGeneration.value = null;
+  // A mission picked over the follow goes with the list: once the followed
+  // card is back, its replay and isolation would have no controls. The
+  // layer keeps the follow (selection.js releases the camera only when
+  // nothing is followed).
+  if (missions.mission) missions.layer?.deselectMission?.();
   void nextTick(() => contextScroller.value?.querySelector('.entity-card__close')?.focus());
 }
 onMounted(() => {
