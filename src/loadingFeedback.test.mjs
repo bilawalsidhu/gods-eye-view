@@ -208,12 +208,14 @@ test('share-follow failures use the universal top-center status instead of the b
     /fallbackTimer = this\._lifetime\.timeout\(showOnce, 1000\)/,
   );
   assert.match(present, /canPresentDeferredStatusNotice\(/);
+  assert.match(present, /if \(canPresent\(\)\) show\(\)/);
   for (const source of [handler, present]) {
     assert.doesNotMatch(source, /this\._showToast\(/);
     assert.doesNotMatch(source, /pushCockpitSignal/);
   }
   assert.match(handler, /result\.classification === 'pending'/);
   assert.match(handler, /state: 'acquiring'/);
+  assert.match(handler, /shareTrackingRestoreNotice\(result\)/);
   assert.match(handler, /persistent: true/);
   assert.match(handler, /this\._shareTrackingNoticeGeneration \+= 1/);
   assert.match(handler, /if \(this\._shareTrackingAcquiringKey\) return/);

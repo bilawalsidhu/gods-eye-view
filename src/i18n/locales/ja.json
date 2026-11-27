@@ -2388,6 +2388,7 @@
   "Gemini Live is unavailable for the configured model.": "設定されたモデルではGemini Liveを利用できません。",
   "Token request is too large": "トークンリクエストが大きすぎます",
   "Use an empty JSON token request": "空のJSONトークンリクエストを使用してください",
+  "Shared layer selection could not be restored": "共有されたレイヤー選択を復元できませんでした",
   "Release Space to send": "Spaceを離して送信",
   "Hold Space to talk": "Spaceを長押しで話す",
   "Voice command context is too large": "音声コマンドのコンテキストが大きすぎます",

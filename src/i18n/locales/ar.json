@@ -2893,6 +2893,7 @@
   "Gemini Live is unavailable for the configured model.": "Gemini Live غير متاح للنموذج المُعَدّ.",
   "Token request is too large": "طلب الرمز كبير جدًا",
   "Use an empty JSON token request": "استخدم طلب رمز بكائن JSON فارغ",
+  "Shared layer selection could not be restored": "تعذّرت استعادة تحديد الطبقات من الرابط المشترك",
   "Voice command context is too large": "سياق الأمر الصوتي كبير جدًا",
   "Gemini reliable transport exceeded its queue limit. Start voice again.": "تجاوز النقل الموثوق لـ Gemini حد قائمة الانتظار. ابدأ الصوت مجددًا.",
   "Gemini reliable transport did not drain. Start voice again.": "لم تُفرَّغ قائمة النقل الموثوق لـ Gemini. ابدأ الصوت مجددًا.",

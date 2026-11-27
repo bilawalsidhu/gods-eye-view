@@ -216,6 +216,17 @@ export class ShareRestoration {
     if (savedState) {
       this._hasShareState = true;
       applySharedWorldTime(savedState);
+      if (savedState.layerStateInvalid) {
+        // Fail-closed decoding restored default layers; say so rather than
+        // let the recipient mistake them for the shared selection.
+        void this.initialRestorePromise.then(() =>
+          this._presentAfterStartupCover(
+            { message: t('Shared layer selection could not be restored') },
+            null,
+            () => !this._disposed,
+          ),
+        );
+      }
       // Reserve camera authority now; the delayed mesh-friendly flight may
       // run only if no newer user, voice, or tracking navigation has won.
       this._initialShareNavigationGeneration =
@@ -622,9 +633,20 @@ export class ShareRestoration {
    * notice (generation) has taken its place. A notice with a detail line is
    * a last-known one: the sentence over the entity's id.
    * @param {{message: string, detail?: string}} notice
-   * @param {number} noticeGeneration
+   * @param {number | null} noticeGeneration
+   * @param {() => boolean} [canPresent] defaults to the share-follow
+   *   generation check; notices outside that sequence pass their own.
    */
-  _presentAfterStartupCover(notice, noticeGeneration) {
+  _presentAfterStartupCover(
+    notice,
+    noticeGeneration,
+    canPresent = () =>
+      canPresentDeferredStatusNotice(
+        noticeGeneration,
+        this._shareTrackingNoticeGeneration,
+        this._disposed,
+      ),
+  ) {
     const show = () =>
       notice.detail
         ? this.showStatus(notice.message, {
@@ -634,14 +656,7 @@ export class ShareRestoration {
         : this.showStatus(notice.message);
     const showAfterStartupCover = () => {
       this._lifetime.frame(() => {
-        if (
-          !canPresentDeferredStatusNotice(
-            noticeGeneration,
-            this._shareTrackingNoticeGeneration,
-            this._disposed,
-          )
-        )
-          return;
+        if (!canPresent()) return;
         const startupCover = document.getElementById('loading-screen');
         if (
           !startupCover ||
@@ -655,14 +670,7 @@ export class ShareRestoration {
         const showOnce = () => {
           removeStartupListener();
           if (fallbackTimer) this._lifetime.cancelTimeout(fallbackTimer);
-          if (
-            canPresentDeferredStatusNotice(
-              noticeGeneration,
-              this._shareTrackingNoticeGeneration,
-              this._disposed,
-            )
-          )
-            show();
+          if (canPresent()) show();
         };
         removeStartupListener = this._lifetime.listen(
           startupCover,
