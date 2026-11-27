@@ -549,18 +549,19 @@ export function createRendering({ state }) {
     // The one map selection: naming a cable makes every other layer let its
     // selected thing go; putting the card away lets the cable's go.
     if (state._selected)
-      claimSelection(
-        CABLE_LAYER_ID,
-        `${state._selected.kind}:${state._selected.featureId}`,
-      );
-    else if (previous)
-      releaseSelection(
-        CABLE_LAYER_ID,
-        `${previous.kind}:${previous.featureId}`,
-      );
+      claimSelection(CABLE_LAYER_ID, selectionId(state._selected));
+    else if (previous) releaseSelection(CABLE_LAYER_ID, selectionId(previous));
     // The card may move along the same cable: publish it whatever the ids.
     resetPublishSignature();
     updateReferenceVisibility();
+  }
+  /**
+   * What the selection is named by: the selected item's record id
+   * (records.js), `cable:<id>` or `landing:<id>`, the id Nearby and search
+   * know it by.
+   */
+  function selectionId({ kind, featureId }) {
+    return `${kind === 'landing-point' ? 'landing' : 'cable'}:${featureId}`;
   }
   return {
     attach,

@@ -926,6 +926,11 @@ test('the name card is the one map selection: it takes it, and gives it up', asy
   const [lineId] = env.set('lines').items.keys();
   env.click({ set: env.set('lines').spec.id, id: lineId });
   assert.equal(currentSelection()?.layerId, 'telegeography-submarine-cables');
+  // Named by its record's id, as Nearby and search know it.
+  assert.equal(currentSelection()?.id, 'cable:ac1');
+  const [pinId] = env.set('pins').items.keys();
+  env.click({ set: env.set('pins').spec.id, id: pinId });
+  assert.equal(currentSelection()?.id, 'landing:lisbon');
   claimSelection('flights', 'abc123');
   assert.equal(namedAt(env), null, "another layer's selection puts it away");
   assert.equal(currentSelection()?.layerId, 'flights');
