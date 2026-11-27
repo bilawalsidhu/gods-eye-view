@@ -583,6 +583,14 @@
   margin: 0.55rem 0 0.15rem;
 }
 
+/* What the item is, in its data's own words. */
+.entity-card__description {
+  margin: 0.45rem 0 0.6rem;
+  color: rgba(225, 236, 242, 0.82);
+  font-size: 0.66rem;
+  line-height: 1.45;
+}
+
 #entity-card .entity-card__where {
   margin: 0;
   font-size: 0.6rem;
