@@ -116,33 +116,6 @@ export function isInRectangle(reading, rect) {
     : reading.lon >= rect.west || reading.lon <= rect.east;
 }
 /**
- * The worst readings inside a lon/lat rectangle, for the readout card.
- *
- * A null rectangle means the camera could not resolve one (a fully oblique or
- * space-level view); everything is then in scope rather than nothing, so the
- * card degrades to the worst readings overall instead of going blank.
- *
- * @param {Array<object>} readings
- * @param {?{west:number, south:number, east:number, north:number}} rect - Degrees.
- * @param {number} [limit=5]
- * @returns {Array<object>}
- */
-export function readingsInView(readings, rect, limit = 5) {
-  if (!Array.isArray(readings)) return [];
-  const cap = Math.max(0, Math.floor(Number(limit) || 0));
-  if (cap === 0) return [];
-  const inside = readings.filter((r) => isInRectangle(r, rect));
-  return inside
-    .slice()
-    .sort(
-      (a, b) =>
-        b.value - a.value ||
-        String(a.stationId ?? a.id).localeCompare(String(b.stationId ?? b.id)),
-    )
-    .slice(0, cap);
-}
-
-/**
  * Map one reading to a JSON-safe analyst record. Pure — no Cesium types.
  * @param {object|null|undefined} raw
  * @param {number} [index=0]

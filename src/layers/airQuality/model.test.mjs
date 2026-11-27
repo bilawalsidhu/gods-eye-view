@@ -6,7 +6,7 @@ import {
   mapAnalystRecord,
   newestObservation,
   readingsAreStale,
-  readingsInView,
+  isInRectangle,
   selectAirQualityOverlayCohort,
 } from './model.js';
 
@@ -40,47 +40,11 @@ const reading = (id, value, lat, lon) => ({
   name: id,
 });
 
-test('the readout lists the worst readings inside the view rectangle', () => {
-  const rows = [
-    reading('west', 9, 51.0, -114.0),
-    reading('east', 4, 43.6, -79.3),
-    reading('mild', 2, 51.1, -114.1),
-  ];
-  const inView = readingsInView(
-    rows,
-    { west: -115, south: 50, east: -113, north: 52 },
-    5,
-  );
-  assert.deepEqual(
-    inView.map((r) => r.id),
-    ['west', 'mild'],
-  );
-});
-
-test('an unresolvable view rectangle degrades to the worst overall, not to blank', () => {
-  // A space-level or fully oblique camera cannot produce a rectangle; the card
-  // should still say something useful.
-  const rows = [reading('a', 3, 0, 0), reading('b', 8, 10, 10)];
-  assert.deepEqual(
-    readingsInView(rows, null, 5).map((r) => r.id),
-    ['b', 'a'],
-  );
-  assert.deepEqual(readingsInView(rows, null, 0), []);
-  assert.deepEqual(readingsInView(null, null, 5), []);
-});
-
 test('a view rectangle crossing the antimeridian still selects correctly', () => {
   // west > east is how a dateline-crossing rectangle is expressed.
-  const rows = [reading('near', 5, 0, 179), reading('far', 9, 0, 100)];
-  const inView = readingsInView(
-    rows,
-    { west: 170, south: -10, east: -170, north: 10 },
-    5,
-  );
-  assert.deepEqual(
-    inView.map((r) => r.id),
-    ['near'],
-  );
+  const rect = { west: 170, south: -10, east: -170, north: 10 };
+  assert.equal(isInRectangle(reading('near', 5, 0, 179), rect), true);
+  assert.equal(isInRectangle(reading('far', 9, 0, 100), rect), false);
 });
 
 test('the overlay cohort is capped and deterministic', () => {
