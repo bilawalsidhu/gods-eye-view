@@ -305,20 +305,36 @@ export function isCctvLiveFrameFallback(activeCamera) {
 }
 
 /** The source badge's label and frame state for the camera and preview. */
-export function presentCctvSourceBadge(activeCamera, enabled, frame) {
+export function presentCctvSourceBadge(
+  activeCamera,
+  enabled,
+  frame,
+  { live = false, liveState = '' } = {},
+) {
   if (!enabled || !activeCamera)
     return { label: t('SOURCE · UNKNOWN'), state: 'idle' };
-  if (frame.loading && !frame.hasFrame)
+  // A live video is OK only once its frames are drawn.
+  if (live && liveState === 'stalled')
+    return { label: t('VIDEO · STALLED'), state: 'error' };
+  if (live && liveState !== 'playing')
     return { label: t('FRAME · LOADING'), state: 'loading' };
-  if (frame.error && !frame.hasFrame)
+  if (!live && frame.loading && !frame.hasFrame)
+    return { label: t('FRAME · LOADING'), state: 'loading' };
+  if (!live && frame.error && !frame.hasFrame)
     return { label: t('FRAME · UNAVAILABLE'), state: 'error' };
   if (isCctvLiveFrameFallback(activeCamera))
     return {
       label: `${cctvSourceKindLabel('fallback')} · ${cctvSourceStatusLabel('degraded')}`,
       state: 'ready',
     };
+  // A live source shown as a still (its video could not play here) is a
+  // fallback frame: LIVE stays for a picture that moves.
+  const sourceKind =
+    activeCamera.sourceKind || activeCamera.feedType || 'unknown';
   const kind = cctvSourceKindLabel(
-    activeCamera.sourceKind || activeCamera.feedType || 'unknown',
+    !live && String(sourceKind).toLowerCase() === 'live'
+      ? 'fallback'
+      : sourceKind,
   );
   const status = cctvSourceStatusLabel(activeCamera.sourceStatus || 'unknown');
   return { label: `${kind} · ${status}`, state: 'ready' };
@@ -326,10 +342,9 @@ export function presentCctvSourceBadge(activeCamera, enabled, frame) {
 
 export function _syncCctvSourceBadge(activeCamera, enabled) {
   this.store.setSourceBadge(
-    presentCctvSourceBadge(
-      activeCamera,
-      enabled,
-      this.store.live ? EMPTY_CCTV_FRAME : this._frame,
-    ),
+    presentCctvSourceBadge(activeCamera, enabled, this._frame, {
+      live: this.store.live,
+      liveState: this.store.liveState,
+    }),
   );
 }

@@ -1,5 +1,12 @@
-/** With no local coverage information, only the globe has default suggestions. */
-const GLOBE_DEFAULTS = ['satellites', 'flights', 'ais-live-vessels'];
+/**
+ * What to suggest on the globe, in a zoomed-in view, or on a place card.
+ */
+const BY_VIEW = Object.freeze({
+  globe: ['satellites', 'flights', 'ais-live-vessels'],
+  // These sources cover a grounded view without relying on a regional feed.
+  local: ['flights', 'satellites', 'recent-imagery'],
+  place: ['flights', 'ais-live-vessels', 'satellites'],
+});
 
 /** With a layer on, what goes with it. */
 const COMPANIONS = Object.freeze({
@@ -15,15 +22,25 @@ export const MAX_SUGGESTIONS = 3;
 /**
  * Up to `MAX_SUGGESTIONS` layer ids to suggest.
  * @param {object[]} rows The data manager's layer rows.
- * @param {{globe?: boolean}} [view] Whether the view shows the whole globe.
+ * @param {{globe?: boolean, grounded?: boolean, place?: boolean}} [view]
+ *   A globe view, a grounded local view, or a place card.
  * @returns {string[]}
  */
-export function suggestLayers(rows, { globe = false } = {}) {
+export function suggestLayers(
+  rows,
+  { globe = false, grounded = false, place = false } = {},
+) {
   const byId = new Map((rows || []).map((row) => [row.id, row]));
   const on = (rows || []).filter((row) => row.enabled).map((row) => row.id);
   const candidates = [
     ...on.flatMap((id) => COMPANIONS[id] || []),
-    ...(globe ? GLOBE_DEFAULTS : []),
+    ...(place
+      ? BY_VIEW.place
+      : globe
+        ? BY_VIEW.globe
+        : grounded && !on.length
+          ? BY_VIEW.local
+          : []),
   ];
   const picked = [];
   for (const id of candidates) {

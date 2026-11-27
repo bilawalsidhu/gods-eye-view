@@ -496,41 +496,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-#gev-stories .s-mtitle > span {
-  display: inline-block;
-  white-space: nowrap;
-}
-#gev-stories .s-mtitle.marquee {
-  text-overflow: clip;
-  -webkit-mask: linear-gradient(
-    90deg,
-    #000 0,
-    #000 calc(100% - 18px),
-    transparent
-  );
-  mask: linear-gradient(90deg, #000 0, #000 calc(100% - 18px), transparent);
-}
-#gev-stories .s-mtitle.marquee > span {
-  animation: gsx-mq var(--mq-dur, 8s) ease-in-out infinite alternate;
-}
-@keyframes gsx-mq {
-  0%,
-  18% {
-    transform: translateX(0);
-  }
-  82%,
-  100% {
-    transform: translateX(var(--mq, 0));
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  #gev-stories .s-mtitle.marquee > span {
-    animation: none;
-  }
-  #gev-stories .s-mtitle.marquee {
-    text-overflow: ellipsis;
-  }
-}
 @container app (min-width: 701px) {
   #gev-stories .ex-feed,
   #gev-stories .st-chapters,

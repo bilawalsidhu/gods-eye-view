@@ -854,14 +854,6 @@ export class ShellFacade {
     return this._contextControls?._contextModeChanging ?? false;
   }
 
-  get _preservePanelStateDuringLayerClear() {
-    return this._contextControls?._preservePanelStateDuringLayerClear ?? false;
-  }
-
-  _contextSuspendsLayer(layerId) {
-    return this._contextControls?.suspendsLayer(layerId) ?? false;
-  }
-
   _runUserFacingContextAction(...args) {
     return this._contextControls?._runUserFacingContextAction(...args);
   }

@@ -2,26 +2,10 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ContextControls } from './contextControls.js';
 
-class Button extends EventTarget {
-  constructor() {
-    super();
-    this.attributes = new Map();
-  }
-  getAttribute(name) {
-    return this.attributes.get(name);
-  }
-  setAttribute(name, value) {
-    this.attributes.set(name, value);
-  }
-}
-const turn = () => new Promise((resolve) => setImmediate(resolve));
-function fixture(t, elements = {}) {
+function fixture(t, publish) {
   const calls = [];
-  const views = [];
   const controls = new ContextControls({
-    publish: (view) => views.push(view),
-    elements,
-    installations: {},
+    publish,
     actions: {
       getCockpit: () => null,
       claimVisualAuthority: () => calls.push('claim'),
@@ -37,7 +21,7 @@ function fixture(t, elements = {}) {
     controls.stop();
     controls.disconnect();
   });
-  return { controls, calls, views };
+  return { controls, calls };
 }
 
 test('Context starts with an explicit idle snapshot', (t) => {
@@ -52,67 +36,13 @@ test('Context starts with an explicit idle snapshot', (t) => {
   });
 });
 
-test('a pending Context tab cannot reopen a disposed panel', async (t) => {
-  const tab = new Button();
-  const { controls, calls } = fixture(t, { _globalContextFlightsBtn: tab });
-  let release;
-  controls._selectContextMode = () =>
-    new Promise((resolve) => {
-      release = resolve;
-    });
-  tab.dispatchEvent(new Event('click'));
-  assert.deepEqual(calls, ['claim']);
-  controls.stop();
-  release(true);
-  await turn();
-  tab.dispatchEvent(new Event('click'));
-  assert.deepEqual(calls, ['claim']);
-});
-
-test('stopping during installations enable prevents the delayed search', async (t) => {
-  const button = new Button();
-  const { controls, calls, views } = fixture(t, {
-    _installationsSearchBtn: button,
-  });
-  let release;
-  controls._dataManager = {
-    layers: new Map([['military-installations', {}]]),
-    setEnabled: () =>
-      new Promise((resolve) => {
-        release = resolve;
-      }),
-    isEnabled: () => true,
-  };
-  controls.installations.searchNearby = () =>
-    assert.fail('search started after stop');
-  button.dispatchEvent(new Event('click'));
-  controls.stop();
-  release(true);
-  await turn();
-  assert.equal(calls.length, 0);
-  assert.equal(views.length, 1, 'disposed controls publish nothing more');
-  assert.equal(views[0].installationsBusy, true);
-});
-
-test('a late installations search cannot publish a notice after disposal', async (t) => {
-  const button = new Button();
-  const { controls, calls } = fixture(t, { _installationsSearchBtn: button });
-  let release;
-  controls._dataManager = {
-    layers: new Map([['military-installations', {}]]),
-    setEnabled: async () => true,
-    isEnabled: () => true,
-  };
-  controls.installations.searchNearby = () =>
-    new Promise((resolve) => {
-      release = resolve;
-    });
-  button.dispatchEvent(new Event('click'));
-  await turn();
-  controls.stop();
-  release(true);
-  await turn();
-  assert.deepEqual(calls, []);
+test('a host can observe mode changes while the application omits the port', (t) => {
+  const states = [];
+  const { controls } = fixture(t, (state) => states.push(state));
+  controls._syncContextModeButtons();
+  assert.deepEqual(states, [
+    { mode: 'none', enabled: false, flightsActive: false, busy: false },
+  ]);
 });
 
 test('reconnecting and disposal release each manager subscription exactly once', (t) => {

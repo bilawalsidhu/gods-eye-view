@@ -16,7 +16,7 @@ function safeNumber(value, fallback = NaN) {
 function frameUrlFor(
   camera,
   refreshMs = ACTIVE_FRAME_REFRESH_MS,
-  { snapshotOnly = false } = {},
+  { snapshotOnly = false, liveOnly = false } = {},
 ) {
   const cadenceMs = Math.max(
     1000,
@@ -31,6 +31,7 @@ function frameUrlFor(
     pitch: String(Math.round(camera.pitchDeg || -10)),
     ts: String(tick),
   });
+  if (liveOnly) params.set('liveOnly', '1');
   if (snapshotOnly) params.set('snapshotOnly', '1');
   return `${FRAME_ENDPOINT}/${encodeURIComponent(camera.id)}?${params.toString()}`;
 }
@@ -61,12 +62,18 @@ export function createCctvSource({
     getFrameUrl: frameUrlFor,
     getMediaUrl: mediaUrlFor,
     /** Read a registered frame and its provenance, including fallback frames. */
-    async getFrame(camera, { signal } = {}) {
+    async getFrame(
+      camera,
+      { signal, refreshMs, snapshotOnly = false, liveOnly = false } = {},
+    ) {
       signal?.throwIfAborted();
-      const response = await fetchImpl(frameUrlFor(camera), {
-        cache: 'no-store',
-        signal,
-      });
+      const response = await fetchImpl(
+        frameUrlFor(camera, refreshMs, { snapshotOnly, liveOnly }),
+        {
+          cache: 'no-store',
+          signal,
+        },
+      );
       if (!response.ok) throw new Error('Camera frame HTTP ' + response.status);
       const bytes = new Uint8Array(await response.arrayBuffer());
       signal?.throwIfAborted();

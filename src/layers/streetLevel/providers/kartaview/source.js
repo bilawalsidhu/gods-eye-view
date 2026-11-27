@@ -44,7 +44,7 @@ export class KartaViewSourceError extends Error {
   }
 }
 
-// Failure texts are English data: the Street Level panel translates them.
+// Failure texts are English data: Street Level's UI translates them.
 const NO_ANSWER = msg('KartaView did not answer in time — try again');
 const UNREACHABLE = msg('KartaView could not be reached — check the network');
 const UNREADABLE = msg('KartaView sent an answer that could not be read');
@@ -131,7 +131,7 @@ export function createKartaViewSource({
             retryAfterSec: retryAfterSeconds(response) ?? 2,
           },
         );
-      // English data with a number: the Street Level panel and the layer
+      // English data with a number: Street Level's UI and the layer
       // panel show it through the 'KartaView answered HTTP {status}' entry.
       if (!response.ok)
         throw new KartaViewSourceError(

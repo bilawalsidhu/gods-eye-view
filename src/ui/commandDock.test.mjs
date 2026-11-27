@@ -7,6 +7,8 @@ import { createPinia } from 'pinia';
 import { createApp, h, nextTick } from 'vue';
 import { setLocale } from '../i18n/index.js';
 import { useDisplayStore } from './stores/display.js';
+import { usePanelChromeStore } from './stores/panelChrome.js';
+import ContextView from './views/ContextView.vue';
 import { useEntityCardStore } from './stores/entityCard.js';
 import { useLocationStore } from './stores/location.js';
 import { useOmnibarStore } from './stores/omnibar.js';
@@ -20,6 +22,10 @@ import { MOBILE_TABS, initMobileShell } from './mobileShell.js';
 import CommandDockView from './views/CommandDockView.vue';
 import SceneChromeView from './views/SceneChromeView.vue';
 import { VisualSettings } from './visualSettings.js';
+import { PLACE_PICK_EVENT } from './contextEvents.js';
+import { installPlacePick } from './placePick.js';
+import { CITY_POIS } from '../cityPois.js';
+import { holdAirportPack } from '../testSupport/holdAirportPack.mjs';
 
 function fixture(t) {
   document.body.replaceChildren();
@@ -132,16 +138,11 @@ test('the phone tab bar joins the end of the page while the shell publishes', as
       (tab) =>
         `${tab.dataset.mobileSheet}:${tab.querySelector('.mobile-tab-icon').textContent}:${tab.querySelector('.mobile-tab-label').textContent}`,
     ),
-    [
-      'layers:layers:Layers',
-      'cameras:videocam:Cameras',
-      'context:radar:Context',
-      'more:more_horiz:More',
-    ],
+    ['layers:layers:Layers', 'context:radar:Context', 'more:more_horiz:More'],
   );
   assert.deepEqual(
     tabs.map((tab) => tab.getAttribute('aria-expanded')),
-    ['false', 'false', 'false', 'false'],
+    ['false', 'false', 'false'],
   );
   store.publishPhoneShell({
     enabled: true,
@@ -152,7 +153,7 @@ test('the phone tab bar joins the end of the page while the shell publishes', as
   assert.equal(backdrop.hidden, false);
   assert.deepEqual(
     tabs.map((tab) => tab.getAttribute('aria-expanded')),
-    ['false', 'false', 'true', 'false'],
+    ['false', 'true', 'false'],
   );
   store.publishPhoneShell({ enabled: false, sheet: null, tabs: MOBILE_TABS });
   await nextTick();
@@ -160,7 +161,7 @@ test('the phone tab bar joins the end of the page while the shell publishes', as
   assert.equal(backdrop.hidden, true);
   assert.deepEqual(
     tabs.map((tab) => tab.getAttribute('aria-expanded')),
-    ['false', 'false', 'false', 'false'],
+    ['false', 'false', 'false'],
   );
   store.publishPhoneShell(null);
   await nextTick();
@@ -189,17 +190,24 @@ test('the phone tabs are labelled in the UI language', async (t) => {
 test('closing a sheet returns focus to its tab once the tab bar shows it closed', async (t) => {
   const { $, pinia } = fixture(t);
   const store = useDisplayStore(pinia);
-  // The Cameras sheet's first panel, with its first control.
-  const cctv = document.body.appendChild(document.createElement('section'));
-  cctv.id = 'cctv-panel';
-  cctv.appendChild(document.createElement('button')).id = 'cctv-first';
+  const chrome = usePanelChromeStore(pinia);
+  const owner = chrome.connect({});
+  chrome.publish(owner, 'global-context-panel', { collapsed: true });
+  const app = createApp(ContextView).use(pinia);
+  app.mount(document.body.appendChild(document.createElement('div')));
+  t.after(() => {
+    app.unmount();
+    chrome.detach(owner);
+  });
+  assert.ok($('.context-title-open'));
   const init = () =>
     initMobileShell({
       documentRef: document,
       matchMedia: () => ({ matches: true }),
       ResizeObserverImpl: null,
       requestFrame: () => 0,
-      setPanelCollapsed() {},
+      setPanelCollapsed: (id, collapsed) =>
+        chrome.publish(owner, id, { collapsed }),
       publish: (view) => store.publishPhoneShell(view),
       afterPublish: (callback) => {
         void nextTick(callback);
@@ -208,12 +216,13 @@ test('closing a sheet returns focus to its tab once the tab bar shows it closed'
   let shell = init();
   t.after(() => shell.destroy());
   await nextTick();
-  const tab = $('#mobile-tab-bar [data-mobile-sheet="cameras"]');
+  const tab = $('#mobile-tab-bar [data-mobile-sheet="context"]');
   tab.focus();
   tab.click();
   await nextTick();
   assert.equal(tab.getAttribute('aria-expanded'), 'true');
-  assert.equal(document.activeElement?.id, 'cctv-first');
+  assert.ok(!$('.context-title-open'));
+  assert.ok($('#global-context-panel').contains(document.activeElement));
   let expandedAtFocus = null;
   tab.addEventListener('focus', () => {
     expandedAtFocus = tab.getAttribute('aria-expanded');
@@ -309,7 +318,12 @@ function omnibarFixture(t, onSearch = () => {}) {
     },
   });
   const voiceEvents = [];
-  useVoiceStore(pinia).connect({ emit: (...args) => voiceEvents.push(args) });
+  useVoiceStore(pinia).connect({
+    emit(name, ...args) {
+      if (name === 'chat-ask') args.pop()?.(true);
+      voiceEvents.push([name, ...args]);
+    },
+  });
   const globeEvents = [];
   useGlobeActionsStore(pinia).connect({
     northUp: () => globeEvents.push('northUp'),
@@ -405,6 +419,84 @@ test('omnibar uses loaded records when one viewport point snapshot throws', asyn
   $('.omnibar-item--view-ask').click();
   assert.equal(prompts.length, 1);
   assert.match(prompts[0], /showing 1 Dams, 1 FIRMS/);
+});
+
+test('choosing a camera result activates its feed as it opens the card', async (t) => {
+  t.mock.method(
+    globalThis,
+    'fetch',
+    async () => new Response(null, { status: 503 }),
+  );
+  const { pinia, type, option } = omnibarFixture(t);
+  const camera = { id: 'b', name: 'Crossing camera', lat: 30, lon: -97 };
+  let active = 'a';
+  const layer = {
+    id: 'cctv',
+    name: 'Cameras',
+    enabled: true,
+    module: {
+      getAnalystRecords: () => [camera],
+      findByQuery: () => camera,
+      selectCamera: (id) => {
+        active = id;
+      },
+    },
+  };
+  const manager = {
+    getAll: () => [layer],
+    layers: new Map([['cctv', layer]]),
+    isEnabled: () => true,
+  };
+  const cards = useEntityCardStore(pinia);
+  cards.connect({ dataManager: () => manager });
+  t.after(() => cards.connect(null));
+  await type(camera.name);
+  option('entity').click();
+  await nextTick();
+  assert.equal(cards.card?.identity.id, 'b');
+  assert.equal(active, 'b');
+});
+
+test('a nearby photo chip leaves a docked photo in place when replacement is refused', async (t) => {
+  t.mock.method(
+    globalThis,
+    'fetch',
+    async () => new Response(null, { status: 503 }),
+  );
+  const { pinia, input } = omnibarFixture(t);
+  const cards = useEntityCardStore(pinia);
+  const replace = t.mock.fn(() => false);
+  cards.connect({ replaceDockedPhoto: replace });
+  t.after(() => cards.connect(null));
+  const original = {
+    layerId: 'street-level',
+    id: 'kartaview:a',
+    label: 'Photo A',
+    lat: 30,
+    lon: -97,
+  };
+  const next = { ...original, id: 'kartaview:b', label: 'Photo B' };
+  cards.select(original);
+  t.mock.method(cards, 'nearbySelected', () => ({
+    same: [
+      {
+        key: 'street-level:kartaview:b',
+        title: next.label,
+        icon: 'photo',
+        identity: next,
+      },
+    ],
+  }));
+  input.focus();
+  await nextTick();
+  const chip = [...document.querySelectorAll('.omnibar-strip__chip')].find(
+    (el) => el.textContent.includes('Photo B'),
+  );
+  assert.ok(chip);
+  chip.click();
+  await nextTick();
+  assert.equal(replace.mock.calls[0]?.arguments[0].id, next.id);
+  assert.equal(cards.card?.identity.id, original.id);
 });
 
 test('omnibar preserves ambiguous and disambiguated place queries, including IME input', async (t) => {
@@ -513,8 +605,7 @@ test('omnibar uses the existing microphone and typed chat controls', async (t) =
   assert.deepEqual(voiceEvents, [
     ['button'],
     ['chat-restore'],
-    ['chat-prompt', 'What is here?'],
-    ['chat-submit'],
+    ['chat-ask', 'What is here?'],
   ]);
 });
 
@@ -1322,7 +1413,7 @@ test('Ask GEV is no default for a word or two, and CJK names are places from two
   }
   assert.deepEqual(searched, ['東京', '北京', '서울']);
   await enter('what is here?');
-  assert.deepEqual(voiceEvents.at(-1), ['chat-submit']);
+  assert.deepEqual(voiceEvents.at(-1), ['chat-ask', 'what is here?']);
 });
 
 test('the place service is asked about whole names, never about callsigns', async (t) => {
@@ -1655,7 +1746,7 @@ async function enterOutcome(t, text, { hover = false } = {}) {
     ...m.switched.map(([id, on]) => `layer(${id},${on ? 'on' : 'off'})`),
     ...m.acted.map((act) => `globe(${act})`),
     ...m.voiceEvents
-      .filter(([kind]) => kind === 'chat-prompt')
+      .filter(([kind]) => kind === 'chat-ask')
       .map(([, q]) => `ask(${q})`),
     ...m.voiceEvents.filter(([kind]) => kind === 'button').map(() => 'mic'),
     ...closed.map((side) => `close(${side})`),
@@ -1731,8 +1822,8 @@ test('a row chosen with the keys stays chosen when rows arrive above it', async 
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.deepEqual(searched, []);
   assert.deepEqual(
-    voiceEvents.find(([kind]) => kind === 'chat-prompt'),
-    ['chat-prompt', 'Paris'],
+    voiceEvents.find(([kind]) => kind === 'chat-ask'),
+    ['chat-ask', 'Paris'],
   );
 });
 
@@ -1857,4 +1948,361 @@ test('bundled place names never default to an action', async (t) => {
     }
   assert.ok(sample.length > 1900, `${sample.length} names`);
   assert.deepEqual(wrong, []);
+});
+
+// A place picked in the field opens its card in Context: the field sends
+// PLACE_PICK_EVENT (placePick.js listens) once the place is reached.
+function placePicks(t) {
+  const picks = [];
+  const onPick = (event) => picks.push(event.detail);
+  document.addEventListener(PLACE_PICK_EVENT, onPick);
+  t.after(() => document.removeEventListener(PLACE_PICK_EVENT, onPick));
+  return picks;
+}
+const settleTurns = async (turns = 6) => {
+  for (let i = 0; i < turns; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await nextTick();
+  }
+};
+
+test('a place searched in the field is a place pick once the search finds it', async (t) => {
+  const picks = placePicks(t);
+  const { type, key, controls } = omnibarFixture(t, () => {
+    controls.searchOrigin = 'omnibar';
+    return true;
+  });
+  await type('Paris, Texas');
+  await key('Enter');
+  await settleTurns();
+  assert.deepEqual(
+    picks.map(({ name, query }) => ({ name, query })),
+    [{ name: 'Paris, Texas', query: 'Paris, Texas' }],
+  );
+});
+
+test('a place search that finishes after a newer pick leaves that pick selected', async (t) => {
+  const picks = placePicks(t);
+  const lookup = Promise.withResolvers();
+  const search = t.mock.fn(() => {
+    controls.searchOrigin = 'omnibar';
+    return lookup.promise;
+  });
+  const { type, key, controls, pinia } = omnibarFixture(t, search);
+  const cards = useEntityCardStore(pinia);
+  t.after(() => cards.clear());
+  await type('Paris, Texas');
+  await key('Enter');
+  assert.equal(search.mock.callCount(), 1, 'the geocode has started');
+  assert.ok(
+    cards.select({
+      layerId: 'local-dams',
+      id: 'newer-dam',
+      label: 'Newer dam',
+      lat: 30.2,
+      lon: -97.7,
+    }),
+  );
+  lookup.resolve(true);
+  await settleTurns();
+  assert.deepEqual(picks, []);
+  assert.equal(cards.card.identity.id, 'newer-dam');
+});
+
+test('a fly-only plan invalidates a place pick still waiting to open its card', async (t) => {
+  const picks = placePicks(t);
+  const { type, key, controls, pinia } = omnibarFixture(t, () => {
+    controls.searchOrigin = 'omnibar';
+    return true;
+  });
+  await type('Paris, Texas');
+  await key('Enter');
+  await settleTurns();
+  assert.equal(picks.length, 1);
+  assert.equal(
+    picks[0].isCurrent?.() ?? true,
+    true,
+    'field reset keeps its pick current',
+  );
+
+  const fly = t.mock.fn(async () => ({ ok: true }));
+  useOmnibarStore(pinia).connectRunner(fly);
+  await type('go to Austin and show flights');
+  await key('Enter');
+  await settleTurns();
+  assert.deepEqual(fly.mock.calls[0]?.arguments, [
+    'fly_to_location',
+    { query: 'austin', waitForArrival: true },
+  ]);
+  assert.equal(picks.length, 1, 'the plan only flies');
+  assert.equal(picks[0].isCurrent?.() ?? true, false);
+});
+
+test('a landmark chip is a place pick', async (t) => {
+  const picks = placePicks(t);
+  const { type } = omnibarFixture(t);
+  const [cityId, city] = Object.entries(CITY_POIS)[0];
+  await type(city.name);
+  await settleTurns();
+  const chip = document.querySelector('.omnibar-strip__chip');
+  assert.ok(chip, `${city.name} offers its landmarks as chips`);
+  chip.click();
+  await settleTurns();
+  const [first] = city.pois;
+  assert.deepEqual(
+    picks.map(({ name, latitude, longitude }) => ({
+      name,
+      latitude,
+      longitude,
+    })),
+    [{ name: first.name, latitude: first.lat, longitude: first.lon }],
+    `the first landmark of ${cityId}`,
+  );
+});
+
+test('a recent-place chip cannot reopen its card after a newer pick', async (t) => {
+  const recent = {
+    name: 'Shibuya Crossing',
+    latitude: 35.6595,
+    longitude: 139.7005,
+  };
+  localStorage.setItem('gev:omnibar:recent-places', JSON.stringify([recent]));
+  t.after(() => localStorage.removeItem('gev:omnibar:recent-places'));
+  const picks = placePicks(t);
+  const { type, pinia } = omnibarFixture(t);
+  const cards = useEntityCardStore(pinia);
+  t.after(() => cards.clear());
+  const flight = Promise.withResolvers();
+  const fly = t.mock.fn(() => flight.promise);
+  useOmnibarStore(pinia).connectRunner(fly);
+  await type('Tokyo');
+  const chip = [...document.querySelectorAll('.omnibar-strip__chip')].find(
+    (node) => node.textContent.includes(recent.name),
+  );
+  assert.ok(chip);
+  chip.click();
+  assert.equal(fly.mock.callCount(), 1);
+  assert.ok(
+    cards.select({
+      layerId: 'local-dams',
+      id: 'newer-dam',
+      label: 'Newer dam',
+      lat: 30.2,
+      lon: -97.7,
+    }),
+  );
+  flight.resolve({ ok: true });
+  await settleTurns();
+  assert.deepEqual(picks, []);
+  assert.equal(cards.card.identity.id, 'newer-dam');
+});
+
+function coldAirportPack(t) {
+  stubPhoton(t);
+  return holdAirportPack(t, [
+    [
+      'KSFO',
+      'SFO',
+      'San Francisco International Airport',
+      37.619,
+      -122.375,
+      'large',
+      'San Francisco',
+      'US',
+      13,
+      4,
+    ],
+    [
+      'JP-0042',
+      '',
+      'Tokyo Test Airfield',
+      35.67,
+      139.7,
+      'small',
+      'Tokyo',
+      'JP',
+      0,
+      1,
+      'RJ01',
+    ],
+  ]).release;
+}
+
+test('repeated Enter on the first airport code opens that airport once after the pack loads', async (t) => {
+  const release = coldAirportPack(t);
+  const picks = placePicks(t);
+  const searched = [];
+  const { type, key, pinia } = omnibarFixture(t, (query) =>
+    searched.push(query),
+  );
+  const flights = [];
+  useOmnibarStore(pinia).connectRunner(async (name, args) => {
+    flights.push([name, args]);
+    return { ok: true };
+  });
+  await type('SFO');
+  await key('Enter');
+  await key('Enter');
+  await settleTurns(2);
+  assert.deepEqual(searched, [], 'no geocoder search for the code meanwhile');
+  release();
+  await settleTurns();
+  assert.deepEqual(searched, []);
+  assert.deepEqual(flights, [
+    ['fly_to_location', { latitude: 37.619, longitude: -122.375 }],
+  ]);
+  assert.deepEqual(
+    picks.map((pick) => pick.airport),
+    ['SFO'],
+  );
+});
+
+test('keyboard entry to the command strip supersedes a pending airport Enter', async (t) => {
+  const release = coldAirportPack(t);
+  const searched = [];
+  const { type, key, input } = omnibarFixture(t, (query) =>
+    searched.push(query),
+  );
+  await type('DRA');
+  await key('Enter');
+  assert.equal(input.getAttribute('aria-busy'), 'true');
+  await key('ArrowUp');
+  assert.equal(
+    input.getAttribute('aria-activedescendant'),
+    'gev-omnibar-chip-0',
+  );
+  assert.equal(input.getAttribute('aria-busy'), 'false');
+  release();
+  await settleTurns();
+  assert.equal(input.value, 'DRA');
+  assert.deepEqual(searched, []);
+  assert.equal(
+    input.getAttribute('aria-activedescendant'),
+    'gev-omnibar-chip-0',
+  );
+});
+
+test('an explicit ICAO choice retains its distinct catalog identity and reopens from recent places', async (t) => {
+  coldAirportPack(t)();
+  const picks = placePicks(t);
+  const { type, pinia } = omnibarFixture(t);
+  const navigate = t.mock.fn(async () => ({ ok: true }));
+  useOmnibarStore(pinia).connectRunner(navigate);
+  const cards = useEntityCardStore(pinia);
+  const frameCard = t.mock.fn();
+  cards.connect({ flyTo: frameCard });
+  t.after(() => cards.connect(null));
+  t.after(installPlacePick({ pinia }));
+  t.after(() => localStorage.removeItem('gev:omnibar:recent-places'));
+  await type('rj01');
+  await settleTurns();
+  assert.ok(
+    !omnibarRows().some((label) => label.includes('Tokyo Test Airfield')),
+  );
+  await type('RJ01');
+  await settleTurns();
+  const rows = omnibarRows();
+  assert.ok(
+    rows.findIndex((label) => label.includes('Tokyo Test Airfield')) > 0,
+    rows.join(', '),
+  );
+  [...document.querySelectorAll('#gev-omnibar-list .omnibar-item')]
+    .find((row) => row.textContent.includes('Tokyo Test Airfield'))
+    .click();
+  await settleTurns();
+  assert.equal(cards.card?.identity.id, 'airport:JP-0042');
+  assert.equal(picks.at(-1)?.airport, 'JP-0042');
+  cards.clear();
+  await type('Tokyo');
+  const chip = [...document.querySelectorAll('.omnibar-strip__chip')].find(
+    (el) => el.textContent.includes('Tokyo Test Airfield'),
+  );
+  assert.ok(chip);
+  chip.click();
+  await settleTurns();
+  assert.deepEqual(
+    picks.map((pick) => pick.airport),
+    ['JP-0042', 'JP-0042'],
+  );
+  assert.equal(cards.card?.identity.id, 'airport:JP-0042');
+  assert.equal(navigate.mock.callCount(), 2, 'one coordinate flight per pick');
+  assert.equal(
+    frameCard.mock.callCount(),
+    0,
+    'the card does not start another flight',
+  );
+});
+
+test('a full-width code opens the same airport as its ASCII spelling', async (t) => {
+  coldAirportPack(t)();
+  const picks = placePicks(t);
+  const { type, key, pinia } = omnibarFixture(t);
+  useOmnibarStore(pinia).connectRunner(async () => ({ ok: true }));
+  await type('ＳＦＯ');
+  await settleTurns();
+  assert.match(omnibarRows()[0], /San Francisco International Airport/);
+  await key('Enter');
+  await settleTurns();
+  assert.equal(picks.at(-1)?.airport, 'SFO');
+});
+
+for (const query of ['sea', 'AUS', 'SFO']) {
+  test('an unresolved airport lookup lets Enter search ' + query, async (t) => {
+    const release = coldAirportPack(t);
+    const searches = [];
+    const { type, key } = omnibarFixture(t, (text) => searches.push(text));
+    await type(query);
+    await key('Enter');
+    if (query === 'SFO')
+      await new Promise((resolve) => setTimeout(resolve, 750));
+    else await nextTick();
+    assert.deepEqual(searches, [query]);
+    release();
+    await settleTurns();
+    assert.deepEqual(searches, [query]);
+  });
+}
+
+test('a newer explicit pick wins while Enter is waiting for the airport pack', async (t) => {
+  const release = coldAirportPack(t);
+  const picks = placePicks(t);
+  const { type, key, pinia } = omnibarFixture(t);
+  const cards = useEntityCardStore(pinia);
+  const fly = t.mock.fn(async () => ({ ok: true }));
+  useOmnibarStore(pinia).connectRunner(fly);
+  t.after(() => cards.clear());
+  await type('SFO');
+  await key('Enter');
+  assert.ok(
+    cards.select({
+      layerId: 'local-dams',
+      id: 'newer-site',
+      label: 'Newer site',
+      lat: 30.2,
+      lon: -97.7,
+    }),
+  );
+  release();
+  await settleTurns();
+  assert.equal(fly.mock.callCount(), 0);
+  assert.deepEqual(picks, []);
+  assert.equal(cards.card.identity.id, 'newer-site');
+});
+
+test('Omnibar keeps an Ask question until Chat accepts it', async (t) => {
+  const { pinia, input, type, option } = omnibarFixture(t);
+  let accepted = false;
+  useVoiceStore(pinia).connect({
+    emit(name, text, acknowledge) {
+      if (name === 'chat-ask') acknowledge?.(Promise.resolve(accepted));
+    },
+  });
+  await type('What is here?');
+  option('Ask').click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(input.value, 'What is here?');
+  accepted = true;
+  option('Ask').click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(input.value, '');
 });

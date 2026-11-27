@@ -1,7 +1,7 @@
 import { nextTick } from 'vue';
 import { useOmnibarStore } from '../ui/stores/omnibar.js';
 import { applicationPinia } from '../ui/vueRuntime.js';
-import { bindAssistantPanelLayout, bindLayoutDock } from './panelLayout.js';
+import { bindAssistantPanelLayout } from './panelLayout.js';
 import { bindChatControl } from './chatControl.js';
 import { bindVoiceMiniPreview } from './voiceMiniPreview.js';
 import { createVoiceControl, voiceStatusLabel } from './control.js';
@@ -294,17 +294,8 @@ export function createVoiceCommands({
   }
   const layouts = panelMount
     ? [
-        bindLayoutDock(ui),
-        bindAssistantPanelLayout({
-          ui,
-          name: 'chatPanel',
-          minimize: () => chat?.minimize({ focus: false }),
-        }),
-        bindAssistantPanelLayout({
-          ui,
-          name: 'voicePanel',
-          minimize: minimizeVoicePanel,
-        }),
+        bindAssistantPanelLayout({ ui, name: 'chatPanel' }),
+        bindAssistantPanelLayout({ ui, name: 'voicePanel' }),
         ui.on('voice-minimize', () => {
           if (ui.state.voicePanel.minimized)
             ui.update('voicePanel', { minimized: false });
@@ -312,19 +303,6 @@ export function createVoiceCommands({
         }),
       ]
     : [];
-  // A voice or chat selection shows in the right rail's Context panel, as a
-  // click's does: its card opens there, and the assistant panel docked over
-  // the rail steps down to its bar, where the latest reply stays readable. A
-  // panel above the dock leaves the rail in view, so it stays as it is.
-  const dockedOverRail = (name) => {
-    const panel = ui.element(name);
-    return Boolean(
-      panel &&
-      !panel.hidden &&
-      panel.dataset?.placement === 'docked' &&
-      !panel.dataset.minimized,
-    );
-  };
   // The Context card generation each selection was asked at, by call, so a
   // slow selection never replaces a card picked since.
   const askedAt = new Map();
@@ -348,15 +326,6 @@ export function createVoiceCommands({
         since,
         cockpitActive: cockpitActive(),
       });
-      if (!panelMount) return;
-      if (adapter.getStartOptions?.().textOnly) {
-        if (ui.state.chat.open && dockedOverRail('chatPanel'))
-          chat?.minimize({ focus: false });
-      } else if (
-        panelMount.panel.snapshot().panelOpen &&
-        dockedOverRail('voicePanel')
-      )
-        minimizeVoicePanel();
     }),
   );
   const unbindMiniPreview = panelMount

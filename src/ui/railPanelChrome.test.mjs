@@ -47,10 +47,6 @@ test('hover lights the border and label, not a shadow', () => {
 
 test('hover recolours only the hovered panel header, never nested sections', () => {
   for (const { selector } of railRules) {
-    assert.ok(
-      !/\.radio-panel-inner/.test(selector),
-      `Radio sits inside Context and must not light up as its own panel: ${selector}`,
-    );
     assert.doesNotMatch(
       selector,
       /:hover\s+:is\(/,
@@ -62,8 +58,6 @@ test('hover recolours only the hovered panel header, never nested sections', () 
   );
   assert.ok(colour, 'the rail title colour rule is missing');
   assert.match(colour.selector, /\.panel-header > \.panel-title/);
-  const radio = rules.find(({ selector }) => selector === '#radio-panel');
-  assert.match(radio?.body || '', /--rail-label-hover:\s*initial/);
 });
 
 test('no later rule dims the open Context title below its siblings', () => {
@@ -100,7 +94,6 @@ test('collapsed launchers on both rails keep titles inside the card', () => {
   // Chinese and Japanese titles fit at full size; 8px would put them under
   // the 9px CJK floor in cjk.css.
   assert.match(translated.selector, /:not\(:lang\(zh\)\):not\(:lang\(ja\)\)/);
-  // Only the rail's own launchers: Radio, nested in Context, keeps its type.
   assert.match(
     translated.selector,
     /#right-context-rail\) > \.panel-collapsible\.collapsed > \[class\$='-panel-inner'\] > \.panel-header > \.panel-title$/,
@@ -165,10 +158,10 @@ test('the default theme geometry change leaves the base gutters alone', () => {
   assert.match(display?.body || '', /font-size:\s*12px/);
 });
 
-test('Data Layers, Context and Space Missions share the 14px side gutters', () => {
+test('Data Layers and Context share the 14px side gutters', () => {
   const gutters = rules.find(
     ({ selector, body }) =>
-      /:is\(\s*\.data-panel-inner,\s*\.global-context-panel-inner,\s*\.space-missions-panel-inner\s*\)$/.test(
+      /:is\(\s*\.data-panel-inner,\s*\.global-context-panel-inner\s*\)$/.test(
         selector,
       ) && /padding-left:\s*14px/.test(body),
   );

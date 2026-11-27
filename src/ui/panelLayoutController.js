@@ -1,6 +1,5 @@
 /** Own rail measurement and layout scheduling. */
 import { layoutLeftPanelRail, layoutRightPanelRail } from './panelRails.js';
-import { syncRadioPanelPlacement } from './radioPanelPlacement.js';
 import { isPanelRailMutation } from './panelRailCatalog.js';
 import { flushDisplayedPanelContent } from './rail/panelContent.js';
 const COCKPIT_LAYOUT_SETTLE_MS = 240;
@@ -40,10 +39,17 @@ const LEFT_STACK_OBSTACLE_SELECTOR = [
  * visible without tying the layout to one screen height.
  */
 const RIGHT_STACK_OBSTACLE_SELECTOR = [
+  // The docked view and the radio mini player while they sit in the corner
+  // (in the column under Context they are room the column keeps instead,
+  // data-corner-reserve), and the corner buttons (Power up, the language
+  // picker): the rail stops above them.
+  '.context-corner:not(.context-corner--column)',
+  '#corner-actions',
   '#cockpit-hud .cockpit-topline',
   '#cockpit-hud .cockpit-topline > div',
   '#title-bar',
   '#style-indicator',
+  '#gev-stories .gs-entry',
   '#top-center-actions',
   '#traffic-sync-chip',
   '#cctv-sync-chip',
@@ -124,11 +130,6 @@ export class PanelLayoutController {
     this._leftPanelStack = document.getElementById('left-panel-stack');
     this._rightPanelStack = document.getElementById('right-context-rail');
     this._ppToggles = document.getElementById('pp-toggles');
-    this._cctvPanel = document.getElementById('cctv-panel');
-    this._weatherPanel = document.getElementById('weather-panel');
-    this._newsPanel = document.getElementById('news-panel');
-    this._recentImageryPanel = document.getElementById('recent-imagery-panel');
-    this._streetLevelPanel = document.getElementById('street-level-panel');
   }
   _scheduleAdaptivePanelLayout({ settle = false } = {}) {
     if (this.destroyed) return;
@@ -157,35 +158,15 @@ export class PanelLayoutController {
       this._leftPanelStack.append(this._ppToggles);
     else stack.prepend(this._ppToggles);
     const globalContextPanel = document.getElementById('global-context-panel');
-    for (const panel of [
-      this._cctvPanel,
-      this._weatherPanel,
-      this._newsPanel,
-      this._recentImageryPanel,
-      this._streetLevelPanel,
-    ]) {
-      if (!panel) continue;
-      stack.insertBefore(panel, globalContextPanel);
-    }
     // Context leads the right column: it is the panel for whatever is picked,
-    // and the camera panels follow it.
+    // with list tabs for Weather, News and Recent Imagery. Missions uses Inspect.
     if (globalContextPanel) stack.prepend(globalContextPanel);
     if (typeof ResizeObserver !== 'undefined') {
       this._rightStackResizeObserver = new ResizeObserver(() => {
         this._scheduleRightPanelLayout();
       });
       this._rightStackResizeObserver.observe(stack);
-      for (const panel of [
-        this._ppToggles,
-        this._cctvPanel,
-        this._weatherPanel,
-        this._newsPanel,
-        this._recentImageryPanel,
-        this._streetLevelPanel,
-        globalContextPanel,
-        document.getElementById('space-missions-panel'),
-        document.getElementById('radio-panel'),
-      ]) {
+      for (const panel of [this._ppToggles, globalContextPanel]) {
         if (panel) this._rightStackResizeObserver.observe(panel);
       }
       document
@@ -198,14 +179,25 @@ export class PanelLayoutController {
     if (typeof MutationObserver !== 'undefined') {
       this._rightStackMutationObserver = new MutationObserver((records) => {
         if (records.every(isPanelRailMutation)) return;
-        this._scheduleRightPanelLayout();
+        this._scheduleRightPanelLayout({
+          reconsiderAutoCollapse: records.some(
+            (record) =>
+              record.target === stack &&
+              record.attributeName === 'data-corner-reserve',
+          ),
+        });
       });
       this._rightStackMutationObserver.observe(stack, {
         subtree: true,
         childList: true,
         characterData: true,
         attributes: true,
-        attributeFilter: ['class', 'hidden', 'data-variant'],
+        attributeFilter: [
+          'class',
+          'hidden',
+          'data-variant',
+          'data-corner-reserve',
+        ],
       });
       // The Stories card comes and goes inside the Stories view; only its
       // arrival or departure moves the rail, not the view's other changes.
@@ -295,7 +287,6 @@ export class PanelLayoutController {
 
   _syncRightPanelAdaptiveLayout() {
     if (this.destroyed) return;
-    syncRadioPanelPlacement(document);
     layoutRightPanelRail({
       stack: this._rightPanelStack,
       obstacles: document.querySelectorAll(RIGHT_STACK_OBSTACLE_SELECTOR),

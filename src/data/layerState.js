@@ -519,6 +519,12 @@ const OPTION_GROUPS = Object.freeze({
       decode: (value) =>
         /^\d{1,3}$/.test(value) ? normalizeVolume(Number(value) / 100) : null,
     }),
+    // What Radio plays: the internet station directory, or a local USB
+    // receiver (RTL-SDR) with no stations fetched or drawn.
+    enumOption('source', 's', 'internet', ['internet', 'local'], {
+      internet: 'i',
+      local: 'l',
+    }),
   ]),
 });
 

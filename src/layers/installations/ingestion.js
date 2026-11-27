@@ -72,7 +72,7 @@ export function createIngestion({
     governorRequestRender('installations-status');
   }
 
-  async function loadInstallations() {
+  async function loadInstallations({ searchPlaces = false } = {}) {
     if (!layerState.enabled || !layerState.viewer) return;
     const { box, coverage } = parts.viewport.loadArea(layerState.viewer);
     // Guidance, not a fault: the layer chose not to query because the view is
@@ -132,8 +132,15 @@ export function createIngestion({
           payload.wide || parts.model.installationWithinViewport(record, box),
       );
       let placesError = null;
-      if (layerState.googleSearchRequested) {
-        layerState.googleSearchRequested = false;
+      if (
+        searchPlaces === true &&
+        coverage.kind === 'viewport' &&
+        !layerState.contextAnchor &&
+        layerState.enabled &&
+        !requestAbort.signal.aborted &&
+        layerState.abort === requestAbort &&
+        layerState.cameraLoadOwner === keyOwner
+      ) {
         // A view across 180° has west > east; its width runs through 180°.
         const lonSpan = box.east - box.west + (box.east < box.west ? 360 : 0);
         const latitude = (box.south + box.north) / 2;

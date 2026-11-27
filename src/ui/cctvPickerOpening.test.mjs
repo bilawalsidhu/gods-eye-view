@@ -1,23 +1,26 @@
-// src/ui/cctvPickerOpening.test.mjs — the picker and the opening camera.
-// The opening camera follows the view until someone picks one. The picker
-// shows it as its own option; a native select fires no change for the
-// option it already shows, so FOCUS keeps that camera, and leaving the list
-// without a choice lets it follow the view.
+// src/ui/cctvPickerOpening.test.mjs — picking a camera and the opening camera.
+// The opening camera follows the view until someone picks one. Context's
+// Cameras list shows it as a row of its own; a pick from that list, from
+// Nearby or with the layer row's Prev/Next ends automatic selection, even a
+// pick of the camera already shown, and leaving the list without a pick lets
+// the camera follow the view.
 import '../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { createPinia } from 'pinia';
-import { createApp, nextTick } from 'vue';
+import { createApp, h, nextTick, ref } from 'vue';
 import cctvLayer, {
   _setCctvCoverageStateForTest,
   _setCctvOverlayHostForTest,
   reopenNearestCamera,
 } from '../data/cctv.js';
 import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
-import { CctvControls } from './cctvControls.js';
-import { useCctvStore } from './stores/cctv.js';
-import CctvPanel from './views/panels/CctvPanel.vue';
+import CameraList from './views/panels/CameraList.vue';
+import NearbyLists from './views/panels/NearbyLists.vue';
+import { useEntityCardStore } from './stores/entityCard.js';
+import { usePanelChromeStore } from './stores/panelChrome.js';
+import { contextRadiusKm, setContextRadiusKm } from './contextRadius.js';
 
 const TRAFALGAR = [51.508, -0.128];
 const CAMBRIDGE = [51.513, -0.129];
@@ -81,7 +84,7 @@ function settleOver(viewer, [lat, lon]) {
 
 /**
  * CCTV opened at Trafalgar Square, then a settled move re-opened it at
- * Cambridge Circus; the panel is connected to the layer.
+ * Cambridge Circus; Context, centred on the view, lists the cameras.
  */
 async function reopenedAtCambridge(t) {
   _setCctvOverlayHostForTest({
@@ -113,35 +116,49 @@ async function reopenedAtCambridge(t) {
   });
 
   document.body.replaceChildren();
-  const host = document.body.appendChild(document.createElement('div'));
+  const radius = contextRadiusKm.value;
+  setContextRadiusKm(10);
+  const layer = {
+    id: 'cctv',
+    name: 'Cameras',
+    enabled: true,
+    stats: { count: 2 },
+    module: cctvLayer,
+  };
   const pinia = createPinia();
-  const app = createApp(CctvPanel).use(pinia);
-  app.mount(host);
-  const select = document.getElementById('cctv-camera-select');
-  const controls = new CctvControls({
-    elements: {
-      _cctvPanel: document.getElementById('cctv-panel'),
-      _cctvSelect: select,
-      _cctvFocusBtn: document.getElementById('cctv-focus-btn'),
-    },
-    cctv: cctvLayer,
-    actions: {
-      isEnabled: () => true,
-      toggleEnabled: async () => true,
-      runExplicitFocus(select, focus) {
-        const cameraId = select();
-        if (cameraId) focus(cameraId);
-      },
-      setParams: (params) => cctvLayer.setParams(params),
-      setPanelCollapsed() {},
-      syncViewport() {},
-    },
-    store: useCctvStore(pinia),
+  const store = useEntityCardStore(pinia);
+  const chrome = usePanelChromeStore(pinia);
+  const owner = chrome.connect({});
+  chrome.publish(owner, 'global-context-panel', { collapsed: false });
+  const manager = {
+    layers: new Map([['cctv', layer]]),
+    isEnabled: (id) => id === 'cctv',
+    getAll: () => [layer],
+    subscribe: () => () => {},
+  };
+  store.connect({
+    dataManager: () => manager,
+    flyTo() {},
+    canFollow: () => false,
   });
-  controls.connect();
+  const host = document.body.appendChild(document.createElement('div'));
+  const listShown = ref(true);
+  const app = createApp({
+    render: () =>
+      h(CameraList, {
+        shown: listShown.value,
+      }),
+  }).use(pinia);
+  store.setViewContextShown(true, 1);
+  app.mount(host);
+  let nearby = null;
   t.after(() => {
-    controls.destroy();
+    nearby?.unmount();
     app.unmount();
+    store.setViewContextShown(false, null);
+    store.connect(null);
+    chrome.detach(owner);
+    setContextRadiusKm(radius);
     globalThis.Image = originalImage;
     globalThis.fetch = originalFetch;
     AbortSignal.timeout = originalTimeout;
@@ -150,48 +167,98 @@ async function reopenedAtCambridge(t) {
   });
 
   assert.equal(settleOver(viewer, CAMBRIDGE), true);
+  // Context follows the centre of the view.
+  store.setView({
+    center: { lat: CAMBRIDGE[0], lon: CAMBRIDGE[1] },
+    heightM: viewer.eye.height,
+  });
   await nextTick();
-  assert.equal(cctvLayer.getUIState().activeCameraId, 'b-cambridge');
-  return { viewer, select };
-}
-
-test('the opening camera shows as its own option', async (t) => {
-  const { select } = await reopenedAtCambridge(t);
-  assert.equal(select.value, 'b-cambridge');
-  const shown = select.options[select.selectedIndex];
-  assert.equal(shown.hidden, false);
-  assert.equal(shown.disabled, false);
-  assert.equal(
-    [...select.options].filter((option) => option.value === 'b-cambridge')
-      .length,
-    1,
-    'the list shows the camera once',
-  );
-  assert.ok([...select.options].every((option) => !option.hidden));
-});
-
-test('FOCUS on the shown camera keeps it after a pan', async (t) => {
-  const { viewer, select } = await reopenedAtCambridge(t);
-  const focus = document.getElementById('cctv-focus-btn');
-  assert.equal(focus.disabled, false);
-  focus.click();
-  // The click handler waits for the layer switch before it picks.
+  // The small camera catalog is indexed on the next timer turn.
   await new Promise((resolve) => setTimeout(resolve, 0));
   await nextTick();
+  assert.equal(cctvLayer.getUIState().activeCameraId, 'b-cambridge');
+  assert.equal(cctvLayer.getUIState().openingCamera, true);
+
+  /** Nearby's lists around the view centre, mounted beside the list. */
+  function mountNearby() {
+    const lists = store.nearbyLayers(CAMBRIDGE[0], CAMBRIDGE[1], {
+      radiusKm: contextRadiusKm.value,
+      limit: 3,
+    });
+    const at = document.body.appendChild(document.createElement('div'));
+    nearby = createApp({ render: () => h(NearbyLists, { lists }) }).use(pinia);
+    nearby.mount(at);
+    return at;
+  }
+  return { viewer, store, mountNearby, listShown };
+}
+
+const cameraList = '[data-list-card="cctv"]';
+const rowNames = (root = document) =>
+  [...root.querySelectorAll(`${cameraList} li .nearby-lists__name`)].map(
+    (el) => el.textContent,
+  );
+
+test('the opening camera appears in the loaded camera catalog', async (t) => {
+  await reopenedAtCambridge(t);
+  // Below globe height the list is nearest the view first.
+  assert.deepEqual(rowNames(), ['Camera b-cambridge', 'Camera a-trafalgar']);
+});
+
+test('picking the shown camera from the Cameras list keeps it after a pan', async (t) => {
+  const { viewer, store } = await reopenedAtCambridge(t);
+  await nextTick();
+  const row = document.querySelector(
+    `${cameraList} [data-list-key="b-cambridge"]`,
+  );
+  assert.ok(row, 'the currently active camera is in the catalog');
+  row.click();
+  await nextTick();
+  assert.equal(store.card?.key, 'cctv:b-cambridge');
+  assert.equal(cctvLayer.getUIState().openingCamera, false);
 
   assert.equal(settleOver(viewer, TRAFALGAR), false);
   assert.equal(cctvLayer.getUIState().activeCameraId, 'b-cambridge');
-  assert.equal(select.value, 'b-cambridge');
 });
 
-test('leaving the picker without a pick lets the camera follow a pan', async (t) => {
-  const { viewer, select } = await reopenedAtCambridge(t);
-  select.focus();
-  select.blur();
+test("picking the shown camera from Nearby's Cameras group keeps it after a pan", async (t) => {
+  const { viewer, store, mountNearby } = await reopenedAtCambridge(t);
+  const nearby = mountNearby();
+  const row = [...nearby.querySelectorAll('li button')].find((button) =>
+    button.textContent.includes('Camera b-cambridge'),
+  );
+  assert.ok(row, "Nearby's Cameras group lists the shown camera");
+  row.click();
   await nextTick();
+  assert.equal(store.card?.key, 'cctv:b-cambridge');
+
+  assert.equal(settleOver(viewer, TRAFALGAR), false);
+  assert.equal(cctvLayer.getUIState().activeCameraId, 'b-cambridge');
+});
+
+test("stepping with the layer row's Prev/Next is a pick: a later pan keeps the camera", async (t) => {
+  const { viewer } = await reopenedAtCambridge(t);
+  const chip = (id) =>
+    cctvLayer.getRowControls().chips.find((c) => c.id === id);
+  chip('next-camera').onClick();
+  assert.equal(cctvLayer.getUIState().activeCameraId, 'a-trafalgar');
+  chip('previous-camera').onClick();
+  assert.equal(cctvLayer.getUIState().activeCameraId, 'b-cambridge');
+  assert.equal(cctvLayer.getUIState().openingCamera, false);
+
+  assert.equal(settleOver(viewer, TRAFALGAR), false);
+  assert.equal(cctvLayer.getUIState().activeCameraId, 'b-cambridge');
+});
+
+test('leaving the Cameras list without a pick lets the camera follow a pan', async (t) => {
+  const { viewer, store, listShown } = await reopenedAtCambridge(t);
+  await nextTick();
+  listShown.value = false;
+  await nextTick();
+  assert.equal(store.card, null, 'no camera was opened');
 
   assert.equal(settleOver(viewer, TRAFALGAR), true);
   await nextTick();
   assert.equal(cctvLayer.getUIState().activeCameraId, 'a-trafalgar');
-  assert.equal(select.value, 'a-trafalgar');
+  assert.equal(cctvLayer.getUIState().openingCamera, true);
 });

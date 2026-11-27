@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * qa-context-arrivals.mjs — search arrivals above the surface, and Contacts
- * listing mapped installations around a moving tracked aircraft.
+ * listing mapped installations around a moving aircraft in Cockpit.
  *
  * Run: node scripts/qa-context-arrivals.mjs http://localhost:4173 [--headful]
  *      [--out qa-shots/context-arrivals] [--only arrivals|contacts]
@@ -13,13 +13,12 @@
  *
  * Contacts: serves two synthetic aircraft through the page's own
  * /api/flights response (one flying north over Camp Mabry at 2,500 m, one
- * near Fort Cavazos) and an empty military feed, starts from a wide Texas
- * view, and presses CONTACTS as a user would. Asserts the Mapped
- * installations row lists at least one site with a distance within 15 s,
- * never falls back to "?" while the aircraft moves (30 s), keeps its site
- * entities (no rebuilds while the view is still), still lists sites in
- * Cockpit, and that SEARCH NEARBY SITES reports what it found. Then re-enters
- * Contacts on the Fort Cavazos aircraft and asserts a site within 30 km.
+ * near Fort Cavazos), empty military and AIS feeds, and mapped sites.
+ * Enters Cockpit from the actual flight card and uses its Display and Radio
+ * controls with Contacts off. Enables the internal Contacts mode separately,
+ * then checks installation distances, a stable SITE count and render records
+ * while flying, and Search nearby sites from Data Layers after leaving
+ * Cockpit. Finally checks the Fort Cavazos aircraft's own nearby site.
  * Requires zero console errors.
  *
  * Writes <out>/result.json, screenshots and <out>/clip.mp4 (CDP screencast
@@ -28,6 +27,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
+import { selectQaContextCard } from './qa-chrome.mjs';
 import { stubPlanespotters } from './qa-photo-stub.mjs';
 import { createScreencast, moveCamera } from './qa-journey-recorder.mjs';
 
@@ -97,9 +97,13 @@ async function openPage({ aircraft = false } = {}) {
   await page.evaluateOnNewDocument((aircraft) => {
     sessionStorage.setItem('gev:first-run-mission-session:v1', 'dismissed');
     if (!aircraft) return;
-    // Synthetic traffic through the app's own feed endpoints: one aircraft
-    // flying north over Camp Mabry, one loitering near Fort Cavazos.
+    // Synthetic aircraft and installations through the app's feed endpoints.
     const started = Date.now();
+    const installationSites = [
+      { id: 51, name: 'Camp Mabry', lat: 30.3125, lon: -97.765 },
+      { id: 52, name: 'Fort Hood', lat: 31.135, lon: -97.78 },
+    ];
+    window.__qaNearbySiteSearches = [];
     const realFetch = window.fetch.bind(window);
     window.fetch = (input, init) => {
       const raw =
@@ -165,6 +169,61 @@ async function openPage({ aircraft = false } = {}) {
         return Promise.resolve(
           Response.json({ ac: [], now: Date.now(), total: 0 }),
         );
+      if (url.origin === location.origin && url.pathname === '/api/vessels')
+        return Promise.resolve(Response.json({ rows: [], status: 'open' }));
+      if (
+        url.origin === location.origin &&
+        url.pathname === '/api/military-installations'
+      ) {
+        return Promise.resolve(
+          Response.json({
+            elements: installationSites.map(({ id, name, lat, lon }) => ({
+              type: 'node',
+              id,
+              lat,
+              lon,
+              tags: { name, military: 'base' },
+            })),
+            status: 'ready',
+            saturated: false,
+            retrievedAt: new Date().toISOString(),
+          }),
+        );
+      }
+      if (
+        url.origin === location.origin &&
+        url.pathname === '/api/google/text-search'
+      ) {
+        window.__qaNearbySiteSearches.push(
+          Object.fromEntries(url.searchParams),
+        );
+        if (
+          !window.__qaExpectedSiteQuery ||
+          Object.entries(window.__qaExpectedSiteQuery).some(
+            ([key, value]) => url.searchParams.get(key) !== value,
+          )
+        ) {
+          return Promise.resolve(
+            Response.json(
+              { error: 'Unexpected fixture query' },
+              { status: 400 },
+            ),
+          );
+        }
+        return Promise.resolve(
+          Response.json({
+            places: [
+              {
+                id: 'qa-mapped-site',
+                name: 'QA Nearby Site',
+                primaryType: 'military_base',
+                latitude: 30.3125,
+                longitude: -97.785,
+              },
+            ],
+          }),
+        );
+      }
       return realFetch(input, init);
     };
   }, aircraft);
@@ -305,6 +364,71 @@ async function arrivals() {
   await page.close();
 }
 
+/**
+ * Track an aircraft, show its Context card and press the card's Cockpit action.
+ */
+async function enterCockpitOn(page, icao24) {
+  await page.waitForFunction(
+    (id) =>
+      window.__godsEyeView.dataManager.layers
+        .get('flights')
+        .module.trackById(id),
+    { timeout: 60_000, polling: 500 },
+    icao24,
+  );
+  await selectQaContextCard(page, { layerId: 'flights', id: icao24 });
+  const entry =
+    '#entity-card[data-layer="flights"] [data-entity-cockpit-entry]';
+  await page.waitForSelector(entry, { visible: true, timeout: 20_000 });
+  await page.click(entry);
+  await page.waitForFunction(
+    (id) => {
+      const state = window.__godsEyeView.styleManager.getCockpitState();
+      return (
+        document.body.classList.contains('cockpit-mode') &&
+        state.active &&
+        state.subject?.layerId === 'flights' &&
+        state.subject.id === id
+      );
+    },
+    { timeout: 30_000 },
+    icao24,
+  );
+}
+
+async function exerciseCockpitUtilities(page) {
+  for (const kind of ['display', 'radio']) {
+    const selector = `[data-cockpit-rail-item="${kind}"]`;
+    const panelId = `cockpit-${kind}-panel`;
+    await page.waitForSelector(selector, { visible: true });
+    const waitFor = (expanded) =>
+      page.waitForFunction(
+        (selector, panelId, expanded) => {
+          const button = document.querySelector(selector);
+          const panel = document.getElementById(panelId);
+          return (
+            button?.getAttribute('aria-controls') === panelId &&
+            button.getAttribute('aria-expanded') === String(expanded) &&
+            panel?.checkVisibility({
+              opacityProperty: true,
+              visibilityProperty: true,
+            }) === expanded
+          );
+        },
+        { timeout: 5000 },
+        selector,
+        panelId,
+        expanded,
+      );
+    await waitFor(false);
+    await page.click(selector);
+    await waitFor(true);
+    await page.click(selector);
+    await waitFor(false);
+    check(`Cockpit ${kind} opens and closes from its visible control`, true);
+  }
+}
+
 async function contacts() {
   const page = await openPage({ aircraft: true });
   const dir = path.join(outDir, 'contacts');
@@ -321,82 +445,109 @@ async function contacts() {
     0,
   );
   await sleep(3000);
-  // In-page probe: row text and installation entity churn every 250 ms.
-  await page.evaluate(() => {
+  // The globe's Follow ends on entry. Sample the actively ridden aircraft
+  // and the installation records owned by the renderer instead.
+  await page.evaluate(async () => {
+    const { getContextStore } = await import('/src/data/contextStore.js');
     const samples = [];
     window.__gevContextSamples = samples;
     let created = 0;
     const seen = new WeakSet();
     setInterval(() => {
-      const row = [
-        ...document.querySelectorAll(
-          '#military-awareness-panel .military-awareness-row',
-        ),
-      ].find(
-        (candidate) =>
-          candidate.querySelector('strong')?.textContent?.trim() ===
-          'Mapped installations',
+      const { dataManager, styleManager } = window.__godsEyeView;
+      const { active, subject } = styleManager.getCockpitState();
+      const snapshot = dataManager.layers
+        .get('military-awareness')
+        ?.module.getContextSnapshot?.();
+      const cohort = snapshot?.cohorts.find(
+        (item) => item.id === 'military-installations',
       );
-      const ds = window.__godsEyeView.viewer.dataSources.getByName(
-        'military-installations',
-      )[0];
-      for (const entity of ds?.entities.values || [])
+      const entities = [...getContextStore().entities.values()].filter(
+        (record) => record.layerId === 'military-installations',
+      );
+      for (const { entity } of entities)
         if (!seen.has(entity)) {
           seen.add(entity);
           created += 1;
         }
+      const installations = (cohort?.nearest || []).map((item) => ({
+        id: item.id ?? null,
+        name: item.name ?? item.label ?? null,
+        distanceKm: Number.isFinite(item.distanceM)
+          ? item.distanceM / 1000
+          : null,
+      }));
       samples.push({
         t: performance.now(),
-        count: row?.querySelector('b')?.textContent?.trim() ?? null,
-        text: row?.innerText?.replace(/\s+/g, ' ').trim() ?? null,
-        installations: [
-          ...(row?.querySelectorAll('button[data-awareness-id]') || []),
-        ].map((button) => ({
-          id: button.dataset.awarenessId,
-          name: button.childNodes[0]?.textContent?.trim(),
-          distance: button.querySelector('span')?.textContent?.trim(),
-        })),
-        entities: ds?.entities.values.length ?? 0,
+        count: cohort ? String(cohort.count ?? '?') : null,
+        text: cohort
+          ? `${cohort.count ?? '?'} · ${installations
+              .map((site) => `${site.name} ${site.distanceKm?.toFixed(1)} km`)
+              .join(', ')}`
+          : null,
+        installations,
+        coverage: cohort?.coverage ?? null,
+        rendered:
+          document
+            .querySelector(
+              '#cockpit-context:not([hidden]) [data-context-cohort="military-installations"] strong',
+            )
+            ?.textContent?.trim() ?? null,
+        entities: entities.length,
         created,
-        tracked:
-          window.__godsEyeView.entityRecords.read(
-            window.__godsEyeView.viewer.trackedEntity,
-          )?.trackedId ?? null,
-        cockpit: document.body.classList.contains('cockpit-mode'),
+        cockpitSubject:
+          active && subject?.id ? `${subject.layerId}:${subject.id}` : null,
+        contactSubject:
+          snapshot?.subjectPresent && snapshot.subject?.id
+            ? `${snapshot.subject.layerId}:${snapshot.subject.id}`
+            : null,
       });
       if (samples.length > 5000) samples.splice(0, 1000);
     }, 250);
   });
   const recorder = await createScreencast(page, dir);
   await recorder.start();
-  const t0 = await page.evaluate(() => performance.now());
+  await enterCockpitOn(page, 'aaa051');
+  const independentEntry = await page.evaluate(() => {
+    const { dataManager, styleManager } = window.__godsEyeView;
+    return (
+      styleManager.getCockpitState().active &&
+      !dataManager.isEnabled('military-awareness')
+    );
+  });
+  check('the flight card enters Cockpit with Contacts off', independentEntry);
+  await exerciseCockpitUtilities(page);
   await page.evaluate(() =>
-    document.getElementById('global-context-flights-btn').click(),
+    window.__godsEyeView.styleManager.cockpitView.exit(),
   );
-  await page
-    .waitForFunction(
-      () =>
-        window.__godsEyeView.entityRecords.read(
-          window.__godsEyeView.viewer.trackedEntity,
-        )?.trackedId === 'flights:aaa051',
-      { timeout: 60_000 },
-    )
-    .catch(() => {});
+  const mode = await page.evaluate(() =>
+    window.__godsEyeView.styleManager.setContextMode('flights'),
+  );
+  if (!mode?.ok || mode.mode !== 'flights')
+    throw new Error(
+      `Could not enable the internal Contacts window: ${JSON.stringify(mode)}`,
+    );
+  const t0 = await page.evaluate(() => performance.now());
+  await enterCockpitOn(page, 'aaa051');
   const readSamples = (from) =>
     page.evaluate(
       (a) => window.__gevContextSamples.filter((s) => s.t >= a),
       from,
     );
   const numeric = (s) => /^\d+/.test(String(s.count ?? ''));
+  const onAircraft = (sample, id) =>
+    sample.cockpitSubject === `flights:${id}` &&
+    sample.contactSubject === sample.cockpitSubject;
   // Up to 15 s for the first answer, then watch 30 s of flight.
   const deadline = Date.now() + 15_000;
   let first = null;
   while (Date.now() < deadline && !first) {
     first = (await readSamples(t0)).find(
       (s) =>
+        onAircraft(s, 'aaa051') &&
         numeric(s) &&
         Number.parseInt(s.count, 10) >= 1 &&
-        /\d+(\.\d+)? k?m\b/.test(s.text),
+        Number.isFinite(s.installations[0]?.distanceKm),
     );
     if (!first) await sleep(500);
   }
@@ -405,12 +556,12 @@ async function contacts() {
     Boolean(first),
     first
       ? `${Math.round(first.t - t0)} ms: ${first.text}`
-      : 'row never answered',
+      : 'cohort never answered',
   );
   await page.screenshot({ path: path.join(dir, 'contacts-camp-mabry.png') });
   await sleep(30_000);
-  const flight = (await readSamples(first?.t ?? t0)).filter(
-    (s) => s.tracked === 'flights:aaa051',
+  const flight = (await readSamples(first?.t ?? t0)).filter((s) =>
+    onAircraft(s, 'aaa051'),
   );
   const reverted = flight.filter((s) => !numeric(s));
   const createdDuring = flight.length
@@ -426,117 +577,142 @@ async function contacts() {
     entitiesCreatedWhileTracking: createdDuring,
   };
   check(
-    'the row never falls back to "?" while the aircraft moves',
-    reverted.length === 0,
+    'the cohort never falls back to "?" while the aircraft moves',
+    flight.length > 1 && reverted.length === 0,
     `${reverted.length}/${flight.length}`,
   );
   check(
-    'site entities are not rebuilt while tracking',
-    createdDuring === 0,
+    'site entities are not rebuilt while riding the aircraft',
+    flight.length > 1 &&
+      flight.every((sample) => sample.entities > 0) &&
+      createdDuring === 0,
     `${createdDuring} created`,
   );
 
-  // Cockpit: the same context must hold with a horizon view.
-  const cockpit = await page.evaluate(() => {
-    const view = window.__godsEyeView.styleManager.cockpitView;
-    view.syncEntry();
-    return view.enter();
-  });
-  await sleep(12_000);
+  // Cockpit: the same context must hold, rendered on its Contact card.
   const inCockpit = (
     await readSamples((await page.evaluate(() => performance.now())) - 8000)
-  ).filter((s) => s.cockpit);
+  ).filter((s) => onAircraft(s, 'aaa051'));
   const scope = await page.evaluate(
     () =>
       document.getElementById('cockpit-context-subject')?.textContent || null,
   );
   await page.screenshot({ path: path.join(dir, 'cockpit-camp-mabry.png') });
   result.contacts.cockpit = {
-    entered: cockpit,
     samples: inCockpit.length,
     last: inCockpit.at(-1)?.text ?? null,
+    rendered: inCockpit.at(-1)?.rendered ?? null,
     scope,
   };
   check(
     'Cockpit scope names the installation window',
-    /INSTALLATIONS WITHIN \d+ KM/.test(scope || ''),
+    /^WITHIN \d+ KM$/.test(inCockpit.at(-1)?.coverage || '') &&
+      scope?.includes(`INSTALLATIONS ${inCockpit.at(-1).coverage}`),
     scope || 'no scope',
   );
   check(
     'Cockpit keeps mapped installations listed',
-    cockpit !== false &&
-      inCockpit.length > 0 &&
-      inCockpit.every((s) => numeric(s) && Number.parseInt(s.count, 10) >= 1),
-    inCockpit.at(-1)?.text || 'no cockpit samples',
+    inCockpit.length > 0 &&
+      inCockpit.every(
+        (s) =>
+          numeric(s) &&
+          Number.parseInt(s.count, 10) >= 1 &&
+          s.rendered === s.count,
+      ),
+    JSON.stringify(inCockpit.at(-1) || 'no cockpit samples'),
+  );
+
+  // Search from a map view offset from the synthetic Cockpit subject.
+  await page.evaluate(() =>
+    window.__godsEyeView.styleManager.cockpitView.exit(),
   );
   await page.evaluate(() =>
-    window.__godsEyeView.styleManager.cockpitView.exit?.(),
+    window.__godsEyeView.styleManager.setPanelCollapsed('data-panel', false, {
+      persist: false,
+      syncShare: false,
+    }),
   );
-  await sleep(2000);
-
-  // SEARCH NEARBY SITES, as the user presses it.
-  await page.evaluate(() => {
-    const toast = document.getElementById('toast');
-    const before = toast.firstChild;
-    document.getElementById('installations-search-btn').click();
-    window.__qaToastBefore = before;
+  const searchChip =
+    '#data-toggles [data-layer-id="military-installations"] [data-chip-id="search-nearby"]';
+  await page.waitForSelector(searchChip, { visible: true, timeout: 10_000 });
+  await moveCamera(
+    page,
+    { lat: 30.34, lon: -97.82, height: 30_000, pitch: -90 },
+    0,
+  );
+  const expectedQuery = await page.evaluate(async () => {
+    const { findCamera } = await import('/src/render/rendererOf.js');
+    const { north, south, east, west } = findCamera(
+      window.__godsEyeView.viewer,
+    ).viewRectangle();
+    window.__qaExpectedSiteQuery = {
+      q: 'military installation',
+      lat: ((north + south) / 2).toFixed(5),
+      lon: ((east + west) / 2).toFixed(5),
+      radiusM: String(
+        Math.round(55_000 * Math.max(north - south, east - west)),
+      ),
+    };
+    return window.__qaExpectedSiteQuery;
   });
-  // Every toast show writes a new text node, even for a repeated message.
-  await page
-    .waitForFunction(
-      () => {
-        const toast = document.getElementById('toast');
-        return (
-          toast.classList.contains('visible') &&
-          toast.firstChild !== window.__qaToastBefore &&
-          toast.textContent.trim().length > 0
-        );
-      },
-      { timeout: 20_000 },
-    )
-    .catch(() => {});
-  const toast = await page.evaluate(() =>
-    document.getElementById('toast').textContent.trim(),
+  await page.click(searchChip);
+  await page.waitForFunction(
+    () => {
+      const layer = window.__godsEyeView.dataManager.layers.get(
+        'military-installations',
+      ).module;
+      return (
+        window.__qaNearbySiteSearches.length > 0 &&
+        layer.getAnalystRecords().some(({ name }) => name === 'QA Nearby Site')
+      );
+    },
+    { timeout: 20_000 },
   );
-  await sleep(1500);
-  const afterSearch = (
-    await readSamples((await page.evaluate(() => performance.now())) - 1000)
-  ).at(-1);
-  result.contacts.search = { toast, row: afterSearch?.text ?? null };
+  const afterSearch = await page.evaluate(() => {
+    const { dataManager } = window.__godsEyeView;
+    return {
+      searches: window.__qaNearbySiteSearches,
+      sites: dataManager.layers
+        .get('military-installations')
+        .module.getAnalystRecords()
+        .map(({ name }) => name),
+    };
+  });
+  result.contacts.search = { ...afterSearch, expectedQuery };
   check(
-    'SEARCH NEARBY SITES reports what it found and the row still lists sites',
-    /mapped sites? within \d+ km/i.test(toast) && numeric(afterSearch || {}),
-    `toast "${toast}" · ${afterSearch?.text}`,
+    'Only the chosen map viewport is sent to Places',
+    afterSearch.searches.length === 1 &&
+      Object.entries(expectedQuery).every(
+        ([key, value]) => afterSearch.searches[0][key] === value,
+      ),
+    JSON.stringify(result.contacts.search),
+  );
+  check(
+    'Search nearby sites adds the returned site and keeps mapped sites',
+    afterSearch.sites.includes('Camp Mabry') &&
+      afterSearch.sites.includes('QA Nearby Site'),
+    JSON.stringify(afterSearch),
+  );
+  await page.evaluate(() =>
+    window.__godsEyeView.styleManager.setPanelCollapsed('data-panel', true, {
+      persist: false,
+      syncShare: false,
+    }),
   );
 
-  // Fort Cavazos: leave Contacts, track the other aircraft, re-enter.
-  await page.evaluate(() =>
-    document.getElementById('global-context-flights-btn').click(),
-  );
-  await sleep(2000);
-  await page.evaluate(() =>
-    window.__godsEyeView.dataManager.layers
-      .get('flights')
-      .module.trackById('aaa052'),
-  );
-  await sleep(3000);
+  // Fort Cavazos: enter Cockpit again on the other aircraft.
   const t1 = await page.evaluate(() => performance.now());
-  await page.evaluate(() =>
-    document.getElementById('global-context-flights-btn').click(),
-  );
+  await enterCockpitOn(page, 'aaa052');
   let cavazos = null;
   const cavazosDeadline = Date.now() + 20_000;
   while (Date.now() < cavazosDeadline) {
     const latest = (await readSamples(t1))
-      .filter((s) => s.tracked === 'flights:aaa052' && numeric(s))
+      .filter((s) => onAircraft(s, 'aaa052') && numeric(s))
       .at(-1);
     const site = latest?.installations.find(
       (record) => record.name === 'Fort Hood',
     );
-    const nearest = site?.distance?.match(/^(\d+(?:\.\d+)?) (k?m)$/);
-    const km = nearest
-      ? Number(nearest[1]) / (nearest[2] === 'm' ? 1000 : 1)
-      : null;
+    const km = site?.distanceKm ?? null;
     if (km !== null && km <= 30) {
       cavazos = {
         text: latest.text,
@@ -555,6 +731,9 @@ async function contacts() {
     'Fort Cavazos contact lists Fort Hood within 30 km',
     Boolean(cavazos),
     JSON.stringify(cavazos),
+  );
+  await page.evaluate(() =>
+    window.__godsEyeView.styleManager.cockpitView.exit?.(),
   );
   result.contactsClip = await recorder.stop();
   await page.close();

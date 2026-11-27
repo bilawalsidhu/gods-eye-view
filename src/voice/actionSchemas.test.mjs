@@ -56,6 +56,11 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // area scopes and the osm-places layer; natural-region candidates and the
     // tightened area tool wording follow review.
     // control_cockpit states the own-layer entry rule (Contacts not required).
+    // Contacts leaves the set_context_mode enum and description: Context's
+    // Nearby view replaced it.
+    // Retired Radio/CCTV panel ids say they open Context; control_cctv's
+    // next/prev walk Context's Cameras list by view centre, and focus is
+    // the card's Fly to.
     // move_camera tilt takes an optional pitchDeg angle, described as
     // absolute with its -45 default, with steps sent as a direction.
     // show_street_level (map, source, photo) adds one tool.
@@ -64,9 +69,17 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // visual style; set_cyber_sonar is excluded above).
     // The Space Missions panel adds one panel target.
     // Fire Perimeters queries add lastGrowthTime.
-    // The dock's Location and Visual Presets trays leave set_panel_open's
-    // targets; Visual (pp-toggles) takes the presets' and map sources' names.
-    '8df28dafaafde3e83e983528e2cc486dc68f282df99f6cde939325a2ee5461a0',
+    // Re-derived: the retired Weather, Recent Imagery and Space Missions
+    // panel ids stay in set_panel_open's enum as aliases, described as
+    // opening Context on their list.
+    // set_panel_open says space-missions turns the layer on.
+    // Street Level keeps its voice target for the photo card and layer row.
+    // Nearby clears the selected card; ordinary Open Context preserves it.
+    // set_context_mode says Space Missions turns its layer on and shows its
+    // list, and off turns it off.
+    // Camera settings has its own panel target for the selected camera.
+    // Name the Space Missions layer and its list in the panel instructions.
+    '9fc06f16336ddcbc04f43f11d569e235a0ed49baac8210c1b12ae0c5fca87c4f',
   );
 });
 
@@ -198,9 +211,11 @@ test('all legacy action arguments are byte-identical after removing the delibera
   // Tilt to an angle is additive.
   delete property('move_camera').pitchDeg;
   const panels = property('set_panel_open').panelId;
+  assert.ok(panels.enum.includes('camera-settings'));
   panels.enum = panels.enum.filter(
     (id) =>
       ![
+        'camera-settings',
         'weather-panel',
         'recent-imagery-panel',
         'voice-settings',
@@ -208,6 +223,7 @@ test('all legacy action arguments are byte-identical after removing the delibera
         'provider-settings',
         'utilities-panel',
         'space-missions-panel',
+        'street-level-panel',
       ].includes(id),
   );
   for (const tool of legacy) {
@@ -258,6 +274,22 @@ test('all legacy action arguments are byte-identical after removing the delibera
     'noir',
   ]);
   visualStyle.enum = [...visualStyle.enum, 'snow'];
+  // Contacts is retired from set_context_mode; restore it for the legacy pin.
+  const contextMode = legacy.find((tool) => tool.name === 'set_context_mode')
+    .parameters.properties.mode;
+  assert.deepEqual(contextMode.enum, [
+    'off',
+    'nearby',
+    'space-missions',
+    'missions',
+  ]);
+  contextMode.enum = [
+    'off',
+    'contacts',
+    'flights',
+    'space-missions',
+    'missions',
+  ];
   // Derived by applying the same removals to the 4b56d0e9 actionSchemas.
   assert.equal(
     createHash('sha256').update(JSON.stringify(legacy)).digest('hex'),

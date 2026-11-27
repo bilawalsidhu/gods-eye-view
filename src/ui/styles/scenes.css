@@ -14,7 +14,6 @@
 }
 
 #left-panel-stack > #data-panel,
-#left-panel-stack > #cctv-panel,
 #left-panel-stack > #global-context-panel,
 #left-panel-stack > #utilities-panel,
 #left-panel-stack > #scene-panel {
@@ -32,10 +31,6 @@
 
 #left-panel-stack > #data-panel {
   order: 1;
-}
-
-#left-panel-stack > #cctv-panel {
-  order: 2;
 }
 
 #left-panel-stack > #utilities-panel {
@@ -56,7 +51,6 @@
 }
 
 #left-panel-stack > #data-panel:not(.collapsed),
-#left-panel-stack > #cctv-panel:not(.collapsed),
 #left-panel-stack > #utilities-panel:not(.collapsed),
 #left-panel-stack > #scene-panel:not(.collapsed) {
   box-sizing: border-box;
@@ -70,9 +64,7 @@
  * the canonical control order and center their combined stack at 50vh.
  */
 #left-panel-stack.layout-tail
-  > :is(#data-panel, #cctv-panel, #utilities-panel, #scene-panel):not(
-    .collapsed
-  ) {
+  > :is(#data-panel, #utilities-panel, #scene-panel):not(.collapsed) {
   box-sizing: border-box;
   flex: 0 0 var(--left-panel-allocated-height);
   height: var(--left-panel-allocated-height);
@@ -80,7 +72,6 @@
 }
 
 #left-panel-stack > #data-panel:not(.collapsed) .data-panel-inner,
-#left-panel-stack > #cctv-panel:not(.collapsed) .cctv-panel-inner,
 #left-panel-stack > #utilities-panel:not(.collapsed) .utilities-panel-inner,
 #left-panel-stack > #scene-panel:not(.collapsed) .scene-panel-inner {
   height: 100%;
@@ -91,7 +82,6 @@
   overflow: hidden;
 }
 
-#left-panel-stack > #cctv-panel:not(.collapsed) .cctv-panel-inner,
 #left-panel-stack > #utilities-panel:not(.collapsed) .utilities-panel-inner,
 #left-panel-stack > #scene-panel:not(.collapsed) .scene-panel-inner {
   overflow-y: auto;
@@ -507,22 +497,6 @@ html:not([lang='en']) #scene-panel .scene-controls .scene-btn {
 
 #data-panel.collapsed .data-toggle-list,
 #data-panel.collapsed .data-library-footer,
-#global-context-panel.collapsed #radio-panel,
-#global-context-panel.collapsed #military-awareness-panel,
-#global-context-panel.collapsed .global-context-actions,
-#global-context-panel.collapsed .global-context-modes,
-#global-context-panel.collapsed .context-mode-view,
-#global-context-panel.collapsed
-  > .global-context-panel-inner
-  > .context-mode-standby,
-#radio-panel.collapsed .radio-panel-inner > :not(.panel-header),
-#cctv-panel.collapsed .cctv-controls,
-#cctv-panel.collapsed .cctv-calibration-block,
-#cctv-panel.collapsed .cctv-frame-wrap,
-#cctv-panel.collapsed #cctv-source-badge,
-#cctv-panel.collapsed #cctv-meta,
-#cctv-panel.collapsed .cctv-summary-label,
-#cctv-panel.collapsed #cctv-summary,
 #scene-panel.collapsed .scene-controls,
 #scene-panel.collapsed .scene-step-heading,
 #scene-panel.collapsed .scene-shot-hint,
@@ -536,19 +510,12 @@ html:not([lang='en']) #scene-panel .scene-controls .scene-btn {
 }
 
 #data-panel.collapsed,
-#cctv-panel.collapsed,
 #utilities-panel.collapsed,
 #scene-panel.collapsed {
   width: var(--left-collapsed-width);
 }
 
-#global-context-panel #radio-panel.collapsed {
-  width: 100%;
-}
-
 #data-panel.collapsed .data-panel-inner,
-#cctv-panel.collapsed .cctv-panel-inner,
-#radio-panel.collapsed .radio-panel-inner,
 #scene-panel.collapsed .scene-panel-inner,
 #utilities-panel.collapsed .utilities-panel-inner,
 #param-slider-panel.collapsed {
@@ -556,8 +523,6 @@ html:not([lang='en']) #scene-panel .scene-controls .scene-btn {
 }
 
 #data-panel.collapsed .panel-header,
-#cctv-panel.collapsed .panel-header,
-#radio-panel.collapsed .panel-header,
 #global-context-panel.collapsed .panel-header,
 #scene-panel.collapsed .panel-header,
 #utilities-panel.collapsed .panel-header,

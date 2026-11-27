@@ -8,6 +8,8 @@ import { WINDOW_DAYS } from './policy.js';
  */
 export const UNKNOWN_LAUNCH_STATUS = msg('Unknown');
 
+const COARSE_NET = new Set(['hour', 'day', 'month', 'quarter', 'year']);
+
 export function createModel({ state: layerState, services, parts, source }) {
   function finiteCoordinate(value) {
     // Number(null), Number('') and Number(false) are 0: absent is not zero.
@@ -187,6 +189,9 @@ export function createModel({ state: layerState, services, parts, source }) {
         const launchTime =
           launch.net || launch.window_start || launch.pad?.location?.name;
         const date = Date.parse(launchTime);
+        const precision = String(launch.net_precision?.name ?? '')
+          .trim()
+          .toLowerCase();
         const pad = launch.pad || {};
         const location = pad.location || {};
         const coordinates = location.coordinates || '';
@@ -205,6 +210,7 @@ export function createModel({ state: layerState, services, parts, source }) {
           launchTime: Number.isFinite(date)
             ? new Date(date).toISOString()
             : null,
+          ...(COARSE_NET.has(precision) && { launchPrecision: precision }),
           launchSite: pad.name || location.name || 'Unknown launch site',
           lat: Number.isFinite(lat) ? lat : null,
           lon: Number.isFinite(lon) ? lon : null,

@@ -1,4 +1,5 @@
 import {
+  CONTEXT_AREA,
   CONTEXT_FEATURE,
   CONTEXT_LINES,
   contextLine,
@@ -427,11 +428,12 @@ const RADIANS = Math.PI / 180;
  * none. A feature drawn in several parts (a MultiPolygon, or a dam mapped as
  * its outline and again as its crest lines under one id) is one feature.
  * @param {object} feature
- * @returns {string|object}
+ * @returns {string|number|object}
  */
 function localFeatureKey(feature) {
   const { id } = feature;
-  return id == null ? feature : String(id);
+  if (id == null) return feature;
+  return Number.isFinite(id) ? id : String(id);
 }
 
 /**
@@ -877,6 +879,7 @@ export function createLocalGeoJsonLayer(
     const built = {
       sets,
       parts: new Map(),
+      areas: new Map(),
       records: [],
       anonymous: anonymousContextKeys(
         parts,
@@ -947,6 +950,13 @@ export function createLocalGeoJsonLayer(
                 }))
               : rhumbPositions(ring),
           );
+          const key = localFeatureKey(part.feature);
+          const polygon = part.rings.map((ring) =>
+            ring.map(({ lon, lat }) => [lon, lat]),
+          );
+          const polygons = built.areas.get(key);
+          if (polygons) polygons.push(polygon);
+          else built.areas.set(key, [polygon]);
           // A feature colour of its own fills it, over its simplestyle fill.
           part.fill =
             own.rgba === rgba
@@ -1098,12 +1108,20 @@ export function createLocalGeoJsonLayer(
       id,
     );
     const key = localFeatureKey(feature);
+    const polygons = _drawn.areas.get(key);
+    if (polygons)
+      Object.defineProperty(record, CONTEXT_AREA, { value: polygons });
     record.key =
       typeof key === 'object'
         ? _drawn.anonymous.keys.get(feature)
-        : `geojson:id:${key}`;
+        : `geojson:${typeof key === 'number' ? 'number' : 'id'}:${key}`;
     Object.defineProperty(record, CONTEXT_FEATURE, {
-      value: { layerName: name, source, properties },
+      value: {
+        layerName: name,
+        source,
+        properties,
+        geometryType: feature.geometry?.type,
+      },
     });
     recordFeature.set(record, feature);
     return record;

@@ -983,9 +983,9 @@ test('genuine chrome changes still invalidate: add, remove, and own-attribute fl
 
   // Chrome appearing later, nested: an added subtree CONTAINING inventory chrome.
   const wrapper = env.document.createElement('div');
-  const awareness = env.document.createElement('div');
-  awareness.id = 'military-awareness-panel';
-  wrapper.appendChild(awareness);
+  const eventPanel = env.document.createElement('div');
+  eventPanel.id = 'bhote-koshi-event-panel';
+  wrapper.appendChild(eventPanel);
   renders = env.viewer.scene.requestRenderCount;
   observer.callback([{
     type: 'childList', target: env.document.body, addedNodes: [wrapper], removedNodes: [],
@@ -995,7 +995,7 @@ test('genuine chrome changes still invalidate: add, remove, and own-attribute fl
   // Chrome disappearing: a removed node that IS inventory chrome.
   renders = env.viewer.scene.requestRenderCount;
   observer.callback([{
-    type: 'childList', target: env.document.body, addedNodes: [], removedNodes: [awareness],
+    type: 'childList', target: env.document.body, addedNodes: [], removedNodes: [eventPanel],
   }]);
   assert.equal(env.viewer.scene.requestRenderCount, renders + 1, 'removed chrome invalidates');
   env.cleanup();
@@ -1013,9 +1013,9 @@ test('chrome observers scope: body is childList discovery; occluder attributes a
 
   // Chrome discovered LATE goes through the refresh-time observe site too.
   const late = env.document.createElement('div');
-  late.id = 'military-awareness-panel';
+  late.id = 'bhote-koshi-event-panel';
   late._rect = { left: 10, top: 10, width: 100, height: 80 };
-  Object.assign(late.style, shippedStacking('#military-awareness-panel'));
+  Object.assign(late.style, shippedStacking('#bhote-koshi-event-panel'));
   env.document.body.appendChild(late);
   env.mutationObservers[0].callback([{
     type: 'childList', target: env.document.body, addedNodes: [late], removedNodes: [],
@@ -1554,6 +1554,45 @@ test('UI exclusions stay per-rect: overlapping chrome never merges into a boundi
   assert.equal(rectsIntersect(painted, { x: -6, y: -6, w: 252, h: 272 }), true,
     'the card sits inside the union the old coalescer would have produced');
   env.cleanup();
+});
+
+test('floating Context chrome moves a card to a clear placement on either edge', () => {
+  // The corner stretches to its visible dock or mini-player. When both leave
+  // the corner its width remains but its height collapses to zero.
+  for (const x of [100, 300]) {
+    const env = installMockEnvironment({ width: 400, height: 300, dpr: 1 });
+    try {
+      const corner = env.document.createElement('div');
+      corner._classes.add('context-corner');
+      Object.assign(corner.style, shippedStacking('.context-corner'));
+      corner._rect = { left: x, top: 200, width: 100, height: 0 };
+      env.document.body.appendChild(corner);
+      initWorldOverlay(env.viewer);
+      setOverlayEntries('fixture', [selectedEntry('A', { position: positionAtScreen(x, 200) })]);
+      env.postRender.raise();
+      const rect = () => getOverlayPaintRect('fixture', 'A');
+      const first = { ...rect() };
+      assert.ok(first.w > 0);
+      corner._rect = { left: first.x, top: first.y, width: first.w, height: first.h };
+      const refresh = () => {
+        for (const observer of env.mutationObservers) {
+          if (observer.observations.some(({ target, options }) => target === corner && options.attributes))
+            observer.callback([{ type: 'attributes', target: corner }]);
+        }
+        env.advanceTime(150);
+        env.postRender.raise();
+      };
+      refresh();
+      assert.ok(rect(), 'the card still has a placement');
+      assert.equal(rectsIntersect(rect(), inflatedRect(corner._rect)), false);
+      corner.hidden = true;
+      refresh();
+      assert.equal(rect().x, first.x);
+      assert.equal(rect().y, first.y);
+    } finally {
+      env.cleanup();
+    }
+  }
 });
 
 test('UI exclusions ignore chrome the user cannot see', () => {

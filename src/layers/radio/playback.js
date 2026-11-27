@@ -93,6 +93,13 @@ export function createPlayback({ state: layerState, services, parts, source }) {
     });
   }
 
+  function clearRadioFallback() {
+    layerState._playFallbackId = null;
+    layerState._playFallbackFocus = null;
+    layerState._playFallbackOrigin = 'programmatic';
+    layerState._playFallbackAttemptId = null;
+  }
+
   function tryRadioFallback(
     failedId,
     origin = layerState._playFallbackOrigin || 'programmatic',
@@ -103,10 +110,7 @@ export function createPlayback({ state: layerState, services, parts, source }) {
       ? layerState._stationById.get(fallbackId)
       : null;
     const fallbackFocusPolicy = layerState._playFallbackFocus;
-    layerState._playFallbackId = null;
-    layerState._playFallbackFocus = null;
-    layerState._playFallbackOrigin = 'programmatic';
-    layerState._playFallbackAttemptId = null;
+    clearRadioFallback();
     if (
       !fallbackStation ||
       fallbackId === failedId ||
@@ -146,9 +150,17 @@ export function createPlayback({ state: layerState, services, parts, source }) {
   async function playSelectedRadio({
     origin = 'programmatic',
     attemptId = null,
+    whileOff = false,
   } = {}) {
     const station = parts.queries.selectedStation();
-    if (!parts.interaction.radioPresentationAllowed() || !station?.streamUrl)
+    // With the layer off only an explicit station play (playStation) or a
+    // resume of the station already selected may start a stream; with the
+    // local receiver chosen, none does.
+    if (
+      layerState._source === 'local' ||
+      !(whileOff || parts.interaction.radioPresentationAllowed()) ||
+      !station?.streamUrl
+    )
       return false;
     if (layerState._tuningActive) parts.tuning.endRadioTuning();
     // A media event carries no reliable attempt identity. Give every explicit
@@ -195,10 +207,7 @@ export function createPlayback({ state: layerState, services, parts, source }) {
       layerState._audioState = 'playing';
       if (layerState._tuningAwaitingStationId === station.id)
         parts.tuningNoise.clearRadioTuningNoise({ emit: false });
-      layerState._playFallbackId = null;
-      layerState._playFallbackFocus = null;
-      layerState._playFallbackOrigin = 'programmatic';
-      layerState._playFallbackAttemptId = null;
+      clearRadioFallback();
       recordDirectoryClick(station.id);
       parts.presentation.emitState();
       if (origin === 'user')
@@ -232,6 +241,7 @@ export function createPlayback({ state: layerState, services, parts, source }) {
     subscribe,
     getState,
     timeoutMs = RADIO_VOICE_PLAYBACK_TIMEOUT_MS,
+    resumeStationId,
   } = {}) {
     if (
       typeof startPlayback !== 'function' ||
@@ -254,6 +264,12 @@ export function createPlayback({ state: layerState, services, parts, source }) {
       };
       const inspect = (state) => {
         if (!started || !state) return;
+        if (
+          resumeStationId &&
+          (state.playingStationId !== resumeStationId ||
+            state.selected?.id !== resumeStationId)
+        )
+          return finish(false);
         if (
           !state.voiceDucked &&
           ['loading', 'buffering', 'playing'].includes(state.audioState)
@@ -296,9 +312,24 @@ export function createPlayback({ state: layerState, services, parts, source }) {
 
   function playPreparedRadioForVoice(options = {}) {
     if (!layerState._voiceDucked) return Promise.resolve(false);
+    // A resume prepared with the layer off owns only that retained stream.
+    // Check again at handoff, after any pause, stop or station replacement.
+    const { resumeStationId, attemptId } = options;
     return confirmRadioPlayback({
-      startPlayback: () =>
-        playSelectedRadio({ origin: 'voice', attemptId: options.attemptId }),
+      resumeStationId,
+      startPlayback: () => {
+        if (
+          resumeStationId &&
+          (layerState._audioStationId !== resumeStationId ||
+            layerState._selectedId !== resumeStationId)
+        )
+          return false;
+        return playSelectedRadio({
+          origin: 'voice',
+          attemptId,
+          whileOff: Boolean(resumeStationId),
+        });
+      },
       subscribe: parts.presentation.subscribeToRadio,
       getState: parts.presentation.getRadioUIState,
       timeoutMs: options.timeoutMs,
@@ -316,10 +347,7 @@ export function createPlayback({ state: layerState, services, parts, source }) {
     const stoppedAttemptId = layerState._activePlaybackAttempt?.id || null;
     parts.tuning.endRadioTuning();
     layerState._playGeneration += 1;
-    layerState._playFallbackId = null;
-    layerState._playFallbackFocus = null;
-    layerState._playFallbackOrigin = 'programmatic';
-    layerState._playFallbackAttemptId = null;
+    clearRadioFallback();
     layerState._activePlaybackAttempt = null;
     if (layerState._audio) {
       layerState._audio.pause();
@@ -342,12 +370,15 @@ export function createPlayback({ state: layerState, services, parts, source }) {
     if (['loading', 'playing', 'buffering'].includes(layerState._audioState)) {
       return Promise.resolve(pauseRadioPlayback({ origin }));
     }
-    if (!parts.interaction.radioPresentationAllowed())
-      return Promise.resolve(false);
+    if (!parts.interaction.radioPresentationAllowed()) {
+      // Off, the station already selected plays on from the catalogue read.
+      return layerState._selectedId
+        ? playSelectedRadio({ origin, whileOff: true })
+        : Promise.resolve(false);
+    }
     if (layerState._selectedId) {
       // Drop a fallback left by a voice step whose playback never started.
-      layerState._playFallbackId = null;
-      layerState._playFallbackFocus = null;
+      clearRadioFallback();
     } else {
       const ranked = parts.queries.rankedVisibleStations();
       if (!ranked.length) return Promise.resolve(false);
@@ -369,10 +400,7 @@ export function createPlayback({ state: layerState, services, parts, source }) {
     if (layerState._tuningAwaitingStationId && !layerState._tuningActive)
       parts.tuning.endRadioTuning();
     layerState._playGeneration += 1;
-    layerState._playFallbackId = null;
-    layerState._playFallbackFocus = null;
-    layerState._playFallbackOrigin = 'programmatic';
-    layerState._playFallbackAttemptId = null;
+    clearRadioFallback();
     layerState._activePlaybackAttempt = null;
     layerState._audio?.pause();
     layerState._audioState = 'paused';
@@ -385,6 +413,7 @@ export function createPlayback({ state: layerState, services, parts, source }) {
   return {
     audioEventBelongsToActiveAttempt,
     installAudio,
+    clearRadioFallback,
     tryRadioFallback,
     recordDirectoryClick,
     playSelectedRadio,

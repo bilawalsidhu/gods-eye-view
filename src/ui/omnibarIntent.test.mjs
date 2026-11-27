@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { isPanelText, magnitudeFloor, parseOmnibar } from './omnibarIntent.js';
+import {
+  RETIRED_PANEL_TARGETS,
+  isPanelText,
+  magnitudeFloor,
+  parseOmnibar,
+} from './omnibarIntent.js';
 
 const matchLayers = (term) =>
   ['flights', 'ships'].includes(term) ? [{ id: term, score: 2 }] : [];
@@ -123,14 +128,9 @@ test('near-miss lines read as people mean them', () => {
   ]);
   assert.equal(isPanelText('show earthquake data layer'), false);
   assert.equal(read('open data layers')[0].item, 'data-panel');
-  assert.equal(
-    read('open space missions panel')[0].item,
-    'space-missions-panel',
-  );
-  assert.equal(
-    read('close the missions panel')[0].item,
-    'space-missions-panel',
-  );
+  // The Space Missions panel name opens its list in Inspect and enables the layer if needed.
+  assert.equal(read('open space missions panel')[0].item, 'space-missions');
+  assert.equal(read('close the missions panel')[0].item, 'space-missions');
   // Without "panel" it is the layer, not its panel.
   assert.equal(isPanelText('show space missions'), false);
   assert.deepEqual(read('go to trinidad and tobago and show flights'), [
@@ -439,4 +439,31 @@ test('every place word is still a bundled place name', async () => {
         .rows)
         names.add(row[0].toLowerCase());
   for (const word of PLACE_WORDS) assert.ok(names.has(word), word);
+});
+
+test('the retired Street Level panel opens its photo or its Data Layers row, and CCTV opens Camera settings', () => {
+  const steps = (line) => parseOmnibar(line)?.steps || [];
+  const street = steps('open street level panel').find(
+    (s) => s.kind === 'panel',
+  );
+  assert.equal(street?.item, 'street-level');
+  assert.equal(street?.action, 'open');
+  assert.equal(RETIRED_PANEL_TARGETS[street.item], 'street-level-panel');
+  const close = steps('close the street level panel').find(
+    (s) => s.kind === 'panel',
+  );
+  assert.equal(close?.action, 'close');
+  assert.equal(RETIRED_PANEL_TARGETS[close?.item], 'street-level-panel');
+  assert.equal(
+    steps('show the street view panel').find((s) => s.kind === 'panel')?.item,
+    'street-level',
+  );
+  for (const [line, target] of [
+    ['open cctv panel', 'cctv-panel'],
+    ['open camera settings', 'camera-settings'],
+    ['show camera tools', 'camera-settings'],
+  ]) {
+    const step = steps(line).find((s) => s.kind === 'panel');
+    assert.equal(RETIRED_PANEL_TARGETS[step?.item], target, line);
+  }
 });

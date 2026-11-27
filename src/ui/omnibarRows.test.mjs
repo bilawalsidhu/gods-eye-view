@@ -262,6 +262,32 @@ test('postcodes, street numbers and coordinates are places; callsigns are not', 
   }
 });
 
+test('typed photo results use the same translated title as the entity strip', () => {
+  const translateTitle = (item) =>
+    item.titleWords?.text === 'Street-level photo'
+      ? 'Photo au niveau de la rue'
+      : item.title;
+  const omnibar = createOmnibar({
+    layers: layers(),
+    entityTitle: translateTitle,
+  });
+  const identity = { layerId: 'street-level', id: 'panoramax:1' };
+  const { rows } = omnibar.rows('panoramax:1', {
+    entities: () => [
+      {
+        key: 'street-level:panoramax:1',
+        title: 'Street-level photo',
+        titleWords: { text: 'Street-level photo' },
+        layerName: 'Street Level',
+        identity,
+      },
+    ],
+  });
+  const photo = rows.find((row) => row.kind === 'entity');
+  assert.equal(photo.label, 'Photo au niveau de la rue');
+  assert.equal(photo.identity, identity);
+});
+
 test('a map item named like a place follows the place; a callsign leads', () => {
   const omnibar = createOmnibar({ layers: layers() });
   const entities = (text) =>
@@ -517,6 +543,121 @@ test('several switches in one line are one plan', () => {
   }
 });
 
+const SFO = {
+  ident: 'KSFO',
+  iata: 'SFO',
+  name: 'San Francisco International Airport',
+  lat: 37.6198,
+  lon: -122.3748,
+  size: 'large',
+  city: 'San Francisco',
+  country: 'US',
+};
+const AUS = {
+  ident: 'KAUS',
+  iata: 'AUS',
+  name: 'Austin Bergstrom International Airport',
+  lat: 30.1975,
+  lon: -97.662,
+  size: 'large',
+  city: 'Austin',
+  country: 'US',
+};
+const ELY = {
+  ident: 'KELY',
+  iata: 'ELY',
+  name: 'Ely Airport Yelland Field',
+  lat: 39.2997,
+  lon: -114.842,
+  size: 'medium',
+  city: 'Ely',
+  country: 'US',
+};
+
+test('a large airport’s code in capitals leads with the airport; the place service follows with its own places', () => {
+  const omnibar = createOmnibar({ layers: layers() });
+  const sfo = omnibar.rows('SFO', {
+    airport: SFO,
+    places: [
+      {
+        name: 'SFO',
+        detail: 'Tølløse, Region Zealand, Denmark',
+        latitude: 55.61,
+        longitude: 11.77,
+      },
+    ],
+  });
+  const [airport, found] = sfo.rows;
+  assert.equal(sfo.defaultIndex, 0, 'Enter opens the airport');
+  assert.equal(airport.kind, 'place');
+  assert.equal(airport.icon, 'local_airport');
+  assert.equal(airport.airport, 'SFO');
+  assert.equal(
+    airport.label,
+    'San Francisco International Airport (SFO) · San Francisco, United States',
+  );
+  assert.deepEqual(airport.coords, {
+    latitude: 37.6198,
+    longitude: -122.3748,
+  });
+  // The place service's hit is where it says, and names no airport.
+  assert.equal(found.label, 'Go to SFO');
+  assert.equal(found.hint, 'Tølløse, Region Zealand, Denmark');
+  assert.deepEqual(found.coords, { latitude: 55.61, longitude: 11.77 });
+  assert.equal(found.airport, undefined);
+
+  // Typed in lower case the place service leads; the airport follows it.
+  const lower = omnibar.rows('sfo', { airport: SFO, places: [] });
+  assert.notEqual(lower.rows[lower.defaultIndex]?.airport, 'SFO');
+  assert.ok(lower.rows.some((row) => row.airport === 'SFO'));
+
+  // A country's code names the country first, even for a large airport.
+  const aus = omnibar.rows('AUS', {
+    airport: AUS,
+    places: [
+      {
+        name: 'Australia',
+        detail: 'Oceania',
+        latitude: -25.27,
+        longitude: 133.77,
+      },
+    ],
+  });
+  assert.equal(aus.rows[aus.defaultIndex].label, 'Go to Australia');
+  assert.equal(aus.rows[aus.defaultIndex + 1].airport, 'AUS');
+
+  const typed = omnibar.rows('AUS', { airport: AUS });
+  assert.equal(typed.rows[typed.defaultIndex].label, 'Go to AUS');
+  assert.equal(typed.rows[typed.defaultIndex + 1].airport, 'AUS');
+});
+
+test('a smaller airport’s code that is also a place name: the place, then the airport', () => {
+  const omnibar = createOmnibar({ layers: layers() });
+  const ely = {
+    name: 'Ely',
+    detail: 'Cambridgeshire, England, United Kingdom',
+    latitude: 52.4,
+    longitude: 0.26,
+  };
+  const { rows, defaultIndex } = omnibar.rows('ELY', {
+    airport: ELY,
+    places: [ely],
+  });
+  assert.equal(rows[defaultIndex].label, 'Go to Ely');
+  const airport = rows.find((row) => row.airport === 'ELY');
+  assert.equal(
+    airport?.label,
+    'Ely Airport Yelland Field (ELY) · Ely, United States',
+  );
+  assert.ok(rows.indexOf(airport) > defaultIndex, 'listed after the place');
+  // An airport for some other line is never offered.
+  const other = omnibar.rows('Elyria', { airport: ELY, places: [] });
+  assert.ok(other.rows.every((row) => !row.airport));
+  // Without an airport the line is the place service's alone.
+  const plain = omnibar.rows('ely', { places: [ely] });
+  assert.equal(plain.rows[0].label, 'Go to Ely');
+});
+
 test('a place named with "and" stays whole, and a place keeps how it was typed', () => {
   const omnibar = createOmnibar({
     layers: [{ id: 'flights', name: 'Live Flights', enabled: false }],
@@ -756,6 +897,60 @@ test('a kind of place written before its name keeps the plan', () => {
   }
 });
 
+// Which typed codes an airport's row takes Enter for, with the bundled pack:
+// a large airport's code in capitals, never a country's code or a smaller
+// airport's, and never a word typed in lower case.
+test('an airport row leads only for a large airport typed as its code', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const { airportByCodeIn, indexAirports } =
+    await import('../data/airports.js');
+  const pack = JSON.parse(
+    await readFile(
+      new URL('../data/local_data/ourairports/airports.json', import.meta.url),
+      'utf8',
+    ),
+  );
+  const index = indexAirports(pack.rows);
+  const omnibar = createOmnibar({ layers: layers() });
+  const westernSydney = airportByCodeIn(index, 'YSWS');
+  const byIcao = omnibar.rows('YSWS', { airport: westernSydney, places: [] });
+  const explicit = byIcao.rows.find((row) => row.key === 'airport:AU-0539');
+  assert.equal(explicit?.airport, 'WSI');
+  assert.deepEqual(explicit.coords, {
+    latitude: westernSydney.lat,
+    longitude: westernSydney.lon,
+  });
+  assert.equal(byIcao.rows[byIcao.defaultIndex], explicit);
+  const lower = omnibar.rows('ysws', {
+    airport: airportByCodeIn(index, 'ysws'),
+    places: [],
+  });
+  assert.equal(lower.rows[lower.defaultIndex].airport, undefined);
+  assert.ok(lower.rows.some((row) => row.key === explicit.key));
+
+  const lead = (line) => {
+    const airport = airportByCodeIn(index, line);
+    const { rows, defaultIndex } = omnibar.rows(line, { airport, places: [] });
+    return Boolean(rows[defaultIndex]?.airport);
+  };
+  for (const [line, leads] of [
+    ['SFO', true],
+    ['JFK', true],
+    ['LHR', true],
+    ['SEA', true],
+    ['USA', false],
+    ['RUS', false],
+    ['SYR', false],
+    ['GPS', false],
+    ['ITA', false],
+    ['GER', false],
+    ['sea', false],
+    ['man', false],
+    ['del', false],
+  ])
+    assert.equal(lead(line), leads, line);
+});
+
 test("what the host's entity lookup found is listed, one named exactly first", () => {
   const omnibar = createOmnibar({ layers: layers() });
   const jal = {
@@ -844,8 +1039,7 @@ test("what the host's entity lookup found is listed, one named exactly first", (
   });
   assert.equal(city.rows[0].kind, 'found');
   assert.equal(city.rows[1].kind, 'place');
-  // An MMSI is a number the privacy check keeps from the place service, but
-  // the host's answer for it is listed.
+  // An MMSI is a bare number; the host's answer for it is listed.
   const mmsi = omnibar.rows('353136000', { found: [ship], entities: () => [] });
   assert.equal(mmsi.rows[0].key, 'found:ais-live-vessels:uuid-1');
   assert.equal(mmsi.defaultIndex, 0);
@@ -893,4 +1087,54 @@ test("what the host's entity lookup found is listed, one named exactly first", (
     '25544',
   ])
     assert.equal(omnibar.lookupQuery(text), text, text);
+});
+
+test("a looked-up thing comes before an airport's row, and the airport before the places", () => {
+  const omnibar = createOmnibar({ layers: layers() });
+  const airport = {
+    ident: 'KSFO',
+    iata: 'SFO',
+    icao: 'KSFO',
+    name: 'San Francisco International Airport',
+    lat: 37.619,
+    lon: -122.375,
+    city: 'San Francisco',
+    country: 'US',
+    size: 'large',
+  };
+  const places = [
+    {
+      name: 'San Francisco',
+      detail: 'California',
+      latitude: 37.77,
+      longitude: -122.42,
+    },
+  ];
+  const plane = {
+    kind: 'aircraft',
+    id: 'a0b1c2',
+    name: 'SFO1',
+    lat: 37.6,
+    lon: -122.4,
+    layerId: 'flights',
+    mmsi: null,
+  };
+  for (const found of [[{ ...plane, name: 'SFO' }], [plane]]) {
+    const { rows, defaultIndex } = omnibar.rows('SFO', {
+      airport,
+      places,
+      found,
+      entities: () => [],
+    });
+    const name = found[0].name;
+    const foundAt = rows.findIndex((row) => row.kind === 'found');
+    const airportAt = rows.findIndex((row) => row.key === 'airport:KSFO');
+    const placeAt = rows.findIndex(
+      (row) => row.kind === 'place' && !row.airport,
+    );
+    assert.equal(foundAt, 0, name);
+    assert.equal(defaultIndex, 0, name);
+    assert.ok(airportAt > foundAt, name);
+    assert.ok(placeAt === -1 || placeAt > airportAt, name);
+  }
 });

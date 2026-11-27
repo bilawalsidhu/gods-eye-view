@@ -1,17 +1,3 @@
-.qci-panel {
-  position: fixed;
-  z-index: 2000;
-  top: 80px;
-  right: 24px;
-  width: min(360px, calc(100vw - 32px));
-  overflow: hidden;
-  border: 1px solid #3eabbc;
-  border-radius: 8px;
-  background: #071117;
-  color: #e6f8fb;
-  box-shadow: 0 12px 36px #000a;
-  font: 12px/1.4 sans-serif;
-}
 .qci-panel[hidden],
 .qci-live[hidden],
 .qci-note[hidden],
@@ -19,14 +5,6 @@
 .qci-marker[hidden],
 .qci-marker-still[hidden] {
   display: none;
-}
-.qci-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 10px;
-  cursor: move;
-  touch-action: none;
 }
 .qci-panel button {
   border: 1px solid #43818d;

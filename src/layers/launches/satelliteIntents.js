@@ -78,6 +78,11 @@ export function createSatelliteIntents({ state: layerState }) {
     // The person's choice survives the mission teardown.
     const previous = layerState._satelliteStateBeforeMission;
     if (previous) previous.restoreVisibility = false;
+    if (change.enabled && previous?.display) {
+      // Explicit ON takes over a layer started only for mission data.
+      if (manager.setLayerParams('satellites', previous.display) !== false)
+        previous.display = null;
+    }
     if (
       change.enabled ||
       !missionsRequested ||
@@ -103,10 +108,8 @@ export function createSatelliteIntents({ state: layerState }) {
   }
 
   /**
-   * Keep a Satellites setting changed on purpose while Space Missions holds
-   * its saved state ("show orbits" off, tracking a satellite, or a place
-   * search that stops tracking): it survives the mission teardown, as a
-   * visibility choice does.
+   * Keep deliberate changes to the borrowed layer's display choices.
+   * Everything else remains live and needs no replay on mission exit.
    */
   function handleParams(change) {
     if (
@@ -115,10 +118,12 @@ export function createSatelliteIntents({ state: layerState }) {
       !isDeliberateOrigin(change.origin)
     )
       return;
-    const previous = layerState._satelliteStateBeforeMission;
+    const display = layerState._satelliteStateBeforeMission?.display;
     const requested = change.requestedParams;
-    if (!previous || !requested || typeof requested !== 'object') return;
-    previous.params = { ...previous.params, ...requested };
+    if (!display || !requested) return;
+    for (const key of ['showPoints', 'showOrbits']) {
+      if (requested[key] !== undefined) display[key] = change.params[key];
+    }
   }
 
   /** Settle once a Satellites OFF has finished stopping Space Missions. */

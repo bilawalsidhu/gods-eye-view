@@ -240,3 +240,29 @@ test('a past hour shown arms no age-out on the wall clock', async (t) => {
     `armed ${JSON.stringify(armed)}`,
   );
 });
+
+test('at a past hour Context reads the stations the map shows', async () => {
+  const source = timedSource();
+  const h = harness({ clock: followed(), ...source });
+  await h.layer.update();
+  await settle();
+  const before = h.layer.getStats().recordsRevision;
+  h.clock.seek(hourAgo(3) + 30 * 60_000);
+  await settle();
+  assert.equal(h.points().show, true);
+  const population = h.layer.getContextPopulation();
+  assert.equal(population.length, 1);
+  assert.match(h.layer.getContextSummary({ population }).caption, /of 1$/);
+  assert.notEqual(h.layer.getStats().recordsRevision, before);
+});
+
+test('at a past hour no source answered for, Context has no stations', async () => {
+  const source = timedSource({ answersTime: false });
+  const h = harness({ clock: followed(), ...source });
+  await h.layer.update();
+  await settle();
+  h.clock.seek(hourAgo(5));
+  await settle();
+  assert.equal(h.points().show, false);
+  assert.deepEqual(h.layer.getContextPopulation(), []);
+});

@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { mapAnalystRecord } from './firmsHeatmap.js';
 import { fireDetectionKey } from './firmsLabels.js';
 import { createQueries } from '../layers/firms/queries.js';
-import { describeEntity, findRecord, nearbyForLayer, viewSummaryForLayer } from './entityContext.js';
+import { describeEntity, findRecord, layerRecordsNear, nearbyForLayer, viewSummaryForLayer } from './entityContext.js';
 
 const FULL_FIRE = {
   index: 7,
@@ -80,6 +80,7 @@ test('Nearby and in-view lists find a weak FIRMS detection below the analyst cut
   assert.equal(module.getAnalystRecords(1)[0].id, 'FIRE-00007');
 
   const center = { lat: 0, lon: 179.99 };
+  assert.deepEqual(layerRecordsNear(manager, layer.id, center, 25).map(({ record }) => record.id), ['FIRE-100001']);
   const viewport = { west: 179, east: -179, south: -1, north: 1 };
   for (const [rect, options] of [[viewport, {}], [null, { hemisphere: true }]]) {
     for (const query of ['', 'FIRE-100001']) {

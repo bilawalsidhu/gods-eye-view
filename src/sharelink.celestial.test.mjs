@@ -3,7 +3,6 @@ import { LocationNavigation } from './ui/locationNavigation.js';
 import { VisualSettings } from './ui/visualSettings.js';
 import { readShellSource, shellMethod } from './testSupport/readShellSource.mjs';
 import { _claimContextVisualAuthority, setContextMode } from './ui/contextActions.js';
-import { _initGlobalContextPanel } from './ui/contextBindings.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ShareLinkManager, decodeShareCreatedAtMs } from './sharelink.js';
@@ -259,7 +258,7 @@ test('a collapsed Recent Imagery panel survives the share-link round trip beside
   ] });
 });
 
-test('a collapsed Street Level panel survives the share-link round trip', () => {
+test('the retired Street Level panel keeps its code, so old links still round-trip', () => {
   const manager = makeManager();
   manager.setPanelStateProvider(() => ({ specs: [
     { id: 'cctv-panel', collapsed: false },
@@ -644,13 +643,6 @@ test('explicit Context transitions claim the visual restore lane before transiti
   );
 
   assert.match(uiSource, /claimVisualAuthority: \(\) =>\s*this\.shareLinkManager\?\.claimRestoreLane\?\.\('visual'\)/);
-  const contextPanel = _initGlobalContextPanel.toString();
-  const contacts = contextPanel.slice(
-    contextPanel.indexOf("this.listen(this._globalContextFlightsBtn, 'click'"),
-    contextPanel.indexOf("this.listen(this._installationsSearchBtn, 'click'"),
-  );
-  assertContextClaimsBefore(contacts, 'this._selectContextMode(', 'Contacts tab');
-
   // The voice/tool facade validates the mode first, then transitions.
   const facade = setContextMode.toString();
   assertContextClaimsBefore(facade, 'this._selectContextMode(', 'setContextMode facade');
@@ -682,12 +674,8 @@ test('explicit Context transitions claim the visual restore lane before transiti
 // detection: `_detectionUserOverridden` is what suppresses the military-style
 // auto-enable for the rest of the session. Contacts entry is not that.
 test('Context lane claims never set the session detection-override flag', () => {
-  const contextPanel = _initGlobalContextPanel.toString();
   const facade = setContextMode.toString();
-  for (const [block, label] of [
-    [contextPanel, 'Context panel'],
-    [facade, 'setContextMode facade'],
-  ]) {
+  for (const [block, label] of [[facade, 'setContextMode facade']]) {
     assert.ok(
       !block.includes('_detectionUserOverridden = true'),
       `${label} must not flag the operator as having overridden detection`,

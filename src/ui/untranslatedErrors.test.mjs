@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { setLocale, t, translateKnown } from '../i18n/index.js';
-import { presentStreetLevelPanel } from './streetLevelPresentation.js';
+import { presentStreetLevel } from './streetLevelPresentation.js';
 import { providerSnapshot } from '../testSupport/streetLevelFakes.mjs';
 import { createWeatherSource } from '../layers/weather/source.js';
 import { presentRoutingFailure } from '../layers/directions/index.js';
@@ -38,10 +38,10 @@ for (const locale of ['es', 'ru']) {
       );
       assert.notEqual(refusal, NO_IMAGERY, 'should be translated');
       assert.match(refusal, /50/, 'keeps the radius');
-      assert.equal(presentStreetLevelPanel(snapshot(refusal)).error, refusal);
+      assert.equal(presentStreetLevel(snapshot(refusal)).error, refusal);
       // The screen-centre refusal is stored as English data and translated
       // by the panel.
-      const aim = presentStreetLevelPanel(snapshot(AIM_AT_GROUND_MESSAGE));
+      const aim = presentStreetLevel(snapshot(AIM_AT_GROUND_MESSAGE));
       assert.notEqual(aim.error, AIM_AT_GROUND_MESSAGE, 'should be translated');
     } finally {
       setLocale('en');

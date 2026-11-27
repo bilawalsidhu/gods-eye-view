@@ -36,9 +36,9 @@ export function createSelection({ state, parts }) {
       contact && !contact.surface
         ? pickIdOf({ drawHit: contact.set ? contact : null, id: event.id })
         : null;
+    const windowRoute = parts.router.resolve(windowId);
     const route =
-      parts.router.resolve(windowId) ??
-      (contactId ? parts.router.resolve(contactId) : null);
+      windowRoute ?? (contactId ? parts.router.resolve(contactId) : null);
     // Not ours: the ground handler decides whether it is the map itself.
     if (!route) {
       parts.openAtGround?.({ surface: hit.surface, ground: groundOf(event) });
@@ -48,6 +48,7 @@ export function createSelection({ state, parts }) {
     if (!route.instance) return;
     route.instance.handlePick(route.id, {
       groundPoint: () => groundPointOf(event),
+      linePart: (windowRoute ? hit.drawHit : contact)?.meta?.coordinates,
     });
   }
 

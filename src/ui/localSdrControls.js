@@ -57,7 +57,9 @@ export class LocalSdrControls {
       this._onReceiverState(state),
     );
     this._radioUnsubscribe =
-      radio?.subscribe?.((state) => this._onRadioState(state)) || null;
+      radio?.subscribe?.((state, sourceOrigin) =>
+        this._onRadioState(state, sourceOrigin),
+      ) || null;
     this._feedsUnsubscribe =
       feeds?.subscribe?.(() => this._scheduleRender()) || null;
     // One request, no polling: learn whether the server has decoder feeds.
@@ -66,13 +68,11 @@ export class LocalSdrControls {
     this._render();
   }
 
-  /** Whether the receiver session is open (keeps the Radio panel expanded). */
-  isActive() {
-    return Boolean(this._state?.connected);
-  }
-
   _stopInternetRadio() {
-    if (internetRadioAudioActive(this._radioState))
+    if (
+      this._radioState?.source !== 'internet' &&
+      internetRadioAudioActive(this._radioState)
+    )
       this.radio?.stopPlayback?.({ origin: 'user' });
   }
 
@@ -137,14 +137,42 @@ export class LocalSdrControls {
   _onReceiverState(state) {
     this._state = state;
     const fmAudioActive = localSdrFmAudioActive(state);
-    // Local FM just started: it takes over from internet radio.
-    if (fmAudioActive && !this._fmAudioActive) this._stopInternetRadio();
+    const justStarted = fmAudioActive && !this._fmAudioActive;
     this._fmAudioActive = fmAudioActive;
+    if (justStarted) {
+      // USB setup can finish after the listener switched back to Internet.
+      if (this._radioState?.source === 'internet') this._holdFm();
+      else this._stopInternetRadio();
+    }
     this._scheduleRender();
   }
 
-  _onRadioState(state) {
+  _holdFm() {
+    this.receiver.holdFm?.({
+      message: () => t('Local FM stopped: internet stations chosen'),
+    });
+  }
+
+  _onRadioState(state, sourceOrigin) {
+    const wasSource = this._radioState?.source;
     this._radioState = state;
+    // Radio switched from the local receiver to the internet stations: the
+    // receiver's FM stops and the device stays connected and tuned (its
+    // ADS-B, feeding Local ADS-B, goes on). Back on the local receiver, the
+    // FM it held plays again only on an explicit source choice.
+    if (
+      wasSource === 'local' &&
+      state?.source === 'internet' &&
+      this._fmAudioActive
+    ) {
+      this._holdFm();
+    } else if (
+      sourceOrigin === 'user' &&
+      state?.source === 'local' &&
+      this._state?.status === 'held'
+    ) {
+      this.receiver.resumeFm?.();
+    }
     const radioAudioActive = internetRadioAudioActive(state);
     // Internet radio just started: it takes over from local FM.
     if (radioAudioActive && !this._radioAudioActive && this._fmAudioActive) {

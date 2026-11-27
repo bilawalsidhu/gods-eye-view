@@ -13,11 +13,12 @@ import {
 } from './stores/entityCard.js';
 
 // The store's in-view answer is shared by Context's globe view and the
-// omnibar: worked out once per key (the exact view, the layers that are
+// omnibar: worked out once per key (the settled view, the layers that are
 // on, each one's data revision) and sliced for callers that want fewer rows.
 function harness(layers) {
   let scans = 0;
   let listener;
+  let activityListener;
   const rows = layers.map((layer) =>
     Object.assign(layer, {
       module: {
@@ -32,19 +33,103 @@ function harness(layers) {
   const store = useEntityCardStore(createPinia());
   const manager = {
     layers: new Map(rows.map((row) => [row.id, row])),
-    isEnabled: (id) => Boolean(rows.find((row) => row.id === id)?.enabled),
-    getAll: () => rows,
+    isEnabled: (id) => Boolean(manager.layers.get(id)?.enabled),
+    getAll: () => [...manager.layers.values()],
     subscribe(callback) {
       listener = callback;
+    },
+    subscribeActivity(callback) {
+      activityListener = callback;
     },
   };
   store.connect({ dataManager: () => manager });
   return {
     store,
+    manager,
+    reportRegistration: (layerId) =>
+      activityListener({ type: 'registrations', layerId }),
     scans: () => scans,
     refresh: (layerId) => listener({ type: 'refresh', layerId }),
   };
 }
+
+test('rotated view counts only what projects onto the screen', () => {
+  const d = 0.1; // north-up half-width of the footprint, degrees (at the equator)
+  const r = d * Math.SQRT2; // the rotated footprint's corner offset
+  // Ground corners of the 45 deg-rotated screen (top-left, bottom-left,
+  // bottom-right, top-right), as the renderer picks them.
+  const corners = [
+    { lat: r, lon: 0 },
+    { lat: 0, lon: -r },
+    { lat: -r, lon: 0 },
+    { lat: 0, lon: r },
+  ];
+  const records = [
+    { id: 'centre', name: 'Centre', lat: 0, lon: 0 },
+    // |lat| + |lon| = 1.7 d > sqrt(2) d: outside the diamond, inside the box.
+    { id: 'offscreen', name: 'Offscreen', lat: 0.85 * d, lon: 0.85 * d },
+  ];
+  const { store } = harness([{ id: 'earthquakes', enabled: true, records }]);
+  const view = {
+    center: { lat: 0, lon: 0 },
+    rect: { west: -r, south: -r, east: r, north: r },
+    heightM: 20_000,
+    eye: { lat: 0, lon: 0 },
+  };
+  const read = () =>
+    store.inView({
+      perLayer: 3,
+      breakdown: true,
+      includeEmpty: true,
+      viewport: true,
+    })[0];
+  store.setView({
+    ...view,
+    corners: [
+      { lat: r, lon: -r },
+      { lat: -r, lon: -r },
+      { lat: -r, lon: r },
+      { lat: r, lon: r },
+    ],
+  });
+  assert.equal(read().count, 2);
+  const omnibar = store.inView({ viewport: true });
+  assert.equal(omnibar[0].count, 2);
+  store.setView({ ...view, corners });
+  const group = read();
+  const ids = (group?.items ?? []).map((item) => item.identity.id);
+  assert.ok(ids.includes('centre'));
+  assert.ok(!ids.includes('offscreen'), `off-screen point counted: ${ids}`);
+  assert.equal(group.count, 1);
+  assert.deepEqual(store.inView({ viewport: true }), omnibar);
+});
+
+test('whole-globe rectangle at 4,800 km does not count the antipode', () => {
+  // Square canvas, 60 deg FOV, straight down at 4,800 km: the corners are
+  // 39.2 deg off-axis, Earth's limb only 34.8 deg, so every corner misses
+  // and the renderer answers with the whole globe.
+  const records = [
+    { id: 'near', name: 'Near', lat: 0, lon: 0 },
+    { id: 'anti', name: 'Antipode', lat: 0, lon: 180 },
+  ];
+  const { store } = harness([{ id: 'earthquakes', enabled: true, records }]);
+  store.setView({
+    center: { lat: 0, lon: 0 },
+    rect: { west: -180, south: -90, east: 180, north: 90 },
+    heightM: 4_800_000,
+    eye: { lat: 0, lon: 0 },
+  });
+  const [group] = store.inView({
+    perLayer: 3,
+    breakdown: true,
+    includeEmpty: true,
+    viewport: true,
+  });
+  const ids = (group?.items ?? []).map((item) => item.identity.id);
+  assert.ok(ids.includes('near'), 'the record under the camera is in view');
+  assert.ok(!ids.includes('anti'), `antipode counted as in view: ${ids}`);
+  assert.equal(group.count, 1);
+});
 
 const point = (id, lat, lon) => ({
   id,
@@ -201,6 +286,41 @@ test('Context retries a partially read point snapshot from ordinary records', (t
   assert.equal(fallback.mock.callCount(), 3);
 });
 
+test('a local Inspector read retries its point snapshot after a fallback', (t) => {
+  t.mock.timers.enable({ apis: ['Date'] });
+  let available = false;
+  const { store } = harness([
+    {
+      id: 'local-dams',
+      enabled: true,
+      records: [{ id: 'ordinary', lat: 0, lon: 0 }],
+      module: {
+        getNearbyContextPoints: () => ({
+          points: (function* () {
+            yield { id: 'optimized', lat: 0, lon: 0 };
+            if (!available) throw new Error('point iteration failed');
+          })(),
+          recordForPoint: (point) => point,
+        }),
+      },
+    },
+  ]);
+  store.setView({
+    center: { lat: 0, lon: 0 },
+    heightM: 40_000,
+    rect: { west: -1, east: 1, south: -1, north: 1 },
+  });
+  const ids = () =>
+    store
+      .inView({ viewport: true, breakdown: true, includeEmpty: true })[0]
+      .items.map(({ identity }) => identity.id);
+  assert.deepEqual(ids(), ['ordinary']);
+  available = true;
+  t.mock.timers.tick(INSPECTOR_PULSE_MS);
+  store.pulseInspector();
+  assert.deepEqual(ids(), ['optimized']);
+});
+
 test('Nearby and globe search match the displayed layer name after switching languages', (t) => {
   const originalLocale = getLocale();
   t.after(() => setLocale(originalLocale));
@@ -216,37 +336,25 @@ test('Nearby and globe search match the displayed layer name after switching lan
   const results = (query) => [
     store.nearbyLayers(0, 0, { query })[0]?.items[0]?.title,
     store.inView({ query })[0]?.items[0]?.title,
-    store.nearbyGroups(0, 0, { query }).other[0]?.title,
   ];
 
   setLocale('en');
-  assert.deepEqual(results('Centres de données'), [
-    undefined,
-    undefined,
-    undefined,
-  ]);
+  assert.deepEqual(results('Centres de données'), [undefined, undefined]);
   setLocale('fr');
   assert.deepEqual(results('Centres de données'), [
-    'Example Facility',
     'Example Facility',
     'Example Facility',
   ]);
   assert.deepEqual(results('Datacenters'), [
     'Example Facility',
     'Example Facility',
-    'Example Facility',
   ]);
   assert.deepEqual(results('Centres de données'), [
-    'Example Facility',
     'Example Facility',
     'Example Facility',
   ]);
   setLocale('en');
-  assert.deepEqual(results('Centres de données'), [
-    undefined,
-    undefined,
-    undefined,
-  ]);
+  assert.deepEqual(results('Centres de données'), [undefined, undefined]);
 });
 
 test('the same key gives the same answer without scanning again; fewer rows are a slice', () => {
@@ -882,6 +990,105 @@ test("Nearby reuses a fresh layer's rows when another layer refreshes or the sam
   );
 });
 
+test('alternating Inspector satellites and selected camera Nearby keeps the settled road scan', (t) => {
+  t.mock.timers.enable({ apis: ['Date'] });
+  const state = {
+    _enabled: true,
+    _roads: Array.from({ length: 1500 }, (_, i) => ({
+      type: 'primary',
+      coords: [
+        [i / 10000, 0],
+        [i / 10000, 0.001],
+      ],
+    })),
+  };
+  const read = t.mock.fn((limit) => trafficAnalystRecords(state, limit));
+  const { store, refresh } = harness([
+    {
+      id: 'traffic',
+      enabled: true,
+      stats: { lastUpdate: 1 },
+      module: { getAnalystRecords: read },
+    },
+    { id: 'satellites', enabled: true, records: [] },
+  ]);
+  const card = () =>
+    store.nearbyLayers(0, 0, {
+      radiusKm: 25,
+      limit: 3,
+      excludeKey: 'cctv:test',
+      excludeLayers: ['radio'],
+    });
+  const first = card();
+  assert.equal(first.find((group) => group.layerId === 'traffic').count, 1500);
+  for (let i = 0; i < 4; i++) {
+    store.nearbyLayers(0.1, 0.1, {
+      radiusKm: 250,
+      limit: 3,
+      onlyLayers: ['satellites'],
+      breakdown: true,
+    });
+    card();
+  }
+  assert.equal(
+    read.mock.callCount(),
+    1,
+    'one road catalogue scan across four alternating reads',
+  );
+  state._roads.pop();
+  refresh('traffic');
+  assert.equal(card().find((group) => group.layerId === 'traffic').count, 1499);
+  assert.equal(read.mock.callCount(), 2);
+});
+
+test('alternating Context and Omnibar reads reuse their settled local projections', () => {
+  const { store, scans } = harness([
+    {
+      id: 'flights',
+      name: 'Flights',
+      enabled: true,
+      stats: { lastUpdate: 1 },
+      records: [point('on', 0, 1)],
+    },
+  ]);
+  store.setView({
+    ...GLOBE,
+    heightM: 40_000,
+    rect: { west: -5, south: -5, east: 5, north: 5 },
+  });
+  const context = () =>
+    store.inView({ viewport: true, breakdown: true, includeEmpty: true });
+  const omnibar = () => store.inView({ viewport: true, perLayer: 2 });
+  const first = context();
+  const second = omnibar();
+  assert.equal(context(), first);
+  assert.equal(omnibar(), second);
+  assert.equal(scans(), 2);
+});
+
+test('Context skips the satellite viewport scan before reading records', () => {
+  const { store, scans } = harness([
+    {
+      id: 'satellites',
+      name: 'Satellites',
+      enabled: true,
+      records: [point('one', 0, 1)],
+    },
+  ]);
+  store.setView({ ...GLOBE, rect: { west: -5, east: 5, south: -5, north: 5 } });
+  assert.deepEqual(
+    store.inView({
+      viewport: true,
+      breakdown: true,
+      excludeLayers: new Set(['satellites']),
+    }),
+    [],
+  );
+  assert.equal(scans(), 0);
+  store.inView({ viewport: true });
+  assert.equal(scans(), 1, 'the Omnibar still reads satellite records');
+});
+
 test('Nearby shows a renamed stationary Contacts subject without a pan', (t) => {
   t.mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
   // Real Contacts controls: a stationary subject whose label is enriched after selection
@@ -975,4 +1182,427 @@ test('Omnibar In view counts a road that crosses the viewport with its middle ve
     1,
     'the crossing road is in view; the outside road is not',
   );
+});
+
+test('the Inspector falls back by scope without widening the Omnibar answer', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const layer = {
+    id: 'earthquakes',
+    enabled: true,
+    records: [point('near-edge', 0, 0.22), point('too-far', 0, 4)],
+    stats: { recordsRevision: 1, count: 2 },
+  };
+  const { store, scans } = harness([layer]);
+  t.after(() => store.setViewContextShown(false, null));
+  store.setViewContextShown(true, 1);
+  const center = { lat: 0, lon: 0 };
+  const rect = { west: -0.2, east: 0.2, south: -0.15, north: 0.15 };
+  store.setView({ center, rect, heightM: 70_000 });
+  const read = (radius = 50) => store.inspectorGroup(layer.id, radius);
+  assert.equal(read().loading, true);
+  assert.equal(scans(), 0, 'index is built off the UI read');
+  t.mock.timers.tick(0);
+
+  const closest = read(20);
+  assert.equal(closest.scope, 'closest');
+  assert.deepEqual(
+    closest.items.map((row) => row.identity.id),
+    ['near-edge'],
+  );
+  assert.ok(closest.items[0].distanceKm < 3, 'distance is to the edge');
+  assert.equal(read(20), closest);
+  assert.deepEqual(store.inView(), []);
+
+  store.setView({ center, rect, heightM: 25_000 });
+  const city = read();
+  assert.equal(
+    city.scope,
+    'closest',
+    'nothing selected reads the view at city scale too',
+  );
+  assert.equal(city.count, 1);
+  assert.ok(city.items[0].distanceKm < 3, 'distance is to the edge');
+
+  store.setView({ center, rect, heightM: 25_000, groundFootprint: false });
+  const sky = read();
+  assert.equal(sky.scope, 'none');
+  assert.equal(sky.count, 0);
+
+  store.setView({ center, rect, heightM: 16_000_000 });
+  const globe = read();
+  assert.equal(globe.scope, 'loaded');
+  assert.equal(globe.count, 2);
+  assert.equal(scans(), 2, 'one index build and one independent Omnibar read');
+});
+
+test('costly Inspector rows refresh during a continuous pan, and immediately on settle', (t) => {
+  let cost = 0;
+  let now = 0;
+  t.mock.method(performance, 'now', () => cost);
+  t.mock.method(Date, 'now', () => now);
+  const parks = [
+    { id: 'west', name: 'West park', lat: 0, lon: 0 },
+    { id: 'east', name: 'East park', lat: 0, lon: 2 },
+  ];
+  const { store } = harness([
+    {
+      id: 'parks',
+      enabled: true,
+      stats: { count: 2, recordsRevision: 1 },
+      module: {
+        getViewRecords() {
+          cost += 30;
+          return parks;
+        },
+      },
+    },
+  ]);
+  store.setViewContextShown(true, 1);
+  t.after(() => store.setViewContextShown(false, null));
+  const read = (lon, settled) => {
+    store.setView(
+      {
+        center: { lat: 0, lon },
+        heightM: 70_000,
+        rect: { west: lon - 0.2, east: lon + 0.2, south: -0.2, north: 0.2 },
+      },
+      { settled },
+    );
+    return store
+      .inspectorGroup('parks', 10)
+      .items.map((row) => row.identity.id);
+  };
+  assert.deepEqual(read(0, true), ['west']);
+  now += 1500;
+  assert.deepEqual(read(2, false), ['west'], 'throttle repeated costly reads');
+  now += MOVING_REFRESH_MS;
+  assert.deepEqual(
+    read(2.01, false),
+    ['east'],
+    'same revision, camera still moving',
+  );
+  assert.deepEqual(read(0, true), ['west']);
+});
+
+function cityAircraftGroup(t, records) {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { store } = harness([{ id: 'flights', enabled: true, records }]);
+  t.after(() => store.setViewContextShown(false, null));
+  store.setViewContextShown(true, 1);
+  store.setView({
+    center: { lat: 0, lon: 0 },
+    rect: { west: -0.1, east: 0.1, south: -0.1, north: 0.1 },
+    heightM: 40_000,
+  });
+  const read = () => store.inspectorGroup('flights', 250);
+  assert.equal(read().loading, true);
+  t.mock.timers.tick(0);
+  return read();
+}
+
+test('Closest ranks parks against a rotated footprint, beyond the enclosing rectangle', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const id = 'test-parks';
+  const records = [
+    {
+      id: 'bounding-northeast',
+      name: 'Bounding northeast',
+      lat: 0.81,
+      lon: 0.78,
+    },
+    {
+      id: 'bounding-northwest',
+      name: 'Bounding northwest',
+      lat: 0.8,
+      lon: -0.85,
+    },
+    {
+      id: 'bounding-southwest',
+      name: 'Bounding southwest',
+      lat: -0.81,
+      lon: -0.82,
+    },
+    { id: 'near-corner', name: 'Near the screen corner', lat: 1.02, lon: 0 },
+  ];
+  const { store } = harness([{ id, enabled: true, records }]);
+  t.after(() => store.setViewContextShown(false, null));
+  store.setViewContextShown(true, 1);
+  store.setView({
+    center: { lat: 0, lon: 0 },
+    eye: { lat: 0, lon: 0 },
+    heightM: 180_000,
+    rect: { west: -1, east: 1, south: -1, north: 1 },
+    corners: [
+      { lat: 1, lon: 0 },
+      { lat: 0, lon: -1 },
+      { lat: -1, lon: 0 },
+      { lat: 0, lon: 1 },
+    ],
+  });
+  assert.equal(store.inspectorGroup(id, 25)?.loading, true);
+  t.mock.timers.tick(0);
+  const closest = store.inspectorGroup(id, 25);
+  assert.equal(closest.scope, 'closest');
+  assert.equal(closest.items[0].identity.id, 'near-corner');
+  assert.ok(Math.abs(closest.items[0].distanceKm - 2.224) < 0.01);
+  assert.ok(
+    closest.items[1].distanceKm > 40,
+    'inside the rectangle is not inside the footprint',
+  );
+});
+
+test('Closest on a world-rectangle fallback measures from the visible limb and keeps its cutoff', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const id = 'test-parks';
+  const records = [110, 76, 60, 66].map((lon) => ({
+    id: String(lon),
+    name: 'Park ' + lon,
+    lat: 0,
+    lon,
+  }));
+  const { store } = harness([{ id, enabled: true, records }]);
+  t.after(() => store.setViewContextShown(false, null));
+  store.setViewContextShown(true, 1);
+  const view = {
+    center: { lat: 0, lon: 5 },
+    eye: { lat: 0, lon: 0 },
+    heightM: 4_800_000,
+    rect: { west: -180, east: 180, south: -90, north: 90 },
+  };
+  store.setView(view);
+  assert.equal(store.inspectorGroup(id, 25)?.loading, true);
+  t.mock.timers.tick(0);
+  const closest = store.inspectorGroup(id, 25);
+  assert.equal(closest.scope, 'closest');
+  assert.deepEqual(
+    closest.items.map(({ identity }) => identity.id),
+    ['60', '66', '76'],
+  );
+  const km = closest.items[0].distanceKm;
+  assert.ok(
+    km > 490 && km < 550,
+    'distance tracks the limb about 55 degrees from the eye',
+  );
+  store.setView({ ...view, heightM: 100_000 });
+  assert.equal(store.inspectorGroup(id, 25).scope, 'none', 'beyond the cutoff');
+});
+
+test('Closest counts and classifies only the three retained park tour flights', (t) => {
+  const group = cityAircraftGroup(t, [
+    { ...point('east-park', 0, 0.3), aircraftClass: 'light' },
+    { ...point('west-park', 0, -0.4), aircraftClass: 'light' },
+    { ...point('north-park', 0.5, 0), aircraftClass: 'turboprop' },
+    { ...point('south-park', -0.6, 0), aircraftClass: 'helicopter' },
+  ]);
+  assert.equal(group.scope, 'closest');
+  assert.equal(group.count, 3);
+  assert.deepEqual(
+    group.items.map(({ identity }) => identity.id),
+    ['east-park', 'west-park', 'north-park'],
+  );
+  assert.equal(group.breakdown?.total, group.count);
+  assert.deepEqual(
+    group.breakdown.splits.find((split) => split.title === 'Type').parts,
+    [
+      { label: 'Light aircraft', count: 2 },
+      { label: 'Turboprops', count: 1 },
+    ],
+  );
+});
+
+test('a visible aircraft reads In view at city scale', (t) => {
+  const group = cityAircraftGroup(t, [
+    { ...point('visible', 0.08, 0.08), altitudeM: 500, onGround: false },
+  ]);
+  assert.equal(group.scope, 'view');
+  assert.equal(group.count, 1);
+  assert.deepEqual(
+    group.items.map((row) => row.identity.id),
+    ['visible'],
+  );
+});
+
+test('the moving Inspector reuses its scope only while the query matches', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const id = 'earthquakes';
+  const { store, scans } = harness([
+    {
+      id,
+      enabled: true,
+      stats: { recordsRevision: 1, count: 1 },
+      records: [{ id: 'quake', name: 'Quake', lat: 1, lon: 0 }],
+    },
+  ]);
+  const view = {
+    center: { lat: 0, lon: 0 },
+    rect: { west: -0.1, east: 0.1, south: -0.1, north: 0.1 },
+    heightM: 40_000,
+  };
+  t.after(() => store.setViewContextShown(false, null));
+  store.setViewContextShown(true, 1);
+  store.setView(view);
+  const read = (radius, options) => store.inspectorGroup(id, radius, options);
+  assert.equal(read(250).loading, true);
+  t.mock.timers.tick(0);
+  const settled = read(250);
+  assert.equal(settled.scope, 'closest');
+  store.setView(
+    { ...view, center: { lat: 0.001, lon: 0 } },
+    { settled: false },
+  );
+  assert.equal(read(250), settled, 'movement alone keeps the settled rows');
+  assert.equal(
+    read(25),
+    settled,
+    'with nothing selected the range is not read',
+  );
+  assert.deepEqual(read(25, { query: 'different event' }).items, []);
+  assert.equal(
+    scans(),
+    1,
+    'only the scope changes; the same data index is used',
+  );
+});
+
+test('removing and re-adding a Library layer while Inspector is hidden evicts its settled index', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const id = 'lib-test';
+  const layer = {
+    id,
+    enabled: true,
+    stats: { recordsRevision: 1, count: 1 },
+    records: [{ id: 'old', name: 'Old record', lat: 0, lon: 0 }],
+  };
+  const { store, manager, reportRegistration } = harness([layer]);
+  t.after(() => store.setViewContextShown(false, null));
+  store.setViewContextShown(true, 1);
+  store.setView({
+    center: { lat: 0, lon: 0 },
+    rect: { west: -0.1, east: 0.1, south: -0.1, north: 0.1 },
+    heightM: 40_000,
+  });
+  const read = () => store.inspectorGroups([id], 250)[0];
+  assert.equal(read().loading, true);
+  t.mock.timers.tick(0);
+  assert.equal(read().items[0].identity.id, 'old');
+
+  store.setViewContextShown(false, 1);
+  manager.layers.delete(id);
+  reportRegistration(id);
+  manager.layers.set(id, {
+    ...layer,
+    module: {
+      getAnalystRecords: () => [
+        { id: 'new', name: 'New record', lat: 0, lon: 0 },
+      ],
+    },
+  });
+  reportRegistration(id);
+  store.setViewContextShown(true, 1);
+  assert.equal(
+    read().loading,
+    true,
+    'the removed layer cannot supply a provisional row',
+  );
+  t.mock.timers.tick(0);
+  assert.equal(read().items[0].identity.id, 'new');
+});
+
+test('the indexed fire radius and the per-record reader agree across the date line', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const layer = {
+    id: 'local-firms',
+    enabled: true,
+    records: [
+      { ...point('first', 0, 179.99), name: 'Detection first' },
+      { ...point('second', 0, -179.96), name: 'Detection second' },
+      { ...point('third', 0, 179.8), name: 'Detection third' },
+      { ...point('outside', 0, -179.3), name: 'Detection outside' },
+    ],
+    stats: { recordsRevision: 1, count: 4 },
+  };
+  const { store } = harness([layer]);
+  t.after(() => store.setViewContextShown(false, null));
+  t.after(store.setSelectedScopeOwner(() => true));
+  store.setViewContextShown(true, 1);
+  store.setView({
+    center: { lat: 0, lon: 180 },
+    rect: { west: 179.98, east: -179.98, south: -0.1, north: 0.1 },
+    heightM: 25_000,
+  });
+  let anchor = { lat: 0, lon: 180 };
+  const read = (limit, options = {}) =>
+    store.inspectorGroup(layer.id, 50, { anchor, limit, ...options });
+  assert.equal(read(2).loading, true);
+  t.mock.timers.tick(0);
+
+  const result = read(2);
+  // An exclusion that matches nothing sends the read record by record.
+  const filtered = read(2, { excludeKey: 'local-firms:none' });
+  assert.equal(result.scope, 'nearby');
+  assert.equal(result.count, 3);
+  assert.deepEqual(
+    result.items.map(({ identity }) => identity.lon),
+    [179.99, -179.96],
+  );
+  assert.equal(filtered.count, result.count);
+  assert.deepEqual(filtered.items, result.items);
+
+  layer.records = [
+    { ...point('west', 0, -0.15), name: 'Detection west' },
+    { ...point('east', 0, 0.15), name: 'Detection east' },
+  ];
+  layer.stats = { recordsRevision: 2, count: 2 };
+  anchor = { lat: 0, lon: 0 };
+  store.setView({
+    center: { lat: 0, lon: 0 },
+    rect: { west: 0.11, east: 0.16, south: -0.02, north: 0.02 },
+    heightM: 25_000,
+  });
+  assert.equal(read(1).loading, true);
+  t.mock.timers.tick(0);
+  const tied = read(1);
+  const filteredTie = read(1, { excludeKey: 'local-firms:none' });
+  assert.equal(tied.count, 2);
+  // Both are 16.7 km from the item; the view no longer breaks the tie.
+  assert.equal(Math.abs(tied.items[0].identity.lon), 0.15);
+  assert.deepEqual(tied.items, filteredTie.items);
+});
+
+test('a selected item’s local scope is measured from the item, never the view', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { store } = harness([
+    {
+      id: 'earthquakes',
+      enabled: true,
+      stats: { recordsRevision: 1, count: 2 },
+      records: [point('in-view', 0, 0), point('by-item', 0, 5.1)],
+    },
+  ]);
+  t.after(() => store.setViewContextShown(false, null));
+  t.after(store.setSelectedScopeOwner(() => true));
+  store.setView({
+    center: { lat: 0, lon: 0 },
+    rect: { west: -0.2, east: 0.2, south: -0.2, north: 0.2 },
+    heightM: 70_000,
+  });
+  const read = (radius) =>
+    store.inspectorGroup('earthquakes', radius, { anchor: { lat: 0, lon: 5 } });
+  assert.equal(read(25).loading, true);
+  t.mock.timers.tick(0);
+
+  const near = read(25);
+  assert.equal(near.scope, 'nearby');
+  assert.deepEqual(
+    near.items.map((row) => row.identity.id),
+    ['by-item'],
+  );
+  // 11 km from the item: outside 1 km. The quake in view is not offered.
+  const far = read(1);
+  assert.equal(far.scope, 'closest');
+  assert.deepEqual(
+    far.items.map((row) => row.identity.id),
+    ['by-item'],
+  );
+  assert.ok(far.items[0].distanceKm > 10 && far.items[0].distanceKm < 12);
 });

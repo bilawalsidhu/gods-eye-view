@@ -27,20 +27,35 @@ test('source and frame states retain their distinct meanings, including retained
       sourceStatus: status,
     });
   }
-  expect('LIVE · OK', 'ready', IDLE, { feedType: 'live', sourceStatus: 'ok' });
+  // A live source's still (its video not playing here) is a fallback frame.
+  expect('FALLBACK · OK', 'ready', IDLE, {
+    feedType: 'live',
+    sourceStatus: 'ok',
+  });
 });
 
 test('calibration labels follow supplied provenance and dirty/save/reset transitions without writes to the camera', () => {
+  // The code label, and the sentence the camera tools show.
   const cases = [
-    ['raw-prior', false, 'CAL · RAW PRIOR'],
-    ['curated', false, 'CAL · CURATED'],
-    ['curated', true, 'CAL · EDITED (UNSAVED)'],
-    ['calibrated', false, 'CAL · CALIBRATED'],
-    ['calibrated', true, 'CAL · EDITED (UNSAVED)'],
-    ['raw-prior', false, 'CAL · RAW PRIOR'],
-    [null, false, 'CAL · --'],
+    [
+      'raw-prior',
+      false,
+      'CAL · RAW PRIOR',
+      "Using the camera's default calibration",
+    ],
+    ['curated', false, 'CAL · CURATED', 'Hand-checked calibration'],
+    ['curated', true, 'CAL · EDITED (UNSAVED)', 'Edited, not saved'],
+    ['calibrated', false, 'CAL · CALIBRATED', 'Saved calibration'],
+    ['calibrated', true, 'CAL · EDITED (UNSAVED)', 'Edited, not saved'],
+    [
+      'raw-prior',
+      false,
+      'CAL · RAW PRIOR',
+      "Using the camera's default calibration",
+    ],
+    [null, false, 'CAL · --', ''],
   ];
-  for (const [calBadge, calDirty, label] of cases) {
+  for (const [calBadge, calDirty, label, status] of cases) {
     const activeCamera = Object.freeze({ id: 'a', calBadge, calDirty });
     const { quality } = presentCctvPanel(
       { enabled: true, activeCameraId: 'a', activeCamera },
@@ -49,11 +64,13 @@ test('calibration labels follow supplied provenance and dirty/save/reset transit
     assert.deepEqual(quality, {
       label,
       calBadge: calDirty ? 'edited' : calBadge || '',
+      status,
     });
   }
   assert.deepEqual(presentCctvPanel(null, false).quality, {
     label: 'CAL · --',
     calBadge: '',
+    status: '',
   });
 });
 
@@ -79,5 +96,27 @@ test('localization changes badge copy while preserving machine state ids', (test
   assert.deepEqual(quality, {
     label: t('CAL · EDITED (UNSAVED)'),
     calBadge: 'edited',
+    status: t('Edited, not saved'),
+  });
+  assert.notEqual(
+    quality.status,
+    'Edited, not saved',
+    'the sentence is translated',
+  );
+});
+
+test('a live video is OK only once its frames are drawn', () => {
+  const camera = { sourceKind: 'live', sourceStatus: 'ok' };
+  const badge = (liveState) =>
+    presentCctvSourceBadge(camera, true, IDLE, { live: true, liveState });
+  assert.deepEqual(badge(''), { label: 'FRAME · LOADING', state: 'loading' });
+  assert.deepEqual(badge('waiting'), {
+    label: 'FRAME · LOADING',
+    state: 'loading',
+  });
+  assert.deepEqual(badge('playing'), { label: 'LIVE · OK', state: 'ready' });
+  assert.deepEqual(badge('stalled'), {
+    label: 'VIDEO · STALLED',
+    state: 'error',
   });
 });

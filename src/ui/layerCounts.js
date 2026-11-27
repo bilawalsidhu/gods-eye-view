@@ -106,10 +106,10 @@ export function createLayerCounts({
   }
 
   return {
-    update({ shown, nothingOn }) {
+    update({ shown, nothingOn, globe = false }) {
       if (stopped) return;
       const wasEligible = eligible;
-      eligible = shown && nothingOn;
+      eligible = shown && (nothingOn || globe);
       if (!shown) return cancel();
       if (!eligible || wasEligible || active) return;
       const state = readState();

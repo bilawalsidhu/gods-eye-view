@@ -176,6 +176,34 @@ test('a registered HLS snapshot can be viewed without changing live stream healt
   assert.equal((await call(segment, SAME_ORIGIN)).statusCode, 200);
 });
 
+test('a dock request receives only an upstream camera image', async (t) => {
+  const cam = {
+    ...camera('cam-a'),
+    feedType: 'snapshot',
+    url: 'https://cams.upstream.invalid/photo.jpg',
+  };
+  let available = false;
+  const { call } = mountCctvProvider(t, {
+    cameras: [cam],
+    fetch: async () =>
+      new Response(available ? 'camera photo' : null, {
+        status: available ? 200 : 503,
+        headers: { 'Content-Type': 'image/jpeg' },
+      }),
+  });
+  const normal = await call('/frame/cam-a', SAME_ORIGIN);
+  assert.equal(normal.headers['X-CCTV-Source'], 'synthetic');
+  assert.match(normal.body, /UPSTREAM UNAVAILABLE/);
+  const path = '/frame/cam-a?liveOnly=1';
+  const outage = await call(path, SAME_ORIGIN);
+  assert.equal(outage.statusCode, 503);
+  assert.equal(outage.body, '');
+  available = true;
+  const recovered = await call(path, SAME_ORIGIN);
+  assert.equal(recovered.headers['X-CCTV-Source'], 'upstream-image');
+  assert.equal(recovered.body, 'camera photo');
+});
+
 test('third camera frame fallback keeps absent health', async (t) => {
   const { call, health, upstream } = mount(t);
   await openPlaylist(call, 'cam-a', lease(0));

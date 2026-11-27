@@ -2245,6 +2245,10 @@ export function createAnnotationResolver({
     }
   }
 
+  function recoveryCenter(viewer) {
+    return pickWorldFromScreen(viewer, 0.5, 0.5) || viewportProximity(viewer);
+  }
+
   /**
    * View-biased Places recovery for a NAME whose geocode missed or landed implausibly
    * far from what the user is looking at — the searchAndFlyTo twin of the recovery
@@ -2261,9 +2265,8 @@ export function createAnnotationResolver({
     geocoded = null,
     signal = undefined,
     placeSearch = defaultGeospatial,
+    center = recoveryCenter(viewer),
   ) {
-    const center =
-      pickWorldFromScreen(viewer, 0.5, 0.5) || viewportProximity(viewer);
     if (!center) return null;
     const geocodeFar =
       !geocoded ||
@@ -2499,6 +2502,7 @@ export function createAnnotationResolver({
     isGroundsLikeAsk,
     selectFootprint,
     viewportBias,
+    recoveryCenter,
     placesNearViewRecovery,
     resolveRegionRingForQuery,
     // Scene helpers, not resolution: the manual draw tool turns a click into a

@@ -21,6 +21,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
+import { selectQaContextCard } from './qa-chrome.mjs';
 
 const CHROME_EXECUTABLE = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const DEFAULT_URL = 'http://localhost:4176';
@@ -585,15 +586,6 @@ async function prepareDetection(page, densityPct) {
 }
 
 async function prepareTrackedFlight(page, cockpit) {
-  if (cockpit) {
-    const contacts = await page.evaluate(() => window.__godsEyeView.styleManager.setContextMode(
-      'contacts',
-      { origin: 'user' },
-    ));
-    if (!contacts?.ok) {
-      return `Contacts activation failed (${contacts?.error || 'unknown error'})`;
-    }
-  }
   const tracked = await page.evaluate(() => {
     const entry = window.__godsEyeView.dataManager.layers.get('flights');
     const layer = entry?.module;
@@ -605,23 +597,29 @@ async function prepareTrackedFlight(page, cockpit) {
   });
   if (!tracked.ok) return `Civil tracking unavailable (${tracked.reason})`;
   try {
-    await page.waitForFunction(() => Boolean(window.__godsEyeView.viewer.trackedEntity?.position), { timeout: 10_000 });
+    await page.waitForFunction(async () => {
+      const { followedOf } = await import('/src/data/followed.js');
+      return Boolean(followedOf(window.__godsEyeView.viewer)?.entity?.position);
+    }, { timeout: 10_000 });
   } catch {
     return 'Civil tracking did not create a tracked entity';
   }
   await sleep(2_000);
   if (!cockpit) return null;
-  const entryAvailable = await page.evaluate(() => {
-    const button = document.getElementById('cockpit-entry');
-    if (!button || button.hidden || button.disabled) return false;
-    button.click();
-    return true;
-  });
-  if (!entryAvailable) return 'Cockpit entry control was unavailable for the tracked aircraft';
+  // Cockpit is entered from the tracked aircraft's Context card, which also
+  // starts Contacts on it.
+  await selectQaContextCard(page, { layerId: 'flights', id: tracked.id });
+  const entry = '#entity-card[data-layer="flights"] [data-entity-cockpit-entry]';
   try {
-    await page.waitForFunction(() => document.body.classList.contains('cockpit-mode'), { timeout: 5_000 });
+    await page.waitForSelector(entry, { visible: true, timeout: 10_000 });
   } catch {
-    return 'Cockpit entry control did not enter cockpit mode';
+    return 'Cockpit entry was unavailable on the tracked aircraft\'s Context card';
+  }
+  await page.click(entry);
+  try {
+    await page.waitForFunction(() => document.body.classList.contains('cockpit-mode'), { timeout: 15_000 });
+  } catch {
+    return 'Cockpit entry did not enter cockpit mode';
   }
   await sleep(2_000);
   return null;
@@ -630,18 +628,39 @@ async function prepareTrackedFlight(page, cockpit) {
 async function prepareMission(page) {
   const state = await readLayerState(page, 'rocket-launches');
   if (!(state?.stats?.count > 0)) return `Mission feed unavailable (${state?.stats?.error || 'no missions'})`;
-  const selected = await page.evaluate(() => {
-    const button = document.querySelector('[data-mission-roster-index="0"]');
-    if (!button) return false;
-    button.click();
-    return true;
+  await page.evaluate(() => {
+    window.__godsEyeView.styleManager.setPanelCollapsed('global-context-panel', false, { persist: false, syncShare: false });
   });
-  if (!selected) return 'Mission roster did not expose a selectable mission';
+  const inspect = await page.$('#context-tab-inspect');
+  if (inspect && await inspect.isVisible()) await inspect.click();
+  let row;
   try {
-    await page.waitForFunction(() => String(window.__godsEyeView.viewer.selectedEntity?.id || '').startsWith('rocket-launch:'), { timeout: 10_000 });
-  } catch {
-    return 'Mission selection did not reach the Cesium selected entity';
+    const visibleRow = await page.waitForFunction(() => {
+      const button = document.querySelector('[data-list-card="space-missions"] button[data-list-index="0"]');
+      if (!button?.getClientRects().length || getComputedStyle(button).visibility === 'hidden') return null;
+      return button;
+    }, { timeout: 10_000 });
+    row = visibleRow.asElement();
+  } catch (error) {
+    if (error.name !== 'TimeoutError') throw error;
+    return 'Mission roster did not expose a visible selectable mission';
   }
+  const missionId = await row.evaluate((button) => button.dataset.listKey);
+  await row.click();
+  try {
+    await page.waitForSelector('#space-mission-panel:not([hidden]) [data-mission-title]', { visible: true, timeout: 10_000 });
+  } catch (error) {
+    if (error.name !== 'TimeoutError') throw error;
+    return 'Mission selection did not show its detail';
+  }
+  const selectedMissionId = await page.evaluate(() => {
+    const layer = window.__godsEyeView.dataManager.layers.get('rocket-launches').module;
+    let id;
+    const unsubscribe = layer.subscribePanel(({ mission }) => { id = mission?.id; });
+    unsubscribe();
+    return id;
+  });
+  if (selectedMissionId !== missionId) return 'Mission detail did not match the selected roster row';
   await sleep(2_000);
   return null;
 }

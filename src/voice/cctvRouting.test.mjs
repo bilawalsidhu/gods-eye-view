@@ -429,10 +429,14 @@ test(
         activeCameraId = id;
         return true;
       },
-      cycleCamera(step) {
-        calls.push(['cycle', step]);
-        activeCameraId = step > 0 ? 'b' : 'a';
-        return activeCameraId;
+      // Next and previous take the layer's own nearby-camera walk.
+      stepNearbyCamera(direction) {
+        calls.push(['step', direction]);
+        activeCameraId = activeCameraId === 'a' ? 'b' : 'a';
+        return {
+          cameraId: activeCameraId,
+          focusResult: CCTV_FOCUS_RESULT.TRACKING_HOLDS_VIEW,
+        };
       },
       focusNearest(options) {
         calls.push(['nearest', options]);
@@ -484,10 +488,8 @@ test(
     assert.deepEqual(calls, [
       ['select', 'b'],
       ['focus', 'b', 1.8],
-      ['cycle', 1],
-      ['focus', 'b', 1.8],
-      ['cycle', -1],
-      ['focus', 'a', 1.8],
+      ['step', 1],
+      ['step', -1],
       ['nearest', { focus: false }],
       ['focus', 'a', 1.8],
       ['focus', 'a', undefined],

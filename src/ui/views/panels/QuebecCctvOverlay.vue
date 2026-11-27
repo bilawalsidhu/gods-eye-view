@@ -2,36 +2,25 @@
 import { ref } from 'vue';
 import { t } from '../../../i18n/index.js';
 import UiButton from '../../kit/UiButton.vue';
-import UiCloseButton from '../../kit/UiCloseButton.vue';
 
-// The Québec 511 camera's floating player and its map preview, teleported to
-// the end of the page. `createQuebecCctvOverlay()` owns every decision: it
-// renders this with the `view` it computes and keeps the imperative parts,
-// which the template never binds: each video's source, playback and load, the
-// panel's dragged position, and the marker's per-frame visibility and place.
-// The elements those parts need are exposed.
+// The player belongs to the selected card. The separately positioned marker stays over the globe.
 defineProps({
+  playerHost: { type: Object, required: true },
   view: { type: Object, required: true },
 });
 const emit = defineEmits([
-  'close',
   'play',
   'refresh',
-  'keydown',
-  'headerPointerdown',
   'liveError',
   'liveLoadeddata',
   'stillError',
   'stillLoadeddata',
 ]);
 
-const panel = ref(null);
-const header = ref(null);
-const close = ref(null);
 const live = ref(null);
 const marker = ref(null);
 const still = ref(null);
-defineExpose({ panel, header, close, live, marker, still });
+defineExpose({ live, marker, still });
 // Each video's load and failure go to the owner, which marks the source.
 const liveListeners = {
   error: () => emit('liveError'),
@@ -44,23 +33,12 @@ const stillListeners = {
 </script>
 
 <!-- Only line breaks inside tags: the markup has no whitespace between elements. -->
-<template><Teleport to="body"
+<template>
+  <Teleport :to="playerHost"
     ><section
-      ref="panel"
       class="qci-panel"
       :hidden="view.panelHidden"
-      role="region"
-      :aria-label="t('CCTV camera')"
-      @keydown="emit('keydown', $event)"
-      ><header
-        ref="header"
-        class="qci-header"
-        @pointerdown="emit('headerPointerdown', $event)"
-        ><strong>{{ view.title }}</strong
-        ><UiCloseButton
-          ref="close"
-          :label="t('Close camera preview')"
-          @click="emit('close')" /></header
+      :aria-label="view.title"
       ><p class="qci-coordinates">{{ view.coordinates }}</p
       ><p class="qci-credit" :hidden="view.creditHidden">{{ view.credit }}</p
       ><video
@@ -73,7 +51,8 @@ const stillListeners = {
         playsinline
         :hidden="view.liveHidden"
         :aria-label="t('CCTV camera')"
-        v-on="liveListeners"></video
+        v-on="liveListeners"
+      ></video
       ><div class="qci-actions" :hidden="view.actionsHidden"
         ><UiButton
           class="qci-play"
@@ -91,6 +70,8 @@ const stillListeners = {
         :hidden="view.sourceHidden"
         >{{ t("Open this image on the provider's site") }}</a
       ></section
+    ></Teleport
+  ><Teleport to="body"
     ><div
       ref="marker"
       class="qci-marker"
@@ -104,7 +85,9 @@ const stillListeners = {
         preload="none"
         :hidden="view.stillHidden"
         aria-hidden="true"
-        v-on="stillListeners"></video
+        v-on="stillListeners"
+      ></video
       ><span class="qci-marker-label">{{ view.markerLabel }}</span></div
-  ></Teleport
-></template>
+    ></Teleport
+  >
+</template>

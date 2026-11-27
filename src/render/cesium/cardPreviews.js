@@ -72,7 +72,15 @@ function renderLoopSwitch(widget, ready = () => true) {
     widget.useDefaultRenderLoop = run;
   };
   return {
+    get active() {
+      return active;
+    },
     sync,
+    drawOnce() {
+      if (widget.isDestroyed() || widget.useDefaultRenderLoop) return;
+      widget.resize();
+      widget.render();
+    },
     set(next) {
       active = Boolean(next);
       sync();
@@ -142,16 +150,22 @@ void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
  *   viewRange?: number}} model The GLB's bytes; the heading (degrees) it
  *   starts facing; how far the camera stands, in bounding radii.
  * @param {{onPhase?: (phase: string) => void, onCycle?: (ms: number) => void,
- *   onFailed?: () => void}} [events]
+ *   onReady?: () => void, onFailed?: () => void}} [events]
  */
 function modelPreview(
   container,
   { gltf, basePath, heading = 0, viewRange = 1.9 },
-  { onPhase = () => {}, onCycle = () => {}, onFailed = () => {} } = {},
+  {
+    onPhase = () => {},
+    onCycle = () => {},
+    onReady = () => {},
+    onFailed = () => {},
+  } = {},
 ) {
   let widget = null;
   let model = null;
   let loaded = false;
+  let still = reducedMotion();
   let removeTick = null;
   let loop = null;
   const fail = () => {
@@ -198,7 +212,6 @@ function modelPreview(
     let cycleMs = 0;
     let lastFrame = performance.now();
     let holdMs = null;
-    const still = reducedMotion();
     const range = sphere.radius * viewRange;
     const pitch = Cesium.Math.toRadians(-18);
     const ease = (x) => x * x * (3 - 2 * x);
@@ -246,9 +259,13 @@ function modelPreview(
     };
     frame();
     removeTick = widget.scene.preRender.addEventListener(frame);
+    const stop = widget.scene.postRender.addEventListener(() => {
+      stop();
+      loaded = true;
+      onReady();
+      loop.sync();
+    });
     widget.render();
-    loaded = true;
-    loop.sync();
   };
 
   Cesium.Model.fromGltfAsync({
@@ -281,7 +298,10 @@ function modelPreview(
   }
 
   return {
-    setActive: (active) => loop.set(active),
+    setActive(active) {
+      if (active) still = reducedMotion();
+      loop.set(active);
+    },
     update() {},
     destroy() {
       removeTick?.();
@@ -441,11 +461,16 @@ function planePose(at, deg) {
  * @param {{from: {code?: string, lat: number, lon: number},
  *   to: {code?: string, lat: number, lon: number},
  *   at?: {lat: number, lon: number}|null}} route
- * @param {{onFailed?: () => void}} [events]
+ * @param {{onReady?: () => void, onFailed?: () => void}} [events]
  */
-function routePreview(container, route, { onFailed = () => {} } = {}) {
+function routePreview(
+  container,
+  route,
+  { onReady = () => {}, onFailed = () => {} } = {},
+) {
   let widget = null;
   let loop = null;
+  let shown = true;
   let { from, to } = route;
   let plane = null;
   let flownLine = null;
@@ -453,6 +478,8 @@ function routePreview(container, route, { onFailed = () => {} } = {}) {
   let removeGrow = null;
   /** True while the plane flies in from the origin; moves wait for it. */
   let flyingIn = false;
+  // Check the new camera view's tile queue after Cesium has drawn it.
+  let framed = false;
   /** The craft's latest position, kept through the fly-in and the load. */
   let latest = route.at;
 
@@ -469,6 +496,7 @@ function routePreview(container, route, { onFailed = () => {} } = {}) {
     const { entities, scene } = widget;
     removeGrow?.();
     removeGrow = null;
+    flyingIn = false;
     entities.removeAll();
     plane = flownLine = null;
     const pin = (place, color) =>
@@ -543,6 +571,8 @@ function routePreview(container, route, { onFailed = () => {} } = {}) {
       const opened = performance.now();
       flyingIn = true;
       const grow = () => {
+        // A paused card draws the current position even while tiles are loading.
+        if (!loop.active) began = -Infinity;
         if (began === null) {
           if (!scene.globe.tilesLoaded && performance.now() - opened < 1500)
             return;
@@ -582,6 +612,8 @@ function routePreview(container, route, { onFailed = () => {} } = {}) {
       new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-62), range),
     );
     scene.requestRender();
+    framed = false;
+    loop?.sync();
   };
 
   try {
@@ -595,7 +627,17 @@ function routePreview(container, route, { onFailed = () => {} } = {}) {
     scene.globe.baseColor = Cesium.Color.fromCssColorString('#0b1820');
     scene.globe.showGroundAtmosphere = false;
     scene.globe.enableLighting = false;
-    loop = renderLoopSwitch(widget);
+    // While paused and visible, keep drawing until the bundled imagery is in.
+    loop = renderLoopSwitch(
+      widget,
+      () => !shown || (framed && !flyingIn && scene.globe.tilesLoaded),
+    );
+    scene.postRender.addEventListener(() => {
+      const firstFrame = !framed && aheadLine;
+      framed = true;
+      if (firstFrame) onReady();
+      if (widget?.useDefaultRenderLoop) loop.sync();
+    });
   } catch {
     onFailed();
     return { setActive() {}, update() {}, destroy() {} };
@@ -626,6 +668,12 @@ function routePreview(container, route, { onFailed = () => {} } = {}) {
 
   return {
     setActive: (active) => loop.set(active),
+    setShown(next) {
+      if (!widget || shown === next) return;
+      shown = next;
+      loop.sync();
+      if (shown) loop.drawOnce();
+    },
     /**
      * A new route redraws; the craft moving along it only moves its plane
      * and the two lines, without replaying the opening draw.
@@ -639,6 +687,7 @@ function routePreview(container, route, { onFailed = () => {} } = {}) {
         return;
       }
       move(latest);
+      if (shown) loop.drawOnce();
     },
     destroy() {
       removeGrow?.();
@@ -663,13 +712,25 @@ const MIN_EYE_M = 60;
  * @param {HTMLElement} container
  * @param {{lat: number, lon: number, altitudeM?: number|null,
  *   heading?: number|null}} craft
- * @param {{onFailed?: () => void}} [events]
+ * @param {{onFailed?: () => void, onReady?: () => void}} [events] `onReady`
+ *   each time a shown view has its imagery on and all its tiles in.
  */
-function cockpitPreview(container, craft, { onFailed = () => {} } = {}) {
+function cockpitPreview(
+  container,
+  craft,
+  { onFailed = () => {}, onReady = () => {} } = {},
+) {
   let widget = null;
   let loop = null;
   let active = false;
   let at = craft;
+  // Ready means the imagery is on and its tiles are in, not only the plain
+  // globe under it.
+  let imageryOn = false;
+  let tilesLeft = 1;
+  const maybeReady = () => {
+    if (active && imageryOn && tilesLeft === 0) onReady();
+  };
   const place = () => {
     if (!widget || !Number.isFinite(at?.lat) || !Number.isFinite(at?.lon))
       return;
@@ -701,10 +762,13 @@ function cockpitPreview(container, craft, { onFailed = () => {} } = {}) {
     scene.globe.showGroundAtmosphere = true;
     scene.fog.enabled = true;
     scene.camera.frustum.fov = Cesium.Math.toRadians(70);
-    // Tiles arriving ask for a frame, so the still fills in as they load.
-    scene.globe.tileLoadProgressEvent.addEventListener(() =>
-      scene.requestRender(),
-    );
+    // Tiles arriving ask for a frame, so the still fills in as they load;
+    // once none are left to come, a shown view is ready.
+    scene.globe.tileLoadProgressEvent.addEventListener((left) => {
+      scene.requestRender();
+      tilesLeft = left;
+      maybeReady();
+    });
     place();
     // Hidden, it draws nothing at all, not even as tiles arrive.
     loop = renderLoopSwitch(widget);
@@ -717,6 +781,7 @@ function cockpitPreview(container, craft, { onFailed = () => {} } = {}) {
     (imagery) => {
       if (!widget) return;
       widget.scene.imageryLayers.addImageryProvider(imagery);
+      imageryOn = true;
       widget.scene.requestRender();
     },
     () => widget && onFailed(),
@@ -726,7 +791,10 @@ function cockpitPreview(container, craft, { onFailed = () => {} } = {}) {
       active = Boolean(next);
       if (!widget) return;
       loop.set(active);
-      if (active) place();
+      if (!active) return;
+      place();
+      // Shown again with its tiles already in: ready at once.
+      maybeReady();
     },
     /** While it shows, the view keeps up with the craft. */
     update(next) {

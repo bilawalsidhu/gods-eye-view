@@ -68,7 +68,7 @@ const quickPrompts = () => [t('Fly to Tokyo'), t('Show live flights')];
     <header class="gev-chat-header">
       <div><strong>{{ t('GEV CHAT') }}</strong><p>{{ t('Ask about the map. Tell it where to go.') }}</p></div>
       <div id="gev-chat-header-actions">
-        <PanelLayoutButtons :docked="props.view.layout.docked" :minimized="props.view.chat.minimized" @dock="emit('layout-dock')" @minimize="emit('chat-minimize')" />
+        <PanelLayoutButtons :minimized="props.view.chat.minimized" @minimize="emit('chat-minimize')" />
         <UiButton v-if="props.view.panel" id="gev-voice-settings-button" class="gev-voice-settings-button" :aria-label="t('Settings')" :title="t('Settings')" aria-controls="gev-voice-panel" :aria-expanded="String(props.view.voicePanel.settingsExpanded)" @click="emit('settings-button')"><UiIcon name="settings" class="gev-voice-settings-icon" :size="null" /></UiButton>
         <UiCloseButton id="gev-chat-close" :label="t('Close chat')" @click="emit('chat-close')" />
       </div>

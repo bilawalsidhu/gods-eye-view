@@ -1,8 +1,4 @@
-import { _initGlobalContextPanel } from './contextBindings.js';
-import {
-  _syncContextModeButtons,
-  _presentContext,
-} from './contextPresentation.js';
+import { _syncContextModeButtons } from './contextPresentation.js';
 import {
   _trackContextLayerReaction,
   _waitForContextLayerSettlement,
@@ -27,16 +23,12 @@ import { connectContextManager } from './contextSubscriptions.js';
 
 /**
  * Own Context transactions and controls through explicit layer and
- * presentation ports. The mode switch is presented through `publish`
- * (the app hands it the `gev-context` store) and rendered by the view.
+ * presentation ports. Hosts can subscribe to mode changes with `publish`.
  */
 export class ContextControls {
-  constructor({ elements, installations, actions, publish = () => {} }) {
-    Object.assign(this, elements);
-    this.installations = installations;
+  constructor({ actions, publish }) {
     this.actions = actions;
     this.publish = publish;
-    this._installationsSearchBusy = false;
     this.listeners = new AbortController();
     this.destroyed = false;
     this._dataManager = null;
@@ -47,13 +39,11 @@ export class ContextControls {
     this._contextSessionSnapshot = null;
     this._contextRestoreState = null;
     this._contextLayerReactionPromises = new Set();
-    this._preservePanelStateDuringLayerClear = false;
     /** Layers Context isolation is switching off right now. */
     this._isolatingLayerIds = new Set();
     this._userFacingContextNotificationTokens = new Set();
     this._clearSelectedLayersPromise = null;
     this._clearSelectedLayersManagerPromise = null;
-    this._initGlobalContextPanel();
   }
   showToast(...args) {
     if (!this.destroyed) this.actions.showToast(...args);
@@ -105,14 +95,8 @@ export class ContextControls {
     this._contextMode = null;
     await this._restoreContextSession();
   }
-  _initGlobalContextPanel(...args) {
-    return _initGlobalContextPanel.call(this, ...args);
-  }
   _syncContextModeButtons(...args) {
     return _syncContextModeButtons.call(this, ...args);
-  }
-  _presentContext(...args) {
-    return _presentContext.call(this, ...args);
   }
   _trackContextLayerReaction(...args) {
     return _trackContextLayerReaction.call(this, ...args);

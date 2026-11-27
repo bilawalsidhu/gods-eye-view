@@ -76,12 +76,11 @@ function fixture() {
     isCockpitActive: () => false,
     scheduleLayout() {},
     getLifecycle: () => null,
-    preservePanelStateDuringClear: () => false,
   };
   const controls = new RadioControls({
     elements: {
       _radioPanel: panel,
-      _radioEnableBtn: enable,
+      _cockpitRadioEnableBtn: enable,
     },
     radio,
     actions,
@@ -137,7 +136,7 @@ test('Radio reconnect removes its previous state subscription', () => {
   }
 });
 
-test('a delayed Radio enable cannot reveal or refocus controls after destruction', async () => {
+test('a delayed Radio enable cannot mark or refocus its button after destruction', async () => {
   const f = fixture();
   let resolve;
   const pending = new Promise((done) => {
@@ -145,7 +144,7 @@ test('a delayed Radio enable cannot reveal or refocus controls after destruction
   });
   try {
     f.actions.setEnabled = () => pending;
-    f.store.act('toggleRadio', 'panel');
+    f.store.act('toggleRadio');
     assert.equal(f.enable.getAttribute('aria-busy'), 'true');
     f.controls.destroy();
     const attrs = new Map(f.enable.attrs);

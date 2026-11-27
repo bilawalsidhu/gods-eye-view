@@ -36,14 +36,13 @@ try {
         document.getElementById('loading-screen')?.classList.contains('hidden'),
       { timeout: 60000 },
     );
+    // Weather's list shows in Context's list tab; the camera tools' CAL chip
+    // waits in their hidden home until a camera card's Camera settings tab
+    // shows it.
     await page.evaluate(async () => {
       const { dataManager, styleManager: manager } = window.__godsEyeView;
       await dataManager.setEnabled('wind', true);
-      manager.setPanelCollapsed('weather-panel', false, {
-        persist: false,
-        syncShare: false,
-      });
-      manager.setPanelCollapsed('cctv-panel', false, {
+      manager.setPanelCollapsed('global-context-panel', false, {
         persist: false,
         syncShare: false,
       });
@@ -70,18 +69,23 @@ try {
         },
       });
     });
-    await page.waitForSelector('.weather-coverage.gev-status-badge');
+    await page.waitForSelector('#context-tab-lists', { visible: true });
+    await page.click('#context-tab-lists');
+    await page.waitForSelector(
+      '#context-lists .weather-coverage.gev-status-badge',
+      {
+        visible: true,
+      },
+    );
     const inventory = await page.evaluate(() => {
-      const source = document.getElementById('cctv-source-badge');
       const quality = document.getElementById('cctv-quality-chip');
-      const coverage = [...document.querySelectorAll('.weather-coverage')];
+      const coverage = [
+        ...document.querySelectorAll('#context-lists .weather-coverage'),
+      ];
       return {
-        shared: [source, quality, ...coverage].every((node) =>
+        shared: coverage.every((node) =>
           node.classList.contains('gev-status-badge'),
         ),
-        live:
-          source.getAttribute('role') === 'status' &&
-          source.getAttribute('aria-live') === 'polite',
         silent: [quality, ...coverage].every(
           (node) =>
             !node.hasAttribute('aria-live') &&
@@ -96,69 +100,20 @@ try {
               !node.hidden &&
               node.classList.contains('gev-status-badge--plain'),
           ),
-        source: source.textContent,
       };
     });
     check(
-      `${lang}: CCTV and populated Weather badges share the view`,
+      `${lang}: populated Weather badges share the view`,
       inventory.shared && inventory.coverage,
       inventory,
     );
     check(
-      `${lang}: existing announcement and read-only semantics remain intact`,
-      inventory.live && inventory.silent,
+      `${lang}: read-only badge semantics remain intact`,
+      inventory.silent,
       inventory,
     );
-    check(
-      `${lang}: source wording uses the active locale`,
-      lang === 'en'
-        ? inventory.source === 'SNAPSHOT · DEGRADED'
-        : inventory.source !== 'SNAPSHOT · DEGRADED',
-      inventory,
-    );
-
-    for (const state of ['loading', 'error', 'retained', 'ready', 'idle']) {
-      const result = await page.evaluate(async (state) => {
-        const owner = window.__godsEyeView.styleManager._cctvControls;
-        const frame = owner._frame;
-        owner._frame = {
-          ...frame,
-          loading: state === 'loading',
-          error: ['error', 'retained'].includes(state),
-          hasFrame: state === 'retained',
-        };
-        owner._syncCctvSourceBadge(
-          owner._cctvState.activeCamera,
-          state !== 'idle',
-        );
-        owner._frame = frame;
-        // The panel view renders the badge on Vue's next flush.
-        await new Promise((resolve) => requestAnimationFrame(resolve));
-        const badge = document.getElementById('cctv-source-badge');
-        return {
-          state: badge.dataset.frameState,
-          text: badge.textContent,
-          color: getComputedStyle(badge).color,
-        };
-      }, state);
-      const expected = {
-        loading: ['loading', 'rgb(255, 229, 155)'],
-        error: ['error', 'rgb(255, 176, 176)'],
-        retained: ['ready', 'rgb(157, 239, 255)'],
-        ready: ['ready', 'rgb(157, 239, 255)'],
-        idle: ['idle', 'rgb(157, 239, 255)'],
-      }[state];
-      check(
-        `${lang}: ${state} keeps its frame state and palette`,
-        result.state === expected[0] &&
-          result.color === expected[1] &&
-          (!['ready', 'retained'].includes(state) ||
-            result.text === inventory.source),
-        result,
-      );
-    }
     for (const [calBadge, dirty, color] of [
-      ['raw-prior', false, 'rgb(143, 231, 255)'],
+      ['raw-prior', false, 'rgba(225, 236, 242, 0.85)'],
       ['curated', false, 'rgb(255, 230, 162)'],
       ['calibrated', false, 'rgb(173, 255, 191)'],
       ['curated', true, 'rgb(255, 208, 138)'],
@@ -166,7 +121,6 @@ try {
       const result = await page.evaluate(
         async ({ calBadge, dirty }) => {
           const owner = window.__godsEyeView.styleManager._cctvControls;
-          document.getElementById('cctv-next-btn').focus();
           owner._renderCctvState({
             ...owner._cctvState,
             activeCamera: {
@@ -175,22 +129,20 @@ try {
               calDirty: dirty,
             },
           });
-          // The panel view renders the chip on Vue's next flush.
+          // The tools render the chip on Vue's next flush.
           await new Promise((resolve) => requestAnimationFrame(resolve));
           const badge = document.getElementById('cctv-quality-chip');
           return {
             state: badge.dataset.calBadge,
             color: getComputedStyle(badge).color,
-            focus: document.activeElement.id,
           };
         },
         { calBadge, dirty },
       );
       check(
-        `${lang}: ${dirty ? 'edited' : calBadge} keeps provenance color and control focus`,
+        `${lang}: ${dirty ? 'edited' : calBadge} keeps its provenance color`,
         result.state === (dirty ? 'edited' : calBadge) &&
-          result.color === color &&
-          result.focus === 'cctv-next-btn',
+          result.color === color,
         result,
       );
     }
@@ -201,72 +153,88 @@ try {
       );
       for (const width of [1440, 620, 390]) {
         await page.setViewport({ width, height: 900 });
-        for (const panelId of ['cctv-panel', 'weather-panel']) {
-          await page.evaluate(async (panelId) => {
-            const manager = window.__godsEyeView.styleManager;
-            for (const other of ['cctv-panel', 'weather-panel']) {
-              if (other !== panelId)
-                manager.setPanelCollapsed(other, true, {
-                  persist: false,
-                  syncShare: false,
-                });
-            }
-            manager.setPanelCollapsed(panelId, false, {
-              persist: false,
-              syncShare: false,
-            });
-            await new Promise((resolve) =>
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        // Phones show Context in the Context tab's sheet.
+        await page.evaluate(() => {
+          if (
+            document.body.classList.contains('mobile-shell') &&
+            document.body.dataset.mobileSheet !== 'context'
+          )
+            document
+              .querySelector('#mobile-tab-bar [data-mobile-sheet="context"]')
+              ?.click();
+        });
+        await page
+          .waitForFunction(
+            () =>
+              document
+                .querySelector('#context-lists .weather-coverage')
+                ?.getBoundingClientRect().width > 0,
+            { timeout: 3000 },
+          )
+          .catch(() => {});
+        await page.evaluate(
+          () =>
+            new Promise((resolve) =>
               requestAnimationFrame(() => requestAnimationFrame(resolve)),
-            );
-          }, panelId);
-          const layout = await page.evaluate((panelId) => {
-            const selector =
-              panelId === 'cctv-panel'
-                ? '#cctv-source-badge, #cctv-quality-chip'
-                : '.weather-coverage';
-            return [...document.querySelectorAll(selector)].map((node) => {
-              const rect = node.getBoundingClientRect();
-              const panel = node.closest(`#${panelId}`).getBoundingClientRect();
-              return {
-                id: node.id || 'weather-coverage',
-                text: node.textContent,
-                width: rect.width,
-                height: rect.height,
-                scroll: node.scrollWidth,
-                client: node.clientWidth,
-                left: rect.left,
-                right: rect.right,
-                panelLeft: panel.left,
-                panelRight: panel.right,
-                fits:
-                  rect.width > 0 &&
-                  rect.height > 0 &&
-                  rect.left >= panel.left - 1 &&
-                  rect.right <= panel.right + 1 &&
-                  node.scrollWidth <= node.clientWidth + 1,
-              };
-            });
-          }, panelId);
-          check(
-            `${lang}/${theme}: ${panelId} badges fit at ${width}px`,
-            layout.length >= (panelId === 'cctv-panel' ? 2 : 1) &&
-              layout.every((node) => node.fits),
-            layout,
-          );
-          if (width === 390)
-            await page.screenshot({
-              path: `${out}/${lang}-${theme}-${panelId}-${width}.png`,
-            });
-        }
+            ),
+        );
+        const layout = await page.evaluate(() =>
+          [
+            ...document.querySelectorAll('#context-lists .weather-coverage'),
+          ].map((node) => {
+            const rect = node.getBoundingClientRect();
+            const panel = node
+              .closest('#global-context-panel')
+              .getBoundingClientRect();
+            return {
+              text: node.textContent,
+              width: rect.width,
+              height: rect.height,
+              scroll: node.scrollWidth,
+              client: node.clientWidth,
+              left: rect.left,
+              right: rect.right,
+              panelLeft: panel.left,
+              panelRight: panel.right,
+              fits:
+                rect.width > 0 &&
+                rect.height > 0 &&
+                rect.left >= panel.left - 1 &&
+                rect.right <= panel.right + 1 &&
+                node.scrollWidth <= node.clientWidth + 1,
+            };
+          }),
+        );
+        check(
+          `${lang}/${theme}: Weather badges fit Context at ${width}px`,
+          layout.length >= 1 && layout.every((node) => node.fits),
+          layout,
+        );
+        if (width === 390)
+          await page.screenshot({
+            path: `${out}/${lang}-${theme}-weather-${width}.png`,
+          });
       }
     }
-    const disposed = await page.evaluate(() => {
+    const disposed = await page.evaluate(async () => {
       const owner = window.__godsEyeView.styleManager._cctvControls;
       const badge = document.getElementById('cctv-quality-chip');
-      const text = badge.textContent;
+      const late = {
+        ...owner._cctvState,
+        activeCamera: {
+          ...owner._cctvState.activeCamera,
+          calBadge: 'calibrated',
+          calDirty: false,
+        },
+      };
       owner.destroy();
-      owner._renderCctvState(null);
-      return badge.textContent === text;
+      owner._renderCctvState(late);
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      return (
+        document.getElementById('cctv-quality-chip')?.dataset.calBadge ===
+        'edited'
+      );
     });
     check(`${lang}: disposal prevents late state painting`, disposed);
   }

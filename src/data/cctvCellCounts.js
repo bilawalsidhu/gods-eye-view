@@ -8,7 +8,7 @@ export function formatCameraCount(count) {
   return `${thousands}K`;
 }
 
-/** An empty cell and its on-screen picker candidate. */
+/** An empty cell and its first on-screen camera. */
 export function createCameraCell(key) {
   return {
     key,
@@ -23,7 +23,6 @@ export function createCameraCell(key) {
     low: Infinity,
     high: -Infinity,
     winner: null,
-    rank: Infinity,
   };
 }
 
@@ -142,7 +141,7 @@ function visitNeighbors(marker, grid, gap, visit) {
  * joins the nearest count it touches. Lone cameras never join each other
  * or bridge two counts. A spread icon's `offsetPx` shifts its footprint sideways.
  * A merged group lists its ground cells in `parts`.
- * Ground cells stay intact for the camera picker and individual-icon pass.
+ * Ground cells stay intact for the individual-icon pass.
  */
 export function mergeCountCells(cells, project, sizeFor, gap) {
   let columnWidth = 0;

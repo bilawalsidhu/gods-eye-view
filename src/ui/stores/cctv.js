@@ -8,11 +8,11 @@ function updatePreviewIds(ids, cameraId, shown) {
 }
 
 /**
- * The CCTV panel as its view renders it. CctvControls presents the buttons,
- * CAL chip, meta line and calibration readout (`presentCctvPanel()`), runs
- * the frame preview, source badge and typed summary, and publishes them
- * here, with the camera picker's options; it keeps its listeners on the
- * panel's controls.
+ * A camera as its card and Camera tools render it. CctvControls presents the
+ * tools' buttons, CAL chip, meta line and calibration readout
+ * (`presentCctvPanel()`), runs the frame preview, source badge and typed
+ * summary, and publishes them here; it keeps its listeners on the tools'
+ * controls.
  */
 export const useCctvStore = defineStore('gev-cctv', () => {
   /** The presented panel; null until the controls first render. */
@@ -29,18 +29,21 @@ export const useCctvStore = defineStore('gev-cctv', () => {
    * time its source gave the shown frame (`timeMs`, `timeLabel`, `timeIso`).
    */
   const frame = shallowRef(null);
-  /** Camera IDs with a mounted card or an open bigger view. */
+  /** Camera IDs with a visible card preview or an open bigger view. */
   const previewCards = shallowRef([]);
   const previewPopups = shallowRef([]);
+  /** Camera whose Context settings currently own calibration. */
+  const settingsCameraId = shallowRef(null);
+  const settingsVisible = shallowRef(false);
   /** Whether the live video surface replaces the still frame. */
   const live = shallowRef(false);
+  /**
+   * What the card's live video shows: '' while no card paints it, 'waiting'
+   * before its first frame, 'playing', or 'stalled' (its last frame held).
+   */
+  const liveState = shallowRef('');
   /** `{label, state}` for the source badge; null until first synced. */
   const sourceBadge = shallowRef(null);
-  /**
-   * The camera picker: `{options: [{value, label}], note, disabled,
-   * selection: {value}|{index}|null}`; null until first rendered.
-   */
-  const picker = shallowRef(null);
   /** The scene summary as typed so far; null until the first one. */
   const summary = shallowRef(null);
 
@@ -78,14 +81,14 @@ export const useCctvStore = defineStore('gev-cctv', () => {
     live.value = Boolean(on);
   }
 
+  /** @param {''|'waiting'|'playing'|'stalled'} next */
+  function setLiveState(next) {
+    liveState.value = next || '';
+  }
+
   /** @param {{label: string, state: string}} next */
   function setSourceBadge(next) {
     sourceBadge.value = markRaw(next);
-  }
-
-  /** @param {object} next */
-  function setPicker(next) {
-    picker.value = markRaw(next);
   }
 
   /** @param {string} text */
@@ -99,18 +102,20 @@ export const useCctvStore = defineStore('gev-cctv', () => {
     frame,
     previewCards,
     previewPopups,
+    settingsCameraId,
+    settingsVisible,
     live,
+    liveState,
     sourceBadge,
     summary,
-    picker,
     publish,
     setCalEdit,
     setFrame,
     showPreviewCard,
     showPreviewPopup,
     setLive,
+    setLiveState,
     setSourceBadge,
     setSummary,
-    setPicker,
   };
 });

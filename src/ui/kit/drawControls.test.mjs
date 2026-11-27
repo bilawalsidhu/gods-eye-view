@@ -1,5 +1,5 @@
 // UTILITIES ▸ Draw (its toggle, Clear, the colour swatches and the drawn
-// shapes' rows), Import and the Street Level panel are on the kit: none of
+// shapes' rows), Import and the Street Level viewer are on the kit: none of
 // them hand-writes a <button>, a Material Symbols span, a select, a checkbox
 // or a range. The Draw toggle is a pressed toggle with `active`. The colour
 // swatches are `role="radio"` buttons: they say they are chosen with
@@ -34,9 +34,8 @@ const views = {
   'DrawMarkList.vue': { buttons: 4, icons: 3, closes: 1 },
   // Import and a file's row actions.
   'GeoImport.vue': { buttons: 2, icons: 2, closes: 0 },
-  // The status toggle, EXPAND and the nearest-imagery button; the viewer's
-  // close. EXPAND's ⤢ ⤡ and the errors' ⚠ are text, not Material symbols.
-  'StreetLevelPanel.vue': { buttons: 3, icons: 0, closes: 1 },
+  // Expand and the embedded photo's close control.
+  'StreetLevelViewer.vue': { buttons: 1, icons: 0, closes: 1 },
 };
 const markup = Object.fromEntries(
   Object.keys(views).map((file) => [file, template(file)]),
@@ -61,8 +60,6 @@ test('they hand-write no select, checkbox or range', () => {
       file,
     );
   }
-  // SINCE is the kit's range.
-  assert.equal(tags(markup['StreetLevelPanel.vue'], 'UiSlider').length, 1);
 });
 
 test('they hand-write no Material glyph; each is a UiIcon sized by the site', () => {

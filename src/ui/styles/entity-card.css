@@ -16,19 +16,6 @@
   gap: 0.5rem;
 }
 
-.entity-card__icon {
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: 1.9rem;
-  height: 1.9rem;
-  color: #36dcff;
-  font-size: 1.1rem;
-  background: rgba(29, 69, 81, 0.35);
-  border: 1px solid rgba(48, 194, 224, 0.35);
-  border-radius: 7px;
-}
-
 .entity-card__kind {
   display: flex;
   flex: 1;
@@ -48,39 +35,6 @@
   color: rgba(199, 214, 222, 0.5);
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.entity-card__status {
-  flex: none;
-  padding: 0.12rem 0.45rem;
-  font-size: 0.58rem;
-  white-space: nowrap;
-  border: 1px solid currentColor;
-  border-radius: 999px;
-}
-
-.entity-card__status--live {
-  color: #5ee6a0;
-}
-
-.entity-card__status--live::before {
-  display: inline-block;
-  width: 5px;
-  height: 5px;
-  margin-right: 0.3rem;
-  vertical-align: middle;
-  background: currentColor;
-  border-radius: 50%;
-  content: '';
-  animation: entity-card-pulse 1.6s ease-in-out infinite;
-}
-
-.entity-card__status--aged {
-  color: rgba(199, 214, 222, 0.6);
-}
-
-.entity-card__status--lost {
-  color: #ff9f43;
 }
 
 /* A UiCloseButton: close-button.css draws no padding, border or background. */
@@ -140,14 +94,6 @@
   letter-spacing: 0.02rem;
 }
 
-.entity-card__where {
-  margin: 0 0 0.5rem;
-  color: rgba(199, 214, 222, 0.5);
-  font-family: var(--font-mono);
-  font-size: 0.62rem;
-  white-space: pre;
-}
-
 .entity-card__facts {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -167,12 +113,25 @@
 }
 
 .entity-card__fact dd {
+  /* Up to two lines, so a provider, a time or the weather is not cut short;
+     anything longer shows in full on hover (its title). */
+  display: -webkit-box;
   margin: 0.1rem 0 0;
   overflow: hidden;
   font-family: var(--font-mono);
   font-size: 0.72rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.entity-card__fact dd.entity-card__weather-credit-line {
+  display: block;
+  overflow: visible;
+  -webkit-line-clamp: unset;
+  line-clamp: none;
 }
 
 .entity-card__empty {
@@ -213,6 +172,18 @@
   border-top: 1px solid rgba(255, 255, 255, 0.07);
 }
 
+/* Fly to held by Tracking or Cockpit: a short word under the buttons. */
+.entity-card__fly-note {
+  margin: 0;
+  color: #ffb547;
+  font-family: var(--font-mono);
+  font-size: var(--gev-tool-font-size);
+}
+
+.entity-card__fly-note:not(:empty) {
+  padding-top: 0.3rem;
+}
+
 .entity-card__action {
   display: inline-flex;
   flex: 1;
@@ -221,35 +192,36 @@
   gap: 0.3rem;
   height: 1.9rem;
   padding: 0 0.4rem;
-  color: rgba(225, 236, 242, 0.88);
-  font-size: 0.66rem;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 7px;
+  min-width: 0;
+  color: var(--gev-tool-text);
+  font-family: var(--font-mono);
+  font-size: var(--gev-tool-font-size);
+  letter-spacing: var(--gev-tool-tracking);
+  text-transform: uppercase;
+  white-space: nowrap;
+  background: var(--gev-tool-fill);
+  border: 1px solid var(--gev-tool-border);
+  border-radius: var(--gev-tool-radius);
   cursor: pointer;
   transition:
     background 140ms ease,
-    border-color 140ms ease;
+    border-color 140ms ease,
+    color 140ms ease;
 }
 
 .entity-card__action .material-symbols-outlined {
   font-size: 0.95rem;
 }
 
-.entity-card__action:hover,
+.entity-card__action:hover {
+  color: var(--gev-tool-on);
+  background: var(--gev-tool-on-fill);
+  border-color: var(--gev-tool-on);
+}
+
 .entity-card__action:focus-visible {
-  background: rgba(48, 194, 224, 0.12);
-  border-color: rgba(48, 194, 224, 0.45);
-}
-
-.entity-card__action--ask {
-  color: #ffb877;
-}
-
-.entity-card__action--ask:hover,
-.entity-card__action--ask:focus-visible {
-  background: rgba(255, 159, 67, 0.12);
-  border-color: rgba(255, 159, 67, 0.5);
+  outline: 2px solid var(--gev-tool-on);
+  outline-offset: 2px;
 }
 
 .entity-card__nearby {
@@ -331,12 +303,6 @@
   transform: translateY(-6px);
 }
 
-@keyframes entity-card-pulse {
-  50% {
-    opacity: 0.35;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .entity-card-enter-active,
   .entity-card-leave-active {
@@ -347,24 +313,32 @@
   .entity-card-leave-to {
     transform: none;
   }
-
-  .entity-card__status--live::before {
-    animation: none;
-  }
 }
 
-/* The Properties tab shows only the layers' settings. The idle hint gives
-   way to the view summary, and Contacts' Cockpit entry to the card's own
-   while the card offers one. */
-#global-context-panel[data-context-tab='props']
-  :is(.global-context-modes, .context-mode-view, #radio-panel),
-#global-context-panel #context-mode-standby,
-#global-context-panel:has([data-entity-cockpit-entry]) #cockpit-entry {
-  display: none !important;
+/* ── In view: what the panel shows while nothing is picked ───────────── */
+.view-context__empty {
+  margin: 0 0 0.4rem;
+  color: rgba(199, 214, 222, 0.7);
+  font-size: 0.68rem;
+  line-height: 1.45;
 }
 
-#global-context-panel .global-context-actions:has(#tr3b-toggle:not([hidden])) {
-  grid-template-columns: minmax(0, 1fr) auto;
+.view-context {
+  margin: 0 0 0.75rem;
+  padding: 0.7rem 0.75rem 0.6rem;
+  color: rgba(225, 236, 242, 0.92);
+  background: rgba(40, 44, 52, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 10px;
+}
+
+.view-context__title {
+  margin: 0.55rem 0 0.1rem;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
 .context-empty {
@@ -410,47 +384,10 @@
   font-size: 1rem;
 }
 
-/* Where the card's data comes from, and how fresh it is. */
-.entity-card__source {
-  margin: 0.6rem 0 0;
-  padding-top: 0.45rem;
-  color: rgba(199, 214, 222, 0.5);
-  font-size: 0.6rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.07);
-}
-
-.entity-card__source span {
-  letter-spacing: 0.06rem;
-  text-transform: uppercase;
-}
-
-/* Open, Context fills the right column top to bottom, its card scrolling
-   inside rather than the panel growing and shrinking with each selection. */
-#right-context-rail > #global-context-panel:not(.collapsed),
-#right-context-rail.layout-focus > #global-context-panel:not(.collapsed) {
-  flex: 0 0 var(--right-stack-max-height, auto);
-  height: var(--right-stack-max-height, auto);
-  max-height: var(--right-stack-max-height, 100%);
-}
-
-#right-context-rail
-  > #global-context-panel:not(.collapsed)
-  .global-context-panel-inner {
-  height: 100%;
-}
-
-/* The icon font's own rules (display: block, 24px) beat the badge's; keep
-   the glyph centred in its square at the badge's size. */
-.entity-card__head .entity-card__icon.material-symbols-outlined {
-  display: grid;
-  place-items: center;
-  box-sizing: border-box;
-  width: 1.9rem;
-  height: 1.9rem;
-  font-size: 1.1rem;
-  line-height: 1;
-  overflow: hidden;
-}
+/* Open, Context is as tall as what it shows, up to the room the right
+   column has (above the dock while one is docked), and scrolls only past
+   that: the column's layout allocates it (rightPanelRail.js). Expanded to a
+   full-height column it fills the screen edge (context-dock.css). */
 
 /* The aircraft's model, turning at the top of its card on a soft spotlight. */
 
@@ -486,6 +423,74 @@
   transform: rotate(90deg);
 }
 
+/* A reading on its layer's banded scale (ReadingHero.vue): the value in its
+   band's colour (--field-band, from the layer's legend), the band's pill,
+   the scale's bands with a mark at the value, then the health message. */
+.reading-hero {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0.2rem 0 0.55rem;
+  padding: 0.55rem 0.6rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+}
+
+.reading-hero__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.6rem;
+  min-width: 0;
+}
+
+.reading-hero__value {
+  color: var(--field-band, rgba(240, 247, 250, 0.98));
+  font-family: var(--font-mono);
+  font-size: 1.6rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.reading-hero__value small {
+  margin-inline-end: 0.3rem;
+  color: rgba(199, 214, 222, 0.6);
+  font-size: 0.6rem;
+  font-weight: 500;
+  letter-spacing: 0.06rem;
+}
+
+.reading-hero__scale {
+  position: relative;
+  display: flex;
+  gap: 2px;
+  height: 0.35rem;
+}
+
+.reading-hero__scale span {
+  flex-basis: 0;
+  min-width: 2px;
+  border-radius: 2px;
+}
+
+.reading-hero__marker {
+  position: absolute;
+  top: -0.2rem;
+  width: 2px;
+  height: 0.75rem;
+  margin-inline-start: -1px;
+  background: rgba(240, 247, 250, 0.98);
+  border-radius: 1px;
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.6);
+}
+
+.reading-hero__risk {
+  margin: 0;
+  color: rgba(199, 214, 222, 0.7);
+  font-size: 0.62rem;
+  line-height: 1.35;
+}
+
 /* Headline figures: big numbers, small labels. */
 .entity-card__tiles {
   display: grid;
@@ -494,9 +499,13 @@
   margin: 0.2rem 0 0.55rem;
 }
 
+/* Tiles in a row are as tall as the tallest: the label at the top, the value
+   at the bottom. */
 .entity-card__tile {
   display: grid;
+  align-content: space-between;
   gap: 0.2rem;
+  min-width: 0;
   padding: 0.45rem 0.4rem;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.07);
@@ -510,15 +519,27 @@
   text-transform: uppercase;
 }
 
+/* A long value wraps to a second line rather than being cut short; past
+   that it ends in an ellipsis, its full text in the tile's title. */
 .entity-card__tile strong {
+  display: -webkit-box;
   overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: break-word;
   color: rgba(236, 244, 248, 0.95);
   font-family: var(--font-mono);
   font-size: 0.76rem;
   font-weight: 600;
   letter-spacing: -0.02em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+}
+
+/* Mission launch times need the full date and time on touch as well. */
+.entity-card__tile[data-mission-tile='time'] strong {
+  display: block;
+  overflow: visible;
+  line-clamp: none;
 }
 
 /* The callout on the turning model, in the frame's top-left corner. The
@@ -568,19 +589,15 @@
 }
 
 .entity-card__subtitle {
+  /* Two lines before it is cut, the whole of it in its tooltip: an operator
+     or a place ("108 km NNE of Punta Cana, Dominican Republic") is a fact. */
+  display: -webkit-box;
   overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
   color: rgba(225, 236, 242, 0.72);
   font-size: 0.7rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.entity-card__meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.35rem 0.6rem;
-  margin: 0.55rem 0 0.15rem;
 }
 
 /* What the item is, in its data's own words. */
@@ -591,23 +608,16 @@
   line-height: 1.45;
 }
 
-#entity-card .entity-card__where {
-  margin: 0;
-  font-size: 0.6rem;
-}
-
 /* The model sits edge to edge under the name, framed by hairlines. */
 
 /* Tiles: the number leads, its unit sits small beside it. */
 #entity-card .entity-card__tile strong {
-  display: flex;
-  align-items: baseline;
-  gap: 0.2rem;
   font-size: 0.95rem;
   letter-spacing: -0.01em;
 }
 
 #entity-card .entity-card__tile small {
+  margin-inline-start: 0.2rem;
   color: rgba(199, 214, 222, 0.6);
   font-size: 0.6rem;
   font-weight: 500;
@@ -619,6 +629,7 @@
 }
 
 .entity-card__section > h4,
+.entity-card__more > summary,
 #entity-card .entity-card__nearby h4 {
   display: flex;
   align-items: center;
@@ -641,7 +652,8 @@
   border-radius: 999px;
 }
 
-/* Actions: the three moves in a row, then asking GEV across the width. */
+/* Actions: Cockpit (or Orbital view) across the width where it exists,
+   then Follow or Fly to, and the small Ask icon in one row. */
 #entity-card .entity-card__actions {
   display: grid;
   gap: 0.35rem;
@@ -655,18 +667,38 @@
   gap: 0.35rem;
 }
 
-#entity-card .entity-card__action--ask {
-  width: 100%;
+.entity-card__action-row .entity-card__action {
+  flex: 1;
   height: 2.1rem;
-  color: #ffb86b;
-  background: rgba(255, 159, 67, 0.08);
-  border-color: rgba(255, 159, 67, 0.35);
 }
 
-#entity-card .entity-card__action--ask:hover,
-#entity-card .entity-card__action--ask:focus-visible {
-  background: rgba(255, 159, 67, 0.16);
-  border-color: rgba(255, 159, 67, 0.6);
+#entity-card .entity-card__action--lead {
+  width: 100%;
+  height: 2.2rem;
+}
+
+/* The full list of details folds under its heading; the heading opens it. */
+.entity-card__more > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.entity-card__more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.entity-card__more > summary::after {
+  width: 6px;
+  height: 6px;
+  margin-inline-start: auto;
+  border-right: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+  content: '';
+}
+
+.entity-card__more[open] > summary::after {
+  transform: translateY(2px) rotate(225deg);
 }
 
 /* ── Callout states ──────────────────────────────────────────────────────
@@ -676,6 +708,14 @@
 /* Exit: text first, then the leader retracts toward the dot, then the dot. */
 
 /* The route on its small globe, and the Route / Model switch above it. */
+
+/* In view, richer: region, the view's figures as tiles, places in view and
+   layer switches as chips. */
+.view-context__region {
+  margin: 0 0 0.15rem;
+  color: rgba(225, 236, 242, 0.7);
+  font-size: 0.7rem;
+}
 
 /* A scheduled route that does not fit the plane's position: amber, dashed,
    with a note, so it cannot pass for the flight's actual route. */
@@ -712,59 +752,11 @@
 
 /* Route progress: the line filled from the origin up to the plane, which
    sits at its share of the way, and dashed beyond it to the destination. */
-.entity-card__route--progress .entity-card__route-line {
-  display: block;
-  background:
-    linear-gradient(90deg, #36dcff, #36dcff) left center /
-      var(--route-share, 0%) 2px no-repeat,
-    linear-gradient(90deg, rgba(199, 214, 222, 0.35) 50%, transparent 0)
-      center / 7px 1px repeat-x;
-  transition: background-size 600ms ease;
-}
-
-.entity-card__route--progress
-  .entity-card__route-line
-  .material-symbols-outlined {
-  position: absolute;
-  top: 50%;
-  left: var(--route-share, 0%);
-  padding: 0 0.15rem;
-  transform: translate(-50%, -50%) rotate(90deg);
-  transition: left 600ms ease;
-}
-
-.entity-card__route-stats {
-  display: flex;
-  justify-content: space-between;
-  gap: 0.5rem;
-  margin: -0.3rem 0 0.6rem;
-  color: rgba(199, 214, 222, 0.6);
-  font-family: var(--font-mono);
-  font-size: 0.58rem;
-}
 
 /* The route globe's corner label: each airport's code over its city and
    state, on a soft scrim so it reads over the imagery. */
 
 /* The airports' cities, under the progress bar: origin left, destination right. */
-.entity-card__route-places {
-  display: flex;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin: -0.35rem 0 0.65rem;
-  color: rgba(225, 236, 242, 0.75);
-  font-size: 0.64rem;
-}
-
-.entity-card__route-places span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.entity-card__route-places span:last-child {
-  text-align: right;
-}
 
 /* While the preview takes turns, a hairline under the active tab fills until
    the switch; a tab the viewer picked stays put and shows no timer. */
@@ -773,15 +765,17 @@
 
 /* Follow, while the camera is on the craft. */
 #entity-card .entity-card__action--on {
-  color: #36dcff;
-  background: rgba(54, 220, 255, 0.12);
-  border-color: rgba(54, 220, 255, 0.45);
+  color: var(--gev-tool-on);
+  background: var(--gev-tool-on-fill);
+  border-color: var(--gev-tool-on);
 }
 
 /* ── Context refinements: one heading style, one tile style, even rhythm ── */
 .spot-conditions__block h4,
 .entity-card__section h4,
-.entity-card__nearby h4 {
+.entity-card__nearby h4,
+.item-charts h4,
+.place-details__head {
   margin: 0 0 0.4rem;
   color: rgba(199, 214, 222, 0.55);
   font-family: var(--font-mono);
@@ -796,10 +790,719 @@
   margin-top: 0.85rem;
 }
 
-.entity-card__tile,
-.spot-conditions__weather {
+/* ── In view: place, radius, counts, what's nearby ── */
+.view-context__eyebrow,
+.view-context__label,
+.nearby-lists__title {
+  margin: 0;
+  color: rgba(199, 214, 222, 0.55);
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  font-weight: 500;
+  letter-spacing: 0.14rem;
+  text-transform: uppercase;
+}
+
+.view-context__title--place {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: 0.35rem;
+}
+
+/* The button has its own column so it stays alongside a wrapped place name. */
+.view-context__title .view-context__pin {
+  display: inline-grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  color: rgba(199, 214, 222, 0.7);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.view-context__title .view-context__pin:hover,
+.view-context__title .view-context__pin.is-on {
+  color: var(--gev-tool-on);
+  border-color: var(--gev-tool-border);
+}
+
+.view-context__title .view-context__pin .material-symbols-outlined {
+  display: block;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.view-context__eyebrow + .view-context__title {
+  margin-top: 0.3rem;
+}
+
+.view-context__label {
+  margin-top: 0.75rem;
+  margin-bottom: 0.4rem;
+}
+
+/* Keep the compact Inspector weather row the same height while its spot changes. */
+.spot-conditions__weather.view-context__weather {
+  box-sizing: border-box;
+  block-size: 4rem;
+  grid-template-columns: minmax(4.9rem, 1fr) minmax(0, 2.75fr);
+  gap: 0.35rem;
+  margin-top: 0.6rem;
+  padding: 0.35rem 0.55rem;
+}
+
+.view-context__temperature {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.view-context__weather .spot-conditions__weather-icon {
+  font-size: 1.1rem;
+}
+
+.view-context__weather .spot-conditions__weather-now strong {
+  font-size: 1rem;
+  white-space: nowrap;
+}
+
+.view-context__weather .spot-conditions__weather-now span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.view-context__weather .spot-conditions__weather-facts {
+  grid-column: auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: center;
+  gap: 0.2rem 0.35rem;
+  margin: 0;
+  line-height: 1.15;
+}
+
+.view-context__weather .spot-conditions__weather-facts div {
+  gap: 0;
+}
+
+.view-context__weather .spot-conditions__weather-facts :is(dt, dd) {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.view-context__weather .spot-conditions__weather-facts dt {
+  font-size: 0.47rem;
+  letter-spacing: normal;
+}
+
+.view-context__weather .spot-conditions__weather-facts dd {
+  overflow: visible;
+  font-size: 0.61rem;
+}
+
+.view-context__weather .view-context__weather-source {
+  padding-inline: 0.22rem;
+  font-size: 0.57rem;
+  letter-spacing: normal;
+  white-space: nowrap;
+}
+
+.view-context__weather-source {
+  align-self: start;
+  justify-self: start;
+  color: var(--text-primary);
+  font-size: 0.65rem;
+  text-decoration: none;
+  text-transform: none;
+}
+
+.view-context__weather-source:hover,
+.view-context__weather-source:focus-visible {
+  text-decoration: underline;
+}
+
+.entity-card__weather-credit {
+  color: inherit;
+  font-size: 0.65rem;
+}
+
+/* The radius, on the line above the counts it sets. */
+.view-context__radius {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.15rem 0.6rem;
+  margin-top: 0.7rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.view-context__radius-label {
+  color: rgba(199, 214, 222, 0.7);
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.08rem;
+  text-transform: uppercase;
+}
+
+.view-context__radius-value {
+  color: rgba(240, 247, 250, 0.95);
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 600;
+}
+
+.view-context__radius-steps {
+  display: flex;
+  grid-column: 2;
+  justify-content: space-between;
+  color: rgba(199, 214, 222, 0.45);
+  font-family: var(--font-mono);
+  font-size: 0.5rem;
+}
+
+.view-context__radius-steps .is-on {
+  color: #36dcff;
+}
+
+/* One tile per layer that is on: a dot for its feed, then its count. */
+.view-context__tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(6.2rem, 1fr));
+  gap: 0.35rem;
+}
+
+.view-context__tile:has(.nearby-lists) {
+  grid-column: 1 / -1;
+}
+.view-context__tile-age {
+  color: rgba(199, 214, 222, 0.5);
+  font-family: var(--font-mono);
+  font-size: 0.52rem;
+  overflow-wrap: anywhere;
+}
+
+.view-context__tile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+  padding: 0.45rem 0.55rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 8px;
-  border-color: rgba(255, 255, 255, 0.07);
+}
+
+.view-context__tile-name {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+  color: rgba(199, 214, 222, 0.7);
+  font-size: 0.58rem;
+  line-height: 1.25;
+}
+
+/* A long layer name ("Street Traffic") wraps to a second line rather than
+   being cut short. */
+.view-context__tile-name > span:last-child {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: break-word;
+}
+
+.view-context__tile-name .material-symbols-outlined {
+  flex: none;
+  color: #36dcff;
+  font-size: 0.85rem;
+}
+
+.view-context__tile strong {
+  /* Tiles in a row are as tall as the tallest; the counts line up below. */
+  margin-top: auto;
+  color: rgba(240, 247, 250, 0.98);
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+/* A count with nothing under it sits under the name, not at the tile's foot. */
+.view-context__tiles:not(.view-context__tiles--facts)
+  .view-context__tile
+  strong {
+  margin-top: 0;
+}
+
+/* A reading in its band leads its tile as a pill: one line, its words
+   whole in the tile's title. */
+.view-context__tile .field-pill {
+  margin-top: 0;
+  font-size: 0.72rem;
+}
+
+/* A reason in place of a 0 (bikeshare: zoom in), and a field layer's value
+   at the centre of the view: words, so smaller and allowed to wrap. */
+.view-context__tile strong.view-context__tile-status,
+.view-context__tile--value strong {
+  font-size: 0.72rem;
+  overflow-wrap: anywhere;
+}
+
+.view-context__dot {
+  flex: none;
+  width: 0.45rem;
+  height: 0.45rem;
+  background: #4be3a0;
+  border-radius: 50%;
+}
+
+.view-context__dot--loading {
+  background: #36dcff;
+}
+
+.view-context__dot--stale,
+.view-context__dot--fallback,
+.view-context__dot--degraded,
+.view-context__dot--partial {
+  background: #ffb547;
+}
+
+.view-context__dot--unavailable {
+  background: #ff5c6c;
+}
+
+.view-context__problem,
+.view-context__hint {
+  margin: 0.5rem 0 0;
+  color: rgba(199, 214, 222, 0.65);
+  font-size: 0.62rem;
+  line-height: 1.45;
+}
+
+.view-context__problem {
+  color: #ffcf8a;
+}
+
+/* Globe view: each layer once, with what its count is made of. */
+.view-context__blocks {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.view-context__block {
+  padding: 0.5rem 0.6rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+}
+
+.view-context__block-head {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  color: rgba(199, 214, 222, 0.8);
+  font-size: 0.66rem;
+}
+
+/* A layer's mark: its map sprite (EntityMark.vue) or its glyph. */
+.view-context__block-head .entity-mark {
+  flex: none;
+  color: #36dcff;
+  font-size: 0.9rem;
+}
+
+.view-context__block-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.view-context__block-head strong {
+  color: rgba(240, 247, 250, 0.98);
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.view-context__block-rows {
+  margin-top: 0.4rem;
+}
+
+.view-context__block-rows ul {
+  display: grid;
+  gap: 0.15rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.view-context__bar {
+  display: flex;
+  gap: 2px;
+  height: 0.3rem;
+  margin-top: 0.45rem;
+  overflow: hidden;
+  border-radius: 3px;
+}
+
+.view-context__bar span {
+  flex-basis: 0;
+  min-width: 2px;
+}
+
+.view-context__bar [data-tone='0'],
+.view-context__bar-key [data-tone='0']::before {
+  background: #36dcff;
+}
+
+.view-context__bar [data-tone='1'],
+.view-context__bar-key [data-tone='1']::before {
+  background: #4be3a0;
+}
+
+.view-context__bar [data-tone='2'],
+.view-context__bar-key [data-tone='2']::before {
+  background: #ffb547;
+}
+
+.view-context__bar [data-tone='3'],
+.view-context__bar-key [data-tone='3']::before {
+  background: #c89bff;
+}
+
+.view-context__bar [data-tone='4'],
+.view-context__bar-key [data-tone='4']::before {
+  background: rgba(199, 214, 222, 0.35);
+}
+
+
+.view-context__bar-key span::before {
+  content: '';
+  display: inline-block;
+  width: 0.4rem;
+  height: 0.4rem;
+  margin-inline-end: 0.25rem;
+  border-radius: 2px;
+}
+
+/* A part in its layer's own legend colour (a band), in place of a tone. */
+.view-context__bar span[data-color],
+.view-context__bar-key span[data-color]::before {
+  background: var(--part-color);
+}
+
+/* A layer's summary in Context: its count line, the band bar, its coverage,
+   then the readings worth a look, each its band's pill and where. */
+.view-context__summary {
+  margin-top: 0.4rem;
+}
+
+.view-context__summary-note {
+  margin: 0.3rem 0 0;
+  color: rgba(199, 214, 222, 0.55);
+  font-size: 0.56rem;
+  line-height: 1.4;
+}
+
+.view-context__summary-rows .field-pill {
+  flex: none;
+  font-size: 0.62rem;
+}
+
+/* With nothing on: a pointer to Data Layers, not a switch. */
+.view-context__pointer {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  margin-top: 0.7rem;
+  padding: 0.55rem 0.65rem;
+  color: rgba(225, 236, 242, 0.92);
+  font: inherit;
+  font-size: 0.7rem;
+  text-align: start;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.view-context__pointer:hover,
+.view-context__pointer:focus-visible {
+  background: rgba(54, 220, 255, 0.08);
+  border-color: rgba(54, 220, 255, 0.4);
+}
+
+.view-context__pointer-text {
+  flex: 1;
+}
+
+.view-context__pointer-go {
+  color: #36dcff;
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.08rem;
+  text-transform: uppercase;
+}
+
+/* What's nearby: one list per layer, its first row the nearest. */
+.nearby-lists {
+  margin-top: 0.85rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.nearby-lists__layer {
+  margin-top: 0.45rem;
+}
+
+.nearby-lists__head {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0 0 0.2rem;
+  color: rgba(199, 214, 222, 0.6);
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  font-weight: 500;
+  letter-spacing: 0.1rem;
+  text-transform: uppercase;
+}
+
+.nearby-lists__head .material-symbols-outlined {
+  font-size: 0.9rem;
+}
+
+.nearby-lists__count {
+  color: #36dcff;
+}
+
+.nearby-lists ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Keep list rows distinct from actions, filters and paging controls. */
+.nearby-lists .nearby-lists__layer li > button,
+.view-context__block-rows li > button {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  /* Room at the end for the panel's scrollbar, which draws over the rows. */
+  padding-block: 0.3rem;
+  padding-inline: 0.4rem 0.75rem;
+  color: rgba(225, 236, 242, 0.88);
+  font: inherit;
+  font-size: 0.68rem;
+  text-align: start;
+  background: none;
+  border: 0;
+  border-inline-start: 2px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.nearby-lists .nearby-lists__layer li > button:hover,
+.nearby-lists .nearby-lists__layer li > button:focus-visible,
+.view-context__block-rows li > button:hover,
+.view-context__block-rows li > button:focus-visible {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.nearby-lists__row--nearest button {
+  background: rgba(54, 220, 255, 0.07);
+  border-inline-start-color: #36dcff;
+}
+
+.nearby-lists__name {
+  flex: 1;
+  min-width: 0;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+
+.nearby-lists__badge {
+  --status-badge-background: transparent;
+  flex: none;
+  padding: 0.05rem 0.3rem;
+  color: #36dcff;
+  font-family: var(--font-mono);
+  font-size: 0.48rem;
+  letter-spacing: 0.08rem;
+  text-transform: uppercase;
+  border: 1px solid rgba(54, 220, 255, 0.5);
+  border-radius: 3px;
+}
+
+.nearby-lists__meta {
+  flex: none;
+  color: rgba(199, 214, 222, 0.55);
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+}
+
+/* A moving item's state on its row: green moving, amber stopped, grey
+   while its feed has nothing new. */
+.nearby-lists__motion {
+  flex: none;
+  color: rgba(199, 214, 222, 0.5);
+  font-size: 14px;
+}
+
+.nearby-lists__motion[data-motion='moving'] {
+  color: #5dff9f;
+}
+
+.nearby-lists__motion[data-motion='stopped'] {
+  color: #ffb86b;
+}
+
+/* Context's Cameras list: every camera within the radius, one per row, its
+   city and provider under its name. */
+.camera-list.nearby-lists {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.camera-list__text {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.camera-list__detail {
+  overflow: hidden;
+  color: rgba(199, 214, 222, 0.55);
+  font-size: 0.6rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A list card in Context (kit/ContextListCard.vue): a layer's block, its
+   head a heading in the block head's look, then its rows, a pager under
+   them. */
+.context-list-card.nearby-lists {
+  margin-top: 0.6rem;
+  padding: 0.5rem 0.6rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.context-list-card .context-list-card__head {
+  margin: 0;
+  font-weight: inherit;
+}
+
+.context-list-card__head .context-list-card__close {
+  margin-inline-start: auto;
+  flex: none;
+  width: 1.75rem;
+  height: 1.75rem;
+  font-size: 1.1rem;
+}
+
+.context-list-card__state {
+  margin: 0.45rem 0 0.1rem;
+  color: rgba(199, 214, 222, 0.6);
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+}
+
+/* Previous, where the page is (the page size's control), Next. At either
+   end a button stays in the tab order, dimmed. */
+.context-list-card__pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+.context-list-card__pager--paged {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto minmax(0, 1fr);
+}
+
+.context-list-card__page-button,
+.context-list-card__back {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  overflow-wrap: anywhere;
+}
+
+:is(.context-list-card__page-button, .context-list-card__back):not(
+    :disabled,
+    [aria-disabled='true']
+  ):hover {
+  border-color: rgba(54, 220, 255, 0.45);
+  background: rgba(54, 220, 255, 0.08);
+}
+
+:is(.context-list-card__page-button, .context-list-card__back):is(
+  :disabled,
+  [aria-disabled='true']
+) {
+  color: rgba(199, 214, 222, 0.55);
+  cursor: default;
+}
+
+.context-list-card__range {
+  min-width: 0;
+  margin-inline: auto;
+  color: rgba(199, 214, 222, 0.55);
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  text-align: center;
+}
+
+.context-list-card__page-button,
+.context-list-card__back,
+select.context-list-card__range {
+  box-sizing: border-box;
+  min-block-size: 24px;
+  min-inline-size: 0;
+  padding-block: 0.15rem;
+  padding-inline: 0.3rem;
+  color: rgba(225, 236, 242, 0.88);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.context-list-card__page-button:focus-visible,
+.context-list-card__back:focus-visible,
+select.context-list-card__range:focus-visible {
+  outline: 1px solid #36dcff;
+  outline-offset: 1px;
+}
+
+/* Back to the list, above an item's detail in the list's place. */
+.context-list-card__back {
+  inline-size: fit-content;
+  max-inline-size: 100%;
+  margin-block: 0.4rem;
 }
 
 /* ── Selected camera: thumbnail, facts, More info ── */
@@ -820,14 +1523,19 @@
   border-radius: 8px;
 }
 
-.cctv-preview__frame img,
-.cctv-preview__live {
+.cctv-preview__frame img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-.cctv-preview__frame.is-empty span:first-child {
+/* "Acquiring frame…" or "Cameras off", over an empty box or a live canvas
+   that has not drawn its first frame. */
+.cctv-preview__wait {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
   color: rgba(199, 214, 222, 0.5);
   font-family: var(--font-mono);
   font-size: 0.58rem;
@@ -837,16 +1545,24 @@
 
 .cctv-preview__badge {
   position: absolute;
-  left: 6px;
+  inset-inline-start: 6px;
   bottom: 6px;
   padding: 2px 7px;
-  color: #4be3a0;
+  color: #8fe7ff;
   font-family: var(--font-mono);
   font-size: 0.5rem;
   letter-spacing: 0.1rem;
+  text-transform: uppercase;
   background: rgba(5, 8, 11, 0.8);
-  border: 1px solid rgba(75, 227, 160, 0.45);
+  border: 1px solid rgba(0, 212, 255, 0.35);
   border-radius: 999px;
+}
+
+/* A live video camera's canvas, moved in from the Camera tools' home. */
+.cctv-preview__video,
+.cctv-preview__video canvas {
+  width: 100%;
+  height: 100%;
 }
 
 /* The frame's time, under the picture. */
@@ -858,51 +1574,162 @@
   letter-spacing: 0.06rem;
 }
 
-.cctv-preview__name {
-  margin: 0;
-  color: rgba(236, 244, 248, 0.94);
-  font-size: 0.78rem;
+.cctv-preview__video canvas {
+  display: block;
+  object-fit: cover;
 }
 
-.cctv-preview__facts {
+/* ── Camera tools: Context's Camera settings tab ── */
+.cctv-tools {
+  padding: 0.1rem 0.15rem 0.4rem;
+}
+
+.cctv-tools > .cctv-tools__group:first-child {
+  margin-top: 0.2rem;
+}
+
+.context-camera-settings__hint {
+  margin: 0.6rem 0.15rem;
+  color: rgba(199, 214, 222, 0.7);
+  font-size: 0.72rem;
+}
+
+/* View, Auto-hop, Calibration and Scene summary: one group each. */
+.cctv-tools__group,
+.cctv-tools__calibration {
+  margin-top: 0.7rem;
+}
+
+.cctv-tools__head {
+  margin: 0 0 0.35rem;
+  color: rgba(199, 214, 222, 0.65);
+  font-size: 0.62rem;
+  font-weight: 600;
+}
+
+.cctv-tools__fold {
+  cursor: pointer;
+}
+
+.cctv-tools__toggles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.75rem;
+}
+
+.cctv-tools__interval {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: rgba(199, 214, 222, 0.75);
+  font-size: 0.62rem;
+}
+
+.cctv-tools__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+}
+
+.cctv-tools__row .gev-tool-button {
+  flex: 1 1 auto;
+}
+
+.cctv-tools__status {
+  display: inline-block;
+  margin: 0 0 0.45rem;
+  padding: 0.15rem 0.45rem;
+  color: rgba(225, 236, 242, 0.85);
+  font-size: 0.62rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+}
+
+/* Calibration: a label beside each value, two columns. */
+.cctv-cal-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.35rem;
-  margin: 0;
+  gap: 0.3rem 0.75rem;
 }
 
-.cctv-preview__facts div {
-  padding: 0.35rem 0.5rem;
-  background: rgba(255, 255, 255, 0.035);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 7px;
+.cctv-cal-grid__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  min-width: 0;
 }
 
-.cctv-preview__facts dt {
-  color: rgba(199, 214, 222, 0.5);
-  font-size: 0.52rem;
-  letter-spacing: 0.06rem;
-  text-transform: uppercase;
-}
-
-.cctv-preview__facts dd {
+.cctv-cal-grid__label {
   overflow: hidden;
-  margin: 0.1rem 0 0;
-  color: rgba(236, 244, 248, 0.92);
-  font-family: var(--font-mono);
-  font-size: 0.68rem;
+  color: rgba(199, 214, 222, 0.7);
+  font-size: 0.62rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.cctv-preview__more {
-  justify-content: center;
+/* The scene summary as short labelled lines. */
+.cctv-tools__lines {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0;
+}
+
+.cctv-tools__line {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.64rem;
+}
+
+.cctv-tools__line dt {
+  color: rgba(199, 214, 222, 0.7);
+}
+
+.cctv-tools__line dd {
+  margin: 0;
+  color: rgba(225, 236, 242, 0.92);
+  text-align: end;
+}
+
+.cctv-tools__summary-text {
+  margin: 0;
+  color: rgba(225, 236, 242, 0.85);
+  font-size: 0.64rem;
+  line-height: 1.5;
+}
+
+@media (max-width: 420px) {
+  .cctv-cal-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The CAL chip's states: calibrated, curated, unsaved edits. */
+#cctv-quality-chip[data-cal-badge='calibrated'] {
+  color: #adffbf;
+  border-color: rgba(141, 255, 135, 0.42);
+  background: rgba(141, 255, 135, 0.12);
+}
+
+#cctv-quality-chip[data-cal-badge='curated'] {
+  color: #ffe6a2;
+  border-color: rgba(255, 217, 122, 0.35);
+  background: rgba(255, 217, 122, 0.1);
+}
+
+#cctv-quality-chip[data-cal-badge='edited'] {
+  color: #ffd08a;
+  border-color: rgba(255, 176, 82, 0.5);
+  background: rgba(255, 176, 82, 0.14);
 }
 
 .cctv-preview__expand {
   position: absolute;
   top: 6px;
-  right: 6px;
+  inset-inline-end: 6px;
   display: grid;
   place-items: center;
   width: 26px;
@@ -932,7 +1759,8 @@
   z-index: 400;
   display: grid;
   place-items: center;
-  padding: 2rem;
+  /* Narrower on a phone, and the same on both sides. */
+  padding: clamp(0.75rem, 5vw, 2rem);
   background: rgba(2, 4, 8, 0.55);
   backdrop-filter: blur(3px);
   -webkit-backdrop-filter: blur(3px);
@@ -948,7 +1776,11 @@
 .cctv-popup__card {
   display: grid;
   gap: 0.6rem;
-  width: min(960px, 92vw);
+  /* Within the overlay's padding: a viewport width would overflow it on the
+     right and sit off centre. */
+  box-sizing: border-box;
+  width: min(960px, 100%);
+  min-width: 0;
   margin: 0;
   padding: 0.7rem;
   background: rgba(12, 12, 20, 0.92);
@@ -1007,6 +1839,13 @@
   border-radius: 8px;
 }
 
+.cctv-popup__credit {
+  display: block;
+  padding: 0 0.2rem 0.1rem;
+  color: rgba(199, 214, 222, 0.6);
+  font-size: 0.6rem;
+}
+
 .cctv-popup__card figcaption {
   display: flex;
   flex-wrap: wrap;
@@ -1022,19 +1861,6 @@
 .cctv-popup__card figcaption b {
   color: rgba(236, 244, 248, 0.92);
   font-weight: 500;
-}
-
-/* CCTV, open, fills the right column top to bottom like Context. */
-#right-context-rail > #cctv-panel:not(.collapsed),
-#right-context-rail.layout-focus > #cctv-panel:not(.collapsed) {
-  flex: 0 0 var(--right-stack-max-height, auto);
-  height: var(--right-stack-max-height, auto);
-  max-height: var(--right-stack-max-height, 100%);
-}
-
-#right-context-rail > #cctv-panel:not(.collapsed) > .cctv-panel-inner,
-#right-context-rail > #cctv-panel:not(.collapsed) > [class$='-inner'] {
-  height: 100%;
 }
 
 /* ── Hero tile ───────────────────────────────────────────────────────────
@@ -1053,6 +1879,62 @@
 
 .entity-hero .cctv-preview {
   margin: 0;
+}
+
+/* The accepted photo uses the viewer; other states can show its still. */
+.sl-hero__slot .sl-viewer-wrap {
+  border-radius: 10px;
+}
+
+.sl-hero__still {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  background: #05080b;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+}
+
+.sl-hero__still img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.sl-hero__glyph {
+  color: rgba(199, 214, 222, 0.45);
+  font-size: 2.2rem;
+}
+
+/* While the card's photo loads, or why it could not open, with Retry. */
+.sl-hero__state {
+  position: absolute;
+  inset-inline: 0;
+  top: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin: 1.6rem 0 0;
+  padding: 0 12px;
+  color: rgba(232, 251, 255, 0.85);
+  font-size: 0.62rem;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.sl-hero__foot {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
 }
 
 .entity-hero__placeholder {
@@ -1083,6 +1965,8 @@
 .entity-hero__glyph.material-symbols-outlined {
   display: grid;
   place-items: center;
+  line-height: 1;
+  text-align: center;
   width: 3.2rem;
   height: 3.2rem;
   color: #36dcff;
@@ -1092,38 +1976,6 @@
   border-radius: 50%;
 }
 
-.entity-hero__figures {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem 1.1rem;
-  min-width: 0;
-}
-
-.entity-hero__figure {
-  display: grid;
-  gap: 0.15rem;
-  min-width: 0;
-}
-
-.entity-hero__figure strong {
-  overflow: hidden;
-  color: rgba(240, 247, 250, 0.98);
-  font-family: var(--font-mono);
-  font-size: 1.15rem;
-  font-weight: 600;
-  line-height: 1.05;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.entity-hero__figure strong small {
-  margin-inline-start: 0.2rem;
-  color: rgba(199, 214, 222, 0.7);
-  font-size: 0.62rem;
-  font-weight: 500;
-}
-
-.entity-hero__figure span,
 .entity-hero__kind {
   color: rgba(199, 214, 222, 0.55);
   font-family: var(--font-mono);
@@ -1133,28 +1985,28 @@
 }
 
 /* ── Cockpit leads an aircraft's actions ─────────────────────────────── */
+/* The lead action reads as on: cyan outline and text, a faint tint, no
+   solid fill. */
 #entity-card .entity-card__action--primary {
   width: 100%;
   height: 2.3rem;
-  color: #04131a;
-  font-size: 0.74rem;
+  color: var(--gev-tool-on);
   font-weight: 600;
-  letter-spacing: 0.04rem;
-  background: #36dcff;
-  border-color: #36dcff;
+  background: var(--gev-tool-on-fill);
+  border-color: var(--gev-tool-on);
   box-shadow: 0 0 18px rgba(54, 220, 255, 0.28);
 }
 
-#entity-card .entity-card__action--primary:hover,
-#entity-card .entity-card__action--primary:focus-visible {
-  color: #04131a;
-  background: #7be8ff;
-  border-color: #7be8ff;
+/* In the button row, the lead (Fly to, Follow) is as tall as the others. */
+#entity-card .entity-card__action-row .entity-card__action--primary {
+  width: auto;
+  height: 2.1rem;
 }
 
-/* Following is a state, not the main action: outlined, not filled. */
-#entity-card .entity-card__action--on {
-  background: transparent;
+#entity-card .entity-card__action--primary:hover {
+  color: #7be8ff;
+  background: rgba(0, 212, 255, 0.2);
+  border-color: #7be8ff;
 }
 
 /* An aircraft's altitude as a filled graph, graded by height: bright at
@@ -1266,16 +2118,50 @@
   bottom: 1px;
 }
 
-/* The compact graph: caption, figure and a short line, nothing else. */
+/* What a layer that is on is made of: under its row, a bar per split whose
+   segments are the parts, and a legend with each part's count. */
+
+/* The compact graph: one slim row, the caption and figure beside a short
+   line, nothing else. */
 .altitude-graph--compact {
-  padding-bottom: 0.5rem;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.3rem 0.6rem;
+}
+
+.altitude-graph--compact .altitude-graph__head {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
 }
 
 .altitude-graph--compact .altitude-graph__plot {
-  height: 1.9rem;
-  margin-bottom: 0;
+  height: 1.4rem;
+  margin: 0;
   background: none;
 }
+
+/* The camera's height under the nothing-on facts: a full-width strip, its
+   caption and figure over a short curve of where the camera has been. */
+.view-context__camera.altitude-graph--compact {
+  display: block;
+  margin: 0.55rem 0 0;
+  padding: 0.5rem 0.6rem;
+}
+
+.view-context__camera.altitude-graph--compact .altitude-graph__head {
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.view-context__camera.altitude-graph--compact .altitude-graph__plot {
+  height: 1.9rem;
+}
+
+/* "Layers on" leads the view, under the place name. */
 
 /* ── Card previews: the photo, route globe, turning model, cockpit view and
    satellite ground view in the hero tile ─────────────────────────────── */
@@ -1565,24 +2451,6 @@
   height: 100% !important;
 }
 
-.route-globe__codes {
-  position: absolute;
-  top: 8px;
-  left: 10px;
-  display: flex;
-  gap: 0.4rem;
-  align-items: baseline;
-  color: rgba(199, 214, 222, 0.6);
-  font-family: var(--font-mono);
-  font-size: 0.62rem;
-  pointer-events: none;
-}
-
-.route-globe__codes strong {
-  color: #e8fbff;
-  font-size: 0.8rem;
-}
-
 .entity-card__preview-switch {
   display: inline-flex;
   gap: 2px;
@@ -1608,36 +2476,6 @@
 .entity-card__preview-switch button.active {
   color: #36dcff;
   background: rgba(54, 220, 255, 0.12);
-}
-.route-globe__codes {
-  align-items: flex-start;
-  gap: 0.5rem;
-  padding: 0.3rem 0.5rem 0.35rem;
-  background: rgba(6, 12, 16, 0.62);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 6px;
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-}
-
-.route-globe__end {
-  display: grid;
-  gap: 1px;
-}
-
-.route-globe__end small {
-  max-width: 7.5rem;
-  overflow: hidden;
-  color: rgba(199, 214, 222, 0.7);
-  font-family: var(--font-sans, inherit);
-  font-size: 0.56rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.route-globe__arrow {
-  padding-top: 0.05rem;
-  color: rgba(54, 220, 255, 0.8);
 }
 .route-globe__compass {
   position: absolute;
@@ -1695,10 +2533,16 @@
   border-radius: 3px;
 }
 
+/* Every hero whose image layers are absolutely positioned needs its own
+   height, or it collapses to nothing: the close-up map most of all, the top
+   image of everything without a photo or a model. */
 .entity-hero:is(
   [data-hero='flight'],
+  [data-hero='model'],
   [data-hero='satellite'],
-  [data-hero='photo']
+  [data-hero='photo'],
+  [data-hero='place-street'],
+  [data-hero='map']
 ) {
   height: 168px;
   background: radial-gradient(
@@ -1708,7 +2552,19 @@
   );
   border: 1px solid rgba(255, 255, 255, 0.07);
 }
+
+/* A satellite's ground view has a height of its own that no flex or grid
+   parent can shrink, and room under it, so the card's kind line sits fully
+   below the image. */
+.entity-hero[data-hero='satellite'] {
+  flex: none;
+  box-sizing: border-box;
+  height: 176px;
+  min-height: 176px;
+  margin-bottom: 0.75rem;
+}
 .entity-hero .entity-hero__layer {
+  transition: opacity 0.2s ease;
   position: absolute;
   inset: 0;
   height: auto;
@@ -1719,6 +2575,7 @@
 }
 
 .entity-hero .entity-hero__layer.is-shown {
+  z-index: 1;
   visibility: visible;
 }
 
@@ -1752,7 +2609,7 @@
   position: absolute;
   z-index: 2;
   bottom: 6px;
-  left: 6px;
+  inset-inline-start: 6px;
   margin: 0;
   background: rgba(10, 14, 20, 0.78);
   border-color: rgba(255, 255, 255, 0.12);
@@ -1770,7 +2627,19 @@
   left: 50%;
   width: 0;
   height: 0;
+  transform-origin: 0 0;
+}
+
+.satellite-ground__imagery {
   filter: grayscale(1) brightness(0.78) contrast(1.2);
+}
+
+/* The tiles' scale, round the spot, so the swath takes the share of the
+   width it is framed for. */
+.satellite-ground__scale {
+  position: absolute;
+  top: 0;
+  left: 0;
   transform-origin: 0 0;
 }
 
@@ -1791,10 +2660,32 @@
   position: absolute;
   top: 0;
   left: 0;
-  width: 256px;
-  height: 256px;
+  width: 257px;
+  height: 257px;
   max-width: none;
   user-select: none;
+}
+
+/* The projected swath shares the tile scale and stays clipped to the card. */
+.satellite-ground__swath {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.satellite-ground__swath-fill {
+  fill: rgba(54, 220, 255, 0.04);
+}
+
+.satellite-ground__swath-edge {
+  fill: none;
+  stroke: rgba(54, 220, 255, 0.3);
+  stroke-width: 1px;
+  vector-effect: non-scaling-stroke;
 }
 
 .satellite-ground__rings {
@@ -1850,7 +2741,7 @@
 .satellite-ground__label {
   position: absolute;
   top: 8px;
-  left: 10px;
+  inset-inline-start: 10px;
   display: grid;
   gap: 1px;
   color: rgba(54, 220, 255, 0.75);
@@ -1868,12 +2759,53 @@
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
 }
 
-.satellite-ground__credit {
+/* A card map's foot: its caption, if any, over its credit. The credit
+   names every source on screen, in full and without hover: a strip across
+   the whole width on the caption's dark backdrop, wrapping to as many lines
+   as it needs, its long form in its title. In a hero with a preview switch
+   the foot sits above the switch. */
+.map-foot {
   position: absolute;
-  right: 8px;
-  bottom: 5px;
-  color: rgba(225, 236, 242, 0.5);
-  font-size: 0.48rem;
+  z-index: 2;
+  bottom: 0;
+  inset-inline: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  pointer-events: none;
+}
+
+.entity-hero:has(> .entity-card__preview-switch) .map-foot {
+  bottom: 38px;
+}
+
+.map-credit,
+.sl-hero__credit {
+  display: block;
+  align-self: stretch;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 2px 8px 3px;
+  color: rgba(232, 251, 255, 0.9);
+  font-size: 0.52rem;
+  line-height: 1.3;
+  text-align: start;
+  overflow-wrap: anywhere;
+  background: rgba(5, 8, 11, 0.7);
+  pointer-events: auto;
+}
+
+.map-credit:focus-visible {
+  outline: 1px solid rgba(54, 220, 255, 0.6);
+  outline-offset: -1px;
+}
+
+/* Hold the preview overlays on their current frame until playback resumes. */
+.flight-cockpit.is-paused .flight-cockpit__ticks,
+.preview-hud.is-paused *,
+.satellite-ground.is-still :is(.satellite-ground__ring, .preview-hud *) {
+  animation-play-state: paused;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2221,14 +3153,32 @@
   letter-spacing: 0.04rem;
 }
 
+/* Esri's credit, in full, along the view's foot. In a card's hero it sits
+   above the preview switch's row and between the tapes, so the switch
+   covers it in neither direction, whatever number of buttons it holds. */
 .flight-cockpit__credit {
   position: absolute;
-  right: 8px;
-  bottom: 5px;
   z-index: 2;
+  bottom: 5px;
+  inset-inline: 8px;
   color: rgba(225, 236, 242, 0.6);
   font-size: 0.48rem;
+  line-height: 1.25;
+  text-align: end;
+  overflow-wrap: anywhere;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+}
+
+.entity-hero:has(> .entity-card__preview-switch) .flight-cockpit__credit {
+  bottom: 38px;
+  inset-inline: 66px;
+  text-align: center;
+}
+
+/* The dock credits it under the picture instead (DockedView.vue), clear of
+   its feed tag. */
+.docked-view__cockpit .flight-cockpit__credit {
+  display: none;
 }
 .preview-hud--cockpit {
   opacity: 0.45;
@@ -2331,11 +3281,12 @@
     transition: none;
   }
 }
+/* At least 24 px each way: the smallest target a pointer can rely on. */
 .entity-card__preview-switch button {
   display: grid;
   place-items: center;
   width: 26px;
-  height: 22px;
+  height: 24px;
   padding: 0;
 }
 
@@ -2350,48 +3301,157 @@
   font-size: 0.62rem;
   font-weight: 600;
 }
-.satellite-ground__credit,
-.flight-cockpit__credit {
-  left: 8px;
+
+/* Play/Pause ends the row, set off from the views by a hairline. */
+.entity-card__preview-switch .entity-card__preview-play {
+  border-inline-start: 1px solid rgba(255, 255, 255, 0.1);
+  border-start-start-radius: 0;
+  border-end-start-radius: 0;
+  border-start-end-radius: 5px;
+  border-end-end-radius: 5px;
+}
+
+/* Alone in its row (a satellite's card), Play has no views to set off. */
+.entity-card__preview-switch .entity-card__preview-play:first-child {
+  border-inline-start: 0;
+  border-radius: 5px;
+}
+
+/* ── Close-up map: the hero for items without a photo ── */
+.close-up-map {
+  overflow: hidden;
+  background: #05080b;
+}
+
+.close-up-map__map {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+}
+
+/* A card's map (CardMapCanvas.vue): dark land while its tiles load or
+   when they cannot be drawn. */
+.card-map {
+  display: block;
+  background: #06080b;
+  user-select: none;
+}
+
+/* The block of tiles is placed from the spot, in whole pixels, at the centre
+   of the hero; a map is never mirrored. */
+.close-up-map__canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
   max-width: none;
-  line-height: 1.25;
-  text-align: right;
-}
-.satellite-ground__credit,
-.flight-cockpit__credit {
-  left: auto;
-  max-width: calc(100% - 110px);
 }
 
-.view-context__empty {
-  margin: 0 0 0.4rem;
-  color: rgba(199, 214, 222, 0.7);
-  font-size: 0.68rem;
-  line-height: 1.45;
+.close-up-map__top {
+  position: absolute;
+  z-index: 2;
+  inset-block-start: 0;
+  inset-inline: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.25rem;
+  padding: 0.25rem 0.35rem;
+  background: rgba(5, 8, 11, 0.7);
+  pointer-events: none;
 }
 
-.view-context {
-  margin: 0 0 0.75rem;
-  padding: 0.7rem 0.75rem 0.6rem;
-  color: rgba(225, 236, 242, 0.92);
-  background: rgba(40, 44, 52, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 10px;
+.close-up-map__top .map-credit {
+  align-self: center;
+  padding: 0.125rem;
+  background: none;
 }
 
-.view-context__title {
-  margin: 0.55rem 0 0.1rem;
-  overflow-wrap: anywhere;
+.close-up-map__theme {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  color: #e8fbff;
+  background: #111921;
+  border: 1px solid #667480;
+  border-radius: 5px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.close-up-map__theme:hover,
+.close-up-map__theme[aria-pressed='true'] {
+  color: var(--accent, #00d4ff);
+  border-color: currentColor;
+}
+
+/* The item's mark (its map sprite, or its glyph) at the centre of a ring
+   glowing in the app's accent on the spot. */
+.close-up-map .close-up-map__icon {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: 2.2rem;
+  height: 2.2rem;
+  color: var(--accent, #00d4ff);
+  font-size: 1.4rem;
+  line-height: 1;
+  text-align: center;
+  background: rgba(5, 8, 11, 0.7);
+  border: 1px solid var(--accent, #00d4ff);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow:
+    0 0 0 6px var(--accent-dim, rgba(0, 212, 255, 0.15)),
+    0 0 18px 4px var(--accent-glow, rgba(0, 212, 255, 0.4));
+}
+
+/* A pinned place wears the same marker as its card's map: its glyph in the
+   accent ring above. */
+.pinned-grid__icon.pinned-grid__icon--place.material-symbols-outlined {
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: 2rem;
+  height: 2rem;
+  color: var(--accent, #00d4ff);
+  font-size: 1.25rem;
+  line-height: 1;
+  text-align: center;
+  text-shadow: none;
+  background: rgba(5, 8, 11, 0.7);
+  border: 1px solid var(--accent, #00d4ff);
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 6px var(--accent-dim, rgba(0, 212, 255, 0.15)),
+    0 0 14px 3px var(--accent-glow, rgba(0, 212, 255, 0.4));
+}
+
+.close-up-map__label {
+  max-width: calc(100% - 16px);
+  box-sizing: border-box;
+  margin-inline-start: 8px;
+  overflow: hidden;
+  padding: 0.15rem 0.4rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: #e8fbff;
   font-family: var(--font-mono);
-  font-size: 1rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  font-size: 0.52rem;
+  letter-spacing: 0.06rem;
+  background: rgba(5, 8, 11, 0.7);
+  border-radius: 3px;
 }
 
-.view-context__region {
-  margin: 0 0 0.15rem;
-  color: rgba(225, 236, 242, 0.7);
-  font-size: 0.7rem;
+/* ── Small charts of how a picked item is changing ── */
+.item-charts {
+  margin-top: 0.85rem;
 }
 
 .view-context__region--clock {
@@ -2411,10 +3471,207 @@
   max-width: 100%;
 }
 
-.view-context__eyebrow,
-.view-context__label,
-.nearby-lists__title {
-  margin: 0;
+.view-context__tiles--facts .view-context__tile strong {
+  display: block;
+}
+
+.view-context__tiles--facts
+  .view-context__tile
+  strong:not(.view-context__tile-status) {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.item-charts__row {
+  display: grid;
+  grid-template-columns: 5.5rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.3rem;
+}
+
+.item-charts__label {
+  color: rgba(199, 214, 222, 0.7);
+  font-family: var(--font-mono);
+  font-size: 0.54rem;
+  letter-spacing: 0.08rem;
+  text-transform: uppercase;
+}
+
+.item-charts__chart {
+  width: 100%;
+  height: 1.8rem;
+}
+
+.item-charts__chart rect {
+  fill: rgba(225, 236, 242, 0.55);
+}
+
+.item-charts__chart rect.is-last {
+  fill: #ff7a45;
+}
+
+.item-charts__chart polyline {
+  fill: none;
+  stroke: #36dcff;
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.item-charts strong {
+  color: rgba(240, 247, 250, 0.95);
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+}
+
+#entity-card .entity-card__action--ask-icon {
+  flex: 0 0 2.4rem;
+}
+
+.entity-card__flag {
+  margin-inline-end: 0.3rem;
+  font-size: 0.85rem;
+}
+
+.entity-card__flag--picture {
+  display: inline-block;
+  width: 20px;
+  height: 15px;
+  vertical-align: middle;
+  background-repeat: no-repeat;
+}
+
+/* Context's tab row. */
+.context-pin-tabs {
+  display: flex;
+  gap: 0.35rem;
+  margin: 0.2rem 0 0.6rem;
+  padding-bottom: 0.55rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.context-pin-tabs button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.3rem;
+  height: 1.65rem;
+  padding: 0 0.55rem;
+  white-space: nowrap;
+  color: var(--gev-tool-text);
+  font-family: var(--font-mono);
+  font-size: var(--gev-tool-font-size);
+  letter-spacing: 0.06rem;
+  text-transform: uppercase;
+  background: var(--gev-tool-fill);
+  border: 1px solid var(--gev-tool-border);
+  border-radius: var(--gev-tool-radius);
+  cursor: pointer;
+}
+
+.context-pin-tabs button:hover,
+.context-pin-tabs button[aria-selected='true'] {
+  color: var(--gev-tool-on);
+  background: var(--gev-tool-on-fill);
+  border-color: var(--gev-tool-on);
+}
+
+/* Context's main tab row is one line: Inspect at its start, the other tabs
+   in a strip that scrolls sideways with no scrollbar, its end fading while
+   more are out of view. */
+#context-body > .context-pin-tabs--main {
+  flex-wrap: nowrap;
+  align-items: center;
+}
+
+.context-pin-tabs__strip {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 0.35rem;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  /* Room for a focused tab's outline. */
+  padding: 2px;
+  margin: -2px;
+}
+
+.context-pin-tabs__strip::-webkit-scrollbar {
+  display: none;
+}
+
+.context-pin-tabs__strip.is-clipped {
+  mask-image: linear-gradient(to right, #000 calc(100% - 1.5rem), transparent);
+}
+
+:root[dir='rtl'] .context-pin-tabs__strip.is-clipped {
+  mask-image: linear-gradient(to left, #000 calc(100% - 1.5rem), transparent);
+}
+
+.view-context__tiles--facts {
+  margin-top: 0.7rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.context-pin-tabs button:focus-visible {
+  outline: 2px solid var(--gev-tool-on);
+  outline-offset: 2px;
+}
+
+.context-pin-notice {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.6rem;
+  padding: 0.4rem 0.55rem;
+  color: rgba(225, 236, 242, 0.9);
+  font-size: 0.64rem;
+  background: rgba(255, 181, 71, 0.1);
+  border: 1px solid rgba(255, 181, 71, 0.35);
+  border-radius: 7px;
+}
+
+.context-pin-notice span {
+  flex: 1;
+}
+
+.context-pin-notice button {
+  color: #ffb547;
+  font: inherit;
+  font-weight: 600;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+/* The Pinned grid: two to a row, as many rows as there are pins; the panel
+   scrolls. Every tile is a still. */
+.pinned-grid__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.pinned-grid__clear {
+  padding: 0;
+  color: rgba(199, 214, 222, 0.75);
+  font: inherit;
+  font-size: 0.62rem;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.pinned-grid__clear:hover,
+.pinned-grid__clear:focus-visible {
+  color: var(--gev-tool-on);
+  text-decoration: underline;
+}
+
+.pinned-grid__title {
+  margin: 0 0 0.45rem;
   color: rgba(199, 214, 222, 0.55);
   font-family: var(--font-mono);
   font-size: 0.56rem;
@@ -2423,205 +3680,383 @@
   text-transform: uppercase;
 }
 
-.view-context__tiles--facts .view-context__tile strong {
-  display: block;
-}
-
-.view-context__tiles--facts .view-context__tile strong:not(.view-context__tile-status) {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.view-context__eyebrow + .view-context__title {
-  margin-top: 0.3rem;
-}
-
-.view-context__label {
-  margin-top: 0.75rem;
-  margin-bottom: 0.4rem;
-}
-
-/* The weather with layers on, zoomed in, under the place and time. */
-.view-context__weather {
-  margin-top: 0.6rem;
-}
-
-.view-context__weather-credit {
-  color: inherit;
-  font-size: 0.65rem;
-}
-
-.view-context__radius {
+.pinned-grid__tiles {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0.15rem 0.6rem;
-  margin-top: 0.7rem;
-  padding-top: 0.6rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.07);
-}
-
-.view-context__radius-label {
-  color: rgba(199, 214, 222, 0.7);
-  font-family: var(--font-mono);
-  font-size: 0.58rem;
-  letter-spacing: 0.08rem;
-  text-transform: uppercase;
-}
-
-.view-context__radius-value {
-  color: rgba(240, 247, 250, 0.95);
-  font-family: var(--font-mono);
-  font-size: 0.66rem;
-  font-weight: 600;
-}
-
-.view-context__radius-steps {
-  display: flex;
-  grid-column: 2;
-  justify-content: space-between;
-  color: rgba(199, 214, 222, 0.45);
-  font-family: var(--font-mono);
-  font-size: 0.5rem;
-}
-
-.view-context__radius-steps .is-on {
-  color: #36dcff;
-}
-
-.view-context__tiles {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(6.2rem, 1fr));
-  gap: 0.35rem;
-}
-
-.view-context__tile-age {
-  color: rgba(199, 214, 222, 0.5);
-  font-family: var(--font-mono);
-  font-size: 0.52rem;
-}
-
-.view-context__tiles--facts {
-  margin-top: 0.7rem;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.view-context__tile {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  min-width: 0;
-  padding: 0.45rem 0.55rem;
+.pinned-grid__tile {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
   background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
 }
 
-.view-context__tile-name {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  min-width: 0;
-  color: rgba(199, 214, 222, 0.7);
-  font-size: 0.58rem;
-  line-height: 1.25;
+.pinned-grid__open {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
 }
 
-.view-context__tile-name > span:last-child {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  overflow-wrap: break-word;
+.pinned-grid__open:focus-visible {
+  outline: 2px solid #36dcff;
+  outline-offset: -2px;
 }
 
-.view-context__tile-name .material-symbols-outlined {
-  flex: none;
+.pinned-grid__frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.pinned-grid__icon {
   color: #36dcff;
-  font-size: 0.85rem;
+  font-size: 1.6rem;
 }
 
-.view-context__tile strong {
-  /* Tiles in a row are as tall as the tallest; the counts line up below. */
-  margin-top: auto;
-  color: rgba(240, 247, 250, 0.98);
-  font-family: var(--font-mono);
-  font-size: 0.95rem;
-  font-weight: 600;
-  line-height: 1.1;
+/* On a still (a place's map, a moving item's last position): the icon
+   marks the spot. */
+.pinned-grid__icon--over {
+  position: relative;
+  text-shadow: 0 0 6px rgba(5, 8, 11, 0.9);
 }
 
-.view-context__tile strong.view-context__tile-status,
-.view-context__tile--value strong {
-  font-size: 0.72rem;
-  overflow-wrap: anywhere;
-}
-
-.view-context__dot {
-  flex: none;
+/* A view's feed state (FeedDot.vue): live green and pulsing, paused amber,
+   no feed red. */
+.feed-dot {
+  display: inline-block;
+  /* A dot, whatever row it sits in: never stretched by a flex row. */
+  flex: 0 0 auto;
   width: 0.45rem;
+  min-width: 0.45rem;
+  max-width: 0.45rem;
   height: 0.45rem;
-  background: #4be3a0;
+  background: #ff5c6c;
   border-radius: 50%;
 }
 
-.view-context__dot--loading {
-  background: #36dcff;
+.feed-dot[data-state='live'] {
+  background: #4be3a0;
+  animation: feed-dot-pulse 1.6s ease-in-out infinite;
 }
 
-.view-context__dot--stale,
-.view-context__dot--fallback,
-.view-context__dot--degraded,
-.view-context__dot--partial {
+.feed-dot[data-state='paused'] {
   background: #ffb547;
 }
 
-.view-context__dot--unavailable {
-  background: #ff5c6c;
+/* Loading: a hollow amber ring, neither live nor paused. */
+.feed-dot[data-state='loading'] {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px #ffb547;
 }
 
-.view-context__problem,
-.view-context__hint {
-  margin: 0.5rem 0 0;
-  color: rgba(199, 214, 222, 0.65);
+@keyframes feed-dot-pulse {
+  50% {
+    opacity: 0.45;
+    box-shadow: 0 0 0 3px rgba(75, 227, 160, 0.18);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feed-dot[data-state='live'] {
+    animation: none;
+  }
+}
+
+/* Paused (PausedChip.vue): one line, top left of the picture, clear of the
+   unpin ✕ on the other side; the reason is its tooltip. */
+.paused-chip {
+  position: absolute;
+  inset-inline-start: 0.35rem;
+  top: 0.3rem;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  max-width: calc(100% - 2.6rem);
+  padding: 0.1rem 0.4rem;
+  overflow: hidden;
+  color: #ffcf8a;
+  font-family: var(--font-mono);
+  font-size: 0.5rem;
+  letter-spacing: 0.06rem;
+  text-transform: uppercase;
+  white-space: nowrap;
+  background: rgba(5, 8, 11, 0.8);
+  border: 1px solid rgba(255, 181, 71, 0.4);
+  border-radius: 999px;
+}
+
+.pinned-grid__state {
+  position: absolute;
+  inset-inline-start: 0.4rem;
+  top: 0.4rem;
+}
+
+.pinned-grid__name {
+  position: absolute;
+  inset-inline: 0.35rem;
+  bottom: 0.3rem;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.12rem 0.35rem;
+  color: #e8fbff;
+  font-family: var(--font-mono);
+  font-size: 0.54rem;
+  background: rgba(5, 8, 11, 0.72);
+  border-radius: 3px;
+}
+
+.pinned-grid__name span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A street-level still's credit: under its name, in full, wrapping as it
+   needs. */
+.pinned-grid__name:has(.pinned-grid__photo-credit) {
+  flex-wrap: wrap;
+  row-gap: 0.1rem;
+}
+
+.pinned-grid__photo-credit {
+  flex-basis: 100%;
+  color: rgba(199, 214, 222, 0.8);
+  font-family: var(--font-sans);
+  font-size: 0.5rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.pinned-grid__unpin {
+  position: absolute;
+  top: 0.25rem;
+  inset-inline-end: 0.25rem;
+  display: grid;
+  place-items: center;
+  width: 1.3rem;
+  height: 1.3rem;
+  padding: 0;
+  color: #e8fbff;
+  background: rgba(5, 8, 11, 0.72);
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.pinned-grid__unpin .material-symbols-outlined {
+  font-size: 0.85rem;
+}
+
+.pinned-grid__credits {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  padding: 0.15rem 0 0.2rem;
+  background: linear-gradient(
+    to top,
+    rgba(8, 12, 16, 0.92) 70%,
+    rgba(8, 12, 16, 0)
+  );
+}
+
+.pinned-grid__credit {
+  margin: 0.35rem 0 0;
+  color: rgba(199, 214, 222, 0.6);
+  font-size: 0.52rem;
+  line-height: 1.35;
+}
+
+.pinned-grid__hint {
+  margin: 0.6rem 0 0;
+  color: rgba(199, 214, 222, 0.6);
   font-size: 0.62rem;
   line-height: 1.45;
 }
 
-.view-context__problem {
-  color: #ffcf8a;
+/* ── Places and spots ── */
+.place-line {
+  margin: 0 0 0.6rem;
 }
 
-.view-context__blocks {
-  display: grid;
+.place-line__head {
+  display: flex;
+  align-items: center;
   gap: 0.4rem;
 }
 
-.view-context__block {
-  padding: 0.5rem 0.6rem;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 8px;
+.place-line__name {
+  color: #e8fbff;
+  font-size: 0.9rem;
+  font-weight: 600;
 }
 
-.view-context__block-head {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  min-width: 0;
+.place-line__pin {
+  display: grid;
+  place-items: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  padding: 0;
   color: rgba(199, 214, 222, 0.8);
-  font-size: 0.66rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 5px;
+  cursor: pointer;
 }
 
-.view-context__block-head .entity-mark {
-  flex: none;
-  color: #36dcff;
+.place-line__pin.is-on {
+  color: #ff5c6c;
+  border-color: rgba(255, 92, 108, 0.5);
+}
+
+.place-line__pin .material-symbols-outlined {
   font-size: 0.9rem;
 }
 
-.view-context__block-name {
+.place-line__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.6rem;
+  margin: 0.2rem 0 0;
+  color: rgba(199, 214, 222, 0.72);
+  font-size: 0.64rem;
+}
+
+.place-line__near {
+  padding: 0;
+  color: #36dcff;
+  font: inherit;
+  text-decoration: underline;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.place-details__tiles {
+  margin-bottom: 0.7rem;
+}
+
+.place-details__suggested {
+  margin: 0.7rem 0;
+}
+
+.place-details__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0 0 0.45rem;
+  padding: 0;
+  list-style: none;
+}
+
+.place-details__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.5rem;
+  color: #e8fbff;
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  text-transform: uppercase;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+}
+
+.place-details__chip .material-symbols-outlined {
+  font-size: 0.8rem;
+}
+
+.place-details__open {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  color: #e8fbff;
+  font: inherit;
+  font-size: 0.7rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.place-details__open-go {
+  color: rgba(199, 214, 222, 0.7);
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  text-transform: uppercase;
+}
+
+/* An airport's card with Live Flights off: why its flight figures are
+   blank, and a way to the layer. */
+.place-details__flights-off {
+  display: block;
+  width: 100%;
+  margin-top: 0.4rem;
+  padding: 0.3rem 0.4rem;
+  color: rgba(199, 214, 222, 0.8);
+  font: inherit;
+  font-size: 0.62rem;
+  text-align: start;
+  background: none;
+  border: 1px dashed rgba(255, 255, 255, 0.16);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.place-details__flights-off:hover,
+.place-details__flights-off:focus-visible {
+  color: #e8fbff;
+  border-color: rgba(54, 220, 255, 0.5);
+}
+
+/* An estimated or unknown arrival or departure figure: its reason on hover. */
+.place-details__estimate {
+  text-decoration: none;
+  cursor: help;
+}
+
+.entity-hero__place-street {
+  padding: 0;
+  font: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+/* Radio in Context keeps its controls within the shared list card. */
+.radio-stations__now {
+  padding: 0.45rem 0.55rem;
+  background: rgba(54, 220, 255, 0.06);
+  border-inline-start: 2px solid #36dcff;
+  border-radius: 4px;
+}
+
+.radio-stations__now-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.74rem;
+}
+
+.radio-stations__now-head strong {
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -2629,62 +4064,713 @@
   white-space: nowrap;
 }
 
-.view-context__block-head strong {
-  color: rgba(240, 247, 250, 0.98);
+.radio-stations__state {
+  flex: none;
+  color: rgba(199, 214, 222, 0.6);
   font-family: var(--font-mono);
-  font-size: 1rem;
-  font-weight: 600;
+  font-size: 0.52rem;
+  letter-spacing: 0.08rem;
+  text-transform: uppercase;
 }
 
-.view-context__block-rows {
+.radio-stations__state.is-on {
+  color: #4be3a0;
+}
+
+.radio-stations__state.is-error {
+  color: #ff5c6c;
+}
+
+/* The local receiver in Context (LocalReceiverPlayer.vue): its status line
+   and volume, in the Now playing box. */
+.local-receiver__status.is-error {
+  color: #ff8f9b;
+}
+
+.local-receiver__volume {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.3rem 0;
+  color: rgba(199, 214, 222, 0.6);
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  letter-spacing: 0.08rem;
+}
+
+.local-receiver__volume input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Why the selected station's stream failed, or why a pinned station did not play. */
+.radio-stations__error,
+.radio-stations__miss {
+  margin: 0.2rem 0 0.35rem;
+  color: #ff8f9b;
+  font-size: 0.66rem;
+}
+
+/* A station's category, coloured as its map marker; dark text on the
+   marker's light colour reads in either theme. */
+.radio-category {
+  display: inline-block;
+  flex: none;
+  margin-inline-end: 0.35rem;
+  padding: 0.05rem 0.35rem;
+  color: #071018;
+  font-size: 0.56rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  vertical-align: 0.05em;
+  background: var(--radio-category, #9aa7b3);
+  border-radius: 4px;
+}
+
+.radio-category-dot {
+  flex: none;
+  width: 0.45rem;
+  height: 0.45rem;
+  background: var(--radio-category, #9aa7b3);
+  border-radius: 50%;
+}
+
+.radio-stations__meta {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  margin: 0.2rem 0 0.45rem;
+  color: rgba(199, 214, 222, 0.6);
+  font-size: 0.6rem;
+}
+
+.radio-stations__meta > .radio-category {
+  flex: none;
+}
+
+/* The details give way with an ellipsis; the distance keeps the line. */
+.radio-stations__meta-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.radio-stations__meta-distance {
+  flex: none;
+  white-space: nowrap;
+}
+
+.radio-stations__meta-distance::before {
+  content: '· ';
+}
+
+.radio-stations__actions {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.radio-stations__seek {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.radio-stations button[data-list-key]:has([aria-current='true']) {
+  background: rgba(54, 220, 255, 0.07);
+  border-inline-start-color: #36dcff;
+}
+
+.radio-stations__playing {
+  color: #4be3a0;
+  font-size: 0.9rem;
+}
+
+.radio-stations__privacy {
+  margin: 0.4rem 0 0;
+  color: rgba(199, 214, 222, 0.55);
+  font-size: 0.6rem;
+  line-height: 1.45;
+}
+
+/* Bottom right: a docked view above the Radio mini player, same width. */
+.context-corner {
+  position: fixed;
+  inset-inline-end: 4.5rem;
+  bottom: 3.6rem;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.4rem;
+  width: 17rem;
+  pointer-events: none;
+}
+
+.context-corner > * {
+  pointer-events: auto;
+}
+
+/* The mini player above a docked view that keeps its own place
+   (ContextView.vue's besideDock). */
+.context-corner--mini-first > .radio-mini {
+  order: -1;
+}
+
+.docked-view {
+  overflow: hidden;
+  color: rgba(225, 236, 242, 0.92);
+  background: rgba(14, 18, 24, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+}
+
+.docked-view__head {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding-block: 0.25rem;
+  padding-inline: 0.55rem 0.3rem;
+  font-size: 0.66rem;
+}
+
+.docked-view__head strong {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.docked-view__head button {
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  color: inherit;
+  background: none;
+  border: 0;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.docked-view__head button:hover,
+.docked-view__head button:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.docked-view__head .material-symbols-outlined {
+  font-size: 0.95rem;
+}
+
+.docked-view__frame {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 9;
+  background: #05080b;
+}
+
+.docked-view__frame img,
+.docked-view__stream,
+.docked-view__cockpit {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* A docked street-level photo: the photo itself, edge to edge, without its
+   bar and caption (its card has them). */
+.docked-view__street {
+  position: absolute;
+  inset: 0;
+}
+
+.docked-view__street .sl-viewer-wrap {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.docked-view__street :is(.sl-viewer-bar, .sl-image-meta) {
+  display: none;
+}
+
+.docked-view__street :is(.sl-viewer-stage, .sl-viewer) {
+  flex: 1 1 auto;
+  height: 100%;
+  min-height: 0;
+  aspect-ratio: auto;
+}
+
+.docked-view__status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.docked-view__loading {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.7rem;
+  background: #05080b;
+  color: var(--text, #c7d6de);
+  font-size: 0.7rem;
+}
+
+.docked-view__wait {
+  color: rgba(199, 214, 222, 0.6);
+  font-size: 0.62rem;
+}
+
+.docked-view__tag {
+  position: absolute;
+  inset-inline-start: 0.4rem;
+  bottom: 0.35rem;
+  padding: 0.1rem 0.35rem;
+  color: rgba(240, 247, 250, 0.9);
+  font-family: var(--font-mono);
+  font-size: 0.52rem;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 4px;
+}
+
+/* A street photo's credit, in full under its picture. */
+.docked-view__credit {
+  margin: 0;
+  padding: 0.2rem 0.55rem 0.25rem;
+  color: rgba(199, 214, 222, 0.75);
+  font-size: 0.52rem;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+/* A docked camera frame's time, as its source gives it. */
+.docked-view__time {
+  display: block;
+  padding: 0.2rem 0.55rem 0;
+  color: rgba(199, 214, 222, 0.6);
+  font-family: var(--font-mono);
+  font-size: 0.52rem;
+  letter-spacing: 0.06rem;
+}
+
+/* Opening in Context failed: the dock stays and says so. */
+.docked-view__notice {
+  position: absolute;
+  inset-inline: 0.4rem;
+  top: 0.35rem;
+  margin: 0;
+  padding: 0.2rem 0.4rem;
+  color: #ffb547;
+  font-size: 0.6rem;
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: 4px;
+}
+
+/* A docked item's own card: a slim bar, not the same feed a second time. */
+.entity-hero--docked {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 0;
+  aspect-ratio: auto;
+  padding: 0.45rem 0.55rem;
+  color: rgba(225, 236, 242, 0.88);
+  font-size: 0.66rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+}
+
+.entity-hero--docked > span:not(.feed-dot) {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.entity-hero__docked-show {
+  flex: none;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.45rem;
+  color: var(--gev-tool-on);
+  font: inherit;
+  background: none;
+  border: 1px solid var(--gev-tool-border);
+  border-radius: var(--gev-tool-radius);
+  cursor: pointer;
+}
+
+.entity-hero__docked-show .material-symbols-outlined {
+  font-size: 0.9rem;
+}
+
+.radio-mini {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.3rem 0.4rem 0.3rem 0.6rem;
+  color: rgba(225, 236, 242, 0.92);
+  font-size: 0.68rem;
+  background: rgba(14, 18, 24, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+}
+
+.radio-mini__icon {
+  color: #4be3a0;
+  font-size: 1rem;
+}
+
+.radio-mini__name {
+  flex: 1;
+  min-width: 0;
+  margin-inline-end: 0.3rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.radio-mini__miss {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.radio-mini button {
+  display: grid;
+  place-items: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  padding: 0;
+  color: var(--gev-tool-text);
+  background: var(--gev-tool-fill);
+  border: 1px solid var(--gev-tool-border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.radio-mini button:focus-visible {
+  outline: 2px solid var(--gev-tool-on);
+  outline-offset: 1px;
+}
+
+.radio-mini button:hover {
+  color: var(--gev-tool-on);
+  background: var(--gev-tool-on-fill);
+  border-color: var(--gev-tool-on);
+}
+
+.radio-mini button .material-symbols-outlined {
+  font-size: 1rem;
+}
+
+/* Pin, Previous, Play or Pause, Next, Close and the volume never shrink or
+   wrap away: the name gives up its room first. */
+.radio-mini__controls {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.radio-mini button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.radio-mini button:disabled:hover {
+  color: var(--gev-tool-text);
+  background: var(--gev-tool-fill);
+  border-color: var(--gev-tool-border);
+}
+
+.radio-mini .radio-mini__pin.is-on {
+  color: var(--gev-tool-on);
+  background: var(--gev-tool-on-fill);
+  border-color: var(--gev-tool-on);
+}
+
+/* Radio's volume: a speaker that mutes and a slider (RadioVolume.vue). */
+.radio-volume {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.radio-volume__mute {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  padding: 0;
+  color: var(--gev-tool-text);
+  background: var(--gev-tool-fill);
+  border: 1px solid var(--gev-tool-border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.radio-volume__mute[aria-pressed='true'] {
+  color: var(--gev-tool-on);
+  border-color: var(--gev-tool-on);
+}
+
+.radio-volume__mute .material-symbols-outlined {
+  font-size: 1rem;
+}
+
+.radio-volume__slider {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.radio-volume__range {
+  flex: 1;
+  min-width: 0;
+}
+
+.radio-stations__volume {
   margin-top: 0.4rem;
 }
 
-.view-context__block-rows ul {
-  display: grid;
-  gap: 0.15rem;
+/* In the mini player the slider opens in the top layer (RadioVolume.vue
+   places it, above the speaker or to its left), over Context and the dock. */
+.radio-volume--compact .radio-volume__slider {
+  position: fixed;
+  inset: auto;
   margin: 0;
-  padding: 0;
-  list-style: none;
+  z-index: 1000;
+  display: none;
+  width: 9rem;
+  padding: 0.4rem 0.5rem;
+  color: inherit;
+  background: rgba(14, 18, 24, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  pointer-events: auto;
 }
 
-.view-context__bar {
+/* Apart, so a browser without popovers still reads the second rule. */
+.radio-volume--compact .radio-volume__slider:popover-open {
   display: flex;
-  gap: 2px;
-  height: 0.3rem;
-  margin-top: 0.45rem;
-  overflow: hidden;
-  border-radius: 3px;
 }
 
-.view-context__bar span {
-  flex-basis: 0;
-  min-width: 2px;
+.radio-volume--compact.is-open .radio-volume__slider {
+  display: flex;
 }
 
-.view-context__bar [data-tone='0'],
-.view-context__bar-key [data-tone='0']::before {
-  background: #36dcff;
+/* A phone: a smaller tile at the side, above the voice bar and the tab bar
+   (--phone-dock-bottom, measured by ContextView.vue), so neither is
+   covered. */
+body.mobile-shell .context-corner {
+  inset-inline-start: auto;
+  inset-inline-end: 0.5rem;
+  bottom: var(
+    --phone-dock-bottom,
+    calc(var(--mobile-tab-space, 58px) + 0.5rem)
+  );
+  width: min(62vw, 15rem);
 }
 
-.view-context__bar [data-tone='1'],
-.view-context__bar-key [data-tone='1']::before {
+body.mobile-shell .radio-mini {
+  flex-wrap: wrap;
+  max-width: none;
+}
+
+/* The phone's narrow tile: the name keeps its line and every control sits
+   on the line under it. */
+body.mobile-shell .radio-mini__name {
+  flex: 1 1 0;
+}
+
+body.mobile-shell .radio-mini__controls {
+  flex: 1 0 100%;
+  justify-content: flex-end;
+}
+
+/* Waiting one layout for the column to make room (ContextView.vue). */
+.context-corner--settling {
+  visibility: hidden;
+}
+
+body.cockpit-mode .context-corner,
+body.ui-clean-view .context-corner,
+body.recording-mode .context-corner {
+  display: none;
+}
+
+/* Esc moves focus to the panel body so the next Esc reaches it; no ring. */
+#global-context-panel .cyber-panel-body:focus {
+  outline: none;
+}
+
+/* The one small line under the name: where the data comes from, how old. */
+.entity-card__source-line {
+  display: block;
+  margin-top: 0.2rem;
+  color: rgba(199, 214, 222, 0.55);
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  letter-spacing: 0.02rem;
+}
+
+.entity-card__source-line--live::before {
+  display: inline-block;
+  width: 0.38rem;
+  height: 0.38rem;
+  margin-inline-end: 0.3rem;
+  vertical-align: 0.05rem;
   background: #4be3a0;
+  border-radius: 50%;
+  content: '';
 }
 
-.view-context__bar [data-tone='2'],
-.view-context__bar-key [data-tone='2']::before {
-  background: #ffb547;
+.entity-card__source-line--lost {
+  color: #ffcf8a;
 }
 
-.view-context__bar [data-tone='3'],
-.view-context__bar-key [data-tone='3']::before {
-  background: #c89bff;
+/* A small icon in the top corner of the image: the TR-3B Easter egg on the
+   3D model view. */
+.entity-hero__corner {
+  position: absolute;
+  z-index: 3;
+  top: 6px;
+  inset-inline-end: 6px;
+  display: flex;
+  gap: 4px;
 }
 
-.view-context__bar-key [data-tone='4']::before,
-.view-context__bar [data-tone='4'] {
-  background: rgba(199, 214, 222, 0.35);
+.entity-hero__corner-button {
+  display: grid;
+  place-items: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  padding: 0;
+  color: rgba(240, 247, 250, 0.92);
+  font-size: 0.9rem;
+  background: rgba(10, 14, 20, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 6px;
+  backdrop-filter: blur(6px);
+  cursor: pointer;
+}
+
+.entity-hero__corner-button:hover,
+.entity-hero__corner-button:focus-visible {
+  border-color: rgba(54, 220, 255, 0.6);
+}
+
+.entity-hero__corner-button.is-on {
+  color: #36dcff;
+  border-color: rgba(54, 220, 255, 0.7);
+}
+
+.entity-hero__ufo:not(.is-on) {
+  filter: grayscale(1);
+}
+
+/* Switching views: the one that was showing stays under the new one until
+   it has drawn, then the new one fades in over it. Never a black tile. */
+.entity-hero .entity-hero__layer.is-behind {
+  z-index: 0;
+}
+
+.entity-hero .entity-hero__layer.is-waiting {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .entity-hero .entity-hero__layer {
+    transition: none;
+  }
+}
+
+/* Route and altitude in one view. */
+.route-profile {
+  margin-top: 0.75rem;
+}
+
+.route-profile__head {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 0 0.3rem;
+  color: rgba(199, 214, 222, 0.55);
+  font-size: 0.56rem;
+  font-weight: 500;
+  letter-spacing: 0.08rem;
+  text-transform: uppercase;
+}
+
+.route-profile__head span:last-child {
+  color: rgba(240, 247, 250, 0.85);
+  font-family: var(--font-mono);
+  letter-spacing: 0.02rem;
+}
+
+.route-profile__chart {
+  position: relative;
+  height: 46px;
+}
+
+.route-profile__chart svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.route-profile__chart {
+  direction: ltr;
+}
+
+.route-profile__ground {
+  stroke: rgba(255, 255, 255, 0.1);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.route-profile__flown,
+.route-profile__ahead {
+  fill: none;
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.route-profile__flown {
+  stroke: #36dcff;
+}
+
+.route-profile__ahead {
+  stroke: rgba(199, 214, 222, 0.45);
+  stroke-dasharray: 3 3;
 }
 
 .view-context__bar-key,
@@ -2700,175 +4786,185 @@
   gap: 0.15rem 0.6rem;
 }
 
-.view-context__bar-key span::before {
-  content: '';
-  display: inline-block;
-  width: 0.4rem;
-  height: 0.4rem;
-  margin-inline-end: 0.25rem;
-  border-radius: 2px;
+.route-profile__plane {
+  position: absolute;
+  width: 0.5rem;
+  height: 0.5rem;
+  background: #f0f7fa;
+  border: 2px solid #36dcff;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
 }
 
-.view-context__pointer {
+.route-profile__note {
+  margin: 0.1rem 0 0;
+  text-align: center;
+  color: rgba(240, 247, 250, 0.85);
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  white-space: nowrap;
+}
+
+.route-profile__ends {
+  direction: ltr;
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  width: 100%;
-  margin-top: 0.7rem;
-  padding: 0.55rem 0.65rem;
-  color: rgba(225, 236, 242, 0.92);
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-top: 0.25rem;
+}
+
+.route-profile__ends > .route-profile__end {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.route-profile__ends > .route-profile__end:last-child {
+  align-items: flex-end;
+  text-align: end;
+}
+
+.route-profile__ends strong {
+  color: rgba(240, 247, 250, 0.95);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+}
+
+.route-profile__ends small {
+  overflow: hidden;
+  color: rgba(199, 214, 222, 0.55);
+  font-size: 0.55rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* An airport named by its code (AirportLink): a quiet link to its card,
+   underlined on hover and ringed when focused from the keyboard. */
+button.airport-link {
+  margin: 0;
+  padding: 0;
+  color: inherit;
   font: inherit;
-  font-size: 0.7rem;
-  text-align: start;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
+  text-align: inherit;
+  background: none;
+  border: 0;
+  border-radius: 3px;
   cursor: pointer;
 }
 
-.view-context__pointer:hover,
-.view-context__pointer:focus-visible {
-  background: rgba(54, 220, 255, 0.08);
-  border-color: rgba(54, 220, 255, 0.4);
-}
-
-.view-context__pointer-text {
-  flex: 1;
-}
-
-.view-context__pointer-go {
+button.airport-link:hover {
   color: #36dcff;
-  font-family: var(--font-mono);
-  font-size: 0.58rem;
-  letter-spacing: 0.08rem;
-  text-transform: uppercase;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
-.nearby-lists {
-  margin-top: 0.85rem;
-  padding-top: 0.6rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.07);
+button.airport-link:hover strong,
+button.airport-link:hover small {
+  color: inherit;
 }
 
-.nearby-lists__layer {
-  margin-top: 0.45rem;
+button.airport-link:focus-visible {
+  outline: 2px solid #36dcff;
+  outline-offset: 2px;
 }
 
-.nearby-lists__head {
+/* A row that names an airport beside it: the row and its airport link side
+   by side, the nearest one's mark on the whole row. */
+.nearby-lists__row--via {
   display: flex;
   align-items: center;
   gap: 0.35rem;
-  margin: 0 0 0.2rem;
-  color: rgba(199, 214, 222, 0.6);
+  border-radius: 4px;
+}
+
+.nearby-lists__row--via > button:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.nearby-lists__row--nearest.nearby-lists__row--via {
+  background: rgba(54, 220, 255, 0.07);
+  box-shadow: inset 2px 0 0 #36dcff;
+}
+
+:root[dir='rtl'] .nearby-lists__row--nearest.nearby-lists__row--via {
+  box-shadow: inset -2px 0 0 #36dcff;
+}
+
+.nearby-lists__row--nearest.nearby-lists__row--via > button:first-child {
+  background: none;
+  border-inline-start-color: transparent;
+}
+
+.nearby-lists__via {
+  flex: none;
+  padding-inline-end: 0.75rem;
+  color: rgba(199, 214, 222, 0.55);
   font-family: var(--font-mono);
-  font-size: 0.56rem;
-  font-weight: 500;
-  letter-spacing: 0.1rem;
-  text-transform: uppercase;
+  font-size: 0.6rem;
+  white-space: nowrap;
 }
 
-.nearby-lists__head .material-symbols-outlined {
-  font-size: 0.9rem;
+.nearby-lists .nearby-lists__via .airport-link {
+  display: inline;
+  width: auto;
+  padding: 0 0.1rem;
+  color: rgba(225, 236, 242, 0.88);
+  font-size: inherit;
+  background: none;
+  border: 0;
 }
 
-.nearby-lists__count {
+.nearby-lists .nearby-lists__via .airport-link:hover {
   color: #36dcff;
 }
 
-.nearby-lists ul {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.nearby-lists button {
+/* Back to the card an airport was opened from. */
+.place-details__back {
   display: flex;
   align-items: center;
-  gap: 0.45rem;
-  width: 100%;
-  /* Room at the end for the panel's scrollbar, which draws over the rows. */
-  padding-block: 0.3rem;
-  padding-inline: 0.4rem 0.75rem;
-  color: rgba(225, 236, 242, 0.88);
+  gap: 0.15rem;
+  max-width: 100%;
+  margin: 0 0 0.4rem;
+  padding-block: 0.15rem;
+  padding-inline: 0.1rem 0.4rem;
+  color: rgba(199, 214, 222, 0.85);
   font: inherit;
-  font-size: 0.68rem;
-  text-align: start;
+  font-size: 0.64rem;
   background: none;
   border: 0;
-  border-inline-start: 2px solid transparent;
   border-radius: 4px;
   cursor: pointer;
 }
 
-.nearby-lists button:hover,
-.nearby-lists button:focus-visible {
+.place-details__back .material-symbols-outlined {
+  flex: none;
+  font-size: 1rem;
+}
+
+:root[dir='rtl'] .place-details__back .material-symbols-outlined {
+  transform: scaleX(-1);
+}
+
+.place-details__back-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.place-details__back:hover,
+.place-details__back:focus-visible {
+  color: #e8fbff;
   background: rgba(255, 255, 255, 0.06);
 }
 
-.nearby-lists__row--nearest button {
-  background: rgba(54, 220, 255, 0.07);
-  border-inline-start-color: #36dcff;
+.place-details__back:focus-visible {
+  outline: 2px solid #36dcff;
+  outline-offset: 1px;
 }
 
-.nearby-lists__name {
-  flex: 1;
-  min-width: 0;
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow-wrap: anywhere;
-}
-
-.nearby-lists__badge {
-  flex: none;
-  padding: 0.05rem 0.3rem;
-  color: #36dcff;
-  font-family: var(--font-mono);
-  font-size: 0.48rem;
-  letter-spacing: 0.08rem;
-  text-transform: uppercase;
-  border: 1px solid rgba(54, 220, 255, 0.5);
-  border-radius: 3px;
-}
-
-.nearby-lists__meta {
-  flex: none;
-  color: rgba(199, 214, 222, 0.55);
-  font-family: var(--font-mono);
-  font-size: 0.6rem;
-}
-
-.nearby-lists__motion {
-  flex: none;
-  color: rgba(199, 214, 222, 0.5);
-  font-size: 14px;
-}
-
-.nearby-lists__motion[data-motion='moving'] {
-  color: #5dff9f;
-}
-
-.nearby-lists__motion[data-motion='stopped'] {
-  color: #ffb86b;
-}
-
-.view-context__camera.altitude-graph--compact {
-  display: block;
-  margin: 0.55rem 0 0;
-  padding: 0.5rem 0.6rem;
-}
-
-.view-context__camera.altitude-graph--compact .altitude-graph__head {
-  flex-direction: row;
-  align-items: baseline;
-  justify-content: space-between;
-}
-
-.view-context__camera.altitude-graph--compact .altitude-graph__plot {
-  height: 1.9rem;
-}
-
+/* Suggested layers: their names, then one Open that shows
+   them in Data Layers. Display only: a name switches nothing on. */
 .view-context__suggest {
   margin-top: 0.8rem;
 }
@@ -2895,4 +4991,72 @@
 .view-context__suggest-item .material-symbols-outlined {
   color: #36dcff;
   font-size: 0.8rem;
+}
+
+/* Radio with no station picked: a clear state under its name. */
+.radio-stations__idle {
+  margin: 0.15rem 0 0.5rem;
+  color: rgba(225, 236, 242, 0.85);
+  font-size: 0.66rem;
+}
+
+/* A name that scrolls when cut off (MarqueeText.vue): still and ellipsized
+   while it fits or motion is reduced; otherwise a wait at each end (a fifth
+   of the round trip each, 2 s at least) and 30 px/s across, edges faded. */
+.marquee {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.marquee.is-moving {
+  text-overflow: clip;
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 0.6rem,
+    #000 calc(100% - 0.6rem),
+    transparent
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 0.6rem,
+    #000 calc(100% - 0.6rem),
+    transparent
+  );
+}
+
+.marquee.is-moving .marquee__text {
+  display: inline-block;
+  padding-inline: 0.6rem;
+  margin-inline-start: -0.6rem;
+  animation: marquee-scroll var(--marquee-duration, 10s) linear infinite;
+}
+
+.radio-stations__now:is(:hover, :focus-within) .marquee__text,
+.radio-mini:is(:hover, :focus-within) .marquee__text {
+  animation-play-state: paused;
+}
+
+@keyframes marquee-scroll {
+  0%,
+  20% {
+    transform: translateX(0);
+  }
+  50%,
+  70% {
+    transform: translateX(var(--marquee-shift, 0));
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee.is-moving .marquee__text {
+    animation: none;
+  }
 }

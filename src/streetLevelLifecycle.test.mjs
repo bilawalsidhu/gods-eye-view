@@ -9,11 +9,11 @@ import { ShareRestoration } from './ui/shareRestoration.js';
 import { StreetLevelControls } from './ui/streetLevelControls.js';
 import { createApp, nextTick } from 'vue';
 import { createPinia } from 'pinia';
-import StreetLevelPanel from './ui/views/panels/StreetLevelPanel.vue';
+import StreetLevelViewer from './ui/views/panels/StreetLevelViewer.vue';
 import { useStreetLevelStore } from './ui/stores/streetLevel.js';
 
 // Street-level request lifecycle across the action, the layer, links and the
-// panel. Offline: providers and camera flights are fixtures.
+// photo viewer. Offline: providers and camera flights are fixtures.
 globalThis.fetch = async () => { throw new Error('Unexpected network use in offline test'); };
 const settle = () => new Promise(resolve => setTimeout(resolve, 0));
 function deferred() {
@@ -34,7 +34,8 @@ async function harness(t, { nearestImage = async () => 'A', failImage = null, ex
     instance.viewer.open = async id => {
       opened.push(id);
       if (id === failImage) throw new Error('Fixture image load failed');
-      pose?.({ imageId: id });
+      pose?.({ imageId: id, position: { lat: 48, lon: 2 } });
+      return id;
     };
     return instance;
   };
@@ -107,7 +108,7 @@ test('a replacement from another source keeps EXPAND', async t => {
     extraProviders: [fakeStreetLevelProvider({ id: 'panoramax', pickPrefix: 'pm:', nearestImage: async () => 'B' })],
   });
   const root = document.body.appendChild(document.createElement('div'));
-  root.innerHTML = '<button id="sl-status"></button><div id="sl-viewer-wrap"><div id="sl-viewer"></div></div><button id="sl-viewer-expand"></button>';
+  root.innerHTML = '<div id="sl-viewer-wrap"><div id="sl-viewer"></div></div><button id="sl-viewer-expand"></button>';
   const wrap = root.querySelector('#sl-viewer-wrap');
   let fullscreen = null;
   Object.defineProperty(document, 'fullscreenElement', { configurable: true, get: () => fullscreen });
@@ -155,7 +156,7 @@ test('a failed replacement shows its error inside the expanded viewer', async t 
   const h = await harness(t, { nearestImage: async () => 'B', failImage: 'B' });
   const root = document.body.appendChild(document.createElement('div'));
   const pinia = createPinia();
-  const app = createApp(StreetLevelPanel); app.use(pinia); app.mount(root);
+  const app = createApp(StreetLevelViewer); app.use(pinia); app.mount(root);
   const store = useStreetLevelStore(pinia);
   const wrap = root.querySelector('#sl-viewer-wrap');
   let fullscreen = null;
@@ -179,7 +180,7 @@ test('a failed replacement shows its error inside the expanded viewer', async t 
   assert.equal(document.fullscreenElement, wrap);
   assert.equal(h.layer.getUIState().street.imageId, 'A');
   assert.match(h.layer.getUIState().street.error, /Fixture image load failed/);
-  assert.equal(wrap.contains(root.querySelector('#sl-error')), false);
+
   const error = wrap.querySelector('#sl-viewer-error');
   assert.match(error.textContent, /Fixture image load failed/);
   assert.equal(error.hidden, false, 'error must be visible inside fullscreen');

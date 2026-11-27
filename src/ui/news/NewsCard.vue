@@ -16,11 +16,19 @@ import UiButton from '../kit/UiButton.vue';
 const props = defineProps({
   item: { type: Object, required: true },
   open: { type: Boolean, default: false },
+  selected: Boolean,
   onChoose: { type: Function, default: () => {} },
   onClear: { type: Function, default: () => {} },
 });
 
 // A picture the publisher no longer serves leaves the card without one.
+const vReleaseMedia = {
+  beforeUnmount(video) {
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+  },
+};
 const pictureFailed = ref(false);
 const dropPicture = () => {
   pictureFailed.value = true;
@@ -65,7 +73,7 @@ const redrawWithView = true;
   >
     <UiButton
       class="news-card__main"
-      :aria-expanded="open ? 'true' : 'false'"
+      :aria-expanded="open || selected ? 'true' : 'false'"
       @click="onChoose(item)"
       ><template v-if="redrawWithView" #default>
         <span v-if="item.picture && !pictureFailed" class="news-card__thumb"
@@ -122,6 +130,7 @@ const redrawWithView = true;
     <div v-if="open" class="news-card__open">
       <video
         v-if="item.picture?.video && !clipFailed"
+        v-release-media
         class="news-card__clip"
         :src="item.picture.video"
         :poster="pictureFailed ? undefined : item.picture.url"

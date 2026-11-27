@@ -12,7 +12,8 @@ import * as Cesium from 'cesium';
 import { CockpitViewController } from './cockpitController.js';
 import { useCockpitStore } from './stores/cockpit.js';
 import CockpitView from './views/CockpitView.vue';
-import ContextView from './views/ContextView.vue';
+import IntelHudView from './views/IntelHudView.vue';
+import { rideFaceFor } from './rideFace.js';
 import { cockpitSubjectProviders } from '../cockpitSubjectProviders.js';
 import { getLocale, setLocale } from '../i18n/index.js';
 import { COCKPIT_GROUND_WAIT_TIMEOUT_MS } from './cockpitPresentation.js';
@@ -135,7 +136,7 @@ function fixture(
   const host = document.body.appendChild(document.createElement('div'));
   const pinia = createPinia();
   const app = createApp(
-    defineComponent(() => () => [h(ContextView), h(CockpitView)]),
+    defineComponent(() => () => [h(IntelHudView), h(CockpitView)]),
   ).use(pinia);
   app.mount(host);
   const store = useCockpitStore(pinia);
@@ -342,11 +343,24 @@ test('a provider candidate offers its own entry face; a shut gate hides it', asy
   const { $, cockpit, store } = fixture(t, { providers: [ride] });
   cockpit.syncEntry();
   await nextTick();
-  const entry = $('#cockpit-entry');
-  assert.equal(entry.hidden, false);
-  assert.match(entry.textContent, /commute/);
-  assert.match(entry.textContent, /RIDE/);
+  assert.equal(store.presence.entryAvailable, true);
+  assert.deepEqual(store.presence.entryFace, {
+    icon: 'commute',
+    label: 'RIDE',
+  });
   assert.equal(store.presence.entryKind, 'example-kind');
+  assert.equal(store.presence.entryLayerId, 'example-layer');
+  // The item's card leads with the provider's own face, not the cab view.
+  const card = { layerId: 'example-layer', identity: { id: 'a1' } };
+  assert.deepEqual(rideFaceFor(card, store.presence), {
+    icon: 'commute',
+    label: 'RIDE',
+  });
+  assert.equal(
+    rideFaceFor({ ...card, identity: { id: 'other' } }, store.presence).label,
+    'Cab view',
+    "another item's card does not borrow the face",
+  );
   // A candidate may bring its own face.
   ride.subject.candidate = {
     id: 'a2',
@@ -355,18 +369,28 @@ test('a provider candidate offers its own entry face; a shut gate hides it', asy
   };
   cockpit.syncEntry();
   await nextTick();
-  assert.match(entry.textContent, /tram/);
-  assert.match(entry.textContent, /BOARD/);
+  assert.deepEqual(store.presence.entryFace, { icon: 'tram', label: 'BOARD' });
+  assert.deepEqual(
+    rideFaceFor(
+      { layerId: 'example-layer', identity: { id: 'a2' } },
+      store.presence,
+    ),
+    { icon: 'tram', label: 'BOARD' },
+  );
   ride.subject.allowed = false;
   cockpit.syncEntry();
   await nextTick();
-  assert.equal(entry.hidden, true, "the provider's own rule shuts entry");
+  assert.equal(
+    store.presence.entryAvailable,
+    false,
+    "the provider's own rule shuts entry",
+  );
   assert.equal(cockpit.enter(), false);
   ride.subject.allowed = true;
   ride.subject.candidate = null;
   cockpit.syncEntry();
   await nextTick();
-  assert.equal(entry.hidden, true, 'no candidate, no entry');
+  assert.equal(store.presence.entryAvailable, false, 'no candidate, no entry');
 });
 
 test('entry holds the subject, takes the camera and shows the generic HUD', async (t) => {
@@ -377,7 +401,7 @@ test('entry holds the subject, takes the camera and shows the generic HUD', asyn
   });
   cockpit.syncEntry();
   await nextTick();
-  $('#cockpit-entry').click();
+  cockpit.enter();
   await settle();
   assert.equal(cockpit.active, true);
   assert.equal(cockpit.subjectKind, 'example-kind');
@@ -867,13 +891,13 @@ test('a class-based provider keeps its `this` from entry to release', async (t) 
     }
   }
   const ride = new Ride();
-  const { $, cockpit, warned } = fixture(t, {
+  const { $, cockpit, store, warned } = fixture(t, {
     providers: [{ definition: ride }],
   });
   cockpit.syncEntry();
   await nextTick();
-  assert.match($('#cockpit-entry').textContent, /RIDE/);
-  $('#cockpit-entry').click();
+  assert.equal(store.presence.entryFace?.label, 'RIDE');
+  cockpit.enter();
   await settle();
   assert.equal(cockpit.active, true);
   assert.equal($('#cockpit-callsign').textContent, 'RIDE a1');
@@ -1054,14 +1078,14 @@ test('a provider’s labels, entry face and look follow a change of language', a
       aheadLabel: german() ? 'Nach vorn sehen' : 'Look ahead',
     }),
   });
-  const { $, cockpit } = fixture(t, { providers: [ride] });
+  const { $, cockpit, store } = fixture(t, { providers: [ride] });
   cockpit.syncEntry();
   await nextTick();
-  assert.match($('#cockpit-entry').textContent, /RIDE/);
+  assert.equal(store.presence.entryFace?.label, 'RIDE');
   // On the entry, before the view.
   setLocale('de');
   await settle();
-  assert.match($('#cockpit-entry').textContent, /FAHRT/);
+  assert.equal(store.presence.entryFace?.label, 'FAHRT');
   setLocale('en');
   await settle();
   assert.equal(cockpit.enter(), true);

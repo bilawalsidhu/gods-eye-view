@@ -13,6 +13,8 @@ import { createPointerTracker } from './pointerContext.js';
 import { createReferentRegistry } from './referents.js';
 import { createTestVoiceUi } from '../testSupport/voiceUi.mjs';
 import { setLocale, t } from '../i18n/index.js';
+import { useEntityCardStore } from '../ui/stores/entityCard.js';
+import { applicationPinia } from '../ui/vueRuntime.js';
 
 const PROVIDER_KEY = 'gev.voice.provider';
 const settle = () => new Promise((resolve) => setImmediate(resolve));
@@ -599,6 +601,8 @@ test('active switch keeps PTT mode, retires the held key, and disposes before mo
   assert.equal(f.facade.sendTextCommand('hello'), 'gemini:hello');
   assert.deepEqual(first.texts, []);
   assert.deepEqual(second.texts, ['hello']);
+  const cards = useEntityCardStore(applicationPinia());
+  const beforeZoom = cards.viewCommandRevision;
   const result = await f.facade.runner('adjust_camera_zoom', {
     direction: 'in',
     amount: 'little',
@@ -609,6 +613,7 @@ test('active switch keeps PTT mode, retires the held key, and disposes before mo
     'the actual shared action runner remains usable after switching',
   );
   assert.equal(f.state.zooms, 1);
+  assert.equal(cards.viewCommandRevision, beforeZoom + 1);
 });
 
 for (const initialState of ['idle', 'error']) {

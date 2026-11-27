@@ -380,6 +380,8 @@ export function normalizePhoto(record) {
   const full =
     fileUrl(record, 'filepathProc', 'fileurlProc') || sized(record, 'proc');
   const index = Number(record.sequenceIndex);
+  const shotAt = kartaViewTimeMs(record.shotDate);
+  const uploadedAt = kartaViewTimeMs(record.dateAdded);
   return {
     id: String(record.id),
     sequenceId: record.sequenceId != null ? String(record.sequenceId) : null,
@@ -388,10 +390,10 @@ export function normalizePhoto(record) {
     lat,
     heading: Number.isFinite(heading) ? heading : null,
     isPano,
-    capturedAt:
-      kartaViewTimeMs(record.shotDate) ?? kartaViewTimeMs(record.dateAdded),
+    capturedAt: shotAt ?? uploadedAt,
+    capturedAtSource: shotAt === null && uploadedAt !== null ? 'added' : null,
     // KartaView's SINCE goes by this (its server filters by upload date).
-    uploadedAt: kartaViewTimeMs(record.dateAdded),
+    uploadedAt,
     urls: {
       // A 1280 px rendition; for a 360° photo it is the front view only.
       view:

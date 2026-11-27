@@ -57,7 +57,7 @@ export const GOOGLE_3D_MAP_STACK_ID = 'photoreal';
 /** Above this, a ground click is a misclick, not a street. */
 export const GROUND_CLICK_MAX_HEIGHT_M = 3_000;
 
-/** English data: the Street Level panel translates it (translateKnown). */
+/** English data: Street Level's UI translates it (translateKnown). */
 export const AIM_AT_GROUND_MESSAGE = msg(
   'Aim the middle of the view at a street to look for imagery there',
 );

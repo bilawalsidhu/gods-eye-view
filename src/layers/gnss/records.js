@@ -21,6 +21,11 @@
  *   gpsjam.org; the one-aircraft discount is the only small-sample guard.
  * - Window: a GEV-defined rolling 30 minutes over the views the user visits.
  */
+import {
+  CONTEXT_AREA,
+  CONTEXT_LINES,
+  contextLine,
+} from '../../data/contextGeometry.js';
 import { cellToBoundary, cellToLatLng, latLngToCell } from 'h3-js';
 
 /** Position source can switch to MLAT after GPS loss; quality must remain aircraft-reported. */
@@ -313,11 +318,12 @@ export function binGnssCells(store) {
       aircraft,
       degraded,
     );
-    cells.push({
+    const boundary = cellToBoundary(id).map(([lat, lon]) => ({ lat, lon }));
+    const cell = {
       id,
       lat,
       lon,
-      boundary: cellToBoundary(id).map(([lat, lon]) => ({ lat, lon })),
+      boundary,
       aircraft,
       degraded,
       observedAt,
@@ -325,7 +331,14 @@ export function binGnssCells(store) {
       level,
       state,
       interpretation,
+    };
+    // Inspect intersects the drawn cell even when its centre is outside the view.
+    const ring = [...boundary, boundary[0]];
+    Object.defineProperties(cell, {
+      [CONTEXT_AREA]: { value: ring.map(({ lon, lat }) => [lon, lat]) },
+      [CONTEXT_LINES]: { value: [contextLine(ring)] },
     });
+    cells.push(cell);
   }
   return cells.sort((a, b) => a.id.localeCompare(b.id));
 }

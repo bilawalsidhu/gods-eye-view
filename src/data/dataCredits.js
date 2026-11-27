@@ -284,7 +284,7 @@ export const DATA_CREDITS = [
   {
     key: 'open-meteo',
     html:
-      'Cockpit current conditions: ' +
+      'Context and Cockpit current conditions: ' +
       '<a href="https://open-meteo.com/en/licence" target="_blank" rel="noopener">Weather data by Open-Meteo.com</a> ' +
       '(CC BY 4.0)',
   },
@@ -735,6 +735,15 @@ export const NATURAL_EARTH_CREDIT = {
   html:
     'Country, state/province and physical region boundaries from ' +
     '<a href="https://www.naturalearthdata.com" target="_blank" rel="noopener">Natural Earth</a> (public domain)',
+};
+
+/** Registered when an airport from the bundled OurAirports pack is first
+ * shown (public domain — no attribution required; credited as a courtesy). */
+export const OURAIRPORTS_CREDIT = {
+  key: 'ourairports',
+  html:
+    'Airports from ' +
+    '<a href="https://ourairports.com/data/" target="_blank" rel="noopener">OurAirports</a> (public domain)',
 };
 
 /** Registered when a name from the bundled Wikidata places packs is first

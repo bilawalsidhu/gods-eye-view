@@ -81,10 +81,12 @@ export const SEQUENCE_IMAGE_FIELDS =
  */
 export const NEAREST_LIMIT = 100;
 /**
- * A nearest-image search not answered in full (body included) by then is
- * given up: a link or posted view, and every view queued behind it, waits.
+ * Maximum time to receive and read a nearest-image response.
  */
 export const NEAREST_TIMEOUT_MS = 12_000;
-/** Fields a nearest-image search needs: where each is, and the filter's. */
+/**
+ * Fields a nearest-image search needs: where each is, the filter's, and its
+ * sequence (a line click prefers that line's images).
+ */
 export const NEAREST_IMAGE_FIELDS =
-  'id,captured_at,geometry,computed_geometry,is_pano';
+  'id,captured_at,geometry,computed_geometry,is_pano,sequence';

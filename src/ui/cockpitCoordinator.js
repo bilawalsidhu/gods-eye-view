@@ -24,6 +24,7 @@ import { readEntityRecord } from '../data/entityRecords.js';
 export class CockpitCoordinator {
   constructor({
     viewer,
+    cockpitStore,
     services,
     elements,
     operations,
@@ -164,6 +165,13 @@ export class CockpitCoordinator {
         return false;
       },
     });
+    if (cockpitStore) {
+      const owner = cockpitStore.connect({
+        toggleTr3b: () => this.cockpitView.toggleTrackedTr3b(),
+        enter: (subject) => this.cockpitView.enter({ subject }),
+      });
+      this._detachCardActions = () => cockpitStore.detach(owner);
+    }
   }
   get _dataManager() {
     return this.readDataManager();
@@ -612,10 +620,12 @@ export class CockpitCoordinator {
     return this._cockpitDisplayPortal?.standardScrollTop ?? 0;
   }
   stop() {
+    this._detachCardActions?.();
     this.cockpitView?.stop();
     this._cockpitDisplayPortal?.stop();
   }
   destroy() {
+    this._detachCardActions?.();
     this.cockpitView?.dispose();
     this._cockpitDisplayPortal?.destroy();
     this._cockpitDisplayPortal = null;

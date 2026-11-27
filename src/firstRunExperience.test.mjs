@@ -1035,6 +1035,15 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
   // ordering while allowing source formatting. Derived from the unchanged
   // release schema before formatting (the previous source-byte pin passed).
   // show_street_level (street-level photos) is a later, separate tool.
+  // Pin the complete production schema before projecting the first-run contract.
+  assert.equal(
+    crypto
+      .createHash('sha256')
+      .update(JSON.stringify(GEV_REALTIME_TOOLS))
+      .digest('hex'),
+    'd93c79e39e265395d0c4cb78a120c90850db208360df1e3af90ccbef781486c4',
+    'the production voice tool contract changed',
+  );
   const legacyTools = structuredClone(GEV_REALTIME_TOOLS).filter(
     (tool) =>
       ![
@@ -1083,11 +1092,35 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
   delete camera.pitchDeg;
   camera.direction.description =
     'Required for pan/tilt/rotate; orbit/rotate_globe default right.';
-  // The Space Missions panel is a later, separate set_panel_open target.
-  const panels = legacyTools.find((tool) => tool.name === 'set_panel_open')
-    .parameters.properties.panelId;
-  assert.ok(panels.enum.includes('space-missions-panel'));
-  panels.enum = panels.enum.filter((id) => id !== 'space-missions-panel');
+  // Restore the legacy panel list and wording before checking the mission pin.
+  const panel = legacyTools.find((tool) => tool.name === 'set_panel_open');
+  const panels = panel.parameters.properties.panelId;
+  const contextPanels = [
+    'camera-settings',
+    'space-missions-panel',
+    'street-level-panel',
+  ];
+  for (const id of contextPanels) assert.ok(panels.enum.includes(id));
+  panels.enum = panels.enum.filter((id) => !contextPanels.includes(id));
+  // Restore the pre-Context descriptions and mode arguments for the upstream pin.
+  panel.description =
+    'Visual/Visual Presets/styles/filters/map sources=pp-toggles; Scenes/saved scenes=scene-panel; Voice Settings=voice-settings; voice control/Preview=voice-preview; Provider Settings/API keys=provider-settings. Voice panels exit Cockpit directly.';
+  const contextMode = legacyTools.find(
+    (tool) => tool.name === 'set_context_mode',
+  );
+  contextMode.description =
+    'Enter/exit Contacts or Space Missions only when explicitly requested; opening Context alone uses set_panel_open.';
+  contextMode.parameters.properties.mode.enum = [
+    'off',
+    'contacts',
+    'flights',
+    'space-missions',
+    'missions',
+  ];
+  contextMode.parameters.properties.mode.description =
+    'Use off to exit context mode.';
+  legacyTools.find((tool) => tool.name === 'control_cctv').description =
+    'CCTV camera operations: enable/disable the layer, select a camera by name, next/prev/nearest/focus, toggle coverage wedges / projection overlay / auto-hop, "viewshed" for color-coded per-camera coverage volumes, and "adjust" for the on-camera calibration gizmo.';
   const block = JSON.stringify(legacyTools);
   // Re-derived for the voice layer manifest (generated layer enums, alias and
   // field hints), point-and-ask's pointer/referent arguments and the prompt
@@ -1109,8 +1142,6 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
   // adds the analyst area scopes and the osm-places layer.
   // control_cockpit states the own-layer entry rule (Contacts not required).
   // Fire Perimeters queries add lastGrowthTime.
-  // The dock's Location and Visual Presets trays leave set_panel_open's
-  // targets; Visual (pp-toggles) takes the presets' names.
   assert.equal(block.length, 31475, 'serialized tool schema length drifted');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),

@@ -22,6 +22,7 @@ const chipClass = (chip) =>
     v-for="chip in chips"
     :key="chip.id"
     :data-chip-id="chip.id"
+    :data-chip-icon="chip.icon || undefined"
     :class="chipClass(chip)"
     :pressed="chip.action ? undefined : Boolean(chip.active)"
     pressed-class="active"

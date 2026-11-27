@@ -47,6 +47,7 @@ test('en: CAL, SRC and CONTEXT keep their English codes', () => {
 test('fr: CAL, SRC and CONTEXT values are translated', () => {
   setLocale('fr');
   try {
+    assert.match(summary(null), /1,00\s*km²/);
     assert.match(
       summary('upstream'),
       /CAL ESTIM\. INITIALE · SRC AMONT · CONTEXTE RUE/,

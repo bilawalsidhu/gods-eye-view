@@ -143,6 +143,31 @@ test('gradeCore mirrors the qa-voice-routing verdicts', () => {
   assert.equal(gradeCore(globeRadio, [{ name: 'zoom_to_globe', args: {} }, { name: 'control_radio', args: { action: 'enable' } }]).ok, false);
   assert.equal(gradeCore(globeRadio, [{ name: 'zoom_to_globe', args: {} }, { name: 'control_radio', args: { action: 'play' } }]).ok, true);
 
+  const contacts = byPhrase('Open Contacts');
+  const context = { name: 'set_panel_open', args: { panelId: 'global-context-panel', open: true } };
+  const nearby = { name: 'set_context_mode', args: { mode: 'nearby' } };
+  assert.equal(gradeCore(contacts, [context]).ok, false);
+  assert.equal(gradeCore(contacts, [nearby]).ok, true);
+  assert.equal(gradeCore(byPhrase('Show nearby'), [nearby]).ok, true);
+  assert.equal(gradeCore(byPhrase('Open Context'), [context]).ok, true);
+  assert.equal(gradeCore(byPhrase('Open Context'), [nearby]).ok, false);
+
+  const openRadio = byPhrase('Open Radio');
+  assert.equal(gradeCore(openRadio, [
+    { name: 'set_panel_open', args: { panelId: 'radio-panel', open: true } },
+  ]).fullCallOk, true);
+  for (const action of ['enable', 'play'])
+    assert.equal(gradeCore(openRadio, [{ name: 'control_radio', args: { action } }]).fullCallOk, false);
+
+  const missions = byPhrase('Open Space Missions');
+  for (const route of [
+    { name: 'set_context_mode', args: { mode: 'space-missions' } },
+    { name: 'set_panel_open', args: { panelId: 'space-missions-panel', open: true } },
+    { name: 'set_layer_visibility', args: { layerId: 'rocket-launches', enabled: true } },
+  ]) assert.equal(gradeCore(missions, [route]).fullCallOk, true);
+  assert.equal(gradeCore(missions, [nearby]).fullCallOk, false);
+  assert.equal(gradeCore(byPhrase('Focus the selected camera'), [{ name: 'control_cctv', args: { action: 'next' } }]).ok, false);
+
   const volume = byPhrase('Set the radio volume to thirty percent');
   assert.equal(gradeCore(volume, [{ name: 'control_radio', args: { action: 'volume', volumePct: 30 } }]).ok, true);
   assert.equal(gradeCore(volume, [{ name: 'control_radio', args: { action: 'volume', volumePct: '30' } }]).ok, false);

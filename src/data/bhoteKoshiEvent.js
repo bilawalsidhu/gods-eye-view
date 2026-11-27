@@ -1,4 +1,5 @@
 import { analystRecordLimit } from './analystRecordLimit.js';
+import { isFollowing } from './followed.js';
 import { isPointerFree } from './inputOwnership.js';
 import {
   clearOverlaySource,
@@ -1134,6 +1135,7 @@ export function createBhoteKoshiEventLayer({
   let _sceneMediaPlaybackCompletedBeatId = null;
   let _sceneMediaPlaybackTimer = null;
   let _sceneMediaOwner = null;
+  let _lastPanelRunToken = null;
   let _removeSceneMediaAbort = null;
   let _witnessEmbedActive = false;
   let _sceneRevealAnimationFrame = null;
@@ -1421,6 +1423,17 @@ export function createBhoteKoshiEventLayer({
     _removeSceneMediaAbort?.();
     _removeSceneMediaAbort = null;
     _sceneMediaOwner = owner;
+    const token = owner?.token;
+    // The Director uses one token across the run, including later shots.
+    if (
+      token &&
+      token !== _lastPanelRunToken &&
+      !token.cancelled &&
+      !token.signal?.aborted
+    ) {
+      _lastPanelRunToken = token;
+      panelStore.showView(_panelOwner);
+    }
     stopSceneMediaPlayback();
     releaseEvidenceVideo({ restorePoster: false });
     _embeddedMedia?.hide?.({ immediate: true });
@@ -3716,6 +3729,16 @@ export function createBhoteKoshiEventLayer({
           _dataManager?.setEnabled(BHOTE_KOSHI_LAYER_ID, false, {
             origin: 'user',
           }),
+        leaveView: () => {
+          if (!panelStore.leaveView(owner)) return false;
+          invalidateIntroAutostart();
+          stopPlayback();
+          const camera = findCamera(_viewer);
+          stopCinematic({
+            releaseCamera: !isFollowing(_viewer) && camera?.flying !== true,
+          });
+          return true;
+        },
         play: handlePlay,
         playScene: playWholeScene,
         toggleCinematic,

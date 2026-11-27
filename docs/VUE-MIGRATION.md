@@ -180,20 +180,19 @@ sky, application-row and Reset glyphs are `UiIcon`s with `:size="null"`, so
 the panel's rules still size them (`src/ui/kit/visualControls.test.mjs` pins
 it). The toggles' other glyphs (◎ ▣ ✈ □ ✨ 🔍) and the presets' style glyphs
 are text characters, not Material symbols, and stay plain spans.
-The entity card's buttons are ghost `UiButton`s: its four preview buttons
-(Photos, Route, 3D, Cockpit view) are pressed toggles with `active`, Follow
-is one with `entity-card__action--on`, and the cockpit entry, Fly to and
-Ask GEV are plain buttons; so are the camera preview's bigger-view and More
-info buttons and the nearby lists' rows (`SpotConditions`, which the
+The entity card's buttons are ghost `UiButton`s: its preview switch
+(Photos, Route, 3D, Cockpit view, Map, and Play or Pause) holds pressed
+toggles with `active`, Follow and Pin are ones with `entity-card__action--on`,
+and the cockpit entry, Fly to and Ask GEV are plain buttons; so are the
+camera preview's bigger-view button and the nearby lists' rows (`SpotConditions`, which the
 context view shows too). Their glyphs are `UiIcon`s with `:size="null"`,
 so entity-card.css and spot-conditions.css still size them
 (`src/ui/kit/entityCardControls.test.mjs` pins it). Ask GEV's chat bubble
 stays inline SVG, since no Material symbol the page loads draws it.
-The command dock holds only the voice control, whose buttons are its own.
-The Context panel's buttons (its two tabs, Contacts, the
-cockpit entry and SEARCH NEARBY SITES, beside the header's search and
-expand and the TR-3B chip) are ghost `UiButton`s; the tabs and Contacts
-are `role="tab"` controls, chosen through `aria-selected` with their own
+The command dock holds the voice control, whose buttons are its own.
+The Context panel's buttons (its tabs and a card's
+actions, the cockpit entry among them, beside the header's search and
+expand) are ghost `UiButton`s; the tabs are `role="tab"` controls, chosen through `aria-selected` with their own
 `active` class rather than `pressed`. The view context it shows while
 nothing is picked (a worldwide tile that turns a layer on, an item's row,
 the place and layer chips and Ask GEV) is on the kit too, and the glyphs of
@@ -210,16 +209,16 @@ while a query is typed. The Filter button opens a disclosure and carries
 a `UiIcon` with `:size="null"`, so `layer-finder.css` still sizes them
 (`src/ui/kit/layerFinderControls.test.mjs` pins it); the search field's
 magnifier is `UiSearchField`'s own span.
-The Space Missions panel's buttons (a mission's roster row, FOCUS,
-REPLAY ASCENT, the replay's pause, PREV, NEXT and SHOW ALL / DESELECT),
-the Contacts panel's (PREV, FOCUS, NEXT and a contact's row), the Radio
-panel's (Enable, PREV, PLAY, NEXT and STOP), the RTL-SDR card's (Connect,
-Locate, Change device, FM, ADS-B, Tune and the two seeks) and the key
-setup's (the POWER UP chip, a key's REMOVE, the voice auth toggle and
-SAVE KEYS) are ghost `UiButton`s. Radio's Enable and the card's Connect,
-FM and ADS-B are pressed toggles with `active`; PLAY and Locate keep
-their own `active` class without `aria-pressed`, since their words say
-what they will do or have done. The chip's bolt is a `UiIcon` with
+The Space Missions list's buttons in Context (a mission's roster row, and
+the selected mission's Replay, the replay's pause, Fly to and Pin), Radio's
+in Context (the station list's Play or Pause, Fly to, Pin, tag chips and
+rows, the fold's PREV, PLAY, NEXT and STOP, the volume's speaker and the
+mini player's), the RTL-SDR card's (Connect, Locate, Change device, FM,
+ADS-B, Tune and the two seeks) and the key setup's (the POWER UP chip, a
+key's REMOVE, the voice auth toggle and SAVE KEYS) are ghost `UiButton`s.
+The card's Connect, FM and ADS-B are pressed toggles with `active`; PLAY
+and Locate keep their own `active` class without `aria-pressed`, since
+their words say what they will do or have done. The chip's bolt is a `UiIcon` with
 `:size="null"`, so provider-settings.css still sizes it
 (`src/ui/kit/missionsRadioControls.test.mjs` pins it). The card's FM
 frequency stays a native number field, which the kit has no control for,
@@ -481,16 +480,22 @@ slot whenever its view is drawn.
    keep their imperative entry points until their owners are components:
    the rail cards and card blocks (`src/ui/rail/`) render through
    Vue's synchronous `render()` behind `createRailCards()` and
-   `createRailCardBlocks()`. Order: Scenes (done: `SceneOptions` and
+   `createRailCardBlocks()`. A control that moves between panels can keep one
+   mounted tree in a Teleport (Radio's tuner fold and the Cameras list in
+   `ContextView.vue`).
+
+   Order: Scenes (done: `SceneOptions` and
    `SceneShotList` over the `gev-scenes` store; the panel's buttons, status
    line, progress bar and the runtime chip render the panel SceneControls
    presents there, and the buttons and file chooser call its actions), Weather (done: the owner
    renders `WeatherReadout` from the view it computes), Recent imagery
    (done: `RecentImageryReadout` and its day cards, the same way),
-   Street level (done: `StreetLevelPanel` renders the `gev-street-level`
-   store that `StreetLevelControls` publishes to; the controls keep their
-   listeners, EXPAND, focus and resizing; `StreetLevelPhotoViewer`, beside
-   it in the layer panels, teleports into the viewer host the photo viewer
+   Street level (done: the standalone panel is retired; `StreetLevelViewer`
+   renders the open photo from the `gev-street-level` store that
+   `StreetLevelControls` publishes to, and Context moves it onto the photo's
+   card (`StreetViewHero`) or the dock, while the filters render on the
+   layer's Data Layers row; the controls keep their listeners, EXPAND, focus and
+   resizing; `StreetLevelPhotoViewer` teleports the photo viewer into its host
    KartaView and Panoramax mount there, which `createPhotoViewer()`
    presents through the layer's `subscribePhotoViewer()` and the
    application shell publishes to the `gev-street-level-photo` store, so
@@ -502,10 +507,11 @@ slot whenever its view is drawn.
    is drawn while the earlier one's mount closes; with no view
    subscribed, as when the layer runs without the application shell, a
    KartaView or Panoramax photo cannot mount),
-   CCTV (done: `CctvPanel` renders
-   the whole panel from the `gev-cctv` store, including the camera picker,
-   the inline pose editor, the frame preview, source badge and typed
-   summary; `CctvControls` keeps its listeners, the frame requests and the
+   CCTV (done: the standalone panel and its camera picker are retired;
+   `CctvTools` renders Context's Camera settings tab from the `gev-cctv`
+   store, including the inline pose editor and typed summary, and
+   `CctvPreview` the camera card's frame, source badge and live video;
+   `CctvControls` keeps its listeners, the frame requests and the
    live video surface; `QuebecCctvOverlay` teleports the Québec 511 player
    and its map preview to the end of the body, rendered synchronously by
    `createQuebecCctvOverlay()` from the view it computes, as the rail cards
@@ -527,9 +533,10 @@ slot whenever its view is drawn.
    style parameter rows render through Vue behind `createStyleParameters()`,
    as a render function so the portable `./ui/input` entry needs no
    component compiler; the other groups follow one owner at a time),
-   Context and Radio (in progress: `RadioPanel` renders the directory row,
-   station card, transport, volume and playback line from the `gev-radio`
-   store that RadioControls publishes to and whose controls it answers
+   Context and Radio (in progress: Radio has no panel of its own;
+   `RadioStations`, `RadioFold`, `RadioVolume` and `RadioMiniPlayer` render
+   its station list, transport, volume and mini player in Context from the
+   `gev-radio` store that RadioControls publishes to and whose controls it answers
    through the store's `connect`/`act` (the shared `createOwners()`; a
    refused station tag gets the kept tag back from `act`), and `SdrCard` the
    local RTL-SDR card that LocalSdrControls publishes beside it and answers
@@ -540,14 +547,14 @@ slot whenever its view is drawn.
    through the store and publishes the band, readouts, slider and needle,
    and the component lays out the tick tape against the dial's measured
    width and lays out the snapped needle before it drops the drag class;
-   `ContextView` renders the mode switch and the nearby sites
-   search from the `gev-context` store, which ContextControls reaches only
-   through its `publish` option, so `./ui/context` needs no Vue;
-   `AwarenessPanel` renders the Contacts panel that the awareness layer
-   publishes through `subscribePanel()`, the first layer to hand its rail
-   content to a view, and `MissionRoster` and `MissionDetail` the Space
-   Missions roster and selected mission that the launches layer publishes
-   the same way), the command dock (the ACTIVE STYLE corner renders the
+   `ContextView` renders the card, the Nearby view and the list tabs;
+   ContextControls presents its mode only through its `publish` option,
+   which the application leaves unset, so `./ui/context` needs no Vue;
+   `NearbyMissions` and `MissionDetail` render the Space Missions roster
+   and selected mission that the launches layer publishes through
+   `subscribePanel()`; the Contacts panel the awareness layer once handed
+   to a view the same way is retired, and Cockpit keeps its Contacts
+   window), the command dock (the ACTIVE STYLE corner renders the
    style VisualSettings publishes to the `gev-display` store; Visual's map
    source chips and status badge render what `createMapSourceControls()`
    publishes beside it, so `./ui/maps` needs no Vue; the Omnibar's city and

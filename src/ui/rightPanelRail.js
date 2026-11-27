@@ -232,29 +232,56 @@ export function layoutRightPanelRail({
     gap * Math.max(0, measuredPanels.length - 1);
   // An open Context panel takes the column's full height: up to just under
   // the HUD readouts at the top of the screen, down to the usual bottom.
-  // CCTV does the same, so its feed and controls have the room.
-  const FULL_HEIGHT = new Set(['global-context-panel', 'cctv-panel']);
   const contextOpen = panels.some(
     (panel) =>
-      FULL_HEIGHT.has(panel.id) && !panel.classList.contains('collapsed'),
+      panel.id === 'global-context-panel' &&
+      !panel.classList.contains('collapsed'),
   );
   // Every panel starts level with the left rail, open or not, so the two
   // rails line up in every HUD layout (Minimal has no top-right readout to
-  // push this column down) and switching between Context, CCTV and Street
-  // Level does not move it. Only the two above also stretch to the bottom.
-  const layout = resolveHudRailLayout({
-    viewportHeight,
-    panelHeight: naturalHeight,
-    laneLeft: stackRect.left,
-    laneRight: stackRect.right,
-    obstacles: obstacleRects,
-    baseTop: alignedTop,
-    baseBottom: viewportHeight * 0.96,
-    gap: safeGap,
-    align: 'start',
-  });
+  // push this column down). Context is the only panel that stretches to the bottom.
+  // One panel alone in this column (its rail hidden while it is open): its
+  // lane includes the rail's gutter it moves over.
+  const soleOpen = Boolean(stack.querySelector?.('.ui-rail--sole-open'));
+  const gutter = soleOpen
+    ? parseFloat(
+        getComputedStyle(stack).getPropertyValue('--panel-rail-clearance'),
+      ) || 48
+    : 0;
+  const rtl = documentRef?.documentElement?.dir === 'rtl';
+  const reserve = Number(stack.dataset.cornerReserve) || 0;
+  const layoutFrom = (baseTop) =>
+    resolveHudRailLayout({
+      viewportHeight,
+      panelHeight: naturalHeight,
+      laneLeft: stackRect.left - (rtl ? gutter : 0),
+      laneRight: stackRect.right + (rtl ? 0 : gutter),
+      obstacles: obstacleRects,
+      baseTop,
+      baseBottom: viewportHeight * 0.96,
+      gap: safeGap,
+      align: 'start',
+    });
+  // A lone panel lines up with the left column's top while nothing is
+  // docked and what it shows fits there; it rises to the top-right row when
+  // something is docked or its content needs the room. Leaving the raised
+  // top takes a margin of spare room, so content that changes as it scrolls
+  // does not make it jump.
+  let layout = layoutFrom(alignedTop);
+  if (soleOpen && layout) {
+    const raised = stack.dataset.soleTop === 'raised';
+    const margin = raised ? Math.max(24, viewportHeight * 0.03) : 0;
+    const fitsAligned =
+      reserve === 0 && naturalHeight + margin <= layout.maxHeight;
+    if (!fitsAligned) layout = layoutFrom(0);
+    stack.dataset.soleTop = fitsAligned ? 'aligned' : 'raised';
+  } else delete stack.dataset.soleTop;
   if (!layout) return;
-  const { safeTop, safeBottom, maxHeight: availableHeight } = layout;
+  // The docked view and the mini player sit under Context in this column
+  // (ContextView.vue): the room they need comes off its bottom.
+  const safeTop = layout.safeTop;
+  const safeBottom = layout.safeBottom - reserve;
+  const availableHeight = Math.max(0, layout.maxHeight - reserve);
   const stabilityBand = Math.max(48, viewportHeight * 0.06);
   const wasFocused = stack.classList.contains('layout-focus');
   const shouldFocus =
@@ -350,6 +377,10 @@ export function layoutRightPanelRail({
   stack.dataset.layoutMode = shouldFocus ? 'focus' : 'normal';
   stack.dataset.safeTop = layoutTop.toFixed(1);
   stack.dataset.safeBottom = safeBottom.toFixed(1);
+  // Where the column could end with no room kept under it: the dock and the
+  // mini player stand on this line (ContextView.vue), so where they sit
+  // never depends on how tall the panel above them is.
+  stack.dataset.columnBottom = layout.safeBottom.toFixed(1);
   stack.dataset.availableHeight = availableHeight.toFixed(1);
   stack.dataset.requiredHeight = naturalHeight.toFixed(1);
   stack.dataset.expandedCount = String(expandedPanels.length);

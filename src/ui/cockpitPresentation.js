@@ -178,28 +178,3 @@ export function tleAgeParts(ageMs) {
   if (hours < 24) return { unit: 'hours', value: Math.floor(hours) };
   return { unit: 'days', value: Math.floor(hours / 24) };
 }
-
-/**
- * The Cockpit entry for each subject it can ride: an aircraft's cockpit, a
- * vessel's bridge or a satellite's orbit. Both entry buttons (Contacts and
- * the Intel HUD readout) show it.
- */
-const COCKPIT_ENTRY_FACES = Object.freeze({
-  aircraft: Object.freeze({ icon: 'flight', label: msg('COCKPIT') }),
-  vessel: Object.freeze({ icon: 'directions_boat', label: msg('BRIDGE') }),
-  satellite: Object.freeze({ icon: 'satellite_alt', label: msg('ORBIT') }),
-});
-
-/**
- * The entry's glyph and localized label for the subject it would ride. An
- * application provider's subject brings its own face, already in the page's
- * language (`presence.entryFace`).
- * @param {string|null|undefined} kind
- * @param {{icon: string, label: string}|null} [face]
- * @returns {{icon: string, label: string}}
- */
-export function cockpitEntryFace(kind, face = null) {
-  if (face?.icon && face?.label) return { icon: face.icon, label: face.label };
-  const known = COCKPIT_ENTRY_FACES[kind] ?? COCKPIT_ENTRY_FACES.aircraft;
-  return { icon: known.icon, label: t(known.label) };
-}

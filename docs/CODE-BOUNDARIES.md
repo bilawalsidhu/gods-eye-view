@@ -328,22 +328,36 @@ share restoration and movement of controls between containers remain caller-owne
 Existing imports of `resolveHudRailLayout` from `cockpitMath.js` remain
 compatible through a re-export.
 
-### Adding a right-rail readout panel
+### Adding a Context list
 
-Add the shell in `src/ui/views/ContextView.vue` inside `#right-context-rail`:
-a `.panel-collapsible` with a stable `id` and matching `data-panel-id`, the
-existing `.panel-header`, collapse button and a dedicated body. Register it
-with the existing panel chrome/layout owners; do not allocate rail space in
-the body renderer. Set `hidden` while empty so the allocator ignores it, and
-expand through the existing collapse button only on first appearance per page
-session, and only when the chrome marked the restored state as a default
-(`data-collapsed-preference`), never over a stored or shared choice. Preserve
-the user's later collapse choice, including body remounts. Mark the body
-`data-rail-scroller` when it scrolls: the rail's measuring pass lifts its
-`max-height` and puts the scroll offset back afterwards. Panel bodies only
-scroll on an open-card change, with one write, never on a refresh.
+Weather, News and Recent Imagery expose their readouts as tabs in Context.
+Add its id, label and layers to `CONTEXT_LISTS` and `LIST_LAYERS` in
+`src/ui/contextLists.js`, and its body (`#context-list-<id>`, holding a
+dedicated body element) to `#context-lists` in `src/ui/views/ContextView.vue`.
+The body stays in the page while Context is closed or shows another tab, so
+the readout renders into it at any time. The readout reports
+`setContextListPresence(id, { count })` while its layer is on and
+`setContextListPresence(id, null)` when it goes off; that adds and removes the
+list tab. When one list is active, it has its own tab. When several are
+active, Lists holds a sub-tab for each.
 
-Compose `createRailCards({ container, document, onParams, onOpen })`. Rails
+`showContextList(id)` selects the list tab. For an explicit open action, follow
+`showListInContext` in `src/voice/gevActions.js`. It selects the list, opens
+`global-context-panel` with `setPanelCollapsed(id, false, { explicit: true })`,
+then calls `revealPanel(id)` with that panel ID to show its sheet on phones.
+Feed refreshes update the readout in place. Context owns the rail scroller.
+
+Use `src/ui/kit/ContextListCard.vue` for the list. In
+`src/ui/weather/WeatherReadout.vue`, each active product supplies a row.
+The readout passes the selected product ID, handles `select` and `back`, and
+renders the product's settings and readings in the `detail` slot. The readout
+owner clears the selection when the product turns off. The briefing and
+observed frame time use the `filter` slot above the rows.
+
+### Rail accordions and shared content blocks
+
+`createRailCards({ container, document, onParams, onOpen })` renders an
+accordion in its caller's container. Rails
 have no time controls of their own; the world timeline moves time. Cards
 reconcile `{ id, title, badge, open, compact,
 compactStatus, blocks }` in place. Their full-width native button headers expose
@@ -351,7 +365,8 @@ compactStatus, blocks }` in place. Their full-width native button headers expose
 adapter owns accordion state. Generic cards do not select data or enable layers.
 
 `blocks` is an ordered array of loose, optional `{ id, type, ... }` descriptors,
-rendered by `rail/RailCardBlocks.vue`. There are no per-section disclosures:
+rendered by `src/ui/rail/RailCardBlocks.vue`. The Weather readout also uses
+this component directly for its briefing and selected product details.
 
 - `summary`: `text`, a single summary line.
 - `list`: `list: { ariaLabel, items }`, keyed by `rail/RailRowList.vue`.
@@ -378,17 +393,6 @@ consumers. They expose `summary.settings`, `summary.actions` and optional
 `summary.result`; wind also retains its raw captured `summary.reading`.
 `readout: true` layer rows render only the toggle and source/meta line; their
 subscriptions still refresh the cards. Cards own configuration and readings.
-
-Weather orders cyclones, wind, then a bordered Observed history group containing
-the frame time and active radar, satellite and lightning cards. The group
-heading and scope name its active products. The frame time shows whenever any
-observed product is enabled and has a frame; the world timeline moves time.
-Exactly one active card is open. Header clicks and newly enabled ids choose it
-(the last new entry wins a batch); refreshes and clock ticks retain it. First
-appearance uses cyclones with storms, otherwise the first card. Disabling the
-open layer falls back to the first remaining card. A WeakMap per document keeps
-explicit choices through body remounts without adding share state. Card opening,
-storm selection and layer enabling remain independent.
 
 Optional card/badge class names provide feature styling. Card titles use
 `.data-name` typography; meta/time/badges use `.data-toggle-meta` typography;
@@ -422,8 +426,8 @@ facade's asynchronous teardown can yield.
 
 ## Ordinary action buttons
 
-The scene panels view and the CCTV panel draw their action buttons with the shared
-`gev-action-button` classes in `src/ui/styles/action-button.css`. Feature
+The scene panels view and the render failure notice draw their action buttons
+with the shared `gev-action-button` classes in `src/ui/styles/action-button.css`. Feature
 controllers own action dispatch, state, persistence and cleanup, and the views
 preserve IDs and layout hooks.
 
@@ -479,17 +483,18 @@ importing the renderer or station providers. Pure tuner calculations retain
 compatibility exports from the data layer. Disposal revokes DOM listeners and
 subscriptions before ending the active tuning interaction.
 
-### Camera panel controls
+### Camera controls
 
 `ui/cctv` composes camera controls, frame loading, calibration editing and status
-presentation. It receives DOM elements, the existing camera port and explicit
+presentation for Context's Camera settings tab and the camera card. It receives
+DOM elements, the existing camera port and explicit
 application actions; it imports no provider, layer or camera engine. Selection,
 placement, navigation and storage policy remain outside the component family.
 
 ### Context coordination
 
-`ui/context` owns mode controls, transactions, session restoration and manager
-subscriptions. Composition supplies the manager, installations search and
+`ui/context` owns the internal Contacts mode Cockpit uses, its transactions,
+session restoration and manager subscriptions. Composition supplies the manager and
 explicit visual/panel actions. `ui/context/policy` exposes the existing pure
 mode and restoration rules. No source transport or renderer is imported by
 these components; initial state and action results retain their existing shape.

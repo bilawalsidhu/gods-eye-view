@@ -1,6 +1,7 @@
 <script setup>
 import { storeToRefs } from 'pinia';
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
+import { retainRowPanel } from '../../layerPanel/rowPanelPlacement.js';
 import { t } from '../../../i18n/index.js';
 import { R820T_GAIN_STEPS_DB } from '../../../sdr/gain.js';
 import { localSdrGainOptionLabel } from '../../localSdrPresentation.js';
@@ -11,20 +12,27 @@ import { useRadioStore } from '../../stores/radio.js';
 import UiButton from '../../kit/UiButton.vue';
 import UiSelect from '../../kit/UiSelect.js';
 
-// The local RTL-SDR card in the Radio panel. LocalSdrControls presents it and
+// The local RTL-SDR card, shown on Radio's Data Layers row while the local
+// receiver is chosen (it lives in a hidden home in Context and the row
+// borrows it, RowPanel.vue). LocalSdrControls presents it and
 // publishes it; until it does, the card shows its initial markup. Its
 // controls call LocalSdrControls through the store. The numeric gain
 // options read in the page language; their values stay numeric.
 const radio = useRadioStore();
 const { sdr } = storeToRefs(radio);
 const { act } = radio;
+// Disconnect stays on the Radio row even when the layer is off.
+const receiverCard = ref(null);
+watch([receiverCard, () => Boolean(sdr.value?.connectionActive)], ([element, connected], _, onCleanup) => {
+  if (element && connected) onCleanup(retainRowPanel('radio', element));
+});
 const frequency = ref(null);
 const GAINS = R820T_GAIN_STEPS_DB.map((gain) => gain.toFixed(1));
 const tune = () => act('tuneSdr', frequency.value.value);
 </script>
 
 <template>
-<div id="sdr-radio-card" class="sdr-radio-card" role="group" :aria-label="t('Local RTL-SDR receiver')">
+<div ref="receiverCard" id="sdr-radio-card" class="sdr-radio-card" role="group" :aria-label="t('Local RTL-SDR receiver')">
   <div class="sdr-radio-heading">
     <strong>{{ t('LOCAL RTL-SDR') }}</strong>
     <span id="sdr-connection-state" v-class-toggle="{ active: sdr?.connectionActive }">{{ sdr ? sdr.connectionLabel : 'NO USB' }}</span>

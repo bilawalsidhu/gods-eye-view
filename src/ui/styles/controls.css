@@ -44,7 +44,7 @@
 }
 
 /* A hovered panel sets --rail-label-hover on itself (see below); its own
-   header picks it up. Radio sits inside Context and keeps its own colour. */
+   header picks it up. */
 :root
   :is(#left-panel-stack, #right-context-rail)
   :is(
@@ -53,10 +53,6 @@
     :is(.panel-header, .pp-header-row) > .panel-collapse-btn
   ) {
   color: var(--rail-label-hover, var(--dock-label-color));
-}
-
-#radio-panel {
-  --rail-label-hover: initial;
 }
 
 /* A title never pushes its toggle out of the card: one that does not fit
@@ -71,8 +67,7 @@
 
 /* A collapsed launcher is 176px wide and its divider has no room to draw,
    so the header drops it and packs closer. English titles such as Recent
-   Imagery then fit whole. Only the rail's own launchers: Radio, nested in
-   Context, keeps its divider. */
+   Imagery then fit whole. */
 :root
   :is(#left-panel-stack, #right-context-rail)
   > .panel-collapsible.collapsed
@@ -116,8 +111,7 @@
 /* Translated titles run longer (Aktuelle Bilddaten), so a collapsed rail
    launcher sets them in compact type rather than pushing the disclosure
    button out of the card or cutting the word short. Chinese and Japanese
-   titles fit at full size and stay at or above their 9px floor (cjk.css);
-   Radio, nested in Context, is not a launcher. */
+   titles fit at full size and stay at or above their 9px floor (cjk.css). */
 html:not([lang='en']):not(:lang(zh)):not(:lang(ja))
   :is(#left-panel-stack, #right-context-rail)
   > .panel-collapsible.collapsed
@@ -180,12 +174,7 @@ html:not([lang='en']):not(:lang(zh)):not(:lang(ja))
       .data-panel-inner,
       .utilities-panel-inner,
       .scene-panel-inner,
-      .cctv-panel-inner,
-      .weather-panel-inner,
-      .recent-imagery-panel-inner,
-      .street-level-panel-inner,
       .global-context-panel-inner,
-      .space-missions-panel-inner,
       #pp-toggles:not(.collapsed),
       #pp-toggles.collapsed > .pp-header-row
     ) {
@@ -198,12 +187,7 @@ html:not([lang='en']):not(:lang(zh)):not(:lang(ja))
       .data-panel-inner,
       .utilities-panel-inner,
       .scene-panel-inner,
-      .cctv-panel-inner,
-      .weather-panel-inner,
-      .recent-imagery-panel-inner,
-      .street-level-panel-inner,
       .global-context-panel-inner,
-      .space-missions-panel-inner,
       #pp-toggles:not(.collapsed),
       #pp-toggles.collapsed > .pp-header-row
     ):hover {
@@ -923,10 +907,7 @@ body.ui-clean-view #cctv-sync-chip,
 body.ui-clean-view #pp-toggles,
 body.ui-clean-view #param-slider-panel,
 body.ui-clean-view #data-panel,
-body.ui-clean-view #cctv-panel,
-body.ui-clean-view #radio-panel,
 body.ui-clean-view #global-context-panel,
-body.ui-clean-view #space-missions-panel,
 body.ui-clean-view #utilities-panel,
 body.ui-clean-view #scene-panel {
   opacity: 0 !important;

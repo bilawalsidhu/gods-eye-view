@@ -8,6 +8,7 @@ const ALL = [
   'flights',
   'ais-live-vessels',
   'street-level',
+  'recent-imagery',
   'cctv',
   'transit',
   'local-firms',
@@ -52,8 +53,25 @@ test('Earthquakes suggests Active Fires only after a successful FIRMS update', (
   );
 });
 
-test('a local view without a coverage signal has no default suggestions', () => {
-  assert.deepEqual(suggestLayers(ALL, { globe: false }), []);
+test('a grounded local view with nothing on suggests globally available layers', () => {
+  assert.deepEqual(suggestLayers(ALL, { grounded: true }), [
+    'flights',
+    'satellites',
+    'recent-imagery',
+  ]);
+  assert.deepEqual(suggestLayers(ALL), [], 'no view or a sky-only view');
+});
+
+test('a grounded view falls back to Data Layers when no baseline layer is available', () => {
+  const rows = [
+    row('flights', { stats: { sourceUnavailable: true } }),
+    row('satellites', { showInTogglePanel: false }),
+    row('recent-imagery', { stats: { keyRequired: true } }),
+    row('street-level'),
+    row('cctv'),
+    row('transit'),
+  ];
+  assert.deepEqual(suggestLayers(rows, { grounded: true }), []);
 });
 
 test('a layer with an unavailable source is not suggested', () => {
@@ -72,7 +90,7 @@ test('with layers on, what goes with them comes first; a layer that is on is nev
   const rows = ALL.map((layer) =>
     layer.id === 'local-firms' ? { ...layer, enabled: true } : layer,
   );
-  assert.deepEqual(suggestLayers(rows, { globe: false }), ['wind']);
+  assert.deepEqual(suggestLayers(rows, { grounded: true }), ['wind']);
   const flightsOn = ALL.map((layer) =>
     layer.id === 'flights' ? { ...layer, enabled: true } : layer,
   );

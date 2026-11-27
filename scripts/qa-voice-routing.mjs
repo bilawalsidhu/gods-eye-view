@@ -419,10 +419,14 @@ async function runRoutingLayer() {
         session.lastTurn,
       );
       const grade = gradeCore(p, calls);
+      const radioSideEffect = p.phrase === 'Open Radio' && calls.find((call) =>
+        call.name === 'control_radio' ||
+        (call.name === 'set_layer_visibility' && call.args?.layerId === 'radio' && call.args.enabled === true),
+      );
       report(
-        grade.ok,
+        (p.checkTypedArgs ? grade.fullCallOk : grade.ok) && !radioSideEffect,
         `route: "${p.phrase}" → ${expectLabel(p)}`,
-        grade.detail,
+        radioSideEffect ? `${grade.detail}; unexpected ${radioSideEffect.name}` : grade.detail,
       );
     }
     session.close();
@@ -2169,18 +2173,82 @@ async function runBehaviorLayer() {
         .join(',')}`,
     );
 
-    // (9) set_context_mode — happy path and a refusal.
-    // Contacts is an exclusive mode that tears other layers down, so this runs
-    // last and hands the app back to `off` before the screenshot.
-    r = await run('set_context_mode', { mode: 'contacts' });
+    // (9) Open Context preserves the pick; Nearby clears it without changing
+    // layers. Use a place card so this check needs no live entity feed.
+    const contextBefore = await page.evaluate(async () => {
+      const { useEntityCardStore } = await import('/src/ui/stores/entityCard.js');
+      const { placeIdentity } = await import('/src/ui/placeCard.js');
+      const cards = useEntityCardStore();
+      const selected = cards.select(
+        placeIdentity({ name: 'Voice Context QA', lat: 30.2672, lon: -97.7431 }),
+        { fly: false, follow: false },
+      );
+      const dm = window.__godsEyeView.dataManager;
+      return {
+        selected,
+        key: cards.card?.key,
+        layers: [...dm.layers.keys()].filter((id) => dm.isEnabled(id)).sort(),
+      };
+    });
+    const contextState = () => page.evaluate(async () => {
+      const { useEntityCardStore } = await import('/src/ui/stores/entityCard.js');
+      return {
+        key: useEntityCardStore().card?.key,
+        collapsed: Boolean(document.querySelector('#global-context-panel .context-title-open')?.checkVisibility()),
+        visible: Boolean(document.querySelector('#context-body #entity-card')?.checkVisibility()),
+      };
+    });
+    r = await run('set_panel_open', { panelId: 'global-context-panel', open: false });
+    await settle(500);
+    const closedContext = await contextState();
+    report(
+      contextBefore.selected && contextBefore.key && r?.ok === true &&
+        closedContext.collapsed && !closedContext.visible && closedContext.key === contextBefore.key,
+      'behavior: closing Context hides the selected card and keeps its identity',
+      JSON.stringify(closedContext),
+    );
+    r = await run('set_panel_open', { panelId: 'global-context-panel', open: true });
+    await settle(500);
+    const contextPick = await contextState();
+    report(
+      contextBefore.key && r?.ok === true && !contextPick.collapsed &&
+        contextPick.key === contextBefore.key && contextPick.visible,
+      'behavior: opening Context preserves the selected card',
+      `before=${contextBefore.key} after=${contextPick.key} visible=${contextPick.visible}`,
+    );
+    r = await run('set_context_mode', { mode: 'nearby' });
+    await settle(1200);
+    const contactsState = await page.evaluate(async () => {
+      const { useEntityCardStore } = await import('/src/ui/stores/entityCard.js');
+      const dm = window.__godsEyeView.dataManager;
+      return {
+        mode: window.__godsEyeView.styleManager?.getContextModeState?.()?.mode,
+        selected: Boolean(useEntityCardStore().card),
+        nearbyVisible: Boolean(document.querySelector('#context-body .view-context')?.checkVisibility()),
+        layers: [...dm.layers.keys()].filter((id) => dm.isEnabled(id)).sort(),
+      };
+    });
+    report(
+      r?.ok === true && r?.mode === 'nearby' && !contactsState.mode &&
+        !contactsState.selected && contactsState.nearbyVisible &&
+        JSON.stringify(contactsState.layers) === JSON.stringify(contextBefore.layers),
+      'behavior: Nearby clears the pick, shows Context awareness and keeps layers',
+      `result=${JSON.stringify(r)?.slice(0, 140)} state=${JSON.stringify(contactsState).slice(0, 250)}`,
+    );
+    // The checks below need the internal Contacts window that Cockpit still
+    // uses, so the page enters it directly. It is exclusive and tears other
+    // layers down, so this runs last and (9e) hands the app back to `off`.
+    await page.evaluate(() =>
+      window.__godsEyeView?.styleManager?.setContextMode?.('flights'),
+    );
     await settle(2500);
     const contextEntered = await page.evaluate(
       () => window.__godsEyeView?.styleManager?.getContextModeState?.() || null,
     );
     report(
-      r?.ok === true && contextEntered?.mode === 'flights',
-      'behavior: set_context_mode enters Contacts',
-      `result=${JSON.stringify(r)?.slice(0, 140)} state=${JSON.stringify(contextEntered)?.slice(0, 90)}`,
+      contextEntered?.mode === 'flights',
+      'setup: the internal Contacts window is up for the checks below',
+      `state=${JSON.stringify(contextEntered)?.slice(0, 90)}`,
     );
 
     // (9a) control_cockpit status reads the real Cockpit surface.

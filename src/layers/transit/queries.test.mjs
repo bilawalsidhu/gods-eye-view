@@ -26,3 +26,19 @@ test('the empty-coverage note counts regions, not feeds', () => {
     `No feed here yet · ${regions.size} regions available`,
   );
 });
+
+test('a vehicle record carries the route type the globe draws its model from', () => {
+  const vehicle = {
+    key: 'k',
+    mode: 'rail',
+    routeType: 101,
+    record: { id: 'v1', lat: 1, lon: 2 },
+  };
+  const state = {
+    _enabled: true,
+    _activeFeeds: new Map(),
+    _vehicles: new Map([['k', vehicle]]),
+  };
+  const { methods } = createQueries({ state, parts: {} });
+  assert.equal(methods.getAnalystRecords()[0].routeType, 101);
+});

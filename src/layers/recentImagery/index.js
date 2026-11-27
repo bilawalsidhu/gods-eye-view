@@ -822,6 +822,12 @@ export function createRecentImageryLayer({
     return _catalogError;
   }
 
+  function hlsCatalogsFailed(errors) {
+    return ['S30', 'L30'].every((product) =>
+      errors.some((error) => error.product === product),
+    );
+  }
+
   function catalogNote(error) {
     return t('{label} catalog unavailable · {detail}', {
       label: PRODUCTS[error.product]?.label || error.product,
@@ -1417,7 +1423,14 @@ export function createRecentImageryLayer({
         notes: notes(),
         auto: _auto,
         toolActive: _toolActive,
-        error: guidance(),
+        error:
+          guidance() ||
+          (!_searching &&
+          _sources.hls &&
+          !_sources.viirs &&
+          hlsCatalogsFailed(_catalogErrors)
+            ? msg('Imagery catalog unavailable')
+            : null),
         notice: _notice,
       };
     },
@@ -1622,9 +1635,7 @@ export function createRecentImageryLayer({
       // Both HLS collections can fail while the result still lists
       // unprobed VIIRS days. Only proven coverage can keep the feed usable.
       const unavailable =
-        ['S30', 'L30'].every((product) =>
-          failures.some((error) => error.product === product),
-        ) && !_candidates.some(drapable);
+        hlsCatalogsFailed(failures) && !_candidates.some(drapable);
       return {
         count: _candidates.length,
         loading: _searching,

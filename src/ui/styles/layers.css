@@ -143,10 +143,6 @@
     max-height var(--transition-fast);
 }
 #right-context-rail > #pp-toggles,
-#right-context-rail > #cctv-panel,
-#right-context-rail > #street-level-panel,
-#right-context-rail > #weather-panel,
-#right-context-rail > #recent-imagery-panel,
 #right-context-rail > #global-context-panel {
   position: relative;
   inset: auto;
@@ -158,29 +154,6 @@
   max-height: 100%;
   pointer-events: auto;
 }
-#right-context-rail #cctv-panel,
-#right-context-rail #street-level-panel,
-#right-context-rail #weather-panel,
-#right-context-rail #recent-imagery-panel {
-  width: 100%;
-  max-height: 100%;
-  pointer-events: auto;
-}
-/* Collapsed readouts must stay hideable by the rail's exclusive layout. */
-#right-context-rail > #weather-panel:not(.collapsed),
-#right-context-rail > #recent-imagery-panel:not(.collapsed) {
-  display: flex;
-  flex-direction: column;
-  flex-shrink: 1;
-  min-height: 0;
-}
-#right-context-rail #cctv-panel.collapsed,
-#right-context-rail #street-level-panel.collapsed,
-#right-context-rail #weather-panel.collapsed,
-#right-context-rail #recent-imagery-panel.collapsed {
-  width: var(--right-display-collapsed-width);
-  margin-inline-start: auto;
-}
 #right-context-rail > #pp-toggles.collapsed {
   width: var(--right-display-collapsed-width);
   margin-inline-start: auto;
@@ -189,24 +162,12 @@
   width: 100%;
 }
 #right-context-rail > #pp-toggles.collapsed .pp-header-row,
-#right-context-rail #cctv-panel.collapsed .cctv-panel-inner,
-#right-context-rail #street-level-panel.collapsed .street-level-panel-inner,
-#right-context-rail #weather-panel.collapsed .weather-panel-inner,
-#right-context-rail #recent-imagery-panel.collapsed .recent-imagery-panel-inner,
 #right-context-rail
   #global-context-panel.collapsed
   .global-context-panel-inner {
   height: 50px;
   min-height: 50px;
   box-sizing: border-box;
-}
-#right-context-rail #cctv-panel:not(.collapsed) .cctv-panel-inner,
-#right-context-rail
-  #street-level-panel:not(.collapsed)
-  .street-level-panel-inner {
-  max-height: 100%;
-  overflow-y: auto;
-  scrollbar-gutter: stable;
 }
 #right-context-rail .global-context-panel-inner {
   max-height: 100%;
@@ -217,6 +178,21 @@
   max-height: 100%;
   overflow-y: auto;
   scrollbar-gutter: stable;
+}
+/* Context's values change on their own (a camera's frame, an age, a count):
+   its scrollbar's room is always kept, and its thumb shows only while the
+   pointer or focus is in the panel, so a live update never flashes it. */
+#right-context-rail
+  #global-context-panel:not(.collapsed)
+  .global-context-panel-inner:not(:hover):not(:focus-within) {
+  scrollbar-color: transparent transparent;
+}
+#right-context-rail
+  #global-context-panel:not(.collapsed)
+  .global-context-panel-inner:not(:hover):not(
+    :focus-within
+  )::-webkit-scrollbar-thumb {
+  background: transparent;
 }
 #right-context-rail #global-context-panel.collapsed {
   width: var(--right-context-collapsed-width);
@@ -286,10 +262,6 @@ body.recording-mode .gev-panel-rail {
   display: none;
 }
 #right-context-rail.layout-focus > #pp-toggles:not(.collapsed),
-#right-context-rail.layout-focus > #cctv-panel:not(.collapsed),
-#right-context-rail.layout-focus > #street-level-panel:not(.collapsed),
-#right-context-rail.layout-focus > #weather-panel:not(.collapsed),
-#right-context-rail.layout-focus > #recent-imagery-panel:not(.collapsed),
 #right-context-rail.layout-focus > #global-context-panel:not(.collapsed) {
   flex: 0 1 var(--right-panel-allocated-height);
   height: var(--right-panel-allocated-height);
@@ -300,18 +272,6 @@ body.recording-mode .gev-panel-rail {
   overflow-y: auto;
   overscroll-behavior: contain;
 }
-#right-context-rail.layout-focus
-  > #weather-panel:not(.collapsed)
-  .weather-panel-inner,
-#right-context-rail.layout-focus
-  > #cctv-panel:not(.collapsed)
-  .cctv-panel-inner,
-#right-context-rail.layout-focus
-  > #street-level-panel:not(.collapsed)
-  .street-level-panel-inner,
-#right-context-rail.layout-focus
-  > #recent-imagery-panel:not(.collapsed)
-  .recent-imagery-panel-inner,
 #right-context-rail.layout-focus
   > #global-context-panel:not(.collapsed)
   .global-context-panel-inner {
@@ -347,26 +307,6 @@ body.recording-mode .gev-panel-rail {
   transform: scaleX(-1);
 }
 
-#space-missions-panel {
-  width: min(100%, 330px);
-  min-height: 0;
-  max-height: var(--right-panel-allocated-height, 100%);
-  pointer-events: auto;
-}
-
-#space-missions-panel[hidden] {
-  display: none;
-}
-
-.space-missions-panel-inner {
-  max-height: inherit;
-  overflow-y: auto;
-  scrollbar-gutter: stable;
-}
-
-#space-missions-panel.collapsed #space-mission-panel-host {
-  display: none;
-}
 /* Synchronous intrinsic measurement, independent of focus and allocation.
    This attribute is not observed by the rail's layout scheduler. */
 #right-context-rail[data-rail-measuring] {
@@ -387,236 +327,17 @@ body.recording-mode .gev-panel-rail {
 }
 #right-context-rail[data-rail-measuring]
   > [data-panel-id]:not(.collapsed)
-  > .cctv-panel-inner,
-#right-context-rail[data-rail-measuring]
-  > [data-panel-id]:not(.collapsed)
-  > .street-level-panel-inner,
-#right-context-rail[data-rail-measuring]
-  > [data-panel-id]:not(.collapsed)
-  > .weather-panel-inner,
-#right-context-rail[data-rail-measuring]
-  > [data-panel-id]:not(.collapsed)
-  > .recent-imagery-panel-inner,
-#right-context-rail[data-rail-measuring]
-  > [data-panel-id]:not(.collapsed)
   > .global-context-panel-inner {
   height: auto !important;
   max-height: none !important;
 }
-#right-context-rail[data-rail-measuring] [data-rail-scroller],
-#right-context-rail[data-rail-measuring] .space-mission-roster-list {
+#right-context-rail[data-rail-measuring] [data-rail-scroller] {
   max-height: none !important;
 }
 #space-mission-panel {
   width: 100%;
   margin-top: 8px;
   pointer-events: auto;
-}
-#space-mission-panel-host:has(#space-mission-panel:not([hidden]))
-  > .space-mission-roster {
-  display: none;
-}
-#space-mission-panel-host .space-mission-roster {
-  display: grid;
-  min-height: 0;
-  gap: 8px;
-  padding: 9px;
-  border: 1px solid rgba(98, 181, 255, 0.2);
-  border-radius: 7px;
-  background: rgba(4, 17, 31, 0.28);
-}
-#space-mission-panel-host .space-mission-roster-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 1px 3px 7px;
-  border-bottom: 1px solid rgba(34, 230, 230, 0.14);
-  font-family: var(--font-mono);
-}
-#space-mission-panel-host .space-mission-roster-header > div {
-  display: grid;
-  min-width: 0;
-  gap: 3px;
-}
-#space-mission-panel-host .space-mission-roster-header strong {
-  color: #8fcfff;
-  font-size: 9px;
-  letter-spacing: 0.16em;
-}
-#space-mission-panel-host .space-mission-roster-header span {
-  color: rgba(190, 230, 230, 0.46);
-  font-size: 7px;
-  letter-spacing: 0.1em;
-}
-#space-mission-panel-host .space-mission-roster-header output {
-  flex: 0 0 auto;
-  color: #22e6e6;
-  font-size: 9px;
-  letter-spacing: 0.08em;
-}
-#space-mission-panel-host .space-mission-roster-list {
-  display: grid;
-  max-height: min(43vh, 420px);
-  gap: 4px;
-  overflow-x: hidden;
-  overflow-y: auto;
-  padding-right: 3px;
-}
-#space-mission-panel-host .space-mission-roster-item {
-  position: relative;
-  display: grid;
-  grid-template-columns: 10px minmax(0, 1fr) 12px;
-  align-items: center;
-  gap: 7px;
-  width: 100%;
-  min-height: 42px;
-  padding: 7px 7px;
-  border: 1px solid rgba(98, 181, 255, 0.13);
-  border-radius: 4px;
-  color: #d8ffff;
-  background: rgba(42, 113, 171, 0.045);
-  font-family: var(--font-mono);
-  text-align: left;
-  cursor: pointer;
-  transition:
-    border-color 0.15s ease,
-    background 0.15s ease,
-    transform 0.15s ease;
-}
-#space-mission-panel-host .space-mission-roster-item::before {
-  content: '';
-  position: absolute;
-  inset: 3px;
-  z-index: 1;
-  opacity: 0;
-  background:
-    linear-gradient(#22e6e6, #22e6e6) left top / 9px 1px no-repeat,
-    linear-gradient(#22e6e6, #22e6e6) left top / 1px 9px no-repeat,
-    linear-gradient(#22e6e6, #22e6e6) right top / 9px 1px no-repeat,
-    linear-gradient(#22e6e6, #22e6e6) right top / 1px 9px no-repeat,
-    linear-gradient(#22e6e6, #22e6e6) left bottom / 9px 1px no-repeat,
-    linear-gradient(#22e6e6, #22e6e6) left bottom / 1px 9px no-repeat,
-    linear-gradient(#22e6e6, #22e6e6) right bottom / 9px 1px no-repeat,
-    linear-gradient(#22e6e6, #22e6e6) right bottom / 1px 9px no-repeat;
-  filter: drop-shadow(0 0 4px rgba(34, 230, 230, 0.45));
-  pointer-events: none;
-  transition: opacity 0.12s ease;
-}
-#space-mission-panel-host .space-mission-roster-item:hover,
-#space-mission-panel-host .space-mission-roster-item:focus-visible {
-  border-color: rgba(34, 230, 230, 0.58);
-  outline: none;
-  background: rgba(34, 230, 230, 0.09);
-  transform: translateX(2px);
-}
-#space-mission-panel-host .space-mission-roster-item:hover::before,
-#space-mission-panel-host .space-mission-roster-item:focus-visible::before {
-  opacity: 1;
-}
-#space-mission-panel-host .space-mission-roster-item > * {
-  position: relative;
-  z-index: 2;
-}
-#space-mission-panel-host .space-mission-roster-marker {
-  width: 5px;
-  height: 5px;
-  justify-self: center;
-  border-radius: 50%;
-  background: var(--mission-roster-color, #22e6e6);
-  box-shadow: 0 0 7px
-    color-mix(in srgb, var(--mission-roster-color, #22e6e6) 70%, transparent);
-}
-#space-mission-panel-host .space-mission-roster-copy {
-  display: grid;
-  min-width: 0;
-  gap: 3px;
-}
-#space-mission-panel-host .space-mission-roster-copy strong,
-#space-mission-panel-host .space-mission-roster-copy small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-#space-mission-panel-host .space-mission-roster-copy strong {
-  color: #d8ffff;
-  font-size: 9px;
-  font-weight: 500;
-  letter-spacing: 0.07em;
-}
-#space-mission-panel-host .space-mission-roster-copy small {
-  color: rgba(190, 230, 230, 0.48);
-  font-size: 7px;
-  letter-spacing: 0.035em;
-}
-#space-mission-panel-host .space-mission-roster-chevron {
-  color: rgba(34, 230, 230, 0.54);
-  font-size: 16px;
-  line-height: 1;
-}
-#space-mission-panel-host .space-mission-roster-empty {
-  padding: 18px 10px;
-  color: rgba(190, 230, 230, 0.48);
-  font:
-    8px/1.5 'JetBrains Mono',
-    monospace;
-  letter-spacing: 0.09em;
-  text-align: center;
-}
-#space-mission-panel-host .space-mission-roster-focus-continuation {
-  margin: 0;
-  padding: 3px;
-  color: rgba(190, 230, 230, 0.58);
-  font:
-    7px/1.4 'JetBrains Mono',
-    monospace;
-  letter-spacing: 0.08em;
-  text-align: center;
-}
-#space-mission-panel .space-mission-view-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 0 2px;
-  border-top: 1px solid rgba(34, 230, 230, 0.18);
-  color: rgba(190, 230, 230, 0.58);
-  font:
-    8px 'JetBrains Mono',
-    monospace;
-  letter-spacing: 0.18em;
-}
-#space-mission-panel .space-mission-view-header button {
-  width: 24px;
-  height: 24px;
-  border: 1px solid rgba(98, 181, 255, 0.24);
-  border-radius: 5px;
-  color: rgba(190, 230, 230, 0.7);
-  background: rgba(42, 113, 171, 0.08);
-  cursor: pointer;
-}
-#space-mission-panel .space-mission-view-header button:hover {
-  border-color: #22e6e6;
-  color: #fff;
-}
-#space-mission-panel .space-mission-detail {
-  display: grid;
-  gap: 8px;
-  padding: 12px 0;
-  color: var(--hud-cyan, #22e6e6);
-  font:
-    11px 'JetBrains Mono',
-    monospace;
-  letter-spacing: 0.08em;
-}
-#space-mission-panel .space-mission-detail strong {
-  font-size: 14px;
-}
-#space-mission-panel .space-mission-detail span {
-  color: rgba(190, 230, 230, 0.7);
-}
-#space-mission-panel .space-mission-detail b {
-  color: #d8ffff;
-  font-weight: 400;
 }
 #space-mission-panel .mission-data-section {
   margin: 0 0 11px;
@@ -715,158 +436,87 @@ body.recording-mode .gev-panel-rail {
   letter-spacing: 0.08em;
 }
 
-#space-mission-panel .mission-action-row {
-  display: flex;
-  gap: 8px;
-  margin: 1px 0 10px;
-}
-#space-mission-panel .mission-replay-button,
-#space-mission-panel .mission-focus-button {
-  flex: 1;
-  min-width: 0;
-  padding: 9px 12px;
-  border: 1px solid rgba(255, 159, 67, 0.62);
-  border-radius: 5px;
-  color: #ffc078;
-  background: linear-gradient(
-    90deg,
-    rgba(255, 159, 67, 0.08),
-    rgba(34, 230, 230, 0.08)
-  );
-  font:
-    9px 'JetBrains Mono',
-    monospace;
-  letter-spacing: 0.16em;
-  cursor: pointer;
-  transition:
-    border-color 0.15s ease,
-    color 0.15s ease,
-    background 0.15s ease,
-    box-shadow 0.15s ease;
-}
-#space-mission-panel .mission-focus-button {
-  border-color: rgba(34, 230, 230, 0.58);
-  color: #22e6e6;
-  background: rgba(34, 230, 230, 0.07);
-}
-#space-mission-panel .mission-replay-button:hover,
-#space-mission-panel .mission-replay-button:focus-visible,
-#space-mission-panel .mission-focus-button:hover,
-#space-mission-panel .mission-focus-button:focus-visible {
-  border-color: #ffb45f;
-  color: #fff;
-  outline: none;
-  box-shadow: 0 0 14px rgba(255, 159, 67, 0.14);
-}
-#space-mission-panel .mission-focus-button:hover,
-#space-mission-panel .mission-focus-button:focus-visible {
-  border-color: #22e6e6;
-  box-shadow: 0 0 14px rgba(34, 230, 230, 0.14);
-}
-#space-mission-panel .mission-replay-button.active {
-  border-color: #22e6e6;
-  color: #d8ffff;
-  background: rgba(34, 230, 230, 0.13);
-  box-shadow: inset 0 0 16px rgba(34, 230, 230, 0.08);
-}
+/* While the replay runs, pause and cancel take Replay's place in the row. */
 #space-mission-panel .mission-replay-transport {
+  display: flex;
   flex: 1;
+  gap: 0.35rem;
   min-width: 0;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 5px;
 }
-#space-mission-panel .mission-replay-transport[hidden] {
-  display: none;
-}
-#space-mission-panel .mission-replay-transport button {
-  min-width: 0;
-  min-height: 34px;
-  padding: 0;
-  border: 1px solid rgba(34, 230, 230, 0.5);
-  border-radius: 4px;
-  color: #22e6e6;
-  background: rgba(34, 230, 230, 0.08);
-  font:
-    15px/1 'JetBrains Mono',
-    monospace;
-  cursor: pointer;
-  transition:
-    border-color 0.15s ease,
-    color 0.15s ease,
-    background 0.15s ease,
-    box-shadow 0.15s ease,
-    opacity 0.15s ease;
-}
-#space-mission-panel .mission-replay-transport button:hover:not(:disabled),
-#space-mission-panel .mission-replay-transport button:focus-visible {
-  border-color: #d8ffff;
-  color: #fff;
-  outline: none;
-  background: rgba(34, 230, 230, 0.16);
-  box-shadow: 0 0 12px rgba(34, 230, 230, 0.14);
-}
-#space-mission-panel .mission-replay-transport button:disabled {
-  opacity: 0.28;
-  cursor: default;
-}
-#space-mission-panel .mission-replay-transport button.cancel {
-  border-color: rgba(255, 159, 67, 0.58);
-  color: #ffb15c;
-  background: rgba(255, 159, 67, 0.08);
+#space-mission-panel .mission-replay-transport .entity-card__action {
+  font-size: 0.8rem;
 }
 #space-mission-panel
   .mission-replay-transport.is-paused
-  [data-mission-replay-play] {
-  border-color: #22e6e6;
-  color: #d8ffff;
-  background: rgba(34, 230, 230, 0.18);
-  box-shadow: inset 0 0 12px rgba(34, 230, 230, 0.1);
+  [data-mission-replay-toggle] {
+  color: var(--gev-tool-on);
+  background: var(--gev-tool-on-fill);
+  border-color: var(--gev-tool-on);
 }
-#space-mission-panel .space-mission-nav {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 10px;
+#space-mission-panel .entity-card__actions {
+  margin: 0.6rem 0;
 }
-#space-mission-panel .mission-nav-button {
-  min-width: 94px;
-  padding: 7px 10px;
-  border: 1px solid rgba(34, 230, 230, 0.55);
-  background: rgba(8, 34, 42, 0.72);
-  color: #22e6e6;
-  font:
-    11px 'JetBrains Mono',
-    monospace;
-  letter-spacing: 0.12em;
-  cursor: pointer;
-  transition:
-    background 0.15s ease,
-    border-color 0.15s ease,
-    opacity 0.15s ease;
+#space-mission-panel .entity-card__action--on {
+  color: var(--gev-tool-on);
+  background: var(--gev-tool-on-fill);
+  border-color: var(--gev-tool-on);
 }
-#space-mission-panel .mission-nav-button:hover:not(:disabled) {
-  background: rgba(34, 230, 230, 0.18);
-  border-color: #22e6e6;
+/* The name block as the item card sets it. */
+#space-mission-panel .entity-card__kind {
+  display: block;
+  color: rgba(199, 214, 222, 0.5);
+  font-size: 0.56rem;
+  letter-spacing: 0.08rem;
 }
-#space-mission-panel .mission-nav-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.28;
+#space-mission-panel .entity-card__title {
+  margin: 0;
+  font-size: 1.15rem;
+  line-height: 1.1;
+  letter-spacing: 0.03rem;
 }
-#space-mission-panel .mission-nav-button span {
-  font-size: 18px;
-  line-height: 0;
-  vertical-align: -2px;
+/* The mission's status, as a chip under its name. */
+#space-mission-panel .mission-card__status {
+  justify-self: start;
+  margin-top: 0.15rem;
+  padding: 0.1rem 0.45rem;
+  color: rgba(54, 220, 255, 0.9);
+  font: 500 0.56rem var(--font-mono);
+  letter-spacing: 0.06rem;
+  text-transform: uppercase;
+  background: rgba(54, 220, 255, 0.1);
+  border: 1px solid rgba(54, 220, 255, 0.3);
+  border-radius: 999px;
 }
-#space-mission-panel .mission-nav-index {
-  min-width: 58px;
+/* The top image while a replay runs: its phase and the vehicle's figures. */
+#space-mission-panel .entity-hero[data-hero='replay'] {
+  height: 168px;
+  background: radial-gradient(
+    ellipse 55% 60% at 50% 55%,
+    rgba(255, 159, 67, 0.12),
+    rgba(255, 255, 255, 0.02) 70%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+#space-mission-panel .mission-card__replay {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 0.35rem;
+  color: #ffc078;
+  font-family: var(--font-mono);
   text-align: center;
-  color: #d8ffff;
-  font:
-    11px 'JetBrains Mono',
-    monospace;
-  letter-spacing: 0.1em;
+}
+#space-mission-panel .mission-card__replay .material-symbols-outlined {
+  font-size: 2rem;
+}
+#space-mission-panel .mission-card__replay strong {
+  font-size: 0.8rem;
+  letter-spacing: 0.08rem;
+  text-transform: uppercase;
+}
+#space-mission-panel .mission-card__telemetry {
+  color: rgba(225, 236, 242, 0.75);
+  font-size: 0.66rem;
 }
 #space-mission-panel button {
   cursor: pointer;
@@ -1034,8 +684,18 @@ body.recording-mode .gev-panel-rail {
 #global-context-panel .panel-glow {
   display: none;
 }
-.global-context-panel-inner,
-.space-missions-panel-inner {
+/* Weather, News and Recent Imagery share the Lists tab. Its sub-tabs
+   wrap, and each readout scrolls independently. */
+.context-pin-tabs {
+  flex-wrap: wrap;
+}
+#context-lists .context-list__body {
+  min-height: 0;
+  max-height: min(60svh, calc(var(--right-stack-max-height, 50svh) - 120px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.global-context-panel-inner {
   position: relative;
   display: flex;
   min-height: 0;
@@ -1051,166 +711,11 @@ body.recording-mode .gev-panel-rail {
   -webkit-backdrop-filter: blur(24px) saturate(1.4);
 }
 
-/* Data Layers, Context and Space Missions share the 14px side padding of the
-   other default theme panels, so every title and toggle sits 19px from its
-   edge. */
-:root
-  :is(
-    .data-panel-inner,
-    .global-context-panel-inner,
-    .space-missions-panel-inner
-  ) {
+/* Data Layers and Context share the 14px side padding of the other default
+   theme panels, so every title and toggle sits 19px from its edge. */
+:root :is(.data-panel-inner, .global-context-panel-inner) {
   padding-right: 14px;
   padding-left: 14px;
-}
-.global-context-actions {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 6px;
-  margin: 0 0 8px;
-}
-.global-context-actions:has(#installations-search-btn) {
-  grid-template-columns: minmax(0, 1fr);
-}
-.global-context-actions:has(#cockpit-entry:not([hidden])) {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-.global-context-actions:has(#cockpit-entry[hidden]) {
-  grid-template-columns: 1fr;
-}
-/* TR-3B reclassify toggle rides an `auto` trailing column so the chip never
-   resizes the COCKPIT / SEARCH buttons beside it. */
-.global-context-actions:has(#tr3b-toggle:not([hidden])) {
-  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
-}
-.global-context-actions:has(#cockpit-entry[hidden]):has(
-    #tr3b-toggle:not([hidden])
-  ) {
-  grid-template-columns: minmax(0, 1fr) auto;
-}
-.tr3b-toggle {
-  width: 26px;
-  min-height: 30px;
-  padding: 0;
-  border: 1px solid rgba(98, 181, 255, 0.22);
-  border-radius: 5px;
-  background: rgba(42, 113, 171, 0.08);
-  /* The saucer is a COLOR-font glyph: `color` and `text-shadow` cannot touch
-     it, so the dim/lit states are carried by `filter` alongside the border and
-     fill. 14px sits inside the 26px chip with breathing room. */
-  font:
-    14px/1 ui-monospace,
-    SFMono-Regular,
-    Menlo,
-    monospace;
-  filter: grayscale(0.6) opacity(0.62);
-  cursor: pointer;
-  transition:
-    filter 160ms ease,
-    border-color 160ms ease,
-    background 160ms ease;
-}
-.tr3b-toggle[hidden] {
-  display: none;
-}
-.tr3b-toggle:hover,
-.tr3b-toggle:focus-visible {
-  border-color: rgba(127, 200, 255, 0.6);
-  background: rgba(66, 148, 211, 0.18);
-  filter: grayscale(0.15) opacity(0.95);
-  outline: none;
-}
-.tr3b-toggle[aria-pressed='true'] {
-  border-color: rgba(190, 220, 255, 0.75);
-  background: rgba(20, 23, 28, 0.9);
-  /* Active: full-colour saucer with a soft halo. drop-shadow works on an emoji
-     where text-shadow does not, so the glyph itself telegraphs the state
-     rather than relying on the chrome alone. */
-  filter: drop-shadow(0 0 5px rgba(150, 210, 255, 0.9));
-}
-/* One segmented control: the two modes read as a single choice. */
-.global-context-modes {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 2px;
-  margin: 0 0 12px;
-  padding: 2px;
-  border: 1px solid rgba(98, 181, 255, 0.22);
-  border-radius: 7px;
-  background: rgba(0, 0, 0, 0.22);
-}
-.context-mode-button {
-  display: flex;
-  min-width: 0;
-  min-height: 34px;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 6px 8px;
-  border: 1px solid transparent;
-  border-radius: 5px;
-  color: rgba(214, 236, 255, 0.72);
-  background: transparent;
-  font: 600 10px/1.2 var(--font-mono);
-  letter-spacing: 0.06em;
-  cursor: pointer;
-  transition:
-    border-color 0.15s ease,
-    color 0.15s ease,
-    background 0.15s ease;
-}
-.context-mode-button .material-symbols-outlined {
-  font-size: 16px;
-}
-.context-mode-button:hover,
-.context-mode-button:focus-visible {
-  color: #fff;
-  background: rgba(98, 181, 255, 0.08);
-  outline: none;
-}
-/* Keep focus distinct when the selected tab owns the accent colors. */
-.context-mode-button:focus-visible {
-  outline: 2px solid var(--text-primary);
-  outline-offset: -3px;
-}
-
-.context-mode-button.active {
-  border-color: rgba(0, 212, 255, 0.55);
-  color: #fff;
-  background: rgba(0, 212, 255, 0.16);
-}
-.context-mode-button:disabled {
-  opacity: 0.55;
-  cursor: wait;
-}
-.context-mode-view[hidden],
-.context-mode-standby[hidden] {
-  display: none !important;
-}
-/* Plain guidance under the tabs, not a placeholder box. */
-.context-mode-standby {
-  display: grid;
-  gap: 6px;
-  padding: 2px 2px 4px;
-  color: rgba(214, 236, 255, 0.72);
-  font: 10px/1.6 var(--font-mono);
-  letter-spacing: 0.02em;
-}
-.context-mode-standby strong {
-  color: var(--text-primary);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-}
-.context-mode-view {
-  min-height: 0;
-}
-#right-context-rail #global-context-panel:not(.collapsed) .context-mode-view,
-#right-context-rail #global-context-panel:not(.collapsed) #radio-panel {
-  /* These sections share the Context panel's existing scroller. Keep their
-     natural heights so flexbox cannot compress one section and let its
-     contents paint through the next section. */
-  flex: 0 0 auto;
 }
 .panel-layer-toggle {
   min-width: 54px;
@@ -1239,30 +744,6 @@ body.recording-mode .gev-panel-rail {
   opacity: 0.45;
   cursor: wait;
 }
-.global-context-actions .panel-layer-toggle {
-  width: 100%;
-  min-height: 32px;
-  padding: 6px 8px;
-  font-size: 10px;
-  letter-spacing: 0.06em;
-}
-#global-context-panel #cockpit-entry {
-  position: static;
-  z-index: auto;
-  width: 100%;
-  min-height: 32px;
-  padding: 5px 8px;
-  border-radius: 5px;
-  justify-content: center;
-  font-size: 10px;
-  box-shadow: none;
-}
-#global-context-panel #cockpit-entry .material-symbols-outlined {
-  font-size: 15px;
-}
-#global-context-panel #cockpit-entry kbd {
-  padding: 2px 4px;
-}
 
 /* ALPR keeps its nearby count in the legend while a wider status chip
    (including ENABLING / DISABLING) is shown. */
@@ -1289,12 +770,6 @@ body.recording-mode #right-context-rail > [data-panel-id] {
   opacity: 0 !important;
   visibility: hidden !important;
   pointer-events: none !important;
-}
-@media (max-width: 720px) {
-  #right-context-rail #weather-panel.collapsed,
-  #right-context-rail #recent-imagery-panel.collapsed {
-    width: 100%;
-  }
 }
 
 /* ── Utilities Panel ─────────────────────────── */

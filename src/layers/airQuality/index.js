@@ -1,3 +1,4 @@
+import { insertRanked } from '../../data/insertRanked.js';
 import { fromDegrees, toLonLatH } from '../../geo/ellipsoid.js';
 import { greatCircleKm } from '../../geoDistance.js';
 import {
@@ -103,6 +104,7 @@ const failureReason = (error) =>
     : error?.name || 'error');
 /** Readings listed in the readout card. */
 const READOUT_LIMIT = 5;
+const EMPTY_POPULATION = Object.freeze([]);
 /** Station dots, CSS pixels: plain and selected. */
 const STATION_PX = 7;
 const SELECTED_STATION_PX = 13;
@@ -329,6 +331,8 @@ export function createAirQualityLayer({
   let _labelled = new Set();
   let _offClick = null;
   let _readings = [];
+  let _recordsRevision = 0;
+  let _stationsShown = null;
   let _lastUpdate = null;
   let _enabled = false;
   /** @type {{ invalidate: () => void } | null} the panels' handle, from init */
@@ -808,6 +812,46 @@ export function createAirQualityLayer({
             reading.assessment.concentration ?? 0,
           ];
 
+  function readingsOnScreen(list) {
+    const rectangle = viewRectangle();
+    const query = findQuery(_viewer);
+    const canvas = _viewer ? canvasOf(_viewer) : null;
+    const width = canvas?.clientWidth;
+    const height = canvas?.clientHeight;
+    // A tilted or turned view's lon/lat box takes in ground off screen: where
+    // the renderer projects, a station must land on the canvas.
+    const onScreen =
+      typeof query?.project === 'function' && width > 0 && height > 0
+        ? (position) => {
+            const xy = query.project(position);
+            return (
+              Boolean(xy) &&
+              xy.x >= 0 &&
+              xy.x <= width &&
+              xy.y >= 0 &&
+              xy.y <= height
+            );
+          }
+        : () => true;
+    /** Of `list`, the readings on screen: inside the view, this side of the globe. */
+    return list.filter((reading) => {
+      if (!isInRectangle(reading, rectangle)) return false;
+      const position = fromDegrees(reading.lon, reading.lat);
+      return !query?.isOccluded?.(position) && onScreen(position);
+    });
+  }
+  const compareRanks = (a, b) =>
+    b.rank[0] - a.rank[0] ||
+    b.rank[1] - a.rank[1] ||
+    a.reading.name.localeCompare(b.reading.name);
+  function addRanked(top, reading) {
+    insertRanked(
+      top,
+      { reading, rank: rankOf(reading) },
+      READOUT_LIMIT,
+      compareRanks,
+    );
+  }
   /**
    * A reading's number on the view's scale, for its group's mean: the index
    * in the AQI view, the concentration in a pollutant view; null unrated.
@@ -1365,6 +1409,7 @@ export function createAirQualityLayer({
     syncVisibility();
     layer._render();
     armAgeOut();
+    _recordsRevision++;
   };
 
   /** Merge again when the next drawn reading or value turns too old. */
@@ -2228,7 +2273,7 @@ export function createAirQualityLayer({
     const step = shownStep();
     const ms = fieldStepTime(manifest, step);
     const text = atNow()
-      ? t('updated {age}', { age: shortAgo(manifest.runMs) })
+      ? t('Updated {age}', { age: shortAgo(manifest.runMs) })
       : ms > clock.wallNow()
         ? t('forecast for {time}', { time: utcText(ms) })
         : utcText(ms);
@@ -2285,6 +2330,10 @@ export function createAirQualityLayer({
   };
   const syncVisibility = () => {
     const shown = _enabled && showStations && stationsShown();
+    if (shown !== _stationsShown) {
+      _stationsShown = shown;
+      _recordsRevision++;
+    }
     if (_points) _points.show = shown;
     overlayHost.setVisible(AIR_QUALITY_OVERLAY_SOURCE_ID, shown);
   };
@@ -2361,6 +2410,7 @@ export function createAirQualityLayer({
         notify();
       });
       _readings = [];
+      _recordsRevision++;
       _lastUpdate = null;
       _enabled = false;
       overlayHost.setVisible(AIR_QUALITY_OVERLAY_SOURCE_ID, false);
@@ -2599,6 +2649,7 @@ export function createAirQualityLayer({
       lastNearest = null;
       owners = new WeakMap();
       _readings = [];
+      _recordsRevision++;
       replacedBy = new Map();
       _lastUpdate = null;
       _panel = null;
@@ -2628,34 +2679,7 @@ export function createAirQualityLayer({
       );
       const loading =
         !covering.length && (isLoading() || (waitingForView && !error));
-      const rectangle = viewRectangle();
-      const query = findQuery(_viewer);
-      const canvas = _viewer ? canvasOf(_viewer) : null;
-      const width = canvas?.clientWidth;
-      const height = canvas?.clientHeight;
-      // A tilted or turned view's lon/lat box takes in ground off screen: where
-      // the renderer projects, a station must land on the canvas.
-      const onScreen =
-        typeof query?.project === 'function' && width > 0 && height > 0
-          ? (position) => {
-              const xy = query.project(position);
-              return (
-                Boolean(xy) &&
-                xy.x >= 0 &&
-                xy.x <= width &&
-                xy.y >= 0 &&
-                xy.y <= height
-              );
-            }
-          : () => true;
-      /** Of `list`, the readings on screen: inside the view, this side of the globe. */
-      const inViewNow = (list) =>
-        list.filter((reading) => {
-          if (!isInRectangle(reading, rectangle)) return false;
-          const position = fromDegrees(reading.lon, reading.lat);
-          return !query?.isOccluded?.(position) && onScreen(position);
-        });
-      const visible = inViewNow(_readings);
+      const visible = readingsOnScreen(_readings);
       // Stations are readings of their hour: ahead of now (a forecast), or
       // at a past hour no provider answered for, they are hidden, and the
       // card leaves them out too.
@@ -2663,16 +2687,9 @@ export function createAirQualityLayer({
       const past = stationsAt() !== null;
       // The stations the tiles may read: the stations in view.
       const candidates = now ? visible : [];
-      const inView = visible
-        .map((reading) => ({ reading, rank: rankOf(reading) }))
-        .sort(
-          (a, b) =>
-            b.rank[0] - a.rank[0] ||
-            b.rank[1] - a.rank[1] ||
-            a.reading.name.localeCompare(b.reading.name),
-        )
-        .map(({ reading }) => reading)
-        .slice(0, READOUT_LIMIT);
+      const ranked = [];
+      for (const row of visible) addRanked(ranked, row);
+      const inView = ranked.map(({ reading }) => reading);
       // How fresh the newest drawn reading is; with all aged out, the newest
       // kept, so the time line still says how old the network's data is.
       const newestOf = (list) =>
@@ -2832,7 +2849,7 @@ export function createAirQualityLayer({
                 ? `${drawing.map((entry) => entry.network).join(', ')} · ${
                     past
                       ? utcText(newest)
-                      : t('updated {age}', { age: shortAgo(newest) })
+                      : t('Updated {age}', { age: shortAgo(newest) })
                   }`
                 : '',
           status:
@@ -2940,6 +2957,111 @@ export function createAirQualityLayer({
       };
     },
 
+    // The resolver indexes this array by identity. Never mutate it from a consumer.
+    getContextPopulation() {
+      return _enabled && showStations && stationsShown()
+        ? _readings
+        : EMPTY_POPULATION;
+    },
+
+    getInspectorContextPoints() {
+      return {
+        points: layer.getContextPopulation(),
+        recordForPoint(point, full = true) {
+          return full ? mapAnalystRecord(point) : point;
+        },
+      };
+    },
+
+    getContextSummary({ population }) {
+      if (!_enabled) return null;
+      const shown = showStations && stationsShown() ? population : [];
+      const { bands } = scaleOf(view);
+      const counts = new Map();
+      let count = 0;
+      let rated = 0;
+      const top = [];
+      for (const row of shown) {
+        count++;
+        if (!isRatedReading(row, view)) continue;
+        rated++;
+        addRanked(top, row);
+        const label =
+          view === 'aqi'
+            ? usAqiBand(row.aqi.index).label
+            : row.assessment.label;
+        counts.set(label, (counts.get(label) ?? 0) + 1);
+      }
+      return {
+        caption: count
+          ? t('Stations rated: {rated} of {total}', {
+              rated: formatNumber(rated),
+              total: formatNumber(count),
+            })
+          : '',
+        bands: bands.map((band) => ({
+          id: band.id ?? band.label,
+          label: bandLabel(
+            band.label,
+            view === 'aqi' ? 'US AQI category' : 'EEA hourly quality',
+          ),
+          color: band.color,
+          count: counts.get(band.label) ?? 0,
+        })),
+        itemsLabel: t('Highest air-quality readings in view'),
+        items: top.map(({ reading: row }) => ({
+          key: row.id,
+          lat: row.lat,
+          lon: row.lon,
+          text: row.name,
+          color: row.color,
+          lead:
+            view === 'aqi'
+              ? `${AQI_NAME} ${scaleText(row)}`
+              : mapLabelValue(row),
+          title: [row.name, categoryText(row)].filter(Boolean).join(' · '),
+          record: mapAnalystRecord(row),
+        })),
+      };
+    },
+
+    describeReading(record) {
+      const parameter = record?.parameter;
+      const aqi = parameter === 'aqi';
+      if (
+        !Number.isFinite(record?.value) ||
+        (!aqi && !Object.hasOwn(EEA_HOURLY_LIMITS, parameter))
+      )
+        return null;
+      const { bands, limits } = scaleOf(parameter);
+      const current = aqi
+        ? record.aqi && usAqiBand(record.aqi.index)
+        : bands[record.assessment?.severity];
+      if (!current) return null;
+      const context = aqi ? 'US AQI category' : 'EEA hourly quality';
+      const end = aqi
+        ? AQI_SHOWN_MAX
+        : limits.at(-1) + (limits.at(-1) - limits.at(-2));
+      return {
+        scale: record.scale,
+        value: aqi
+          ? aqiText(record.value)
+          : `${concentrationText(parameter, record.value)} ${layerUnits(parameter)}`,
+        band: {
+          id: current.id ?? current.label,
+          label: bandLabel(current.label, context),
+          color: current.color,
+        },
+        at: Math.min(1, Math.max(0, record.value / end)),
+        segments: bands.map((band, i) => ({
+          id: band.id ?? band.label,
+          label: bandLabel(band.label, context),
+          color: band.color,
+          share: ((limits[i] ?? end) - (limits[i - 1] ?? 0)) / end,
+        })),
+      };
+    },
+
     /**
      * Snapshot readings as JSON-safe records for the analyst query engine.
      * @param {number} [maxCount=500]
@@ -2993,6 +3115,10 @@ export function createAirQualityLayer({
             : `${view} ${number} ${layerUnits(view)}`;
       const category = categoryText(nearest);
       return {
+        ...(category && {
+          level: nearest.band ?? nearest.assessment?.label,
+          color: nearest.color,
+        }),
         value: category ? `${shown} · ${category}` : shown,
         detail: `${nearest.name} · ${formatQuantity(Math.round(nearestKm), 'km')}`,
         ...(Number.isFinite(nearest.observedMs)
@@ -3026,6 +3152,7 @@ export function createAirQualityLayer({
           );
         });
       return {
+        recordsRevision: _recordsRevision,
         count: _readings.length,
         source: sourceLabel(),
         lastUpdate: _lastUpdate,

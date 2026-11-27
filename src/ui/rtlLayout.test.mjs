@@ -56,13 +56,13 @@ test('phone top-bar actions mirror with the logo', () => {
   assert.doesNotMatch(corner, /(?:^|\s)right:/);
 });
 
-test('the Space Missions counter reads as a number pair in right-to-left', () => {
+test('position counters read as a number pair in right-to-left', () => {
   const counters =
     /html\[dir='rtl'\]\s*:is\(([^)]*\[data-role='beat-index'\][^)]*)\)\s*\{([^}]*)\}/.exec(
       sheet('rtl.css'),
     );
   assert.ok(counters, 'no left-to-right counter rule in rtl.css');
-  assert.match(counters[1], /\[data-mission-index\]/);
+  assert.match(counters[1], /#cockpit-brief-position/);
   assert.match(counters[2], /direction: ltr;/);
 });
 
@@ -78,7 +78,6 @@ test('select chevrons and legend ranges follow the field and the ramp in right-t
   );
   // Selects that set their own padding keep the chevron's room at the end.
   for (const [name, selector, inline] of [
-    ['radio.css', '#radio-filter', '8px 24px'],
     ['radio.css', '.sdr-gain-row select', '7px 22px'],
     ['voice-card.css', '#gev-voice-timeout-select', '0.45rem 22px'],
   ]) {
@@ -99,4 +98,49 @@ test('select chevrons and legend ranges follow the field and the ramp in right-t
     ruleBody(rtl, "html[dir='rtl'] .rail-card-scale"),
     /direction: ltr;/,
   );
+});
+
+test('Radio and camera controls in Context keep their sense in right-to-left', () => {
+  const rtl = sheet('rtl.css');
+  // The local receiver's seek pair keeps down on the left, as the SDR card's.
+  assert.match(
+    rtl,
+    /html\[dir='rtl'\] :is\(\.sdr-seek-row, \.radio-stations__seek, \.radio-tuner\) \{\s*direction: ltr;/,
+  );
+  const player = readFileSync(
+    new URL('./views/panels/LocalReceiverPlayer.vue', import.meta.url),
+    'utf8',
+  );
+  assert.match(
+    player,
+    /<span class="radio-stations__seek"[^>]*>\s*<UiButton[^>]*seekSdr', -1\)[\s\S]*?seekSdr', 1\)/,
+  );
+  // A row's Previous and Next chevrons point the other way.
+  assert.match(
+    rtl,
+    /\.data-toggle-chip:is\(\s*\[data-chip-icon='chevron_left'\],\s*\[data-chip-icon='chevron_right'\]\s*\)\s*\.ui-icon \{\s*transform: scaleX\(-1\);/,
+  );
+  const chips = readFileSync(
+    new URL('./rail/RailChips.vue', import.meta.url),
+    'utf8',
+  );
+  assert.match(chips, /:data-chip-icon="chip\.icon \|\| undefined"/);
+  // So do the radio player's Previous and Next skip glyphs.
+  assert.match(
+    rtl,
+    /\.radio-mini__controls\s*:is\(\[data-chip-icon='skip_previous'\], \[data-chip-icon='skip_next'\]\)\s*\.ui-icon \{\s*transform: scaleX\(-1\);/,
+  );
+  const mini = readFileSync(
+    new URL('./views/panels/RadioMiniPlayer.vue', import.meta.url),
+    'utf8',
+  );
+  assert.match(mini, /data-chip-icon="skip_previous"[^>]*@click="step\(-1\)"/);
+  assert.match(mini, /data-chip-icon="skip_next"[^>]*@click="step\(1\)"/);
+  // A camera card's expand button sits at the end, clear of the paused chip
+  // at the start.
+  const card = sheet('entity-card.css');
+  const expand = ruleBody(card, '.cctv-preview__expand');
+  assert.match(expand, /inset-inline-end: 6px;/);
+  assert.doesNotMatch(expand, /(^|\s)(left|right):/);
+  assert.match(ruleBody(card, '.paused-chip'), /inset-inline-start:/);
 });

@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, nextTick, watch } from 'vue';
 import { t } from '../i18n/index.js';
 import UiRail from './kit/UiRail.vue';
 import {
@@ -32,6 +32,24 @@ const items = computed(() =>
     }),
 );
 const active = computed(() => panels.openPanelId(props.side));
+// A rail with one entry whose panel is open has nothing to offer: it hides,
+// and the panel's own header closes it (its ▶, Esc and the shortcut). Folded,
+// the panel's tab and the icon show again. Focus on the hidden icon moves to
+// the panel's header.
+const soleOpen = computed(
+  () => items.value.length === 1 && active.value !== null,
+);
+watch(soleOpen, async (hidden) => {
+  if (!hidden) return;
+  const doc = globalThis.document;
+  const id = active.value;
+  if (!doc?.activeElement?.closest?.(`[data-rail-item="${id}"]`)) return;
+  await nextTick();
+  doc
+    .getElementById(id)
+    ?.querySelector('.panel-header button, .ui-panel__header button, button')
+    ?.focus({ preventScroll: true });
+});
 const label = computed(() =>
   props.side === 'left' ? t('Left panels') : t('Right panels'),
 );
@@ -45,6 +63,7 @@ const label = computed(() =>
     :label="label"
     :panel-open="active !== null"
     collapsible
+    :class="{ 'ui-rail--sole-open': soleOpen }"
     @select="onSelect"
   />
 </template>

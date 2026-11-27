@@ -1,10 +1,7 @@
 // The command dock's and the Context panel's buttons and Material glyphs are
 // the kit's: neither the dock, the Context view nor the view context it
 // shows while nothing is picked hand-writes a <button> or a Material Symbols
-// span (the dock's own buttons are the voice control's). Context's tabs and
-// its Contacts mode button are `role="tab"` controls: they say they are
-// chosen with `aria-selected` and keep their own `active` class, never
-// `aria-pressed`.
+// span. Context tabs are kit buttons with aria-selected.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -33,14 +30,15 @@ const inView = template('panels/ViewContext.vue');
 const suggested = template('panels/SuggestedLayers.vue');
 const nearby = template('panels/NearbyLists.vue');
 const views = {
-  // The voice control, the tab bar and the reticles are views of their own.
   'CommandDockView.vue': { markup: dock, buttons: 0, icons: 0, closes: 0 },
-  // Search and Expand in the header, the two tabs, Contacts, the cockpit
-  // entry, SEARCH NEARBY SITES and the TR-3B chip.
-  'ContextView.vue': { markup: context, buttons: 8, icons: 7, closes: 0 },
-  // Buttons select a globe row or open Data Layers. Icons mark the pointer,
-  // weather, worldwide counts, layer counts and readings. Globe rows use EntityMark.
-  'panels/ViewContext.vue': { markup: inView, buttons: 2, icons: 5, closes: 0 },
+  // The collapsed title's Expand, Search and Expand in the header, the
+  // Inspect, Camera settings, Lists and Pinned, a list sub-tab and
+  // Back to the followed card from Missions.
+  'ContextView.vue': { markup: context, buttons: 9, icons: 3, closes: 0 },
+  // Pin this view, the Flights and Data Layers pointers and a nearest row.
+  // The glyphs: the pin, the layer tiles' four and the pointer's layers.
+  // A globe-view section uses EntityMark for its layer.
+  'panels/ViewContext.vue': { markup: inView, buttons: 4, icons: 6, closes: 0 },
   // Open in Data Layers; a layer's glyph and the pointer's layers.
   'panels/SuggestedLayers.vue': {
     markup: suggested,
@@ -48,7 +46,7 @@ const views = {
     icons: 2,
     closes: 0,
   },
-  // An item's row; a list's glyph and an item's motion.
+  // An item's row, a list's glyph and an item's motion.
   'panels/NearbyLists.vue': { markup: nearby, buttons: 1, icons: 2, closes: 0 },
 };
 
@@ -71,20 +69,21 @@ test('no tag hand-writes aria-pressed; the pressed toggles take :pressed', () =>
   const pressed = (markup) =>
     tags(markup, 'UiButton').filter((b) => /\s:pressed=/.test(b)).length;
   assert.equal(pressed(dock), 0);
-  // Search, Expand and TR-3B.
-  assert.equal(pressed(context), 3);
-  assert.equal(pressed(inView), 0);
+  // Search and Expand.
+  assert.equal(pressed(context), 2);
+  // Pin this view.
+  assert.equal(pressed(inView), 1);
   assert.equal(pressed(suggested), 0);
   assert.equal(pressed(nearby), 0);
 });
 
 test("Context's tabs say they are chosen, not pressed", () => {
+  // Inspect, Camera settings, Lists, Pinned and a list sub-tab.
   const tabs = tags(context, 'UiButton').filter((b) => /\srole="tab"/.test(b));
-  assert.equal(tabs.length, 3);
+  assert.equal(tabs.length, 5);
   for (const button of tabs) {
     assert.match(button, /\s:aria-selected=/);
     assert.doesNotMatch(button, /\s:pressed=/);
-    assert.match(button, /\s(?::class|v-class-toggle)="\{ active: /);
   }
 });
 
@@ -102,7 +101,10 @@ test('they hand-write no Material glyph; each is a UiIcon', () => {
   }
   // An item's motion glyph is an image with its own name, not decoration.
   // Each globe-view block's head and each nearby row lead with a mark.
-  assert.equal(tags(inView, 'EntityMark').length, 1);
+  assert.deepEqual(
+    tags(inView, 'EntityMark').map((mark) => mark.match(/:layer="([^"]+)"/)[1]),
+    ['tile.id', 'layer.id'],
+  );
   assert.equal(tags(nearby, 'EntityMark').length, 1);
   const [motion] = tags(nearby, 'UiIcon').filter((i) =>
     /nearby-lists__motion/.test(i),

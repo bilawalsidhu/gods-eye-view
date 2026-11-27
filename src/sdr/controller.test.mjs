@@ -135,6 +135,92 @@ test('FM resumes audio before opening WebUSB and reports the running context', a
   assert.equal(controller.getState().gain, 'auto');
 });
 
+test('holding FM silences it and keeps the receiver connected and tuned; resuming plays it again', async (t) => {
+  const events = [];
+  const posted = [];
+  class FakeAudioContext {
+    constructor() {
+      this.state = 'suspended';
+      this.destination = {};
+      this.audioWorklet = { addModule: async () => {} };
+    }
+    async resume() {
+      this.state = 'running';
+    }
+    async close() {
+      this.state = 'closed';
+    }
+  }
+  class FakeAudioWorkletNode {
+    constructor() {
+      this.port = { postMessage: (message) => posted.push(message) };
+    }
+    connect() {}
+  }
+  const device = fakeDevice(events);
+  const restore = [
+    replaceGlobal('navigator', { usb: {} }),
+    replaceGlobal('AudioContext', FakeAudioContext),
+    replaceGlobal('AudioWorkletNode', FakeAudioWorkletNode),
+    replaceGlobal('Worker', FakeWorker),
+  ];
+  t.after(() => restore.reverse().forEach((callback) => callback()));
+  const controller = new SdrController({
+    storage: memoryStorage(),
+    providerFactory: () => ({ get: async () => device }),
+  });
+  t.after(() => controller.stop());
+  assert.equal(await controller.connect('fm'), true);
+  assert.equal(controller.getState().status, 'streaming');
+  const sessions = () => posted.filter((message) => message.type === 'session');
+  const before = sessions().length;
+
+  const tuning = Promise.withResolvers();
+  const transfer = Promise.withResolvers();
+  const setFrequency = device.setCenterFrequency;
+  device.setCenterFrequency = () => {
+    tuning.resolve();
+    return transfer.promise;
+  };
+  const pending = controller.tuneFm(100_700_000);
+  await tuning.promise;
+  assert.equal(
+    controller.holdFm({
+      message: 'Local FM stopped: internet stations chosen',
+    }),
+    true,
+  );
+  transfer.resolve(100_700_003);
+  await pending;
+  device.setCenterFrequency = setFrequency;
+  let state = controller.getState();
+  assert.equal(state.status, 'held');
+  assert.equal(
+    state.frequencyHz,
+    100_700_003,
+    'the held receiver is already tuned',
+  );
+  assert.equal(state.connected, true, 'the device stays connected');
+  assert.equal(state.message, 'Local FM stopped: internet stations chosen');
+  assert.equal(sessions().at(-1).enabled, false, 'the player takes no audio');
+  assert.ok(!events.includes('device:close'));
+  assert.equal(controller.holdFm(), false, 'held once');
+
+  assert.equal(controller.resumeFm(), true);
+  state = controller.getState();
+  assert.equal(state.status, 'streaming');
+  assert.equal(state.connected, true);
+  assert.equal(sessions().at(-1).enabled, true, 'audio plays again');
+  assert.ok(sessions().length > before);
+  assert.equal(controller.resumeFm(), false, 'nothing to resume');
+
+  // A tune while held plays again too.
+  controller.holdFm();
+  assert.equal(await controller.tuneFm(101_100_000, { quiet: true }), true);
+  assert.equal(controller.getState().status, 'streaming');
+  assert.equal(sessions().at(-1).enabled, true);
+});
+
 test('receiver presets keep the known-working tuning settings', () => {
   assert.deepEqual(SDR_RECEIVER_PRESETS.fm, {
     frequencyHz: 98_500_000,

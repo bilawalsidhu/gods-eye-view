@@ -500,6 +500,24 @@ export function transitModelSpec(set, vehicle) {
 }
 
 /**
+ * The model an item is drawn with, from what picks it: `{fleet: 'aircraft'}`
+ * with an aircraft's fields ({@link aircraftModelSpec}), `'vessel'` with a
+ * vessel's ({@link vesselModelSpec}), `'transit'` with a transit or rail
+ * vehicle's ({@link transitModelSpec}).
+ * @param {{catalog: object, types: object}|null} set
+ * @param {{fleet: string}|null} subject
+ * @returns {object|null} {@link fleetModelSpec}; null without a set, for an
+ *   unknown table, or for a vessel drawn without one
+ */
+export function subjectModelSpec(set, subject) {
+  if (!set || !subject) return null;
+  if (subject.fleet === 'aircraft') return aircraftModelSpec(set, subject);
+  if (subject.fleet === 'vessel') return vesselModelSpec(set, subject);
+  if (subject.fleet === 'transit') return transitModelSpec(set, subject);
+  return null;
+}
+
+/**
  * Every model the type map names, defaults and fallbacks included.
  * @param {object} types Parsed `types.json`.
  * @returns {Set<string>}

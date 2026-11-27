@@ -586,11 +586,7 @@ test('a lead result renders first', () => {
   });
   const panel = createWeatherPanel({ container: f.container });
   const order = () =>
-    [
-      ...f.container.querySelectorAll(
-        '[data-card-id="air-quality"] [data-block-id]',
-      ),
-    ]
+    [...f.container.querySelectorAll('.weather-card [data-block-id]')]
       .map((node) => node.dataset.blockId)
       .filter((id, index, all) => all.indexOf(id) === index);
   panel.update([entry(true)]);
@@ -608,16 +604,14 @@ test('a lead result renders first', () => {
   ]);
   // The heading result is framed by its class, and its close button says
   // what it lets go of.
-  const head = f.container.querySelector(
-    '[data-card-id="air-quality"] .rail-card-result',
-  );
+  const head = f.container.querySelector('.weather-card .rail-card-result');
   assert.ok(head.classList.contains('is-lead'));
   const close = head.querySelector('[data-action-id="clear"]');
   assert.equal(close.getAttribute('aria-label'), 'Deselect station');
   panel.update([entry(false)]);
   assert.ok(
     !f.container
-      .querySelector('[data-card-id="air-quality"] .rail-card-result')
+      .querySelector('.weather-card .rail-card-result')
       .classList.contains('is-lead'),
   );
   assert.equal(order()[0], 'details');

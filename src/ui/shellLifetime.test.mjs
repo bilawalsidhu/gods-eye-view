@@ -45,6 +45,7 @@ function location(t, { homeView = null } = {}) {
     elements: {}, navigation: {}, readCockpit: () => null,
     operations: {
       _stampNavigation() {}, _updateTrafficSyncChip() {},
+      _noteViewCommand() { calls.push('view-command'); },
       _runExplicitNavigation(_noun, run) { return run(); },
     },
   });
@@ -64,6 +65,27 @@ test('shell disposal settles a pending globe reset once and revokes its timeout'
   assert.deepEqual(calls, after);
   assert.equal(calls.filter(c => c === 'resume').length, 1);
   assert.equal((await owner.resetToGlobeView()).cancelled, true);
+});
+
+test('only a completed globe reset releases remembered Context list order', async (t) => {
+  const { owner, calls, readHooks } = location(t);
+  const notifications = () => calls.filter((call) => call === 'view-command').length;
+  const cancelled = owner.resetToGlobeView();
+  const old = readHooks();
+  assert.equal(notifications(), 0);
+  old.onCancel();
+  assert.equal((await cancelled).ok, false);
+  old.onComplete();
+  assert.equal(notifications(), 0);
+
+  const pending = owner.resetToGlobeView();
+  assert.equal(owner.resetToGlobeView(), pending);
+  assert.equal(notifications(), 0);
+  readHooks().onComplete();
+  assert.equal((await pending).ok, true);
+  readHooks().onComplete();
+  assert.equal(notifications(), 1);
+  owner.destroy();
 });
 
 test('the logo goes live and flies to the home view, replacing a globe reset under way', async (t) => {

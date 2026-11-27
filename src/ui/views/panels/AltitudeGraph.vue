@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed, ref, useId, watch } from 'vue';
 import { formatNumber, t } from '../../../i18n/index.js';
 
 // A figure as a filled graph (an aircraft's altitude, the camera's height, a
@@ -20,7 +20,11 @@ const props = defineProps({
    * (given in m/s), both on a straight scale (a satellite).
    */
   unit: { type: String, default: 'feet' },
-  /** Only the caption, the current figure and the line: no scale or change. */
+  /**
+   * One slim row: the caption and current figure beside a short line, with
+   * no scale or change. It shows only once the readings have moved by
+   * a 100 ft step: a level figure is already on the card's tiles.
+   */
   compact: { type: Boolean, default: false },
 });
 
@@ -29,6 +33,7 @@ const MIN_RANGE_M = 600;
 const WIDTH = 100;
 const HEIGHT = 36;
 
+const graphId = useId();
 const readings = ref([]);
 watch(
   () => props.tick,
@@ -57,34 +62,38 @@ const shown = (m) => (SHOW[props.unit] || ((value) => t('{n} ft', { n: number(fe
 /** The least each scale spans, so a steady figure still reads as a line. */
 const LEAST = { feet: MIN_RANGE_M, km: 2000, 'km/s': 20 };
 
-const graph = computed(() => {
-  const list = readings.value;
+function buildGraph(list) {
+  const unit = props.unit;
   if (!list.length) return null;
   const last = list[list.length - 1];
   const first = list[0];
-  const span = Math.max(1, last.at - first.at);
+  const start = first.at;
+  const end = last.at;
+  const span = Math.max(1, end - start);
   // The camera ranges from metres to the whole globe, so its heights are
   // drawn on a log scale: each zoom step is a similar rise or fall.
-  const log = props.unit === 'metric';
+  const log = unit === 'metric';
   const scaled = (m) => (log ? Math.log10(Math.max(1, m)) : m);
   const heights = list.map((item) => scaled(item.m));
   const high = Math.max(...heights);
   const low = Math.min(...heights);
   // The least the scale spans: about 2,000 ft for aircraft, half a decade
   // for the camera.
-  const least = log ? 0.5 : LEAST[props.unit] || MIN_RANGE_M;
+  const least = log ? 0.5 : LEAST[unit] || MIN_RANGE_M;
   const pad = Math.max((least - (high - low)) / 2, (high - low) * 0.15);
   const bottom = Math.max(0, low - pad);
   const top = Math.max(high + pad, bottom + least);
-  const x = (at) => WIDTH - ((last.at - at) / span) * WIDTH;
+  const x = (at) => WIDTH - ((end - at) / span) * WIDTH;
   const y = (m) => HEIGHT - ((scaled(m) - bottom) / (top - bottom)) * (HEIGHT - 2) - 1;
   // The readings span the full width; a single reading (a card that has
   // just opened) draws as a level line instead of a dot.
-  const points = list.length > 1 ? list.map((item) => [x(item.at), y(item.m)]) : [[0, y(first.m)], [WIDTH, y(first.m)]];
+  const points = list.length > 1
+    ? list.map((item) => [x(item.at), y(item.m)])
+    : [[0, y(first.m)], [WIDTH, y(first.m)]];
   const line = points.map(([px, py], index) => `${index ? 'L' : 'M'}${px.toFixed(2)} ${py.toFixed(2)}`).join(' ');
   const moved = last.m - first.m;
-  const feetScale = !SHOW[props.unit];
-  const change = feetScale ? feet(last.m) - feet(first.m) : Math.abs(moved) >= Math.max(1, last.m * (props.unit === 'metric' ? 0.005 : 0.0005)) ? moved : 0;
+  const feetScale = !SHOW[unit];
+  const change = feetScale ? feet(last.m) - feet(first.m) : Math.abs(moved) >= Math.max(1, last.m * (unit === 'metric' ? 0.005 : 0.0005)) ? moved : 0;
   const changeText = feetScale ? t('{n} ft', { n: number(Math.abs(change)) }) : shown(Math.abs(moved));
   const minutes = Math.floor((last.at - first.at) / 60_000);
   return {
@@ -96,9 +105,18 @@ const graph = computed(() => {
     bottom: shown(log ? 10 ** bottom : bottom),
     trend: change > 0 ? 'up' : change < 0 ? 'down' : 'level',
     change: change ? `${change > 0 ? '+' : '−'}${changeText}` : t('Level', { context: 'altitude' }),
-    since: minutes >= 1 ? t('Last {n} min', { n: minutes }) : props.unit === 'metric' ? t('Just now') : t('Since selected'),
+    since: minutes >= 1 ? t('Last {n} min', { n: minutes }) : unit === 'metric' ? t('Just now') : t('Since selected'),
   };
+}
+/** Whether the readings have moved by a 100 ft step: a history worth drawing. */
+const moved = computed(() => {
+  const list = readings.value;
+  const first = list.length ? feet(list[0].m) : 0;
+  return list.some((item) => feet(item.m) !== first);
 });
+// A compact flight figure waits for a change worth drawing (a level altitude
+// is on the card's tiles); the camera's height strip always shows.
+const graph = computed(() => (props.compact && props.unit === 'feet' && !moved.value ? null : buildGraph(readings.value)));
 </script>
 
 <template>
@@ -110,13 +128,13 @@ const graph = computed(() => {
     <div class="altitude-graph__plot">
       <svg :viewBox="`0 0 ${WIDTH} ${HEIGHT}`" preserveAspectRatio="none" role="img" :aria-label="`${label || t('Altitude')} ${graph.now}, ${graph.change}`">
         <defs>
-          <linearGradient id="altitude-graph-fill" gradientUnits="userSpaceOnUse" x1="0" :y1="0" x2="0" :y2="HEIGHT">
+          <linearGradient :id="`${graphId}-fill`" gradientUnits="userSpaceOnUse" x1="0" :y1="0" x2="0" :y2="HEIGHT">
             <stop offset="0" class="altitude-graph__stop altitude-graph__stop--high" />
             <stop offset="0.5" class="altitude-graph__stop altitude-graph__stop--mid" />
             <stop offset="1" class="altitude-graph__stop altitude-graph__stop--low" />
           </linearGradient>
         </defs>
-        <path class="altitude-graph__area" :d="graph.area" fill="url(#altitude-graph-fill)" />
+        <path class="altitude-graph__area" :d="graph.area" :fill="`url(#${graphId}-fill)`" />
         <path class="altitude-graph__line" :d="graph.line" />
       </svg>
       <span class="altitude-graph__head-dot" :style="{ top: `${(graph.headY / HEIGHT) * 100}%` }" aria-hidden="true"></span>

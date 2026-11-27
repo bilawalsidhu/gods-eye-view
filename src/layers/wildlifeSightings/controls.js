@@ -31,20 +31,25 @@ const LEGEND_LABELS = Object.freeze({
 
 function* loadedSightings(state) {
   yield* state.rows.values();
-  const { selectedId, selectedRow } = state;
+  const { selectedId, selectedRow, contextRecord } = state;
   if (
     selectedId &&
     selectedRow?.stableId === selectedId &&
+    selectedId !== contextRecord?.row.stableId &&
     !state.rows.has(selectedId)
   )
     yield selectedRow;
+  const contextRow = contextRecord?.row;
+  if (contextRow && !state.rows.has(contextRow.stableId)) yield contextRow;
 }
 
-function isInspectableSighting(row, nowMs, taxa, selectedId) {
+function isInspectableSighting(row, nowMs, taxa, state) {
+  const { selectedId, contextRecord } = state;
   return (
     Number.isFinite(row?.lat) &&
     Number.isFinite(row?.lon) &&
     ((selectedId && row.stableId === selectedId) ||
+      row.stableId === contextRecord?.row.stableId ||
       isRecentWildlifeSighting(row, nowMs, taxa))
   );
 }
@@ -96,7 +101,7 @@ export function createControls({ state, services, parts }) {
     const nowMs = services.now();
     const taxa = state.drawnParams?.taxa ?? state.taxa;
     for (const row of loadedSightings(state)) {
-      if (isInspectableSighting(row, nowMs, taxa, state.selectedId)) yield row;
+      if (isInspectableSighting(row, nowMs, taxa, state)) yield row;
     }
   }
 
@@ -248,12 +253,21 @@ export function createControls({ state, services, parts }) {
       }
       return result;
     },
-    /** Count the observations Context can inspect without mapping each record. */
-    getInspectableCount() {
-      if (!state.enabled) return 0;
-      let count = 0;
-      for (const _ of inspectableSightings()) count++;
-      return count;
+    /** Hold one observation for an open Context card without selecting its marker. */
+    retainContextRecord(id) {
+      if (!state.enabled) return;
+      const row =
+        state.rows.get(id) ??
+        (state.contextRecord?.row.stableId === id
+          ? state.contextRecord.row
+          : null) ??
+        (state.selectedId === id ? state.selectedRow : null);
+      if (!row) return;
+      const record = { row };
+      state.contextRecord = record;
+      return () => {
+        if (state.contextRecord === record) state.contextRecord = null;
+      };
     },
     /** Report the visible count, feed state and retry guidance. */
     getStats() {
@@ -279,7 +293,9 @@ export function createControls({ state, services, parts }) {
         count,
         lastUpdate: state.lastUpdate,
         // Selection can keep an expired record inspectable without a feed update.
-        recordsRevision: state.selectedId,
+        recordsRevision: state.contextRecord
+          ? JSON.stringify([state.selectedId, state.contextRecord.row.stableId])
+          : state.selectedId,
         error: state.error,
         stale: state.stale,
         loading,

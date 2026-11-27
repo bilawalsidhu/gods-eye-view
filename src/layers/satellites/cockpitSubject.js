@@ -218,6 +218,26 @@ export function createCockpitSubject({ state: layerState, parts }) {
 
   const methods = {
     /**
+     * Whether a satellite in the catalog can be ridden in the orbital view:
+     * its class decides (debris never is). Asked before it is tracked, so a
+     * card offers the orbital view only where entry would follow.
+     * @param {string|number} noradId
+     * @returns {boolean} False for a satellite the catalog does not hold.
+     */
+    cockpitEnterable(noradId) {
+      const id = parts.tracking._normalizeTrackedNorad(noradId);
+      const sat = id === null ? null : layerState._catalog.get(id);
+      if (!sat) return false;
+      // Read as satelliteIdentity reads it, without keeping it: the catalog's
+      // records may still refine the class before the satellite is ridden.
+      return satelliteClassEnterable(
+        sat.cockpitIdentity?.satelliteClass ||
+          sat.satelliteClass ||
+          classifySatellite({ noradId: id, name: sat.name, group: sat.group }),
+      );
+    },
+
+    /**
      * The tracked satellite as Cockpit subject info, from the same per-frame
      * SGP4 sample the dot and the follow camera use.
      * @returns {{kind: 'satellite', layerId: 'satellites', id: string,

@@ -1,7 +1,9 @@
-// Focused tests for the local-infrastructure analyst-record mapper and snapshot seam.
 import { EARTH_RADIUS_KM } from '../geoDistance.js';
+// Focused tests for the local-infrastructure analyst-record mapper and snapshot seam.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { createPinia } from 'pinia';
+import { useEntityCardStore } from '../ui/stores/entityCard.js';
 import { localGeoJsonServices } from '../app/localGeojsonServices.js';
 import { bindFakeGroundRenderer } from '../testSupport/fakeGroundRenderer.mjs';
 import {
@@ -493,6 +495,19 @@ test('infra getAnalystRecords: a multi-part line feature is listed once', async 
       northEdge,
       'nearest point is on the viewport edge',
     );
+    const globeViewport = viewSummaryForLayer(
+      manager,
+      row,
+      { ...polarRect, south: 89.69, north: northEdge },
+      polarCenter,
+      {
+        hemisphere: true,
+        clipViewport: true,
+        heightM: 20_000_000,
+        query: 'Polar Crest',
+      },
+    );
+    assert.equal(globeViewport.items[0].identity.lat, northEdge);
     const globeHeight = 20_000_000;
     const horizonAngle =
       (Math.acos(EARTH_RADIUS_KM / (EARTH_RADIUS_KM + globeHeight / 1000)) *
@@ -563,16 +578,84 @@ test('infra getAnalystRecords: a multi-part line feature is listed once', async 
   }
 });
 
+test('infra records distinguish numeric and string IDs across draws and refreshes', async (t) => {
+  const originalWindow = globalThis.window;
+  globalThis.window = { dispatchEvent() {} };
+  const [north, south, literal] = [
+    [7, 'North', [1, 2]],
+    ['7', 'South', [3, 4]],
+    ['geojson:number:7', 'Literal identifier', [5, 6]],
+  ].map(([id, name, coordinates]) => ({
+    type: 'Feature',
+    id,
+    properties: { name },
+    geometry: { type: 'Point', coordinates },
+  }));
+  const viewer = {};
+  const fake = bindFakeGroundRenderer(viewer, {
+    eye: { lon: 2, lat: 3, height: 100_000 },
+  });
+  const layer = createLocalGeoJsonLayer({
+    id: 'local-dams',
+    name: 'Typed sites',
+    loadFeatures: async () => [north, south, literal],
+    color: '#0088ff',
+    overlayHost: { setVisible() {}, setEntries() {}, clearSource() {} },
+    inputFor: () => ({ onClick: () => () => {} }),
+  });
+  t.after(() => {
+    layer.destroy(viewer);
+    fake.unbind();
+    if (originalWindow === undefined) delete globalThis.window;
+    else globalThis.window = originalWindow;
+  });
+
+  await layer.enable(viewer);
+  assert.equal(layer.getStats().count, 3);
+  assert.equal(layer.getAnalystRecords().length, 3);
+  const row = { id: 'local-dams', enabled: true, module: layer };
+  const manager = { layers: new Map([[row.id, row]]) };
+  const picks = ['7', '7_2', literal.id].map((id) =>
+    describeEntity(manager, { layerId: row.id, id: `${row.id}:${id}` }),
+  );
+  assert.deepEqual(
+    picks.map(({ title }) => title),
+    ['North', 'South', 'Literal identifier'],
+  );
+  assert.equal(new Set(picks.map(({ key }) => key)).size, 3);
+  assert.deepEqual(
+    picks.map(({ identity }) => findRecord(manager, identity)?.name),
+    ['North', 'South', 'Literal identifier'],
+  );
+
+  const southPick = picks[1];
+  selectEntityContext(getContextStore().entities.get('local-dams:7_2').entity);
+  const secondNorth = {
+    ...north,
+    geometry: { type: 'Point', coordinates: [1.025, 2] },
+  };
+  await layer.replaceFeatures(viewer, [south, north, literal, secondNorth]);
+  assert.equal(getSelectedEntityContext()?.label, 'South');
+  assert.equal(layer.getStats().count, 3);
+  assert.equal(findRecord(manager, picks[0].identity).parts.length, 2);
+  assert.equal(findRecord(manager, southPick.identity).name, 'South');
+
+  await layer.replaceFeatures(viewer, [north, literal, secondNorth]);
+  assert.equal(getSelectedEntityContext(), null);
+  assert.equal(findRecord(manager, southPick.identity), null);
+  assert.equal(findRecord(manager, picks[0].identity).name, 'North');
+});
+
 test('infra records list and count multi-part features across the dateline once', async () => {
   const originalFetch = globalThis.fetch;
   const originalWindow = globalThis.window;
   globalThis.window = { dispatchEvent() {} };
-  const square = (lon, lat) => [
+  const square = (lon, lat, size = 0.01) => [
     [
       [lon, lat],
-      [lon + 0.01, lat],
-      [lon + 0.01, lat + 0.01],
-      [lon, lat + 0.01],
+      [lon + size, lat],
+      [lon + size, lat + size],
+      [lon, lat + size],
       [lon, lat],
     ],
   ];
@@ -583,7 +666,10 @@ test('infra records list and count multi-part features across the dateline once'
       properties: { name: 'Split Campus' },
       geometry: {
         type: 'MultiPolygon',
-        coordinates: [square(179.7, 30.3), square(179.75, 30.3)],
+        coordinates: [
+          square(179.7, 30.3),
+          [...square(179.75, 30.3), ...square(179.751, 30.301, 0.002)],
+        ],
       },
     },
     {
@@ -681,6 +767,25 @@ test('infra records list and count multi-part features across the dateline once'
       module: layer,
     };
     const dm = { getAll: () => [row], layers: new Map([[row.id, row]]) };
+    const inSmallView = (lon, lat) =>
+      viewSummaryForLayer(
+        dm,
+        row,
+        {
+          west: lon - 0.0001,
+          east: lon + 0.0001,
+          south: lat - 0.0001,
+          north: lat + 0.0001,
+        },
+        { lon, lat },
+      );
+    assert.equal(inSmallView(179.759, 30.309)?.items[0].title, 'Split Campus');
+    assert.equal(inSmallView(179.752, 30.302), null, 'the hole has no fill');
+    assert.equal(
+      inSmallView(-179.989, 30.301)?.count,
+      1,
+      'the later polygon belongs to the same feature',
+    );
     const coincident = nearbyForLayer(
       dm,
       row,
@@ -809,4 +914,89 @@ test('infra records list and count multi-part features across the dateline once'
     if (originalWindow === undefined) delete globalThis.window;
     else globalThis.window = originalWindow;
   }
+});
+
+test('imported park points can be closest to the view without admitting line or polygon anchors', async (t) => {
+  const originalWindow = globalThis.window;
+  globalThis.window = { dispatchEvent() {} };
+  const feature = (id, type, coordinates) => ({
+    type: 'Feature',
+    id,
+    properties: { name: id },
+    geometry: { type, coordinates },
+  });
+  const features = [
+    feature('Park East', 'Point', [0.22, 0]),
+    feature('Park Middle', 'Point', [0.25, 0]),
+    feature('Park Far', 'Point', [0.3, 0]),
+    feature('Outside search', 'Point', [10, 0]),
+    feature('Trail', 'LineString', [
+      [0.21, -0.01],
+      [0.21, 0],
+      [0.21, 0.01],
+    ]),
+    feature('Park Boundary', 'Polygon', [
+      [
+        [0.205, -0.005],
+        [0.215, -0.005],
+        [0.215, 0.005],
+        [0.205, 0.005],
+        [0.205, -0.005],
+      ],
+    ]),
+  ];
+  const viewer = {};
+  const fake = bindFakeGroundRenderer(viewer, {
+    eye: { lon: 0, lat: 0, height: 70_000 },
+  });
+  const layer = createLocalGeoJsonLayer({
+    id: 'test-parks',
+    name: 'Parks',
+    loadFeatures: async () => features,
+    color: '#0088ff',
+    overlayHost: { setVisible() {}, setEntries() {}, clearSource() {} },
+    inputFor: () => ({ onClick: () => () => {} }),
+  });
+  const store = useEntityCardStore(createPinia());
+  t.after(() => {
+    store.setViewContextShown(false, null);
+    store.connect(null);
+    layer.destroy(viewer);
+    fake.unbind();
+    if (originalWindow === undefined) delete globalThis.window;
+    else globalThis.window = originalWindow;
+  });
+  await layer.enable(viewer);
+  const row = {
+    id: layer.id,
+    name: layer.name,
+    module: layer,
+    enabled: true,
+    stats: layer.getStats(),
+  };
+  const manager = {
+    layers: new Map([[row.id, row]]),
+    isEnabled: () => true,
+    getAll: () => [row],
+  };
+  store.connect({ dataManager: () => manager });
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const center = { lat: 0, lon: 0 };
+  const rect = { west: -0.2, east: 0.2, south: -0.15, north: 0.15 };
+  store.setViewContextShown(true, 1);
+  store.setView({ center, rect, heightM: 70_000 });
+  assert.equal(store.inspectorGroup(row.id, 20)?.loading, true);
+  t.mock.timers.tick(0);
+  const closest = store.inspectorGroup(row.id, 20);
+  assert.ok(
+    closest && !closest.loading && !closest.readFailed,
+    JSON.stringify(closest),
+  );
+  assert.equal(closest.scope, 'closest');
+  assert.equal(closest.count, 3);
+  assert.deepEqual(
+    closest.items.map(({ title }) => title),
+    ['Park East', 'Park Middle', 'Park Far'],
+  );
+  assert.deepEqual(store.inView({ viewport: true }), []);
 });

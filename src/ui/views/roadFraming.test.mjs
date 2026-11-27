@@ -170,21 +170,44 @@ async function countInspector(t, requestServices, constructControls) {
   };
 }
 
-
 test('a Local road picked from Nearby is framed below the all-roads height', async (t) => {
-  t.mock.method(globalThis, 'fetch', async () => new Response(null, { status: 503 }));
+  t.mock.method(
+    globalThis,
+    'fetch',
+    async () => new Response(null, { status: 503 }),
+  );
   const inspector = await countInspector(t, {});
   await inspector.show();
   await inspector.point(48.8566, 2.3522, 2_500);
   const cards = useEntityCardStore(applicationPinia());
-  const record = { id: 'road-1', name: 'Local road', roadType: 'residential', lat: 48.8567, lon: 2.3523 };
-  assert.ok(cards.select({ layerId: 'traffic', id: 'road-1', label: 'Local road', lat: record.lat, lon: record.lon, record }, { fly: true }));
+  const record = {
+    id: 'road-1',
+    name: 'Local road',
+    roadType: 'residential',
+    lat: 48.8567,
+    lon: 2.3523,
+  };
+  assert.ok(
+    cards.select(
+      {
+        layerId: 'traffic',
+        id: 'road-1',
+        label: 'Local road',
+        lat: record.lat,
+        lon: record.lon,
+        record,
+      },
+      { fly: true },
+    ),
+  );
   await nextTick();
   assert.equal(cards.card.kind, 'road segment');
   assert.equal(inspector.flyToBounds.mock.callCount(), 1);
   const { offset } = inspector.flyToBounds.mock.calls[0].arguments[1];
   const heightM = offset.range * Math.sin(Math.abs(offset.pitch));
-  console.log('range', offset.range, 'pitch', offset.pitch, 'camera height m', Math.round(heightM));
   // src/layers/traffic/rendering.js visibleRoadsForAltitude keeps residential roads only at or below 5,000 m.
-  assert.ok(heightM <= 5000, `camera height ${Math.round(heightM)} m drops residential roads`);
+  assert.ok(
+    heightM <= 5000,
+    `camera height ${Math.round(heightM)} m drops residential roads`,
+  );
 });

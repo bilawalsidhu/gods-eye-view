@@ -45,3 +45,19 @@ export async function captureQaScreenshot(
   }
   return page.screenshot(options);
 }
+
+/** Reveal a fixture item's Context card on the dev server without following it. */
+export function selectQaContextCard(page, identity) {
+  return page.evaluate(async (item) => {
+    const [{ applicationPinia }, { useEntityCardStore }] = await Promise.all([
+      import('/src/ui/vueRuntime.js'),
+      import('/src/ui/stores/entityCard.js'),
+    ]);
+    useEntityCardStore(applicationPinia()).select(item, { follow: false });
+    window.__godsEyeView.styleManager.setPanelCollapsed(
+      'global-context-panel',
+      false,
+      { persist: false, syncShare: false },
+    );
+  }, identity);
+}

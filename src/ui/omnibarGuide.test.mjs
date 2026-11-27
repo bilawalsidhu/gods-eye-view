@@ -1,9 +1,19 @@
-// The guided walk's callout, rendered by startGuide() over happy-dom.
+// src/ui/omnibarGuide.test.mjs — the guided walk's callout, rendered by
+// startGuide() over happy-dom, and a layer's settings walk, which points at
+// the Visual panel for labels and 3D models.
 import '../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createApp, h, onMounted } from 'vue';
-import { startGuide } from './omnibarGuide.js';
+import { createPinia } from 'pinia';
+import CctvPreview from './views/panels/CctvPreview.vue';
+import { useCctvStore } from './stores/cctv.js';
+import {
+  FEATURE_GUIDES,
+  layerSettingsGuide,
+  startGuide,
+} from './omnibarGuide.js';
+import { CAMERA_SETTINGS_EVENT } from './contextEvents.js';
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 const $ = (selector) => document.querySelector(selector);
@@ -169,4 +179,111 @@ test('each further target of a step gets its own ring after the callout', async 
   await frame();
   assert.deepEqual(subs(), [sub]);
   assert.equal(sub.style.opacity, '0');
+});
+
+test('Esc closes the enlarged camera preview before it ends the guide', async (t) => {
+  fixture(t);
+  const pinia = createPinia();
+  const cctv = useCctvStore(pinia);
+  cctv.publish({ enabled: true, activeCameraId: 'cam1' });
+  cctv.setFrame({ cameraId: 'cam1', src: '/fixture-camera.jpg' });
+  const preview = createApp(CctvPreview, { cameraId: 'cam1' }).use(pinia);
+  preview.mount(document.body.appendChild(document.createElement('div')));
+  t.after(() => preview.unmount());
+
+  startGuide([{ text: () => 'Look' }]);
+  await settle();
+  $('.cctv-preview__expand').click();
+  await settle();
+  const close = $('.cctv-popup__close');
+  assert.ok(close, 'the real preview opened');
+  const esc = (target) =>
+    target.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+    );
+  esc(close);
+  await settle();
+  assert.equal($('.cctv-popup'), null);
+  assert.ok($('.gev-guide'), 'the guide stays open');
+  esc($('.gev-guide-callout'));
+  await settle();
+  assert.equal($('.gev-guide'), null);
+});
+
+function visualPanel() {
+  document.body.replaceChildren();
+  const group = (id) => {
+    const wrap = document.body.appendChild(document.createElement('div'));
+    wrap.className = 'pp-toggle-group';
+    const button = wrap.appendChild(document.createElement('button'));
+    button.id = id;
+    return wrap;
+  };
+  return {
+    labels: group('detection-toggle'),
+    models: group('models3d-toggle'),
+  };
+}
+
+const targetsOf = (steps) => steps.flatMap((step) => step.targets?.() || []);
+const textsOf = (steps) => steps.map((step) => step.text?.() || '').join(' ');
+
+test('an aircraft layer walks to the Visual panel for its labels and 3D models', () => {
+  const { labels, models } = visualPanel();
+  const steps = layerSettingsGuide({ id: 'flights', shown: 'Live Flights' });
+  const targets = targetsOf(steps);
+  assert.ok(targets.includes(models), 'the 3D model settings');
+  assert.ok(steps.some((step) => /Open Visual/.test(step.text?.() || '')));
+  assert.doesNotMatch(textsOf(steps), /Properties/);
+  assert.equal(
+    targets.includes(labels),
+    false,
+    'flights draw no overlay labels',
+  );
+});
+
+test('a label layer walks to the Visual panel for its label settings', () => {
+  const { labels, models } = visualPanel();
+  const steps = layerSettingsGuide({ id: 'satellites', shown: 'Satellites' });
+  const targets = targetsOf(steps);
+  assert.ok(targets.includes(labels));
+  assert.equal(targets.includes(models), false);
+  assert.doesNotMatch(textsOf(steps), /Properties/);
+});
+
+test("the cameras' walk ends on Context's Camera settings tab, while a camera card is open", () => {
+  visualPanel();
+  const shown = [];
+  const onShow = () => shown.push('camera-settings');
+  document.addEventListener(CAMERA_SETTINGS_EVENT, onShow);
+  const step = () =>
+    layerSettingsGuide({ id: 'cctv', shown: 'Cameras' }).find((each) =>
+      /Camera settings/.test(each.text?.() || ''),
+    );
+  assert.ok(step(), 'a Camera settings step');
+  assert.equal(step().skip(), true, 'skipped with no camera card open');
+  const tab = document.body.appendChild(document.createElement('button'));
+  tab.id = 'context-tab-camera';
+  assert.equal(step().skip(), false);
+  assert.deepEqual(step().targets(), [tab]);
+  step().prepare();
+  assert.deepEqual(shown, ['camera-settings'], 'it shows the tab');
+  document.removeEventListener(CAMERA_SETTINGS_EVENT, onShow);
+  assert.equal(
+    layerSettingsGuide({ id: 'flights', shown: 'Live Flights' }).some((each) =>
+      /Camera settings/.test(each.text?.() || ''),
+    ),
+    false,
+  );
+});
+
+// The "properties" topic (labels, density, 3D models) runs, and walks to
+// where those settings are: the Visual panel's label settings.
+test('the properties topic walks to the Visual panel’s label settings without throwing', () => {
+  const { labels } = visualPanel();
+  const steps = FEATURE_GUIDES.properties();
+  assert.ok(steps.length > 0);
+  assert.ok(targetsOf(steps).includes(labels), 'the label settings');
+  assert.match(textsOf(steps), /Density/);
+  assert.doesNotMatch(textsOf(steps), /Properties holds/);
 });

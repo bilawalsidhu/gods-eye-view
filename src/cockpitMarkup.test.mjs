@@ -126,15 +126,6 @@ test('Cockpit has one reset action beside its bottom exit path', () => {
     'Cockpit Reset must sit before the exit button',
   );
 
-  const actions = html.match(
-    /<div class="global-context-actions"[\s\S]*?<\/div>/,
-  );
-  assert.ok(actions, 'Contact Context actions are missing');
-  assert.ok(
-    actions[0].indexOf('id="cockpit-entry"') <
-      actions[0].indexOf('id="installations-search-btn"'),
-    'Cockpit must precede Search Nearby Sites',
-  );
   assert.match(
     css,
     /body\.cockpit-mode #view-switcher \{[\s\S]*?bottom: max\(clamp\(128px, 15vh, 150px\), env\(safe-area-inset-bottom\)\);[\s\S]*?margin-bottom: -95px;/,
@@ -203,17 +194,6 @@ test('Cockpit vision cycle exposes every map preset exactly once', () => {
     'changing the map preset in Cockpit must refresh the exit restore baseline without replacing Normal',
   );
   assert.match(ui, /setStyle\([\s\S]*?this\._syncCockpitInheritedStyle\(\);/);
-});
-
-test('Contacts uses the approved radar icon', () => {
-  const button = html.match(
-    /<button\b[^>]*\bid="global-context-flights-btn"[\s\S]*?<\/button>/,
-  );
-  assert.ok(button, 'Contacts button is missing');
-  assert.match(
-    button[0],
-    /material-symbols-outlined"[^>]*aria-hidden="true">radar<\/span>/,
-  );
 });
 
 test('Cockpit Escape handling precedes form-control shortcut suppression and focus is restored', () => {
@@ -594,10 +574,8 @@ test('Clear Selected Layers uses one adopted batch and discards Context restorat
     _restoreContextSession.toString(),
     /if \(restoreState\.cancelled\) return;[\s\S]*?settleContextIntentReplay/,
   );
-  assert.match(
-    radioPresentation,
-    /!this\.actions\.preservePanelStateDuringClear\(\)[\s\S]*?this\.actions\.setPanelCollapsed\('radio-panel', true\)/,
-  );
+  // Radio has no panel of its own to close when it turns off.
+  assert.doesNotMatch(radioPresentation, /setPanelCollapsed\('radio-panel'/);
   assert.match(
     clearSelectedLayers.toString(),
     /this\._userFacingContextNotificationTokens\.add\(notificationToken\)/,
@@ -688,13 +666,10 @@ test('fresh Cockpit entry temporarily collapses map panels and exit restores the
   assert.ok(entryPanels, 'Cockpit entry panel list is missing');
   for (const panelId of [
     'data-panel',
-    'cctv-panel',
     'utilities-panel',
     'scene-panel',
     'pp-toggles',
     'global-context-panel',
-    'space-missions-panel',
-    'radio-panel',
   ]) {
     assert.match(
       entryPanels[1],
@@ -908,7 +883,7 @@ test('Cockpit Radio station changes preserve first-person camera ownership', () 
   assert.match(cycleHelper[1], /cycleStation\(direction, \{[\s\S]*?rotate,/);
   assert.match(radioBindings, /\n    cycleRadio,\n/);
   const panel = fs.readFileSync(
-    new URL('./ui/views/panels/RadioPanel.vue', import.meta.url),
+    new URL('./ui/views/panels/RadioFold.vue', import.meta.url),
     'utf8',
   );
   const cockpit = fs.readFileSync(
@@ -1269,21 +1244,7 @@ test('Cockpit Contact navigation omits the redundant Focus camera action', () =>
   assert.doesNotMatch(ui, /contextFocus|militaryAwarenessLayer\.focusCurrent/);
 });
 
-test('Global Context names its mixed contact cycle without changing the stable mode id', () => {
-  const match = html.match(
-    /<button\b[^>]*\bid="global-context-flights-btn"[\s\S]*?<\/button>/,
-  );
-  assert.ok(match, 'Global Context contacts button is missing');
-  assert.match(match[0], />CONTACTS</);
-  assert.match(match[0], /aria-label="CONTACTS"/);
-  assert.match(
-    match[0],
-    /title="Cycles the nearest contacts of whatever type you select — planes, vessels, installations\. Satellites track independently\."/,
-  );
-  assert.doesNotMatch(match[0], />FLIGHTS</);
-});
-
-test('Global Context uses its dedicated right rail without a duplicate Data Layers row', () => {
+test('Global Context uses its dedicated right rail, with no Contacts control and no duplicate Data Layers row', () => {
   assert.match(
     contextLayer,
     /id:\s*'military-awareness'[\s\S]*?showInTogglePanel:\s*false/,
@@ -1301,16 +1262,10 @@ test('Global Context uses its dedicated right rail without a duplicate Data Laye
     /getLayers: \(\) => this\.manager\.getAll\(\)/,
   );
   assert.match(html, /id="global-context-panel"/);
-  assert.match(html, /id="global-context-flights-btn"/);
+  assert.doesNotMatch(html, /id="global-context-flights-btn"/);
   assert.doesNotMatch(html, /id="global-context-missions-btn"/);
-  assert.match(html, /id="space-missions-panel"/);
-});
-
-test('Global Context standby describes Contacts', () => {
-  const match = html.match(/<div id="context-mode-standby"[\s\S]*?<\/div>/);
-  assert.ok(match, 'Global Context standby is missing');
-  assert.match(match[0], /CONTACTS — nearest planes · vessels · sites/);
-  assert.doesNotMatch(match[0], /SPACE MISSIONS/);
+  // Space Missions' list is a tab in Context; its own panel is retired.
+  assert.doesNotMatch(html, /id="space-missions-panel"/);
 });
 
 test('cockpit briefing cycle control keeps its state as the accessible name', () => {
@@ -1487,5 +1442,62 @@ test('Contact folded for one Cockpit left panel comes back only once neither is 
     );
   } finally {
     globalThis.document = previous;
+  }
+});
+
+test('Cockpit hides the whole bottom-right corner row and the Stories entry', () => {
+  // Power up, the language picker and the Stories button go together, as
+  // the top row and the dock do; none is left half shown or pushed off screen.
+  assert.match(
+    css,
+    /body\.cockpit-mode #corner-actions,[^{]*\{\s*display: none;\s*\}/,
+  );
+  assert.match(
+    css,
+    /body\.cockpit-mode #gev-stories \.gs-entry,\s*body\.cockpit-mode #gev-stories \.gs-pop\s*\{\s*display: none;\s*\}/,
+  );
+  assert.match(css, /body\.cockpit-mode #key-setup-chip,/);
+  assert.doesNotMatch(
+    css,
+    /body\.cockpit-mode[^{,]*(?:#corner-actions|\.locale-picker|\.gs-entry)[^{,]*\{[^}]*display:\s*(?:flex|block|inline)/,
+    'no cockpit rule brings part of the corner back',
+  );
+  assert.doesNotMatch(
+    css,
+    /bottom: max\(clamp\(22px, 4vh, 42px\), 3\.5rem\)/,
+    'the readout no longer steps up for a picker the cockpit hides',
+  );
+});
+
+test('the Cockpit keyboard hint and position readout clear the map credits', () => {
+  const REM = 16;
+  const CREDIT_HEIGHT_PX = 28;
+  const CLEARANCE_PX = 8;
+  // From 1200px the credit row sits on the bottom edge.
+  const edgeCredit = css.match(
+    /body:not\(\.ui-clean-view\):not\(\.recording-mode\) #cesium-credits,[\s\S]*?\{\s*right: auto;\s*bottom: ([\d.]+)rem;/,
+  );
+  assert.ok(edgeCredit, 'the bottom-edge credit row is where it was');
+  const wide = css.match(
+    /@media \(min-width: 1200px\) \{\s*body\.cockpit-mode :is\(\.cockpit-help, \.cockpit-position-readout\) \{\s*bottom: ([\d.]+)rem;\s*\}\s*\}/,
+  );
+  assert.ok(wide, 'the hint steps above the credit row from 1200px');
+  const creditTop = Number(edgeCredit[1]) * REM + CREDIT_HEIGHT_PX;
+  assert.ok(Number(wide[1]) * REM - creditTop >= CLEARANCE_PX);
+  // Below 1200px the credits sit at 2vh + 5rem, over the hint's own place
+  // (at most 42px up, two 12px lines tall) at every height the phone and
+  // laptop sizes reach.
+  assert.match(
+    css,
+    /@media \(max-width: 1199px\) \{\s*body:not\(\.ui-clean-view\):not\(\.recording-mode\) #cesium-credits,[\s\S]*?bottom: calc\(2vh \+ 5rem \+ var\(--world-timeline-lift, 0px\)\);/,
+  );
+  assert.match(
+    css,
+    /\.cockpit-help \{[^}]*bottom: clamp\(22px, 4vh, 42px\);/,
+  );
+  for (const height of [500, 720, 844, 900]) {
+    const creditBottom = 0.02 * height + 5 * REM;
+    const hintTop = Math.min(42, Math.max(22, 0.04 * height)) + 2 * 12;
+    assert.ok(creditBottom - hintTop >= CLEARANCE_PX, `at ${height}px tall`);
   }
 });

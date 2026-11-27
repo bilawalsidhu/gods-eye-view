@@ -11,7 +11,8 @@ export function createLifecycle({
   const { clearSelectedEntityContextForLayer } = services.context;
 
   const methods = {
-    init(viewer) {
+    init(viewer, { panel = null } = {}) {
+      layerState.panel = panel;
       layerState.viewer = viewer;
       parts.rendering.attach(viewer);
       const cameraChanged = () => {
@@ -78,6 +79,7 @@ export function createLifecycle({
     },
 
     destroy(viewer) {
+      layerState.panel = null;
       source.destroy?.();
       this.disable();
       layerState.contextAnchor = null;

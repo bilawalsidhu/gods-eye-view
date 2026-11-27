@@ -1,15 +1,12 @@
 /** Web-Mercator tile math for Street Level coverage, without Cesium. */
 
+import { wrapLon } from '../../geoDistance.js';
+export { wrapLon };
+
 const MAX_LAT = 85.05112878;
 
 function clampLat(lat) {
   return Math.max(-MAX_LAT, Math.min(MAX_LAT, lat));
-}
-
-/** Wrap a longitude, or a difference of two, into [-180, 180]: the short way round. */
-export function wrapLon(lon) {
-  if (lon >= -180 && lon <= 180) return lon;
-  return ((((lon + 180) % 360) + 360) % 360) - 180;
 }
 
 /** Fractional tile column of a longitude in [-180, 180] at zoom z. */

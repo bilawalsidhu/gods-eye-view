@@ -323,7 +323,7 @@ export const CATALONIA_IMAGE_HOSTS = Object.freeze(
 /** SCT `sctidcam` values: a bare image filename, which also keys the camera
  * id (the feed's `fid` embeds an upstream server-start stamp). */
 export const CATALONIA_SCT_CAMERA_FILE_RE = /^[a-z0-9]+\.(gif|jpe?g)$/i;
-/** Per-`font` partner credit, shown beside the provider in the CCTV panel
+/** Per-`font` partner credit, shown beside the provider on the camera card
  * (same pattern as DriveBC's partner-supplied cameras). SCT is the feed's
  * own publisher and carries no separate credit. */
 export const CATALONIA_FONT_CREDIT = Object.freeze({

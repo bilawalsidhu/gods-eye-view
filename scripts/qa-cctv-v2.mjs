@@ -476,6 +476,30 @@ async function main() {
         }
       }
     });
+    // Follow decoded stills through the projection's draw and buffer swap.
+    await page.evaluateOnNewDocument(() => {
+      if (window !== window.top) return;
+      const frames = new WeakMap();
+      window.__qaFramePath = (canvas) => frames.get(canvas);
+      const ctx = CanvasRenderingContext2D.prototype;
+      const draw = ctx.drawImage;
+      ctx.drawImage = function (source, ...args) {
+        const result = draw.call(this, source, ...args);
+        const path =
+          source instanceof HTMLImageElement &&
+          source.currentSrc.includes('/api/cctv/frame/')
+            ? new URL(source.currentSrc, location.href).pathname
+            : frames.get(source);
+        if (path?.startsWith('/api/cctv/frame/')) frames.set(this.canvas, path);
+        else frames.delete(this.canvas);
+        return result;
+      };
+      const clear = ctx.clearRect;
+      ctx.clearRect = function (...args) {
+        frames.delete(this.canvas);
+        return clear.apply(this, args);
+      };
+    });
     console.log('Loading app...');
     await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
     const appReady = await waitForPredicate(
@@ -1267,11 +1291,18 @@ async function main() {
         ? ui.activeCamera
         : ui.cameras.find(isStill);
       const collapsed = document
-        .getElementById('cctv-panel')
+        .getElementById('global-context-panel')
         .classList.contains('collapsed');
       if (camera) {
         layer.selectCamera(camera.id);
-        styleManager.setPanelCollapsed('cctv-panel', false, {
+        if (ui.activeCamera?.id === camera.id) {
+          document.dispatchEvent(
+            new CustomEvent('gev:cctv-selected', {
+              detail: { cameraId: camera.id },
+            }),
+          );
+        }
+        styleManager.setPanelCollapsed('global-context-panel', false, {
           persist: false,
           syncShare: false,
         });
@@ -1286,22 +1317,26 @@ async function main() {
           const layer =
             window.__godsEyeView.dataManager.layers.get('cctv').module;
           const camera = layer.getUIState().activeCamera;
-          const image = document.getElementById('cctv-frame');
+          const image = document.querySelector(
+            '#entity-card[data-layer="cctv"] .cctv-preview__frame img',
+          );
           const plane = layer._cctvDrawnForTest().planes[`cctv-${id}-plane`];
           const path = `/api/cctv/frame/${encodeURIComponent(id)}`;
           return (
             camera?.id === id &&
-            plane?.source?.canvas &&
+            window.__qaFramePath(plane?.source?.canvas) === path &&
             image?.naturalWidth > 0 &&
-            !image.hidden &&
-            new URL(image.currentSrc).pathname === path &&
-            new URL(camera.frameUrl, location.origin).pathname === path
+            image.checkVisibility({
+              visibilityProperty: true,
+              opacityProperty: true,
+            }) &&
+            new URL(image.currentSrc).pathname === path
           );
         },
         { timeoutMs: 30000, args: [still.id] },
       ));
     record(
-      'panel <img> and plane share the same /api/cctv/frame/<id> URL family',
+      'Context preview and plane share the same /api/cctv/frame/<id> URL family',
       sameFamily,
       `image camera=${still.id || 'none'}`,
     );
@@ -1310,7 +1345,7 @@ async function main() {
         const { dataManager, styleManager } = window.__godsEyeView;
         dataManager.layers.get('cctv').module.selectCamera(activeId);
         if (collapsed)
-          styleManager.setPanelCollapsed('cctv-panel', true, {
+          styleManager.setPanelCollapsed('global-context-panel', true, {
             persist: false,
             syncShare: false,
           });

@@ -59,6 +59,16 @@ function stubReceiver() {
       this.emit({ connected: false, status: 'idle' });
       return true;
     },
+    holdFm(options) {
+      calls.push(['holdFm', options?.message?.() ?? null]);
+      this.emit({ status: 'held' });
+      return true;
+    },
+    resumeFm() {
+      calls.push(['resumeFm']);
+      this.emit({ status: 'streaming' });
+      return true;
+    },
     async setMode(mode) {
       calls.push(['setMode', mode]);
       this.emit({ mode });
@@ -91,8 +101,8 @@ function stubRadio() {
       listener({ audioState: 'idle' });
       return () => listeners.delete(listener);
     },
-    emit(state) {
-      for (const listener of listeners) listener(state);
+    emit(state, sourceOrigin) {
+      for (const listener of listeners) listener(state, sourceOrigin);
     },
     stopPlayback(options) {
       calls.push(options);
@@ -166,7 +176,6 @@ test('card controls drive gain, FM mode and the Local ADS-B layer', async (t) =>
   store.act('setSdrMode', 'adsb');
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(layerCalls, [false, true]);
-  assert.equal(controls.isActive(), true);
 
   store.act('tuneSdr', '101.1');
   assert.deepEqual(receiver.calls.at(-1), ['tuneFm', 101_100_000]);
@@ -234,4 +243,65 @@ test('the card shows one read-only decoder-feed line after a single probe', asyn
   });
   await new Promise((resolve) => setTimeout(resolve, 30));
   assert.equal(shown.feedLine, 'Decoder feeds: 1090 live · 978 live');
+});
+
+test('choosing the internet stations on Radio’s row stops local FM, the receiver kept connected; Radio going off leaves it playing', async (t) => {
+  const receiver = stubReceiver();
+  const radio = stubRadio();
+  const controls = new LocalSdrControls({
+    document: stubDocument(),
+    receiver,
+    radio,
+  });
+  t.after(() => controls.destroy());
+  radio.emit({ audioState: 'idle', source: 'local' });
+  receiver.emit({ connected: true, status: 'streaming', mode: 'fm' });
+  const stops = () =>
+    receiver.calls.filter(([name]) => ['stop', 'holdFm'].includes(name));
+  // Radio turned off (its stream stopped, its source kept): FM plays on.
+  radio.emit({ audioState: 'stopped', source: 'local', enabled: false });
+  assert.equal(stops().length, 0, 'Radio off does not stop the receiver');
+  radio.emit({ audioState: 'idle', source: 'internet' });
+  assert.deepEqual(stops(), [
+    ['holdFm', 'Local FM stopped: internet stations chosen'],
+  ]);
+  assert.equal(receiver.getState().connected, true, 'still connected');
+  // Internet radio starting now does not disconnect a held receiver.
+  radio.emit({ audioState: 'playing', source: 'internet' });
+  assert.equal(receiver.calls.filter(([name]) => name === 'stop').length, 0);
+  // A restored source preference does not play the held receiver.
+  radio.emit({ audioState: 'stopped', source: 'local' }, 'share-link');
+  assert.equal(receiver.getState().status, 'held');
+  radio.emit({ audioState: 'stopped', source: 'internet' }, 'user');
+  radio.emit({ audioState: 'stopped', source: 'local' }, 'user');
+  assert.deepEqual(receiver.calls.at(-1), ['resumeFm']);
+  assert.equal(receiver.getState().status, 'streaming');
+});
+
+test('FM setup completing after Internet is selected leaves the station playing', async (t) => {
+  const receiver = stubReceiver();
+  const radio = stubRadio();
+  const store = stubStore();
+  const ready = Promise.withResolvers();
+  receiver.connect = async () => {
+    receiver.emit({ status: 'connecting' });
+    await ready.promise;
+    receiver.emit({ status: 'streaming', connected: true });
+    return true;
+  };
+  const controls = new LocalSdrControls({
+    document: stubDocument(),
+    receiver,
+    radio,
+    store,
+  });
+  t.after(() => controls.destroy());
+  radio.emit({ source: 'local', audioState: 'stopped' }, 'user');
+  const connect = store.act('toggleSdrConnection');
+  radio.emit({ source: 'internet', audioState: 'playing' }, 'user');
+  ready.resolve();
+  await connect;
+  assert.equal(receiver.getState().status, 'held');
+  assert.equal(receiver.getState().connected, true);
+  assert.deepEqual(radio.calls, []);
 });

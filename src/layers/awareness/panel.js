@@ -45,18 +45,22 @@ function presentAwarenessReason(summary = {}) {
 }
 
 /**
- * The Contacts panel as a view renders it. The layer presents a plain view
- * object (`standby`, `results` or `empty`) and publishes it to subscribers;
- * Core's AwarenessPanel component renders it and calls the layer's
- * navigation methods. Text arrives in the UI language.
+ * The Contacts panel's view. The layer presents a plain view object
+ * (`standby`, `results` or `empty`) and publishes it to subscribers. The
+ * application no longer subscribes: the Contacts panel is retired. Text
+ * arrives in the UI language.
  */
 export function createPanel({ state: layerState, parts }) {
   /** Publish a fresh view unless it is the one already shown. */
   function publish(view) {
+    layerState.panelView = view;
+    if (!layerState.panelListeners.size) {
+      layerState.panelSignature = null;
+      return;
+    }
     const signature = JSON.stringify(view);
     if (layerState.panelSignature === signature) return;
     layerState.panelSignature = signature;
-    layerState.panelView = view;
     for (const listener of [...layerState.panelListeners]) listener(view);
   }
 
@@ -226,6 +230,7 @@ export function createPanel({ state: layerState, parts }) {
       subject: `${subject.label} · ${windowLabel}`,
       subjectIdentity: { layerId: subject.layerId, id: subject.id },
       subjectLabel: subject.label,
+      subjectOrigin: subject.origin,
       subjectNames: presentNames(subject.memberNames),
       photo: presentPhoto(subject),
       navigation: presentNavigation(),

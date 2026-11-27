@@ -91,7 +91,8 @@ body.mobile-shell[data-mobile-sheet] #mobile-sheet-backdrop:not([hidden]) {
 
 /* ── Top bar: logo at the start, globe actions at the end ──────────────── */
 body.mobile-shell #title-bar {
-  top: calc(var(--mobile-top-inset) + 10px);
+  /* Leave room above the logo for the outer Radio broadcast wave. */
+  top: calc(var(--mobile-top-inset) + 16px);
   inset-inline-start: 14px;
 }
 
@@ -105,7 +106,7 @@ body.mobile-shell #title-bar .subtitle {
 }
 
 body.mobile-shell #top-center-actions {
-  top: calc(var(--mobile-top-inset) + 10px);
+  top: calc(var(--mobile-top-inset) + 16px);
   inset-inline-start: auto;
   inset-inline-end: 12px;
 }
@@ -132,9 +133,7 @@ body.mobile-shell #right-context-rail {
 }
 
 body.mobile-shell[data-mobile-sheet='layers'] #left-panel-stack,
-body.mobile-shell[data-mobile-sheet='cameras'] #right-context-rail,
 body.mobile-shell[data-mobile-sheet='context'] #right-context-rail,
-body.mobile-shell[data-mobile-sheet='missions'] #right-context-rail,
 /* Visual opens from the left rail on wider screens, so it lives in the left
    stack and the More sheet is that stack showing Visual alone. */
 body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack {
@@ -163,12 +162,7 @@ body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack {
 }
 
 body.mobile-shell #left-panel-stack > *,
-body.mobile-shell #right-context-rail > *,
-/* Rail rules show expanded Weather, News and Recent Imagery by id; on phones
-   they belong to the Context sheet only. */
-body.mobile-shell #right-context-rail > #weather-panel,
-body.mobile-shell #right-context-rail > #news-panel,
-body.mobile-shell #right-context-rail > #recent-imagery-panel {
+body.mobile-shell #right-context-rail > * {
   display: none;
 }
 
@@ -179,27 +173,9 @@ body.mobile-shell[data-mobile-sheet='layers']
   #left-panel-stack
   > #utilities-panel,
 body.mobile-shell[data-mobile-sheet='layers'] #left-panel-stack > #scene-panel,
-body.mobile-shell[data-mobile-sheet='cameras']
-  #right-context-rail
-  > #cctv-panel,
-body.mobile-shell[data-mobile-sheet='cameras']
-  #right-context-rail
-  > #street-level-panel,
 body.mobile-shell[data-mobile-sheet='context']
   #right-context-rail
   > #global-context-panel,
-body.mobile-shell[data-mobile-sheet='context']
-  #right-context-rail
-  > #weather-panel:not([hidden]),
-body.mobile-shell[data-mobile-sheet='context']
-  #right-context-rail
-  > #news-panel:not([hidden]),
-body.mobile-shell[data-mobile-sheet='context']
-  #right-context-rail
-  > #recent-imagery-panel:not([hidden]),
-body.mobile-shell[data-mobile-sheet='missions']
-  #right-context-rail
-  > #space-missions-panel:not([hidden]),
 body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack > #pp-toggles {
   position: relative;
   inset: auto;
@@ -208,12 +184,6 @@ body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack > #pp-toggles {
   max-width: none;
   margin: 0;
   transform: none;
-}
-
-/* The sheet scrolls: News keeps its height instead of shrinking under the
-   panel below it, as the rail makes it do on a desktop. */
-body.mobile-shell #right-context-rail > #news-panel:not(.collapsed) {
-  flex-shrink: 0;
 }
 
 /* ── Dock: [mic] [Omnibar] [chat] above the World Timeline ─────────────
@@ -371,4 +341,149 @@ body.mobile-shell #command-dock {
   bottom: calc(
     var(--mobile-tab-space) + 10px + var(--world-timeline-lift, 0px)
   );
+}
+
+/* Context on a phone: a shorter sheet, so the globe keeps more of
+   the screen; a picked item's top image shrinks to a thumbnail beside its
+   name, so the name, buttons and key numbers show without scrolling. Nearby
+   and More details follow when the sheet is scrolled. */
+body.mobile-shell[data-mobile-sheet='context'] #right-context-rail {
+  max-height: min(var(--mobile-sheet-max-height), 48vh);
+}
+
+@supports (height: 1dvh) {
+  body.mobile-shell[data-mobile-sheet='context'] #right-context-rail {
+    max-height: min(var(--mobile-sheet-max-height), 48dvh);
+  }
+}
+
+body.mobile-shell #entity-card {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  column-gap: 0.7rem;
+  align-items: start;
+}
+
+body.mobile-shell #entity-card > * {
+  grid-column: 1 / -1;
+}
+
+body.mobile-shell #entity-card > .entity-hero {
+  grid-column: 1;
+  height: 4.25rem;
+  min-height: 0;
+  margin: 0;
+}
+
+/* A narrow map thumbnail keeps the marker visible behind the top controls. */
+body.mobile-shell #entity-card > .entity-hero .close-up-map__top {
+  align-items: flex-start;
+  background: transparent;
+}
+
+body.mobile-shell #entity-card > .entity-hero .close-up-map__top .map-credit {
+  align-self: flex-start;
+  background: rgba(5, 8, 11, 0.7);
+}
+
+body.mobile-shell #entity-card > .entity-card__head {
+  grid-column: 2;
+  margin-top: 0;
+}
+
+/* A camera's top image is its feed with its facts and More info under it:
+   too much for the thumbnail, which would clip them (and leave More info
+   focusable out of sight). It keeps the full width at its own height, with
+   the name above it. */
+/* A street-level photo's top image holds the viewer, or its still with the
+   loading or failure state, Retry and the credit: the same as a camera. */
+body.mobile-shell
+  #entity-card
+  > .entity-hero:is(
+    [data-hero='camera'],
+    [data-hero='street'],
+    [data-hero='place-street']
+  ) {
+  grid-column: 1 / -1;
+  height: auto;
+  overflow: visible;
+}
+
+body.mobile-shell
+  #entity-card
+  > [data-hero='place-street']
+  .entity-hero__place-street {
+  position: relative;
+  width: 100%;
+}
+
+body.mobile-shell [data-hero='place-street'] .entity-hero__place-street img {
+  height: 8rem;
+}
+
+body.mobile-shell [data-hero='place-street'] .entity-hero__place-street small {
+  position: static;
+  display: block;
+  max-width: none;
+}
+
+body.mobile-shell
+  #entity-card:has(
+    > .entity-hero:is(
+        [data-hero='camera'],
+        [data-hero='street'],
+        [data-hero='place-street']
+      )
+  )
+  > .entity-card__head {
+  grid-column: 1 / -1;
+}
+
+body.mobile-shell
+  #entity-card
+  > .entity-hero
+  :is(
+    .preview-hud,
+    .satellite-ground__label,
+    .flight-cockpit__label,
+    .flight-cockpit__tape,
+    .close-up-map__label,
+    .close-up-map__icon
+  ) {
+  display: none;
+}
+
+/* Give interactive previews a full row so all choices fit beside Play.
+   Other map and photo thumbnails keep their place beside the heading. */
+body.mobile-shell
+  #entity-card
+  > .entity-hero:has(> .entity-card__preview-switch) {
+  grid-column: 1 / -1;
+  height: 6.5rem;
+}
+
+body.mobile-shell
+  #entity-card:has(> .entity-hero > .entity-card__preview-switch)
+  > .entity-card__head {
+  grid-column: 1 / -1;
+}
+
+/* Without controls, attribution can sit at the foot of the thumbnail. */
+body.mobile-shell
+  #entity-card
+  > .entity-hero:not(:has(> .entity-card__preview-switch))
+  .map-foot {
+  bottom: 0;
+}
+
+body.mobile-shell #entity-card > .entity-hero .map-credit {
+  padding: 1px 4px 2px;
+  font-size: 0.4rem;
+  line-height: 1.2;
+}
+
+body.mobile-shell #entity-card > .entity-hero .flight-cockpit__credit {
+  bottom: 38px;
+  inset-inline: 4px;
+  text-align: start;
 }

@@ -334,6 +334,12 @@ export function refreshSubjectWords() {
   this.publishPresenceView();
 }
 
+/** The layer each built-in entry rides an item of (an aircraft's card tracks it first). */
+const BUILT_IN_ENTRY_LAYERS = Object.freeze({
+  satellite: 'satellites',
+  vessel: 'ais-live-vessels',
+});
+
 export function syncEntry() {
   if (this.destroyed) return false;
   if (this.active) return;
@@ -348,18 +354,27 @@ export function syncEntry() {
       ? (chosen.candidate.face ?? chosen.provider.entryFace)
       : null;
   const available = entryKind !== null;
+  const entryId = available ? chosen.id : null;
+  // The layer of the item entry would ride, for the card of that item.
+  const entryLayerId = available
+    ? (chosen.provider?.layerId ?? BUILT_IN_ENTRY_LAYERS[entryKind] ?? null)
+    : null;
   // Change-only publishes: this runs on a preUpdate cadence, and a fresh
   // presence every frame would re-render the views even when nothing
   // changed. (perf item 9)
   if (
     this.presence.entryAvailable === available &&
     this.presence.entryKind === entryKind &&
+    this.presence.entryLayerId === entryLayerId &&
+    this.presence.entryId === entryId &&
     this.presence.entryFace?.icon === face?.icon &&
     this.presence.entryFace?.label === face?.label
   )
     return;
   this.presence.entryAvailable = available;
   this.presence.entryKind = entryKind;
+  this.presence.entryLayerId = entryLayerId;
+  this.presence.entryId = entryId;
   this.presence.entryFace = face && { icon: face.icon, label: face.label };
   this.publishPresenceView();
 }
@@ -537,6 +552,8 @@ function enterSubject(provider) {
     active: true,
     entryAvailable: false,
     entryKind: null,
+    entryLayerId: null,
+    entryId: null,
     entryFace: null,
     subjectKind: provider.kind,
     subjectGeneric: true,
@@ -571,13 +588,36 @@ function enterSubject(provider) {
  * Enter first person on the first subject in entry order (resolveEntry): a
  * tracked aircraft, the tracked satellite's orbital view, the selected
  * vessel's bridge or an application provider's subject.
- * @param {{kind?: string|null}} [options] Restrict entry to one subject kind;
+ * @param {{kind?: string|null, subject?: {layerId: string, id: string}|null}} [options] Restrict entry to one subject kind or card identity;
  *   voice entry is aircraft-only.
  * @returns {boolean} True when the view was entered.
  */
-export function enter({ kind = null } = {}) {
+export function enter({ kind = null, subject = null } = {}) {
   if (this.destroyed) return false;
   if (this.active) return false;
+  // A card requests its own item. Recheck at the action boundary: presence
+  // may still describe the previous frame's selection.
+  if (subject?.layerId === 'flights' || subject?.layerId === 'military') {
+    // An aircraft card just tracked its item. A generic entry could instead
+    // adopt a different selection. Check the camera's current follow key.
+    if (
+      (kind !== null && kind !== 'aircraft') ||
+      followedOf(this.viewer)?.key !== `${subject.layerId}:${subject.id}`
+    )
+      return false;
+    kind = 'aircraft';
+  } else if (subject) {
+    const entry = this.resolveEntry();
+    const layerId =
+      entry?.provider?.layerId ?? BUILT_IN_ENTRY_LAYERS[entry?.kind];
+    if (
+      layerId !== subject.layerId ||
+      entry?.id !== String(subject.id) ||
+      (kind !== null && kind !== entry.kind)
+    )
+      return false;
+    kind = entry.kind;
+  }
   const subjectKind = kind ?? this.resolveEntryKind() ?? 'aircraft';
   const provider = this.subjectProviders.find(
     (entry) => entry.kind === subjectKind,
@@ -666,6 +706,8 @@ export function enter({ kind = null } = {}) {
     active: true,
     entryAvailable: false,
     entryKind: null,
+    entryLayerId: null,
+    entryId: null,
     subjectKind,
     tr3b: null,
   });
@@ -838,24 +880,26 @@ export function exit({ restoreTracking = true } = {}) {
     layer?.refocusTrackedById?.(subject);
   }
   this.syncEntry();
-  // Return to the card or readout control that opened Cockpit.
-  const readoutEntry = document.getElementById('cockpit-entry-readout');
-  const restoreTarget =
-    this.entryFocusOrigin === this.entry ||
-    this.entryFocusOrigin?.hasAttribute('data-entity-cockpit-entry') ||
-    (readoutEntry && this.entryFocusOrigin === readoutEntry)
-      ? this.entryFocusOrigin
-      : this.entry || this.entryFocusOrigin;
+  // Return to the control that opened Cockpit, such as the card's entry.
+  const restoreTarget = this.entryFocusOrigin;
   this.entryFocusOrigin = null;
   // The entry shows when Vue flushes the presence; read it after.
   Promise.resolve().then(() => {
-    if (
-      !this.destroyed &&
-      !this.active &&
-      restoreTarget?.isConnected &&
-      !restoreTarget.hidden
-    )
-      restoreTarget.focus({ preventScroll: true });
+    if (this.destroyed || this.active) return;
+    let target = restoreTarget;
+    if (!target?.isConnected && target?.dataset.entityCockpitEntry) {
+      target = Array.from(
+        document.querySelectorAll('[data-entity-cockpit-entry]'),
+      ).find(
+        (entry) =>
+          entry instanceof HTMLElement &&
+          entry.dataset.entityCockpitEntry ===
+            restoreTarget.dataset.entityCockpitEntry &&
+          !entry.closest('[hidden]'),
+      );
+    }
+    if (target?.isConnected && !target.closest('[hidden]'))
+      target.focus({ preventScroll: true });
   });
   return true;
 }

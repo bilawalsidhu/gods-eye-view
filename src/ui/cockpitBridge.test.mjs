@@ -6,11 +6,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createPinia } from 'pinia';
 import { createApp, defineComponent, h, nextTick } from 'vue';
-import { CockpitViewController } from './cockpitController.js';
+import { CockpitCoordinator } from './cockpitCoordinator.js';
 import { setLocale } from '../i18n/index.js';
 import { useCockpitStore } from './stores/cockpit.js';
 import CockpitView from './views/CockpitView.vue';
-import ContextView from './views/ContextView.vue';
+import IntelHudView from './views/IntelHudView.vue';
 import * as Cesium from 'cesium';
 import {
   bindFakeCesiumCamera,
@@ -18,6 +18,7 @@ import {
   followedEntity,
 } from '../testSupport/fakeCameraPort.mjs';
 import { fakeScenePorts } from '../testSupport/fakeCesiumScene.mjs';
+import { withEntityRecord } from '../data/entityRecords.js';
 import { vesselCockpitInfo } from '../layers/vessels/cockpitSubject.js';
 import { VesselRecords } from '../layers/vessels/records.js';
 
@@ -152,7 +153,7 @@ function fixture(
   const host = document.body.appendChild(document.createElement('div'));
   const pinia = createPinia();
   const app = createApp(
-    defineComponent(() => () => [h(ContextView), h(CockpitView)]),
+    defineComponent(() => () => [h(IntelHudView), h(CockpitView)]),
   ).use(pinia);
   app.mount(host);
   const store = useCockpitStore(pinia);
@@ -201,7 +202,9 @@ function fixture(
   // that answers from the test's scene (`sceneQuery`).
   const ports = fakeScenePorts(viewer);
   bindFakeCesiumCamera(viewer, { ...ports, query: sceneQuery(viewer, ports) });
-  const cockpit = new CockpitViewController(viewer, {
+  const coordinator = new CockpitCoordinator({
+    viewer,
+    cockpitStore: store,
     services: {
       flightsLayer: {
         getTrackedInfo: () => (flightsEnabled ? aircraftInfo : null),
@@ -219,16 +222,27 @@ function fixture(
       cachedGroundFloor: () => null,
       GROUND_FLOOR_LIFT_M: 0,
     },
-    // The aircraft gate stays shut: the bridge must not depend on Contacts.
-    isEntryAllowed: () => Boolean(aircraftInfo),
-    isBridgeEntryAllowed: () => bridgeAllowed,
-    publish: {
-      presence: (view) => store.publishPresence(view),
-      instruments: (view) => store.publishInstruments(view),
-      route: (view) => store.publishRoute(view),
-      radar: (view) => store.publishRadar(view),
+    operations: {
+      publishCockpit: {
+        presence: store.publishPresence,
+        instruments: store.publishInstruments,
+        route: store.publishRoute,
+        radar: store.publishRadar,
+      },
+      _stampNavigation() {},
     },
+    readDataManager: () => ({
+      isEnabled: (layerId) =>
+        layerId === 'ais-live-vessels'
+          ? bridgeAllowed
+          : layerId === 'flights' && flightsEnabled && Boolean(aircraftInfo),
+    }),
+    readContext: () => null,
+    readActiveStyle: () => 'normal',
+    enterPanels() {},
+    exitPanels() {},
   });
+  const { cockpitView: cockpit } = coordinator;
   // The briefing and signals have their own tests; the bridge keeps only
   // what it shows and owns.
   Object.assign(cockpit, {
@@ -245,7 +259,7 @@ function fixture(
   if (aircraftInfo)
     Object.assign(cockpit, { updateContext() {}, updateRoute() {} });
   t.after(() => {
-    cockpit.stop();
+    coordinator.stop();
     app.unmount();
     document.body.classList.remove('cockpit-mode');
   });
@@ -290,22 +304,55 @@ async function settle() {
   await Promise.resolve();
 }
 
-test('a selected vessel offers a BRIDGE entry without Contacts', async (t) => {
-  const { $, cockpit } = fixture(t);
+test('a selected vessel offers a bridge entry without Contacts', async (t) => {
+  const { cockpit } = fixture(t);
   cockpit.syncEntry();
   await nextTick();
-  const entry = $('#cockpit-entry');
-  assert.equal(entry.hidden, false);
-  assert.match(entry.textContent, /directions_boat/);
-  assert.match(entry.textContent, /BRIDGE/);
-  assert.equal($('#tr3b-toggle').hidden, true, 'TR-3B stays aircraft-only');
+  assert.equal(cockpit.presence.entryAvailable, true);
+  assert.equal(cockpit.presence.entryKind, 'vessel');
+  assert.equal(
+    cockpit.presence.entryLayerId,
+    'ais-live-vessels',
+    'its card offers the bridge view',
+  );
+  assert.equal(cockpit.presence.tr3b, null, 'TR-3B stays aircraft-only');
 });
 
-test('a shut bridge gate keeps the entry hidden', async (t) => {
-  const { $, cockpit } = fixture(t, { bridgeAllowed: false });
+test('card entry rejects a changed candidate and presence follows same-layer selection', (t) => {
+  const { cockpit, vessels, store } = fixture(t);
+  cockpit.syncEntry();
+  assert.equal(cockpit.presence.entryId, RECORD.id);
+  const next = { ...RECORD, id: '211000002', name: 'SECOND SHIP' };
+  vessels.select(next);
+  store.act('enter', {
+    layerId: 'ais-live-vessels',
+    id: RECORD.id,
+  });
+  assert.equal(
+    cockpit.active,
+    false,
+    'a stale card cannot enter the new selected ship',
+  );
+  assert.deepEqual(vessels.calls, []);
+  cockpit.syncEntry();
+  assert.equal(
+    cockpit.presence.entryId,
+    next.id,
+    'same-layer selection republishes its identity',
+  );
+  store.act('enter', {
+    layerId: 'ais-live-vessels',
+    id: next.id,
+  });
+  assert.equal(cockpit.active, true);
+  assert.deepEqual(vessels.calls, [['subject', next.id]]);
+});
+
+test('a shut bridge gate offers no entry', async (t) => {
+  const { cockpit } = fixture(t, { bridgeAllowed: false });
   cockpit.syncEntry();
   await nextTick();
-  assert.equal($('#cockpit-entry').hidden, true);
+  assert.equal(cockpit.presence.entryAvailable, false);
   assert.equal(cockpit.enter(), false);
 });
 
@@ -313,7 +360,7 @@ test('entering the bridge hides the vessel and shows bridge readouts', async (t)
   const { $, cockpit, vessels } = fixture(t);
   cockpit.syncEntry();
   await nextTick();
-  $('#cockpit-entry').click();
+  cockpit.enter();
   await settle();
   assert.equal(cockpit.active, true);
   assert.equal(cockpit.subjectKind, 'vessel');
@@ -523,15 +570,49 @@ test("turning off the ridden aircraft's layer ends the cockpit", async (t) => {
   assert.equal(cockpit.active, false);
 });
 
-test('BRIDGE enters the selected vessel bridge and aircraft-only entry refuses it', async (t) => {
-  const { $, cockpit } = fixture(t);
+test('entry rides the selected vessel bridge and aircraft-only entry refuses it', async (t) => {
+  const { cockpit } = fixture(t);
   assert.equal(cockpit.enter({ kind: 'aircraft' }), false);
   cockpit.syncEntry();
   await settle();
-  $('#cockpit-entry').click();
+  cockpit.enter();
   await settle();
   assert.equal(cockpit.active, true);
   assert.equal(cockpit.subjectKind, 'vessel');
+});
+
+test('an aircraft card cannot enter Cockpit on a different followed aircraft', async (t) => {
+  const { cockpit, viewer, aircraft, store } = fixture(t, {
+    aircraftInfo: {
+      icao24: 'abc123',
+      callsign: 'TEST1',
+      latitude: 54.5,
+      longitude: 10.2,
+      altitudeM: 3000,
+      velocityMps: 200,
+      track: 45,
+      onGround: false,
+    },
+  });
+  followEntity(
+    viewer,
+    withEntityRecord(aircraft, { trackedId: 'flights:abc123' }),
+  );
+  store.act('enter', {
+    layerId: 'military',
+    id: 'abc123',
+  });
+  store.act('enter', {
+    layerId: 'flights',
+    id: 'abc124',
+  });
+  assert.equal(cockpit.active, false);
+  store.act('enter', {
+    layerId: 'flights',
+    id: 'abc123',
+  });
+  assert.equal(cockpit.active, true);
+  await settle();
 });
 
 test('C neither enters nor leaves the bridge; it stays the CCTV shortcut', async (t) => {
@@ -947,7 +1028,10 @@ test('arrows do nothing new in an aircraft cockpit', async (t) => {
     prograde: null,
     retrograde: null,
   });
-  assert.equal(document.querySelector('.cockpit-compass-marker') === null, true);
+  assert.equal(
+    document.querySelector('.cockpit-compass-marker') === null,
+    true,
+  );
   assert.doesNotMatch(
     document.querySelector('.cockpit-help').textContent,
     /ARROWS LOOK/,
@@ -1318,23 +1402,6 @@ test('a ship with no true heading is held, and labelled, on its course', async (
   );
 });
 
-test('both entries name the subject the same way', async () => {
-  const { cockpitEntryFace } = await import('./cockpitPresentation.js');
-  assert.deepEqual(cockpitEntryFace('vessel'), {
-    icon: 'directions_boat',
-    label: 'BRIDGE',
-  });
-  assert.deepEqual(cockpitEntryFace('satellite'), {
-    icon: 'satellite_alt',
-    label: 'ORBIT',
-  });
-  assert.deepEqual(cockpitEntryFace('aircraft'), {
-    icon: 'flight',
-    label: 'COCKPIT',
-  });
-  assert.deepEqual(cockpitEntryFace(null), cockpitEntryFace('aircraft'));
-});
-
 test('a ship with neither heading nor course makes up no direction', async (t) => {
   const clock = manualClock(t, START_MS);
   const record = {
@@ -1363,7 +1430,10 @@ test('a ship with neither heading nor course makes up no direction', async (t) =
     prograde: null,
     retrograde: null,
   });
-  assert.equal(document.querySelector('.cockpit-compass-marker') === null, true);
+  assert.equal(
+    document.querySelector('.cockpit-compass-marker') === null,
+    true,
+  );
   assert.match(
     $('.cockpit-visor-status-right').textContent,
     /NO HEADING · AIS/,

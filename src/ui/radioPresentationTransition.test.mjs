@@ -33,6 +33,7 @@ for (const lifecycleState of ['enabling', 'disabling']) {
             enabled: lifecycleState === 'disabling',
             uncertain: false,
           }),
+          scheduleLayout() {},
         },
       };
       const state = {
@@ -42,21 +43,9 @@ for (const lifecycleState of ['enabling', 'disabling']) {
         stationCount: 0,
         audioState: 'idle',
       };
-      try {
-        renderRadioState.call(ctx, state);
-      } catch (error) {
-        // Anything thrown after the transitional label is a different
-        // missing fixture field, not the bug under test.
-        assert.ok(
-          !(
-            error instanceof ReferenceError &&
-            /lifecycleLabel/.test(error.message)
-          ),
-          `render threw: ${error.message}`,
-        );
-      }
-      assert.equal(shown.enable.busy, true);
-      assert.equal(shown.enable.text, lifecycleState.toUpperCase());
+      renderRadioState.call(ctx, state);
+      assert.equal(shown.cockpit.enable.busy, true);
+      assert.equal(shown.cockpit.enable.text, lifecycleState.toUpperCase());
     } finally {
       globalThis.document = prior;
     }

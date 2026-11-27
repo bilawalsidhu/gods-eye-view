@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createPinia } from 'pinia';
 import { PanelChrome } from './panelChrome.js';
+import { usePanelChromeStore } from './stores/panelChrome.js';
 import { presentPanelLocally } from '../testSupport/panelState.mjs';
 import { readPanelState } from './rail/panelState.js';
 
@@ -26,25 +28,25 @@ function fixture(theme = 'tactical') {
   left.children = [layers, scenes];
   for (const panel of left.children) panel.parentElement = left;
   const rail = node('rail');
-  const display = node('pp-toggles'), context = node('global-context-panel'), cctv = node('cctv-panel'), radio = node('radio-panel');
-  const missions = node('space-missions-panel');
-  rail.children = [display, context, missions, cctv];
+  const display = node('pp-toggles'), context = node('global-context-panel'), cctv = node('cctv-panel');
+  rail.children = [display, context, cctv];
   for (const panel of rail.children) panel.parentElement = rail;
-  context.children = [radio];
-  radio.parentElement = context;
+  const chrome = usePanelChromeStore(createPinia());
   const saved = [], claimed = [];
   const owner = {
+    _chromeStore: chrome,
+    _chromeToken: chrome.connect({}),
     _leftPanelStack: left,
     _rightPanelStack: rail,
     _panelLayout: {},
     _lifetime: { frame() {} },
     _presentPanel: presentPanelLocally, _shownPanel: readPanelState, _scheduleRightPanelLayout() {},
-    _scheduleLeftPanelLayout() {}, _layoutRightPanels() {}, _syncCctvPanelViewport() {},
+    _scheduleLeftPanelLayout() {}, _layoutRightPanels() {},
     _savePanelCollapsedState: (...args) => saved.push(args),
     shareLinkManager: { claimRestoreLane: (...args) => claimed.push(args), onPanelStateChange() {} },
   };
   owner.setPanelCollapsed = PanelChrome.prototype.setPanelCollapsed.bind(owner);
-  return { layers, scenes, display, context, missions, cctv, radio, owner, saved, claimed,
+  return { layers, scenes, display, context, cctv, owner, saved, claimed,
     doc: { documentElement: { dataset: { uiTheme: theme } }, getElementById: (id) => nodes.get(id) },
   };
 }
@@ -72,36 +74,17 @@ test('explicit opening collapses side peers and claims their restoration lanes i
   }
 });
 
-test('the Context and Space Missions panels close each other on desktop', () => {
+test('opening Context on desktop collapses Display, and opening Display collapses Context', () => {
   const f = fixture('tactical'), prior = globalThis.document;
   globalThis.document = f.doc;
   try {
-    f.owner.setPanelCollapsed('global-context-panel', false, { explicit: true });
-    f.owner.setPanelCollapsed('space-missions-panel', false, { explicit: true });
-    assert.equal(f.missions.classList.contains('collapsed'), false);
-    assert.equal(f.context.classList.contains('collapsed'), true, 'opening Space Missions closes Context');
-    f.owner.setPanelCollapsed('global-context-panel', false, { explicit: true });
-    assert.equal(f.context.classList.contains('collapsed'), false);
-    assert.equal(f.missions.classList.contains('collapsed'), true, 'opening Context closes Space Missions');
-    // Radio lives inside Context, so opening it closes Space Missions too.
-    f.owner.setPanelCollapsed('space-missions-panel', false, { explicit: true });
-    f.owner.setPanelCollapsed('radio-panel', false, { explicit: true });
-    assert.equal(f.context.classList.contains('collapsed'), false);
-    assert.equal(f.missions.classList.contains('collapsed'), true);
-  } finally { globalThis.document = prior; }
-});
-
-test('opening already-expanded Radio reveals Context and closes Display', () => {
-  const f = fixture('tactical'), prior = globalThis.document;
-  globalThis.document = f.doc;
-  try {
-    f.owner.setPanelCollapsed('radio-panel', false, { explicit: true });
     f.owner.setPanelCollapsed('pp-toggles', false, { explicit: true });
-    assert.equal(f.radio.classList.contains('collapsed'), false);
-    assert.equal(f.context.classList.contains('collapsed'), true);
-    f.owner.setPanelCollapsed('radio-panel', false, { explicit: true });
+    f.owner.setPanelCollapsed('global-context-panel', false, { explicit: true });
     assert.equal(f.context.classList.contains('collapsed'), false);
     assert.equal(f.display.classList.contains('collapsed'), true);
+    f.owner.setPanelCollapsed('pp-toggles', false, { explicit: true });
+    assert.equal(f.display.classList.contains('collapsed'), false);
+    assert.equal(f.context.classList.contains('collapsed'), true);
   } finally { globalThis.document = prior; }
 });
 
@@ -126,9 +109,8 @@ test('a feature revealing a side panel makes it the side owner', () => {
   try {
     f.owner.setPanelCollapsed('pp-toggles', false, { explicit: true });
     f.claimed.length = 0;
-    // Street Level's viewer or a selected radio station opens its panel
-    // without an explicit user disclosure.
-    f.owner.setPanelCollapsed('radio-panel', false);
+    // A pick on the globe opens Context without an explicit user disclosure.
+    f.owner.setPanelCollapsed('global-context-panel', false);
     assert.equal(f.context.classList.contains('collapsed'), false);
     assert.equal(f.display.classList.contains('collapsed'), true);
     assert.equal(f.owner._panelLayout._rightStackPreferredPanelId, 'global-context-panel');

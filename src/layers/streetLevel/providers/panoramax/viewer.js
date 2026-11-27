@@ -71,12 +71,15 @@ export const PANORAMAX_SOURCES = Object.freeze({
     photo.urls.sd && hdDecodable(photo) && pixels > SD_WIDTH
       ? photo.urls.hd
       : null,
-  describe: (photo) => ({
+  describe: (photo, drawn) => ({
     // Where no author can be named, the instance holding the photo is.
-    title: !photo.creator && photo.via ? `via ${photo.via}` : null,
+    title: null,
     creator: photo.creator,
+    via: photo.creator ? null : (photo.via ?? null),
     license: photo.license,
     externalUrl: panoramaxPictureUrl(photo.id),
+    // Do not contact a different picture host just to display a card.
+    still: drawn?.url ?? null,
   }),
 });
 

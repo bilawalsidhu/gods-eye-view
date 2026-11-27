@@ -1,11 +1,11 @@
-import { computed, ref } from 'vue';
-import { formatNumber, t } from '../i18n/index.js';
+import { ref } from 'vue';
 
 // How far out Context looks for what is "nearby": one distance for every
 // nearby block (flights, vessels, hazards, alerts, other loaded items). The
 // control in the Context panel steps through a few distances; the choice is
 // kept for the next visit.
 const KEY = 'gev.contextRadiusKm';
+const OVERHEAD_KEY = 'gev.overheadRangeKm';
 
 /** The distances the control steps through, in km. */
 export const CONTEXT_RADIUS_STEPS = Object.freeze([
@@ -22,9 +22,9 @@ export function nearestRadiusStep(km) {
   );
 }
 
-function read() {
+function read(key) {
   try {
-    const saved = globalThis.localStorage?.getItem(KEY);
+    const saved = globalThis.localStorage?.getItem(key);
     return saved === null || saved === undefined
       ? DEFAULT_CONTEXT_RADIUS_KM
       : nearestRadiusStep(saved);
@@ -34,22 +34,18 @@ function read() {
 }
 
 /** The radius every nearby block uses, in km. */
-export const contextRadiusKm = ref(read());
+export const contextRadiusKm = ref(read(KEY));
+export const overheadRangeKm = ref(read(OVERHEAD_KEY));
 
-export function setContextRadiusKm(km) {
-  contextRadiusKm.value = nearestRadiusStep(km);
+function setRadius(radius, key, km) {
+  radius.value = nearestRadiusStep(km);
   try {
-    globalThis.localStorage?.setItem(KEY, String(contextRadiusKm.value));
+    globalThis.localStorage?.setItem(key, String(radius.value));
   } catch {
     // Without storage the choice lasts for this visit.
   }
 }
 
-export const contextRadiusText = computed(() =>
-  t('{n} km', { n: formatNumber(contextRadiusKm.value) }),
-);
-export const contextRadiusIndex = computed(() =>
-  Math.max(0, CONTEXT_RADIUS_STEPS.indexOf(contextRadiusKm.value)),
-);
-export const pickContextRadius = (index) =>
-  setContextRadiusKm(CONTEXT_RADIUS_STEPS[index]);
+export const setContextRadiusKm = (km) => setRadius(contextRadiusKm, KEY, km);
+export const setOverheadRangeKm = (km) =>
+  setRadius(overheadRangeKm, OVERHEAD_KEY, km);

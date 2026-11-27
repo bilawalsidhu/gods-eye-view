@@ -53,6 +53,7 @@ export function createWildlifeSightingsLayer({
     cellSets: null,
     selectedId: null,
     selectedRow: null,
+    contextRecord: null,
     /** Rows retained by selection after a successful page omitted them. */
     heldRows: new WeakSet(),
     carriers: new Map(),

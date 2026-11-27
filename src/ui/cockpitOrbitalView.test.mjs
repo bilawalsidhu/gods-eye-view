@@ -12,7 +12,6 @@ import { CockpitViewController } from './cockpitController.js';
 import { useCockpitStore } from './stores/cockpit.js';
 import { useHudStore } from './stores/hud.js';
 import CockpitView from './views/CockpitView.vue';
-import ContextView from './views/ContextView.vue';
 import IntelHudView from './views/IntelHudView.vue';
 import {
   ORBITAL_SETTLE_BLUR_PX,
@@ -121,11 +120,7 @@ function fixture(
   const host = document.body.appendChild(document.createElement('div'));
   const pinia = createPinia();
   const app = createApp(
-    defineComponent(() => () => [
-      h(ContextView),
-      h(IntelHudView),
-      h(CockpitView),
-    ]),
+    defineComponent(() => () => [h(IntelHudView), h(CockpitView)]),
   ).use(pinia);
   app.mount(host);
   useHudStore(pinia);
@@ -361,35 +356,30 @@ async function orbitAt(t, options) {
   return { ...scene, clock };
 }
 
-test('a tracked satellite offers an ORBIT entry in Contacts and the readout', async (t) => {
-  const { $, cockpit } = fixture(t);
+test('a tracked satellite offers the orbital entry', async (t) => {
+  const { cockpit } = fixture(t);
   cockpit.syncEntry();
   await nextTick();
-  for (const selector of ['#cockpit-entry', '#cockpit-entry-readout']) {
-    const entry = $(selector);
-    assert.equal(entry.hidden, false, selector);
-    assert.match(entry.textContent, /satellite_alt/);
-    assert.match(entry.textContent, /ORBIT/);
-  }
-  assert.equal($('#tr3b-toggle').hidden, true, 'TR-3B stays aircraft-only');
+  assert.equal(cockpit.presence.entryAvailable, true);
+  assert.equal(cockpit.presence.entryKind, 'satellite');
+  assert.equal(cockpit.presence.tr3b, null, 'TR-3B stays aircraft-only');
 });
 
-test('a shut orbit gate keeps the entry hidden and refuses entry', async (t) => {
-  const { $, cockpit } = fixture(t, { orbitAllowed: false });
+test('a shut orbit gate offers no entry and refuses entry', async (t) => {
+  const { cockpit } = fixture(t, { orbitAllowed: false });
   cockpit.syncEntry();
   await nextTick();
-  assert.equal($('#cockpit-entry').hidden, true);
-  assert.equal($('#cockpit-entry-readout').hidden, true);
+  assert.equal(cockpit.presence.entryAvailable, false);
   assert.equal(cockpit.enter(), false);
   assert.equal(cockpit.active, false);
 });
 
-test('ORBIT enters the orbital view; voice-style aircraft entry refuses it', async (t) => {
+test('entry rides the orbital view; voice-style aircraft entry refuses it', async (t) => {
   const { $, cockpit } = fixture(t);
   assert.equal(cockpit.enter({ kind: 'aircraft' }), false);
   cockpit.syncEntry();
   await nextTick();
-  $('#cockpit-entry').click();
+  cockpit.enter();
   assert.equal(cockpit.active, true);
   assert.equal(cockpit.subjectKind, 'satellite');
   $('#map-view-switch').click();

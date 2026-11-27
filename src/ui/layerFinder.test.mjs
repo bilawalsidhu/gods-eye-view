@@ -12,6 +12,9 @@ import { createApp, nextTick } from 'vue';
 import { LayerPanel } from 'gods-eye-view/ui/layers';
 import { createGevActionRunner } from '../voice/gevActions.js';
 import { bindRenderer } from '../render/rendererOf.js';
+import { StyleManager } from './applicationShell.js';
+import { initMobileShell } from './mobileShell.js';
+import { usePanelChromeStore } from './stores/panelChrome.js';
 import LayerPanelsView from './views/LayerPanelsView.vue';
 import { mountApplicationViews } from './views/index.js';
 import { useLayerFinderStore } from './stores/layerFinder.js';
@@ -22,13 +25,12 @@ const flush = async () => {
   await nextTick();
 };
 
-function fixture(t) {
+function fixture(t, pinia = createPinia()) {
   document.body.replaceChildren();
   // Frames run at once, so the observers' batching does not hold a test up.
   globalThis.requestAnimationFrame = (fn) => setTimeout(fn, 0);
   globalThis.cancelAnimationFrame = (id) => clearTimeout(id);
   const root = document.body.appendChild(document.createElement('div'));
-  const pinia = createPinia();
   const app = createApp(LayerPanelsView).use(pinia);
   app.mount(root);
   const finder = useLayerFinderStore(pinia);
@@ -376,6 +378,52 @@ test('stock search and voice use the mounted list Finder', async (t) => {
   await search('flights');
   assert.deepEqual(shown(), ['flights']);
   assert.equal(finder.inputs().query, 'flights');
+});
+
+test('asking for Directions from Context reveals its row in the phone Layers sheet', async (t) => {
+  const pinia = createPinia();
+  const { layers, panel } = fixture(t, pinia);
+  t.mock.method(globalThis, 'matchMedia', () => ({ matches: true }));
+  const chrome = usePanelChromeStore(pinia);
+  const owner = chrome.connect({});
+  const setPanelCollapsed = (id, collapsed) =>
+    chrome.publish(owner, id, { collapsed });
+  const phone = initMobileShell({ setPanelCollapsed, requestFrame: null });
+  t.after(() => phone.destroy());
+  const row = document.querySelector(
+    '#utilities-toggles [data-layer-id="directions"]',
+  );
+  const utilities = row.closest('[data-panel-id]');
+
+  phone.setSheet('layers');
+  assert.equal(panel.classList.contains('collapsed'), false);
+  assert.equal(utilities.classList.contains('collapsed'), true);
+  phone.setSheet('context');
+
+  const viewer = {};
+  t.after(bindRenderer(viewer, { canvas: document.createElement('canvas') }));
+  const runner = createGevActionRunner({
+    viewer,
+    styleManager: {
+      _mobileShell: phone,
+      setPanelCollapsed,
+      revealPanel: StyleManager.prototype.revealPanel,
+    },
+    dataManager: {
+      layers: new Map(layers.map((layer) => [layer.id, { module: {} }])),
+      getAll: () => layers,
+    },
+  });
+  t.after(runner.dispose);
+  const scroll = t.mock.method(row, 'scrollIntoView');
+  const result = await runner('show_data_layers_menu', {
+    layerId: 'directions',
+  });
+  assert.equal(phone.getSheet(), 'layers');
+  assert.equal(utilities.classList.contains('collapsed'), false);
+  assert.equal(row.matches('.gev-voice-focus:not(.is-filtered)'), true);
+  assert.equal(result.focusedLayer?.id, 'directions');
+  assert.equal(scroll.mock.callCount(), 1);
 });
 
 test('the section index has a tick per group and drops filtered groups', async (t) => {

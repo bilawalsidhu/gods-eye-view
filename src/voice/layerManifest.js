@@ -472,13 +472,12 @@ const layers = [
     },
   },
   {
-    // Global Context owns this layer; voice reaches it through
-    // set_context_mode, never a bare toggle.
+    // Cockpit owns the internal Contacts mode. Voice cannot toggle this layer.
     id: 'military-awareness',
     aliases: [],
     toggle: false,
     context: false,
-    noQuery: 'use set_context_mode contacts',
+    noQuery: 'not a voice layer; Context lists nearby aircraft',
   },
 ];
 

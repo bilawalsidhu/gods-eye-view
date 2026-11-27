@@ -97,6 +97,7 @@ test('a flat picture shows its SD version with author, licence and a Panoramax l
   assert.equal(pose.bearing, 30);
   assert.equal(pose.isPano, false);
   assert.equal(pose.creator, 'tester');
+  assert.equal(pose.still, PHOTOS.flat.urls.sd);
   assert.equal(pose.license, 'CC BY-SA 4.0');
   assert.equal(pose.sequenceId, 'seq-1');
   assert.equal(
@@ -302,10 +303,12 @@ test('a photo with no author to name is captioned with the instance holding it',
   );
   photo.via = 'panoramax.ign.fr';
   assert.deepEqual(PANORAMAX_SOURCES.describe(photo), {
-    title: 'via panoramax.ign.fr',
+    title: null,
     creator: null,
+    via: 'panoramax.ign.fr',
     license: 'CC BY-SA 4.0',
     externalUrl: 'https://api.panoramax.xyz/#pic=x&focus=pic',
+    still: null,
   });
   const named = { ...photo, creator: 'Robot8A' };
   assert.equal(PANORAMAX_SOURCES.describe(named).title, null);
@@ -345,4 +348,18 @@ test('an SD panorama refused for its size is not fetched again as a flat photo',
   // Opened again later: the refused file is still not asked for.
   await viewer.open('pano');
   assert.equal(loads.filter((l) => l.url === PHOTOS.pano.urls.sd).length, 1);
+});
+
+test('a failed replacement can leave the previous picture on screen', async () => {
+  const { viewer, poses, host } = setup();
+  await viewer.mount(host);
+  const { picture } = parts(host);
+  await viewer.open('flat');
+  const previous = picture.src;
+  assert.equal(picture.hidden, false);
+  assert.equal(poses.at(-1).imageId, 'flat');
+  await assert.rejects(viewer.open('missing'), /no such picture/);
+  assert.equal(picture.hidden, false);
+  assert.equal(picture.src, previous);
+  assert.equal(poses.at(-1).imageId, 'flat');
 });

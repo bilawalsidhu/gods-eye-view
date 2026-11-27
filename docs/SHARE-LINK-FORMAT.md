@@ -77,9 +77,9 @@ vessel once it has it.
 Views built by `show_in_gods_eye_view` or `src/view/index.js` can add
 `sl=<source>,<lat>,<lon>` to the long form. Once the link has restored, the
 app opens the nearest photo there, or, for a source that bills every load,
-arms the panel so OPEN loads it (see `docs/TOOLS.md`). The app's own links do
-not carry it: the address bar's long form drops `sl` when the camera next
-moves, and the short form has no field for it. A reload or the app's Copy
+waits for you to press **OPEN** on the Street Level row in Data Layers
+(see `docs/TOOLS.md`). The app's own links do not carry it: the address
+bar's long form drops `sl` when the camera next moves, and the short form has no field for it. A reload or the app's Copy
 Link keeps the lit source, the layer and the map, but not the photo request.
 
 ## Payload
@@ -291,6 +291,12 @@ reserved: a decoder ignores that entry, as for collapsed 0.
 | 9   | `pp-toggles`           | `p`             | collapsed           |
 | 10  | `param-slider-panel`   | `m`             | expanded            |
 | 11  | `space-missions-panel` | `n`             | collapsed           |
+
+Panels 3, 4, 5, 6 and 11 are retired. Their numbers, tokens and defaults
+stay fixed so old links decode. The app omits their state from new links and
+ignores it on restore. Their content is in Context now (Radio's station list
+and tuner, a camera's or photo's card, the Recent Imagery list tab, and Space
+Missions in Inspect).
 
 Panels 0 and 1 were the command dock's Visual Presets and Location trays,
 which no layout shows any more. Their numbers and tokens stay reserved: links

@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createGoogleViewer } from './viewer.js';
-import { DETAILS_RETRY_COOLDOWN_MS, DETAILS_TIMEOUT_MS } from './policy.js';
+import {
+  DETAILS_RETRY_COOLDOWN_MS,
+  DETAILS_TIMEOUT_MS,
+  OPEN_TIMEOUT_MS,
+} from './policy.js';
 import {
   fakeHost,
   fakeMapsLoader,
@@ -176,6 +180,110 @@ test('a viewer unmounted while the library loads builds no panorama (none is bil
   assert.equal(host.children.length, 0);
 });
 
+test('hiding the host while the SDK imports builds no panorama', async () => {
+  const fake = fakeStreetViewLibrary({ panoramas: PANORAMAS });
+  const loader = fakeMapsLoader(fake.library, { deferred: true });
+  const viewer = createGoogleViewer({ loader });
+  const host = fakeHost();
+  let visible = true;
+  const mounting = viewer.mount(host, { isVisible: () => visible });
+  visible = false;
+  loader.release();
+  const mounted = await mounting.catch(() => null);
+  assert.equal(fake.built.length, 0);
+  assert.equal(host.children.length, 0);
+  assert.equal(mounted, null);
+
+  visible = true;
+  await viewer.mount(host, { isVisible: () => visible });
+  assert.equal(await viewer.open('pano-a'), 'pano-a');
+});
+
+test('hiding a mounted host before the open starts makes no panorama request', async () => {
+  const { fake, viewer, host } = setup();
+  let visible = true;
+  await viewer.mount(host, { isVisible: () => visible });
+  const [panorama] = fake.built;
+  const setPano = panorama.setPano.bind(panorama);
+  const requested = [];
+  panorama.setPano = (id) => {
+    requested.push(id);
+    setPano(id);
+  };
+  const opening = viewer.open('pano-a');
+  visible = false;
+  const shown = await opening.catch(() => null);
+  assert.deepEqual(requested, []);
+  assert.equal(panorama.visible, false);
+  assert.equal(shown, null);
+
+  visible = true;
+  assert.equal(await viewer.open('pano-a'), 'pano-a');
+  visible = false;
+  viewer.close();
+  assert.equal(panorama.visible, false, 'closing still hides the SDK viewer');
+  await viewer.open('pano-a').catch(() => {});
+  assert.equal(
+    panorama.visible,
+    false,
+    'the cached frame cannot reopen while hidden',
+  );
+  assert.deepEqual(requested, ['pano-a']);
+});
+
+test('canceling a replacement after the host hides requests no restoration', async () => {
+  const { fake, viewer, host } = setup();
+  let visible = true;
+  await viewer.mount(host, { isVisible: () => visible });
+  await viewer.open('pano-a');
+  const [panorama] = fake.built;
+  const requested = [];
+  panorama.setPano = (id) => {
+    requested.push(id);
+    panorama.pano = id;
+  };
+  const replacement = viewer.open('pano-b');
+  await settle();
+  visible = false;
+  assert.equal(viewer.cancelOpenKeeping('pano-a'), false);
+  viewer.close();
+  await replacement;
+  assert.equal(panorama.visible, false);
+  assert.deepEqual(requested, ['pano-b']);
+});
+
+test('a withdrawn callback does not reload the settled panorama while hidden', async () => {
+  const { fake, viewer, host, poses } = setup();
+  let visible = true;
+  await viewer.mount(host, { isVisible: () => visible });
+  await viewer.open('pano-a');
+  const [panorama] = fake.built;
+  const move = panorama.setPano.bind(panorama);
+  panorama.setPano = () => {};
+  const replacement = viewer.open('pano-b');
+  await settle();
+  assert.equal(viewer.cancelOpenKeeping('pano-a'), true);
+  await replacement;
+  const recoveries = [];
+  panorama.setPano = (id) => {
+    recoveries.push(id);
+    move(id);
+  };
+  visible = false;
+  move('pano-b');
+  await settle();
+  assert.deepEqual(recoveries, []);
+  assert.ok(!poses.some((pose) => pose?.imageId === 'pano-b'));
+
+  visible = true;
+  move('pano-b');
+  await settle();
+  assert.deepEqual(recoveries, []);
+  assert.equal(panorama.visible, false);
+  assert.equal(poses.at(-1), null);
+  assert.ok(!poses.some((pose) => pose?.imageId === 'pano-b'));
+});
+
 test('a date that arrives after the photo was closed emits nothing', async () => {
   const { fake, viewer, poses, host } = setup();
   await viewer.mount(host);
@@ -236,6 +344,108 @@ test('a second open whose status stays OK still resolves, on the new position', 
   assert.equal(poses.at(-1).imageId, 'pano-b');
 });
 
+test('an OK event with the previous position does not finish a replacement', async () => {
+  const { fake, viewer, poses, host } = setup();
+  await viewer.mount(host);
+  await viewer.open('pano-a');
+  const [panorama] = fake.built;
+  panorama.setPano = (id) => {
+    panorama.pano = id;
+    panorama.fire('status_changed');
+    panorama.fire('pov_changed');
+  };
+  let resolved = false;
+  const opening = viewer.open('pano-b').then((id) => {
+    resolved = true;
+    return id;
+  });
+  await settle();
+  const resolvedBeforePosition = resolved;
+  const earlyReplacement = poses.some((pose) => pose?.imageId === 'pano-b');
+  panorama.position = { lat: () => 38.5817, lng: () => -121.4944 };
+  panorama.fire('position_changed');
+  const displayed = await opening;
+  assert.equal(resolvedBeforePosition, false);
+  assert.equal(earlyReplacement, false);
+  assert.equal(displayed, 'pano-b');
+  assert.deepEqual(poses.at(-1).position, { lat: 38.5817, lon: -121.4944 });
+});
+
+test('a late Google position from a superseded open cannot confirm its replacement', async () => {
+  const { fake, viewer, poses, host } = setup();
+  await viewer.mount(host);
+  const [panorama] = fake.built;
+  panorama.setPano = (id) => {
+    panorama.pano = id;
+  };
+  const first = viewer.open('pano-a');
+  await settle();
+  let resolved = false;
+  const second = viewer.open('pano-b').then((id) => {
+    resolved = true;
+    return id;
+  });
+  await settle();
+  panorama.pano = 'pano-a';
+  panorama.status = 'OK';
+  panorama.position = { lat: () => 38.5816, lng: () => -121.4944 };
+  panorama.fire('position_changed');
+  await settle();
+  const resolvedBeforeReplacement = resolved;
+  const earlyPoses = poses.slice();
+  panorama.pano = 'pano-b';
+  panorama.position = { lat: () => 38.5817, lng: () => -121.4944 };
+  panorama.fire('position_changed');
+  const shown = await second;
+  assert.equal(await first, undefined);
+  assert.equal(resolvedBeforeReplacement, false);
+  assert.deepEqual(earlyPoses, []);
+  assert.equal(shown, 'pano-b');
+});
+
+test('a late position for the confirmed panorama cannot complete its replacement', async () => {
+  const { fake, viewer, poses, host } = setup();
+  await viewer.mount(host);
+  await viewer.open('pano-a');
+  const [panorama] = fake.built;
+  panorama.setPano = (id) => {
+    panorama.pano = id;
+    panorama.fire('pano_changed');
+  };
+  const opening = viewer.open('pano-b');
+  await settle();
+  panorama.pano = 'pano-a';
+  panorama.fire('pano_changed');
+  panorama.fire('position_changed');
+  await settle();
+  panorama.pano = 'pano-b';
+  panorama.status = 'ZERO_RESULTS';
+  panorama.fire('status_changed');
+  await assert.rejects(opening, /no imagery/);
+  assert.equal(poses.at(-1), null);
+});
+
+test('a failed replacement invalidates the old Google frame and ignores late pose callbacks', async () => {
+  const { fake, viewer, poses, host } = setup();
+  await viewer.mount(host);
+  await viewer.open('pano-a');
+  const [panorama] = fake.built;
+  const setPano = panorama.setPano.bind(panorama);
+  const calls = [];
+  panorama.setPano = (id) => {
+    calls.push(id);
+    setPano(id);
+  };
+  await assert.rejects(viewer.open('gone'), /no imagery/);
+  assert.equal(poses.at(-1), null, 'the previous pixels are unconfirmed');
+  const count = poses.length;
+  panorama.setPov({ heading: 90, pitch: 0 });
+  panorama.fire('position_changed');
+  await settle();
+  assert.equal(poses.length, count);
+  assert.deepEqual(calls, ['gone'], 'failure makes no recovery request');
+});
+
 test('Google answering with a newer id for the place shows that id', async () => {
   const fake = fakeStreetViewLibrary({
     panoramas: PANORAMAS,
@@ -245,8 +455,23 @@ test('Google answering with a newer id for the place shows that id', async () =>
   const poses = [];
   viewer.onPose((pose) => poses.push(pose));
   await viewer.mount(fakeHost());
-  await viewer.open('old-id');
+  assert.equal(await viewer.open('old-id'), 'pano-a');
   assert.equal(poses.at(-1).imageId, 'pano-a');
+  assert.equal(
+    await viewer.open('old-id'),
+    'pano-a',
+    'reopening the same alias uses the confirmed panorama',
+  );
+  assert.equal(await viewer.open('pano-b'), 'pano-b');
+  assert.equal(await viewer.open('old-id'), 'pano-a');
+  const beforeReopen = poses.length;
+  assert.equal(await viewer.open('pano-a'), 'pano-a');
+  assert.equal(poses.length, beforeReopen + 1);
+  assert.equal(
+    await viewer.open('old-id'),
+    'pano-a',
+    'the canonical reopen keeps the known alias',
+  );
 });
 
 test('a panorama that never shows fails after the timeout and leaves no listener', async (t) => {
@@ -468,4 +693,227 @@ test('unmount during details-service acquisition makes no later billed lookup', 
     'teardown invalidates the request before calling getPanorama',
   );
   instance.destroy();
+});
+
+test('status can confirm the panorama at a shared location only when the SDK also identifies it', async (t) => {
+  const { viewer, fake, host } = setup();
+  await viewer.mount(host);
+  await viewer.open('pano-a');
+  const [panorama] = fake.built;
+  panorama.setPano = (id) => {
+    panorama.pano = id;
+  };
+  const opening = viewer.open('pano-b');
+  await settle();
+  let confirmed = false;
+  opening.then(() => {
+    confirmed = true;
+  });
+  panorama.getLocation = () => ({ pano: 'pano-b', latLng: panorama.position });
+  panorama.fire('status_changed');
+  await settle();
+  t.after(() => viewer.close());
+  assert.equal(confirmed, true);
+  assert.equal(await opening, 'pano-b');
+});
+
+test('withdrawing a displaced panorama waits for an explicit reopen', async () => {
+  const { viewer, fake, host, poses } = setup();
+  await viewer.mount(host);
+  await viewer.open('pano-a');
+  const [panorama] = fake.built;
+  const move = panorama.setPano.bind(panorama);
+  const requests = [];
+  panorama.setPano = (id) => {
+    requests.push(id);
+    if (id === 'pano-a') return move(id);
+    panorama.pano = id;
+    panorama.fire('pano_changed');
+  };
+  const replacement = viewer.open('pano-b');
+  await settle();
+  assert.equal(
+    panorama.getPano(),
+    'pano-b',
+    'the SDK exposes the requested ID before the frame',
+  );
+  assert.equal(viewer.cancelOpenKeeping('pano-a'), false);
+  viewer.close();
+  await replacement;
+  await settle();
+  assert.deepEqual(requests, ['pano-b']);
+  move('pano-b');
+  assert.equal(await viewer.open('pano-a'), 'pano-a');
+  assert.deepEqual(requests, ['pano-b', 'pano-a']);
+  assert.ok(!poses.some((pose) => pose?.imageId === 'pano-b'));
+});
+
+test('late Google callbacks after close cannot confirm a newer open', async () => {
+  const fake = fakeStreetViewLibrary({ panoramas: PANORAMAS });
+  const viewer = createGoogleViewer({ loader: fakeMapsLoader(fake.library) });
+  const poses = [];
+  viewer.onPose((pose) => poses.push(pose));
+  await viewer.mount(fakeHost());
+  const [panorama] = fake.built;
+  panorama.setPano = (id) => {
+    panorama.pano = id;
+  };
+  const first = viewer.open('pano-a');
+  await settle();
+  viewer.close();
+  let resolved = false;
+  const second = viewer.open('pano-b').then((id) => {
+    resolved = true;
+    return id;
+  });
+  await settle();
+  // A's late answer, the same events the existing supersession test delivers.
+  panorama.pano = 'pano-a';
+  panorama.status = 'OK';
+  panorama.position = { lat: () => 38.5816, lng: () => -121.4944 };
+  panorama.fire('position_changed');
+  await settle();
+  assert.equal(
+    poses.some((pose) => pose?.imageId === 'pano-a'),
+    false,
+  );
+  assert.equal(resolved, false, 'B is not confirmed by the canceled A');
+  panorama.pano = 'pano-b';
+  panorama.position = { lat: () => 38.5817, lng: () => -121.4944 };
+  panorama.fire('position_changed');
+  await first;
+  assert.equal(await second, 'pano-b');
+});
+
+test('a timed-out panorama cannot complete its replacement or poison the alias cache', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { fake, viewer, poses, host } = setup();
+  await viewer.mount(host);
+  const [panorama] = fake.built;
+  panorama.setPano = (id) => (panorama.pano = id);
+  const pendingA = assert.rejects(viewer.open('pano-a'));
+  await new Promise(setImmediate);
+  t.mock.timers.tick(OPEN_TIMEOUT_MS);
+  await pendingA;
+
+  let opened = false;
+  const pendingB = viewer.open('pano-b').then((id) => {
+    opened = true;
+    return id;
+  });
+  await new Promise(setImmediate);
+  panorama.pano = 'pano-a';
+  panorama.status = 'OK';
+  panorama.position = { lat: () => 38.5816, lng: () => -121.4944 };
+  panorama.fire('position_changed');
+  await new Promise(setImmediate);
+  const publishedBeforeB = poses.length;
+  const openedBeforeB = opened;
+  panorama.pano = 'pano-b';
+  panorama.position = { lat: () => 38.5817, lng: () => -121.4944 };
+  panorama.fire('position_changed');
+  assert.equal(await pendingB, 'pano-b');
+  assert.equal(publishedBeforeB, 0);
+  assert.equal(openedBeforeB, false);
+});
+
+test('only a verified unseen alias can reopen the displayed panorama', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const fake = fakeStreetViewLibrary({
+    panoramas: PANORAMAS,
+    substitutes: { 'old-id': 'pano-a' },
+  });
+  const readPanorama = fake.library.StreetViewService.prototype.getPanorama;
+  fake.library.StreetViewService.prototype.getPanorama = function ({ pano }) {
+    return readPanorama.call(this, {
+      pano: pano === 'old-id' ? 'pano-a' : pano,
+    });
+  };
+  const viewer = createGoogleViewer({ loader: fakeMapsLoader(fake.library) });
+  await viewer.mount(fakeHost());
+  assert.equal(await viewer.open('pano-a'), 'pano-a');
+  const opening = viewer.open('old-id');
+  const result = opening.catch(() => null);
+  await new Promise(setImmediate);
+  t.mock.timers.tick(OPEN_TIMEOUT_MS);
+  assert.equal(await result, 'pano-a');
+  assert.equal(
+    await viewer.open('old-id'),
+    'pano-a',
+    'the verified alias is reused',
+  );
+});
+
+test('reopening the settled panorama still ignores the withdrawn replacement', async () => {
+  const { fake, viewer, poses, host } = setup();
+  await viewer.mount(host);
+  await viewer.open('pano-a');
+  const [panorama] = fake.built;
+  const move = panorama.setPano.bind(panorama);
+  panorama.setPano = () => {};
+  const replacement = viewer.open('pano-b');
+  await settle();
+  viewer.close();
+  await replacement;
+  assert.equal(await viewer.open('pano-a'), 'pano-a');
+
+  panorama.setPano = move;
+  move('pano-b');
+  await settle();
+  assert.equal(panorama.visible, false);
+  assert.equal(poses.at(-1), null);
+  assert.ok(!poses.some((pose) => pose?.imageId === 'pano-b'));
+});
+
+test('native arrow activation can revisit a cancelled panorama without reloading the old one', async () => {
+  const { viewer, fake, host, poses } = setup();
+  const make = host.ownerDocument.createElement;
+  host.ownerDocument.createElement = () =>
+    Object.assign(new EventTarget(), make());
+  await viewer.mount(host);
+  await viewer.open('pano-a');
+  const [panorama] = fake.built;
+  const move = panorama.setPano.bind(panorama);
+  const requests = [];
+  panorama.setPano = (id) => requests.push(id);
+  const replaced = viewer.open('pano-b');
+  await settle();
+  assert.equal(viewer.cancelOpenKeeping('pano-a'), true);
+  await replaced;
+  const arrow = () => move('pano-b');
+  panorama.element.addEventListener('click', arrow, { once: true });
+  panorama.element.dispatchEvent(new Event('click'));
+  await settle();
+  assert.equal(poses.at(-1).imageId, 'pano-b');
+  assert.deepEqual(requests, ['pano-b']);
+  viewer.unmount();
+});
+
+test('a canonical callback from a superseded open cannot supply the new request’s alias', async () => {
+  const { viewer, fake, host, poses } = setup();
+  await viewer.mount(host);
+  const [panorama] = fake.built;
+  const name = (id) => {
+    panorama.pano = id;
+    panorama.fire('pano_changed');
+  };
+  panorama.setPano = name;
+  const retired = viewer.open('old-a');
+  await settle();
+  const pending = viewer.open('pano-b');
+  await settle();
+  name('pano-a');
+  panorama.status = 'OK';
+  panorama.position = { lat: () => 38.5816, lng: () => -121.4944 };
+  panorama.fire('position_changed');
+  await settle();
+  const premature = poses.slice();
+  name('pano-b');
+  panorama.position = { lat: () => 38.5817, lng: () => -121.4944 };
+  panorama.fire('position_changed');
+  const shown = await pending;
+  assert.equal(await retired, undefined);
+  assert.deepEqual(premature, []);
+  assert.equal(shown, 'pano-b');
+  viewer.unmount();
 });

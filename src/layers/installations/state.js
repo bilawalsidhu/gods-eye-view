@@ -26,7 +26,10 @@ export function createState({ services }) {
     moveEndRemove: null,
     clickSubscription: null,
     timer: null,
-    googleSearchRequested: false,
+    /** Whether the Data Layers row's nearby search is running. */
+    nearbySearchBusy: false,
+    /** The panels' handle from init: the Data Layers row repaints through it. */
+    panel: null,
     /** Contacts subject position; when set, it replaces the camera viewport. */
     contextAnchor: null,
     /** Latest subject centre, independent of the retained tile-fetch anchor. */

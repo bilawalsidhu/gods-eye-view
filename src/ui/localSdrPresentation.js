@@ -13,6 +13,8 @@ const STATUS_LABELS = Object.freeze({
   connecting: msg('CONNECTING'),
   tuning: msg('TUNING'),
   streaming: msg('STREAMING'),
+  // FM held while Radio plays its internet stations; the device stays open.
+  held: msg('PAUSED'),
   error: msg('ERROR'),
   unsupported: msg('UNSUPPORTED'),
 });
@@ -138,7 +140,9 @@ export function localSdrCardView(state) {
     connectionLabel: state.connected
       ? adsbActive
         ? tn(state.aircraftHeard || 0, '{count} HEARD', '{count} HEARD')
-        : t('STREAMING')
+        : state.status === 'held'
+          ? t('PAUSED')
+          : t('STREAMING')
       : statusLabel(state.status),
     connectionActive: Boolean(state.connected),
     connectLabel: transitional

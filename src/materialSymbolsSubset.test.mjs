@@ -31,6 +31,7 @@ function sourceFiles(directory = SRC_ROOT) {
   const files = [];
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     const absolute = path.join(directory, entry.name);
+    if (absolute === path.join(SRC_ROOT, 'testSupport')) continue;
     if (entry.isDirectory()) files.push(...sourceFiles(absolute));
     else if (
       entry.isFile() &&

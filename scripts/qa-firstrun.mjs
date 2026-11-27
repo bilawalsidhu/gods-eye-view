@@ -662,17 +662,22 @@ async function main() {
     await open(page, { query: "?welcome=1", errorSink: consoleErrors });
     await pick(page, 'space-missions');
     state = await appState(page);
+    // Context opens Inspect on the Missions roster.
+    await page.waitForFunction(() => document
+      .querySelector('[data-list-card="space-missions"]')?.checkVisibility(), { timeout: 10000 })
+      .catch(() => {});
     const missions = await page.evaluate(() => {
-      const panel = document.getElementById('space-missions-panel');
+      const context = document.getElementById('global-context-panel');
       return {
         layerOn: window.__godsEyeView.dataManager.isEffectivelyEnabled('rocket-launches'),
-        panelOpen: !!panel && !panel.hidden && !panel.classList.contains('collapsed'),
+        panelOpen: Boolean(context && !context.classList.contains('collapsed')
+          && document.querySelector('[data-list-card="space-missions"]')?.checkVisibility()),
       };
     });
     record('SPACE MISSIONS switches its layer on without a Context mode',
       missions.layerOn && state.contextMode == null,
       `layerOn=${missions.layerOn} contextMode=${state.contextMode}`);
-    record('SPACE MISSIONS opens its own panel', missions.panelOpen,
+    record('SPACE MISSIONS opens its list in Context', missions.panelOpen,
       `panelOpen=${missions.panelOpen}`);
     record('SPACE MISSIONS still leaves the detection override untouched',
       state.detectionOverridden === false, `_detectionUserOverridden=${state.detectionOverridden}`);

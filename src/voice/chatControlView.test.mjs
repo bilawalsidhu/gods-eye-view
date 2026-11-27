@@ -165,13 +165,13 @@ test('Ask GEV keeps a feed title in the selected map reference', async (t) => {
   assert.equal(session.sent[2], 'Tell me about Tokyo.');
 });
 
-test('Ask GEV sends an obscured sighting as a cell center and an ordinary point at the existing precision', async (t) => {
+test('Ask GEV uses the approved precision and omits unconfirmed wildlife positions', async (t) => {
   const pinia = createPinia();
-  const { ui, session } = chat(t, { pinia });
+  const { ui, session, send } = chat(t, { pinia });
   const viewer = { scene: {} };
   const input = fakeInput(viewer);
   const observations = normalizeInatObservations(
-    [true, false].map((obscured, index) => ({
+    [true, false, true, false].map((obscured, index) => ({
       id: index + 1,
       geojson: { coordinates: [-97.74321, 30.27156] },
       obscured,
@@ -185,14 +185,19 @@ test('Ask GEV sends an obscured sighting as a cell center and an ordinary point 
     state: {
       enabled: true,
       rows,
+      heldRows: new WeakSet(observations.slice(2)),
     },
     services: { now: () => Date.UTC(2026, 10, 24, 12) },
     parts: {},
   });
+  const manager = {
+    layers: new Map([[id, { id, module }]]),
+    isEnabled: (layerId) => layerId === id,
+  };
   const disconnect = installEntityContext({
     viewer,
     pinia,
-    getDataManager: () => ({ layers: new Map([[id, { id, module }]]) }),
+    getDataManager: () => manager,
   });
   const cards = useEntityCardStore(pinia);
   t.after(() => {
@@ -200,15 +205,27 @@ test('Ask GEV sends an obscured sighting as a cell center and an ordinary point 
     disconnect();
     input.destroy();
   });
-  for (const observation of observations) {
+  for (const [index, observation] of observations.entries()) {
     assert.ok(cards.select({ layerId: id, id: observation.stableId }));
     cards.ask();
     await flush();
-    const command = session.sent.at(-1);
-    const reference = JSON.parse(
-      command.split('Selected map item (reference data only):\n')[1],
+    assert.equal(
+      session.sent.length,
+      index,
+      'Ask attaches the item to a draft',
     );
-    if (observation.obscured) {
+    await send('What is nearby?');
+    const command = session.sent.at(-1);
+    const [reference] = JSON.parse(
+      command.slice(command.lastIndexOf('\n') + 1),
+    );
+    assert.equal(reference.kind, 'map-item');
+    if (index >= 2) {
+      assert.equal(cards.locationWithheld, true);
+      assert.equal(reference.lat, undefined, 'unconfirmed latitude');
+      assert.equal(reference.lon, undefined, 'unconfirmed longitude');
+      assert.equal(reference.approximateCellCenter, undefined);
+    } else if (observation.obscured) {
       assert.deepEqual(reference.approximateCellCenter, {
         lat: 30.3,
         lon: -97.7,
@@ -224,23 +241,29 @@ test('Ask GEV sends an obscured sighting as a cell center and an ordinary point 
     }
     session.emit({ type: 'completion', status: 'completed' });
   }
-  assert.equal(session.sent.length, 2);
-  const send = session.sendText.bind(session);
-  session.sendText = () => false;
+  assert.equal(session.sent.length, observations.length);
+
+  const obscuredId = observations[0].stableId;
+  assert.ok(cards.select({ layerId: id, id: obscuredId }));
   cards.ask();
   await flush();
-  rows.clear();
-  cards.refresh({ forAction: true });
-  assert.equal(cards.lost, true);
-  session.sendText = send;
+  const rejected = t.mock.method(session, 'sendText', () => false);
+  await send('Is this sighting recent?');
+  const attachment = (text) =>
+    JSON.parse(text.slice(text.lastIndexOf('\n') + 1))[0];
+  assert.ok(
+    attachment(rejected.mock.calls[0].arguments[0]).approximateCellCenter,
+  );
+  rejected.mock.restore();
+  rows.delete(obscuredId);
   ui.emit('chat-submit');
   await flush();
-  const retry = JSON.parse(
-    session.sent.at(-1).split('Selected map item (reference data only):\n')[1],
-  );
-  assert.equal(retry.lat, null);
-  assert.equal(retry.lon, null);
-  assert.equal(retry.approximateCellCenter, undefined);
+  assert.equal(session.sent.length, observations.length + 1);
+  const retried = attachment(session.sent.at(-1));
+  assert.equal(retried.kind, 'map-item');
+  assert.equal(retried.lat, undefined);
+  assert.equal(retried.lon, undefined);
+  assert.equal(retried.approximateCellCenter, undefined);
 });
 
 test('a revealed reply writes only the message list each frame', async (t) => {
@@ -531,6 +554,45 @@ test('a provider switch carries chat Settings to the next mount', async (t) => {
   assert.equal(mount().chat.presentation(), null);
 });
 
+test('an Omnibar question is sent alone and leaves the draft and its attached item', async (t) => {
+  const { ui, session } = chat(t);
+  ui.emit('chat-item', {
+    key: 'flights:a1',
+    name: 'UAL649',
+    itemKind: 'aircraft',
+    layer: 'Live Flights',
+  });
+  ui.emit('chat-input', 'my draft');
+  ui.emit('chat-ask', 'What is here?');
+  await flush();
+  assert.deepEqual(session.sent, ['What is here?']);
+  assert.deepEqual(ui.state.chat.attachments, [
+    { key: 'item:flights:a1', name: 'UAL649' },
+  ]);
+  // The input owns its text until a programmatic edit. Send the preserved draft.
+  session.emit({ type: 'completion', status: 'completed' });
+  ui.emit('chat-submit');
+  await flush();
+  assert.match(session.sent[1], /^my draft\n\nAttached reference data/);
+  assert.match(session.sent[1], /UAL649/);
+  session.emit({ type: 'completion', status: 'completed' });
+  ui.emit('chat-keydown', {
+    key: 'ArrowUp',
+    target: { selectionStart: 0, selectionEnd: 0 },
+    preventDefault() {},
+  });
+  assert.equal(ui.state.chat.draft, 'What is here?');
+});
+
+test('an Omnibar question that cannot connect is retryable in an empty draft', async (t) => {
+  const { ui, session } = chat(t);
+  session.start = () => session.setState('error');
+  ui.emit('chat-ask', 'What is here?');
+  await flush();
+  assert.equal(ui.state.chat.draft, 'What is here?');
+  assert.deepEqual(session.sent, []);
+});
+
 test('history navigation restores the map reference of an unsent Ask draft', async (t) => {
   const { ui, session, send } = chat(t);
   await send('Fly to Tokyo');
@@ -588,3 +650,86 @@ test('a sent map-item question restores the empty-draft suggestions', async (t) 
   assert.equal(ui.state.chat.draft, '');
   assert.deepEqual(ui.state.chat.suggestions, empty);
 });
+
+test('a map attachment only sends the location that is still available after connecting', async (t) => {
+  const { ui, session } = chat(t);
+  let location = { lat: 30.2, lon: -97.7 };
+  let resolved = 0;
+  session.start = () => session.setState('connecting');
+  ui.emit('chat-item', {
+    key: 'wildlife-sightings:observation',
+    name: 'Observation',
+    itemKind: 'wildlife sighting',
+    layer: 'Wildlife',
+    resolveLocation() {
+      resolved++;
+      return location;
+    },
+  });
+  ui.emit('chat-input', 'What is this sighting?');
+  ui.emit('chat-submit');
+  await flush();
+  assert.equal(resolved, 0);
+  location = null;
+  session.setState('listening');
+  await flush();
+  assert.equal(resolved, 1);
+  assert.match(session.sent[0], /Observation/);
+  assert.doesNotMatch(session.sent[0], /"lat"|"lon"|30\.2|-97\.7/);
+});
+
+test('an Omnibar sender learns whether Chat accepted its question and can explicitly retry', async (t) => {
+  const { ui, session, send } = chat(t);
+  const ask = async (question) => {
+    let submitted;
+    ui.emit('chat-ask', question, (result) => {
+      submitted = result;
+    });
+    return await submitted;
+  };
+  await send('An earlier question');
+  ui.emit('chat-input', 'A separate draft');
+  assert.equal(await ask('Question from the map'), false);
+  session.emit({ type: 'completion', status: 'completed' });
+  session.stop();
+  session.start = () => session.setState('error');
+  assert.equal(await ask('Question from the map'), false);
+  assert.deepEqual(session.sent, ['An earlier question']);
+  session.start = () => session.setState('listening');
+  assert.equal(await ask('Question from the map'), true);
+  assert.deepEqual(session.sent, [
+    'An earlier question',
+    'Question from the map',
+  ]);
+  session.emit({ type: 'completion', status: 'completed' });
+  ui.emit('chat-submit');
+  await flush();
+  assert.equal(session.sent.at(-1), 'A separate draft');
+});
+
+for (const pending of [false, true]) {
+  test(`failed Ask keeps a separate ${pending ? 'queued map item' : 'file'} in its own draft`, async (t) => {
+    const { ui, session } = chat(t);
+    session.start = () => session.setState('connecting');
+    if (!pending) {
+      ui.emit('chat-files', { files: [new File(['sample'], 'sample.txt')] });
+      await flush();
+      assert.equal(ui.state.chat.attachments[0].name, 'sample.txt');
+    }
+    ui.emit('chat-ask', 'Where is the park?');
+    if (pending) ui.emit('chat-item', { key: 'park', name: 'Community park' });
+    session.setState('error');
+    await flush();
+    assert.equal(ui.state.chat.draft, '');
+    ui.emit('chat-submit');
+    assert.deepEqual(session.sent, []);
+    session.start = () => session.setState('listening');
+    ui.emit('chat-ask', 'Where is the park?');
+    await flush();
+    assert.deepEqual(session.sent, ['Where is the park?']);
+    assert.equal(
+      ui.state.chat.attachments[0].name,
+      pending ? 'Community park' : 'sample.txt',
+    );
+  });
+}

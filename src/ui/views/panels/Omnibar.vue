@@ -3,7 +3,10 @@ import { computed, nextTick, onBeforeUnmount, onMounted, onUpdated, ref, watch }
 import { storeToRefs } from 'pinia';
 import { getLocale, t, tn } from '../../../i18n/index.js';
 import { EXCLUSIVE_SURFACE_CLASSES } from '../../../exclusiveSurfaces.js';
-import { createOmnibar, drawAsked, escapeRegExp, readLine, VILLAGES } from '../../omnibarRows.js';
+import { airportCanLead, createOmnibar, drawAsked, escapeRegExp, readLine, VILLAGES } from '../../omnibarRows.js';
+import { RETIRED_PANEL_TARGETS } from '../../omnibarIntent.js';
+import { announcePlacePick } from '../../placePick.js';
+import { findAirportByCode, isAirportCode } from '../../../data/airports.js';
 import { lookupMatches } from '../../entityLookup.js';
 import { FEATURE_GUIDES, layerGuide, layerSettingsGuide, startGuide } from '../../omnibarGuide.js';
 import { citiesInRegion, createPlaceSuggester, inExtent, minPlaceChars } from '../../../search/placeSuggestions.js';
@@ -12,7 +15,7 @@ import { PHOTON_SETTING } from '../../../search/photonSetting.js';
 import { citiesAround, countryName, findPlace, nearestCity, placesNear } from '../../../data/wikidataCities.js';
 import { CITY_POIS } from '../../../cityPois.js';
 import { useDisplayStore } from '../../stores/display.js';
-import { useEntityCardStore } from '../../stores/entityCard.js';
+import { sayWords, useEntityCardStore } from '../../stores/entityCard.js';
 import { useGlobeActionsStore } from '../../stores/globeActions.js';
 import { useLocationStore } from '../../stores/location.js';
 import { useOmnibarStore } from '../../stores/omnibar.js';
@@ -26,6 +29,7 @@ import { vRootClass } from '../../rail/rootClass.js';
 // controls, layers through the shell's omnibar actions, and anything else can
 // go to GEV's typed chat. The mic starts voice, as the dock's button does.
 const { controls, runner } = storeToRefs(useOmnibarStore());
+const entityTitle = (item) => sayWords(item.titleWords, item.title);
 
 // A bundled city in the shape the place chips use, keyed by its Wikidata id
 // (namesakes are common). Showing one credits the Wikidata packs (once; the
@@ -133,7 +137,7 @@ const suggester = createPlaceSuggester(
 // place service and count requests all come from it.
 const reader = computed(() => {
   void layerRevision.value;
-  return createOmnibar({ layers: controls.value?.layers() || [], isEntity });
+  return createOmnibar({ layers: controls.value?.layers() || [], isEntity, entityTitle });
 });
 
 /** Whether the text names something loaded on the map ("ISS"), to follow. */
@@ -178,6 +182,30 @@ watch(query, (value) => {
 onBeforeUnmount(() => {
   clearTimeout(placesTimer);
   placesAbort?.abort();
+});
+
+// The airport a line is exactly the code of ("SFO"), from the bundled pack:
+// nothing leaves the app for it.
+const codeAirport = ref({ for: '', airport: null });
+// The lookup still running for the line, if any: the first code of a
+// session waits on the pack, and Enter waits for it rather than taking the
+// row that was the default before the airport's row arrived.
+let codeLookup = null;
+let pendingAirportEnter = null;
+// Give a cold bundled lookup a short head start before using the visible default.
+const AIRPORT_ENTER_WAIT_MS = 250;
+watch(query, async (value) => {
+  const text = value.trim();
+  if (!isAirportCode(text)) {
+    codeAirport.value = { for: '', airport: null };
+    codeLookup = null;
+    return;
+  }
+  const lookup = findAirportByCode(text).catch(() => null);
+  codeLookup = lookup;
+  const airport = await lookup;
+  if (codeLookup === lookup) codeLookup = null;
+  if (query.value.trim() === text) codeAirport.value = { for: text, airport };
 });
 
 // Things anywhere, from the host's lookup when it gives one (the
@@ -245,11 +273,11 @@ function readRecent() {
  * name came from (`photon`: OpenStreetMap data, `wikidata`: the bundled
  * packs), so its chip later shows that credit.
  */
-function rememberPlace({ id, name, latitude, longitude, source }) {
+function rememberPlace({ id, name, latitude, longitude, source, airport }) {
   if (!name || !Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
   try {
     const list = readRecent().filter((place) => placeKey(place) !== placeKey({ id, name, latitude, longitude }));
-    list.unshift({ ...(id && { id }), name, latitude, longitude, ...(source && { source }) });
+    list.unshift({ ...(id && { id }), name, latitude, longitude, ...(source && { source }), ...(typeof airport === 'string' && airport && { airport }) });
     globalThis.localStorage?.setItem(RECENT_KEY, JSON.stringify(list.slice(0, 20)));
     recentRevision.value++;
   } catch {
@@ -334,7 +362,7 @@ const strip = computed(() => {
     const counted = countQuery.value;
     return {
       title: tn(counted.count, '{what} in {place}: {count} item', '{what} in {place}: {count} items', { what: counted.what, place: counted.placeName }),
-      chips: counted.items.map((item) => ({ key: `count:${item.key}`, kind: 'entity', icon: item.icon, identity: item.identity, name: item.title })),
+      chips: counted.items.map((item) => ({ key: `count:${item.key}`, kind: 'entity', icon: item.icon, identity: item.identity, name: entityTitle(item) })),
     };
   }
   if (!asked && !selected.value) {
@@ -343,7 +371,7 @@ const strip = computed(() => {
       .flatMap((group) => group.items.map((item) => ({ ...item, icon: group.icon })))
       .sort((a, b) => a.distanceKm - b.distanceKm)
       .slice(0, 6)
-      .map((item) => ({ key: `inview:${item.key}`, kind: 'entity', icon: item.icon, identity: item.identity, name: item.title }));
+      .map((item) => ({ key: `inview:${item.key}`, kind: 'entity', icon: item.icon, identity: item.identity, name: entityTitle(item) }));
     const total = groups.reduce((sum, group) => sum + group.count, 0);
     return chips.length ? { title: tn(total, '{count} item in view', '{count} items in view'), chips } : null;
   }
@@ -352,17 +380,17 @@ const strip = computed(() => {
     const current = selected.value;
     const { same = [], other = [] } = selectedNearby.value || {};
     const chips = [
-      { key: `sel:${current.key}`, kind: 'entity', icon: current.icon, identity: current.identity, name: current.title, pressed: true },
+      { key: `sel:${current.key}`, kind: 'entity', icon: current.icon, identity: current.identity, name: entityTitle(current), pressed: true },
       ...[...same.slice(0, 5), ...other].map((item) => ({
         key: `sel-near:${item.key}`,
         kind: 'entity',
         icon: item.icon,
         identity: item.identity,
-        name: item.title,
+        name: entityTitle(item),
       })),
       ...selectedPlaces.value.map((place) => ({ key: `sel-place:${placeKey(place)}`, kind: 'place', icon: 'location_city', ...place })),
     ];
-    return { title: t('Selected · near {name}', { name: current.title }), chips };
+    return { title: t('Selected · near {name}', { name: entityTitle(current) }), chips };
   }
   if (villagesAsked.value && villages.value?.asked === villagesAsked.value && villages.value.places.length) {
     return {
@@ -443,8 +471,21 @@ async function goTo({ latitude, longitude }) {
   const location = locationStore.controls;
   if (!location || location.destroyed) throw new Error();
   searchedFor.value = query.value;
-  await location.search(`${latitude}, ${longitude}`);
-  return true;
+  return (await location.search(`${latitude}, ${longitude}`)) === true;
+}
+
+function ownsPlaceChoice(current, selection) {
+  return current === generation && entityCard.selectionGeneration() === selection;
+}
+
+function publishPlaceChoice(place, current, selection) {
+  announcePlacePick({ ...place, isCurrent: () => ownsPlaceChoice(current, selection) });
+}
+
+function openEntityChoice(identity) {
+  if (identity.layerId === 'cctv' || identity.layerId === 'street-level')
+    return entityCard.open(identity);
+  return entityCard.select(identity, { fly: true });
 }
 
 function chooseChip(chip, { viaKey = false } = {}) {
@@ -455,7 +496,7 @@ function chooseChip(chip, { viaKey = false } = {}) {
   error.value = '';
   locationStore.controls?.editSearch();
   if (chip.kind === 'entity') {
-    entityCard.select(chip.identity, { fly: true });
+    openEntityChoice(chip.identity);
     reset({ blur: !keepsFocus(viaKey) });
     return;
   }
@@ -471,24 +512,39 @@ function chooseChip(chip, { viaKey = false } = {}) {
     reset();
     return;
   }
+  let deferredPoi = false;
   // The city whose landmarks are open would only fold them: it is flown to.
   if (chip.kind === 'city' && locationView.value?.poiCity === chip.cityId && runner.value)
-    void runner.value('fly_to_location', { locationId: chip.cityId });
+    // This chip announces the card itself.
+    void runner.value('fly_to_location', { locationId: chip.cityId, waitForArrival: true });
   else if (chip.kind === 'city') locationStore.controls?.chooseCity(chip.cityId);
   else if (chip.kind === 'landmark') {
     if (locationView.value?.poiCity === chip.cityId) locationStore.controls?.choosePoi(chip.index);
     else {
       locationStore.controls?.chooseCity(chip.cityId);
-      if (chip.index > 0) setTimeout(() => locationStore.controls?.choosePoi(chip.index), 0);
+      deferredPoi = chip.index > 0;
     }
   }
   // Preset cities and landmarks are the app's own data, not Photon's.
   rememberPlace(chip.kind === 'city' || chip.kind === 'landmark' ? { ...chip, source: 'preset' } : chip);
   reset({ blur: !keepsFocus(viaKey) });
-  if (chip.kind === 'city' || chip.kind === 'landmark') return;
-  // A refused flight shows its error under the field, as a row's does.
+  // A place picked opens its card in Context (placePick.js).
+  const picked = { name: chip.name, latitude: chip.latitude, longitude: chip.longitude, ...(chip.airport && { airport: chip.airport }) };
   const current = generation;
-  goTo(chip).catch((failure) => {
+  const selection = entityCard.selectionGeneration();
+  if (deferredPoi) {
+    setTimeout(() => {
+      if (!ownsPlaceChoice(current, selection) || locationView.value?.poiCity !== chip.cityId) return;
+      locationStore.controls?.choosePoi(chip.index);
+      publishPlaceChoice(picked, current, selection);
+    }, 0);
+    return;
+  }
+  if (chip.kind === 'city' || chip.kind === 'landmark') return publishPlaceChoice(picked, current, selection);
+  // A refused flight shows its error under the field, as a row's does.
+  goTo(chip).then((ok) => {
+    if (ok && ownsPlaceChoice(current, selection)) publishPlaceChoice({ ...picked, framed: true }, current, selection);
+  }).catch((failure) => {
     if (current === generation)
       error.value = failure?.reason
         ? t('Unable to complete this action: {reason}', { reason: failure.reason })
@@ -573,6 +629,7 @@ const built = computed(() => {
   const card = selected.value;
   return reader.value.rows(text, {
     places: placesFor.value === text ? places.value : [],
+    airport: codeAirport.value.for === text ? codeAirport.value.airport : null,
     found: foundFor.value === text ? found.value : [],
     entities: (needle, options) => entityCard.search(needle, options),
     selection: card
@@ -731,8 +788,10 @@ function reset({ blur = true } = {}) {
 function askGev(text) {
   if (!voice.controls) throw new Error();
   voice.controls.emit('chat-restore');
-  voice.controls?.emit('chat-prompt', text);
-  voice.controls?.emit('chat-submit');
+  // Keep the original field until the chat session accepts this question.
+  let submission = false;
+  voice.controls.emit('chat-ask', text, result => { submission = result; });
+  return submission;
 }
 
 /**
@@ -842,7 +901,9 @@ async function runPlan(steps, current) {
         result = await run('set_hud', { visible: step.visible });
         break;
       case 'panel':
-        if (!togglePanel(step)) throw new ActionFailed();
+        // Retired panels (Street Level, Space Missions): the runner routes them.
+        if (RETIRED_PANEL_TARGETS[step.item]) result = await run('set_panel_open', { panelId: RETIRED_PANEL_TARGETS[step.item], open: step.action === 'open' });
+        else if (!togglePanel(step)) throw new ActionFailed();
         break;
       case 'radio':
         result = await run(
@@ -898,9 +959,10 @@ async function choose(item, { viaKey = false } = {}) {
     else if (item.kind === 'sel-follow') entityCard.follow();
     else if (item.kind === 'sel-cockpit') entityCard.cockpit();
     else if (item.kind === 'sel-ask') entityCard.ask();
-    else if (item.kind === 'sel-close') entityCard.clear();
+    else if (item.kind === 'sel-close') entityCard.clear({ dismiss: true });
     else if (item.kind === 'count-show' || item.kind === 'place') {
       const { coords, place } = item;
+      const selection = entityCard.selectionGeneration();
       if (coords && runner.value) {
         // The coordinates alone: a name would win over them (see goTo).
         if (!settled(await runner.value('fly_to_location', { ...coords }))) return;
@@ -913,8 +975,17 @@ async function choose(item, { viaKey = false } = {}) {
         // one (undefined) keeps the line, as the plan path does.
         if (result !== true || locationView.value?.searchOrigin !== 'omnibar' || searchError.value) return;
       }
+      if (!ownsPlaceChoice(current, selection)) return;
       // A typed spot is the user's own; a looked-up place keeps its source.
-      if (coords && item.kind === 'place') rememberPlace({ name: place, ...coords, source: item.source || 'typed' });
+      if (coords && item.kind === 'place') rememberPlace({ name: place, ...coords, source: item.source || 'typed', airport: item.airport });
+      if (item.kind === 'place') {
+        reset({ blur: !keepsFocus(viaKey) });
+        const picked = coords
+          ? { name: place, ...coords, framed: true, ...(item.airport && { airport: item.airport }) }
+          : { name: place, query: place };
+        publishPlaceChoice(picked, generation, selection);
+        return;
+      }
     } else if (item.kind === 'layer') {
       if (!controls.value) throw new Error();
       // A layer already as asked ("show flights" with Flights on) is left alone.
@@ -922,10 +993,10 @@ async function choose(item, { viaKey = false } = {}) {
       // A layer that is no longer there cannot be switched.
       if (!live) throw new Error();
       if (Boolean(live.enabled) !== item.enabled && (await controls.value.setLayer(item.id, item.enabled)) === false) throw new Error();
-    } else if (item.kind === 'entity') entityCard.select(item.identity, { fly: true });
+    } else if (item.kind === 'entity') openEntityChoice(item.identity);
     else if (item.kind === 'found') {
-      // Found in its layer (switched on if need be), then picked as a
-      // Context row picks it; one the layer had yet to load is picked there
+      // Found in its layer (switched on if need be), then opened as a
+      // Context row opens it; one the layer had yet to load is picked there
       // already, with the camera centred on it, and only its card opens.
       if (!controls.value?.findLookedUp) throw new Error();
       const found = await controls.value.findLookedUp(item.match, { signal });
@@ -936,7 +1007,8 @@ async function choose(item, { viaKey = false } = {}) {
         return;
       }
       if (!found?.ok) throw new Error();
-      if (!entityCard.select(found.identity, { fly: !found.picked }) && !found.picked) throw new Error();
+      const shown = found.picked ? entityCard.select(found.identity) : openEntityChoice(found.identity);
+      if (!shown && !found.picked) throw new Error();
     }
     else if (item.kind === 'plan') await runPlan(item.steps, current);
     else if (item.kind === 'mic') {
@@ -964,7 +1036,7 @@ async function choose(item, { viaKey = false } = {}) {
         stopGuide = startGuide(steps, { title: t('Guide') });
       }
       return;
-    } else if (item.kind === 'ask') askGev(item.query);
+    } else if (item.kind === 'ask' && !await askGev(item.query)) throw new Error();
     // Run with Enter, the field keeps focus, ready for the next line. Rows
     // that hand the keyboard to something else let it go: chat, voice, the
     // cockpit, following and drawing.
@@ -984,6 +1056,11 @@ async function choose(item, { viaKey = false } = {}) {
 }
 
 function enterStrip() {
+  navigated.value = true;
+  if (pendingAirportEnter === generation) {
+    supersede();
+    busy.value = false;
+  }
   inStrip.value = true;
   chipIndex.value = Math.min(chipIndex.value, strip.value.chips.length - 1);
   showChip();
@@ -1028,7 +1105,30 @@ function onKeydown(event) {
     // flight; an edited line (which clears busy) runs.
     if (event.repeat || busy.value) return;
     if (inStrip.value && chips[chipIndex.value]) chooseChip(chips[chipIndex.value], { viaKey: true });
-    else choose(items.value[active.value], { viaKey: true });
+    else if (codeLookup && !navigated.value && airportCanLead(readLine(query.value))) {
+      // A code line whose airport is still being looked up: Enter picks
+      // once the rows settle. Hold this Enter while it still owns the field
+      // and the user has not picked anything else.
+      supersede();
+      const current = generation;
+      pendingAirportEnter = current;
+      const selection = entityCard.selectionGeneration();
+      busy.value = true;
+      let timer;
+      const deadline = new Promise((resolve) => { timer = setTimeout(resolve, AIRPORT_ENTER_WAIT_MS); });
+      void Promise.race([codeLookup, deadline])
+        .finally(() => clearTimeout(timer))
+        .then(() => nextTick())
+        .then(() => {
+          if (current === generation && open.value && !navigated.value && entityCard.selectionGeneration() === selection) {
+            return choose(items.value[active.value], { viaKey: true });
+          }
+        })
+        .finally(() => {
+          if (pendingAirportEnter === current) pendingAirportEnter = null;
+          if (current === generation) busy.value = false;
+        });
+    } else choose(items.value[active.value], { viaKey: true });
   } else if (event.key === 'Escape' && !showResults.value && !query.value.trim()) {
     // An empty, closed field lets go, so the app's own keys work again.
     input.value?.blur();

@@ -7,7 +7,9 @@
 
 #corner-actions {
   position: fixed;
-  inset-inline-end: 0.9rem;
+  /* As far from its edge as the attribution row is from the other
+     (command-dock-trays.css, 1.5rem). */
+  inset-inline-end: 1.5rem;
   inset-block-end: 0.9rem;
   /* Above the dock (145), the cockpit HUD and panel stacks (146–147);
      below the first-run launcher (175) and Provider Settings (190). */
@@ -235,17 +237,13 @@
 }
 
 /* The surfaces that hide the rest of the chrome hide the corner too. The
-   cockpit keeps the language picker (provider-settings.css hides the chip). */
+   cockpit, the orbital view included, hides the whole row with the top row
+   and the dock; the Stories entry goes with it (stories-entry.css). */
 body.ui-clean-view #corner-actions,
 body.recording-mode #corner-actions,
+body.cockpit-mode #corner-actions,
 body.scene-playback-mode #corner-actions {
   display: none;
-}
-
-/* The cockpit's position readout shares this corner: it steps up to clear
-   the picker row (0.9rem inset + one ~2rem button + a gap). */
-body.cockpit-mode .cockpit-position-readout {
-  bottom: max(clamp(22px, 4vh, 42px), 3.5rem);
 }
 
 /* Below this width the full chip label runs into the centred dock: the chip

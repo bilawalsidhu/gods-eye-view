@@ -351,10 +351,7 @@
   color: var(--text-secondary);
   cursor: pointer;
 }
-#command-dock
-  #gev-voice-control
-  .gev-panel-layout
-  button:is(:hover, [aria-pressed='true']) {
+#command-dock #gev-voice-control .gev-panel-layout button:hover {
   color: var(--accent);
   background: #36dcff14;
 }
@@ -1151,24 +1148,8 @@
   }
 }
 
-/* Placement: above the dock by default, or docked into the right rail lane. */
-body[data-assistant-docked='true'] #right-context-rail {
-  visibility: hidden;
-  pointer-events: none;
-}
-#gev-voice-control [data-assistant-panel] {
+#gev-voice-control :is(#gev-chat-panel, #gev-voice-panel) {
   max-width: calc(100vw - 1rem);
-}
-#gev-voice-control [data-assistant-panel][data-placement='docked'] {
-  max-width: none;
-  max-height: none;
-}
-#gev-chat-panel[data-placement='docked'] #gev-chat-messages {
-  flex: 1 1 auto;
-}
-/* The lane is narrow: quick commands below already offer these prompts. */
-#gev-chat-panel[data-placement='docked'] #gev-chat-empty > :is(svg, button) {
-  display: none;
 }
 
 /* Settings opened from chat: same frame as chat, chat options first, then
@@ -1185,10 +1166,7 @@ body[data-assistant-docked='true'] #right-context-rail {
   padding-top: 0.75rem;
   border-top: 1px solid var(--glass-border);
 }
-#gev-voice-control
-  #gev-voice-panel[data-context='chat'][data-placement='compact']:not(
-    [data-minimized]
-  ) {
+#gev-voice-control #gev-voice-panel[data-context='chat']:not([data-minimized]) {
   width: var(--chat-frame-width, min(25rem, calc(100vw - 1.5rem)));
   height: var(--chat-frame-height, auto);
   max-height: none;
@@ -1258,11 +1236,7 @@ body[data-assistant-docked='true'] #right-context-rail {
 #command-dock
   #gev-voice-control
   #gev-voice-panel[data-minimized]
-  :is(
-    .gev-voice-panel-body,
-    .gev-voice-panel-tabs,
-    .gev-panel-layout [data-layout-dock]
-  ) {
+  :is(.gev-voice-panel-body, .gev-voice-panel-tabs) {
   display: none;
 }
 #command-dock
@@ -1275,14 +1249,6 @@ body[data-assistant-docked='true'] #right-context-rail {
 /* Title leads; tabs, layout and close group on the right. */
 #gev-voice-panel .gev-voice-panel-title {
   margin-right: auto;
-}
-
-/* Phones have no right rail to dock into. It outranks the shared header
-   button rule, which would otherwise show the dock button again. */
-@media (max-width: 720px) {
-  #command-dock #gev-voice-control .gev-panel-layout [data-layout-dock] {
-    display: none !important;
-  }
 }
 
 /* Minimized voice previews the last sentence from each side. */
@@ -1366,15 +1332,6 @@ body[data-assistant-docked='true'] #right-context-rail {
   .gev-voice-mini {
   order: 1;
   margin: 0 0 0.4rem;
-}
-
-/* A focused toggle that is already pressed shows one highlight, not two. */
-#command-dock
-  #gev-voice-control
-  .gev-panel-layout
-  button[aria-pressed='true']:is(:focus, :focus-visible) {
-  outline: none !important;
-  box-shadow: 0 0 0 1px currentColor;
 }
 
 /* Assistant panels share the left panels' glass surface (layers.css). */
@@ -1566,7 +1523,7 @@ body[data-assistant-docked='true'] #right-context-rail {
   display: none;
 }
 
-/* Voice header buttons follow chat's order: dock, minimize, settings, close. */
+/* Voice header buttons follow chat's order: minimize, settings, close. */
 #command-dock
   #gev-voice-control
   #gev-voice-panel

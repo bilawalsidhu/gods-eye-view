@@ -101,18 +101,6 @@
     width: 260px;
   }
 
-  #cctv-panel {
-    top: auto;
-    left: 16px;
-    right: 16px;
-    width: auto;
-    bottom: 308px;
-  }
-
-  #cctv-panel.collapsed {
-    width: auto;
-  }
-
   /* Narrow viewports: cap the preview height to keep the panel compact. Cap
      the IMAGE, not the wrap — the wrap is overflow:hidden, so capping it would
      re-crop the very timestamp this is protecting. object-fit: contain then
@@ -120,10 +108,6 @@
   #cctv-frame {
     aspect-ratio: auto;
     height: 120px;
-  }
-
-  .cctv-frame-wrap {
-    min-height: 0;
   }
 
   #scene-panel {
@@ -184,28 +168,16 @@
   }
 
   #right-context-rail #pp-toggles.collapsed .pp-header-row,
-  #right-context-rail #cctv-panel,
-  #right-context-rail #cctv-panel.collapsed,
-  #right-context-rail #street-level-panel,
-  #right-context-rail #street-level-panel.collapsed,
-  #right-context-rail #recent-imagery-panel,
-  #right-context-rail #recent-imagery-panel.collapsed,
-  #right-context-rail #radio-panel,
-  #right-context-rail #radio-panel.collapsed,
   #right-context-rail #global-context-panel,
   #right-context-rail #global-context-panel.collapsed {
     width: 100%;
   }
 
   #left-panel-stack > #data-panel,
-  #left-panel-stack > #cctv-panel,
-  #left-panel-stack > #street-level-panel,
   #left-panel-stack > #global-context-panel,
   #left-panel-stack > #utilities-panel,
   #left-panel-stack > #scene-panel,
   #left-panel-stack > #data-panel.collapsed,
-  #left-panel-stack > #cctv-panel.collapsed,
-  #left-panel-stack > #street-level-panel.collapsed,
   #left-panel-stack > #global-context-panel.collapsed,
   #left-panel-stack > #utilities-panel.collapsed,
   #left-panel-stack > #scene-panel.collapsed {

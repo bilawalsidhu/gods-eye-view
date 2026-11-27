@@ -37,7 +37,7 @@ export function createLifecycle({
 
   /**
    * The settled-view pass: thin the icons, queue the newly visible geometry,
-   * reselect cards, and tell subscribers (the camera picker) when the shown
+   * reselect cards, and tell subscribers when the shown
    * set changed since they were last told, including by motion passes.
    */
   function settleView() {
@@ -196,9 +196,8 @@ export function createLifecycle({
       if (record) record.probeToken = (record.probeToken || 0) + 1;
     layerState._records = [];
     layerState._recordById = new Map();
+    layerState._cameraWalk = null;
     layerState._viewRecords = [];
-    layerState._pickerRecords = [];
-    layerState._cameraIndexCache = null;
     layerState._coverageVisibleIds = new Set();
     layerState._neighborCountCache = null;
     layerState._coverageCohort = null;
@@ -559,8 +558,6 @@ export function createLifecycle({
       parts.rendering.hideCctvVisuals();
       // Nothing is in view while the layer is off.
       layerState._viewRecords = [];
-      layerState._pickerRecords = [];
-      layerState._cameraIndexCache = null;
       parts.presentation.notifyListeners();
     },
 

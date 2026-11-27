@@ -32,6 +32,11 @@ export function createProjection({
   parts,
   source,
 }) {
+  const videoConsumers = { card: null, dock: null };
+  const videoNeeded = (id) =>
+    layerState._showProjection ||
+    videoConsumers.card === id ||
+    videoConsumers.dock === id;
   const { holdContinuousRender, releaseContinuousRender } = services.render;
 
   /**
@@ -334,6 +339,11 @@ export function createProjection({
 
   function ensureProjectionRuntime(record) {
     if (!record) return null;
+    if (
+      parts.model.isVideoFeedCamera(record.camera) &&
+      !videoNeeded(record.camera.id)
+    )
+      return null;
     if (record.projection && !record.projection.disposed)
       return record.projection;
     const runtime = createProjectionRuntime(record);
@@ -434,24 +444,48 @@ export function createProjection({
     return parts.selection.getActiveRecord()?.projection?.video || null;
   }
 
+  function releaseVideo(record) {
+    const runtime = record.projection;
+    destroyProjectionRuntime(runtime);
+    record.projection = null;
+    layerState._projectionEntities = layerState._projectionEntities.filter(
+      (entry) => entry !== runtime,
+    );
+  }
+
+  // The selected camera shares one decoder between its projection, card and dock.
+  function setVideoConsumer(surface, cameraId) {
+    if (videoConsumers[surface] === cameraId) return;
+    videoConsumers[surface] = cameraId;
+    const record = parts.selection.getActiveRecord();
+    if (
+      !record ||
+      !layerState._enabled ||
+      !parts.model.isVideoFeedCamera(record.camera)
+    )
+      return;
+    if (videoNeeded(record.camera.id)) ensureProjectionRuntime(record);
+    else if (record.projection?.video) releaseVideo(record);
+  }
+
   function pauseInactiveProjectionFeeds(activeId) {
     for (const record of layerState._records) {
       if (!record.projection?.video) continue;
-      if (record.camera.id === activeId && layerState._enabled) {
+      if (
+        record.camera.id === activeId &&
+        layerState._enabled &&
+        videoNeeded(activeId)
+      ) {
         record.projection.video.play().catch(() => {});
       } else {
-        const runtime = record.projection;
-        destroyProjectionRuntime(runtime);
-        record.projection = null;
-        layerState._projectionEntities = layerState._projectionEntities.filter(
-          (entry) => entry !== runtime,
-        );
+        releaseVideo(record);
       }
     }
   }
   return {
     createCctvProjectionOverlayEntry,
     getActiveVideoElement,
+    setVideoConsumer,
     updatePlanePlacement,
     clearProjectionOverlay,
     setPlaneVisible,

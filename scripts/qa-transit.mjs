@@ -1958,30 +1958,9 @@ try {
   await wait(6_000);
   check('transit is on before entering a Context mode', await isOn());
 
-  // CONTACTS
-  await page.click('#global-context-flights-btn');
-  await wait(18_000);
-  const inContacts = {
-    transit: await isOn(),
-    vehicles: await page.evaluate(
-      () =>
-        window.__godsEyeView.dataManager.layers.get('transit').module.getStats()
-          .count,
-    ),
-  };
-  // Contacts is not a passive overlay: it puts every non-dependency layer away
-  // for the duration, Transit included, and gives it back on exit.
-  check(
-    'Contacts puts Transit away for the duration',
-    inContacts.transit === false && inContacts.vehicles === 0,
-    JSON.stringify(inContacts),
-  );
-  await page.click('#global-context-flights-btn');
-  await wait(12_000);
-  check('leaving Contacts restores Transit', await isOn());
-
-  // SPACE MISSIONS: an ordinary layer. It neither refuses nor puts away
-  // Transit, so a Transit switched on while it runs stays on after it ends.
+  // SPACE MISSIONS: switched on by a person, it leaves Transit as it is (it
+  // switches only its Satellites dependency). Transit can be switched on
+  // while it runs, and stays on after it ends.
   const setMissions = (enabled) =>
     page.evaluate(
       (on) =>

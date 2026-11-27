@@ -65,6 +65,9 @@ export function fakeStreetLevelProvider({
     credit: { html },
     create: (providerContext) => {
       context = providerContext;
+      const viewer = fakePhotoViewer({
+        pose: { providerId: id, position: { lon: -121.49, lat: 38.58 } },
+      });
       return {
         status: async () => ({ configured: true }),
         init() {},
@@ -76,16 +79,92 @@ export function fakeStreetLevelProvider({
         handlePick: () => false,
         nearestImage,
         viewer: {
-          mount: async () => calls.mount++,
-          open: async (imageId) => calls.open.push(imageId),
-          close() {},
-          unmount: () => calls.unmount++,
-          resize() {},
-          onPose: () => () => {},
+          ...viewer,
+          async mount(host) {
+            calls.mount++;
+            await viewer.mount(host);
+          },
+          async open(imageId) {
+            calls.open.push(imageId);
+            return viewer.open(imageId);
+          },
+          unmount() {
+            calls.unmount++;
+            viewer.unmount();
+          },
         },
       };
     },
   };
+}
+
+/* A provider whose asynchronous frames can be held or stepped in a UI test. */
+export function posingStreetLevelProvider(
+  id,
+  {
+    nearestImage,
+    groundClick = false,
+    keepDisplayedOnCancel = false,
+    beforePose,
+    afterPose,
+    walker,
+    positionOf = (imageId) => ({ lat: imageId === 'A' ? 48 : 49, lon: 2 }),
+  } = {},
+) {
+  const provider = fakeStreetLevelProvider({
+    id,
+    pickPrefix: `${id}:`,
+    nearestImage,
+  });
+  provider.groundClick = groundClick;
+  const create = provider.create;
+  provider.create = (context) => {
+    const instance = create(context);
+    let pose = null;
+    let generation = 0;
+    let displayed = null;
+    instance.viewer.onPose = (listener) => {
+      pose = listener;
+      return () => (pose = null);
+    };
+    // A step the viewer takes on its own (arrows, PLAY), to another image.
+    if (walker) {
+      walker.loseFrame = () => pose?.(null);
+      walker.step = (imageId, overrides = {}) =>
+        pose?.({
+          imageId,
+          position: { lat: 49, lon: 2 },
+          bearing: 10,
+          ...overrides,
+        });
+    }
+    instance.viewer.close = () => {
+      generation++;
+      displayed = null;
+    };
+    if (keepDisplayedOnCancel) {
+      instance.viewer.cancelOpenKeeping = (id) => {
+        if (id !== displayed) return false;
+        generation++;
+        return true;
+      };
+    }
+    instance.viewer.open = async (imageId) => {
+      const request = ++generation;
+      await beforePose?.(imageId);
+      if (generation === request) {
+        pose?.({
+          imageId,
+          position: positionOf(imageId),
+          bearing: 10,
+        });
+        await afterPose?.(imageId);
+        if (generation === request) displayed = imageId;
+      }
+    };
+    return instance;
+  };
+  return provider;
 }
 
 /**
@@ -120,7 +199,9 @@ export function fakePhotoViewer({ pose = null } = {}) {
     mount: async () => calls.mount++,
     async open(imageId) {
       calls.open.push(imageId);
-      if (pose) emit?.({ imageId, ...pose });
+      if (!pose) return;
+      emit?.({ imageId, ...pose });
+      return imageId;
     },
     close() {},
     unmount: () => calls.unmount++,

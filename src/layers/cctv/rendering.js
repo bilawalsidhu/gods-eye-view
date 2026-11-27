@@ -105,16 +105,6 @@ function frustumVolumeItem(id, positions, color) {
   };
 }
 
-/** FNV-1a over a camera id: a stable, well-spread order for crowded cells. */
-function idHash(id) {
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < id.length; i++) {
-    hash ^= id.charCodeAt(i);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return hash >>> 0;
-}
-
 export function createRendering({
   state: layerState,
   services,
@@ -365,13 +355,11 @@ export function createRendering({
    * Cull far-side cameras on the CPU because the hidden globe writes no depth.
    * Group the rest by ground cell. _viewRecords holds the active camera and
    * every nearby icon outside a count for geometry and cards. Cells smaller
-   * than VIEW_MIN_CELL_M do not form groups. _pickerRecords adds the
-   * best-ranked camera of each visible cell. Both arrays keep their identity
-   * while their contents are unchanged.
+   * than VIEW_MIN_CELL_M do not form groups.
    *
    * Runs on camera settle, throttled during motion, on resize, enable and
    * activation changes — never per frame.
-   * @returns {boolean} Whether the shown set or the picker list changed.
+   * @returns {boolean} Whether the shown set changed.
    */
 
   function refreshHorizonCulling() {
@@ -406,7 +394,6 @@ export function createRendering({
     const project = screenProjector(pose, width, height);
     const pass = (layerState._viewPassId = (layerState._viewPassId || 0) + 1);
     const shown = [];
-    const picker = [];
     const cells = new Map();
     const visibleCells = [];
     // Drawn terrain where the globe is the surface. The photoreal stack has
@@ -516,9 +503,8 @@ export function createRendering({
       const cellM = VIEW_CELL_PX * metresPerPixelPerMetre * range;
       if (record.camera.id === activeId) {
         if (!nearScreen) continue;
-        record.viewPass = record.pickerPass = pass;
+        record.viewPass = pass;
         shown.push(record);
-        picker.push(record);
         continue;
       }
       if (!(cellM >= VIEW_MIN_CELL_M)) {
@@ -528,7 +514,6 @@ export function createRendering({
         addCellCamera(cell, record.camera);
         cell.iconPx = CAMERA_ICON_PX * iconScaleAt(range);
         cell.winner = record;
-        cell.rank = 0;
         record.viewCell = cell;
         visibleCells.push(cell);
         continue;
@@ -543,12 +528,9 @@ export function createRendering({
       if (cell.count === 1) cell.iconPx = CAMERA_ICON_PX * iconScaleAt(range);
       record.viewCell = cell;
       if (!nearScreen) continue;
-      // The picker ranks only candidates that were in its padded viewport.
-      if (!cell.winner) visibleCells.push(cell);
-      const rank = viewRank(record);
-      if (rank < cell.rank) {
+      if (!cell.winner) {
+        visibleCells.push(cell);
         cell.winner = record;
-        cell.rank = rank;
       }
     }
     // Check each mount mate against counts where its icon will be drawn.
@@ -568,8 +550,6 @@ export function createRendering({
     layerState._counts?.update(visibleCells, project, groundHeight);
     for (const cell of visibleCells) {
       const record = cell.winner;
-      picker.push(record);
-      record.pickerPass = pass;
       if (cell.count === 1 && !cell.absorbed) {
         record.viewPass = pass;
         shown.push(record);
@@ -613,14 +593,9 @@ export function createRendering({
       previous.length !== shown.length ||
       previous.some((record) => record.viewPass !== pass);
     if (changed) layerState._viewRecords = shown;
-    const oldPicker = layerState._pickerRecords ?? [];
-    const pickerChanged =
-      picker.length !== oldPicker.length ||
-      oldPicker.some((record) => record.pickerPass !== pass);
-    if (pickerChanged) layerState._pickerRecords = picker;
     if (coverageChanged) refreshCoverageStyles();
     if (cardsChanged) parts.cards.pushAmbientCardEntries();
-    return changed || pickerChanged;
+    return changed;
   }
 
   /**
@@ -791,21 +766,6 @@ export function createRendering({
     record.viewCellLon = lon;
     record.viewCellKey = `${level}:${row}:${Math.floor(lon / lonStep)}`;
     return record.viewCellKey;
-  }
-
-  /** Lower ranks win a crowded cell: healthy feeds first, then a stable id order. */
-  function viewRank(record) {
-    const status = layerState._healthById.get(record.camera.id)?.status;
-    const tier =
-      status === 'ok'
-        ? 0
-        : status === 'degraded'
-          ? 1
-          : status === 'offline'
-            ? 3
-            : 2;
-    record.viewHash ??= idHash(record.camera.id);
-    return tier * 2 ** 32 + record.viewHash;
   }
 
   /**

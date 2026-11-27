@@ -82,16 +82,40 @@ const PANEL_NAMES = [
   ],
   [/authoring( panel)?|scenes? panel/, 'left', 'scene-panel', msg('Authoring')],
   [/display( panel)?|visual( panel)?/, 'left', 'pp-toggles', msg('Visual')],
-  [/cctv panel|cameras? panel/, 'right', 'cctv-panel', msg('CCTV')],
-  [/street ?level panel/, 'right', 'street-level-panel', msg('Street Level')],
+  // The CCTV and Street Level panels are retired: cameras' cards open in
+  // Context, and their tools are its Camera settings tab (the runner shows
+  // it while a camera's card is open; RETIRED_PANEL_TARGETS). Street Level
+  // opens the card of a photo its viewer has accepted in Context, or
+  // otherwise its row in Data Layers, where its filters and OPEN are
+  // (the runner's set_panel_open).
+  // Space Missions is listed in Inspect. The runner turns the layer on
+  // if needed and shows it (RETIRED_PANEL_TARGETS).
+  [/cctv panel|cameras? panel/, 'right', 'cctv', msg('Cameras')],
+  [
+    /camera (settings|tools)/,
+    'right',
+    'camera-settings',
+    msg('Camera settings'),
+  ],
+  [/street ?(level|view) panel/, 'right', 'street-level', msg('Street Level')],
   [
     /(space )?missions? panel/,
     'right',
-    'space-missions-panel',
+    'space-missions',
     msg('Space Missions'),
   ],
   [/context( panel)?/, 'right', 'global-context-panel', msg('Context')],
 ];
+/**
+ * Retired panels whose names the action runner routes (set_panel_open): the
+ * omnibar names the step, the runner decides where it lands in Context.
+ */
+export const RETIRED_PANEL_TARGETS = Object.freeze({
+  cctv: 'cctv-panel',
+  'camera-settings': 'camera-settings',
+  'street-level': 'street-level-panel',
+  'space-missions': 'space-missions-panel',
+});
 const CLOSE = /\b(collapse|close|hide|minimi[sz]e|dismiss|shut|fold)\b/;
 const OPEN = /\b(open|expand|show|reveal)\b/;
 

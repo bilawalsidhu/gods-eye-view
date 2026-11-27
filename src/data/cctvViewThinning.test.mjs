@@ -323,8 +323,6 @@ test('a lone camera beside a count joins it, unless it is the active camera', ()
     cctvLayer.getDetectableObjects().map((o) => o.sourceId),
     ['cam-4'],
   );
-  // The picker still offers one camera from each ground cell.
-  assert.equal(cctvLayer.getUIState().cameraIndex.length, 3);
 
   seedCoverage({
     viewer: viewerAt(20_000),
@@ -523,22 +521,19 @@ test('cameras on one mount draw side by side once they show as icons', () => {
     );
 });
 
-test('a pan keeps the same winners, and an unchanged view keeps its list', () => {
+test('a pan keeps the same count cells, and an unchanged view keeps its list', () => {
   const { records } = recordsAt(CLUSTER);
   const viewer = viewerAt(20_000);
   seedCoverage({ viewer, records });
   refreshHorizonCulling();
-  const before = cctvLayer.getUIState().cameraIndex;
+  const cells = () => markers().map(({ cell }) => [cell.key, cell.count]);
+  const before = cells();
   const list = _viewRecordIdsForTest();
   // A pan of a few to some 40 px (a pixel is about 30 m from 20 km up).
   for (const shiftM of [90, 330, 600, 1110]) {
     viewer.moveTo(shiftM / 111_320);
     refreshHorizonCulling();
-    assert.equal(
-      cctvLayer.getUIState().cameraIndex,
-      before,
-      `pan by ${shiftM} m`,
-    );
+    assert.deepEqual(cells(), before, `pan by ${shiftM} m`);
   }
   viewer.moveTo(0);
   refreshHorizonCulling();
@@ -546,7 +541,7 @@ test('a pan keeps the same winners, and an unchanged view keeps its list', () =>
   assert.deepEqual(_viewRecordIdsForTest(), list);
 });
 
-test('a small zoom within one cell size keeps the same winners', () => {
+test('a small zoom within one cell size keeps the same counts', () => {
   const { records } = recordsAt(CLUSTER);
   const shownAt = (heightM) => {
     seedCoverage({
@@ -554,28 +549,19 @@ test('a small zoom within one cell size keeps the same winners', () => {
       records,
     });
     refreshHorizonCulling();
-    return cctvLayer.getUIState().cameraIndex;
+    return markers().map(({ cell }) => [cell.key, cell.count]);
   };
   // Cells come in power-of-two metre steps: about 1.5 km and 1.6 km cells at
-  // these heights fall in the same step, so the same cameras win.
+  // these heights fall in the same step, so grouping stays the same.
   assert.deepEqual(shownAt(20_500), shownAt(20_000));
 });
 
-test('the picker prefers the healthy camera and the marker stays at the mean', () => {
+test('the marker stays at the mean when the catalog order changes', () => {
   const { records } = recordsAt(CLUSTER.slice(0, 2));
-  // Whichever camera the id order would pick, the healthy one must win.
   let first;
-  for (const id of ['cam-0', 'cam-1']) {
-    seedCoverage({
-      viewer: viewerAt(20_000),
-      records,
-      healthById: new Map([[id, { status: 'ok' }]]),
-    });
+  for (let i = 0; i < 2; i++) {
+    seedCoverage({ viewer: viewerAt(20_000), records });
     refreshHorizonCulling();
-    assert.deepEqual(
-      cctvLayer.getUIState().cameraIndex.map((c) => c.id),
-      [id],
-    );
     const { pos, height } = markers()[0];
     assert.equal(height, 40);
     const center = Cesium.Cartesian3.fromDegrees(0.0005, 0, 10);
@@ -652,21 +638,12 @@ test('UI state builds the full camera list only when it is read', () => {
   }
   const first = cctvLayer.getUIState();
   assert.equal(built, 0, 'listeners that skip `cameras` cost nothing');
-  assert.deepEqual(
-    first.cameraIndex.map((camera) => camera.id),
-    ['cam-0', 'cam-1'],
-  );
-  assert.equal(
-    cctvLayer.getUIState().cameraIndex,
-    first.cameraIndex,
-    'the index keeps its identity while the view does',
-  );
   assert.equal(first.cameras.length, 2);
   assert.ok(built > 0, 'reading `cameras` builds it');
   assert.equal(first.cameras, first.cameras, 'and builds it once');
 });
 
-test('the camera picker lists the view, with the active camera first', () => {
+test('the full catalog includes an active camera outside the view', () => {
   const { records } = recordsAt([
     [0, 0],
     [0.01, 0],
@@ -679,12 +656,11 @@ test('the camera picker lists the view, with the active camera first', () => {
   });
   refreshHorizonCulling();
   const state = cctvLayer.getUIState();
+  assert.equal(state.activeCameraId, 'cam-1');
   assert.deepEqual(
-    state.cameraIndex.map((camera) => camera.id),
-    ['cam-1', 'cam-0', 'cam-2'],
-    'the off-screen active camera leads, then what is in view',
+    state.cameras.map(({ id }) => id),
+    ['cam-0', 'cam-1', 'cam-2'],
   );
-  assert.equal(state.cameras.length, 3, 'the full list is still every camera');
 });
 
 test('panning a cell across the padded screen edge keeps its full count', () => {
@@ -700,8 +676,6 @@ test('panning a cell across the padded screen edge keeps its full count', () => 
       markers().map((item) => item.cell.count),
       [3],
     );
-    if (lon === 0)
-      assert.equal(cctvLayer.getUIState().cameraIndex[0].id, 'cam-0');
   }
 });
 

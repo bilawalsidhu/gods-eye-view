@@ -388,18 +388,11 @@ test(
         .textContent,
       /OFF/,
     );
-    const imageryPanel = document.getElementById('recent-imagery-panel');
-    assert.equal(imageryPanel.hidden, false, 'the imagery readout is shown');
     assert.equal(await lifecycle.setEnabled('recent-imagery', false), true);
     await frame();
-    assert.equal(
-      imageryPanel.hidden,
-      true,
-      'the imagery readout hides with its layer',
-    );
     assert.equal(active('recent-imagery'), false);
     assert.equal(await lifecycle.setEnabled('recent-imagery', true), true);
     await frame();
-    assert.equal(imageryPanel.hidden, false, 'and returns with it');
+    assert.equal(active('recent-imagery'), true, 'and returns with it');
   },
 );

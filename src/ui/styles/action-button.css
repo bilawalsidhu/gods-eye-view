@@ -93,3 +93,120 @@
   color: #ff7e7e;
   border-color: #ff7e7e;
 }
+
+/* Shared by Context cards, Camera tools, Pinned tabs and the Radio mini
+ * player. Brighter idle text keeps small capitals readable on dark panels. */
+:root {
+  --gev-tool-radius: 8px;
+  --gev-tool-border: rgba(255, 255, 255, 0.16);
+  --gev-tool-fill: rgba(255, 255, 255, 0.04);
+  --gev-tool-text: rgba(232, 234, 237, 0.74);
+  --gev-tool-on: var(--accent);
+  --gev-tool-on-fill: rgba(0, 212, 255, 0.12);
+  --gev-tool-font-size: 9.5px;
+  --gev-tool-tracking: 1.2px;
+}
+
+.gev-tool-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  min-height: 1.9rem;
+  padding: 0.3rem 0.6rem;
+  color: var(--gev-tool-text);
+  font-family: var(--font-mono);
+  font-size: var(--gev-tool-font-size);
+  letter-spacing: var(--gev-tool-tracking);
+  line-height: 1.2;
+  text-transform: uppercase;
+  white-space: nowrap;
+  background: var(--gev-tool-fill);
+  border: 1px solid var(--gev-tool-border);
+  border-radius: var(--gev-tool-radius);
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.gev-tool-button:hover:not(:disabled),
+.gev-tool-button.is-on,
+.gev-tool-button[aria-pressed='true'] {
+  color: var(--gev-tool-on);
+  border-color: var(--gev-tool-on);
+  background: var(--gev-tool-on-fill);
+}
+
+.gev-tool-button:focus-visible {
+  outline: 2px solid var(--gev-tool-on);
+  outline-offset: 2px;
+}
+
+.gev-tool-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* A setting that is on or off: a small switch before its name, in the
+   tool style but in sentence case. The state is aria-pressed. */
+.gev-tool-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 1.9rem;
+  padding: 0.2rem 0.1rem;
+  color: var(--gev-tool-text);
+  font: inherit;
+  font-size: 0.66rem;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.gev-tool-toggle__switch {
+  position: relative;
+  flex: none;
+  width: 1.6rem;
+  height: 0.9rem;
+  background: var(--gev-tool-fill);
+  border: 1px solid var(--gev-tool-border);
+  border-radius: 999px;
+}
+
+.gev-tool-toggle__switch::after {
+  content: '';
+  position: absolute;
+  top: 1px;
+  inset-inline-start: 1px;
+  width: calc(0.9rem - 4px);
+  height: calc(0.9rem - 4px);
+  background: var(--gev-tool-text);
+  border-radius: 50%;
+  transition: inset-inline-start var(--transition-fast, 0.15s);
+}
+
+.gev-tool-toggle[aria-pressed='true'] .gev-tool-toggle__switch {
+  background: var(--gev-tool-on-fill);
+  border-color: var(--gev-tool-on);
+}
+
+.gev-tool-toggle[aria-pressed='true'] .gev-tool-toggle__switch::after {
+  inset-inline-start: calc(1.6rem - 0.9rem + 1px);
+  background: var(--gev-tool-on);
+}
+
+.gev-tool-toggle__state {
+  color: rgba(199, 214, 222, 0.7);
+}
+
+.gev-tool-toggle:focus-visible {
+  outline: 2px solid var(--gev-tool-on);
+  outline-offset: 2px;
+}
+
+.gev-tool-toggle:disabled {
+  opacity: 0.45;
+  cursor: default;
+}

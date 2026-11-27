@@ -1,100 +1,7 @@
-/* News rail panel (#news-panel): the last 24 hours as a doom-scroll of event
-   cards drawn with GEV's own tokens. Colour is
-   severity only (the layer sets --news-color per card); never a side. The
-   rail owns placement and height; only the body scrolls. */
-.news-panel-inner {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-height: 0;
-  max-height: 100%;
-  box-sizing: border-box;
-  padding: 14px;
-  border: 1px solid var(--glass-border);
-  border-radius: var(--panel-radius);
-  background: var(--glass-bg);
-  backdrop-filter: blur(24px) saturate(1.4);
-  -webkit-backdrop-filter: blur(24px) saturate(1.4);
-  box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.5),
-    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
-    0 1px 0 rgba(255, 255, 255, 0.06) inset;
-}
-#news-panel .panel-glow {
-  position: absolute;
-  inset: -18px;
-  background: radial-gradient(
-    ellipse at center,
-    rgba(0, 212, 255, 0.16) 0%,
-    transparent 65%
-  );
-  filter: blur(16px);
-  opacity: 0.25;
-  pointer-events: none;
-}
-#news-panel .panel-header {
-  flex: 0 0 auto;
-}
-#news-panel-count {
-  color: var(--text-secondary);
-  font: 9px var(--font-mono);
-}
-#news-panel-body {
-  min-height: 0;
-  max-height: calc(var(--right-stack-max-height, 50svh) - 64px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-#news-panel.collapsed #news-panel-body,
-#news-panel[hidden] {
-  display: none !important;
-}
-#right-context-rail > #news-panel {
-  position: relative;
-  inset: auto;
-  flex: 0 0 auto;
-  width: 100%;
-  max-height: 100%;
-  pointer-events: auto;
-}
-#right-context-rail > #news-panel:not(.collapsed) {
-  display: flex;
-  flex-direction: column;
-  flex-shrink: 1;
-  min-height: 0;
-}
-#right-context-rail.layout-focus > #news-panel:not(.collapsed) {
-  flex: 0 1 var(--right-panel-allocated-height);
-  height: var(--right-panel-allocated-height);
-  min-height: 0;
-  max-height: var(--right-panel-allocated-height);
-}
-#right-context-rail.layout-focus
-  > #news-panel:not(.collapsed)
-  .news-panel-inner {
-  height: 100%;
-}
-#right-context-rail[data-rail-measuring]
-  > #news-panel:not(.collapsed)
-  > .news-panel-inner {
-  height: auto !important;
-}
-#right-context-rail #news-panel.collapsed {
-  width: var(--right-display-collapsed-width);
-  margin-inline-start: auto;
-}
-#right-context-rail #news-panel.collapsed .news-panel-inner {
-  height: 50px;
-  min-height: 50px;
-  padding-bottom: 10px;
-}
-@media (max-width: 720px) {
-  #right-context-rail #news-panel.collapsed {
-    width: 100%;
-  }
-}
-
+/* News's list in Context (#context-list-news): the last 24 hours as a
+   doom-scroll of event cards drawn with GEV's own tokens. Colour is severity
+   only (the layer sets --news-color per card); never a side. Only the body
+   scrolls (#context-lists in layers.css). */
 .news-readout {
   display: flex;
   flex-direction: column;
@@ -103,7 +10,6 @@
   color: var(--text-primary);
   font: 11px/1.4 var(--font-sans);
 }
-.news-readout__window,
 .news-readout__head {
   margin: 0;
   color: var(--text-secondary);
@@ -121,20 +27,61 @@
   flex-wrap: wrap;
   gap: 4px;
 }
-/* One select per row: at the rail's width two side by side cut off
-   "Significant and above" (and longer translations). */
-.news-readout__filters {
+/* Filters: one row, folded, that reads what is chosen; open, one select per
+   row (at the rail's width two side by side cut off "Significant and above"
+   and longer translations). */
+.news-readout__filters-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  padding: 4px 0;
+  color: var(--text-secondary);
+  list-style: none;
+  cursor: pointer;
+}
+.news-readout__filters-summary::-webkit-details-marker {
+  display: none;
+}
+.news-readout__filters-summary::after {
+  flex: none;
+  width: 5px;
+  height: 5px;
+  margin-inline-start: auto;
+  border-right: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+  content: '';
+}
+.news-readout__filters[open] > .news-readout__filters-summary::after {
+  transform: translateY(1px) rotate(225deg);
+}
+.news-readout__filters-summary:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+}
+.news-readout__filters-label {
+  flex: none;
+  font: 600 9px var(--font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.news-readout__chosen {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-dim);
+  font-size: 10px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.news-readout__filter-fields {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 6px;
+  padding-top: 6px;
 }
 .news-filter {
   min-width: 0;
-}
-/* The window choice sits where the window label does, as narrow as its text. */
-.news-readout__window-choice {
-  align-self: flex-start;
-  font-family: var(--font-mono);
 }
 .news-toggle {
   display: flex;
@@ -146,22 +93,6 @@
 }
 .news-toggle input {
   accent-color: var(--accent);
-}
-.news-readout__section {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.news-readout__list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.news-readout__list.is-stale {
-  opacity: 0.5;
 }
 .news-readout__footer {
   display: flex;
@@ -395,8 +326,7 @@
   background: var(--news-color);
 }
 @media (prefers-reduced-motion: no-preference) {
-  .news-card,
-  .news-readout__list {
+  .news-card {
     transition:
       background var(--transition-fast),
       border-color var(--transition-fast),

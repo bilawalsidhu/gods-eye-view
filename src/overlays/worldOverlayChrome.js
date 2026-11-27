@@ -9,6 +9,9 @@ export const WORLD_OVERLAY_OCCLUDER_SELECTORS = Object.freeze([
   '#cctv-sync-chip',
   '#left-panel-stack',
   '#right-context-rail',
+  // The floating dock and Radio player fill this corner. An expanded
+  // Context puts the player inside the measured right rail instead.
+  '.context-corner',
   '.weather-summary',
   '#pp-toggles',
   '#command-dock',
@@ -22,7 +25,6 @@ export const WORLD_OVERLAY_OCCLUDER_SELECTORS = Object.freeze([
   '.hud-bottom-bar',
   '#space-mission-panel',
   '#space-mission-panel-host',
-  '#military-awareness-panel',
   '#bhote-koshi-event-panel',
   // Only the cockpit's solid windows obstruct readable cards.
   '#cockpit-context',

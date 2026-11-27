@@ -351,7 +351,7 @@
   font-size: 0.62rem;
 }
 
-/* ── Start with: where ENTER GOD MODE begins ── */
+/* ── Start with: where ENTER DEFAULT MODE begins ── */
 .first-run-missions {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -395,7 +395,7 @@
   font-size: 1rem;
 }
 
-/* The selected start: what ENTER GOD MODE will run. */
+/* The selected start: what ENTER DEFAULT MODE will run. */
 .first-run-missions button[aria-pressed='true'] {
   background: rgba(25, 151, 178, 0.18);
   border-color: rgba(48, 194, 224, 0.75);
@@ -767,7 +767,7 @@ a.first-run-link-card:focus-visible {
 }
 
 /* The globe's meridians are full circles squeezed sideways; a squeeze that
-   cycles reads as the globe turning. Still until God mode is selected. */
+   cycles reads as the globe turning. Still until Default mode is selected. */
 .first-run-meridians ellipse {
   transform: scaleX(var(--m));
   transform-box: fill-box;
@@ -834,9 +834,9 @@ a.first-run-link-card:focus-visible {
   }
 }
 
-/* HUD callouts over the God preview: brackets, an orbit, and two target
+/* HUD callouts over the Default mode preview: brackets, an orbit, and two target
    blips whose leader lines draw out to a label stub, taking turns. They play
-   only while God mode is selected. */
+   only while Default mode is selected. */
 .first-run-callouts {
   position: absolute;
   inset: 0;

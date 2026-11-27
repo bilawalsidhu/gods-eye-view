@@ -9,7 +9,7 @@ import UiSlider from '../../kit/UiSlider.js';
 // The Bhote Koshi reconstruction controls, at the end of the context rail,
 // as the event layer (src/data/bhoteKoshiEvent.js) presents them. Clicks and
 // slider moves go back to the layer.
-const { panel, controls } = storeToRefs(useBhoteKoshiPanelStore());
+const { visiblePanel: panel, controls } = storeToRefs(useBhoteKoshiPanelStore());
 const call = (name, ...args) => controls.value?.[name]?.(...args);
 const sliderValue = (event, scale) => Number(event.target.value) / scale;
 </script>

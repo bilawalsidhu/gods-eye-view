@@ -10,6 +10,7 @@ export const {
   isRateLimitedOutcome,
   isGroundsLikeAsk,
   viewportBias,
+  recoveryCenter,
   placesNearViewRecovery,
   resolveRegionRingForQuery,
   pickWorldFromScreen,

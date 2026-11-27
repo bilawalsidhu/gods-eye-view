@@ -262,16 +262,14 @@ export function bindRadioControls() {
       return;
     }
   };
-  // Both Enable buttons render from the Radio store; before its first render
-  // there is nothing shown to mark, so the button is marked directly.
+  // Cockpit's Enable button renders from the Radio store; before its first
+  // render there is nothing shown to mark, so the button is marked directly.
   const setTriggerBusy = (trigger, busy) => {
-    const where =
-      trigger === this._radioEnableBtn
-        ? 'panel'
-        : trigger === this._cockpitRadioEnableBtn
-          ? 'cockpit'
-          : null;
-    if (where && showRadioEnableBusy.call(this, busy, where)) return;
+    if (
+      trigger === this._cockpitRadioEnableBtn &&
+      showRadioEnableBusy.call(this, busy)
+    )
+      return;
     trigger.setAttribute('aria-disabled', String(busy));
     trigger.setAttribute('aria-busy', String(busy));
   };
@@ -283,11 +281,11 @@ export function bindRadioControls() {
     if (busyTriggers.has(trigger)) return;
     if (trigger.getAttribute('aria-busy') === 'true') return;
     const enabling = !this.actions.isEnabled();
-    const revealAfterEnable = enabling && trigger === this._radioEnableBtn;
     busyTriggers.add(trigger);
     setTriggerBusy(trigger, true);
     try {
-      const toggled = await this.actions.runUserAction(
+      // A rejection or a semantic false shows its toast in runUserAction.
+      await this.actions.runUserAction(
         (notificationToken) =>
           this.actions.setEnabled(enabling, {
             origin: 'user',
@@ -302,27 +300,9 @@ export function bindRadioControls() {
           }),
         },
       );
-      if (this.destroyed || toggled === false) return;
-      if (
-        enabling &&
-        trigger === this._radioEnableBtn &&
-        !document
-          .getElementById('global-context-panel')
-          ?.classList.contains('collapsed')
-      ) {
-        this.actions.setPanelCollapsed('radio-panel', false, {
-          explicit: true,
-        });
-      }
-      if (revealAfterEnable)
-        await this._revealRadioControlsAfterExplicitEnable(trigger);
     } finally {
       busyTriggers.delete(trigger);
-      if (!this.destroyed) {
-        setTriggerBusy(trigger, false);
-        if (revealAfterEnable && trigger.isConnected)
-          trigger.focus({ preventScroll: true });
-      }
+      if (!this.destroyed) setTriggerBusy(trigger, false);
     }
   };
   this.listen(
@@ -433,8 +413,13 @@ export function bindRadioControls() {
   );
   // The directory order is catalog/filter authority, not camera authority.
   // Globe motion therefore never rebuilds or re-ranks the frequency band.
-  this._radioSelectedHandler = () =>
-    this.actions.setPanelCollapsed('radio-panel', false);
+  // A station picked on the globe opens Context; ContextView shows its
+  // list.
+  this._radioSelectedHandler = () => {
+    if (this.actions.isCockpitActive?.()) return;
+    this.actions.setPanelCollapsed('global-context-panel', false);
+    this.actions.revealPanel?.('global-context-panel');
+  };
   this.listen(document, 'gev:radio-selected', this._radioSelectedHandler);
   // The Radio panel's and Cockpit's controls, and the tuner slider's events,
   // call these through the store.
@@ -443,13 +428,11 @@ export function bindRadioControls() {
   // must never start the map-view rotation/fallback flights that would
   // compete with its preUpdate pose.
   this._storeToken = this.store?.connect?.({
-    /** @param {'panel'|'cockpit'} where Which Enable button was pressed. */
-    toggleRadio: (where) =>
-      void toggleRadio(
-        where === 'cockpit'
-          ? this._cockpitRadioEnableBtn
-          : this._radioEnableBtn,
-      ),
+    /** Cockpit's Radio Enable button. */
+    toggleRadio: () => {
+      if (this._cockpitRadioEnableBtn)
+        void toggleRadio(this._cockpitRadioEnableBtn);
+    },
     toggleCockpitRadio: () =>
       setCockpitDisclosure('radio', !this._cockpitDisclosureOpen('radio')),
     /**
@@ -564,6 +547,7 @@ export function bindRadioControls() {
         finishTuner(false);
     },
     tunerKeyDown: (event) => {
+      if (event.defaultPrevented) return;
       if (event.key === 'Escape' && this._radioTunerDragging) {
         event.preventDefault();
         finishTuner(false);

@@ -2,6 +2,9 @@ import { PbfReader } from 'pbf';
 import { VectorTile } from '@mapbox/vector-tile';
 import { tileLocalToLonLat } from '../../tileMath.js';
 
+// Bound the geometry retained for drawing, picking and Context per tile.
+const MAX_TILE_VERTICES = 65_536;
+
 /**
  * Decode a `mly1_public` coverage tile (z11–14) into sequences. The z14
  * `image` layer, which can hold >150k points, is skipped.
@@ -15,17 +18,26 @@ export function decodeCoverageTile(bytes, address) {
   const { x, y, z } = address;
   const sequenceLayer = tile.layers.sequence;
   if (sequenceLayer) {
-    for (let i = 0; i < sequenceLayer.length; i++) {
+    let remaining = MAX_TILE_VERTICES;
+    for (let i = 0; i < sequenceLayer.length && remaining >= 2; i++) {
       const feature = sequenceLayer.feature(i);
       const props = feature.properties || {};
       // A sequence with a capture gap is a multi-line: keep each part as its
       // own line, so no straight segment is drawn across the gap.
       const parts = [];
       for (const line of feature.loadGeometry()) {
-        const part = line.map((point) =>
-          tileLocalToLonLat(point.x, point.y, sequenceLayer.extent, x, y, z),
-        );
-        if (part.length >= 2) parts.push(part);
+        if (remaining < 2) break;
+        if (line.length < 2) continue;
+        const count = Math.min(line.length, remaining);
+        const part = [];
+        for (let j = 0; j < count; j++) {
+          const point = line[j];
+          part.push(
+            tileLocalToLonLat(point.x, point.y, sequenceLayer.extent, x, y, z),
+          );
+        }
+        parts.push(part);
+        remaining -= count;
       }
       if (!parts.length) continue;
       result.sequences.push({

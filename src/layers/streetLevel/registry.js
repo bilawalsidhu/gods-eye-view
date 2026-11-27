@@ -25,7 +25,7 @@ export function filtersOf(provider) {
  *   first keyless provider is lit instead of a default that cannot draw.
  * @property {{kind: 'view-cone', color: string}} [marker]   Default: GEV's pin.
  * @property {Array<'pano'|'since'>} [filters]   Filters it honours (default both).
- * @property {{noun: string, action: string}} [coverageLabel]   How the panel counts its lines and says what a click does (default: sequences, "click a line for its photos").
+ * @property {{noun: string, action: string}} [coverageLabel]   How Data Layers counts its lines and says what a click does (default: sequences, "click a line for its photos").
  * @property {'capture'|'upload'} [sinceBasis]   What SINCE compares (default 'capture'); 'upload' notes "(by upload date)" beside the SINCE value while the provider is lit.
  * @property {(context: ProviderContext) => ProviderInstance} create
  *
@@ -34,10 +34,10 @@ export function filtersOf(provider) {
  * @property {() => {pano: string, sinceMs: number|null}} getFilter   Filter resolved against now; read it on every use so "since N days" keeps up.
  * @property {() => boolean} isActive  Layer enabled and this provider switched on.
  * @property {() => void} notify       Ask the core to publish a new UI snapshot.
- * @property {{openImage: (imageId: string, options?: {frame?: boolean}) => Promise<boolean>, openNearest: (point: {lon: number, lat: number}) => Promise<boolean>, reportError: (message: string|null) => void}} actions
+ * @property {{openImage: (imageId: string, options?: {frame?: boolean}) => Promise<boolean>, openNearest: (point: {lon: number, lat: number}, sequenceId?: string) => Promise<boolean>, cancelNearest: () => void, reportError: (message: string|null, imageId?: string) => void}} actions
  *   `openNearest` opens this provider's image nearest a point the user picked
- *   (needs `nearestImage`); `reportError` shows a viewer or key error in the
- *   panel, or withdraws this provider's own (null).
+ *   (needs `nearestImage`); `cancelNearest` withdraws an overtaken pick.
+ *   An image id on `reportError` limits the error to that displayed image.
  *
  * @typedef {object} ProviderInstance
  * @property {(options?: {signal?: AbortSignal}) => Promise<{configured: boolean}>} status   Whether a usable key is set; the core gives up on a hung answer through `signal`.
@@ -46,23 +46,27 @@ export function filtersOf(provider) {
  * @property {() => void} deactivate                 Detach, clear coverage and selection, hide.
  * @property {(viewer: object) => void} destroy
  * @property {(filter: {pano: string, sinceMs: number|null}) => void} setFilter   The filter changed: redraw (reading `getFilter()`).
- * @property {() => {count: number, loading: boolean, hint: string, error: string|null, keyRequired: boolean, keyRejected?: boolean}} coverageStats
+ * @property {() => {count: number, loading: boolean, hint: string, error: string|null, keyRequired: boolean, keyRejected?: boolean, drawnVersion?: number}} coverageStats
+ * @property {(point: {lat: number, lon: number}, radiusKm: number, rect?: ?{west: number, east: number, south: number, north: number}, clip?: ?{visible: ?function, crossing?: ?function, key: string}) => Array<{sequenceId: string, lat: number, lon: number, km: number, capturedAt: number, isPano: boolean}>} [coverageNear]   One result per drawn sequence within the radius, nearest first. With rect, use the nearest point inside the viewport and any supplied screen clip.
  * @property {(pickId: string, click?: {groundPoint: () => {lon: number, lat: number}|null}) => boolean} handlePick   The id carries the provider's own prefix; `groundPoint` is where the click met the ground.
  * @property {(sequenceId: string) => Promise<void>} [selectSequence]
  * @property {() => void} [clearSequence]
  * @property {() => {selectedId: string|null, images: number, loading: boolean, error?: string|null}} [sequenceStats]
- * @property {(point: {lat: number, lon: number}, options?: {signal?: AbortSignal, radiusM?: number}) => Promise<string|null>} [nearestImage]   For ground clicks and `openNearest`; an aborted lookup gives up (it may reject with an AbortError). `radiusM` asks for a wider search than NEAREST_RADIUS_M; a provider that cannot search wider ignores it.
+ * @property {(point: {lat: number, lon: number}, options?: {signal?: AbortSignal, radiusM?: number, sequenceId?: string}) => Promise<string|null>} [nearestImage]   For ground clicks and `openNearest`; an aborted lookup gives up (it may reject with an AbortError). `radiusM` asks for a wider search than NEAREST_RADIUS_M; a provider that cannot search wider ignores it.
  * @property {ViewerAdapter} viewer
  *
  * @typedef {object} ViewerAdapter
  * @property {(host: HTMLElement) => Promise<void>} mount     Idempotent; may lazy-load a library.
- * @property {(imageId: string) => Promise<void>} open        Resolves once the image is on screen and a pose was emitted.
+ * @property {(imageId: string) => Promise<string|void>} open Resolves once the image is on screen and a pose was emitted. Its result, when available, identifies the image confirmed by the adapter.
+ * @property {(imageId: string) => boolean} [cancelOpenKeeping]
+ *   Cancel an unshown replacement if this image is still drawn.
  * @property {() => void} close                               Drop the image, keep the instance warm.
  * @property {() => void} unmount                             Destroy the instance (host handed to another provider).
  * @property {() => void} resize
  * @property {(mode: 'letterbox'|'fill') => void} [setRenderMode]
  * @property {() => boolean} [supportsRenderModes]   False while the image has no frame to fit (a panorama): FIT / FILL hide.
- * @property {(listener: (pose: StreetPose) => void) => () => void} onPose
+ * @property {(listener: (pose: StreetPose|null) => void) => () => void} onPose
+ *   A null pose reports that the adapter lost its displayed frame.
  * @property {(listener: (view: ?object) => void) => () => void} [subscribeView]
  *   An adapter that draws nothing itself presents its viewer here, for the
  *   layer's `subscribePhotoViewer()` (see photoViewer.js): its current
@@ -83,9 +87,11 @@ export function filtersOf(provider) {
  * @property {number|null} altitude
  * @property {boolean} isPano
  * @property {number|null} capturedAt   Epoch milliseconds.
+ * @property {'added'|null} [capturedAtSource]   An upload time used when the capture time is unknown.
  * @property {'day'|'month'} [capturedAtPrecision]   How exactly the provider dates images (default 'day').
  * @property {string|null} [title]     A place name for the caption, e.g. the address.
  * @property {string|null} creator
+ * @property {string|null} [via]   A hosting instance credited when the author is unknown.
  * @property {string|null} [license]   The image's licence when it is per image, e.g. 'CC BY-SA 4.0'.
  * @property {string|null} sequenceId
  * @property {string} externalUrl      Deep link to the image on the provider's site.

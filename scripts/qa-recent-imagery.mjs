@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
  * Rendered acceptance for DATA ▸ Recent Imagery against the real NASA
- * endpoints (CMR catalog, GIBS tiles, Worldview snapshots): the rail panel,
+ * endpoints (CMR catalog, GIBS tiles, Worldview snapshots): the Context list,
  * USE VIEW and the live preview, the three modes (IMAGE, VS BASEMAP, A / B)
  * with their pins, the divider and the Esri surface on Google 3D, Escape
  * order, the oversized-view refusal and ZOOM IN, CLEAR, the share link,
  * map-switch rebind (a manual switch to Google 3D keeps the imagery on
- * Esri), CCTV stability at 900 and 700 px, scroll preservation, a
+ * Esri), Context reach at 900 and 700 px, scroll preservation, a
  * layout-shift measurement across every transition, and disable.
  *
  * Run: start the app (`./scripts/dev-fresh.sh`) and
@@ -14,7 +14,7 @@
  * Env: QA_BASE_URL (default http://localhost:4173), QA_SHOT_DIR (default
  * qa-shots/recent-imagery), QA_HEADFUL=1.
  * QA_RECENT_IMAGERY_SLOW_RENDER=1 permits loaded SwiftShader CI to use a
- * 4 s ZOOM IN wait and 0.8 s height-stability tail (defaults: 2 s / 1.2 s).
+ * 4 s ZOOM IN wait (default 2 s).
  * Every wait is bounded. Without NASA access the run skips with code 0.
  */
 import fs from 'node:fs';
@@ -27,10 +27,9 @@ const SHOT_DIR = process.env.QA_SHOT_DIR || 'qa-shots/recent-imagery';
 const HEADFUL = process.env.QA_HEADFUL === '1';
 const SLOW_RENDER = process.env.QA_RECENT_IMAGERY_SLOW_RENDER === '1';
 const ZOOM_TIMEOUT_MS = SLOW_RENDER ? 4_000 : 2_000;
-const HEIGHT_TAIL_SAMPLES = SLOW_RENDER ? 8 : 12;
 const STEP_TIMEOUT = 20_000;
 const AUSTIN = { lon: -97.74, lat: 30.27, height: 12_000 };
-const PANEL = '#recent-imagery-panel';
+const PANEL = '#context-list-recent-imagery';
 
 async function networkAvailable() {
   try {
@@ -143,6 +142,30 @@ function installPageHelpers() {
       const line = document.getElementById('recent-imagery-split-line');
       return Boolean(line && !line.hidden);
     },
+    /** The Imagery list's tab label: its sub-tab, or the one Lists tab. */
+    imageryTab() {
+      const tab =
+        document.getElementById('context-list-tab-recent-imagery') ||
+        document.getElementById('context-tab-lists');
+      const text = tab?.textContent?.trim() || '';
+      return /^Imagery\b/.test(text) ? text : null;
+    },
+    /** What scrolls the readout: its list body or the nearest scrolling ancestor. */
+    scroller() {
+      for (
+        let node = document.getElementById('recent-imagery-panel-body');
+        node;
+        node = node.parentElement
+      ) {
+        const overflow = getComputedStyle(node).overflowY;
+        if (
+          /auto|scroll/.test(overflow) &&
+          node.scrollHeight > node.clientHeight
+        )
+          return node;
+      }
+      return document.getElementById('recent-imagery-panel-body');
+    },
     headerOnScreen(id) {
       const element = document.getElementById(id);
       const header =
@@ -188,8 +211,9 @@ const state = () =>
       borrowedEsri: snapshot.borrowedEsri,
       error: snapshot.error,
       diagnostics: qa.layer().diagnostics(),
-      cards: document.querySelectorAll('#recent-imagery-panel .ri-card').length,
-      panelHidden: document.getElementById('recent-imagery-panel')?.hidden,
+      cards: document.querySelectorAll('#context-list-recent-imagery .ri-card')
+        .length,
+      listTab: window.__riQa.imageryTab(),
       noticeText: text('ri-notice-text'),
       hintText: text('ri-hint'),
       rowA: text('ri-slot-a'),
@@ -250,10 +274,17 @@ const click = (selector) =>
   }, selector);
 const clickAction = (id) => click(`${PANEL} [data-action-id="${id}"]`);
 const clickMode = (mode) => click(`${PANEL} .ri-mode-btn[data-mode="${mode}"]`);
-const focusStrip = () =>
-  page.evaluate(() =>
-    document.getElementById('ri-strip')?.focus({ preventScroll: true }),
-  );
+const focusStrip = async () => {
+  const focused = await page.evaluate((panel) => {
+    const button =
+      document.querySelector(`${panel} .ri-card.focused .ri-card-open`) ||
+      document.querySelector(`${panel} .ri-card-open`);
+    button?.focus({ preventScroll: true });
+    return Boolean(button) && document.activeElement === button;
+  }, PANEL);
+  if (!focused)
+    throw new Error('Recent Imagery keyboard input has no focused day button');
+};
 const pressOnStrip = async (key) => {
   await focusStrip();
   await page.keyboard.press(key);
@@ -301,7 +332,7 @@ const CONTROLS = {
   clear: `${PANEL} [data-action-id="clear"]`,
   notice: '#ri-notice',
   'zoom-in': '#ri-zoom-in',
-  strip: '#ri-strip',
+  strip: `${PANEL} .ri-strip`,
   hint: '#ri-hint',
   'mode-image': `${PANEL} .ri-mode-btn[data-mode="image"]`,
   'mode-basemap': `${PANEL} .ri-mode-btn[data-mode="basemap"]`,
@@ -318,8 +349,8 @@ const CONTROLS = {
 };
 const measure = () =>
   page.evaluate((controls) => {
-    const panel = document.getElementById('recent-imagery-panel');
-    const body = document.getElementById('recent-imagery-panel-body');
+    const panel = document.getElementById('context-list-recent-imagery');
+    const body = window.__riQa.scroller();
     const panelRect = panel?.getBoundingClientRect();
     const out = { bodyScroll: body?.scrollTop ?? null, rects: {} };
     for (const [name, selector] of Object.entries(controls)) {
@@ -398,14 +429,14 @@ try {
   const photoreal = initialStack === 'photoreal';
   console.log(`initial map stack: ${initialStack}`);
   console.log(
-    `stability: ${SLOW_RENDER ? 'slow-render' : 'default'} (zoom ${ZOOM_TIMEOUT_MS} ms, last ${HEIGHT_TAIL_SAMPLES} samples)`,
+    `stability: ${SLOW_RENDER ? 'slow-render' : 'default'} (zoom ${ZOOM_TIMEOUT_MS} ms)`,
   );
   const onPhotorealOnly = (name, passed, detail) =>
     photoreal
       ? check(name, passed, detail)
       : console.log(`[SKIP] ${name} — the boot stack is ${initialStack}`);
 
-  // ── enable: the panel in the rail, per the rail readout pattern ─────────
+  // ── enable: the list in Context, per the rail readout pattern ───────────
   const layerToggle = '[data-layer-id="recent-imagery"] .data-toggle-btn';
   check(
     'the data panel carries a Recent Imagery toggle',
@@ -417,47 +448,55 @@ try {
       window.__godsEyeView.dataManager.isEnabled('recent-imagery'),
     ),
   );
-  check(
-    'the panel appears on the right rail once enabled',
-    await until(
-      () => document.getElementById('recent-imagery-panel')?.hidden === false,
+  // Its list is a tab in Context; the person opens Context to see it.
+  await page.evaluate(() =>
+    window.__godsEyeView.styleManager.setPanelCollapsed(
+      'global-context-panel',
+      false,
+      { persist: false, syncShare: false },
     ),
   );
-  const railPlacement = await page.evaluate(() => {
-    const rail = document.getElementById('right-context-rail');
-    const panel = document.getElementById('recent-imagery-panel');
+  check(
+    'Context offers the Imagery list once enabled',
+    await until(() => Boolean(window.__riQa.imageryTab())),
+  );
+  await click('#context-tab-lists');
+  // With other lists on, Imagery has a sub-tab of its own.
+  await page.evaluate(() =>
+    document.getElementById('context-list-tab-recent-imagery')?.click(),
+  );
+  check(
+    'its tab shows the Imagery list',
+    await until(() =>
+      document.getElementById('context-list-recent-imagery')?.checkVisibility(),
+    ),
+  );
+  const listPlacement = await page.evaluate(() => {
+    const list = document.getElementById('context-list-recent-imagery');
     const body = document.getElementById('recent-imagery-panel-body');
-    const order = [...rail.children].map((child) => child.id);
-    const at = (id) => order.indexOf(id);
     return {
-      inRail: panel?.parentElement === rail,
-      beforeContext: at('recent-imagery-panel') < at('global-context-panel'),
-      afterWeather: at('weather-panel') < at('recent-imagery-panel'),
-      collapsed: panel?.classList.contains('collapsed'),
-      scroller: body?.hasAttribute('data-rail-scroller'),
+      inContext: Boolean(list?.closest('#global-context-panel')),
+      bodyInList: body?.parentElement === list,
       readoutInBody: body?.firstElementChild?.classList.contains(
         'recent-imagery-readout',
       ),
       body: body?.offsetHeight,
-      title: panel?.querySelector('.panel-title')?.textContent,
-      order,
+      tab: window.__riQa.imageryTab(),
+      selected:
+        document
+          .getElementById('context-tab-lists')
+          ?.getAttribute('aria-selected') === 'true',
     };
   });
   check(
-    'the panel sits in the rail after WEATHER and before CONTEXT, expanded on first appearance',
-    railPlacement.inRail &&
-      railPlacement.beforeContext &&
-      railPlacement.afterWeather &&
-      railPlacement.collapsed === false &&
-      railPlacement.body > 0,
-    JSON.stringify(railPlacement),
-  );
-  check(
-    'the body is a rail scroller holding the readout, under a RECENT IMAGERY header',
-    railPlacement.scroller &&
-      railPlacement.readoutInBody &&
-      railPlacement.title === 'RECENT IMAGERY',
-    JSON.stringify(railPlacement),
+    'the readout sits in the Context Imagery list, under its selected tab',
+    listPlacement.inContext &&
+      listPlacement.bodyInList &&
+      listPlacement.readoutInBody &&
+      listPlacement.body > 0 &&
+      listPlacement.selected &&
+      Boolean(listPlacement.tab),
+    JSON.stringify(listPlacement),
   );
   const listOf = (selector, key) =>
     page.evaluate(
@@ -484,11 +523,14 @@ try {
     actionIds === 'select-box,use-view,clear',
     actionIds,
   );
-  const blocks = await listOf(`${PANEL} .recent-imagery-readout > *`, 'none');
+  const blocks = await listOf(
+    `${PANEL} .recent-imagery-readout > *`,
+    'listCard',
+  );
   check(
-    'the body is the fixed stack: actions, notice, strip, hint, selection, controls, details',
+    'the body is the stack: actions, notice, days list, hint, selection, controls, details',
     blocks ===
-      'ri-actions,ri-notice,ri-strip,ri-hint,ri-selection,ri-controls,ri-details',
+      'ri-actions,ri-notice,recent-imagery,ri-hint,ri-selection,ri-controls,ri-details',
     blocks,
   );
   let current = await state();
@@ -496,8 +538,9 @@ try {
     'before a box: CLEAR is disabled, the hint says what to do, IMAGE is the mode',
     (await page.evaluate(
       () =>
-        document.querySelector('#recent-imagery-panel [data-action-id="clear"]')
-          ?.disabled,
+        document.querySelector(
+          '#context-list-recent-imagery [data-action-id="clear"]',
+        )?.disabled,
     )) === true &&
       current.hintText === 'Select a box or use the view' &&
       current.mode === 'image',
@@ -520,21 +563,54 @@ try {
     searched && Boolean(current.box),
     `${current.candidates.length} candidates, error=${current.error} boxError=${current.boxError}`,
   );
+  const pageSize = 5; // ContextListCard's default page size.
+  const dayKeys = current.candidates.map(({ key }) => key);
+  const expectPage = (start) =>
+    until(
+      ({ panel, keys, range }) => {
+        const root = document.querySelector(panel);
+        const displayed = [...(root?.querySelectorAll('.ri-card') ?? [])].map(
+          (card) => card.dataset.key,
+        );
+        return (
+          displayed.length === keys.length &&
+          displayed.every((key, index) => key === keys[index]) &&
+          root?.querySelector('[data-list-range]')?.textContent.trim() === range
+        );
+      },
+      {
+        panel: PANEL,
+        keys: dayKeys.slice(start, start + pageSize),
+        range: `${start + 1}–${Math.min(start + pageSize, dayKeys.length)} of ${dayKeys.length}`,
+      },
+    );
   check(
-    'the strip renders one card per day',
-    current.cards === current.candidates.length && current.cards > 0,
-    `${current.cards} cards`,
+    'the first page contains the first five days or fewer',
+    dayKeys.length > 0 && (await expectPage(0)),
   );
-  const countText = await page.evaluate(
-    () => document.getElementById('recent-imagery-panel-count')?.textContent,
-  );
+  if (dayKeys.length > pageSize) {
+    check(
+      'the next page has the next distinct days and updates its range',
+      (await click(`${PANEL} [data-list-next]`)) &&
+        (await expectPage(pageSize)),
+    );
+    check(
+      'Previous restores the first page and range',
+      (await click(`${PANEL} [data-list-previous]`)) && (await expectPage(0)),
+    );
+  }
+  const countText = await page.evaluate(() => window.__riQa.imageryTab());
   check(
-    'the header count reads the day count',
-    /^\d+ DAYS?$/.test(countText),
+    'the Imagery tab reads the day count',
+    countText === `Imagery · ${current.candidates.length}`,
     countText,
   );
   const startHere = await page.evaluate(() =>
-    [...document.querySelectorAll('#recent-imagery-panel .ri-card-start')]
+    [
+      ...document.querySelectorAll(
+        '#context-list-recent-imagery .ri-card-start',
+      ),
+    ]
       .filter((node) => !node.hidden)
       .map((node) => node.closest('.ri-card').dataset.key),
   );
@@ -665,12 +741,12 @@ try {
   // The readout paints on the frame after the layer changes: wait for it.
   const cardFlag = (key) =>
     document.querySelector(
-      `#recent-imagery-panel .ri-card[data-key="${key}"] .ri-card-flag`,
+      `#context-list-recent-imagery .ri-card[data-key="${key}"] .ri-card-flag`,
     )?.textContent;
   await until(
     (key) =>
       document.querySelector(
-        `#recent-imagery-panel .ri-card[data-key="${key}"] .ri-card-flag`,
+        `#context-list-recent-imagery .ri-card[data-key="${key}"] .ri-card-flag`,
       )?.textContent === 'PREVIEW',
     targetKey,
     2_000,
@@ -688,7 +764,7 @@ try {
         (key) =>
           document
             .querySelector(
-              `#recent-imagery-panel .ri-card[data-key="${key}"] .ri-chip[data-slot="a"]`,
+              `#context-list-recent-imagery .ri-card[data-key="${key}"] .ri-chip[data-slot="a"]`,
             )
             ?.getAttribute('aria-pressed'),
         targetKey,
@@ -787,7 +863,7 @@ try {
     (key) =>
       [
         ...document.querySelectorAll(
-          `#recent-imagery-panel .ri-card[data-key="${key}"] .ri-chip`,
+          `#context-list-recent-imagery .ri-card[data-key="${key}"] .ri-chip`,
         ),
       ].map((chip) => chip.textContent),
     targetKey,
@@ -1020,7 +1096,7 @@ try {
   check(
     `an oversized USE VIEW (${Math.round(refusalWidth)} km) is refused in the notice line`,
     refused &&
-      /^View is [\d,]+ km wide · limit 1,000 km$/.test(current.noticeText),
+      /^View is [\d,]+\s+km wide · limit 1,000\s+km$/.test(current.noticeText),
     current.noticeText,
   );
   check(
@@ -1243,174 +1319,37 @@ try {
     }
   }
 
-  // ── collapse / expand, CCTV stability, DISPLAY + CONTEXT reachable ──────
-  /** Click a panel's collapse button; resolves to whether it is expanded. */
-  const togglePanel = (id) =>
-    page.evaluate((panelId) => {
-      const button = document.querySelector(
-        `.panel-collapse-btn[data-collapse-target="${panelId}"]`,
-      );
-      if (!button) return null;
-      button.click();
-      return !document.getElementById(panelId)?.classList.contains('collapsed');
-    }, id);
-  const imageryPanel = 'recent-imagery-panel';
-  const collapsedNow = (await togglePanel(imageryPanel)) === false;
-  await wait(400);
-  const headerOnly = await page.evaluate(() => ({
-    panel: document.getElementById('recent-imagery-panel')?.offsetHeight,
-    body: document.getElementById('recent-imagery-panel-body')?.offsetHeight,
-  }));
-  check(
-    'collapsing the panel leaves a header bar only',
-    collapsedNow &&
-      headerOnly.body === 0 &&
-      headerOnly.panel > 0 &&
-      headerOnly.panel <= 80,
-    JSON.stringify(headerOnly),
-  );
-  const expandedAgain = await togglePanel(imageryPanel);
-  await wait(400);
-  const bodyBack = await page.evaluate(
-    () => document.getElementById('recent-imagery-panel-body')?.offsetHeight,
-  );
-  check(
-    'expanding the panel brings the body back',
-    expandedAgain === true && bodyBack > 0,
-    `body=${bodyBack}`,
-  );
-
-  /** Sample both panel heights for 2 s; settled = the tail never changes. */
-  const settledHeights = async () => {
-    const samples = [];
-    for (let i = 0; i < 20; i += 1) {
-      samples.push(
-        await page.evaluate(() => ({
-          imagery: document.getElementById('recent-imagery-panel')
-            ?.offsetHeight,
-          cctv: document.getElementById('cctv-panel')?.offsetHeight,
-        })),
-      );
-      await wait(100);
-    }
-    const tail = (key) =>
-      new Set(samples.slice(-HEIGHT_TAIL_SAMPLES).map((s) => s[key]));
-    return {
-      settled: tail('imagery').size === 1 && tail('cctv').size === 1,
-      detail: `imagery=${samples.map((s) => s.imagery).join(',')} cctv=${samples.map((s) => s.cctv).join(',')}`,
-    };
-  };
-  const railFit = () =>
-    page.evaluate(() => {
-      const px = (element) =>
-        parseFloat(
-          element?.style.getPropertyValue('--right-panel-allocated-height'),
-        );
-      const cctv = document.getElementById('cctv-panel');
-      const imagery = document.getElementById('recent-imagery-panel');
-      const rail = document.getElementById('right-context-rail');
-      // Reachable: its header is on screen, or the rail's exclusive policy
-      // (an expanded panel under the tactical HUD) hid it while collapsed.
-      const reach = (id) => {
-        const element = document.getElementById(id);
-        return (
-          window.__riQa.headerOnScreen(id) ||
-          (rail?.classList.contains('layout-exclusive') &&
-            element?.classList.contains('collapsed') &&
-            element.getBoundingClientRect().height === 0)
-        );
-      };
-      return {
-        cctvRendered: cctv?.offsetHeight ?? null,
-        cctvAllocated: px(cctv),
-        imageryRendered: imagery?.offsetHeight ?? null,
-        imageryAllocated: px(imagery),
-        imageryCollapsed: Boolean(imagery?.classList.contains('collapsed')),
-        imageryDisplay: imagery ? getComputedStyle(imagery).display : null,
-        focus: rail?.classList.contains('layout-focus'),
-        exclusive: rail?.classList.contains('layout-exclusive'),
-        display: reach('pp-toggles'),
-        context: reach('global-context-panel'),
-      };
-    });
+  // ── DISPLAY + CONTEXT reachable ─────────────────────────────────────────
+  // Check that the list stays reachable in Context at both viewport heights.
   for (const height of [900, 700]) {
     const at = `(${height} px viewport)`;
     await page.setViewport({ width: 1280, height });
     await wait(600);
-    check(
-      `the CCTV panel expands from its launcher ${at}`,
-      (await togglePanel('cctv-panel')) === true,
-    );
-    const expanded = await settledHeights();
-    check(
-      `the imagery and CCTV panel heights settle with CCTV expanded ${at}`,
-      expanded.settled,
-      expanded.detail,
-    );
-    const fit = await railFit();
-    check(
-      `CCTV renders at its allocated height beside the imagery panel ${at}`,
-      !fit.focus ||
-        (Number.isFinite(fit.cctvAllocated) &&
-          Math.abs(fit.cctvRendered - fit.cctvAllocated) <= 2),
-      JSON.stringify(fit),
-    );
-    // A collapsed panel has no allocation, so it is judged on its own terms:
-    // the exclusive rail (one expanded panel) hides it outright, otherwise it
-    // is a header bar. An expanded panel must have been allocated a height.
-    const imageryFits = fit.imageryCollapsed
-      ? fit.exclusive
-        ? fit.imageryRendered === 0 && fit.imageryDisplay === 'none'
-        : fit.imageryRendered > 0 && fit.imageryRendered <= 80
-      : !fit.focus ||
-        (Number.isFinite(fit.imageryAllocated) &&
-          fit.imageryRendered <= fit.imageryAllocated + 2);
-    check(
-      `the imagery panel stays within its allocation, or takes no room when the exclusive rail hides it collapsed ${at}`,
-      imageryFits,
-      JSON.stringify(fit),
-    );
-    check(
-      `DISPLAY and CONTEXT stay reachable ${at}`,
-      fit.display && fit.context,
-      JSON.stringify(fit),
-    );
-    await shot(`07-cctv-expanded-${height}`);
-    check(
-      `the CCTV panel collapses again ${at}`,
-      (await togglePanel('cctv-panel')) === false,
-    );
-    const collapsed = await settledHeights();
-    check(
-      `the panel heights settle with CCTV collapsed ${at}`,
-      collapsed.settled,
-      collapsed.detail,
-    );
-    const imageryExpanded = await page.evaluate(
-      () =>
-        !document
-          .getElementById('recent-imagery-panel')
-          ?.classList.contains('collapsed'),
-    );
-    if (imageryExpanded) await togglePanel(imageryPanel);
-    await wait(400);
-    const onScreen = await page.evaluate(() =>
-      Object.fromEntries(
-        [
-          'pp-toggles',
-          'global-context-panel',
-          'recent-imagery-panel',
-          'cctv-panel',
-        ].map((id) => [id, window.__riQa.headerOnScreen(id)]),
+    const onScreen = await page.evaluate(() => ({
+      // Folded, the Visual panel is reached from its left-rail launcher.
+      display:
+        window.__riQa.headerOnScreen('pp-toggles') ||
+        (() => {
+          const rect = document
+            .querySelector('[data-rail-item="pp-toggles"]')
+            ?.getBoundingClientRect();
+          return Boolean(
+            rect?.height > 0 && rect.top >= 0 && rect.bottom <= innerHeight,
+          );
+        })(),
+      context: window.__riQa.headerOnScreen('global-context-panel'),
+      list: Boolean(
+        document
+          .getElementById('context-list-recent-imagery')
+          ?.checkVisibility(),
       ),
-    );
+    }));
     check(
-      `DISPLAY, CONTEXT, CCTV and the imagery header are all on screen once everything is collapsed ${at}`,
-      Object.values(onScreen).every(Boolean),
+      `DISPLAY and CONTEXT stay reachable with the Imagery list shown ${at}`,
+      onScreen.display && onScreen.context && onScreen.list,
       JSON.stringify(onScreen),
     );
-    await togglePanel(imageryPanel);
-    await wait(400);
+    await shot(`07-rail-${height}`);
   }
 
   // ── scroll preservation (700 px viewport, body scrollable) ───────────────
@@ -1421,14 +1360,14 @@ try {
   await wait(300);
   const bodyScroll = () =>
     page.evaluate(() => {
-      const body = document.getElementById('recent-imagery-panel-body');
+      const body = window.__riQa.scroller();
       return {
         top: body.scrollTop,
         max: body.scrollHeight - body.clientHeight,
       };
     });
   const start = await page.evaluate(() => {
-    const body = document.getElementById('recent-imagery-panel-body');
+    const body = window.__riQa.scroller();
     const max = body.scrollHeight - body.clientHeight;
     if (max > 0) body.scrollTop = Math.round(max / 2);
     return { max, top: body.scrollTop };
@@ -1489,10 +1428,9 @@ try {
     `${hostsDetail(current)} split=${current.splitVisible}`,
   );
   check(
-    'the panel hides when the layer is off',
-    await until(
-      () => document.getElementById('recent-imagery-panel')?.hidden === true,
-    ),
+    'the Imagery list tab goes when the layer is off',
+    current.listTab === null,
+    String(current.listTab),
   );
   onPhotorealOnly('disabling hands Google 3D back', await backOnPhotoreal());
   await wait(1_500);

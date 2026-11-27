@@ -14,10 +14,14 @@
 // own. The walk works the same for all of them.
 
 import { isAircraftLayer } from '../data/aircraftLayerIds.js';
-import { h, render as renderVue } from 'vue';
+import { h, nextTick, render as renderVue } from 'vue';
 import { t } from '../i18n/index.js';
 import { EXCLUSIVE_SURFACE_CLASSES } from '../exclusiveSurfaces.js';
-import { LABEL_LAYERS } from './contextLayerTabs.js';
+import { LABEL_LAYERS } from './labelLayers.js';
+import {
+  CAMERA_SETTINGS_EVENT,
+  ESCAPE_OWNING_DIALOGS,
+} from './contextEvents.js';
 import OmnibarGuide from './views/panels/OmnibarGuide.vue';
 
 const LEFT_RAIL = '.ui-rail--left .ui-rail__item';
@@ -91,23 +95,16 @@ function openVisualSteps() {
   return openPanelSteps(LEFT_RAIL, 'pp-toggles', t('Visual'));
 }
 
-/** Steps that bring up a section of Context's Properties tab. */
-function propertiesSteps(section, text) {
-  const pane = `#context-tab-${section}`;
-  const tab = () => $('#context-tab-btn-props');
+/** Steps that bring up a group of settings in the Visual panel. */
+function visualSettingsSteps(control, text) {
+  const group = () => $(control)?.closest('.pp-toggle-group') || $(control);
   return [
-    ...openPanelSteps(RIGHT_RAIL, 'global-context-panel', t('Context')),
+    ...openVisualSteps(),
     {
-      targets: () => [tab()],
-      text: () => t('Open Properties: settings for the layers that are on'),
-      skip: () => !tab(),
-      done: () => tab()?.getAttribute('aria-selected') === 'true',
-    },
-    {
-      prepare: () => $(pane)?.scrollIntoView?.({ block: 'center' }),
-      targets: () => [$(pane)?.closest('.context-props__section') || $(pane)],
+      prepare: () => group()?.scrollIntoView?.({ block: 'center' }),
+      targets: () => [group()],
       text,
-      skip: () => !$(pane)?.offsetParent,
+      skip: () => !group()?.offsetParent,
     },
   ];
 }
@@ -152,10 +149,9 @@ export function layerSettingsGuide(layer) {
             }),
       skip: () => !$(controls),
     },
-    // Labels and 3D models now sit in Context's Properties while their
-    // layers are on.
+    // Labels and 3D models are Visual settings.
     ...(LABEL_LAYERS.has(layer.id)
-      ? propertiesSteps('labels', () =>
+      ? visualSettingsSteps('#detection-toggle', () =>
           t(
             'Labels tag {layer} on the map. Density sets how many are labelled; Fade and Outside set how they thin out beyond the scope.',
             {
@@ -165,11 +161,32 @@ export function layerSettingsGuide(layer) {
         )
       : []),
     ...(isAircraftLayer(layer.id)
-      ? propertiesSteps('aircraft', () =>
+      ? visualSettingsSteps('#models3d-toggle', () =>
           t(
             '3D models: Proximity shows them up close only, All shows every aircraft as a model.',
           ),
         )
+      : []),
+    // A camera's own tools are Context's Camera settings tab, there while
+    // its card is open.
+    ...(layer.id === 'cctv'
+      ? [
+          {
+            prepare: async () => {
+              if (typeof CustomEvent === 'function')
+                globalThis.document?.dispatchEvent(
+                  new CustomEvent(CAMERA_SETTINGS_EVENT),
+                );
+              await nextTick();
+            },
+            targets: () => [$('#context-tab-camera')],
+            text: () =>
+              t(
+                "Camera settings in Context holds the open camera's projection, coverage, auto-hop and calibration.",
+              ),
+            skip: () => !$('#context-tab-camera'),
+          },
+        ]
       : []),
   ];
 }
@@ -370,10 +387,13 @@ export const FEATURE_GUIDES = Object.freeze({
         ),
     },
   ],
+  // The settings of the layers that are on: their labels and how dense they
+  // are, and 3D models, are Visual settings; each layer's own options are on
+  // its Data Layers row.
   properties: () =>
-    propertiesSteps('labels', () =>
+    visualSettingsSteps('#detection-toggle', () =>
       t(
-        'Properties holds the settings for the layers that are on, each layer marked by a coloured dot',
+        'Labels for the layers that are on: Density sets how many are labelled. Each layer’s own options are on its Data Layers row',
       ),
     ),
   north: () => [
@@ -608,15 +628,16 @@ export function startGuide(steps, { title = '' } = {}) {
     const [target] = current.targets?.() || [];
     if (target?.contains(event.target) && !current.done) advance();
   }
-  // Only Escape is the walk's: it ends the walk and nothing else (the
-  // Omnibar or a panel behind it stays as it is). Every other key goes on to
-  // the page untouched.
+  // Escape ends the guide unless a dialog owns it. Other keys pass through.
   function onKey(event) {
     if (screenIsOwned(doc)) {
       stop();
       return;
     }
     if (event.key !== 'Escape' || event.isComposing) return;
+    // A dialog that keeps its own Esc (a camera's enlarged view) takes it:
+    // one Esc closes that, and the walk goes on.
+    if (doc.querySelector(ESCAPE_OWNING_DIALOGS)) return;
     event.preventDefault();
     event.stopPropagation();
     stop();

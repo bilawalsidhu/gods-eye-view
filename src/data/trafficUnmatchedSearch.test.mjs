@@ -2,11 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { trafficAnalystRecords } from '../layers/traffic/records.js';
 import { nearbyByKind, nearbyForLayer } from './entityContext.js';
-import { CONTEXT_LINES } from './contextGeometry.js';
+import { contextLine, CONTEXT_LINES } from './contextGeometry.js';
 
 function roads(n, seed = 1) {
   let state = seed;
-  const random = () => { state = (state * 16807) % 2147483647; return state / 2147483647; };
+  const random = () => {
+    state = (state * 16807) % 2147483647;
+    return state / 2147483647;
+  };
   const out = [];
   for (let i = 0; i < n; i++) {
     let lat = 48.85 + (random() - 0.5) * 0.5;
@@ -31,7 +34,10 @@ function counted(full) {
     Object.defineProperty(copy, CONTEXT_LINES, {
       value: record[CONTEXT_LINES].map((path) => ({
         bounds: path.bounds,
-        points: () => { read.add(copy); return path.points(); },
+        points: () => {
+          read.add(copy);
+          return path.points();
+        },
       })),
     });
     return copy;
@@ -41,24 +47,73 @@ function counted(full) {
 const managerOf = (records) => ({
   isEnabled: () => true,
   getAll: () => [{ id: 'traffic', enabled: true, name: 'Street Traffic' }],
-  layers: new Map([['traffic', { module: { getAnalystRecords: () => records } }]]),
+  layers: new Map([
+    ['traffic', { module: { getAnalystRecords: () => records } }],
+  ]),
 });
 
 test('unmatched traffic search skips road paths', () => {
-  const full = trafficAnalystRecords({ _enabled: true, _roads: roads(10000), _liveMode: false });
+  const full = trafficAnalystRecords({
+    _enabled: true,
+    _roads: roads(10000),
+    _liveMode: false,
+  });
   const a = counted(full);
   const m = managerOf(a.records);
-  const layerRes = nearbyForLayer(m, { id: 'traffic', enabled: true }, here, { radiusKm: 250, limit: 3, query: 'zzqq-absent' });
+  const layerRes = nearbyForLayer(m, { id: 'traffic', enabled: true }, here, {
+    radiusKm: 250,
+    limit: 3,
+    query: 'zzqq-absent',
+  });
   const layerReads = a.read.size;
   a.read.clear();
-  const kindRes = nearbyByKind(m, here, { radiusKm: 250, limit: 3, query: 'zzqq-absent' });
+  const kindRes = nearbyByKind(m, here, {
+    radiusKm: 250,
+    limit: 3,
+    query: 'zzqq-absent',
+  });
   const kindReads = a.read.size;
   a.read.clear();
-  nearbyForLayer(m, { id: 'traffic', enabled: true }, here, { radiusKm: 250, limit: 3 });
+  nearbyForLayer(m, { id: 'traffic', enabled: true }, here, {
+    radiusKm: 250,
+    limit: 3,
+  });
   const emptyReads = a.read.size;
   assert.equal(layerRes?.count, 0);
   assert.equal(kindRes.other.length, 0);
   assert.ok(emptyReads < 10000 / 4, `an empty query reads ${emptyReads} roads`);
   assert.equal(layerReads, 0, `nearbyForLayer read ${layerReads} roads`);
   assert.equal(kindReads, 0, `nearbyByKind read ${kindReads} roads`);
+});
+
+test('Nearby uses the drawn road that crosses the radius and skips unrelated roads', () => {
+  function record(id, title) {
+    const row = { id, title, lat: 0, lon: 1 };
+    Object.defineProperty(row, CONTEXT_LINES, {
+      value: [
+        contextLine([
+          { lat: 0, lon: -1 },
+          { lat: 0, lon: 1 },
+        ]),
+      ],
+    });
+    return row;
+  }
+  const data = counted([
+    record('west', 'West Road'),
+    record('east', 'East Road'),
+  ]);
+  const manager = managerOf(data.records);
+  const layer = { id: 'traffic', enabled: true };
+  const center = { lat: 0, lon: 0 };
+  const options = { radiusKm: 25, query: 'west road', limit: 1 };
+  const group = nearbyForLayer(manager, layer, center, options);
+  assert.equal(group.count, 1);
+  assert.equal(group.items[0].title, 'West Road');
+  assert.ok(group.items[0].distanceKm < 0.01);
+  assert.deepEqual([...data.read], [data.records[0]]);
+  data.read.clear();
+  const other = nearbyByKind(manager, center, options).other;
+  assert.equal(other[0].title, 'West Road');
+  assert.deepEqual([...data.read], [data.records[0]]);
 });

@@ -498,7 +498,7 @@ test('the card is slim: one time line, a station count, the key lines and nothin
   // network only (its title), not the world.
   assert.equal(summary.coverage, 'national');
   // The networks drawn, and how fresh the newest reading is.
-  assert.equal(summary.detail, 'NATIONAL · updated 10m ago');
+  assert.equal(summary.detail, 'NATIONAL · Updated 10m ago');
   assert.equal(summary.status, '1 station');
   // Above the switch only what needs doing: no coverage notes, counts,
   // interpretation, headline or guidance.
@@ -614,7 +614,7 @@ test('a missing OpenAQ key adds one line naming Provider Settings', async () => 
   ]);
   // The source line names the networks drawn: an empty Europe is not
   // pinned on a network that was never asked.
-  assert.match(controls.summary.detail, /^NATIONAL · updated /);
+  assert.match(controls.summary.detail, /^NATIONAL · Updated /);
   assert.equal(controls.summary.status, '1 station');
   // A network drew: the layer is not waiting for a key.
   assert.equal(layer.getStats().keyRequired, false);
@@ -635,7 +635,7 @@ test('the time line comes only from providers that answered; a failed one reads 
   await flush();
   let controls = layer.getRowControls();
   assert.equal(lineText(controls, 'provider-regional'), 'REGIONAL unavailable');
-  assert.match(controls.summary.detail, /^OPENAQ, NATIONAL · updated /);
+  assert.match(controls.summary.detail, /^OPENAQ, NATIONAL · Updated /);
   assert.equal(controls.summary.status, '2 stations');
   // Every network failing: no station and no time line, each one unavailable.
   const down = cardHarness(
@@ -1292,11 +1292,11 @@ test('readings older than six hours are not drawn, even with no answer since', a
   assert.deepEqual(controls.list.items, []);
   // The card still says the network is unavailable, and how old it was.
   assert.equal(lineText(controls, 'provider-national'), 'NATIONAL unavailable');
-  assert.equal(controls.summary.detail, 'NATIONAL · updated 6h ago');
+  assert.equal(controls.summary.detail, 'NATIONAL · Updated 6h ago');
   layer.disable();
 });
 
-test('in the AQI view a value older than six hours leaves the index', async (t) => {
+test('an age-out that changes a station changes the records revision', async (t) => {
   t.mock.timers.enable({
     apis: ['setTimeout', 'Date'],
     now: 1_700_000_000_000,
@@ -1316,10 +1316,20 @@ test('in the AQI view a value older than six hours leaves the index', async (t) 
   );
   await layer.update();
   await flush();
+  const before = layer.getStats();
   assert.equal(layer.getRowControls().list.items[0].lead, '154');
   t.mock.timers.tick(3600_000);
   await flush();
   const [row] = layer.getRowControls().list.items;
+  const after = layer.getStats();
+  assert.equal(after.count, before.count);
+  assert.equal(after.lastUpdate, before.lastUpdate);
+  assert.notEqual(after.recordsRevision, before.recordsRevision);
+  assert.match(
+    layer.getContextSummary({ population: layer.getContextPopulation() })
+      .items[0].lead,
+    /9$/,
+  );
   // PM2.5 is now 6.5 hours old: NO2 alone (20 µg/m³, 10 ppb: 9) sets the
   // index.
   assert.equal(row.lead, '9');
@@ -1718,4 +1728,36 @@ test('a selected station below the top five shows its index details', async () =
   const controls = layer.getRowControls();
   assert.ok(!controls.list.items.some((i) => i.active));
   assert.match(controls.summary.result.title, /Calculated US AQI/);
+});
+
+test('unrated stations are not listed among the highest readings', async () => {
+  const { layer } = cardHarness({
+    national: [
+      ...station('national', DURBAN, { 'PM2.5': 40 }),
+      ...[
+        CAPE_TOWN,
+        { ...CAPE_TOWN, id: 'other', name: 'Other', lat: -25 },
+      ].flatMap((site) =>
+        station('national', site, { 'PM2.5': 12 }).map((row) => ({
+          ...row,
+          qualityFlagged: true,
+        })),
+      ),
+    ],
+  });
+  await layer.update();
+  await flush();
+  const population = layer.getContextPopulation();
+  assert.equal(population.length, 3);
+  const summary = layer.getContextSummary({ population });
+  assert.equal(summary.caption, 'Stations rated: 1 of 3');
+  assert.equal(
+    summary.bands.reduce((sum, band) => sum + band.count, 0),
+    1,
+  );
+  assert.deepEqual(
+    summary.items.map((row) => row.key),
+    ['national:durban:aqi'],
+  );
+  layer.disable();
 });

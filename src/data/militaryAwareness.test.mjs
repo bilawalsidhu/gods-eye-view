@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -56,10 +55,6 @@ import { fakeDrawPort } from '../testSupport/fakeDrawPort.mjs';
 
 const militaryAwarenessSource = readLayerSource(
   new URL('./militaryAwareness.js', import.meta.url),
-  'utf8',
-);
-const awarenessPanelSource = readFileSync(
-  new URL('../ui/views/panels/AwarenessPanel.vue', import.meta.url),
   'utf8',
 );
 
@@ -318,15 +313,7 @@ function panelCount(runtime, label) {
   return runtime.panel().view?.rows?.find((row) => row.label === label)?.count;
 }
 
-test('Contacts continuation target is the visible explanatory note', () => {
-  assert.match(
-    awarenessPanelSource,
-    /<p class="military-awareness-note" tabindex="-1" data-awareness-focus-continuation>\{\{ view\.note \}\}<\/p>/,
-  );
-  assert.doesNotMatch(
-    awarenessPanelSource,
-    /<span[^>]*data-awareness-focus-continuation/,
-  );
+test('the awareness layer words its open-source context note', () => {
   assert.match(
     militaryAwarenessSource,
     /'Open-source mapped\/observed context\./,
@@ -2331,10 +2318,7 @@ test('expanded Context results omit the redundant status heading', () => {
     militaryAwarenessSource,
     /GLOBAL CONTEXT <span>CONTEXT ONLY<\/span>/,
   );
-  assert.doesNotMatch(awarenessPanelSource, /military-awareness-heading/);
-  assert.match(awarenessPanelSource, /military-awareness-subject/);
   assert.match(militaryAwarenessSource, /FLIGHT \/ VESSEL WINDOW/);
-  assert.match(awarenessPanelSource, /military-awareness-controls/);
 });
 
 test('Context entry tracks a nearer civilian aircraft over a farther military aircraft', async () => {
@@ -4345,7 +4329,7 @@ test('a selected installation card keeps every member name as text', () => {
       },
     });
     militaryAwarenessLayer.update();
-    // The view renders names as text; ui/awarenessPanel.test.mjs covers it.
+    // The view carries the names as plain strings.
     const names = runtime.panel().view?.subjectNames;
     assert.equal(names?.summary, 'Named areas (4)');
     assert.deepEqual(names?.names, [

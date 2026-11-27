@@ -11,6 +11,7 @@
  * embedded or not.
  */
 
+import { nextTick } from 'vue';
 import {
   announceNavigationAuthority,
   watchCameraOwner,
@@ -18,7 +19,12 @@ import {
 import { toRadians } from '../geo/index.js';
 import { t, translateKnown } from '../i18n/index.js';
 import { GOOGLE_LABEL } from '../layers/streetLevel/providers/google/policy.js';
+import { STREET_LEVEL_LAYER_ID } from '../layers/streetLevel/policy.js';
 import { cameraOf } from '../render/rendererOf.js';
+import {
+  findDataLayerRow,
+  scrollDataLayerRow,
+} from '../ui/layerFinderFilter.js';
 import {
   annotationsFromParams,
   createView,
@@ -31,7 +37,6 @@ const EMBED_VIEW_MESSAGE = 'gev:view';
 const EMBED_APPLIED_MESSAGE = 'gev:view-applied';
 const EMBED_READY_MESSAGE = 'gev:ready';
 
-const STREET_LEVEL_LAYER = 'street-level';
 const FOLLOW_LAYERS = {
   aircraft: 'flights',
   military_aircraft: 'military',
@@ -139,11 +144,22 @@ function streetLevelArgs(streetLevel, { autoOpen = true } = {}) {
   };
 }
 
-const STREET_LEVEL_PANEL_ID = 'street-level-panel';
+/** The panel that holds OPEN: Street Level's row in Data Layers. */
+const DATA_LAYERS_PANEL_ID = 'data-panel';
+
+/**
+ * Bring Street Level's Data Layers row, which holds OPEN, into view: on a
+ * long layer list it can sit below the fold of the panel just opened.
+ * @param {?Document} doc
+ */
+async function showStreetLevelRow(doc) {
+  await nextTick();
+  await scrollDataLayerRow(findDataLayerRow(doc, STREET_LEVEL_LAYER_ID));
+}
 /** Dispatched on the window when a link opened after start-up has restored. */
 const SHARE_NAVIGATION_RESTORED_EVENT = 'gev:share-navigation-restore-settled';
 
-/** The armed link's toast, naming the OPEN button as the panel shows it. */
+/** The armed link's toast, naming the OPEN button on the Street Level row. */
 function armedToast() {
   return t('Street View is ready: press {open} to load it', {
     open: t('OPEN {labels}', { labels: translateKnown(GOOGLE_LABEL) }),
@@ -199,7 +215,7 @@ export async function applyView(
   }
   for (const layerId of view.layers) {
     // The street-level action lights its source first, then the layer.
-    if (view.street_level && layerId === STREET_LEVEL_LAYER) continue;
+    if (view.street_level && layerId === STREET_LEVEL_LAYER_ID) continue;
     if (!dataManager.isEnabled(layerId))
       await act('set_layer_visibility', { layerId, enabled: true });
   }
@@ -223,10 +239,12 @@ export async function applyView(
       // Overtaken (a click on the map, a newer request): hands off.
       if (result?.cancelled || result?.superseded) return steps;
       // An earlier view's photo must not stay over a place this view left.
-      // From the imagery stage on the action has settled the panel itself
+      // From the imagery stage on the action has settled the photo card
       // (a photo it could not load keeps its error).
       if (result?.stage !== 'imagery')
-        dataManager.layers?.get?.(STREET_LEVEL_LAYER)?.module?.closeViewer?.();
+        dataManager.layers
+          ?.get?.(STREET_LEVEL_LAYER_ID)
+          ?.module?.closeViewer?.();
       if (!result?.location)
         steps.push({ step: 'camera', ok: await flyTo(viewer, view.camera) });
     }
@@ -343,16 +361,16 @@ export function installViews({
       shell._showToast?.(keyToast(result));
       return;
     }
-    // OPEN must be in view, but embed mode hides the rail that holds it: in
-    // a frame a posted view is the way to open a photo.
+    // In a frame the rail is hidden. The host opens photos by posting a view.
     if (result?.armed === true && !isEmbedded(location)) {
       // Opened for this link only: the recipient's saved layout stays theirs.
-      shell.setPanelCollapsed?.(STREET_LEVEL_PANEL_ID, false, {
+      shell.setPanelCollapsed?.(DATA_LAYERS_PANEL_ID, false, {
         explicit: true,
         persist: false,
       });
-      // On a phone the panel sits in a tab sheet: open it so OPEN shows.
-      shell.revealPanel?.(STREET_LEVEL_PANEL_ID);
+      // On a phone Data Layers sits in a tab sheet: open it so OPEN shows.
+      shell.revealPanel?.(DATA_LAYERS_PANEL_ID);
+      await showStreetLevelRow(windowRef?.document ?? globalThis.document);
       shell._showToast?.(armedToast());
     }
   };

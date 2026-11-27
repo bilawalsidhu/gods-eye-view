@@ -593,12 +593,13 @@ test('the desktop bottom row: credits on the Power Up baseline, the dock lifted,
   );
   // There the readout clears the row under it, however many lines it wraps
   // onto (--credit-line-height).
+  const omnibar = read('./styles/omnibar-dock.css');
   assert.match(
-    read('./styles/omnibar-dock.css'),
-    /html\[dir='rtl'\] \*\):not\(\.context-docked\)\s*#intel-hud\[data-variant='tactical'\]\s*\.hud-bottom-right \{\s*bottom: max\(3\.375rem, var\(--omnibar-credits-clear\)\);/,
+    omnibar,
+    /html\[dir='rtl'\] \*\):not\(\.context-docked\)\s*\{\s*--tactical-hud-bottom: max\(3\.375rem, var\(--omnibar-credits-clear\)\);/,
   );
   const locale = read('./styles/locale-picker.css');
-  assert.match(locale, /#corner-actions \{[^}]*inset-inline-end: 0\.9rem;/);
+  assert.match(locale, /#corner-actions \{[^}]*inset-inline-end: 1\.5rem;/);
 
   // From 1200px the readout keeps 8px above Power Up and the coordinates
   // start level with it. The World Timeline sits between the corners, so they
@@ -606,10 +607,7 @@ test('the desktop bottom row: credits on the Power Up baseline, the dock lifted,
   const split = read('./styles/rail-split.css');
   const wide = block(split, '@media (min-width: 1200px)');
   const readoutWide =
-    value(
-      wide,
-      /\n  #intel-hud\[data-variant='tactical'\] \.hud-bottom-right \{\s*bottom: ([\d.]+)rem;/,
-    ) * rem;
+    value(wide, /:root \{\s*--tactical-hud-bottom: ([\d.]+)rem;/) * rem;
   assert.equal(readoutWide, POWER_UP.bottom + POWER_UP.height + 8);
   assert.equal(
     value(wide, /\.hud-bottom-left \{\s*bottom: calc\(([\d.]+)rem \+ 26px\);/) *
@@ -663,13 +661,36 @@ test('the desktop bottom row: credits on the Power Up baseline, the dock lifted,
       rem >=
       5 * rem + CREDIT_HEIGHT + 6,
   );
-  // The desktop Omnibar layout outranks these rules; its readout keeps the
-  // same 8px above Power Up.
-  const omnibarReadout = value(
-    read('./styles/omnibar-dock.css'),
-    /#intel-hud\[data-variant='tactical'\] \.hud-bottom-right \{\s*bottom: ([\d.]+)rem;/,
+  // In the desktop Omnibar layout, the two corners start in one row.
+  // Taller AIS details keep their clearance above Power Up.
+  const tacticalGrid = cssRuleBody(
+    omnibar,
+    /#intel-hud\[data-variant='tactical'\]/,
   );
-  assert.equal(omnibarReadout * rem, POWER_UP.bottom + POWER_UP.height + 8);
+  assert.match(
+    tacticalGrid,
+    /display: grid;[^}]*align-content: end;[^}]*align-items: start;/,
+  );
+  assert.match(
+    cssRuleBody(
+      omnibar,
+      /#intel-hud\[data-variant='tactical'\]\s*:is\(\.hud-bottom-left, \.hud-bottom-right\)/,
+    ),
+    /position: relative;\s*bottom: auto;\s*grid-area: 1 \/ 1;/,
+  );
+  assert.match(
+    tacticalGrid,
+    /padding-block-end: var\(--tactical-hud-bottom\);/,
+  );
+  const omnibarClearance = value(
+    omnibar,
+    /--tactical-hud-bottom: ([\d.]+)rem;/,
+  );
+  assert.equal(omnibarClearance * rem, POWER_UP.bottom + POWER_UP.height + 8);
+  assert.match(
+    block(omnibar, '@media (max-width: 1119px)'),
+    /--tactical-hud-bottom: calc\(var\(--omnibar-dock-raised\) \+ 56px \+ 4px\);/,
+  );
 });
 
 test('scope choice and expanded feather survive every HUD layout and both restore paths', async (t) => {

@@ -165,7 +165,6 @@ test('desktop panel lanes use per-panel allocations and presentation-only auto-c
     /panel\.id === preferredPanelId[\s\S]*?\[\s*preferredExpandedPanel,\s*\.\.\.expandedPanelsInDomOrder/,
     'the latest explicitly opened right panel must receive primary allocation',
   );
-  assert.match(ui, /panelId === 'radio-panel'[\s\S]*?document\.getElementById\('global-context-panel'\)/);
   assert.match(rightRail, /focusedExpandedPanel = expandedPanelsInDomOrder\.find\(\s*\(panel\) =>\s*panel\.contains\(documentRef\.activeElement\),?\s*\)/);
   // Collapse buttons render aria-expanded from the state the chrome presents
   // (panelChromeButtons.test.mjs covers the views).

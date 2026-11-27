@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import puppeteer from 'puppeteer';
+import { selectQaContextCard } from './qa-chrome.mjs';
 import {
   checkInstallationPan,
   checkInstallationSelection,
@@ -421,28 +422,8 @@ try {
     await page.screenshot({ path: `${dir}/${key}.png` });
     console.log(key, expected);
   }
-  await page.evaluate(() => {
-    if (
-      document
-        .getElementById('global-context-panel')
-        .classList.contains('collapsed')
-    )
-      document
-        .querySelector('[data-collapse-target="global-context-panel"]')
-        .click();
-  });
-  await page.waitForSelector('#global-context-flights-btn', { visible: true });
-  await page.evaluate(() => {
-    const button = document.getElementById('global-context-flights-btn');
-    if (button.getAttribute('aria-selected') !== 'true') button.click();
-  });
-  await page.waitForFunction(
-    () => {
-      const state = window.__godsEyeView.styleManager.getContextModeState();
-      return state.mode === 'flights' && !state.changing;
-    },
-    { timeout: 60000 },
-  );
+  // A selected site shows on its Context card; the Contacts panel that
+  // listed its named areas is retired.
   result.card = await page.evaluate(() => {
     const g = window.__godsEyeView;
     return g.dataManager.layers
@@ -450,29 +431,33 @@ try {
       .module.focusById('osm:military:r13529728');
   });
   assert.equal(result.card, true);
+  await selectQaContextCard(page, {
+    layerId: 'military-installations',
+    id: 'osm:military:r13529728',
+  });
   await page.waitForFunction(
     () =>
       document
-        .getElementById('military-awareness-panel')
-        ?.textContent.includes('Named areas') &&
-      document
-        .getElementById('military-awareness-panel')
-        .checkVisibility({ visibilityProperty: true, opacityProperty: true }),
+        .querySelector('#entity-card[data-layer="military-installations"]')
+        ?.checkVisibility({ visibilityProperty: true, opacityProperty: true }),
     { timeout: 15000 },
   );
   result.cardText = await page.$eval(
-    '#military-awareness-panel',
+    '#entity-card[data-layer="military-installations"]',
     (el) => el.textContent,
   );
   assert.match(result.cardText, /Fort Hood/);
-  assert.match(result.cardText, /TA-25/);
-  await sleep(1800);
-  await page.$eval(
-    '#military-awareness-panel .military-awareness-names',
-    (el) => {
-      el.open = true;
-    },
+  result.memberNames = await page.evaluate(
+    () =>
+      window.__godsEyeView.dataManager.layers
+        .get('military-installations')
+        .module.getById('osm:military:r13529728')?.memberNames || [],
   );
+  assert.ok(
+    result.memberNames.some((name) => /TA-25/.test(name)),
+    `member names: ${result.memberNames.join(', ')}`,
+  );
+  await sleep(1800);
   await page.screenshot({ path: `${dir}/member-names-card.png` });
   assert.equal(result.packs.length, 1, 'single lazy asset fetch');
   assert.deepEqual(result.forbidden, []);

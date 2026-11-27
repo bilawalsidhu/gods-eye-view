@@ -58,6 +58,8 @@ export function createInteraction({
   }
 
   function radioPresentationAllowed() {
+    // A local receiver shows no stations at all.
+    if (layerState._source === 'local') return false;
     if (!layerState._managerLifecyclePresentation) return layerState._enabled;
     return (
       layerState._enabled &&

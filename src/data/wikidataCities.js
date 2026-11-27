@@ -161,23 +161,35 @@ export function loadCities(fetchImpl = (...args) => globalThis.fetch(...args)) {
 }
 
 /**
- * The city a point is in or nearest to: the largest within `nearKm`, else the
- * nearest within `radiusKm`, else null. Preferring the largest nearby keeps a
- * view over a metropolis from being named after one of its suburbs.
+ * The city a point is in or nearest to, using an already loaded index.
+ * The largest within `nearKm` wins, otherwise the nearest within `radiusKm`.
  */
-export async function nearestCity(
+export function nearestCityIn(
+  cells,
   latitude,
   longitude,
-  { radiusKm = 60, nearKm = 12 } = {},
+  { radiusKm = 60, nearKm = 12, country = null } = {},
 ) {
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  let nearest = null;
+  let largestNear = null;
+  for (const city of citiesWithin(cells, latitude, longitude, radiusKm)) {
+    if (country && city.country !== country) continue;
+    if (!nearest || city.distanceKm < nearest.distanceKm) nearest = city;
+    if (
+      city.distanceKm <= nearKm &&
+      (!largestNear || city.population > largestNear.population)
+    )
+      largestNear = city;
+  }
+  return largestNear ?? nearest;
+}
+
+/** Find a city offline, loading the bundled index if needed. */
+export async function nearestCity(latitude, longitude, options) {
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
   const { cells } = await loadCities();
-  const found = citiesWithin(cells, latitude, longitude, radiusKm);
-  if (!found.length) return null;
-  const near = found.filter((city) => city.distanceKm <= nearKm);
-  if (near.length)
-    return near.reduce((a, b) => (b.population > a.population ? b : a));
-  return found.reduce((a, b) => (b.distanceKm < a.distanceKm ? b : a));
+  return nearestCityIn(cells, latitude, longitude, options);
 }
 
 /** Cities around a point, most populous first. */

@@ -99,13 +99,13 @@ function stormTitle(storm) {
 }
 
 /**
- * Hazards within a radius of a spot, nearest first within each kind:
- * `[{kind, icon, title, detail, distanceKm, at}]`. Every kind uses the same
+ * Hazard rows within a radius, nearest first within each kind, and the kinds
+ * whose requested feeds were unavailable. Every kind uses the same
  * radius, the one Context's radius control sets. Satellite fire hits need a
  * FIRMS key the browser cannot see, so they are read only with `fires`: while
  * the FIRMS layer is on, which has found the key works.
  */
-export async function hazardsNear(
+export async function hazardReadNear(
   lat,
   lon,
   radiusKm = 250,
@@ -203,9 +203,16 @@ export async function hazardsNear(
     });
   }
   const order = { storm: 0, wildfire: 1, hotspots: 2, quake: 3 };
-  return found.sort(
+  found.sort(
     (a, b) => order[a.kind] - order[b.kind] || a.distanceKm - b.distanceKm,
   );
+  const failed = [];
+  if (quakeRows === null) failed.push('quake');
+  if (stormSnap === null || stormSnap.unavailable) failed.push('storm');
+  if (perimeterSnap === null) failed.push('wildfire');
+  if (withFires && (fireSnap === null || fireSnap.keyRequired))
+    failed.push('hotspots');
+  return { rows: found, failed };
 }
 
 /** Title-case copy for a WMO weather code, and the icon that goes with it. */

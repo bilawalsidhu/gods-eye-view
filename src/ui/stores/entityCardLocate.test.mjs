@@ -16,6 +16,7 @@ function setup({ found = true } = {}) {
     reference: 'vessel:v1',
   };
   let inFeed = true;
+  let layerEnabled = true;
   const asked = [];
   const module = {
     getAnalystRecords: () => (inFeed ? [{ ...vessel }] : []),
@@ -35,7 +36,7 @@ function setup({ found = true } = {}) {
     },
   };
   const dataManager = {
-    isEnabled: () => true,
+    isEnabled: () => layerEnabled,
     layers: new Map([['ais-live-vessels', { module }]]),
     getAll: () => [],
   };
@@ -44,6 +45,7 @@ function setup({ found = true } = {}) {
     followed: [],
     reselected: [],
     visible: true,
+    released: [],
     dataManager: () => dataManager,
     openPanel() {},
     flyTo(card) {
@@ -51,6 +53,9 @@ function setup({ found = true } = {}) {
     },
     follow(card) {
       shell.followed.push(card.key);
+    },
+    letGo(card) {
+      shell.released.push(card.key);
     },
     reselect(card, options) {
       shell.reselected.push([card.identity.id, options.follow]);
@@ -66,6 +71,9 @@ function setup({ found = true } = {}) {
     asked,
     leave: () => (inFeed = false),
     come: () => (inFeed = true),
+    setEnabled: (value) => {
+      layerEnabled = value;
+    },
   };
 }
 
@@ -193,4 +201,25 @@ test('Fly to and Ask read the open camera’s current calibrated mount by id', (
   mount.latitude = 49.003;
   store.refresh();
   assert.equal(store.card.lat, 49.003);
+});
+
+test('turning off a pinned selection keeps its card and releases its camera', (t) => {
+  const { store, shell, setEnabled } = setup();
+  t.after(() => store.clear());
+  const identity = { layerId: 'ais-live-vessels', id: 'v1' };
+  assert.equal(store.open(identity, { fromPin: true }), true);
+  const key = store.card.key;
+  store.following = key;
+  setEnabled(false);
+  store.refresh();
+  assert.equal(store.card?.key, key);
+  assert.equal(store.fromPin, true);
+  assert.deepEqual(shell.released, [key]);
+  assert.equal(store.isFollowing(), false);
+
+  setEnabled(true);
+  assert.equal(store.select(identity), true);
+  setEnabled(false);
+  store.refresh();
+  assert.equal(store.card, null);
 });

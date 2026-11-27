@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   clockLine,
   dayLengthMinutes,
+  durationText,
   localClock,
   utcClock,
 } from './contextTime.js';
@@ -48,4 +49,12 @@ test('the time line reads local and UTC, or UTC alone until the zone is known', 
     '10:14 local, 16:14 UTC',
   );
   assert.equal(clockLine(null, at), '16:14 UTC');
+});
+
+test('a duration rounds to the minute before it splits into hours', () => {
+  assert.equal(durationText(45), '45 min');
+  assert.equal(durationText(119.6), '2 h 0 min');
+  assert.equal(durationText(60 + 59.7), '2 h 0 min', 'never "1 h 60 min"');
+  assert.equal(durationText(125), '2 h 5 min');
+  assert.equal(durationText(1_500), '25 h 0 min');
 });

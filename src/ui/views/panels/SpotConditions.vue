@@ -1,161 +1,197 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { onLocaleChange, t } from '../../../i18n/index.js';
-import { weatherFacts, hazardsNear, regionalBrief, weatherLook } from '../../spotConditions.js';
-import { approximatePosition, distanceText } from '../../distanceText.js';
+import { computed, inject, nextTick, unref, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { formatNumber, onLocaleChange, t } from '../../../i18n/index.js';
 import { contextAgeText } from '../../contextTime.js';
-import { greatCircleKm } from '../../../geoDistance.js';
-import { CONTEXT_RADIUS_STEPS, contextRadiusKm, contextRadiusText as radiusText, contextRadiusIndex as radiusIndex, pickContextRadius as pickRadius } from '../../contextRadius.js';
-import { contextNeedle, matchesContextSearch } from '../../contextSearch.js';
-import UiButton from '../../kit/UiButton.vue';
-import UiIcon from '../../kit/UiIcon.vue';
-import UiSlider from '../../kit/UiSlider.js';
-import { sayWords, useEntityCardStore } from '../../stores/entityCard.js';
+import { hazardReadNear } from '../../spotConditions.js';
 import { useOmnibarStore } from '../../stores/omnibar.js';
 import { shownLayerName } from '../../layerNames.js';
+import { CONTEXT_EXEMPT, flightsFeedStatus, inspectorFeedLabel, presentLayerRow, splitBar } from '../../layerRowState.js';
+import { FIELD_ICONS, fieldReading } from '../../fieldReading.js';
+import { entityKind } from '../../../data/entityContext.js';
+import { greatCircleKm } from '../../../geoDistance.js';
+import { contextRadiusKm } from '../../contextRadius.js';
+import { contextNeedle, matchesContextSearch } from '../../contextSearch.js';
+import { sayWords, supportsLocalScopes, useEntityCardStore } from '../../stores/entityCard.js';
+import UiButton from '../../kit/UiButton.vue';
+import UiIcon from '../../kit/UiIcon.vue';
+import NearbyLists from './NearbyLists.vue';
+import ContextBreakdownBar from './ContextBreakdownBar.vue';
+import { inspectorScopeLabel } from '../../inspectorSpatialIndex.js';
+import ContextRadius from './ContextRadius.vue';
+import { focusCardTitle, focusedRow, replacementRow } from '../../cardFocus.js';
 
-// A selected item's weather and solar time, then flights, vessels, hazards,
-// alerts and other loaded items within the radius. Moving the item refreshes them.
+// Conditions here, then Nearby, at the foot of every card. Conditions here
+// reads each field layer that is on (wind, GNSS integrity, air quality,
+// recent imagery) at the item itself, worded as the Inspector's value tiles.
+// Nearby groups items by enabled layer, the selected item's layer first,
+// and sorts each group by distance. The radius control sits above the list.
+// A satellite's card lists what is inside its swath instead: the ground it
+// sees right now. Natural hazards near the item follow (earthquakes, tropical
+// storms and wildfire perimeters from their public feeds, also while those
+// layers are off; satellite fire hits only while FIRMS is on), then warnings
+// broadcast by things nearby.
 const props = defineProps({
   lat: { type: Number, required: true },
   lon: { type: Number, required: true },
-  withContacts: Boolean,
-  /** Distances from a selected privacy cell or rounded observation are approximate. */
-  approximate: Boolean,
-  /** The selected item's own key, left out of the nearby lists. */
+  /** The selected item's own key, left out of the lists. */
   excludeKey: { type: String, default: '' },
-  /** How far the spot moves before the weather and hazards are read again. */
+  /** The selected item's layer, listed first. */
+  ownLayer: { type: String, default: '' },
+  approximate: Boolean,
+  embedded: Boolean,
+  /** A satellite's swath width: the lists look inside it instead. */
+  swathKm: { type: Number, default: null },
+  /**
+   * How far the item moves before its hazards are read again: 1 km for
+   * something that stays put (a correction of its position), 25 km for one
+   * that moves.
+   */
   settleKm: { type: Number, default: 1 },
 });
 
 const store = useEntityCardStore();
 const omnibar = useOmnibarStore();
-
-const brief = ref(null);
-const hazards = ref([]);
-const loading = ref(true);
-/** Where the weather and hazards were last read for. */
-let readAt = null;
-let reading = 0;
-/** Hazard reads count apart, so moving the radius never drops a weather read. */
-let readingHazards = 0;
-let settle = null;
-
-const radiusKm = contextRadiusKm;
-
-// Satellite fire hits come only while the FIRMS layer is on (spotConditions.js).
-const firesOn = () =>
-  Boolean((omnibar.controls?.layers() || []).find((layer) => layer.id === HAZARD_LAYER.hotspots)?.enabled);
-
-async function read(lat, lon, { force = false } = {}) {
-  if (!force && readAt && greatCircleKm(readAt, { lat, lon }) <= props.settleKm) return;
-  readAt = { lat, lon };
-  const mine = ++reading;
-  const mineHazards = ++readingHazards;
-  // A forced re-read keeps what is shown until the new reading lands.
-  if (!force) loading.value = true;
-  const [nextBrief, nextHazards] = await Promise.all([
-    regionalBrief(lat, lon, store.readWeather, { force }),
-    hazardsNear(lat, lon, radiusKm.value, { fires: firesOn(), force }).catch(() => []),
-  ]);
-  if (reading !== mine) return;
-  if (nextBrief || !force) brief.value = nextBrief;
-  // A radius change meanwhile has its own, newer hazard read.
-  if (readingHazards === mineHazards) hazards.value = nextHazards;
-  loading.value = false;
-}
-watch(
-  () => `${props.lat},${props.lon}`,
-  () => {
-    clearTimeout(settle);
-    settle = setTimeout(() => void read(props.lat, props.lon), 350);
-  },
-  { immediate: true },
-);
-// A new radius only re-filters the hazard feeds, which are already cached.
-async function rereadHazards(km) {
-  const at = readAt || { lat: props.lat, lon: props.lon };
-  const mine = ++readingHazards;
-  const next = await hazardsNear(at.lat, at.lon, km, { fires: firesOn() }).catch(() => []);
-  if (readingHazards !== mine) return;
-  hazards.value = next;
-}
-watch(radiusKm, (km) => void rereadHazards(km));
-// A spot that stays put (a parked selection, a still view) reads its weather
-// and hazards again once the kept copies are old.
-const REREAD_MS = 5 * 60_000;
-let rereadTimer = 0;
-onMounted(() => {
-  rereadTimer = setInterval(() => void read(props.lat, props.lon, { force: true }), REREAD_MS);
+const shown = inject('contextViewShown', true);
+const scopeOwner = () => unref(shown) && globalThis.document?.visibilityState !== 'hidden';
+const releaseScope = store.setSelectedScopeOwner(scopeOwner);
+onBeforeUnmount(releaseScope);
+const spatialLayers = computed(() => {
+  void tick.value;
+  void store.layerRevision;
+  return scopeOwner() && !inSwath.value && !contextNeedle.value && store.view?.center
+    ? store.liveLayers().filter(row => supportsLocalScopes(row.id))
+    : [];
 });
-onBeforeUnmount(() => clearInterval(rereadTimer));
-// Hazard rows are worded as they are read, so a new language reads them again.
-const stopLocale = onLocaleChange(() => void rereadHazards(radiusKm.value));
+const scopedGroups = computed(() => spatialLayers.value.map(row => {
+  const group = store.inspectorGroup(row.id, radiusKm.value, {
+    row, anchor: {lat: props.lat, lon: props.lon}, excludeKey: row.id === props.ownLayer ? props.excludeKey : '',
+  });
+  return group && { ...group, bar: splitBar(group.breakdown, 1), layerId: row.id, layerName: shownLayerName(row.name, row.id) };
+}).filter(Boolean));
+const groupLabel = scope => inspectorScopeLabel(scope, radiusKm.value, store.card?.title);
 
-// Warnings from the loaded layers move with their records; read them often.
+
+// What the layers have nearby moves with their records; read it often.
 const tick = ref(0);
 let timer = null;
 onMounted(() => {
   timer = setInterval(() => tick.value++, 4000);
 });
-onBeforeUnmount(() => {
-  clearInterval(timer);
-  clearTimeout(settle);
-  stopLocale();
+onBeforeUnmount(() => clearInterval(timer));
+
+const inSwath = computed(() => Number.isFinite(props.swathKm) && props.swathKm > 0);
+const radiusKm = computed(() => (inSwath.value ? props.swathKm / 2 : contextRadiusKm.value));
+const km = (n) => t('{n} km', { n: formatNumber(n) });
+const title = computed(() =>
+  inSwath.value
+    ? t('Inside the swath · {width} wide', { width: km(Math.round(props.swathKm)) })
+    : t('Nearby · {radius}', { radius: km(contextRadiusKm.value) }),
+);
+
+// Each field layer that is on, read at the item on the same poll as the
+// lists: a layer that is off, or outside its coverage here, has no row, and
+// none left leaves the group out.
+const fields = computed(() => {
+  void tick.value;
+  void store.managerVersion;
+  void store.layerRevision;
+  return store
+    .liveLayers()
+    // The item's own layer is the card itself: no second reading of it.
+    .filter((row) => !CONTEXT_EXEMPT.includes(row.id) && row.id !== props.ownLayer)
+    .flatMap((row) => {
+      const { tone } = presentLayerRow(row);
+      const layer = { id: row.id, tone, toneText: inspectorFeedLabel(tone) };
+      const reading = fieldReading(store.valueAt(row.id, props.lat, props.lon), layer, { emptyValue: t('No reading here'), omitOutsideCoverage: true });
+      if (!reading) return [];
+      return [{ ...layer, ...reading, name: shownLayerName(row.name, row.id), icon: FIELD_ICONS[row.id] || entityKind(row.id).icon }];
+    });
 });
+
 // The Context search narrows every list below to what holds its text.
 const searching = computed(() => Boolean(contextNeedle.value));
+// Flights answers with its closest aircraft only outside a search or a swath.
+const closestFlights = computed(() => !(searching.value || inSwath.value));
+const shownFields = computed(() =>
+  fields.value.filter((field) => matchesContextSearch(field.name, field.value, field.detail)),
+);
+const lists = computed(() => {
+  void tick.value;
+  void store.layerRevision;
+  if (!scopeOwner()) return [];
+  const found = store.nearbyLayers(props.lat, props.lon, {
+    radiusKm: radiusKm.value,
+    limit: searching.value ? 12 : 3,
+    excludeKey: props.excludeKey,
+    query: contextNeedle.value,
+    excludeLayers: ['radio', ...spatialLayers.value.map(row => row.id)],
+    closestFlights: closestFlights.value,
+  });
+  if (!props.ownLayer) return found;
+  return [...found.filter((list) => list.layerId === props.ownLayer), ...found.filter((list) => list.layerId !== props.ownLayer)];
+});
+
+// Flights always answers in the card, from the item: aircraft within the
+// radius sit in the lists; with none there, the closest three with their
+// distance; with none loaded, why.
+const FLIGHTS = 'flights';
+const flightsBlock = computed(() => {
+  void tick.value;
+  void store.managerVersion;
+  void store.layerRevision;
+  if (!closestFlights.value || !scopeOwner()) return null;
+  const row = store.allLayers().find((layer) => layer.id === FLIGHTS && layer.enabled);
+  if (!row) return null;
+  const group = lists.value.find((list) => list.layerId === FLIGHTS);
+  if (group?.items.length && group.scope !== 'closest') return null;
+  const name = shownLayerName(row.name, row.id);
+  if (group?.scope === 'closest') return { name, group, status: '' };
+  const { tone, updatedAt } = presentLayerRow(row);
+  const status = flightsFeedStatus({
+    readFailed: group?.readFailed,
+    tone,
+    updatedAt: updatedAt ?? (row.stats?.count ? 0 : null),
+  }) || t('No nearby aircraft');
+  return { name, group: null, status };
+});
+const shownLists = computed(() => lists.value.filter((list) => list !== flightsBlock.value?.group));
+// The closest aircraft go with their list, which then cannot hand focus on:
+// a focused row moves to the same row now listed in Nearby, or one of the
+// same layer, else to the card's title. Focus that moved elsewhere stays.
+const root = ref(null);
+const flightsSection = ref(null);
+watch(flightsBlock, (next) => {
+  const doc = globalThis.document;
+  if (next?.group || !flightsSection.value?.contains(doc?.activeElement)) return;
+  const was = focusedRow(flightsSection.value, doc.activeElement);
+  void nextTick(() => {
+    const active = doc.activeElement;
+    if (active && active !== doc.body && active.isConnected) return;
+    const row = was && root.value && replacementRow(root.value, was, 'button[data-via-key]');
+    if (row) row.focus();
+    else focusCardTitle();
+  });
+}, { flush: 'pre' });
+
 const alerts = computed(() => {
   void tick.value;
   return store
-    .alertsAt(props.lat, props.lon, { radiusKm: radiusKm.value, limit: searching.value ? 40 : 4 })
+    .alertsAt(props.lat, props.lon, {
+      radiusKm: radiusKm.value,
+      limit: searching.value ? 40 : 4,
+      excludeKey: props.excludeKey,
+    })
     .filter((alert) => matchesContextSearch(alert.title, sayWords(alert.words, alert.text), alert.text));
 });
-const shownHazards = computed(() =>
-  hazards.value.filter((hazard) => matchesContextSearch(hazard.title, hazard.detail, hazardLayers.value[hazard.kind]?.name)).slice(0, searching.value ? 12 : 5),
-);
 
-// The merged card gets these cohorts and their coverage from Awareness.
-const CONTACT_LAYERS = ['flights', 'military', 'ais-live-vessels', 'military-installations'];
-const groups = computed(() => {
-  void tick.value;
-  return store.nearbyGroups(props.lat, props.lon, {
-    radiusKm: radiusKm.value,
-    limit: searching.value ? 12 : 4,
-    excludeKey: props.excludeKey,
-    excludeLayers: props.withContacts ? CONTACT_LAYERS : undefined,
-    query: contextNeedle.value,
-  });
-});
-const trafficBlocks = computed(() => {
-  if (props.withContacts)
-    return groups.value.flights.count
-      ? [{ id: 'local-adsb', icon: 'flight', title: t('Local ADS-B'), ...groups.value.flights }]
-      : [];
-  return [
-    { id: 'flights', icon: 'flight', title: t('Flights within {radius}', { radius: radiusText.value }), none: t('No flights within {radius} from the layers that are on.', { radius: radiusText.value }), ...groups.value.flights },
-    { id: 'vessels', icon: 'directions_boat', title: t('Vessels within {radius}', { radius: radiusText.value }), none: t('No vessels within {radius} from the layers that are on.', { radius: radiusText.value }), ...groups.value.vessels },
-  ];
-});
-
-// Local solar time at the spot, from its longitude: no time zone lookup.
-const localTime = computed(() => {
-  void tick.value;
-  const solar = new Date(Date.now() + (props.lon / 15) * 3_600_000);
-  return `${String(solar.getUTCHours()).padStart(2, '0')}:${String(solar.getUTCMinutes()).padStart(2, '0')}`;
-});
-
-const weather = computed(() => brief.value?.weather || null);
-const look = computed(() => weatherLook(weather.value?.weatherCode));
-const round = (n) => (Number.isFinite(n) ? Math.round(n) : null);
-const facts = computed(() => weatherFacts(weather.value));
-
-function distance({ distanceKm: km, identity }) {
-  return distanceText(km, props.approximate || approximatePosition(identity?.record));
-}
-
-// The layer each kind of hazard comes from. Picking a hazard turns its layer
-// on (when it is off) so the marker and its label are there to select.
+// Hazards near the item, from the feeds the hazard layers read, kept for
+// five minutes whichever spot asks (spotConditions.js): the same cache
+// guards every read here, the scheduled ones included, so a feed is asked at
+// most once every five minutes. They look out as far as the Context radius,
+// also on a satellite's card (whose Nearby lists keep to its swath). They
+// are read again once the item has moved more than `settleKm` (after a
+// short settle), when the radius or FIRMS changes, in a new language, and
+// every five minutes while the card stays open.
 const HAZARD_LAYER = {
   quake: 'earthquakes',
   storm: 'weather-cyclones',
@@ -164,11 +200,62 @@ const HAZARD_LAYER = {
 };
 // Far enough out to see the markers (and pick one), not just the ground.
 const HAZARD_RANGE_M = { quake: 120000, storm: 1500000, wildfire: 40000, hotspots: 180000 };
-const layerTick = ref(0);
+const SETTLE_MS = 350;
+const REREAD_MS = 5 * 60_000;
+const hazards = ref([]);
+const hazardsPending = ref(true);
+const hazardsFailed = ref([]);
+let hazardsAt = null;
+let readingHazards = 0;
+let settleTimer = 0;
+const layerRows = () => omnibar.controls?.layers() || [];
+// Satellite fire hits need FIRMS on: read live wherever it decides a request
+// or a row, never from a copy that may be seconds old.
+const firmsLive = () => Boolean(layerRows().find((layer) => layer.id === HAZARD_LAYER.hotspots)?.enabled);
+// What the template follows to notice FIRMS turning on or off: at once, from
+// manager changes, layer updates and the poll.
+const firesOn = computed(() => {
+  void store.managerVersion;
+  void store.layerRevision;
+  void tick.value;
+  return firmsLive();
+});
+async function readHazards() {
+  hazardsAt = { lat: props.lat, lon: props.lon };
+  const mine = ++readingHazards;
+  const { rows, failed } = await hazardReadNear(props.lat, props.lon, contextRadiusKm.value, { fires: firmsLive() })
+    .catch(() => ({ rows: [], failed: Object.keys(HAZARD_LAYER) }));
+  if (readingHazards !== mine) return;
+  hazards.value = rows;
+  hazardsFailed.value = failed;
+  hazardsPending.value = false;
+}
+watch(
+  () => [props.lat, props.lon],
+  () => {
+    if (!hazardsAt) return void readHazards();
+    if (greatCircleKm(hazardsAt, { lat: props.lat, lon: props.lon }) <= props.settleKm) return;
+    clearTimeout(settleTimer);
+    settleTimer = setTimeout(() => void readHazards(), SETTLE_MS);
+  },
+  { immediate: true },
+);
+watch([contextRadiusKm, firesOn], () => void readHazards());
+const stopLocale = onLocaleChange(() => void readHazards());
+let rereadTimer = 0;
+onMounted(() => {
+  rereadTimer = setInterval(() => void readHazards(), REREAD_MS);
+});
+onBeforeUnmount(() => {
+  clearInterval(rereadTimer);
+  clearTimeout(settleTimer);
+  stopLocale();
+});
 const hazardLayers = computed(() => {
-  void layerTick.value;
-  void hazards.value;
-  const rows = omnibar.controls?.layers() || [];
+  void store.managerVersion;
+  void store.layerRevision;
+  void tick.value;
+  const rows = layerRows();
   return Object.fromEntries(
     Object.entries(HAZARD_LAYER).map(([kind, id]) => {
       const row = rows.find((layer) => layer.id === id);
@@ -176,157 +263,152 @@ const hazardLayers = computed(() => {
     }),
   );
 });
-// Turning FIRMS on or off adds or drops its fire hits at once.
-watch(
-  () => Boolean(hazardLayers.value.hotspots?.on),
-  () => void rereadHazards(radiusKm.value),
+// Fire hits show only while FIRMS is on now, whatever a read found earlier.
+const liveHazards = computed(() =>
+  hazards.value.filter((hazard) => hazard.kind !== 'hotspots' || firesOn.value),
 );
-let layerTimer = 0;
-onMounted(() => {
-  layerTimer = setInterval(() => layerTick.value++, 1500);
+const matchingHazards = computed(() =>
+  liveHazards.value.filter((hazard) => matchesContextSearch(hazard.title, hazard.detail, hazardLayers.value[hazard.kind]?.name)),
+);
+const shownHazards = computed(() => matchingHazards.value.slice(0, searching.value ? 12 : 5).map(hazard => ({
+  ...hazard,
+  detail: [hazard.detail, Number.isFinite(hazard.time) ? contextAgeText(Date.now() - hazard.time) : ''].filter(Boolean).join(' · '),
+})));
+const failedKinds = computed(() => hazardsFailed.value.filter((kind) => kind !== 'hotspots' || firesOn.value));
+const hazardState = computed(() => {
+  if (searching.value || shownHazards.value.length) return null;
+  if (hazardsPending.value) return { mark: '…', label: t('Loading') };
+  return failedKinds.value.length ? { mark: '—', label: t('Unavailable') } : null;
 });
-onBeforeUnmount(() => clearInterval(layerTimer));
-
-function flyTo(hazard) {
+// Picking a hazard turns its layer on (when it is off), so its marker is
+// there to select, and flies to it.
+function flyToHazard(hazard) {
+  // A fire-hit row left over from before FIRMS went off does nothing.
+  if (hazard.kind === 'hotspots' && !firmsLive()) return;
   const layer = hazardLayers.value[hazard.kind];
-  if (layer && !layer.on) {
-    void omnibar.controls?.setLayer(layer.id, true);
-    setTimeout(() => layerTick.value++, 800);
-  }
+  if (layer && !layer.on) void omnibar.controls?.setLayer(layer.id, true);
   omnibar.runner?.('fly_to_location', {
     latitude: hazard.at.lat,
     longitude: hazard.at.lon,
-    query: hazard.title,
     viewMode: 'overview',
     rangeM: HAZARD_RANGE_M[hazard.kind] ?? 100000,
   });
 }
 
-const sources = computed(() => {
-  const list = [];
-  if (weather.value) list.push('Open-Meteo');
-  if (hazards.value.some((h) => h.kind === 'quake')) list.push('USGS');
-  if (hazards.value.some((h) => h.kind === 'storm')) list.push('NOAA NHC');
-  if (hazards.value.some((h) => h.kind === 'wildfire')) list.push('NIFC WFIGS');
-  if (hazards.value.some((h) => h.kind === 'hotspots')) list.push('NASA FIRMS');
-  return list.join(' · ');
+// The feeds behind the hazard rows, credited in the card: their layers may
+// be off, so the map's own credits do not name them.
+const HAZARD_SOURCE = { quake: 'USGS', storm: 'NOAA NHC', wildfire: 'NIFC WFIGS', hotspots: 'NASA FIRMS' };
+const hazardSources = computed(() => {
+  if (hazardsPending.value) return t('Loading');
+  const sources = new Set(liveHazards.value.map((hazard) => HAZARD_SOURCE[hazard.kind]).filter(Boolean));
+  for (const kind of failedKinds.value) {
+    if (HAZARD_SOURCE[kind]) sources.add(`${HAZARD_SOURCE[kind]}: ${t('Unavailable')}`);
+  }
+  return [...sources].join(' · ');
 });
+
+const distance = (n) => {
+  const value = t('{n} km', { n: n < 10 ? formatNumber(n, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : formatNumber(Math.round(n)) });
+  return props.approximate ? `${value} (${t('approximate')})` : value;
+};
 </script>
 
 <template>
-  <section class="spot-conditions" :aria-label="t('Conditions here')" :aria-busy="String(loading)">
-    <!-- A selected item leads with the weather and the time there. -->
-    <div class="spot-conditions__weather spot-conditions__weather--timed">
-      <template v-if="weather">
-        <UiIcon class="spot-conditions__weather-icon" :name="look.icon" :size="null" />
-        <div class="spot-conditions__weather-now">
-          <strong>{{ round(weather.temperatureC) }}°C</strong>
-          <span>{{ t(look.label) }}<template v-if="Number.isFinite(weather.apparentTemperatureC)"> · {{ t('feels {n}°', { n: round(weather.apparentTemperatureC) }) }}</template></span>
-        </div>
-      </template>
-      <p v-else class="spot-conditions__loading spot-conditions__weather-wait">{{ loading ? t('Reading conditions here…') : t('No weather reading here.') }}</p>
-      <div class="spot-conditions__time">
-        <strong>{{ localTime }}</strong>
-        <span>{{ t('Local solar time') }}</span>
-      </div>
-      <dl v-if="weather" class="spot-conditions__weather-facts">
-        <div v-for="fact in facts" :key="fact.label">
-          <dt>{{ fact.label }}</dt>
-          <dd>{{ fact.value }}</dd>
-        </div>
-      </dl>
-    </div>
-
-    <!-- One distance for every nearby block below. -->
-    <div class="spot-conditions__radius">
-      <span class="spot-conditions__radius-label">{{ t('Nearby radius') }}</span>
-      <UiSlider class="spot-conditions__radius-slider" min="0" :max="CONTEXT_RADIUS_STEPS.length - 1" step="1" :model-value="radiusIndex" :aria-label="t('Nearby radius')" :aria-valuetext="radiusText" :title="t('How far out the nearby lists look')" @update:model-value="pickRadius" />
-      <output class="spot-conditions__radius-value">{{ radiusText }}</output>
-    </div>
-
-    <div v-for="block in trafficBlocks" v-show="!searching || block.items.length" :key="block.id" class="spot-conditions__block">
+  <section ref="root" class="spot-conditions" :aria-label="title">
+    <div v-if="shownFields.length" class="spot-conditions__block spot-conditions__fields">
       <h4>
-        <UiIcon :name="block.icon" :size="null" />
-        <span>{{ block.title }}</span>
-        <span class="spot-conditions__count">{{ block.count }}</span>
+        <UiIcon name="location_on" :size="null" />
+        <span>{{ t('Conditions here') }}</span>
       </h4>
-      <ul v-if="block.items.length">
-        <li v-for="item in block.items" :key="item.key">
-          <UiButton @click="store.select(item.identity, { fly: true })">
-            <span class="spot-conditions__row-main">
-              <span class="spot-conditions__row-title">{{ item.title }}</span>
+      <ul>
+        <li
+          v-for="field in shownFields"
+          :key="field.id"
+          class="spot-conditions__field"
+          :class="{ 'spot-conditions__field--empty': field.empty, 'spot-conditions__field--failed': field.failed }"
+          :data-layer="field.id"
+          :data-level="field.level || undefined"
+          :style="field.color ? { '--field-band': field.color } : undefined"
+          :title="field.detail || undefined"
+        >
+          <UiIcon :name="field.icon" :size="null" />
+          <span class="spot-conditions__field-main">
+            <span class="spot-conditions__field-head">
+              <span class="spot-conditions__field-name">{{ field.name }}</span>
+              <small v-if="!field.empty && !field.failed && ['stale', 'degraded', 'unavailable'].includes(field.tone)">{{ field.toneText }}</small>
+              <small v-if="field.age" class="spot-conditions__field-age">{{ field.age }}</small>
             </span>
-            <span class="spot-conditions__row-meta">{{ distance(item) }}</span>
-          </UiButton>
+            <strong class="spot-conditions__field-value">
+              <i v-if="field.color" class="spot-conditions__field-swatch" aria-hidden="true"></i>
+              <i v-else-if="field.failed" class="view-context__dot" :class="`view-context__dot--${field.failedTone}`" aria-hidden="true"></i>
+              <span>{{ field.value }}</span>
+            </strong>
+            <span v-if="field.detail" class="spot-conditions__field-detail">{{ field.detail }}</span>
+          </span>
         </li>
       </ul>
-      <p v-else class="spot-conditions__none">{{ block.none }}</p>
     </div>
 
-    <div v-show="!searching || shownHazards.length" class="spot-conditions__block">
+    <ContextRadius v-if="!inSwath" class="spot-conditions__radius" :label="t('Radius')" />
+    <section v-for="group in scopedGroups" :key="group.layerId" class="spot-conditions__block" :data-spatial-layer="group.layerId">
+      <h4>{{ group.layerName }} · {{ group.readFailed ? t('Unavailable') : group.loading ? t('Loading') : formatNumber(group.count) }}</h4>
+      <template v-if="!group.readFailed && !group.loading">
+        <p>{{ groupLabel(group.scope) }}</p>
+        <ContextBreakdownBar v-if="group.bar" :parts="group.bar.parts" />
+        <NearbyLists :lists="[group]" :title="group.layerName" rows-only :approximate="approximate" @focus-lost="focusCardTitle()" />
+      </template>
+    </section>
+    <NearbyLists :lists="shownLists" :title="title" :approximate="approximate" @focus-lost="focusCardTitle()" />
+    <section v-if="flightsBlock" ref="flightsSection" class="spot-conditions__block" data-spatial-layer="flights">
+      <h4>{{ flightsBlock.name }} · {{ flightsBlock.group ? formatNumber(flightsBlock.group.count) : flightsBlock.status }}</h4>
+      <template v-if="flightsBlock.group">
+        <p>{{ groupLabel('closest') }}</p>
+        <NearbyLists :lists="[flightsBlock.group]" :title="flightsBlock.name" rows-only :approximate="approximate" @focus-lost="focusCardTitle()" />
+      </template>
+    </section>
+
+    <div v-if="shownHazards.length || hazardState" class="spot-conditions__block spot-conditions__hazards">
       <h4>
         <UiIcon name="warning" :size="null" />
-        <span>{{ t('Hazards within {radius}', { radius: radiusText }) }}</span>
-        <span class="spot-conditions__count" :class="{ 'spot-conditions__count--hot': hazards.length }">{{ loading ? '…' : searching ? shownHazards.length : hazards.length }}</span>
+        <span>{{ t('Hazards within {radius}', { radius: km(contextRadiusKm) }) }}</span>
+        <span class="spot-conditions__count spot-conditions__count--hot" :title="hazardState?.label">{{ hazardState?.mark ?? matchingHazards.length }}</span>
       </h4>
-      <ul v-if="shownHazards.length">
+      <ul>
         <li v-for="hazard in shownHazards" :key="`${hazard.kind}-${hazard.title}-${hazard.distanceKm}`" :class="`spot-conditions__hazard--${hazard.kind}`">
-          <UiButton @click="flyTo(hazard)">
+          <UiButton @click="flyToHazard(hazard)">
             <UiIcon :name="hazard.icon" :size="null" />
             <span class="spot-conditions__row-main">
               <span class="spot-conditions__row-title">{{ hazard.title }}</span>
-              <span v-if="hazard.detail || hazard.time" class="spot-conditions__row-detail">{{ [hazard.detail, Number.isFinite(hazard.time) ? contextAgeText(Date.now() - hazard.time) : ''].filter(Boolean).join(' · ') }}</span>
+              <span v-if="hazard.detail" class="spot-conditions__row-detail">{{ hazard.detail }}</span>
               <span v-if="hazardLayers[hazard.kind]" class="spot-conditions__row-layer" :class="{ 'is-on': hazardLayers[hazard.kind].on }" :title="hazardLayers[hazard.kind].on ? t('Layer on') : t('Turns the layer on')">
                 <span class="spot-conditions__row-dot" aria-hidden="true"></span>{{ hazardLayers[hazard.kind].name }}
               </span>
             </span>
-            <span class="spot-conditions__row-meta">{{ distance(hazard) }} {{ t(hazard.direction) }}</span>
+            <span class="spot-conditions__row-meta">{{ distance(hazard.distanceKm) }}<template v-if="hazard.distanceKm >= 0.05 && hazard.direction"> {{ t(hazard.direction) }}</template></span>
           </UiButton>
         </li>
       </ul>
-      <p v-else-if="!loading" class="spot-conditions__none">{{ t('No earthquakes, tropical storms or wildfires reported within {radius}.', { radius: radiusText }) }}</p>
+      <p v-if="hazardSources" class="spot-conditions__source">{{ hazardSources }}</p>
     </div>
 
     <div v-if="alerts.length" class="spot-conditions__block">
       <h4>
         <UiIcon name="emergency_home" :size="null" />
-        <span>{{ t('Broadcast alerts within {radius}', { radius: radiusText }) }}</span>
+        <span>{{ t('Broadcast alerts') }}</span>
         <span class="spot-conditions__count spot-conditions__count--hot">{{ alerts.length }}</span>
       </h4>
       <ul>
         <li v-for="alert in alerts" :key="alert.key" class="spot-conditions__hazard--alert">
-          <UiButton @click="store.select(alert.identity, { fly: true })">
+          <UiButton @click="store.open(alert.identity)">
             <UiIcon :name="alert.icon" :size="null" />
             <span class="spot-conditions__row-main">
-              <span class="spot-conditions__row-title">{{ alert.title }}</span>
+              <span class="spot-conditions__row-title">{{ sayWords(alert.titleWords, alert.title) }}</span>
               <span class="spot-conditions__row-detail">{{ sayWords(alert.words, alert.text) }}</span>
             </span>
-            <span class="spot-conditions__row-meta">{{ distance(alert) }}</span>
+            <span class="spot-conditions__row-meta">{{ distance(alert.distanceKm) }}</span>
           </UiButton>
         </li>
       </ul>
     </div>
-
-    <div v-if="groups.other.length" class="spot-conditions__block">
-      <h4>
-        <UiIcon name="layers" :size="null" />
-        <span>{{ t('Also within {radius}', { radius: radiusText }) }}</span>
-        <span class="spot-conditions__count">{{ groups.other.length }}</span>
-      </h4>
-      <ul>
-        <li v-for="item in groups.other" :key="item.key">
-          <UiButton @click="store.select(item.identity, { fly: true })">
-            <UiIcon :name="item.icon" :size="null" />
-            <span class="spot-conditions__row-main">
-              <span class="spot-conditions__row-title">{{ item.title }}</span>
-              <span class="spot-conditions__row-detail">{{ shownLayerName(item.layerName, item.layerId) }}</span>
-            </span>
-            <span class="spot-conditions__row-meta">{{ distance(item) }}</span>
-          </UiButton>
-        </li>
-      </ul>
-    </div>
-
-    <p v-if="sources" class="spot-conditions__source">{{ sources }}</p>
   </section>
 </template>

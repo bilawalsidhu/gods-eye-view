@@ -3,17 +3,23 @@ import { markRaw, shallowRef } from 'vue';
 
 /**
  * @typedef {object} StreetLevelHandlers
- * @property {(stop: number) => void} setSinceStop Record a SINCE stop.
- * @property {(stop: number) => string} describeSinceStop A stop's readout.
+ * @property {() => void} [closeViewer] Close the embedded viewer.
+ * @property {(mode: string) => void} [setRenderMode] Fit or fill the photo.
+ * @property {(id: string) => void} [openPhoto] Open a remembered photo again.
+ * @property {(id: string, options?: {pendingOnly?: boolean}) => void} [closePhoto] Close the photo whose card went.
+ * @property {() => void} [withdrawPhoto] Close any photo, loading or not: something else was picked.
+ * @property {() => void} [cancelDockedPhoto] Cancel and restore the dock's current photo.
+ * @property {() => void} [stopPlayback] Stop a playing sequence, out of sight.
  */
 
 /**
- * The Street Level panel as its view renders it. StreetLevelControls owns
- * the presentation (`presentStreetLevelPanel()`), the viewer and EXPAND: it
- * publishes here and attaches the actions the view forwards.
+ * Street Level as its photo viewer (StreetLevelViewer.vue, on the photo's
+ * card in Context) and the card render it. StreetLevelControls owns the
+ * presentation (`presentStreetLevel()`), the viewer and EXPAND: it
+ * publishes here and attaches the actions the views forward.
  */
 export const useStreetLevelStore = defineStore('gev-street-level', () => {
-  /** The presented panel; null until an owner renders, then its last render. */
+  /** The presented row and viewer; null until an owner renders, then its last render. */
   const view = shallowRef(null);
   /** Whether EXPAND has the viewer full screen; null until first synced. */
   const expanded = shallowRef(null);
@@ -25,7 +31,7 @@ export const useStreetLevelStore = defineStore('gev-street-level', () => {
   let owner = null;
 
   /**
-   * Present the panel for an owner, replacing any earlier owner.
+   * Attach the row and viewer actions for an owner, replacing any earlier owner.
    * @param {StreetLevelHandlers} handlers
    * @returns {object} Token for detach().
    */
@@ -64,12 +70,7 @@ export const useStreetLevelStore = defineStore('gev-street-level', () => {
 
   /** Forward a view action to the owner. */
   function act(name, ...args) {
-    owner?.handlers[name]?.(...args);
-  }
-
-  /** The readout of a SINCE stop while its thumb is dragged. */
-  function describeSinceStop(stop) {
-    return owner?.handlers.describeSinceStop?.(stop) ?? '';
+    return owner?.handlers[name]?.(...args);
   }
 
   return {
@@ -84,6 +85,5 @@ export const useStreetLevelStore = defineStore('gev-street-level', () => {
     setEmbedOverlay,
     detach,
     act,
-    describeSinceStop,
   };
 });

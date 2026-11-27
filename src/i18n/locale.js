@@ -1,3 +1,6 @@
+import { LOCALES } from './shippedLocales.js';
+export { LOCALES };
+
 // Which locale the page runs in: ?lang= → stored choice → browser languages →
 // English. Only shipped locales are ever selected.
 
@@ -6,24 +9,6 @@ export const LOCALE_STORAGE_KEY = 'gev:locale:v1';
 
 /** Source language and fallback. */
 export const DEFAULT_LOCALE = 'en';
-
-/** Shipped locales; order does not matter. Adding one: docs/TRANSLATORS.md. */
-export const LOCALES = Object.freeze([
-  'en',
-  'ar',
-  'de',
-  'es',
-  'fr',
-  'he',
-  'it',
-  'ja',
-  'pt',
-  'ru',
-  'sv',
-  'uk',
-  'zh-CN',
-  'zh-Hant',
-]);
 
 /** Each locale named in its own language, for the selector. */
 export const LOCALE_NAMES = Object.freeze({

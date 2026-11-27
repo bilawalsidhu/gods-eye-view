@@ -13,6 +13,7 @@ import {
 import {
   interruptCameraMotion,
   interruptGlobeRotation,
+  manualCameraInputCount,
 } from '../cameraVerbs.js';
 import { IntelHUD } from '../hud.js';
 import { ShareLinkManager } from '../sharelink.js';
@@ -90,6 +91,7 @@ export class StyleManager extends ApplicationShell {
         flyToLandmark,
         searchAndFlyTo,
         interruptCameraMotion,
+        manualCameraInputCount,
         interruptGlobeRotation,
         IntelHUD,
         ShareLinkManager,

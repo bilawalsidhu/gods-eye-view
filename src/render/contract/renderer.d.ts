@@ -101,6 +101,7 @@ export interface CardPreviews {
     events?: {
       onPhase?(phase: 'plain' | 'scan'): void;
       onCycle?(ms: number): void;
+      onReady?(): void;
       onFailed?(): void;
     },
   ): CardPreview<void>;
@@ -108,13 +109,13 @@ export interface CardPreviews {
   route(
     container: HTMLElement,
     route: CardRoute,
-    events?: { onFailed?(): void },
+    events?: { onFailed?(): void; onReady?(): void },
   ): CardPreview<CardRoute>;
   /** The view ahead from an aircraft's position, height and heading. */
   cockpit(
     container: HTMLElement,
     craft: CardCraft,
-    events?: { onFailed?(): void },
+    events?: { onFailed?(): void; onReady?(): void },
   ): CardPreview<CardCraft>;
 }
 
@@ -141,6 +142,8 @@ export interface CardCraft {
 
 /** One preview: hidden, it rests on its last frame. */
 export interface CardPreview<Values> {
+  /** A shown, paused preview redraws its still when its data changes. */
+  setShown?(shown: boolean): void;
   setActive(active: boolean): void;
   update(values: Values): void;
   destroy(): void;

@@ -15,7 +15,8 @@ export function createLifecycle({
 
   const methods = {
     /** Initialize the stations' rendering and the single audio element. */
-    init(viewer) {
+    init(viewer, { panel = null } = {}) {
+      parts.controls?.watchRowControls?.(panel);
       layerState._sessionGeneration += 1;
       layerState._viewer = viewer;
       parts.clustering.resetRadioClusterOverlayIdentities();
@@ -33,8 +34,19 @@ export function createLifecycle({
       parts.presentation.emitState();
     },
 
-    /** Hide the layer and stop playback without forgetting the selected station. */
+    /**
+     * Hide the layer and stop playback without forgetting the selected
+     * station. A stream the app asked to keep (keepStreamWhenOff, a pinned
+     * station) plays on, or stays paused, as a docked view stays live with
+     * its layer off.
+     */
     disable() {
+      const keepStream =
+        ['loading', 'buffering', 'playing', 'paused'].includes(
+          layerState._audioState,
+        ) &&
+        Boolean(layerState._audioStationId) &&
+        layerState._keepStreamWhenOff?.(layerState._audioStationId) === true;
       layerState._sessionGeneration += 1;
       layerState._enabled = false;
       parts.navigation.invalidateRadioCameraNavigation();
@@ -49,7 +61,8 @@ export function createLifecycle({
       parts.tuning.endRadioTuning();
       layerState._cancelledTuningPresentationStation = null;
       layerState._tuningUnavailableStationId = null;
-      parts.playback.stopRadioPlayback({ origin: 'layer-disable' });
+      if (keepStream) parts.playback.clearRadioFallback();
+      else parts.playback.stopRadioPlayback({ origin: 'layer-disable' });
       parts.rendering.setStationsShown(false);
       parts.rendering.removeSelectionEntity();
       if (layerState._overlayPublishTimer)
@@ -65,6 +78,8 @@ export function createLifecycle({
 
     /** Release rendering, event, request, and playback resources. */
     destroy() {
+      parts.controls?.watchRowControls?.(null);
+      layerState._keepStreamWhenOff = null;
       this.disable();
       parts.volume.cancelRadioVolumeTransition();
       layerState._voiceDucked = false;
@@ -83,6 +98,7 @@ export function createLifecycle({
       layerState._stationById.clear();
       layerState._categories = Object.freeze([]);
       layerState._filter = DEFAULT_RADIO_FILTER;
+      layerState._source = 'internet';
       layerState._renderById.clear();
       parts.clustering.resetRadioClusterOverlayIdentities();
       layerState._lastHorizonCameraPosition = null;

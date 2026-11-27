@@ -140,33 +140,19 @@ test('destroy invalidates image callbacks and releases each subscription once', 
   assert.equal(requests.length, 1);
 });
 
-test('disposing during camera enable prevents the delayed focus and future clicks', async () => {
+test('disposing stops the camera tools listening', () => {
   const button = new EventTarget();
-  let resolveEnable;
-  let enables = 0;
-  let focuses = 0;
+  const params = [];
   const controls = new CctvControls({
-    elements: { _cctvPanel: {}, _cctvNextBtn: button },
+    elements: { _cctvPanel: {}, _cctvAutoHopBtn: button },
     cctv: {},
     actions: {
       isEnabled: () => true,
-      syncViewport() {},
-      toggleEnabled() {
-        enables++;
-        return new Promise((resolve) => {
-          resolveEnable = resolve;
-        });
-      },
-      runExplicitFocus() {
-        focuses++;
-      },
+      setParams: (next) => params.push(next),
     },
   });
   button.dispatchEvent(new Event('click'));
   controls.destroy();
-  resolveEnable(true);
-  await new Promise((resolve) => setImmediate(resolve));
   button.dispatchEvent(new Event('click'));
-  assert.equal(enables, 1);
-  assert.equal(focuses, 0);
+  assert.deepEqual(params, [{ autoHop: true }]);
 });

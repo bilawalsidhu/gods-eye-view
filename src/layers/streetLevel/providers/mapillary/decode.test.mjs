@@ -153,3 +153,15 @@ test('a sequence with a capture gap keeps its parts as separate lines', () => {
   // No part ends where the next begins: the gap is not bridged.
   assert.notDeepEqual(sequence.parts[0].at(-1), sequence.parts[1][0]);
 });
+
+test('the decoder bounds retained coverage vertices per tile', () => {
+  const geometry = linePart(
+    Array.from({ length: 66_000 }, (_, i) => [i % 2048, 100]),
+  );
+  const { sequences } = decodeCoverageTile(sampleTile({ geometry }), {
+    x: 0,
+    y: 0,
+    z: 1,
+  });
+  assert.equal(sequences[0].parts[0].length, 65_536);
+});

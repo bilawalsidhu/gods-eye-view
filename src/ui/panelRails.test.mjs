@@ -555,7 +555,8 @@ test('natural height includes visible content, margins and wrapper chrome, exclu
 function thrashingRightRail({
   focused = false,
   weatherOpen = false,
-  tallId = 'cctv-panel',
+  // An open Context panel takes the full column.
+  tallId = 'global-context-panel',
 } = {}) {
   const f = fixture('right');
   f.options.windowRef.innerHeight = 920;
@@ -567,9 +568,12 @@ function thrashingRightRail({
     height: 444,
     collapsed: !weatherOpen,
   });
-  const context = element('global-context-panel', { collapsed: true });
+  const context =
+    tallId === 'global-context-panel'
+      ? null
+      : element('global-context-panel', { collapsed: true });
   if (!weatherOpen) weather.classList.add('layout-auto-collapsed');
-  f.stack.children = [display, cctv, weather, context];
+  f.stack.children = [display, cctv, weather, context].filter(Boolean);
   f.stack.classList.toggle('layout-focus', focused);
   f.options.preferredPanelId = cctv.id;
   f.options.displayPanel = display;
@@ -670,7 +674,7 @@ test('right rail enters focus only above available height and leaves below the f
   assert.equal(f.stack.classList.contains('layout-focus'), false);
 });
 
-test('an open CCTV panel takes the full column however short its content', () => {
+test('an open Context panel takes the full column however short its content', () => {
   const f = thrashingRightRail();
   f.cctv.intrinsicHeight = 200;
   f.run();
@@ -803,12 +807,7 @@ function flatRules(block) {
 
 test('narrow-screen rails pin every hosted panel glow inside its panel box', () => {
   const css = readStylesheet(new URL('../../style.css', import.meta.url));
-  for (const panel of [
-    'data-panel',
-    'utilities-panel',
-    'scene-panel',
-    'cctv-panel',
-  ]) {
+  for (const panel of ['data-panel', 'utilities-panel', 'scene-panel']) {
     // The glow rule may be shared: `#data-panel .panel-glow, #utilities-panel .panel-glow {`.
     assert.match(
       css,

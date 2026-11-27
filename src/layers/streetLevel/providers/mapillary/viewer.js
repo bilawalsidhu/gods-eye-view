@@ -1,4 +1,9 @@
 import { mapillaryImageUrl } from './policy.js';
+import { msg } from '../../../../i18n/index.js';
+
+const OPEN_TIMEOUT_MS = 12_000;
+// A timed-out move leaves a short separate window to identify the frame still on screen.
+const DISPLAY_CHECK_TIMEOUT_MS = 500;
 
 /**
  * @typedef {object} StreetPose
@@ -28,7 +33,7 @@ export function graphEndpointUrl(source) {
 }
 
 /**
- * The panel's photo viewer: loads MapillaryJS on the first `mount` and emits
+ * The card’s photo viewer: loads MapillaryJS on the first `mount` and emits
  * a pose on every image, view or position change.
  */
 export function createMapillaryViewer({ source, render } = {}) {
@@ -37,12 +42,15 @@ export function createMapillaryViewer({ source, render } = {}) {
   let container = null;
   /** The viewer being built for a host: a second mount joins it, not a twin. */
   let building = null;
-  let pendingOpen = null;
+  let openRequest = null;
+  let withdrawn = null;
   /** Bumped by `unmount`, so a construction it overtook builds nothing. */
   let generation = 0;
   let renderMode = 'letterbox';
   /** Metadata of the image on screen; pov/position events reuse it. */
   let current = null;
+  let imageEvent = 0;
+  let viewerRun = 0;
   /** The pose listener (the viewer host); one at a time. */
   let poseListener = null;
 
@@ -76,10 +84,16 @@ export function createMapillaryViewer({ source, render } = {}) {
     }
   }
 
-  /** Read MapillaryJS image metadata into the pose shape. */
-  function describe(image) {
+  function poseOf(image, pov) {
+    // Camera position interpolates between images. This position belongs to
+    // the accepted image itself, even while the camera is still moving.
+    const { lat, lng } = image.lngLat || {};
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const imageId = String(image.id);
     return {
-      imageId: String(image.id),
+      imageId,
+      position: { lon: lng, lat },
+      bearing: Number.isFinite(pov?.bearing) ? pov.bearing : null,
       isPano: image.cameraType === 'spherical',
       capturedAt: image.capturedAt ?? null,
       sequenceId: image.sequenceId ?? null,
@@ -89,31 +103,93 @@ export function createMapillaryViewer({ source, render } = {}) {
           ? image.originalAltitude
           : null,
       creator: image.creatorUsername || null,
+      externalUrl: mapillaryImageUrl(imageId),
     };
   }
 
-  async function publishPose(image) {
-    if (!viewer) return;
-    try {
-      const [lngLat, pov] = await Promise.all([
-        viewer.getPosition(),
-        viewer.getPointOfView(),
-      ]);
-      // Closed (or never opened) while the pose was in flight: a late
-      // `image` event must not bring the photo back.
-      if (pendingOpen === null) return;
-      if (image) current = describe(image);
-      if (!current || !viewer) return;
-      emit({
-        ...current,
-        position: { lon: lngLat.lng, lat: lngLat.lat },
-        bearing: Number.isFinite(pov?.bearing) ? pov.bearing : null,
-        externalUrl: mapillaryImageUrl(current.imageId),
-      });
-      requestRender();
-    } catch {
-      /* viewer torn down mid-flight */
+  function invalidate() {
+    if (!current) return;
+    current = null;
+    emit(null);
+  }
+
+  async function publishPose(instance, frame) {
+    const pov = await instance.getPointOfView().catch(() => null);
+    if (viewer !== instance || openRequest || current !== frame) return;
+    const pose = poseOf(frame.image, pov);
+    if (!pose) {
+      invalidate();
+      return;
     }
+    emit(pose);
+    requestRender();
+  }
+
+  async function onImage(instance, image) {
+    const request = openRequest;
+    if (!image?.id || (!request && !current)) return;
+    const run = viewerRun;
+    const event = ++imageEvent;
+    const displayed = await instance.getImage().catch(() => null);
+    if (
+      viewer !== instance ||
+      run !== viewerRun ||
+      request !== openRequest ||
+      displayed?.id !== image.id ||
+      event < (current?.event ?? 0)
+    )
+      return;
+    if (request) {
+      // A transition away from the old image leaves it unconfirmed even
+      // if a later load fails. Only this request's image can finish it.
+      if (current?.image.id !== displayed.id) invalidate();
+      request.observe(displayed);
+    } else if (current) {
+      if (displayed.id === withdrawn?.id && current.image.id !== displayed.id) {
+        // A cancelled SDK move reached the display after the card left.
+        // Return to the previously confirmed frame without announcing the abandoned one.
+        const retained = current;
+        withdrawn = null;
+        try {
+          await instance.moveTo(retained.image.id);
+        } catch {
+          if (run === viewerRun && current === retained) invalidate();
+        }
+        return;
+      }
+      if (displayed.id !== current.image.id) withdrawn = null;
+      const frame = { image: displayed, event };
+      current = frame;
+      void publishPose(instance, frame);
+    }
+  }
+
+  async function openPose(instance, request) {
+    const id = request.id;
+    // moveTo resolves when the navigator installs the target. The viewer's
+    // animation frame can still report the previous image at that point.
+    let target;
+    try {
+      target = await instance.moveTo(id);
+    } catch (error) {
+      // Native arrow navigation supersedes the pending SDK move. Its target
+      // can now be visited intentionally, including the same photo.
+      if (withdrawn === request && error?.name === 'CancelMapillaryError')
+        withdrawn = null;
+      throw error;
+    }
+    if (openRequest !== request) return;
+    if (String(target?.id) !== id)
+      throw new Error(msg('Image could not be opened'));
+    void instance.getImage().then(request.observe, () => {});
+    const image = await request.shown;
+    if (!image || openRequest !== request) return;
+    const pov = await instance.getPointOfView().catch(() => null);
+    if (openRequest !== request) return;
+    const displayed = await instance.getImage();
+    if (String(displayed?.id) !== id || openRequest !== request) return;
+    const pose = poseOf(displayed, pov);
+    return pose ? { image: displayed, pose } : null;
   }
 
   function ensureViewer(host) {
@@ -148,20 +224,24 @@ export function createMapillaryViewer({ source, render } = {}) {
         zoom: true,
         attribution: true,
       },
-      // The panel's ResizeObserver resizes the viewer, and skips it while it
+      // The viewer wrapper's ResizeObserver resizes the viewer, and skips it while it
       // is hidden (0x0); MapillaryJS's own window tracking would resize a
       // hidden viewer and ask for a tile at z=NaN.
       trackResize: false,
       renderMode: libraryRenderMode(renderMode),
     });
     container = host;
-    viewer.on('image', (event) => publishPose(event.image));
-    viewer.on('pov', () => publishPose(null));
-    viewer.on('position', () => publishPose(null));
-    return viewer;
+    const instance = viewer;
+    instance.on('image', (event) => void onImage(instance, event.image));
+    instance.on('pov', () => {
+      if (current && !openRequest) void publishPose(instance, current);
+    });
+    return instance;
   }
 
   function destroyViewer() {
+    openRequest?.cancel();
+    openRequest = null;
     if (viewer) {
       try {
         viewer.remove();
@@ -172,6 +252,17 @@ export function createMapillaryViewer({ source, render } = {}) {
     viewer = null;
     container = null;
     current = null;
+  }
+
+  /** Cancel a pending replacement while retaining the displayed photo. */
+  function cancelOpenKeeping(imageId) {
+    if (!current || String(current.image.id) !== String(imageId)) return false;
+    if (openRequest) withdrawn = openRequest;
+    viewerRun++;
+    openRequest?.cancel();
+    openRequest = null;
+    stopPlayback();
+    return true;
   }
 
   /** A playing sequence keeps stepping through (and downloading) images. */
@@ -189,20 +280,90 @@ export function createMapillaryViewer({ source, render } = {}) {
       await ensureViewer(host);
     },
 
-    /** Resolves once the image is on screen and its first pose was emitted. */
+    /** Resolve with the displayed image ID, after emitting its matching pose. */
     async open(imageId) {
       const id = String(imageId);
       if (!container) throw new Error('Mapillary viewer is not mounted');
-      pendingOpen = id;
-      const instance = await ensureViewer(container);
-      if (pendingOpen !== id) return;
-      const image = await instance.moveTo(id);
-      if (pendingOpen !== id) return;
-      await publishPose(image);
+      openRequest?.cancel();
+      withdrawn = null;
+      viewerRun++;
+      let show;
+      let stop;
+      const shown = new Promise((resolve) => (show = resolve));
+      const stopped = new Promise((resolve) => (stop = resolve));
+      let endCheck;
+      const request = {
+        id,
+        shown,
+        observe: (image) => {
+          if (String(image?.id) === id) show(image);
+        },
+        cancel: () => {
+          show(null);
+          stop(null);
+          endCheck?.(null);
+        },
+      };
+      openRequest = request;
+      let timedOut = false;
+      const timer = setTimeout(() => {
+        timedOut = true;
+        stop(null);
+      }, OPEN_TIMEOUT_MS);
+      let checkTimer;
+      const instance = viewer;
+      try {
+        // Let a newer open take over before issuing a second move.
+        await Promise.resolve();
+        if (openRequest !== request) return;
+        let frame;
+        let failure;
+        try {
+          frame = await Promise.race([openPose(instance, request), stopped]);
+        } catch (error) {
+          failure = error;
+        }
+        if (openRequest !== request) return;
+        if (!frame) {
+          // Mapillary may keep the earlier image when its move is rejected.
+          // Check the SDK's current image before retaining that frame.
+          const displayed = current
+            ? await Promise.race([
+                instance.getImage().catch(() => null),
+                new Promise((resolve) => {
+                  endCheck = resolve;
+                  checkTimer = setTimeout(
+                    () => resolve(null),
+                    DISPLAY_CHECK_TIMEOUT_MS,
+                  );
+                }),
+              ])
+            : null;
+          if (openRequest !== request) return;
+          if (!displayed || displayed.id !== current?.image.id) invalidate();
+          else if (timedOut) cancelOpenKeeping(displayed.id);
+          throw failure || new Error(msg('Image could not be opened'));
+        }
+        current = { image: frame.image, event: imageEvent };
+        openRequest = null;
+        emit(frame.pose);
+        requestRender();
+        return frame.pose.imageId;
+      } finally {
+        clearTimeout(timer);
+        clearTimeout(checkTimer);
+        request.cancel();
+        if (openRequest === request) openRequest = null;
+      }
     },
 
+    cancelOpenKeeping,
+
     close() {
-      pendingOpen = null;
+      viewerRun++;
+      withdrawn = null;
+      openRequest?.cancel();
+      openRequest = null;
       current = null;
       // Hidden, the viewer must not keep playing.
       stopPlayback();
@@ -211,7 +372,6 @@ export function createMapillaryViewer({ source, render } = {}) {
     stopPlayback,
 
     unmount() {
-      pendingOpen = null;
       // A build still waiting for the library gives up when it arrives.
       generation++;
       building = null;

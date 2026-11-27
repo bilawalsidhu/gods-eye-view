@@ -312,7 +312,7 @@ test('› walks across sequence pages without moving the camera; ‹ walks back;
   assert.equal(poses.at(-1), `s-${size}`, 'onto the second page');
   assert.deepEqual(actions.opened.at(-1), {
     id: `s-${size}`,
-    options: { frame: false },
+    options: { frame: false, request: false },
   });
   assert.ok(source.calls.pages.includes('s:2'));
   await press(prev, poses);

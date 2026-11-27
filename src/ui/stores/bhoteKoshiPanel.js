@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { markRaw, shallowRef } from 'vue';
+import { computed, markRaw, shallowRef } from 'vue';
 
 /**
  * The Bhote Koshi event's reconstruction panel as its view renders it. The
@@ -17,6 +17,10 @@ export const useBhoteKoshiPanelStore = defineStore(
      * cinematic button's also holds `pressed`.
      */
     const panel = shallowRef(null);
+    const hiddenOwner = shallowRef(null);
+    const visiblePanel = computed(() =>
+      panel.value?.owner !== hiddenOwner.value ? panel.value : null,
+    );
 
     /** @param {?object} next A fresh presentation; every publish re-renders. */
     function publish(next) {
@@ -28,9 +32,29 @@ export const useBhoteKoshiPanelStore = defineStore(
 
     /** @param {?object} next The controls, or null to disconnect. */
     function connect(next) {
+      hiddenOwner.value = null;
       controls.value = next && markRaw(next);
     }
 
-    return { panel, publish, controls, connect };
+    function leaveView(owner) {
+      if (!owner || visiblePanel.value?.owner !== owner) return false;
+      hiddenOwner.value = owner;
+      return true;
+    }
+
+    function showView(owner) {
+      if (owner && panel.value?.owner === owner && hiddenOwner.value === owner)
+        hiddenOwner.value = null;
+    }
+
+    return {
+      panel,
+      visiblePanel,
+      publish,
+      controls,
+      connect,
+      leaveView,
+      showView,
+    };
   },
 );

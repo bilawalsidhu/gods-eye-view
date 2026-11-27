@@ -35,18 +35,17 @@ try {
       document.getElementById('loading-screen')?.classList.contains('hidden'),
     { timeout: 60000 },
   );
-  // DISPLAY holds most segmented controls; Draw's shape group is in UTILITIES.
-  await page.evaluate(() => {
-    for (const panel of ['pp-toggles', 'utilities-panel'])
-      window.__godsEyeView.styleManager.setPanelCollapsed(panel, false, {
-        persist: false,
-        syncShare: false,
-      });
-  });
+  await page.evaluate(() =>
+    window.__godsEyeView.styleManager.setPanelCollapsed('pp-toggles', false, {
+      persist: false,
+      syncShare: false,
+    }),
+  );
 
   const surface = await page.evaluate(() => {
     // Colour swatches are one-of-many too, but chips, not segments: they are
-    // checked on their own below.
+    // checked on their own below. Street Level's panorama filter joins the
+    // page only with its layer on, as a Data Layers row control.
     const groups = [
       ...document.querySelectorAll('[role="radiogroup"]:not(.draw-colors)'),
     ];
@@ -70,8 +69,8 @@ try {
     };
   });
   check(
-    'all six one-of-many groups use the shared surface',
-    surface.groups === 6 && surface.buttons === 15 && surface.shared,
+    'all five one-of-many groups use the shared surface',
+    surface.groups === 5 && surface.buttons === 12 && surface.shared,
     JSON.stringify(surface),
   );
 
@@ -117,7 +116,9 @@ try {
       );
     }),
   );
+  await page.waitForSelector('#models3d-mode-all', { visible: true });
   await page.focus('#models3d-mode-all');
+  await page.waitForSelector('#models3d-mode-all:focus');
   await page.keyboard.press('ArrowLeft');
   check(
     'Display retains its click-only arrow policy',
@@ -129,7 +130,9 @@ try {
     ),
   );
   await page.focus('#models3d-mode-proximity');
+  await page.waitForSelector('#models3d-mode-proximity:focus');
   await page.keyboard.press('Space');
+  await page.waitForSelector('#models3d-mode-proximity[aria-checked="true"]');
   check(
     'native Space selects model coverage',
     await page.evaluate(
@@ -154,9 +157,17 @@ try {
     ),
   );
 
-  await page.evaluate(() =>
-    document.querySelector('[data-shape="pin"]').click(),
-  );
+  await page.evaluate(() => {
+    window.__godsEyeView.styleManager.setPanelCollapsed(
+      'utilities-panel',
+      false,
+      {
+        persist: false,
+        syncShare: false,
+      },
+    );
+    document.querySelector('[data-shape="pin"]').click();
+  });
   check(
     'drawing shape still uses its existing feature action',
     await page.evaluate(
@@ -168,10 +179,26 @@ try {
     ),
   );
 
-  // Off-layer controls still own params; no catalog/provider request is needed.
-  await page.evaluate(() =>
-    document.querySelector('[data-sl-pano="flat"]').click(),
+  // The panorama filter is a Street Level Data Layers row control, offered
+  // while the layer is on.
+  const slOption = (value) =>
+    `#data-toggles [data-layer-id="street-level"] [data-chip-id="sl-pano-${value}"]`;
+  await page.evaluate(async () => {
+    const { dataManager, styleManager } = window.__godsEyeView;
+    await dataManager.setEnabled('street-level', true, { origin: 'user' });
+    styleManager.setPanelCollapsed('data-panel', false, {
+      persist: false,
+      syncShare: false,
+    });
+  });
+  await page.waitForSelector(`${slOption('flat')}:not([disabled])`, {
+    timeout: 20000,
+  });
+  await page.evaluate(
+    (selector) => document.querySelector(selector).click(),
+    slOption('flat'),
   );
+  await page.waitForSelector(`${slOption('flat')}[aria-checked="true"]`);
   check(
     'panorama choice reaches the Street Level layer',
     await page.evaluate(
@@ -181,25 +208,20 @@ try {
           .module.getParams().pano === 'flat',
     ),
   );
-  await page.evaluate(() =>
-    document.querySelector('[data-sl-pano="flat"]').dispatchEvent(
-      new KeyboardEvent('keydown', {
-        key: 'Home',
-        bubbles: true,
-        cancelable: true,
-      }),
-    ),
+  await page.focus(slOption('flat'));
+  await page.keyboard.press('ArrowRight');
+  await page.waitForSelector(
+    `${slOption('all')}[aria-checked="true"][tabindex="0"]`,
   );
   check(
-    'Street Level Home retains selection and roving tab state',
+    'Street Level arrows wrap the selection and move keyboard focus',
     await page.evaluate(
-      () =>
+      (selector) =>
         window.__godsEyeView.dataManager.layers
           .get('street-level')
           .module.getParams().pano === 'all' &&
-        document
-          .querySelector('[data-sl-pano="all"]')
-          .getAttribute('tabindex') === '0',
+        document.activeElement === document.querySelector(selector),
+      slOption('all'),
     ),
   );
   await page.evaluate(() =>
@@ -279,13 +301,42 @@ try {
   await page.evaluate(async () => {
     const { dataManager, styleManager } = window.__godsEyeView;
     await dataManager.setEnabled('recent-imagery', true);
-    styleManager.setPanelCollapsed('recent-imagery-panel', false, {
+    styleManager.setPanelCollapsed('global-context-panel', false, {
       persist: false,
       syncShare: false,
     });
   });
-  for (const width of [1440, 620, 390]) {
+  // Recent Imagery's controls are its list tab in Context, opened at
+  // desktop width before the narrow passes.
+  await page.setViewport({ width: 1440, height: 900 });
+  await page.waitForFunction(
+    () => !document.body.classList.contains('mobile-shell'),
+  );
+  await page.waitForSelector('#context-tab-lists', { visible: true });
+  await page.click('#context-tab-lists');
+  // With other lists on, Imagery has a sub-tab of its own.
+  await page.evaluate(() =>
+    document.getElementById('context-list-tab-recent-imagery')?.click(),
+  );
+  for (const [width, mobile] of [
+    [1440, false],
+    [620, true],
+    [390, true],
+  ]) {
     await page.setViewport({ width, height: 900 });
+    await page.waitForFunction(
+      (mobile) => document.body.classList.contains('mobile-shell') === mobile,
+      {},
+      mobile,
+    );
+    if (mobile) {
+      const contextOpen = await page.evaluate(
+        () => document.body.dataset.mobileSheet === 'context',
+      );
+      if (!contextOpen)
+        await page.click('#mobile-tab-bar [data-mobile-sheet="context"]');
+    }
+    await page.waitForSelector('#ri-mode', { visible: true });
     await page.focus('.ri-mode-btn[aria-checked="true"]');
     const modeLayout = await page.evaluate(() => {
       const group = document.getElementById('ri-mode');

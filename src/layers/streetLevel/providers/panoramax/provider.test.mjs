@@ -307,7 +307,7 @@ test('› and ‹ step along the picture’s links without moving the camera, as
   assert.ok(await until(() => env.poses.at(-1) === 's-1'));
   assert.deepEqual(env.actions.opened.at(-1), {
     id: 's-1',
-    options: { frame: false },
+    options: { frame: false, request: false },
   });
   env.next.fire('click');
   assert.ok(await until(() => env.poses.at(-1) === 's-2'));
@@ -483,6 +483,11 @@ test('a line clicked from high up looks for its sequence further off; the radius
     '220 m off, from 25 km',
   );
   assert.equal(source.calls.nearest.at(-1).radius, 250);
+  assert.equal(
+    await instance.nearestImage(east(0), { sequenceId: 'line' }),
+    'line-0',
+    'the Nearby row searches as far along its sequence as a line click',
+  );
   height(1_000);
   click();
   assert.equal(
@@ -991,6 +996,8 @@ test('after a GPU reset the viewer draws the same picture itself, leaving the co
     },
   });
   const { context, actions } = fakeContext();
+  const reports = [];
+  context.actions.reportError = (message, id) => reports.push({ message, id });
   const instance = definition.create(context);
   actions.instance = instance;
   const host = fakeHost(instance.viewer);
@@ -1009,8 +1016,9 @@ test('after a GPU reset the viewer draws the same picture itself, leaving the co
   assert.deepEqual(actions.opened, [], 'not through the core');
   failLoads = true;
   canvas().fire('webglcontextlost');
-  assert.ok(await until(() => actions.errors.some(Boolean)));
-  assert.match(actions.errors.filter(Boolean)[0], /could not be loaded/);
+  assert.ok(await until(() => reports.length > 0));
+  assert.equal(reports[0].id, 'p-0');
+  assert.match(reports[0].message, /could not be loaded/);
 });
 
 /** A source whose lookup of `heldId` waits for `release()` and ignores aborts. */
@@ -1191,4 +1199,19 @@ test('a busy or timed-out tile keeps its own message; only a body that is not a 
     assert.ok(await until(() => env.instance.sequenceStats().error));
     assert.equal(env.instance.sequenceStats().error, failure.message);
   }
+});
+
+test('a Nearby line row asks for its own sequence’s picture first', async () => {
+  const items = [
+    ...sequence('other', 2, { offset: 0 }),
+    ...sequence('row', 3, { offset: 8 }),
+  ];
+  const { instance, source } = setup({ items });
+  assert.equal(
+    await instance.nearestImage(east(1), { sequenceId: 'row' }),
+    'row-0',
+  );
+  assert.equal(source.calls.nearest[0].collections, 'row');
+  // Without one, any sequence's nearest picture.
+  assert.equal(await instance.nearestImage(east(1)), 'other-0');
 });

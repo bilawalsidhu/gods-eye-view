@@ -26,10 +26,11 @@ import { createDrawSets } from './drawSets.js';
  * The camera source supplies `getCatalog`, `getHealth`, `getFrameUrl` and
  * `getMediaUrl`. A source may also set `framesCarryTime: true` when each
  * response from its frame URLs carries the frame's capture time, in
- * milliseconds since the epoch, in the `X-CCTV-Frame-Time` header: the CCTV
- * panel, the camera's card and its bigger view then fetch the frame and show
- * that time with it. Frames from another origin need the header listed in
- * `Access-Control-Expose-Headers`. A frame without the header shows no time.
+ * milliseconds since the epoch, in the `X-CCTV-Frame-Time` header: the
+ * camera's card in Context, its bigger view and the docked view then fetch
+ * or show the frame with that time. Frames from another origin need the
+ * header listed in `Access-Control-Expose-Headers`. A frame without the
+ * header shows no time.
  */
 export function createCctvLayer({ services, source }) {
   if (
@@ -75,6 +76,7 @@ export function createCctvLayer({ services, source }) {
       _setCctvOverlayHostForTest: parts.testing._setCctvOverlayHostForTest,
       createCctvProjectionOverlayEntry:
         parts.projection.createCctvProjectionOverlayEntry,
+      setVideoConsumer: parts.projection.setVideoConsumer,
       getActiveVideoElement: parts.projection.getActiveVideoElement,
       setCctvCardPresentationOptions:
         parts.cards.setCctvCardPresentationOptions,
@@ -127,6 +129,7 @@ export function createCctvLayer({ services, source }) {
       _cctvDrawnForTest: parts.testing._cctvDrawnForTest,
       focusCctvRecord: parts.navigation.focusCctvRecord,
       maybeAutoHop: parts.navigation.maybeAutoHop,
+      setPreviewedCamera: parts.navigation.setPreviewedCamera,
       openingCameraId: parts.navigation.openingCameraId,
       reopenNearestCamera: parts.navigation.reopenNearestCamera,
       cctvCycleIndex: parts.navigation.cctvCycleIndex,
