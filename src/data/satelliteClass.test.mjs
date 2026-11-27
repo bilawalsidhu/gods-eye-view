@@ -380,6 +380,10 @@ test('a catalog rebuild refreshes the detection overlay class strings', async ()
     await satellitesLayer.update(viewer);
     const first = satellitesLayer.getDetectableObjects().find((o) => o.sourceId === 33333);
     assert.ok(first, 'the seeded satellite is collectable');
+    // Collected on every paint: one array refilled, each satellite's own object.
+    const list = satellitesLayer.getDetectableObjects();
+    assert.equal(satellitesLayer.getDetectableObjects(), list);
+    assert.equal(list.find((o) => o.sourceId === 33333), first);
     // A payload with no SATCAT record and no recognisable name takes its
     // group's class (src/layers/satellites/classes.js).
     assert.equal(first.klass, 'TELECOM');
