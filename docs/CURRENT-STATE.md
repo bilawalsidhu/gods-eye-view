@@ -10235,6 +10235,17 @@ changes or ten minutes pass; any other 403 fails only that request.
 An unresolved camera never launches a global scan. All views share conservative
 45/minute and 1,800/hour process limits; a shared key's other clients still count.
 
+The route's `at` (ms) asks a past hour (floored to the hour; within the
+current hour it is now, and a time after now is refused). Every pollutant is
+read from OpenAQ's hourly means up to that hour (`sensors/{id}/hours` with
+`datetime_to` at it): the US AQI view folds PM2.5, PM10, O3 and CO hours with
+`aqiStations` as at now, with NO2 and SO2 from their newest hour within six
+hours; a pollutant view shows that hour's means. Readings are aged against the
+hour, and stations that began reporting after it are skipped. An hour within
+three days of now is checked again hourly, as networks file hours late; an
+older hour's stations and means are read once. Each hour asked is a view with
+its own `VIEW_SHARE` under the same process limits.
+
 OpenAQ's selected pollutant uses explicit sensor hourly averages, with period,
 coverage and quality checks. Supported PM2.5, PM10, NO2, O3 and SO2 measurements
 receive a clearly labelled GEV comparison against the European Air Quality Index's
@@ -10332,9 +10343,12 @@ step to its last with the world clock, follows the clock while the field is on
 and draws the step nearest its time; playing, the clock waits for the next
 step for at most 20 s. A time outside the run held asks the host for the run
 covering it (`atMs`), once per three hours of time (a failed ask again after a
-minute); at now a run that no longer covers now is let go. Stations are
-readings of now and are hidden away from now (their labels, list and count
-too). The card's time line names the model by the manifest's `sourceShort`, else
+minute); at now a run that no longer covers now is let go. Stations follow
+the timeline when the clock follows the layer: an earlier hour than the
+current one asks each provider for that hour (`atMs`, the hour's start) and
+shows its stations once the provider answered for it, aged against that hour;
+ahead of now no station is drawn (their labels, list and count too), and
+nothing is asked. The card's time line names the model by the manifest's `sourceShort`, else
 `source`: "updated {age}" at now, "forecast for {time}" ahead of it, the time
 behind it.
 Outside the run, with no run covering the time on its way, one muted line says
