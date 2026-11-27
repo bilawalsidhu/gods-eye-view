@@ -1484,7 +1484,9 @@ export function createNewsLayer({
     source: 'GEV news',
     updateInterval: 120_000,
 
-    init(nextViewer) {
+    init(nextViewer, { panel = null } = {}) {
+      // The panels' handle: invalidated when the row or readout changed.
+      listener = panel ? () => panel.invalidate() : null;
       viewer = nextViewer;
       // A scene with no renderer to draw with draws nothing.
       const draw = viewer ? findDraw(viewer) : null;
@@ -1733,9 +1735,6 @@ export function createNewsLayer({
         // which takes no layer imports: labels and colours are resolved here.
         feed: feedView(),
       };
-    },
-    setRowControlsListener(value) {
-      listener = typeof value === 'function' ? value : null;
     },
     getStats() {
       return {

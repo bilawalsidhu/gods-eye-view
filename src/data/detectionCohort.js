@@ -8,10 +8,18 @@ export function cohortCapForQuota(quota) {
 
 /** Stable FNV-1a identity hash used only on solve ticks. */
 export function stableIdentityHash(layerId, sourceId) {
-  const text = `${String(layerId)}\u0000${String(sourceId)}`;
+  // FNV-1a over `${layerId}\u0000${sourceId}`, hashed in three runs rather
+  // than over the joined string, which this would build per contact per solve.
   let hash = 2166136261;
-  for (let i = 0; i < text.length; i++) {
-    hash ^= text.charCodeAt(i);
+  const layerText = typeof layerId === 'string' ? layerId : String(layerId);
+  for (let i = 0; i < layerText.length; i++) {
+    hash ^= layerText.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  hash = Math.imul(hash, 16777619); // ^= 0 (the separator) leaves it as it is
+  const sourceText = typeof sourceId === 'string' ? sourceId : String(sourceId);
+  for (let i = 0; i < sourceText.length; i++) {
+    hash ^= sourceText.charCodeAt(i);
     hash = Math.imul(hash, 16777619);
   }
   return hash >>> 0;

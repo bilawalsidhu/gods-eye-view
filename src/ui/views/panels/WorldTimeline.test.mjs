@@ -93,6 +93,27 @@ test('the timeline hides while no layer with time to show is on', async (t) => {
   assert.equal(bar() === null, true, 'the layer went off');
 });
 
+test('the hidden timeline does not redraw as the world time moves', async (t) => {
+  const bar = mount(t);
+  await nextTick();
+  assert.equal(bar(), null, 'hidden with no layer that has time to show');
+  // Count the view's renders from here on.
+  const view = document.body.querySelector('div').__vue_app__._instance;
+  let renders = 0;
+  const run = view.effect.run;
+  view.effect.run = function (...args) {
+    renders += 1;
+    return run.apply(this, args);
+  };
+  const at = Date.UTC(2026, 9, 30, 6, 15, 42);
+  for (let i = 0; i < 5; i += 1) {
+    worldClock.seek(at + i * 60_000);
+    await nextTick();
+  }
+  assert.equal(bar(), null);
+  assert.equal(renders, 0, 'nothing drawn, nothing redrawn');
+});
+
 test('the track runs over the time the layers show, to now, and scrubs', async (t) => {
   const bar = mount(t);
   const now = Date.now();

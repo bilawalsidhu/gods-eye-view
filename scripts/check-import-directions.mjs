@@ -33,6 +33,21 @@ const renderer = (file) =>
 const compatibilityEdge = (from, to) =>
   from === 'server/providers/local.js' &&
   to === 'server/standalone/key-setup.js';
+// Layers describe their row and readout as data (`getRowControls()`) and
+// call `panel.invalidate()`; the panels draw them. A layer never imports the
+// panel UI, its stores or Vue.
+const layerModule = (file) => /^src\/(?:layers|library)\//.test(file);
+const panelUi = (file) =>
+  /^src\/ui\/(?:layerPanel(?:\.js|\/)|layers\.js$|weatherPanel\.js$|newsPanel\.js$|recentImagery(?:\.js$|\/)|stores\/)/.test(
+    file,
+  );
+/**
+ * Panel UI imports that predate the rule, as `from -> to`. The list only
+ * shrinks: an entry no longer needed fails the check until it is removed.
+ */
+const PANEL_UI_ALLOWED = new Set([
+  'src/layers/wind/inspectionMarker.js -> src/ui/stores/windInspection.js',
+]);
 const portableExport = (key) =>
   key.startsWith('./sources/') ||
   /\/source$/.test(key) ||
@@ -77,6 +92,7 @@ export function checkImportDirections(root) {
   );
   const errors = new Set();
   const modules = new Map();
+  const panelUiAllowedSeen = new Set();
   const relative = (file) =>
     path.relative(root, file).split(path.sep).join('/');
   const report = (file, message) => errors.add(`${file}: ${message}`);
@@ -114,6 +130,8 @@ export function checkImportDirections(root) {
         target = path.resolve(root, exported);
       } else {
         record.external.push(specifier);
+        if (layerModule(file) && /^vue(?:\/|$)/.test(specifier))
+          report(file, `Data layer imports Vue: ${specifier}`);
         if (
           file.startsWith('src/') &&
           (builtins.has(specifier) || specifier.startsWith('node:'))
@@ -136,6 +154,15 @@ export function checkImportDirections(root) {
         continue;
       }
       record.edges.push(to);
+      if (layerModule(file) && panelUi(to)) {
+        const edge = `${file} -> ${to}`;
+        if (PANEL_UI_ALLOWED.has(edge)) panelUiAllowedSeen.add(edge);
+        else
+          report(
+            file,
+            `Data layer imports panel UI: ${to} (describe it in getRowControls() and call panel.invalidate())`,
+          );
+      }
       if (file.startsWith('src/') && to.startsWith('server/'))
         report(file, `Browser imports server: ${to}`);
       if (
@@ -162,6 +189,15 @@ export function checkImportDirections(root) {
     return record;
   }
   for (const file of files) load(file);
+  for (const edge of PANEL_UI_ALLOWED)
+    if (
+      !panelUiAllowedSeen.has(edge) &&
+      existsSync(path.join(root, edge.split(' -> ')[0]))
+    )
+      report(
+        'scripts/check-import-directions.mjs',
+        `Remove the panel UI allowance no import needs: ${edge}`,
+      );
   // A helper outside src must not smuggle Node or server code into a browser graph.
   const browserSeen = new Set();
   function browser(file) {

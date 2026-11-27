@@ -2233,8 +2233,8 @@ endpoints; standalone entries provide scene services and the satellite dependenc
 The satellites layer draws through the renderer's draw port and no longer
 reaches Cesium: the dots are one point set moved in a single write a frame, the
 tracked satellite's dot a set of its own drawn where the follow camera framed
-it, and the orbit rings a line set dimmed behind the globe and turned with the
-Earth each second. A caller handing it a Cesium viewer, with no
+it, and the orbit rings a line set hidden by the Earth behind it (no part drawn
+through the globe) and turned with the Earth each second. A caller handing it a Cesium viewer, with no
 renderer bound, loads the `./render/cesium/unbound` export once first.
 
 The ISS (NORAD 25544, by number, not name) is drawn as NASA's 3D model within
@@ -3577,6 +3577,47 @@ Layer rows, feed feedback, counts, focus-preserving chips and toggle listeners
 are owned by a renderer-free panel component. The layer manager supplies current
 snapshots, lifecycle actions and row descriptors. Remount and teardown remove
 listeners and row subscriptions; obsolete completions do not repaint old rows.
+A refresh (a layer's status or row controls, such as every step of a scene
+whose time advances) skips a row list whose panel is not displayed (collapsed
+or hidden) and repaints it once, with its current rows, when it is displayed
+again; the Weather and News rail readouts do the same for their bodies, while
+the panels still appear, count and open as before. Whatever shows a panel
+repaints what it owes at once, through `src/ui/rail/panelContent.js`, before
+anything measures the panel or reads its rows: the panel chrome opening a panel
+(a click, voice or any other caller), a phone sheet (every panel of its rail,
+expanded ones included), and leaving clean view, Cockpit or scene playback
+(every panel that is not collapsed). Each repaints only the owed lists inside
+the panel it shows. Each panel layout pass first repaints the owed lists that
+have a layout box and presents nothing when none is owed; content still not
+displayed stays owed. Each list is owed on its own. Content repainted this way
+counts as displayed until the ResizeObserver's next report, so a refresh in
+between paints it instead of owing it again. A ResizeObserver
+catches every other way a panel is
+displayed, before the browser draws it. A list whose presented rows equal the
+ones it shows is not rendered again.
+
+One interface joins a layer to the panel. A layer describes its row and
+readout as data, `getRowControls()` (a read with no side effects, carrying the
+readout summary, the news feed and list items) beside `getStats()`. At `init`
+the manager hands it `panel.invalidate()` (`init(viewer, { signal, panel })`,
+in `src/data/lifecycle.js`): no arguments, no result, it marks the layer
+dirty and asks for one frame, and never paints. A layer whose row or readout
+depends on the scene time declares `panelFollowsTime: true` (wind and the
+weather products) and does not follow the timeline itself: the panel follows
+it once and reads those layers again when it moves. One scheduler in
+`LayerPanel` (`invalidate`, `paintPending`) paints, once per frame, the row
+lists, the Weather and News readouts and the Recent Imagery readout, only the
+displayed ones and only what changed; invalidations while a surface or the
+page is hidden leave exactly one catch-up paint for when it is shown. The
+readouts are plain views with no subscriptions of their own; the Recent
+Imagery readout takes what changed from `takePanelChanges()`. The manager
+refuses a layer that still defines `setRowControlsListener`,
+`scripts/check-import-directions.mjs` stops `src/layers/**` and
+`src/library/**` from importing the panel UI, its stores or Vue (existing
+imports are on an allow list that only shrinks), and
+`src/data/layerPanelContract.test.mjs` holds the interface for every
+registered layer.
+
 The clear control presents busy state while its existing action owns the transaction.
 The Wildlife group follows Events and precedes Weather; Wildlife Sightings
 provides its confirmed toggle, taxa presets and fixed-order, nonempty legend.
@@ -4625,7 +4666,7 @@ which embeds the MAP_KEY.
 > **2026-08-23 — first-run mission launcher** (`src/firstRunExperience.js`,
 > `#first-run-launcher`, styles in `src/ui/styles/first-run.css`). After startup
 > settles, a fresh session gets three steps: mode introduction, a starting
-> mission, then quick tips and links. God mode is available; Analyst is
+> mission, then quick tips and links. Default mode is available; Analyst is
 > marked coming soon. **Space Missions · Environmental · Explore
 > manually** are the starting choices, with Explore selected by default; Live
 > Contacts is no longer offered as a starting mission (its Context tab is
@@ -4640,7 +4681,7 @@ which embeds the MAP_KEY.
 > Stories card's BROWSE STORIES button closes the card (a session dismissal,
 > like Skip) and opens the in-app Stories Explore view, keeping the Stories
 > announcement hidden while Stories loads. Next and Back preserve that selection without starting
-> a mission. Only **Enter God mode** runs it; Back is inert while it is loading.
+> a mission. Only **Enter Default mode** runs it; Back is inert while it is loading.
 > Step changes focus the main action, announce the new heading separately from
 > mission progress, and refresh the scrolling affordance after the transition. Repeated Enter keys,
 > double-clicks and activation during a step transition cannot launch a mission; a quick second
@@ -4698,7 +4739,7 @@ which embeds the MAP_KEY.
 > `localStorage['gev:first-run-mission:v1'] === 'suppressed'`, written **only**
 > by the "Don't show this again" checkbox → the per-session
 > `sessionStorage['gev:first-run-mission-session:v1'] === 'dismissed'`, written
-> by **every** close path (a mission or Explore from ENTER GOD MODE, ESC, the
+> by **every** close path (a mission or Explore from ENTER DEFAULT MODE, ESC, the
 > header Skip button, BROWSE STORIES). So
 > it returns each fresh browser session until the visitor ticks the box; clearing
 > storage un-ticks it, which is accepted. Both stores fail open — an unreadable
@@ -7938,10 +7979,10 @@ silently demoting every later lookup for the session.
 - **Satellites**: core catalog from CelesTrak's stations, visual, GPS, GLONASS, Galileo, GEO, resource, weather, planet, SAR and science groups, tracking lands ~726km out via `viewFrom` (tracked entity owns a point graphic so the tracking camera engages), rings realign via primitive modelMatrix (no per-second rebuild flicker), optional `setParams({catalog:'dense'})` Starlink mode.
 - **Satellite classes** (`src/layers/satellites/classes.js`): every satellite is filed under one of six classes, each with its own point colour and toggle chip (the chip shows the colour while the class is on): STATIONS (warm white), IMAGING (cyan), TELECOM (violet; communications and navigation, so GPS, GLONASS, Galileo and BeiDou read as one family), STARLINK (dim slate), PROBES (muted blue-gray) and DEBRIS (receding brown-gray). That module is the single source of truth for class, label and colour, so the dot, the card and the chip's swatch cannot disagree. Two deliberate palette rules: no class may sit in the 40–48° amber band, which is the app-wide known-military convention; and STARLINK stays far below PROBES in Rec.601 luminance so the dense shell stays separable when NVG/FLIR collapse the scene to one channel. The ISS keeps its long-standing red hero dot rather than the STATIONS colour — it carries a permanent name label and its card still reads `STATIONS · ISS`; it is a station whichever group ingested it, so a stations-feed outage cannot refile it. `src/data/satelliteClass.js` keeps the group-based labels beneath the classes: the constellation subtype and a group's own label for a satellite with no class. The tracked satellite's dot keeps that colour too: tracking draws it larger (14 px), white-outlined and over everything, never in another colour (`_addTrackedEntity`, `src/layers/satellites/rendering.js`).
 - Class is also a **text field**, not just a color: `TELECOM · GPS` / `STARLINK` / `STATIONS · ISS` leads the tracked card's detail block and replaces the raw CelesTrak tag on the detection-overlay label. Because that canvas composites above the post-FX chain, the class stays readable in NVG/FLIR after the in-scene dot colors are flattened.
-- The satellites row in DATA LAYERS carries per-layer sub-controls (`DataLayerManager._syncRowControls`, the first consumer of the optional `getRowControls()` layer hook): one chip per class (the STARLINK chip exposes the existing `catalog` param); a class that is on shows its point colour, its name and its live count in its chip (`swatch` and `count`, drawn by `src/ui/rail/RailChips.vue`), and a class that is off shows only its name; and an info line while SATCAT is stale or unavailable (`Classes may lag: SATCAT is a cached copy` / `Classes may lag: SATCAT unavailable`). Default is the sparse core catalog. The chips are stateless — each declares the params to apply and the manager owns the write — so the Space Missions capture/restore path over the same param stays authoritative. Controls stay hidden while the layer is off. An explicit CORE or DENSE choice participates in versioned local and share-link state; temporary Space Missions overrides do not.
+- The satellites row in DATA LAYERS carries per-layer sub-controls (the first consumer of the optional `getRowControls()` layer hook, which the layer panel reads in `src/ui/layerPanel.js`): one chip per class (the STARLINK chip exposes the existing `catalog` param); a class that is on shows its point colour, its name and its live count in its chip (`swatch` and `count`, drawn by `src/ui/rail/RailChips.vue`), and a class that is off shows only its name; and an info line while SATCAT is stale or unavailable (`Classes may lag: SATCAT is a cached copy` / `Classes may lag: SATCAT unavailable`). Default is the sparse core catalog. The chips are stateless — each declares the params to apply and the manager owns the write — so the Space Missions capture/restore path over the same param stays authoritative. Controls stay hidden while the layer is off. An explicit CORE or DENSE choice participates in versioned local and share-link state; temporary Space Missions overrides do not.
 - **Class toggles** (`src/layers/satellites/classes.js`): the layer row carries one chip per class — STATIONS, IMAGING, TELECOM (communications and navigation), PROBES (science, technology development and demonstration, unknown purpose) and DEBRIS (rocket bodies, fragments, unknown objects launched before last year and dead payloads) on by default, so the layer shows what it did before classes; STARLINK off, as DENSE was. Points of a hidden class stay built and are only hidden, so a toggle needs no reload; hidden classes are left out of the detection overlay, the voice/framing position lists and analyst answers (the tracked satellite still answers), and only the chips of classes on screen carry a colour and a count; an on class with nothing loaded shows its colour without a count. The class comes, strongest evidence first, from CelesTrak SATCAT (object type and operational status, fetched per group through `/api/celestrak-satcat/<group>`, cached a day by the proxy; the layer keeps a current read six hours rather than asking on every five-minute update), the bundled UCS Satellite Database pack (UCS-Satellite-Database 5-1-2023: operator, owner country and purpose; `src/data/local_data/ucs_satellites/`), name patterns for satellites launched after May 2023, and finally the CelesTrak groups the TLE came in (a mission group such as `weather` before the orbit group `geo`; a UCS purpose of "Unknown" counts as none). Only crewed stations and the craft that visit them, by name, are STATIONS: the CubeSats CelesTrak's stations group also carries after their deployment from the ISS are classed like any other satellite. A payload whose SATCAT record gives no status, with no UCS record and no recognisable name, that launched 20 or more years ago (SATCAT's launch date, else the TLE designator's year) is presumed dead and filed as debris; without a SATCAT record (a failed read) nothing is presumed. To cover imaging launched after the UCS snapshot the core catalog also reads CelesTrak's `resource`, `weather`, `planet`, `sar` and `science` groups. Debris can be tracked but is never ridden: the orbital entry gate (`orbitEntryAllowed`) refuses it, so no ORBIT entry is offered and double-click does nothing for it. Retired stations and the shuttles have re-entered and have no orbit to show. An explicit class choice is kept in local and share-link state as the `classes` option, one letter per class shown (`sitpd`: stations, imaging, telecom, probes, debris; `0`: none; `src/data/satelliteClassMask.js`), and the layer takes those letters back through `setParams({classes})`; STARLINK maps to the existing `catalog: 'dense'` param instead.
 - The satellite Cockpit subject (`getCockpitSubject()`) also carries `satelliteClass`, `cosparId` (from SATCAT, else TLE line 1), `tle` (`{line1, line2, epochMs}`), `owner` (`{countryCode, label}`: ISO 3166-1 alpha-2 for a single country, `null` code for organisations such as ESA, EUMETSAT or Intelsat and for joint owners) and `operator` (UCS; SpaceX for Starlink). UCS names the operator's country and wins over the SATCAT owner code; CelesTrak's CIS (former USSR) is filed under Russia.
-- **The STARLINK chip (formerly DENSE) reports the dense LOAD, not the catalog param.** The param flips synchronously while the Starlink shell takes seconds to arrive over a chunked load, and CelesTrak 502s that feed regularly. So the chip reads `STARLINK ···` (busy, disabled) while loading, ACTIVE only once dense points are actually on screen, and `STARLINK ✕` with the reason on hover when the load fails — a failure also reverts `catalog` to `core`, drops any partial chunk, and leaves the chip clickable to retry. A load is judged by points added, not by HTTP status: a 200 carrying an empty body, a passed-through HTML error page, or only TLEs the core catalog already owns fails with the same revert semantics as a 502. Any explicit request for `core` clears a latched error even when the mode does not change, so a Space Missions restore of an already-core snapshot never leaves the user with a failure they did not cause. Because the load settles asynchronously, the layer pushes a re-render through the optional `setRowControlsListener()` hook; nothing else would repaint that row before the 5-minute catalog refresh, so the counts would otherwise sit stale.
+- **The STARLINK chip (formerly DENSE) reports the dense LOAD, not the catalog param.** The param flips synchronously while the Starlink shell takes seconds to arrive over a chunked load, and CelesTrak 502s that feed regularly. So the chip reads `STARLINK ···` (busy, disabled) while loading, ACTIVE only once dense points are actually on screen, and `STARLINK ✕` with the reason on hover when the load fails — a failure also reverts `catalog` to `core`, drops any partial chunk, and leaves the chip clickable to retry. A load is judged by points added, not by HTTP status: a 200 carrying an empty body, a passed-through HTML error page, or only TLEs the core catalog already owns fails with the same revert semantics as a 502. Any explicit request for `core` clears a latched error even when the mode does not change, so a Space Missions restore of an already-core snapshot never leaves the user with a failure they did not cause. Because the load settles asynchronously, the layer calls `panel.invalidate()` (the handle `init` receives); nothing else would repaint that row before the 5-minute catalog refresh, so the counts would otherwise sit stale.
 - **A dependency owner takes the row with it.** Space Missions borrows this layer for TLE lookup with `showPoints:false`; while points are hidden the layer returns empty row controls, so no count describes an empty sky and the chip cannot accept a write that the owner's restore would silently revert.
 - The detection-overlay record cache (`_detectionObjects`) is cleared with the catalog on every rebuild: it stamps id/class at creation only, and a rebuild can re-tag a satellite when a partial CelesTrak outage changes which group wins dedupe.
 - **Catalog numbers above 99999** can be written in a TLE as Alpha-5: a letter A–Z, skipping I and O, for the first two digits, so `A0000` is 100000 and `Z9999` is 339999. CelesTrak's TLE feed carries no satellite above 99999 (that needs the OMM feed, #1191), so this is compatibility with Alpha-5 TLEs. `src/sources/tle.js` decodes the field through one shared helper: `noradIdFromSatnum()` for the satellites layer, which keys and deduplicates its catalog by that number, and `tleCatalogNumber()` for the satellite tools. Plain digits read as before (`noradIdFromSatnum()` accepts any length, as an OMM satrec carries the number unpadded); a malformed field — a sign, decimal point, hex, exponent, embedded space, stray or lowercase letter, or blank — is rejected rather than partly read, as `NaN` in the layer and `null` in the tools.

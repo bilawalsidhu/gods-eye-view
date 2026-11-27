@@ -1,8 +1,11 @@
 import '../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { nextTick } from 'vue';
 import { setLocale } from '../i18n/index.js';
 import { createNewsPanel } from './newsPanel.js';
+import { installFakeResizeObserver } from '../testSupport/fakeResizeObserver.mjs';
+import { flushPanelContent } from './rail/panelContent.js';
 import {
   NEWS_CATEGORIES,
   NEWS_SEVERITY,
@@ -164,6 +167,44 @@ test('the panel shows the last 24 h as event cards and opens once', () => {
   assert.equal(opened(), 1);
   news.destroy();
   assert.equal(panel.hidden, true);
+});
+
+test('a feed body that is not displayed is not repainted, and repaints once, current, when it is', () => {
+  const sizes = installFakeResizeObserver();
+  try {
+    const { news, panel } = fixture();
+    const body = document.getElementById('news-panel-body');
+    const cards = () => panel.querySelectorAll('.news-readout__feed .news-card');
+    sizes.report(body, 0, 0);
+    news.update(view());
+    assert.equal(cards().length, 0, 'not painted while collapsed');
+    assert.equal(panel.hidden, false);
+    assert.equal(document.getElementById('news-panel-count').textContent, '2');
+    sizes.report(body, 280, 400);
+    assert.equal(cards().length, 2, 'painted when displayed');
+    const [observer] = sizes.watching(body);
+    news.destroy();
+    assert.equal(observer.disconnected, true);
+  } finally {
+    sizes.restore();
+  }
+});
+
+test('presenting the panel open paints the owed feed at once', () => {
+  const sizes = installFakeResizeObserver();
+  try {
+    const { news, panel } = fixture();
+    const body = document.getElementById('news-panel-body');
+    const cards = () => panel.querySelectorAll('.news-readout__feed .news-card');
+    sizes.report(body, 0, 0);
+    news.update(view());
+    assert.equal(cards().length, 0);
+    flushPanelContent(panel);
+    assert.equal(cards().length, 2);
+    news.destroy();
+  } finally {
+    sizes.restore();
+  }
 });
 
 test('a card click flies there; open, it links the source and closes', () => {
@@ -443,7 +484,7 @@ test('the panel names the window the server serves', () => {
   );
 });
 
-test('a clip waits behind its picture and plays, on request, in the open card', () => {
+test('a clip waits behind its picture and plays, on request, in the open card', async () => {
   const { news, panel } = fixture();
   const clipped = report('clip', {
     event: {
@@ -477,14 +518,10 @@ test('a clip waits behind its picture and plays, on request, in the open card', 
   );
   assert.equal(video.getAttribute('preload'), 'none');
   assert.ok(video.hasAttribute('controls'));
-  // An expired link leaves the card without the clip.
+  // An expired link leaves the card without the clip; the card drops it
+  // itself, on Vue's next tick, with no new view from the layer.
   video.dispatchEvent(new Event('error'));
-  news.update(
-    view({
-      items: [feedCardView(clipped, NOW)],
-      selected: feedCardView(clipped, NOW),
-    }),
-  );
+  await nextTick();
   assert.equal(panel.querySelector('.news-card.is-open video') === null, true);
   news.destroy();
 });

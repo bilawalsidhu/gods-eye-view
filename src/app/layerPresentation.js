@@ -15,9 +15,11 @@ export class LayerPresentation {
     this.manager = manager;
     this.weatherClock = weatherClock;
     this._panel = null;
-    this.pendingVisible = false;
     this._unsubscribe = manager.subscribeActivity((change) => {
-      if (change.type === 'status') this.refresh();
+      // A layer's state or its `panel.invalidate()`: the panel paints on its
+      // next frame, whatever else changes before then included.
+      if (change.type === 'status') this._panel?.invalidate();
+      else if (change.type === 'panel') this._panel?.invalidate(change.layerId);
       else if (change.type === 'registrations') this._panel?.rerender();
       else if (change.type === 'destroy-all') this.destroy();
       else {
@@ -57,14 +59,6 @@ export class LayerPresentation {
         hasRowControls: (id) =>
           typeof this.manager.layers.get(id)?.module?.getRowControls ===
           'function',
-        subscribeRowControls: (id, listener) => {
-          const module = this.manager.layers.get(id)?.module;
-          module?.setRowControlsListener?.(listener);
-          return () => module?.setRowControlsListener?.(null);
-        },
-        onHiddenRefresh: () => {
-          this.pendingVisible = true;
-        },
       });
     return this._panel;
   }
@@ -77,18 +71,13 @@ export class LayerPresentation {
     if (factory) this.panel.attachRecentImagery(factory);
     else this._panel?.attachRecentImagery(null);
   }
-  refresh() {
-    this._panel?._refreshTogglePanel();
-  }
+  /** The page is shown again: paint what was invalidated while it was hidden. */
   flushVisible() {
-    if (!this.pendingVisible) return;
-    this.pendingVisible = false;
-    this.refresh();
+    this._panel?.paintPending();
   }
   destroy() {
     this._panel?.destroy();
     this._panel = null;
-    this.pendingVisible = false;
     this._unsubscribe?.();
     this._unsubscribe = null;
   }

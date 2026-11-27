@@ -7,7 +7,6 @@ import { createSelection } from './selection.js';
 import { createIngestion } from './ingestion.js';
 import { createViewport } from './viewport.js';
 import { createQueries } from './queries.js';
-import { createControls } from './controls.js';
 import { createLifecycle } from './lifecycle.js';
 import { createTesting } from './testing.js';
 import { createTransitCockpitSubject } from './cockpitSubject.js';
@@ -52,7 +51,6 @@ export function createTransitLayer({
   parts.ingestion = createIngestion(context);
   parts.viewport = createViewport(context);
   parts.queries = createQueries(context);
-  parts.controls = createControls(context);
   parts.lifecycle = createLifecycle(context);
   parts.testing = createTesting(context);
   parts.cockpit = createTransitCockpitSubject(context);
@@ -61,7 +59,6 @@ export function createTransitLayer({
     { updateInterval: TRANSIT_POLL_MS },
     parts.lifecycle.methods,
     parts.queries.methods,
-    parts.controls.methods,
     parts.cockpit.methods,
     {
       /**
