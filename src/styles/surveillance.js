@@ -13,15 +13,11 @@ import { msg } from '../i18n/marker.js';
  */
 
 /**
- * The bloom is an 11x11 Gaussian over samples four texels apart. Its weight
- * exp(-(x² + y²) / 18) is a product of a row weight and a column weight, and
- * the stage reads its input with nearest sampling, so every sample is a whole
- * texel away from the first. This pass therefore sums the eleven samples of
- * each row once per texel and the main pass sums eleven of those: 22 reads
- * for each pixel where one pass took 121, with the same result.
- *
- * The row sum is written across two 8-bit channels (whole 255ths in red, the
- * remainder in green) so the stage keeps the default render target.
+ * The bloom's 11x11 Gaussian is a row weight times a column weight: this
+ * pass sums each row of 11 samples four texels apart, and the main pass
+ * sums 11 of those read at texel centres, which matches the single pass up
+ * to rounding at texel edges. The sum is packed in red (whole 255ths) and
+ * green (the rest), so the stage keeps the default render target.
  */
 const NVG_BLOOM_ROWS_SHADER = /* glsl */ `
     uniform sampler2D colorTexture;
@@ -54,9 +50,7 @@ export const nightVisionShader = {
   timeHz: 15,
   passes: [
     {
-      name: 'bloomRows',
       texture: 'bloomRowsTexture',
-      uniforms: ['gain'],
       fragmentShader: NVG_BLOOM_ROWS_SHADER,
     },
   ],
@@ -237,12 +231,12 @@ export const nightVisionShader = {
 
       // ── Intensifier tube bloom (THE key NVG visual) ─────
       // Bloom around bright sources — wider kernel for realistic halos
-      // Rows were summed by the bloomRows pass; the columns are summed here.
+      // The row sums, read at texel centres (Cesium may sample them LINEAR); the columns are summed here.
       float bloomAccum = 0.0;
       float bloomW = 0.0;
       for (int y = -5; y <= 5; y++) {
         vec2 offset = vec2(0.0, float(y)) * texel * 4.0;
-        vec2 rows = texture(bloomRowsTexture, distUV + offset).rg;
+        vec2 rows = texture(bloomRowsTexture, (floor((distUV + offset) * dims) + 0.5) / dims).rg;
         float w = exp(-float(y * y) / 18.0);
         bloomAccum += (rows.r + rows.g / 255.0) * w;
         bloomW += w;

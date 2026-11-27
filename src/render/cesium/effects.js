@@ -9,7 +9,8 @@
  * A style's GLSL goes to Cesium as written: Cesium supplies `colorTexture`,
  * `colorTextureDimensions` and `v_textureCoordinates`, and declares
  * `out_FragColor` itself when the shader writes it. The port supplies
- * `intensity`, `time` and one uniform per parameter.
+ * `intensity`, `time` and one uniform per parameter, to the style's shader and
+ * to each of its passes.
  *
  * Stages run in the order styles were defined, then sharpen. A style draws
  * while it is the style, and the styles it replaced while they fade out
@@ -36,6 +37,8 @@ import {
 const OFF = 0.001;
 /** Bloom below this strength runs no pass. */
 const BLOOM_FLOOR = 0.06;
+/** The reason a stepped style asks for its frame; `whenSettled` does not wait on it. */
+export const STYLE_STEP_REASON = 'effects:animated';
 /** Uniform names a parameter key or a pass's texture may not take. */
 const RESERVED = new Set([
   'colorTexture',
@@ -103,10 +106,6 @@ export function bloomUniforms(strength) {
 const clamp01 = (value) => Math.min(1, Math.max(0, Number(value) || 0));
 const IDENTIFIER = /^[A-Za-z_]\w*$/;
 
-/** A style's `time` at `seconds`: stepped for one with `timeHz`. */
-const styleTime = (record, seconds) =>
-  record.timeHz ? Math.floor(seconds * record.timeHz) / record.timeHz : seconds;
-
 /**
  * @param {object} scene A Cesium scene.
  * @param {{
@@ -114,9 +113,7 @@ const styleTime = (record, seconds) =>
  *   frame: import('../contract/frame').FramePort,
  *   report: (error: unknown) => void,
  *   createStage?: (options: object) => object,
- *   createComposite?: (options: object) => object,
- * }} options `createStage` makes a `PostProcessStage` and
- *   `createComposite` a `PostProcessStageComposite`; tests pass fakes.
+ * }} options `createStage` makes a `PostProcessStage`; tests pass a fake.
  * @returns {{port: import('../contract/effects').EffectsPort,
  *   dispose: () => void}}
  */
@@ -127,8 +124,6 @@ export function createCesiumEffects(
     frame,
     report,
     createStage = (options) => new Cesium.PostProcessStage(options),
-    createComposite = (options) =>
-      new Cesium.PostProcessStageComposite(options),
   },
 ) {
   const stages = scene.postProcessStages;
@@ -146,8 +141,7 @@ export function createCesiumEffects(
   let sharpenEnabled = false;
   let sharpenAmount = 0;
 
-  // The animation clock: running while an animated style draws, holding
-  // the loop continuous for one without `timeHz`.
+  // The animation clock: running while an animated style draws.
   let release = null;
   let offFrame = null;
   let offStep = null;
@@ -187,10 +181,6 @@ export function createCesiumEffects(
   }
 
   /**
-   * A style with passes: each pass reads the frame's colour, the style's
-   * own shader reads the frame's colour and each pass's output, and the
-   * composite answers to `enabled` and `uniforms` as a single stage would.
-   *
    * Cesium replaces a stage's `uniforms` object on its first frame, so the
    * composite's uniforms and the passes' read the main stage's current
    * object each time rather than the one it was created with.
@@ -207,13 +197,13 @@ export function createCesiumEffects(
         },
       });
     const passes = record.passes.map((pass) => {
-      const passName = `${name}_${pass.name}`;
+      const passName = `${name}_${pass.texture}`;
       uniforms[pass.texture] = passName;
       return createStage({
         name: passName,
         fragmentShader: pass.glsl,
         uniforms: Object.fromEntries(
-          pass.params.map((key) => [key, () => shared[key]]),
+          Object.keys(shared).map((key) => [key, () => main.uniforms[key]]),
         ),
       });
     });
@@ -222,7 +212,7 @@ export function createCesiumEffects(
       fragmentShader: record.glsl,
       uniforms,
     });
-    return createComposite({
+    return new Cesium.PostProcessStageComposite({
       name,
       stages: [...passes, main],
       inputPreviousStageTexture: false,
@@ -262,12 +252,15 @@ export function createCesiumEffects(
       offFrame = frame.on('preRender', tick);
       release = frame.holdContinuous('effects:animated');
     } else if (!continuous && release) {
-      stopContinuous();
+      stopClock();
     }
     // `preUpdate` comes on every tick, drawn or not, so a step is seen in
     // time to ask for its frame.
     if (stepped && !offStep) offStep = frame.on('preUpdate', step);
-    else if (!stepped && offStep) stopStep();
+    else if (!stepped && offStep) {
+      offStep();
+      offStep = null;
+    }
   }
 
   const secondsAt = (t) => ((t?.now ?? performance.now()) - started) / 1000;
@@ -275,39 +268,28 @@ export function createCesiumEffects(
   function tick(t) {
     const seconds = secondsAt(t);
     for (const record of styles.values())
-      if (record.animated)
-        record.stage.uniforms.time = styleTime(record, seconds);
+      if (record.animated && !record.timeHz)
+        record.stage.uniforms.time = seconds;
   }
 
-  /** Moves each stepped style's clock, and asks for a frame on a step. */
   function step(t) {
     const seconds = secondsAt(t);
     let moved = false;
     for (const record of styles.values()) {
       if (!record.animated || !record.timeHz) continue;
-      const time = styleTime(record, seconds);
+      const time = Math.floor(seconds * record.timeHz) / record.timeHz;
       if (time === record.stage.uniforms.time) continue;
       record.stage.uniforms.time = time;
       if (drawing(record)) moved = true;
     }
-    if (moved) frame.requestRender('effects:animated');
+    if (moved) frame.requestRender(STYLE_STEP_REASON);
   }
 
-  function stopContinuous() {
+  function stopClock() {
     offFrame?.();
     offFrame = null;
     release?.();
     release = null;
-  }
-
-  function stopStep() {
-    offStep?.();
-    offStep = null;
-  }
-
-  function stopClock() {
-    stopContinuous();
-    stopStep();
   }
 
   function changed(reason) {
@@ -324,11 +306,10 @@ export function createCesiumEffects(
   const port = {
     styles: () =>
       capabilities.has('styles')
-        ? [...styles.values()].map(({ id, params, animated, timeHz }) => ({
+        ? [...styles.values()].map(({ id, params, animated }) => ({
             id,
             params: params.map((p) => ({ ...p })),
             animated,
-            ...(timeHz ? { timeHz } : {}),
           }))
         : [],
     defineStyle(definition) {
@@ -344,26 +325,27 @@ export function createCesiumEffects(
         if (RESERVED.has(p.key) || !IDENTIFIER.test(p.key))
           throw new TypeError(`Style parameter name not allowed: ${p.key}`);
       const passes = (definition.shader.passes ?? []).map((pass) => ({
-        name: String(pass.name),
-        texture: String(pass.texture),
-        params: [...(pass.params ?? [])],
+        texture: pass.texture,
         glsl: pass.glsl,
       }));
       const keys = new Set(params.map((p) => p.key));
+      const textures = new Set();
       for (const pass of passes) {
-        if (!IDENTIFIER.test(pass.name) || typeof pass.glsl !== 'string')
-          throw new TypeError(`Style pass not allowed: ${pass.name}`);
+        // `main` is the style's own stage (`makeComposite`).
         if (
+          typeof pass.texture !== 'string' ||
+          !IDENTIFIER.test(pass.texture) ||
           RESERVED.has(pass.texture) ||
           keys.has(pass.texture) ||
-          !IDENTIFIER.test(pass.texture)
+          textures.has(pass.texture) ||
+          pass.texture === 'main'
         )
           throw new TypeError(
             `Style pass texture not allowed: ${pass.texture}`,
           );
-        for (const key of pass.params)
-          if (!keys.has(key))
-            throw new TypeError(`Style pass parameter unknown: ${key}`);
+        if (typeof pass.glsl !== 'string')
+          throw new TypeError(`Style pass has no GLSL: ${pass.texture}`);
+        textures.add(pass.texture);
       }
       const timeHz = Number(definition.timeHz);
       const previous = styles.get(id);
@@ -504,6 +486,8 @@ export function createCesiumEffects(
       if (disposed) return;
       disposed = true;
       stopClock();
+      offStep?.();
+      offStep = null;
       listeners.clear();
       modulation?.dispose();
       // A destroyed scene took its stages with it.

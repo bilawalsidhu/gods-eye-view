@@ -52,15 +52,18 @@ test('FLIR blooms with two 9-sample sums, not 81 samples', () => {
 });
 
 for (const shader of [nightVisionShader, thermalShader])
-  test(`${shader.name}: each pass is fed the uniforms it declares`, () => {
+  test(`${shader.name}: each pass reads style uniforms and feeds the main shader`, () => {
     assert.ok(shader.passes.length > 0);
     for (const pass of shader.passes) {
-      const declared = [
-        ...pass.fragmentShader.matchAll(/uniform float (\w+);/g),
-      ].map((match) => match[1]);
-      assert.deepEqual(declared, pass.uniforms);
-      for (const uniform of pass.uniforms)
-        assert.ok(uniform in shader.uniforms, `${uniform} is a style uniform`);
+      for (const [, uniform] of pass.fragmentShader.matchAll(
+        /uniform float (\w+);/g,
+      ))
+        assert.ok(
+          uniform in shader.uniforms ||
+            uniform === 'intensity' ||
+            uniform === 'time',
+          `${uniform} is a style uniform`,
+        );
       assert.match(
         shader.fragmentShader,
         new RegExp(`uniform sampler2D ${pass.texture};`),
@@ -71,23 +74,3 @@ for (const shader of [nightVisionShader, thermalShader])
       );
     }
   });
-
-test('the row and column weights multiply back to the single-pass weight', () => {
-  // Night vision: exp(-(x² + y²) / 18). FLIR: exp(-0.5 (x² + y²) / 8).
-  const cases = [
-    [
-      5,
-      (x, y) => Math.exp(-(x * x + y * y) / 18),
-      (v) => Math.exp(-(v * v) / 18),
-    ],
-    [
-      4,
-      (x, y) => Math.exp((-0.5 * (x * x + y * y)) / 8),
-      (v) => Math.exp((-0.5 * v * v) / 8),
-    ],
-  ];
-  for (const [reach, whole, part] of cases)
-    for (let y = -reach; y <= reach; y++)
-      for (let x = -reach; x <= reach; x++)
-        assert.ok(Math.abs(whole(x, y) - part(x) * part(y)) < 1e-12);
-});

@@ -6,6 +6,7 @@ import {
   createCesiumPorts,
   listenerList,
 } from './ports.js';
+import { STYLE_STEP_REASON } from './effects.js';
 import { updateCameraChanged } from './internals.js';
 import { createNativeClick } from './nativeClick.js';
 
@@ -1047,6 +1048,39 @@ test('whenSettled settles once shown tiles have loaded under a hidden globe', as
     });
   } finally {
     clearInterval(ticker);
+    ports.dispose();
+  }
+});
+
+test('whenSettled settles while a stepped style asks for its frames', async () => {
+  const { widget, scene, raise } = tickingWidget();
+  scene.primitives = listedPrimitives([]);
+  scene.globe = { show: false, tilesLoaded: false };
+  // Each asked-for frame is drawn soon after, as Cesium's loop would.
+  scene.requestRender = () => {
+    scene._renderRequested = true;
+    setTimeout(() => {
+      if (!scene._renderRequested) return;
+      scene._renderRequested = false;
+      raise('preRender');
+      raise('postRender');
+    }, 1);
+  };
+  const ports = createCesiumPorts(widget, { capabilities: all });
+  // A step every fourth tick, sooner than the idle wait, as NVG at 15 Hz.
+  let ticks = 0;
+  const offStep = ports.frame.on('preUpdate', () => {
+    if (++ticks % 4 === 0) ports.frame.requestRender(STYLE_STEP_REASON);
+  });
+  const ticker = setInterval(() => raise('preUpdate'), 5);
+  try {
+    assert.deepEqual(await ports.whenSettled({ timeoutMs: 1500 }), {
+      state: 'settled',
+      blockers: [],
+    });
+  } finally {
+    clearInterval(ticker);
+    offStep();
     ports.dispose();
   }
 });

@@ -13,11 +13,6 @@ export interface StyleDescriptor {
   params: Array<{ key: string; min: number; max: number; default: number }>;
   /** Animates, so it needs frames while on. */
   animated: boolean;
-  /**
-   * An animated style whose `time` moves in steps of `1 / timeHz` seconds:
-   * the renderer draws one frame a step for it instead of every frame.
-   */
-  timeHz?: number;
 }
 
 /**
@@ -42,8 +37,8 @@ export interface StyleShader {
   wgsl?: string;
   /**
    * GLSL passes drawn before `glsl`, each over the frame's colour. A pass
-   * declares what it reads as `glsl` does, and only the parameters it lists
-   * in `params`; `glsl` reads each pass's output as
+   * declares what it reads as `glsl` does, `time` moving only for an
+   * animated style; `glsl` reads each pass's output as
    * `uniform sampler2D <texture>`. A renderer that cannot draw the passes
    * cannot draw the style's GLSL either.
    */
@@ -51,16 +46,21 @@ export interface StyleShader {
 }
 
 export interface StylePass {
-  /** A GLSL identifier, unique among the style's passes. */
-  name: string;
-  /** The sampler `glsl` reads this pass's output as. */
+  /**
+   * The sampler `glsl` reads this pass's output as: a GLSL identifier,
+   * unique among the style's passes, never a parameter key or a name the
+   * renderer supplies.
+   */
   texture: string;
-  /** The style's parameters this pass reads. */
-  params: string[];
   glsl: string;
 }
 
 export interface StyleDefinition extends StyleDescriptor {
+  /**
+   * An animated style whose `time` moves in steps of `1 / timeHz` seconds:
+   * the renderer draws one frame a step for it instead of every frame.
+   */
+  timeHz?: number;
   shader: StyleShader;
 }
 

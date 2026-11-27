@@ -20,6 +20,29 @@ function check(name, passed) {
   console.log(`[${passed ? 'PASS' : 'FAIL'}] ${name}`);
   if (!passed) failures++;
 }
+async function tilesSettled(timeout) {
+  return page
+    .waitForFunction(
+      () => {
+        const { globe, primitives } = window.__godsEyeView.viewer.scene;
+        if (globe.show && !globe.tilesLoaded) return false;
+        for (let i = 0; i < primitives.length; i++) {
+          const primitive = primitives.get(i);
+          if (
+            typeof primitive.tilesLoaded === 'boolean' &&
+            !primitive.tilesLoaded
+          )
+            return false;
+        }
+        return true;
+      },
+      { timeout },
+    )
+    .then(
+      () => true,
+      () => false,
+    );
+}
 try {
   await page.setViewport({ width: 1440, height: 900 });
   const url = new URL(process.env.QA_BASE_URL || 'http://127.0.0.1:4173');
@@ -51,28 +74,18 @@ try {
         requestAnimationFrame(() => requestAnimationFrame(resolve)),
       ),
   );
-  const settled = await page
-    .waitForFunction(
-      () => {
-        const primitives = window.__godsEyeView.viewer.scene.primitives;
-        for (let i = 0; i < primitives.length; i++) {
-          const primitive = primitives.get(i);
-          if (
-            typeof primitive.tilesLoaded === 'boolean' &&
-            !primitive.tilesLoaded
-          )
-            return false;
-        }
-        return true;
-      },
-      { timeout: 60_000 },
-    )
-    .then(
-      () => true,
-      () => false,
-    );
-  check('visible tile content settles before visual captures', settled);
+  check(
+    'visible tile content settles before visual captures',
+    await tilesSettled(60_000),
+  );
   fs.mkdirSync('qa-shots/visual-effects', { recursive: true });
+  // Draws a second on a still scene: NVG and FLIR step at 15 Hz, CRT holds
+  // the loop, the others draw nothing by themselves.
+  const RATES = {
+    surveillance: [8, 25],
+    thermal: [8, 25],
+    retro: [25, Infinity],
+  };
   for (const style of [
     'normal',
     'retro',
@@ -96,18 +109,7 @@ try {
       const visible = Object.entries(effects.stages)
         .filter(([, stage]) => stage.enabled)
         .map(([name]) => name);
-      const animated = Object.values(effects.stages).some(
-        (stage) =>
-          stage.enabled &&
-          stage.uniforms.time !== undefined &&
-          stage.uniforms.intensity > 0.001,
-      );
-      return {
-        active: manager.activeStyle,
-        visible,
-        clock: effects.frameId !== null,
-        animated,
-      };
+      return { active: manager.activeStyle, visible };
     });
     check(
       `${style}: only the selected style remains visible`,
@@ -115,9 +117,28 @@ try {
         JSON.stringify(state.visible) ===
           JSON.stringify(style === 'normal' ? [] : [style]),
     );
+    if (!(await tilesSettled(30_000)))
+      throw new Error(
+        `${style}: tile loading did not settle before frame sampling`,
+      );
+    const draws = await page.evaluate(async () => {
+      const scene = window.__godsEyeView.viewer.scene;
+      let n = 0;
+      const off = scene.postRender.addEventListener(() => (n += 1));
+      // Overlay layout can briefly request extra frames on a still scene.
+      const samples = [];
+      for (let i = 0; i < 3; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        samples.push(n);
+        n = 0;
+      }
+      off();
+      return Math.min(...samples);
+    });
+    const [low, high] = RATES[style] ?? [0, 5];
     check(
-      `${style}: the animation clock follows visible animated stages`,
-      state.clock === state.animated,
+      `${style}: the renderer draws ${low}-${high} frames a second on a still scene (${draws})`,
+      draws >= low && draws <= high,
     );
     if (['normal', 'surveillance', 'thermal'].includes(style)) {
       await page.screenshot({ path: `qa-shots/visual-effects/${style}.png` });

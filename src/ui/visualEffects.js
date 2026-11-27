@@ -13,17 +13,9 @@ const OFF = 0.001;
  * A style as the renderer contract defines it
  * (`src/render/contract/effects.d.ts`).
  * @param {string} name
- * @param {{fragmentShader: string, uniforms?: Record<string, {default: number, min: number, max: number}>, timeHz?: number, passes?: Array<{name: string, texture: string, uniforms: string[], fragmentShader: string}>}} shader
+ * @param {{fragmentShader: string, uniforms?: Record<string, {default: number, min: number, max: number}>, timeHz?: number, passes?: Array<{texture: string, fragmentShader: string}>}} shader
  */
 export function styleDefinition(name, shader) {
-  const program = { glsl: shader.fragmentShader };
-  if (shader.passes?.length)
-    program.passes = shader.passes.map((pass) => ({
-      name: pass.name,
-      texture: pass.texture,
-      params: [...pass.uniforms],
-      glsl: pass.fragmentShader,
-    }));
   return {
     id: name,
     params: Object.entries(shader.uniforms || {}).map(([key, meta]) => ({
@@ -33,8 +25,14 @@ export function styleDefinition(name, shader) {
       default: meta.default,
     })),
     animated: shader.fragmentShader.includes('uniform float time'),
-    ...(shader.timeHz ? { timeHz: shader.timeHz } : {}),
-    shader: program,
+    timeHz: shader.timeHz,
+    shader: {
+      glsl: shader.fragmentShader,
+      passes: (shader.passes ?? []).map((pass) => ({
+        texture: pass.texture,
+        glsl: pass.fragmentShader,
+      })),
+    },
   };
 }
 

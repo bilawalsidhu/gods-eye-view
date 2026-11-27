@@ -19,7 +19,7 @@ import { listenerList, toCartesian, uncaught } from './common.js';
 import { createCesiumCredits } from './credits.js';
 import { createCesiumDraw } from './draw.js';
 import { gpuIconCapabilities } from './gpuIcons.js';
-import { createCesiumEffects } from './effects.js';
+import { createCesiumEffects, STYLE_STEP_REASON } from './effects.js';
 import { renderNow, willDraw } from './frame.js';
 import { createCesiumGlobe } from './globe.js';
 import { createCesiumQuery, queryCapabilities } from './query.js';
@@ -263,13 +263,17 @@ export function createCesiumPorts(
   // given while it draws waits for the next, as Cesium's own request does.
   const pendingReasons = [];
   let answering = 0;
+  // A frame only a style's step asked for is part of that style's cadence.
+  let answered = [];
+  const onlySteps = (reasons) =>
+    reasons.length > 0 && reasons.every((r) => r === STYLE_STEP_REASON);
   const drawing = () => {
     settleTick(true);
     answering = pendingReasons.length;
   };
   const drew = () => {
     rendered += 1;
-    pendingReasons.splice(0, answering);
+    answered = pendingReasons.splice(0, answering);
     answering = 0;
   };
   let disposed = false;
@@ -705,9 +709,9 @@ export function createCesiumPorts(
    * ticks and `IDLE_MS`. Resolves `'idle'` if in that time it drew nothing
    * of its own accord and `busy()` stayed false; `'busy'` as soon as it did;
    * `'ended'` if the ports are disposed or `end` passes first. A draw while
-   * a hold keeps the loop drawing every frame is the hold's, not the
-   * scene's own; `busy` is asked at each tick's start, before Cesium decides
-   * whether it draws.
+   * a hold keeps the loop drawing every frame is the hold's, and one only
+   * a style's step asked for is the style's, not the scene's own. `busy` is
+   * asked at each tick's start, before Cesium decides whether it draws.
    * @param {number} end
    * @param {() => boolean} busy Whether work landed that will draw again.
    */
@@ -716,7 +720,7 @@ export function createCesiumPorts(
       const from = performance.now();
       let ticks = 0;
       const offDraw = scene.postRender.addEventListener(() => {
-        if (scene.requestRenderMode) finish('busy');
+        if (scene.requestRenderMode && !onlySteps(answered)) finish('busy');
       });
       // Each preUpdate also ends the tick before it.
       const offTick = scene.preUpdate.addEventListener(() => {
@@ -820,7 +824,11 @@ export function createCesiumPorts(
      * hold makes anyway is the hold's).
      */
     function idleBlocked() {
-      busy = completed > 0 || (scene.requestRenderMode && renderPending(scene));
+      busy =
+        completed > 0 ||
+        (scene.requestRenderMode &&
+          renderPending(scene) &&
+          !onlySteps(pendingReasons));
       completed = 0;
       return busy;
     }

@@ -15,12 +15,9 @@ import { msg } from '../i18n/marker.js';
  */
 
 /**
- * The hot-spot bloom is a 9x9 Gaussian over samples three texels apart. Its
- * weight is a product of a row weight and a column weight, and the stage
- * reads its input with nearest sampling, so this pass sums the nine samples
- * of each row once per texel and the main pass sums nine of those: 18 reads
- * for each pixel where one pass took 81, with the same result. The row sum is
- * written across two 8-bit channels, as in the night-vision bloom.
+ * The hot-spot bloom split as the night-vision one is (`surveillance.js`):
+ * a 9x9 Gaussian over samples three texels apart, rows here, columns in
+ * the main pass.
  */
 const FLIR_BLOOM_ROWS_SHADER = /* glsl */ `
     uniform sampler2D colorTexture;
@@ -56,9 +53,7 @@ export const thermalShader = {
   timeHz: 15,
   passes: [
     {
-      name: 'bloomRows',
       texture: 'bloomRowsTexture',
-      uniforms: ['sensitivity', 'mode'],
       fragmentShader: FLIR_BLOOM_ROWS_SHADER,
     },
   ],
@@ -257,12 +252,12 @@ export const thermalShader = {
 
       // ── Hot-spot bloom/bleed ────────────────────────────
       // Sample a wider area for bloom on bright spots
-      // Rows were summed by the bloomRows pass; the columns are summed here.
+      // The row sums, read at texel centres (Cesium may sample them LINEAR); the columns are summed here.
       float bloomSample = 0.0;
       float bloomWeight = 0.0;
       for (int y = -4; y <= 4; y++) {
         vec2 offset = vec2(0.0, float(y)) * texel * 3.0;
-        vec2 rows = texture(bloomRowsTexture, uv + offset).rg;
+        vec2 rows = texture(bloomRowsTexture, (floor((uv + offset) * dims) + 0.5) / dims).rg;
         float w = exp(-0.5 * float(y * y) / 8.0);
         bloomSample += (rows.r + rows.g / 255.0) * w;
         bloomWeight += w;
