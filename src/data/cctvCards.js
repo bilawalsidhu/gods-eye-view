@@ -89,28 +89,6 @@ export const CCTV_THUMBNAIL_ALTITUDE_SCALE = Object.freeze({
 // ─── Pure helpers (exported for unit tests — no Cesium, no DOM) ────────────
 
 /**
- * Returns whether an ambient card anchor is outside the protected top HUD
- * band. A user-pinned hover card may intentionally enter the band because it
- * is temporary and requested; persistent ambient cards yield to the HUD.
- *
- * @param {Object} input
- * @param {number} input.sy - Anchor Y in CSS pixels.
- * @param {number} input.viewH - Viewport height in CSS pixels.
- * @param {boolean} [input.pinned=false]
- * @returns {boolean}
- */
-export function isCctvCardAnchorSafe({ sy, viewH, pinned = false } = {}) {
-  if (pinned) return Number.isFinite(sy);
-  if (!Number.isFinite(sy) || !Number.isFinite(viewH) || viewH <= 0)
-    return false;
-  const safeTop = Math.min(
-    CCTV_CARD_SAFE_TOP_MAX_PX,
-    viewH * CCTV_CARD_SAFE_TOP_RATIO,
-  );
-  return sy >= safeTop;
-}
-
-/**
  * Greedy nearest-first screen-space declutter over LOD-selected candidates
  * (the vessel/FIRMS min-separation idiom): accept a candidate only when its
  * anchor keeps `minSepPx` from every already-accepted anchor, so cards never
@@ -158,44 +136,6 @@ export function declutterCctvCards(
     acceptedIds.push(candidate.id);
   }
   return acceptedIds;
-}
-
-/**
- * Altitude-driven card scale and opacity (curve constants above).
- * Piecewise, monotonic non-increasing in both channels:
- *   - ≤1,800 m: full size, fully opaque.
- *   - 1,800→6,000 m: smoothstep shrink 1.0 → 0.45 (opaque).
- *   - 6,000→9,500 m: slight continued linear shrink 0.45 → 0.35; opaque
- *     until 7,500 m, then a linear alpha fade to 0 at 9,500 m.
- *   - ≥9,500 m: fully hidden (alpha 0) — entries may persist, nothing paints.
- * @param {number} cameraHeightM - Viewer camera height above the ellipsoid.
- * @returns {{scale:number, alpha:number}}
- */
-export function cardScaleForAltitude(cameraHeightM) {
-  const h = Number.isFinite(cameraHeightM) ? Math.max(0, cameraHeightM) : 0;
-  if (h <= CCTV_CARD_SCALE_FULL_M) return { scale: 1, alpha: 1 };
-  if (h <= CCTV_CARD_SCALE_MID_M) {
-    const t =
-      (h - CCTV_CARD_SCALE_FULL_M) /
-      (CCTV_CARD_SCALE_MID_M - CCTV_CARD_SCALE_FULL_M);
-    const s = t * t * (3 - 2 * t); // smoothstep — no visible kink at either end
-    return { scale: 1 + (CCTV_CARD_SCALE_AT_MID - 1) * s, alpha: 1 };
-  }
-  const t = Math.min(
-    1,
-    (h - CCTV_CARD_SCALE_MID_M) /
-      (CCTV_CARD_FADE_END_M - CCTV_CARD_SCALE_MID_M),
-  );
-  const scale =
-    CCTV_CARD_SCALE_AT_MID + (CCTV_CARD_SCALE_MIN - CCTV_CARD_SCALE_AT_MID) * t;
-  if (h >= CCTV_CARD_FADE_END_M)
-    return { scale: CCTV_CARD_SCALE_MIN, alpha: 0 };
-  if (h <= CCTV_CARD_FADE_START_M) return { scale, alpha: 1 };
-  const alpha =
-    1 -
-    (h - CCTV_CARD_FADE_START_M) /
-      (CCTV_CARD_FADE_END_M - CCTV_CARD_FADE_START_M);
-  return { scale, alpha };
 }
 
 /**

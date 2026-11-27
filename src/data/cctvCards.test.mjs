@@ -8,35 +8,20 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  CCTV_CARD_FADE_END_M,
-  CCTV_CARD_FADE_START_M,
   CCTV_CARD_FETCH_BURST_LIMIT,
   CCTV_CARD_FETCH_BURST_SPACING_MS,
   CCTV_CARD_FETCH_STEADY_SPACING_MS,
   CCTV_CARD_MIN_SEP_PX,
-  CCTV_CARD_SCALE_AT_MID,
-  CCTV_CARD_SCALE_FULL_M,
-  CCTV_CARD_SCALE_MID_M,
-  CCTV_CARD_SCALE_MIN,
   CCTV_FRAME_CACHE_MAX,
   applyFrameResult,
   cardFetchPolicy,
-  cardScaleForAltitude,
   createCctvThumbnailOverlayEntry,
   createFrameSlot,
   declutterCctvCards,
   frameFetchDue,
   frameRetryDelayMs,
-  isCctvCardAnchorSafe,
   planFrameCachePrune,
 } from './cctvCards.js';
-
-test('isCctvCardAnchorSafe protects the top HUD band for ambient cards', () => {
-  assert.equal(isCctvCardAnchorSafe({ sy: 100, viewH: 1000 }), false);
-  assert.equal(isCctvCardAnchorSafe({ sy: 150, viewH: 1000 }), true);
-  assert.equal(isCctvCardAnchorSafe({ sy: 100, viewH: 1000, pinned: true }), true);
-  assert.equal(isCctvCardAnchorSafe({ sy: NaN, viewH: 1000 }), false);
-});
 
 // ─── declutterCctvCards ──────────────────────────────────────────────────────
 
@@ -127,42 +112,6 @@ test('CCTV card module cannot resurrect a canvas, projection, listener, or priva
     /setCctvCardHitRects/,
   ];
   for (const pattern of forbidden) assert.doesNotMatch(source, pattern);
-});
-
-// ─── cardScaleForAltitude — the owner-decided altitude curve (finding 5) ────
-
-test('cardScaleForAltitude: full size and opacity at or below 1,800 m', () => {
-  assert.deepEqual(cardScaleForAltitude(0), { scale: 1, alpha: 1 });
-  assert.deepEqual(cardScaleForAltitude(CCTV_CARD_SCALE_FULL_M), { scale: 1, alpha: 1 });
-  assert.deepEqual(cardScaleForAltitude(NaN), { scale: 1, alpha: 1 });
-});
-
-test('cardScaleForAltitude: hits the owner-decided waypoints', () => {
-  const mid = cardScaleForAltitude(CCTV_CARD_SCALE_MID_M);
-  assert.ok(Math.abs(mid.scale - CCTV_CARD_SCALE_AT_MID) < 1e-9, 'scale ~0.45 at 6,000 m');
-  assert.equal(mid.alpha, 1);
-  const fadeStart = cardScaleForAltitude(CCTV_CARD_FADE_START_M);
-  assert.equal(fadeStart.alpha, 1, 'still opaque at 7,500 m');
-  assert.ok(fadeStart.scale < CCTV_CARD_SCALE_AT_MID, 'keeps shrinking slightly past 6,000 m');
-  const midFade = cardScaleForAltitude((CCTV_CARD_FADE_START_M + CCTV_CARD_FADE_END_M) / 2);
-  assert.ok(Math.abs(midFade.alpha - 0.5) < 1e-9, 'linear fade midpoint');
-});
-
-test('cardScaleForAltitude: fully hidden at and above the 9,500 m ceiling', () => {
-  assert.equal(cardScaleForAltitude(CCTV_CARD_FADE_END_M).alpha, 0);
-  assert.equal(cardScaleForAltitude(50_000).alpha, 0);
-  assert.equal(cardScaleForAltitude(50_000).scale, CCTV_CARD_SCALE_MIN);
-});
-
-test('cardScaleForAltitude: scale and alpha are monotonic non-increasing', () => {
-  let prev = cardScaleForAltitude(0);
-  for (let h = 100; h <= 12_000; h += 100) {
-    const cur = cardScaleForAltitude(h);
-    assert.ok(cur.scale <= prev.scale + 1e-12, `scale rises at ${h} m`);
-    assert.ok(cur.alpha <= prev.alpha + 1e-12, `alpha rises at ${h} m`);
-    assert.ok(cur.scale >= CCTV_CARD_SCALE_MIN - 1e-12);
-    prev = cur;
-  }
 });
 
 // ─── cardFetchPolicy — cold-fill burst pacing (finding 3) ───────────────────
