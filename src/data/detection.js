@@ -189,8 +189,6 @@ export function countFadingRenderEntries(renderEntries) {
 
 /** @type {number} Current mode index into MODE_LABELS */
 let _mode = MODE_OFF;
-/** @type {HTMLCanvasElement|null} Shared host canvas used for QA diagnostics. */
-let _hostCanvas = null;
 /** @type {HTMLCanvasElement|null} Host-owned scene-blend isolation surface. */
 let _hostSurface = null;
 /** @type {CanvasRenderingContext2D|null} Current host-owned paint target. */
@@ -417,7 +415,6 @@ export function destroyDetection() {
   _calloutCount = 0;
   _layers = [];
   _onModeChange = null;
-  _hostCanvas = null;
   _hostSurface = null;
   _ctx = null;
   _mode = MODE_OFF;
@@ -642,44 +639,6 @@ export function getDetectionDiagnostics() {
   return result;
 }
 
-function _publishDiagnostics() {
-  if (!_hostCanvas?.dataset || !_lastDiagnostics) return;
-  const dataset = _hostCanvas.dataset;
-  dataset.profile = _lastDiagnostics.profile || 'OFF';
-  dataset.densityPct = String(_lastDiagnostics.densityPct ?? _densityPct);
-  dataset.allocationStrategy =
-    _lastDiagnostics.allocationStrategy || _allocationStrategy;
-  dataset.solveRevision = String(_lastDiagnostics.solveRevision ?? 0);
-  dataset.collectiveLabelBudget = String(
-    _lastDiagnostics.collectiveLabelBudget ?? 0,
-  );
-  dataset.labelsByLayer = JSON.stringify(_lastDiagnostics.labelsByLayer || {});
-  dataset.entitlementByLayer = JSON.stringify(
-    _lastDiagnostics.entitlementByLayer || {},
-  );
-  dataset.labeledKeys = JSON.stringify(_lastDiagnostics.labeledKeys || []);
-  dataset.labelAlphaByKey = JSON.stringify(
-    _lastDiagnostics.labelAlphaByKey || {},
-  );
-  dataset.bracketOpacityCounts = JSON.stringify(
-    _lastDiagnostics.bracketOpacityCounts || {},
-  );
-  dataset.keyholeRadius = String(_lastDiagnostics.keyholeRadius ?? 0);
-  dataset.keyholeFeatherPx = String(_lastDiagnostics.keyholeFeatherPx ?? 0);
-  dataset.demandByLayer = JSON.stringify(_lastDiagnostics.demandByLayer || {});
-  dataset.cohortByLayer = JSON.stringify(_lastDiagnostics.cohortByLayer || {});
-  dataset.placementBuildCount = String(
-    _lastDiagnostics.placementBuildCount ?? 0,
-  );
-  dataset.observationCount = String(_lastDiagnostics.observationCount ?? 0);
-  dataset.selectedCount = String(_lastDiagnostics.selectedCount ?? 0);
-  dataset.fadingCount = String(_lastDiagnostics.fadingCount ?? 0);
-  dataset.paintMs = String(_lastDiagnostics.paintMs ?? 0);
-  dataset.solveMs = String(_lastDiagnostics.solveMs ?? 0);
-  dataset.frameTotalMs = String(_lastDiagnostics.frameTotalMs ?? 0);
-  dataset.throttleSkipCount = String(_lastDiagnostics.throttleSkipCount ?? 0);
-}
-
 /**
  * Switches the visual theme for detection's host paint lane.
  * @param {string} styleName - Theme key from THEME_MAP (e.g. 'retro', 'surveillance', 'thermal').
@@ -805,7 +764,6 @@ function _shouldPaintDetectionLane(frame) {
 function _paintDetectionLane(frame) {
   if (_mode === MODE_OFF || _suspended) return;
   _ctx = frame.ctx;
-  _hostCanvas = frame.canvas;
   if (_hostSurface !== frame.surface) {
     _hostSurface = frame.surface;
     _applySurfaceTheme();
@@ -834,7 +792,6 @@ function _paintDetectionLane(frame) {
     _lastDiagnostics.solveMs = _lastSolveMs;
     _lastDiagnostics.throttleSkipCount = _throttleSkipCount;
   }
-  if (result.didSolve) _publishDiagnostics();
   // Detection holds no continuous render. Each bounded animation requests its own next
   // frame until it ends (see `detectionRenderDemand.js`).
   if (

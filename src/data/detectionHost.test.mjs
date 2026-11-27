@@ -419,9 +419,6 @@ test('detection lifecycle re-hosts unchanged painters behind the sole host liste
     assert.equal(env.detectionCtx.globalCompositeOperation, 'source-over');
     assert.equal(env.detectionCtx.filter, 'none');
     assert.equal(surface.style.display, 'block');
-    const canvas = env.document.getElementById('world-overlay-canvas');
-    assert.equal(Number(canvas.dataset.solveRevision), first.solveRevision);
-    assert.equal(canvas.dataset.profile, 'DENSE');
 
     // The existing 125 ms arbiter cadence remains authoritative.
     env.advance(124);
