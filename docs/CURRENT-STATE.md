@@ -232,8 +232,7 @@ the IUGG mean spherical Earth radius, 6371.0088 km. `greatCircleKm` is
 canonical; `greatCircleMeters` is its exact metre conversion. Missing,
 non-finite, and out-of-range points (latitude outside ±90, longitude outside
 ±180) return `Infinity`, so threshold and nearest-item consumers exclude invalid
-positions. Exported `haversineKm` entry points are compatibility wrappers
-only. `src/data/approxDistance.js`, the equirectangular
+positions. `src/data/approxDistance.js`, the equirectangular
 viewer-proximity approximation, is deliberately separate, as are intentional
 local angular, projection, ellipsoidal prefilter, and small-viewport
 approximations. Four modules keep their own great-circle code:

@@ -29,7 +29,7 @@
  */
 
 import { feedProvenanceEnvelope } from './layerSnapshot.js';
-import { greatCircleKm, pointInRing } from '../geoDistance.js';
+import { greatCircleKm } from '../geoDistance.js';
 import { pointInPreparedArea, prepareArea } from './areaGeometry.js';
 import { VOICE_LAYER_MANIFEST, voiceLayer } from '../voice/layerManifest.js';
 
@@ -105,41 +105,6 @@ function toEpochMs(value) {
   const text = String(value ?? '').trim();
   if (/^-?\d+(\.\d+)?$/.test(text)) return Number(text);
   return Date.parse(text);
-}
-
-/** @deprecated Use geoDistance.greatCircleKm with `{ lat, lon }` points. */
-export function haversineKm(lat1, lon1, lat2, lon2) {
-  return greatCircleKm({ lat: lat1, lon: lon1 }, { lat: lat2, lon: lon2 });
-}
-
-/** Scope records spatially. scope: {kind:'view'|'region'|'radius'|'anywhere'|'area', …}. */
-export function applyScope(records, scope, resolved) {
-  if (!scope || scope.kind === 'anywhere') return records;
-  if (resolved?.prepared) {
-    return records.filter((r) =>
-      pointInPreparedArea(resolved.prepared, r.lat, r.lon),
-    );
-  }
-  if (scope.kind === 'region' && resolved?.ring) {
-    return records.filter(
-      (r) =>
-        Number.isFinite(r.lat) &&
-        Number.isFinite(r.lon) &&
-        pointInRing(resolved.ring, r.lat, r.lon),
-    );
-  }
-  if (scope.kind === 'radius' || scope.kind === 'view') {
-    const c = resolved?.center;
-    const km = resolved?.km;
-    if (!c || !Number.isFinite(km)) return records;
-    return records.filter(
-      (r) =>
-        Number.isFinite(r.lat) &&
-        Number.isFinite(r.lon) &&
-        haversineKm(c.lat, c.lon, r.lat, r.lon) <= km,
-    );
-  }
-  return records;
 }
 
 const OPS_BY_TYPE = Object.freeze({
@@ -616,7 +581,7 @@ export async function selectAnalystRows(
     const own = distanceOf?.(row);
     if (Number.isFinite(own)) return own;
     return ref && Number.isFinite(row.lat) && Number.isFinite(row.lon)
-      ? Math.round(haversineKm(ref.lat, ref.lon, row.lat, row.lon) * 10) / 10
+      ? Math.round(greatCircleKm(ref, row) * 10) / 10
       : null;
   };
   const read = (key, row, field) =>
@@ -1033,12 +998,7 @@ export function createAnalystEngine(providers) {
         ? (row) =>
             Number.isFinite(row.lat) &&
             Number.isFinite(row.lon) &&
-            haversineKm(
-              resolvedScope.center.lat,
-              resolvedScope.center.lon,
-              row.lat,
-              row.lon,
-            ) <= resolvedScope.km
+            greatCircleKm(resolvedScope.center, row) <= resolvedScope.km
         : null;
 
     // 3) Filter, count and rank in one pass, yielding between slices.
