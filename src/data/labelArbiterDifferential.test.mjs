@@ -1,10 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  ALLOCATION_ELASTIC,
-  ALLOCATION_WEIGHTED,
-  LabelArbiter,
-} from './labelArbiter.js';
+import { ALLOCATION_ELASTIC, ALLOCATION_WEIGHTED } from './detectionPolicy.js';
+import { LabelArbiter } from './labelArbiter.js';
 
 // Compact rows retain the full identity/corner/rect contract:
 // key@corner@x@y@w@h (fade rows append @alpha@selected).

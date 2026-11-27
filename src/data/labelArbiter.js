@@ -1,6 +1,5 @@
 import {
   ALLOCATION_ELASTIC,
-  ALLOCATION_WEIGHTED,
   normalizeAllocationStrategy,
 } from './detectionPolicy.js';
 
@@ -1211,5 +1210,3 @@ export const LABEL_ARBITER_TIMING = Object.freeze({
   minimumLifetimeMs: MIN_LIFETIME_MS,
   cooldownMs: COOLDOWN_MS,
 });
-
-export { ALLOCATION_ELASTIC, ALLOCATION_WEIGHTED };
