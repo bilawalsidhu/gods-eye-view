@@ -57,11 +57,7 @@ function isInspectableSighting(row, nowMs, taxa, state) {
 /** Own layer-row descriptors and serializable filter options. */
 export function createControls({ state, services, parts }) {
   function notify() {
-    try {
-      state.controlsListener?.();
-    } catch {
-      /* repaint listeners are optional */
-    }
+    state.panel?.invalidate();
   }
 
   function chip({ id, label, title, params, key, value }) {
@@ -119,10 +115,6 @@ export function createControls({ state, services, parts }) {
     /** Route camera refreshes through the application's lifecycle manager. */
     attachDataManager(manager) {
       state.manager = manager;
-    },
-    /** Connect the layer row's repaint listener. */
-    setRowControlsListener(listener) {
-      state.controlsListener = typeof listener === 'function' ? listener : null;
     },
     /** Snapshot the requested filters for share links and restoration. */
     getParams() {

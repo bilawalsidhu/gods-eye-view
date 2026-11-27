@@ -220,8 +220,10 @@ export function useDockedCamera({
       if (next !== was) {
         stillState.value = '';
         pendingUntil = 0;
-        // A card URL may be a live-only proxy fallback. Keep it only for this open dock.
-        cardFallback = fromCard;
+        // A card URL may be a live-only proxy fallback. Keep it only for this
+        // open dock; an object URL (a frame read for its time) is the card's
+        // and may be freed, so it is never a fallback.
+        cardFallback = String(fromCard).startsWith('blob:') ? '' : fromCard;
         descriptor = null;
       }
       if (!cameraId.value) {

@@ -189,22 +189,25 @@ export function createControls({ state: layerState, services, parts, source }) {
         ),
       };
     },
-
-    setRowControlsListener(listener) {
-      unsubscribeRowControls?.();
-      unsubscribeRowControls = null;
-      if (!listener) return;
-      // Redrawn only when the stations or whether they are offered change,
-      // not on every playback tick.
-      let previous = '';
-      unsubscribeRowControls = parts.presentation.subscribeToRadio(() => {
-        const key = `${layerState._source}|${parts.interaction.radioPresentationAllowed()}|${parts.queries.visibleStations().length > 1}`;
-        if (key === previous) return;
-        previous = key;
-        listener();
-      });
-    },
   };
 
-  return { methods };
+  /**
+   * Invalidate the panels' row while `panel` is given: only when the
+   * stations or whether they are offered change, not on every playback tick.
+   * @param {{ invalidate: () => void } | null} panel
+   */
+  function watchRowControls(panel) {
+    unsubscribeRowControls?.();
+    unsubscribeRowControls = null;
+    if (!panel) return;
+    let previous = '';
+    unsubscribeRowControls = parts.presentation.subscribeToRadio(() => {
+      const key = `${layerState._source}|${parts.interaction.radioPresentationAllowed()}|${parts.queries.visibleStations().length > 1}`;
+      if (key === previous) return;
+      previous = key;
+      panel.invalidate();
+    });
+  }
+
+  return { methods, watchRowControls };
 }

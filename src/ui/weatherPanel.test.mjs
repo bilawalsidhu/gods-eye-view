@@ -4,10 +4,28 @@ import test from 'node:test';
 import { nextTick } from 'vue';
 import assert from 'node:assert/strict';
 import { setLocale } from '../i18n/index.js';
-import { createWeatherPanel } from './weatherPanel.js';
+import { createWeatherPanel as createView } from './weatherPanel.js';
+
+/**
+ * The view, driven as the layer panel drives it: the view never follows the
+ * clock, and the fixture's `state()` reads it again with the same entries,
+ * as the layer panel does when the scene time moves.
+ */
+function createWeatherPanel(options, ...rest) {
+  const view = createView(options, ...rest);
+  if (view && options?.drive) options.drive(view);
+  return view;
+}
 import { railDocumentFixture as railFixture } from './railTestFixture.mjs';
 import { createAirQualityLayer } from '../layers/airQuality/index.js';
 import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
+import { installFakeResizeObserver } from '../testSupport/fakeResizeObserver.mjs';
+import { flushPanelContent } from './rail/panelContent.js';
+import {
+  resetContextLists,
+  setContextListPresence,
+  showContextList,
+} from './contextLists.js';
 const ticks = ['2026-09-22T01:00:00Z', '2026-09-22T01:05:00Z'];
 const wind = {
   id: 'wind',
@@ -29,6 +47,7 @@ function fixture() {
   // Weather's list in Context reports whether its tab shows, and its count.
   const reports = [];
   const listeners = new Set();
+  let readAgain = () => {};
   const calls = [];
   let state = {
     mode: 'latest',
@@ -50,9 +69,19 @@ function fixture() {
     calls,
     listeners,
     clock,
+    drive(view) {
+      const update = view.update;
+      let entries = null;
+      view.update = (next) => {
+        entries = next;
+        return update(next);
+      };
+      readAgain = () => entries && update(entries);
+    },
     state: (next) => {
       state = { ...state, ...next };
       for (const fn of listeners) fn(state);
+      readAgain();
     },
   };
 }
@@ -270,6 +299,69 @@ test('the list reports its tab only while a weather product shows, with their co
   view.update([radar]);
   assert.deepEqual(f.presence(), { count: 1 });
   view.destroy();
+});
+
+test('a body that is not displayed is not repainted, and repaints once, current, when it is', () => {
+  const sizes = installFakeResizeObserver();
+  try {
+    const f = fixture();
+    const view = createWeatherPanel(f);
+    sizes.report(f.container, 0, 0);
+    view.update([wind]);
+    assert.deepEqual(rowIds(f), [], 'not painted while its list is not shown');
+    // The list's tab still shows, with its count.
+    assert.deepEqual(f.presence(), { count: 1 });
+    view.update([wind, radar]);
+    f.state({ mode: 'latest' });
+    assert.deepEqual(rowIds(f), []);
+    assert.deepEqual(f.presence(), { count: 2 });
+    f.writes();
+    sizes.report(f.container, 280, 400);
+    assert.ok(f.writes() > 0);
+    assert.ok(rowIds(f).includes('wind'), 'painted when displayed');
+    assert.ok(rowIds(f).includes('weather-radar'), 'with the latest products');
+    f.writes();
+    sizes.report(f.container, 280, 300);
+    assert.equal(f.writes(), 0, 'nothing owed, nothing painted');
+    const [observer] = sizes.watching(f.container);
+    view.destroy();
+    assert.equal(observer.disconnected, true);
+  } finally {
+    sizes.restore();
+  }
+});
+
+test('Context opening on the Weather list paints the owed readout at once; on another list it stays owed', () => {
+  const sizes = installFakeResizeObserver();
+  try {
+    const f = fixture();
+    const context = document.body.appendChild(document.createElement('aside'));
+    context.dataset.panelId = 'global-context-panel';
+    context.appendChild(f.container);
+    const view = createWeatherPanel(f);
+    sizes.report(f.container, 0, 0);
+    view.update([wind]);
+    view.update([wind, radar]);
+    assert.deepEqual(rowIds(f), []);
+    // The fixture reports presence to itself; Context's lists hear it here.
+    setContextListPresence('weather', { count: 2 });
+    setContextListPresence('news', { count: 5 });
+    showContextList('news');
+    flushPanelContent(context);
+    assert.deepEqual(rowIds(f), [], 'Context opens on another list');
+    showContextList('weather');
+    flushPanelContent(context);
+    assert.ok(rowIds(f).includes('wind'));
+    assert.ok(rowIds(f).includes('weather-radar'), 'with the latest products');
+    f.writes();
+    flushPanelContent(context);
+    sizes.report(f.container, 280, 400);
+    assert.equal(f.writes(), 0, 'nothing owed, nothing painted');
+    view.destroy();
+  } finally {
+    sizes.restore();
+    resetContextLists();
+  }
 });
 
 test('settings, reading and footer actions pass the layer id, params and user origin', async () => {

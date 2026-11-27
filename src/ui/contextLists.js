@@ -117,6 +117,20 @@ export function shownList(lists, choice) {
   return lists.find((list) => list.id === choice)?.id ?? lists[0]?.id ?? '';
 }
 
+/**
+ * Whether Context's list tab shows list `id`; Context itself may be folded.
+ * A readout in that list's body paints when Context is presented open only
+ * while this holds: otherwise its body stays hidden behind another tab or
+ * list.
+ * @param {string} id A CONTEXT_LISTS id.
+ */
+export function contextListShown(id) {
+  return (
+    contextListsActive.value &&
+    shownList(listsOn(contextListPresence), contextListChoice.value) === id
+  );
+}
+
 /** For tests: forget every list and choice. */
 export function resetContextLists() {
   for (const id of Object.keys(contextListPresence))

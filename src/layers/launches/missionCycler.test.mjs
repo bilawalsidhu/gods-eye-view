@@ -28,8 +28,13 @@ function rig({ ids = ['A', 'B', 'C'], selected = null, enabled = true } = {}) {
       },
     },
   };
-  const { methods } = createControls({ state, services: {}, parts });
+  const { methods, watchRowControls } = createControls({
+    state,
+    services: {},
+    parts,
+  });
   return {
+    watchRowControls,
     state,
     methods,
     chip: (id) => methods.getRowControls().chips.find((c) => c.id === id),
@@ -92,10 +97,10 @@ test('there are no controls while the layer is off or the roster is empty', () =
   assert.equal(r.state._selectedLaunchId, 'A');
 });
 
-test('the row listener fires only when the roster or the selection changes', () => {
+test('the row is invalidated only when the roster or the selection changes', () => {
   const r = rig();
   let calls = 0;
-  r.methods.setRowControlsListener(() => calls++);
+  r.watchRowControls({ invalidate: () => calls++ });
   const view = r.state._missionRosterView;
   r.publish({ roster: view });
   assert.equal(calls, 1, 'the first view is a change');
@@ -107,11 +112,11 @@ test('the row listener fires only when the roster or the selection changes', () 
   r.publish({ roster: roster('A', 'B') });
   assert.equal(calls, 3, 'a new roster is');
 
-  // A new listener replaces the old one; null removes it.
+  // A new handle replaces the old one; null (destroy) removes it.
   let replaced = 0;
-  r.methods.setRowControlsListener(() => replaced++);
+  r.watchRowControls({ invalidate: () => replaced++ });
   assert.equal(r.listenerCount(), 1);
-  r.methods.setRowControlsListener(null);
+  r.watchRowControls(null);
   assert.equal(r.listenerCount(), 0);
   r.publish({ roster: roster('C') });
   assert.equal(calls, 3);

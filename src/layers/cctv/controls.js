@@ -15,7 +15,6 @@ import { attachCctvVideo } from './videoPlayback.js';
 export function createControls({ state: layerState, services, parts, source }) {
   const { holdContinuousRender, releaseContinuousRender } = services.render;
   const { CCTV_ACTIVATION_RESULT } = services.activation;
-  let rowControlsListener = null;
   // Prev/Next are offered while a step has somewhere to go.
   const stepsOffered = () => parts.navigation.canStepNearby();
 
@@ -487,6 +486,22 @@ export function createControls({ state: layerState, services, parts, source }) {
     },
 
     /**
+     * Picks a camera as a click on it does: it becomes the active camera, its
+     * card opened in Context. `center: false` leaves the view to the
+     * caller (a pick from a list frames it); otherwise the view flies to it.
+     * @param {string} cameraId
+     * @param {{origin?: string, center?: boolean}} [options]
+     * @returns {boolean} True when the camera is loaded and now active.
+     */
+    pickById(cameraId, { center = true } = {}) {
+      if (!layerState._enabled || !cameraId) return false;
+      const result = parts.selection.setActiveCamera(String(cameraId));
+      if (result === CCTV_ACTIVATION_RESULT.NOT_FOUND) return false;
+      if (center) parts.navigation.focusCamera(String(cameraId), 1.8);
+      return true;
+    },
+
+    /**
      * Flies the viewer to a specific camera.
      * @param {string} cameraId - Camera ID to focus on.
      * @param {number} [durationSec=2.2] - Flight duration in seconds.
@@ -535,8 +550,10 @@ export function createControls({ state: layerState, services, parts, source }) {
      * @param {?{lat: number, lon: number, radiusKm: number, order?: string[], restart?: boolean}} area
      */
     setNearbyArea(area) {
+      // The row's arrows change only when whether a step is offered changes.
+      const offered = stepsOffered();
       parts.navigation.setNearbyArea(area);
-      rowControlsListener?.();
+      if (stepsOffered() !== offered) layerState._panel?.invalidate();
     },
 
     /**
@@ -552,22 +569,6 @@ export function createControls({ state: layerState, services, parts, source }) {
           parts.navigation.stepNearbyCamera,
         ),
       };
-    },
-
-    setRowControlsListener(listener) {
-      if (rowControlsListener)
-        layerState._listeners.delete(rowControlsListener);
-      rowControlsListener = null;
-      if (typeof listener !== 'function') return;
-      // Camera updates and list changes redraw the row only when its arrows change.
-      let previous = stepsOffered();
-      rowControlsListener = () => {
-        const offered = stepsOffered();
-        if (offered === previous) return;
-        previous = offered;
-        listener();
-      };
-      layerState._listeners.add(rowControlsListener);
     },
 
     /**

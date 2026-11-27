@@ -516,7 +516,7 @@ async function main() {
         enabled: true,
         uncertain: true,
       });
-      gev.dataManager.refreshLayerStats();
+      entry.panel.invalidate();
       const staticResult = module.setTuningStatic(true);
       const filterBefore = module.getUIState().filter;
 
@@ -545,6 +545,10 @@ async function main() {
         stationIds: module.getTunerStations(3).map(({ id }) => id),
       });
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      // The Data Layers rows repaint while the panel is displayed; it starts collapsed.
+      const dataPanel = document.getElementById('data-panel');
+      if (dataPanel?.classList.contains('collapsed'))
+        dataPanel.querySelector('[data-collapse-target="data-panel"]')?.click();
       const genreChips = [...document.querySelectorAll(`${strip} button:not(:first-child):not([data-city-option])`)];
       const result = {
         presentationActive: module.getUIState().presentationActive,
@@ -585,7 +589,7 @@ async function main() {
         enabled: true,
         uncertain: false,
       });
-      gev.dataManager.refreshLayerStats();
+      entry.panel.invalidate();
       module.cancelTuning();
       camera.flyTo = originalFlyTo;
       return result;

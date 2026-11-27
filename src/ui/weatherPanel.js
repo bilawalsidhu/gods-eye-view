@@ -1,8 +1,14 @@
 import { h, render as renderVue } from 'vue';
-import { formatUtcDayMonth, t } from '../i18n/index.js';
+import { formatUtcDayMonth, getLocale, t } from '../i18n/index.js';
 import { utcClock } from './rail/utcClock.js';
 import WeatherReadout from './weather/WeatherReadout.vue';
-import { setContextListPresence, WEATHER_LIST_LAYERS } from './contextLists.js';
+import {
+  contextListShown,
+  setContextListPresence,
+  WEATHER_LIST_LAYERS,
+} from './contextLists.js';
+import { watchDisplayed } from './displayWatch.js';
+import { onPanelOpening } from './rail/panelContent.js';
 
 const OBSERVED = new Set(WEATHER_LIST_LAYERS.slice(2, 5));
 const utc = (time) =>
@@ -222,9 +228,46 @@ export function createWeatherPanel({
       render();
     },
   };
-  const paint = (view) =>
+  // A view equal to the one shown is not rendered again; the product whose
+  // details show is part of what it shows.
+  let shownView = null;
+  const paint = (view) => {
+    let key = null;
+    try {
+      // Its template translates labels too: a new locale renders again.
+      key = `${getLocale()}\u0000${selected}\u0000${JSON.stringify(view)}`;
+    } catch {
+      // A view that cannot be compared is always rendered.
+    }
+    if (key !== null && key === shownView) return;
+    shownView = key;
     renderVue(h(WeatherReadout, { view, selected, ...handlers }), container);
-  const render = () => {
+  };
+  // The readout is not repainted while its body is not displayed (Context
+  // folded, another tab or another list shown); it repaints once when the
+  // body is displayed again: at once when Context is presented open on this
+  // list, otherwise when a ResizeObserver reports the body displayed.
+  let owed = false;
+  const body = watchDisplayed(container, () => {
+    if (owed) render();
+  });
+  const flush = ({ displayedOnly = false } = {}) => {
+    if (!owed) return;
+    if (
+      displayedOnly
+        ? !(container.getClientRects?.().length > 0)
+        : !contextListShown('weather')
+    )
+      return;
+    // The body is being shown: a later render paints it rather than owing it.
+    body.assumeShown();
+    render({ force: true });
+  };
+  const offOpening = onPanelOpening(
+    container.closest?.('[data-panel-id]'),
+    flush,
+  );
+  const render = ({ force = false } = {}) => {
     if (destroyed) return;
     const state = clock?.getState() || {
       mode: 'latest',
@@ -369,15 +412,18 @@ export function createWeatherPanel({
     });
     const hidden = active.length === 0;
     if (!active.some(({ id }) => id === selected)) selected = null;
-    paint({
-      hidden,
-      briefing: weatherBriefing(active, state, clock),
-      frameTime,
-      cards: models,
-    });
+    owed = !force && !body.shown();
+    if (!owed)
+      paint({
+        hidden,
+        briefing: weatherBriefing(active, state, clock),
+        frameTime,
+        cards: models,
+      });
     onPresence(hidden ? null : { count: active.length });
   };
-  const unsubscribe = clock?.subscribe(render);
+  // The scene time is read here, never followed: the layer panel calls
+  // `update` again when the time moves (see LayerPanel.invalidate).
   return {
     update(nextEntries) {
       entries = nextEntries.filter(({ summary }) => summary);
@@ -398,7 +444,8 @@ export function createWeatherPanel({
     },
     destroy() {
       destroyed = true;
-      unsubscribe?.();
+      body.disconnect();
+      offOpening();
       renderVue(null, container);
       onPresence(null);
     },

@@ -28,7 +28,7 @@ export function createState({ services }) {
     timer: null,
     /** Whether the Data Layers row's nearby search is running. */
     nearbySearchBusy: false,
-    /** Repaints the Data Layers row when its controls change. */
+    /** Invalidates the Data Layers row (the panels' handle from init). */
     rowControlsListener: null,
     /** Contacts subject position; when set, it replaces the camera viewport. */
     contextAnchor: null,

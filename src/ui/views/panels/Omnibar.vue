@@ -7,8 +7,9 @@ import { airportCanLead, createOmnibar, drawAsked, escapeRegExp, readLine, VILLA
 import { RETIRED_PANEL_TARGETS } from '../../omnibarIntent.js';
 import { announcePlacePick } from '../../placePick.js';
 import { findAirportByCode, isAirportCode } from '../../../data/airports.js';
+import { lookupMatches } from '../../entityLookup.js';
 import { FEATURE_GUIDES, layerGuide, layerSettingsGuide, startGuide } from '../../omnibarGuide.js';
-import { citiesInRegion, createPlaceSuggester, inExtent, mayBePrivate, minPlaceChars } from '../../../search/placeSuggestions.js';
+import { citiesInRegion, createPlaceSuggester, inExtent, minPlaceChars } from '../../../search/placeSuggestions.js';
 import { greatCircleKm } from '../../../geoDistance.js';
 import { PHOTON_SETTING } from '../../../search/photonSetting.js';
 import { citiesAround, countryName, findPlace, nearestCity, placesNear } from '../../../data/wikidataCities.js';
@@ -19,6 +20,7 @@ import { useGlobeActionsStore } from '../../stores/globeActions.js';
 import { useLocationStore } from '../../stores/location.js';
 import { useOmnibarStore } from '../../stores/omnibar.js';
 import { useVoiceStore } from '../../stores/voice.js';
+import { worldClock } from '../../../time/worldClock.js';
 import UiButton from '../../kit/UiButton.vue';
 import UiIcon from '../../kit/UiIcon.vue';
 import { vRootClass } from '../../rail/rootClass.js';
@@ -59,6 +61,16 @@ const dismissed = ref(false);
 const error = ref('');
 const busy = ref(false);
 let generation = 0;
+// The choice still running (a looked-up item being found in its layer):
+// aborted as soon as anything newer happens, so nothing it was waiting for
+// takes the selection or the camera afterwards.
+let running = null;
+/** Supersede whatever the field was still running. */
+function supersede() {
+  generation++;
+  running?.abort();
+  running = null;
+}
 let stopGuide;
 // A search's error shows under the line it was for: one that fails after
 // the line was edited says nothing under the new text.
@@ -72,7 +84,7 @@ const voiceOn = computed(() => voice.view?.root?.assistantMode === 'voice');
 // waiting on its flight changes nothing afterwards.
 watch(voiceOn, (active) => {
   if (!active) return;
-  generation++;
+  supersede();
   busy.value = false;
 });
 const assistantOpen = computed(() => voice.view?.root?.chatOpen || voice.view?.voicePanel?.hidden === false);
@@ -143,8 +155,8 @@ watch(query, (value) => {
   clearTimeout(placesTimer);
   placesAbort?.abort();
   // Only text that may name a place goes to the place service, and only the
-  // part that names it: never private text, a question, a sentence, a
-  // command, a switch, coordinates or an aircraft code (see placeQuery).
+  // part that names it: never a question, a sentence, a command, a
+  // switch, coordinates or an aircraft code (see placeQuery).
   // Nothing is looked up for a field hidden under voice.
   const asked = suggester.enabled && !voiceOn.value ? reader.value.placeQuery(text) : null;
   if (!asked) {
@@ -194,6 +206,47 @@ watch(query, async (value) => {
   const airport = await lookup;
   if (codeLookup === lookup) codeLookup = null;
   if (query.value.trim() === text) codeAirport.value = { for: text, airport };
+});
+
+// Things anywhere, from the host's lookup when it gives one (the
+// `entityLookup` option, src/app/controls.js), asked with the typed line once
+// typing pauses: only a bare name, code or number (lookupQuery in
+// omnibarRows.js), never while voice has the field. An edit or closing the
+// field aborts the request.
+const found = ref([]);
+const foundFor = ref('');
+let foundAbort = null;
+let foundTimer = null;
+/** Whether the line goes to the host's lookup. */
+const asksHost = (text) => typeof controls.value?.lookupEntities === 'function' && !voiceOn.value && Boolean(reader.value.lookupQuery(text));
+watch(query, (value) => {
+  const text = value.trim();
+  clearTimeout(foundTimer);
+  foundAbort?.abort();
+  foundAbort = null;
+  if (!asksHost(text)) {
+    found.value = [];
+    foundFor.value = '';
+    return;
+  }
+  foundTimer = setTimeout(async () => {
+    const controller = new AbortController();
+    foundAbort = controller;
+    try {
+      // A clock held in the past asks for things as they were then.
+      const at = worldClock.isLive() ? undefined : Math.round(worldClock.now());
+      const answer = await controls.value.lookupEntities({ text, at, signal: controller.signal });
+      if (controller.signal.aborted) return;
+      found.value = lookupMatches(answer);
+      foundFor.value = text;
+    } catch {
+      if (!controller.signal.aborted) found.value = [];
+    }
+  }, 250);
+});
+onBeforeUnmount(() => {
+  clearTimeout(foundTimer);
+  foundAbort?.abort();
 });
 
 // ── Place strip ──────────────────────────────────────────────────────
@@ -305,7 +358,6 @@ watch(stripPlace, async (place) => {
 
 const strip = computed(() => {
   const asked = query.value.trim();
-  if (asked && mayBePrivate(asked)) return null;
   if (asked && countQuery.value) {
     const counted = countQuery.value;
     return {
@@ -438,7 +490,7 @@ function openEntityChoice(identity) {
 
 function chooseChip(chip, { viaKey = false } = {}) {
   if (screenIsOwned()) return;
-  generation++;
+  supersede();
   busy.value = false;
   // A chip is a new request: the last one's error goes.
   error.value = '';
@@ -578,6 +630,7 @@ const built = computed(() => {
   return reader.value.rows(text, {
     places: placesFor.value === text ? places.value : [],
     airport: codeAirport.value.for === text ? codeAirport.value.airport : null,
+    found: foundFor.value === text ? found.value : [],
     entities: (needle, options) => entityCard.search(needle, options),
     selection: card
       ? { title: card.title, layerName: card.layerName, canFollow: entityCard.canFollow(), canCockpit: entityCard.canCockpit() }
@@ -697,18 +750,16 @@ onBeforeUnmount(() => {
   if (photonShown.value) controls.value?.creditSuggestions?.(false);
 });
 const noCommand = computed(() => focused.value && !dismissed.value && query.value.trim().startsWith('>') && !items.value.length);
-// Text withheld as private says so, rather than showing nothing.
-const privateNote = computed(() => focused.value && !dismissed.value && mayBePrivate(query.value.trim()));
 // An error stays in view while voice is on, even with the voice panel open.
 const showFeedback = computed(() => feedback.value && (focused.value || !assistantOpen.value || voiceOn.value));
-const showResults = computed(() => open.value || showFeedback.value || noCommand.value || privateNote.value);
+const showResults = computed(() => open.value || showFeedback.value || noCommand.value);
 
 function onInput(event) {
   // Text an input method is still composing is read when it is committed
   // (compositionend), not sent to the place service half-written.
   if (event.isComposing) return;
   query.value = event.target.value;
-  generation++;
+  supersede();
   busy.value = false;
   dismissed.value = false;
   locationStore.controls?.editSearch();
@@ -724,7 +775,7 @@ function onInput(event) {
  * waiting on a flight) is superseded, so none of its later steps run.
  */
 function reset({ blur = true } = {}) {
-  generation++;
+  supersede();
   busy.value = false;
   dismissed.value = true;
   query.value = '';
@@ -895,7 +946,11 @@ const keepsFocus = (viaKey) =>
 
 async function choose(item, { viaKey = false } = {}) {
   if (!item || item.kind === 'none' || screenIsOwned()) return;
-  const current = ++generation;
+  supersede();
+  const current = generation;
+  const controller = new AbortController();
+  running = controller;
+  const { signal } = controller;
   busy.value = true;
   error.value = '';
   try {
@@ -939,6 +994,22 @@ async function choose(item, { viaKey = false } = {}) {
       if (!live) throw new Error();
       if (Boolean(live.enabled) !== item.enabled && (await controls.value.setLayer(item.id, item.enabled)) === false) throw new Error();
     } else if (item.kind === 'entity') openEntityChoice(item.identity);
+    else if (item.kind === 'found') {
+      // Found in its layer (switched on if need be), then opened as a
+      // Context row opens it; one the layer had yet to load is picked there
+      // already, with the camera centred on it, and only its card opens.
+      if (!controls.value?.findLookedUp) throw new Error();
+      const found = await controls.value.findLookedUp(item.match, { signal });
+      if (current !== generation || signal.aborted || found?.reason === 'cancelled') return;
+      // Nothing to pick at this time: the host's line says why, under the field.
+      if (found?.reason === 'unplaced' && item.match.detail) {
+        error.value = `${item.match.name || item.match.id} · ${item.match.detail}`;
+        return;
+      }
+      if (!found?.ok) throw new Error();
+      const shown = found.picked ? entityCard.select(found.identity) : openEntityChoice(found.identity);
+      if (!shown && !found.picked) throw new Error();
+    }
     else if (item.kind === 'plan') await runPlan(item.steps, current);
     else if (item.kind === 'mic') {
       // No voice connected: the row fails rather than passing for done.
@@ -987,7 +1058,7 @@ async function choose(item, { viaKey = false } = {}) {
 function enterStrip() {
   navigated.value = true;
   if (pendingAirportEnter === generation) {
-    generation++;
+    supersede();
     busy.value = false;
   }
   inStrip.value = true;
@@ -1038,7 +1109,8 @@ function onKeydown(event) {
       // A code line whose airport is still being looked up: Enter picks
       // once the rows settle. Hold this Enter while it still owns the field
       // and the user has not picked anything else.
-      const current = ++generation;
+      supersede();
+      const current = generation;
       pendingAirportEnter = current;
       const selection = entityCard.selectionGeneration();
       busy.value = true;
@@ -1103,16 +1175,16 @@ function onGlobalKeydown(event) {
 
 onMounted(() => document.addEventListener('keydown', onGlobalKeydown));
 onBeforeUnmount(() => {
-  generation++;
+  supersede();
   stopGuide?.();
   document.removeEventListener('keydown', onGlobalKeydown);
 });
 
 /** The mic button; pressing it supersedes a plan still running. */
-function onMic(supersede = false) {
+function onMic(stopRunning = false) {
   if (screenIsOwned()) return;
-  if (supersede) {
-    generation++;
+  if (stopRunning) {
+    supersede();
     busy.value = false;
   }
   voice.controls?.emit('button');
@@ -1226,7 +1298,6 @@ watch(
       </li>
     </ul>
       <p v-show="noCommand" role="status">{{ t('No matching command') }}</p>
-      <p v-show="privateNote" role="status">{{ t('Looks private, so nothing is searched or sent') }}</p>
     </div>
   </section>
 </template>

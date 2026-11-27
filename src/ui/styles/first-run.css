@@ -767,7 +767,7 @@ a.first-run-link-card:focus-visible {
 }
 
 /* The globe's meridians are full circles squeezed sideways; a squeeze that
-   cycles reads as the globe turning. Still until Default Mode is selected. */
+   cycles reads as the globe turning. Still until Default mode is selected. */
 .first-run-meridians ellipse {
   transform: scaleX(var(--m));
   transform-box: fill-box;
@@ -834,9 +834,9 @@ a.first-run-link-card:focus-visible {
   }
 }
 
-/* HUD callouts over the Default Mode preview: brackets, an orbit, and two target
+/* HUD callouts over the Default mode preview: brackets, an orbit, and two target
    blips whose leader lines draw out to a label stub, taking turns. They play
-   only while Default Mode is selected. */
+   only while Default mode is selected. */
 .first-run-callouts {
   position: absolute;
   inset: 0;

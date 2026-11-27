@@ -11,7 +11,9 @@ export function createLifecycle({
   const { clearSelectedEntityContextForLayer } = services.context;
 
   const methods = {
-    init(viewer) {
+    init(viewer, { panel = null } = {}) {
+      // The panels' handle: the row repaints through it.
+      layerState.rowControlsListener = panel ? () => panel.invalidate() : null;
       layerState.viewer = viewer;
       parts.rendering.attach(viewer);
       const cameraChanged = () => {
@@ -78,6 +80,7 @@ export function createLifecycle({
     },
 
     destroy(viewer) {
+      layerState.rowControlsListener = null;
       source.destroy?.();
       this.disable();
       layerState.contextAnchor = null;

@@ -24,7 +24,8 @@ import {
   onFollowChanged,
   stopFollowing,
 } from '../data/followed.js';
-import { currentSelection } from '../data/clickSelect.js';
+import { currentSelection, onSelectionChanged } from '../data/clickSelect.js';
+import { _connectContextCard, _mapSelectionChanged } from './contextCard.js';
 import { fromDegreesInto } from '../geo/ellipsoid.js';
 import { inputFor } from '../input/dispatcher.js';
 import {
@@ -922,6 +923,14 @@ export function installEntityContext({
     }, 250);
   });
 
+  // Custom layers open the card through ui/contextCard.js.
+  const offSelection = onSelectionChanged(_mapSelectionChanged);
+  const offCard = _connectContextCard({
+    // Nothing opens in Cockpit, as for a click.
+    select: (item) => !inCockpit() && store.select(item),
+    clear: () => store.clear(),
+  });
+
   // A click on anything a layer can identify opens its card. The input
   // dispatcher hands every subscriber the same click, picked once before
   // any layer acts on it, and only while no tool holds the pointer.
@@ -1189,6 +1198,8 @@ export function installEntityContext({
     }
     clearTimeout(firstRead);
     offClick();
+    offCard();
+    offSelection();
     for (const off of cameraOff) off?.();
     clearTimeout(trailing);
     clearTimeout(quiet);

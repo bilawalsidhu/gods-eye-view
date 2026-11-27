@@ -332,11 +332,15 @@ test('voice ducking lowers what is heard, not the user volume; a volume set mean
 });
 
 test('a single filtered station keeps its current stream and offers no row steps', async (t) => {
-  const { layer } = await radioOnWithStation(t);
+  const { layer, manager } = await radioOnWithStation(t);
   const audio = await play(layer, ID_A);
   const rowChanges = [];
-  layer.setRowControlsListener(() =>
-    rowChanges.push(layer.getRowControls().chips.length),
+  // The row is invalidated through the manager's panel handle.
+  t.after(
+    manager.subscribeActivity((change) => {
+      if (change?.type === 'panel' && change.layerId === 'radio')
+        rowChanges.push(layer.getRowControls().chips.length);
+    }),
   );
   layer.setParams({ filter: 'news' });
   assert.deepEqual(layer.getRowControls().chips, []);

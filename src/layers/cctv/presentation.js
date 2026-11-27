@@ -312,6 +312,8 @@ export function createPresentation({
       poseSource: camera.poseSource || null,
       basePose: camera.basePose ? { ...camera.basePose } : null,
       frameUrl: parts.frames.frameUrlFor(camera, refreshMs),
+      // The source gives each frame's time in its response (`framesCarryTime`).
+      framesCarryTime: source?.framesCarryTime === true,
       mediaUrl: parts.frames.mediaUrlFor(camera),
     };
   }
@@ -390,6 +392,8 @@ export function createPresentation({
   /** Dispatches the current UI state to all registered subscriber callbacks. */
 
   function notifyListeners() {
+    // Loading progress and its end show in the layer row too.
+    layerState._panel?.invalidate();
     const payload = uiState();
     for (const callback of layerState._listeners) {
       try {

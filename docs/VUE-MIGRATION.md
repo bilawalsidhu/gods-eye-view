@@ -129,7 +129,7 @@ the start tiles are pressed toggles, and all but SKIP keep `aria-disabled`
 rather than `disabled`, so they stay focusable while the card is busy. Its
 tile, tip, Stories and arrow glyphs are `UiIcon`s with `:size="null"`, so
 first-run.css still sizes them (`src/ui/kit/welcomeControls.test.mjs` pins
-it). Default Mode's preview globe and callouts stay inline SVG drawings, and
+it). Default mode's preview globe and callouts stay inline SVG drawings, and
 its outbound links stay links.
 Every button in the Stories views (the Stories entry and its popup and
 toast, Explore, the Story screen, its header, rail, timeline and context

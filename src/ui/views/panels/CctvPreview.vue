@@ -98,9 +98,15 @@ const stillBadge = computed(() => {
   return live.value ? (src.value ? t('SNAPSHOT') : '') : sourceBadge.value?.label;
 });
 const inlineBadge = computed(() => hasCanvas.value ? sourceBadge.value?.label : stillBadge.value);
+// The frame's time, as its camera source gives it, while the picture shown is
+// that frame: none for a source that gives none, for a saved still, or while
+// the live video takes the picture's place.
+const time = computed(() => (src.value && src.value === liveSrc.value && frame.value?.timeLabel) || '');
+const datetime = computed(() => (time.value ? frame.value.timeIso : undefined));
+// The requested URL names the camera; a fetched frame is shown from an object URL.
 const params = computed(() => {
   try {
-    return new URL(src.value, location.origin).searchParams;
+    return new URL((same.value && frame.value?.currentSrc) || src.value, location.origin).searchParams;
   } catch {
     return new URLSearchParams();
   }
@@ -180,6 +186,7 @@ watch(() => props.shown && props.pageShown ? props.cameraId : '', (cameraId, _, 
         <UiIcon name="open_in_full" :size="null" />
       </UiButton>
     </div>
+    <time v-if="time && !showCanvas" class="cctv-preview__time" :datetime="datetime">{{ time }}</time>
     <Teleport to="body">
       <div v-if="big" class="cctv-popup" role="dialog" data-owns-escape :aria-label="name || t('Camera view')" @click.self="big = false">
         <figure class="cctv-popup__card">
@@ -192,7 +199,8 @@ watch(() => props.shown && props.pageShown ? props.cameraId : '', (cameraId, _, 
           <img v-if="src" :src="src" :alt="name || t('Camera frame')" />
           <small v-if="credit" class="cctv-popup__credit">{{ credit }}</small>
           <figcaption v-if="unavailable && !src">{{ t('FRAME · UNAVAILABLE') }}</figcaption>
-          <figcaption v-else-if="facts.length">
+          <figcaption v-else-if="time || facts.length">
+            <time v-if="time" :datetime="datetime">{{ time }}</time>
             <span v-for="fact in facts" :key="fact.label">{{ fact.label }} <b>{{ fact.value }}</b></span>
           </figcaption>
         </figure>

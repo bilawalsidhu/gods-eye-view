@@ -166,21 +166,6 @@ test('a camera gone from the catalog ends the walk instead of selecting it', () 
   assert.deepEqual(r.selected, ['c1', 'c4']);
 });
 
-test('the row redraws only when whether the steps are offered changes', () => {
-  const r = rig();
-  let repaints = 0;
-  r.methods.setRowControlsListener(() => repaints++);
-  r.parts.presentation.notifyListeners();
-  assert.equal(repaints, 0, 'a camera update with the steps still offered');
-  r.state._enabled = false;
-  r.parts.presentation.notifyListeners();
-  assert.equal(repaints, 1);
-  r.methods.setRowControlsListener(null);
-  r.state._enabled = true;
-  r.parts.presentation.notifyListeners();
-  assert.equal(repaints, 1, 'a removed listener hears nothing');
-});
-
 test("with Context's Cameras list, a walk steps through that list in its order", () => {
   const r = rig({
     cameras: [...CAMERAS, { id: 'far', lat: 40, lon: 0 }],
@@ -273,9 +258,9 @@ test('results A/B/C becoming A/C restart the walk; a recentre keeps it', () => {
 });
 
 test('the steps are withdrawn while the listed cameras offer nowhere to go', () => {
-  const { methods } = rig({ activeId: 'c1' });
+  const { methods, state } = rig({ activeId: 'c1' });
   let repaints = 0;
-  methods.setRowControlsListener(() => repaints++);
+  state._panel = { invalidate: () => repaints++ };
   const list = (order) =>
     methods.setNearbyArea({ lat: 2, lon: 0, radiusKm: 2.5, order });
   list(['c1']);

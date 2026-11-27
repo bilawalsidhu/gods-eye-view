@@ -1,5 +1,6 @@
 /** Tracking identity, entry, exit and contact navigation for the Cockpit controller. */
 import { t } from '../i18n/index.js';
+import { flushAllPanelContent } from './rail/panelContent.js';
 import { cameraOf } from '../render/rendererOf.js';
 import {
   formatHeadingReadout,
@@ -270,6 +271,9 @@ export function dispatchCockpitModeChanged(active, info = null) {
         )))
       ? info.layerId
       : null;
+  // Entering or leaving Cockpit shows panels by a class on the page: repaint
+  // what they owe before the layout passes this event starts measure them.
+  flushAllPanelContent();
   window.dispatchEvent(
     new CustomEvent('gev:cockpit-mode-changed', {
       detail: { active: active === true, subjectId, layerId },

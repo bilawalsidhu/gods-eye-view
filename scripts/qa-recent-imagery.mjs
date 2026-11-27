@@ -180,8 +180,13 @@ function installPageHelpers() {
   };
 }
 
+// The readout paints on the frame after the layer changes, so the DOM is
+// read after a frame has passed.
 const state = () =>
-  page.evaluate(() => {
+  page.evaluate(async () => {
+    await new Promise((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(resolve)),
+    );
     const qa = window.__riQa;
     const snapshot = qa.snap();
     const gev = window.__godsEyeView;
@@ -409,6 +414,15 @@ try {
   if (!booted) throw new Error('boot timeout');
   await page.evaluate(installPageHelpers);
 
+  // The Data Layers rows repaint while the panel is displayed; it starts
+  // collapsed. Open it before moving the camera: a click that lands before
+  // the address has caught up with a camera move puts the camera back at the
+  // view the address names.
+  await page.evaluate(() => {
+    const panel = document.getElementById('data-panel');
+    if (panel?.classList.contains('collapsed'))
+      panel.querySelector('[data-collapse-target="data-panel"]')?.click();
+  });
   await setView(AUSTIN);
   await tilesSettled();
   const initialStack = await page.evaluate(() => window.__riQa.activeStack());
@@ -724,13 +738,20 @@ try {
     current.diagnostics.ownedCount === 1,
     hostsDetail(current),
   );
-  const flag = await page.evaluate(
+  // The readout paints on the frame after the layer changes: wait for it.
+  const cardFlag = (key) =>
+    document.querySelector(
+      `#context-list-recent-imagery .ri-card[data-key="${key}"] .ri-card-flag`,
+    )?.textContent;
+  await until(
     (key) =>
       document.querySelector(
         `#context-list-recent-imagery .ri-card[data-key="${key}"] .ri-card-flag`,
-      )?.textContent,
+      )?.textContent === 'PREVIEW',
     targetKey,
+    2_000,
   );
+  const flag = await page.evaluate(cardFlag, targetKey);
   check('the previewed card wears PREVIEW', flag === 'PREVIEW', flag);
 
   // ── IMAGE: S pins the focused day; focus no longer moves the map ────────

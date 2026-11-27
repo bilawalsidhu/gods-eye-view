@@ -15,7 +15,8 @@ export function createLifecycle({
 
   const methods = {
     /** Initialize the stations' rendering and the single audio element. */
-    init(viewer) {
+    init(viewer, { panel = null } = {}) {
+      parts.controls?.watchRowControls?.(panel);
       layerState._sessionGeneration += 1;
       layerState._viewer = viewer;
       parts.clustering.resetRadioClusterOverlayIdentities();
@@ -77,6 +78,7 @@ export function createLifecycle({
 
     /** Release rendering, event, request, and playback resources. */
     destroy() {
+      parts.controls?.watchRowControls?.(null);
       layerState._keepStreamWhenOff = null;
       this.disable();
       parts.volume.cancelRadioVolumeTransition();

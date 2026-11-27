@@ -82,11 +82,6 @@ export function createControls({
       };
     },
 
-    setRowControlsListener(listener) {
-      layerState.rowControlsListener =
-        typeof listener === 'function' ? listener : null;
-    },
-
     /**
      * Load sites around a Contacts subject instead of the camera viewport.
      *

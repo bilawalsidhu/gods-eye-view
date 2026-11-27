@@ -2389,7 +2389,10 @@ async function recentImageryInContext(t) {
     scene: { canvas: { clientWidth: 1000 }, requestRender() {} },
   };
   bindFakeCesiumCamera(viewer, { globe: fakeGlobePort() });
-  layer.init(viewer);
+  // The layer panel updates the readout on the frame after the layer
+  // invalidates it; here it updates at once.
+  let readout = null;
+  layer.init(viewer, { panel: { invalidate: () => readout?.update() } });
   layer.attachMapStackController(fakeController());
   let active = false;
   const tool = {
@@ -2403,7 +2406,7 @@ async function recentImageryInContext(t) {
     },
     isActive: () => active,
   };
-  const readout = createRecentImageryPanel({
+  readout = createRecentImageryPanel({
     container: document.getElementById('recent-imagery-panel-body'),
     layer,
     viewer,

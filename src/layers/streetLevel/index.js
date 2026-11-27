@@ -100,7 +100,7 @@ export function createStreetLevelLayer({
     isAvailable: (entry) => providerAvailable(entry),
   });
 
-  /** Who presents the layer row's filters (the UI), and the row's listener. */
+  /** Who presents the layer row's filters (the UI), and the panels' row invalidation. */
   let rowControlsPresenter = null;
   let rowControlsListener = null;
 
@@ -1116,7 +1116,9 @@ export function createStreetLevelLayer({
       };
     },
 
-    init(viewer) {
+    init(viewer, { panel = null } = {}) {
+      // The panels' handle: the row repaints through it.
+      rowControlsListener = panel ? () => panel.invalidate() : null;
       state.viewer = viewer;
       parts.marker.ensure(viewer);
       parts.marker.setVisible(false);
@@ -1161,6 +1163,7 @@ export function createStreetLevelLayer({
     },
 
     destroy(viewer = state.viewer) {
+      rowControlsListener = null;
       layer.disable();
       for (const entry of state.providers.values())
         entry.instance.destroy(viewer);
@@ -1599,9 +1602,6 @@ export function createStreetLevelLayer({
     },
     getRowControls() {
       return rowControlsPresenter?.() ?? null;
-    },
-    setRowControlsListener(listener) {
-      rowControlsListener = typeof listener === 'function' ? listener : null;
     },
 
     /** Stop a sequence playing in the open photo, leaving the photo open. */

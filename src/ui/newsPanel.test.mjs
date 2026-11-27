@@ -5,6 +5,13 @@ import { nextTick } from 'vue';
 import { setLocale } from '../i18n/index.js';
 import { resetListCardMemory } from './kit/ContextListCard.vue';
 import { createNewsPanel } from './newsPanel.js';
+import { installFakeResizeObserver } from '../testSupport/fakeResizeObserver.mjs';
+import { flushPanelContent } from './rail/panelContent.js';
+import {
+  resetContextLists,
+  setContextListPresence,
+  showContextList,
+} from './contextLists.js';
 import {
   NEWS_CATEGORIES,
   NEWS_SEVERITY,
@@ -91,9 +98,11 @@ function fixture() {
   // News's list in Context: a body the readout renders into, and the list's
   // presence (whether its tab shows, and its count) reported as it goes.
   document.body.innerHTML = `
-    <div id="context-list-news">
-      <div id="news-panel-body"></div>
-    </div>`;
+    <aside id="global-context-panel" data-panel-id="global-context-panel">
+      <div id="context-list-news">
+        <div id="news-panel-body"></div>
+      </div>
+    </aside>`;
   const panel = document.getElementById('context-list-news');
   const reports = [];
   const calls = [];
@@ -161,6 +170,54 @@ test('the list shows the last 24 h as event cards, with its tab only while News 
   assert.equal(second.querySelector('.news-card__thumb') === null, true);
   news.destroy();
   assert.equal(presence(), null, 'its tab goes with it');
+});
+
+test('a feed body that is not displayed is not repainted, and repaints once, current, when it is', () => {
+  const sizes = installFakeResizeObserver();
+  try {
+    const { news, panel, presence } = fixture();
+    const body = document.getElementById('news-panel-body');
+    const cards = () =>
+      panel.querySelectorAll('[data-list-card="news"] .news-card');
+    sizes.report(body, 0, 0);
+    news.update(view());
+    assert.equal(cards().length, 0, 'not painted while its list is not shown');
+    // The list's tab still shows, with its count.
+    assert.equal(String(presence()?.count), '5');
+    sizes.report(body, 280, 400);
+    assert.ok(cards().length > 0, 'painted when displayed');
+    const [observer] = sizes.watching(body);
+    news.destroy();
+    assert.equal(observer.disconnected, true);
+  } finally {
+    sizes.restore();
+  }
+});
+
+test('Context opening on the News list paints the owed feed at once; on another list it stays owed', () => {
+  const sizes = installFakeResizeObserver();
+  try {
+    const { news, panel } = fixture();
+    const context = document.getElementById('global-context-panel');
+    const body = document.getElementById('news-panel-body');
+    const cards = () =>
+      panel.querySelectorAll('[data-list-card="news"] .news-card');
+    sizes.report(body, 0, 0);
+    news.update(view());
+    assert.equal(cards().length, 0);
+    setContextListPresence('weather', { count: 1 });
+    setContextListPresence('news', { count: 5 });
+    showContextList('weather');
+    flushPanelContent(context);
+    assert.equal(cards().length, 0, 'Context opens on another list');
+    showContextList('news');
+    flushPanelContent(context);
+    assert.ok(cards().length > 0);
+    news.destroy();
+  } finally {
+    sizes.restore();
+    resetContextLists();
+  }
 });
 
 test('a card click flies there; open, it links the source and closes', () => {
@@ -637,7 +694,7 @@ test('the panel names the window the server serves', () => {
   assert.equal(panel.querySelector('select[aria-label="Time window"]'), null);
 });
 
-test('a clip waits behind its picture and plays, on request, in the open card', () => {
+test('a clip waits behind its picture and plays, on request, in the open card', async () => {
   const { news, panel } = fixture();
   const clipped = report('clip', {
     event: {
@@ -671,14 +728,10 @@ test('a clip waits behind its picture and plays, on request, in the open card', 
   );
   assert.equal(video.getAttribute('preload'), 'none');
   assert.ok(video.hasAttribute('controls'));
-  // An expired link leaves the card without the clip.
+  // An expired link leaves the card without the clip; the card drops it
+  // itself, on Vue's next tick, with no new view from the layer.
   video.dispatchEvent(new Event('error'));
-  news.update(
-    view({
-      items: [feedCardView(clipped, NOW)],
-      selected: feedCardView(clipped, NOW),
-    }),
-  );
+  await nextTick();
   assert.equal(panel.querySelector('.news-card.is-open video') === null, true);
   news.destroy();
 });

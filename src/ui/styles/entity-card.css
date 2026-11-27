@@ -600,6 +600,14 @@
   font-size: 0.7rem;
 }
 
+/* What the item is, in its data's own words. */
+.entity-card__description {
+  margin: 0.45rem 0 0.6rem;
+  color: rgba(225, 236, 242, 0.82);
+  font-size: 0.66rem;
+  line-height: 1.45;
+}
+
 /* The model sits edge to edge under the name, framed by hairlines. */
 
 /* Tiles: the number leads, its unit sits small beside it. */
@@ -1580,6 +1588,15 @@ select.context-list-card__range:focus-visible {
 .cctv-preview__video canvas {
   width: 100%;
   height: 100%;
+}
+
+/* The frame's time, under the picture. */
+.cctv-preview__time {
+  margin-top: -0.25rem;
+  color: rgba(199, 214, 222, 0.6);
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.06rem;
 }
 
 .cctv-preview__video canvas {
@@ -4366,6 +4383,16 @@ select.context-list-card__range:focus-visible {
   font-size: 0.52rem;
   line-height: 1.3;
   overflow-wrap: anywhere;
+}
+
+/* A docked camera frame's time, as its source gives it. */
+.docked-view__time {
+  display: block;
+  padding: 0.2rem 0.55rem 0;
+  color: rgba(199, 214, 222, 0.6);
+  font-family: var(--font-mono);
+  font-size: 0.52rem;
+  letter-spacing: 0.06rem;
 }
 
 /* Opening in Context failed: the dock stays and says so. */

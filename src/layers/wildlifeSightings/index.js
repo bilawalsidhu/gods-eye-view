@@ -66,7 +66,8 @@ export function createWildlifeSightingsLayer({
     drawnParams: null,
     pendingParams: null,
     failedParams: null,
-    controlsListener: null,
+    /** @type {{ invalidate: () => void } | null} the panels' handle, from init */
+    panel: null,
     lastUpdate: null,
     error: null,
     stale: false,

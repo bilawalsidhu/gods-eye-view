@@ -100,6 +100,15 @@ const { canvas: streamCanvas, streamOn, still, stillAttempt, stillLoaded, stillF
   cctvView,
   suspended: away,
 });
+// The frame's time, as its camera source gives it, while the dock shows
+// the frame the camera's card read; the dock's own reads carry no time.
+const cameraTime = computed(() => {
+  const current = view.value;
+  const frame = activeFrame.value;
+  if (current?.kind !== 'camera' || streamOn.value || !still.value || !cameraPictured.value) return '';
+  if (frame?.cameraId !== String(current.identity?.id) || frame.src !== still.value) return '';
+  return frame.timeLabel || '';
+});
 
 // A docked flight's live position, for its cockpit view. A read that misses
 // it (a feed refresh) keeps the last position, so the view is not torn down
@@ -413,6 +422,7 @@ watch(
       <p v-if="streetStatus && !streetLoading" class="docked-view__notice" aria-hidden="true">{{ streetStatus }}</p>
       <p v-else-if="reopenFailed" class="docked-view__notice" role="status">{{ t('Could not open this in Context') }}</p>
     </div>
+    <time v-if="cameraTime" class="docked-view__time" :datetime="activeFrame.timeIso">{{ cameraTime }}</time>
     <p v-if="credit" class="docked-view__credit">{{ credit }}</p>
   </section>
 </template>

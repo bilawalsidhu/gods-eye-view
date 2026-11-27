@@ -9,6 +9,7 @@ import {
   nextSheet,
   sheetForPanelId,
 } from './mobileShell.js';
+import { onPanelOpening } from './rail/panelContent.js';
 
 function element(tag, document) {
   const node = new EventTarget();
@@ -320,6 +321,44 @@ test('sheets borrow panels and put them back exactly as they were', () => {
   }
   // Already-open panels are not touched.
   assert.ok(!calls.some(({ panelId }) => kept.includes(panelId)));
+});
+
+test('a sheet repaints owed content of an already expanded panel before it is measured or focused', () => {
+  const { document, press, calls } = fixture({ expanded: ['data-panel'] });
+  press('more');
+  const dataPanel = document.getElementById('data-panel');
+  const rail = document.getElementById('left-panel-stack');
+  // Rows a refresh skipped while Data Layers sat behind the More sheet.
+  let rows = 'old';
+  const events = [];
+  const off = onPanelOpening(dataPanel, () => {
+    rows = 'current';
+    events.push('flush');
+  });
+  rail.getBoundingClientRect = () => {
+    events.push(`measure:${rows}`);
+    return { top: 0, height: 0 };
+  };
+  const query = dataPanel.querySelectorAll;
+  dataPanel.querySelectorAll = (selector) => {
+    events.push(`focus:${rows}`);
+    return query(selector);
+  };
+  try {
+    calls.length = 0;
+    press('layers');
+    // Already expanded: the sheet presents nothing through the panel chrome.
+    assert.deepEqual(
+      calls.filter(({ panelId }) => panelId === 'data-panel'),
+      [],
+    );
+    assert.equal(events[0], 'flush');
+    assert.ok(events.includes('measure:current'));
+    assert.ok(events.includes('focus:current'));
+    assert.ok(!events.some((event) => event.endsWith(':old')));
+  } finally {
+    off();
+  }
 });
 
 test('a panel the user changes inside a sheet stays as they left it', () => {

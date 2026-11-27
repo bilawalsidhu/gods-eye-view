@@ -694,6 +694,8 @@ watch(
 
           <ReadingHero v-if="card.reading && !contextNeedle" :reading="card.reading" />
 
+          <p v-if="card.description && !contextNeedle" class="entity-card__description">{{ card.description }}</p>
+
           <div v-if="tiles.length && !contextNeedle" class="entity-card__tiles" :style="{ gridTemplateColumns: `repeat(${tiles.length}, minmax(0, 1fr))` }">
             <div v-for="tile in tiles" :key="tile.field" class="entity-card__tile" :title="[tile.number, tile.unit].filter(Boolean).join(' ')">
               <span>{{ tile.label }}</span>
