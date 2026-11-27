@@ -249,6 +249,8 @@ export function createPresentation({
       poseSource: camera.poseSource || null,
       basePose: camera.basePose ? { ...camera.basePose } : null,
       frameUrl: parts.frames.frameUrlFor(camera, refreshMs),
+      // The source gives each frame's time in its response (`framesCarryTime`).
+      framesCarryTime: source?.framesCarryTime === true,
       mediaUrl: parts.frames.mediaUrlFor(camera),
     };
   }

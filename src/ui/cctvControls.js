@@ -63,6 +63,11 @@ export class CctvControls {
     this._cctvChip = null;
     this._cctvFrameRequestToken = 0;
     this._cctvFramePreloader = null;
+    // A frame being fetched for its time, and the object URLs of the frame
+    // read for that request and of the frame on screen.
+    this._cctvFrameFetch = null;
+    this._cctvFramePendingUrl = null;
+    this._cctvFrameShownUrl = null;
     this._frame = EMPTY_CCTV_FRAME;
     this._calibrationEdit = null;
     this._actionGeneration = 0;

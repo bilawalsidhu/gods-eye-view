@@ -841,6 +841,15 @@
   border-radius: 999px;
 }
 
+/* The frame's time, under the picture. */
+.cctv-preview__time {
+  margin-top: -0.25rem;
+  color: rgba(199, 214, 222, 0.6);
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.06rem;
+}
+
 .cctv-preview__name {
   margin: 0;
   color: rgba(236, 244, 248, 0.94);
