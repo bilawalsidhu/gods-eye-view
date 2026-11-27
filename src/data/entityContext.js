@@ -1971,11 +1971,7 @@ export function nearbyForLayer(
     const classified = breakdown && BREAKDOWN_KINDS.has(kind.kind) ? [] : null;
     let count = 0;
     for (const point of points) {
-      if (
-        !reach &&
-        source &&
-        Math.abs(point.lat - here.lat) > latitudeSpan
-      )
+      if (!reach && source && Math.abs(point.lat - here.lat) > latitudeSpan)
         continue;
       if (!source && matchRecord && !recordMatches(point, needle, '', layerId))
         continue;

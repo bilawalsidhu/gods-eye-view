@@ -817,16 +817,15 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
         bounds,
         page: options.page,
         index: source?.index,
-        localScopes:
-          dual
-            ? {
-                anchor,
-                selected,
-                excludeKey: options.excludeKey,
-                // Never count the view beside a selected item.
-                noGround: true,
-              }
-            : null,
+        localScopes: dual
+          ? {
+              anchor,
+              selected,
+              excludeKey: options.excludeKey,
+              // Never count the view beside a selected item.
+              noGround: true,
+            }
+          : null,
         collectPopulation: summarizePopulation && !globe,
         nearestOnly,
         isPoint: inspectorPointRecord,
