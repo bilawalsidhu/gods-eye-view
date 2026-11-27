@@ -6580,6 +6580,13 @@ The incident card rounds the WFIGS size to whole acres, except under one acre,
 where it keeps the reported hundredths: a 0.25-acre fire reads `0.25 ac`, not
 `0 ac`.
 
+Explicit perimeter picks publish one shared `fire-perimeters` context record with
+NIFC WFIGS provenance and the incident anchor. Switching incidents removes the
+previous record, while ordinary refreshes update the selected record without a
+new selection event. Clear, disable, and feed eviction remove the record. A
+card or label of another layer painted over the area takes the click, so it
+neither selects nor clears the incident.
+
 Prohibited & Restricted Airspace is off by default (share-link token `8`) and sits in
 Infrastructure. The proxy pages `TYPE_CODE IN ('P','R')` from the FAA SUA
 FeatureServer, caps the body, and reuses a one-hour snapshot, serving the last

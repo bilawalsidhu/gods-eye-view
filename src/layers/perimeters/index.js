@@ -130,6 +130,7 @@ export function createFirePerimetersLayer({
   overlayHost = null,
   inputFor = defaultInputFor,
   picking = null,
+  context = null,
   inciwebSource = null,
   inciwebPublications = null,
   openExternal = null,
@@ -173,6 +174,8 @@ export function createFirePerimetersLayer({
   let _selectedId = null;
   let _selectedLink = null;
   let _selectedCardId = null;
+  // The carrier of the selected incident's shared context record.
+  let _selectedContextEntity = null;
   let _inciwebIndex = [];
   let _indexFetchedAt = 0;
   let _indexFetchInFlight = false;
@@ -195,6 +198,59 @@ export function createFirePerimetersLayer({
   }
 
   const canSelect = () => overlayHost && inputFor && picking;
+
+  /**
+   * Drop the selected incident's shared context record. `evicted` marks a
+   * record that left the feed; otherwise the clear is the user's.
+   */
+  function clearSelectedContext({ evicted = false } = {}) {
+    // Nothing published, nothing to clear (and no store to reach for).
+    if (!_selectedContextEntity) return;
+    if (!evicted)
+      context?.clearSelectedEntityContextForLayer?.('fire-perimeters');
+    context?.removeEntityContextsForLayer?.('fire-perimeters');
+    _selectedContextEntity = null;
+  }
+
+  /**
+   * Publish the selected incident as the layer's one shared context record.
+   * Only an explicit pick announces it; a refresh updates it in place.
+   */
+  function publishSelectedContext(row, { announce = false } = {}) {
+    if (!context) return null;
+    _selectedContextEntity ||= { show: true };
+    const contextId = `fire-perimeter:${row.id}`;
+    const record = context.registerEntityContext?.(_selectedContextEntity, {
+      id: contextId,
+      layerId: 'fire-perimeters',
+      layerName: 'Fire Perimeters',
+      source: 'NIFC WFIGS',
+      // No dataSource: disable and destroy remove the record outright.
+      // Context already carries the translated layer name; use the source's
+      // own incident name rather than an untranslated fixed prefix.
+      label: row.name || t('Fire Perimeters'),
+      latitude: row.anchor.lat,
+      longitude: row.anchor.lon,
+      properties: {
+        acres: row.acres ?? null,
+        containedPct: row.containedPct ?? null,
+        state: row.state ?? null,
+        category: row.category ?? null,
+        discoveredTime: row.discoveredTime ?? null,
+        updatedTime: row.updatedTime ?? null,
+        cause: row.cause ?? null,
+        behavior: row.behavior ?? null,
+      },
+    });
+    if (announce && record)
+      context.selectEntityContext?.(_selectedContextEntity);
+    // One record per layer: switching incidents evicts the previous one.
+    if (record)
+      context.removeEntityContextsForLayer?.('fire-perimeters', {
+        retainIds: new Set([contextId]),
+      });
+    return record || null;
+  }
 
   /**
    * Refresh the InciWeb catalog off the render path: a hanging or failed
@@ -283,11 +339,12 @@ export function createFirePerimetersLayer({
     return best;
   }
 
-  function publishSelectedCard() {
+  function publishSelectedCard({ announce = false } = {}) {
     if (!canSelect()) return;
     const row = _selectedId ? _fireById.get(_selectedId) : null;
     if (!row) {
       resetSelection();
+      clearSelectedContext({ evicted: true });
       overlayHost.setEntries(
         PERIMETER_OVERLAY_SOURCE_ID,
         [],
@@ -342,6 +399,7 @@ export function createFirePerimetersLayer({
       [card],
       CARD_HOST_OPTIONS,
     );
+    publishSelectedContext(row, { announce });
   }
 
   /**
@@ -389,7 +447,7 @@ export function createFirePerimetersLayer({
         abortLinkVerification();
         _linkFailures.clear();
         _selectedId = incidentId;
-        publishSelectedCard();
+        publishSelectedCard({ announce: true });
         return;
       }
       // A pick that belongs to a sibling layer (e.g. an aircraft) is not
@@ -400,6 +458,7 @@ export function createFirePerimetersLayer({
       }
       if (_selectedId) {
         _selectedId = null;
+        clearSelectedContext();
         publishSelectedCard();
       }
     });
@@ -669,6 +728,7 @@ export function createFirePerimetersLayer({
 
   function clearSelection() {
     resetSelection();
+    clearSelectedContext();
     if (overlayHost) {
       overlayHost.clearSource(PERIMETER_OVERLAY_SOURCE_ID);
       overlayHost.setVisible?.(PERIMETER_OVERLAY_SOURCE_ID, false);

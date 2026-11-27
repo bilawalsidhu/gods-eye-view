@@ -4,6 +4,7 @@ import {
   createInciwebPublicationSource,
 } from '../../layers/perimeters/index.js';
 import * as picking from '../../data/pickRegistry.js';
+import * as context from '../../data/contextStore.js';
 import * as overlays from '../../overlays/worldOverlay.js';
 
 /** Wire fire perimeters into the application catalog. */
@@ -24,6 +25,7 @@ export function createApplicationFirePerimeters({
     }),
     openExternal: (url) => window.open(url, '_blank', 'noopener,noreferrer'),
     picking,
+    context,
     ...options,
     // inciweb: false outranks InciWeb sources in options.
     ...(inciweb === false && {

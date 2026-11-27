@@ -9,7 +9,9 @@ import { firePerimeterSnapshot } from './records.js';
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { hexColor } from '../../render/color.js';
 import { LayerLifecycle } from '../../data/lifecycle.js';
-import { clickCard } from '../../data/pickRegistry.js';
+import { clickCard, setClickCardHitTest } from '../../data/pickRegistry.js';
+import * as realContext from '../../data/contextStore.js';
+import { inputFor } from '../../input/dispatcher.js';
 import { fakeInput, fakeInputUnderLabel } from '../../input/testDoubles.mjs';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 
@@ -33,6 +35,7 @@ function harness(
     pick = () => null,
     inciwebIndex = null,
     cardHit = () => null,
+    contextOwner = null,
     publication = async () => ({
       createdMs: 1757000000000,
       changedMs: 1757900000000,
@@ -42,6 +45,11 @@ function harness(
   const overlay = { entries: new Map(), visible: null };
   const owners = new Map();
   const opened = [];
+  const contexts = {
+    records: new Map(),
+    selected: null,
+    selectedEvents: 0,
+  };
   const viewer = { scene: { pick } };
   const { draw } = bindFakeDraw(viewer);
   const input = fakeInputUnderLabel(viewer);
@@ -84,6 +92,29 @@ function harness(
       : { getIndex: async () => [] },
     inciwebPublications: { getPublication: publication },
     openExternal: (url) => opened.push(url),
+    context: contextOwner || {
+      registerEntityContext(entity, metadata) {
+        entity.contextId = metadata.id;
+        const record = { ...metadata, entity };
+        contexts.records.set(metadata.id, record);
+        return record;
+      },
+      selectEntityContext(entity) {
+        contexts.selected = contexts.records.get(entity.contextId) || null;
+        contexts.selectedEvents += 1;
+        return contexts.selected;
+      },
+      clearSelectedEntityContextForLayer(layerId) {
+        if (contexts.selected?.layerId === layerId) contexts.selected = null;
+      },
+      removeEntityContextsForLayer(layerId, { retainIds } = {}) {
+        for (const [id, record] of contexts.records)
+          if (record.layerId === layerId && !retainIds?.has(id))
+            contexts.records.delete(id);
+        if (contexts.selected && !contexts.records.has(contexts.selected.id))
+          contexts.selected = null;
+      },
+    },
   });
   lastDraw = draw;
   if (init) {
@@ -100,6 +131,9 @@ function harness(
     clicks,
     owners,
     opened,
+    contexts,
+    /** The fake input the layer subscribes to (taps, raw clicks). */
+    input,
     /** A Space Missions label painted over the map: while `over`, it takes
      *  each click and is the card on top. */
     label: input.label,
@@ -1313,4 +1347,231 @@ test('a historical card checks its complex page when every own-name page is of a
     ]);
     h.layer.destroy();
   }
+});
+
+const firePick = () => perimeterPick(`fire-perimeter:${fire.id}:0`);
+
+test('a perimeter pick publishes one shared NIFC context record; empty space clears it', async () => {
+  let pickResult = null;
+  const h = harness(
+    { getSnapshot: async () => snap([fire]) },
+    { pick: () => pickResult },
+  );
+  await h.layer.update(h.viewer);
+  pickResult = firePick();
+  h.clicks.handler({ position: { x: 10, y: 10 } });
+  assert.equal(h.contexts.selectedEvents, 1);
+  const selected = h.contexts.selected;
+  assert.equal(selected?.id, `fire-perimeter:${fire.id}`);
+  assert.equal(selected.layerId, 'fire-perimeters');
+  assert.equal(selected.source, 'NIFC WFIGS');
+  assert.equal(selected.label, 'Fixture Fire');
+  assert.equal(selected.properties.containedPct, 40);
+  assert.equal(selected.latitude, fire.anchor.lat);
+  assert.equal(selected.longitude, fire.anchor.lon);
+
+  // A refresh updates the record in place without a new selection.
+  await h.layer.update(h.viewer);
+  assert.equal(h.contexts.selectedEvents, 1);
+
+  pickResult = null;
+  h.clicks.handler({ position: { x: 10, y: 10 } });
+  assert.equal(h.contexts.selected, null);
+  assert.equal(h.contexts.records.size, 0);
+  h.layer.destroy();
+});
+
+test('switching perimeter picks evicts the previous shared context record', async () => {
+  const other = { ...fire, id: '2026-NMGNF-000124', name: 'Neighbor Fire' };
+  let picked = fire.id;
+  const h = harness(
+    { getSnapshot: async () => snap([fire, other]) },
+    { pick: () => perimeterPick(`fire-perimeter:${picked}:0`) },
+  );
+  await h.layer.update(h.viewer);
+  h.clicks.handler({ position: { x: 10, y: 10 } });
+  assert.deepEqual(
+    [...h.contexts.records.keys()],
+    [`fire-perimeter:${fire.id}`],
+  );
+
+  picked = other.id;
+  h.clicks.handler({ position: { x: 10, y: 10 } });
+  assert.deepEqual(
+    [...h.contexts.records.keys()],
+    [`fire-perimeter:${other.id}`],
+  );
+  assert.equal(h.contexts.selected?.label, 'Neighbor Fire');
+  assert.equal(h.contexts.selectedEvents, 2);
+
+  await h.layer.update(h.viewer);
+  assert.deepEqual(
+    [...h.contexts.records.keys()],
+    [`fire-perimeter:${other.id}`],
+  );
+  assert.equal(h.contexts.selectedEvents, 2);
+  h.layer.destroy();
+});
+
+test('a refresh that drops the selected incident drops its shared context record', async () => {
+  let current = snap([fire]);
+  const h = harness({ getSnapshot: async () => current }, { pick: firePick });
+  await h.layer.update(h.viewer);
+  h.clicks.handler({ position: { x: 10, y: 10 } });
+  assert.equal(h.contexts.selected?.layerId, 'fire-perimeters');
+  current = snap([{ ...fire, id: 'different' }], { revision: 'r2' });
+  await h.layer.update(h.viewer);
+  assert.equal(h.contexts.selected, null);
+  assert.equal(h.contexts.records.size, 0);
+  h.layer.destroy();
+});
+
+/** A window for the real context store, recording its selection events. */
+function installRealContextHost(t) {
+  const previous = globalThis.window;
+  globalThis.window = new EventTarget();
+  t.after(() => {
+    if (previous === undefined) delete globalThis.window;
+    else globalThis.window = previous;
+  });
+  const events = [];
+  window.addEventListener('gev:entity-selected', (event) =>
+    events.push(['selected', event.detail.id]),
+  );
+  window.addEventListener('gev:entity-selection-cleared', (event) =>
+    events.push(['cleared', event.detail.reason]),
+  );
+  return events;
+}
+
+// A FIRMS or AIS card painted over the area is that layer's click, whichever
+// handler hears the click first, even when that layer's own handler repaints
+// its cards (and so their hit rectangles) while acting on the click.
+test('a sibling card over a perimeter keeps the shared selection, in either handler order', async (t) => {
+  const events = installRealContextHost(t);
+  for (const siblingFirst of [true, false]) {
+    for (const sourceId of ['local-firms-card', 'ais-live-vessels-card']) {
+      let hit = { sourceId, entryId: 'sibling-card' };
+      const h = harness(
+        { getSnapshot: async () => snap([fire]) },
+        { pick: firePick, contextOwner: realContext },
+      );
+      setClickCardHitTest(() => hit);
+      t.after(() => setClickCardHitTest(null));
+      await h.layer.update(h.viewer);
+      const sibling = { show: true };
+      realContext.registerEntityContext(sibling, {
+        id: `${sourceId}:sibling`,
+        layerId: sourceId,
+      });
+      const siblingClick = (event) => {
+        if (clickCard(event)?.sourceId !== sourceId) return;
+        realContext.selectEntityContext(sibling);
+        hit = null; // Its publication repaints its cards.
+      };
+      let offSibling;
+      if (siblingFirst) {
+        h.layer.disable();
+        offSibling = inputFor(h.viewer).onClick(siblingClick);
+        h.layer.enable();
+      } else {
+        offSibling = inputFor(h.viewer).onClick(siblingClick);
+      }
+      events.length = 0;
+      h.clicks.handler({ position: { x: 5, y: 7 } });
+      assert.deepEqual(
+        events,
+        [['selected', `${sourceId}:sibling`]],
+        `${sourceId}, sibling first: ${siblingFirst}`,
+      );
+      assert.equal(
+        realContext.getSelectedEntityContext().id,
+        `${sourceId}:sibling`,
+      );
+      assert.equal(h.overlay.entries.get('fire-perimeters')?.length ?? 0, 0);
+      offSibling();
+      h.layer.destroy();
+      realContext.removeEntityContextsForLayer(sourceId);
+    }
+  }
+});
+
+test('a tap selects like a click, and disable or destroy release the click and the shared record', async (t) => {
+  const events = installRealContextHost(t);
+  let picked = null;
+  const h = harness(
+    { getSnapshot: async () => snap([fire]) },
+    { pick: () => picked, contextOwner: realContext },
+  );
+  await h.layer.update(h.viewer);
+  picked = firePick();
+  h.input.tap({ x: 5, y: 7 });
+  assert.deepEqual(events, [['selected', `fire-perimeter:${fire.id}`]]);
+
+  events.length = 0;
+  h.layer.disable();
+  assert.equal(h.clicks.destroyed, 1, 'the click subscription is released');
+  assert.deepEqual(events, [['cleared', 'deliberate']]);
+  assert.equal(realContext.getContextStore().entities.size, 0);
+  h.input.tap({ x: 5, y: 7 });
+  assert.deepEqual(
+    events,
+    [['cleared', 'deliberate']],
+    'a disabled layer cannot reselect',
+  );
+
+  h.layer.enable();
+  await h.layer.update(h.viewer);
+  h.input.tap({ x: 5, y: 7 });
+  events.length = 0;
+  h.layer.destroy();
+  assert.equal(h.clicks.destroyed, 1);
+  assert.deepEqual(events, [['cleared', 'deliberate']]);
+  assert.equal(realContext.getContextStore().entities.size, 0);
+});
+
+test('the real context store tells deliberate perimeter clears from feed eviction', async (t) => {
+  const events = installRealContextHost(t);
+  const second = { ...fire, id: 'second', name: 'Second incident' };
+  let current = snap([fire, second]);
+  let picked = null;
+  const h = harness(
+    { getSnapshot: async () => current },
+    { pick: () => picked, contextOwner: realContext },
+  );
+  await h.layer.update(h.viewer);
+  picked = firePick();
+  h.clicks.handler({ position: { x: 1, y: 1 } });
+  events.length = 0;
+  picked = perimeterPick('fire-perimeter:second:0');
+  h.clicks.handler({ position: { x: 1, y: 1 } });
+  assert.deepEqual(events, [['selected', 'fire-perimeter:second']]);
+  assert.deepEqual(
+    [...realContext.getContextStore().entities.keys()],
+    ['fire-perimeter:second'],
+  );
+
+  current = snap([fire, { ...second, name: 'Updated incident' }], {
+    revision: 'r2',
+  });
+  events.length = 0;
+  await h.layer.update(h.viewer);
+  assert.equal(
+    realContext.getSelectedEntityContext().label,
+    'Updated incident',
+  );
+  assert.deepEqual(events, [], 'a refresh announces nothing');
+
+  picked = null;
+  h.clicks.handler({ position: { x: 1, y: 1 } });
+  assert.deepEqual(events, [['cleared', 'deliberate']]);
+
+  picked = perimeterPick('fire-perimeter:second:0');
+  h.clicks.handler({ position: { x: 1, y: 1 } });
+  events.length = 0;
+  current = snap([fire], { revision: 'r3' });
+  await h.layer.update(h.viewer);
+  assert.equal(realContext.getSelectedEntityContext(), null);
+  assert.deepEqual(events, [['cleared', 'evicted']]);
+  h.layer.destroy();
 });
