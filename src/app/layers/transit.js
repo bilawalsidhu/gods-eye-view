@@ -52,8 +52,6 @@ export function createApplicationTransit({
         coarseFloorCoord: groundFloor.coarseFloorCoord,
         neighborFloorM: groundFloor.neighborFloorM,
         warmGroundFloor: groundFloor.warmGroundFloor,
-        corridorFloorCells: groundFloor.corridorFloorCells,
-        allocateCorridorCells: groundFloor.allocateCorridorCells,
       },
       mesh: { sampleMeshFloorCells: meshFloor.sampleMeshFloorCells },
       fleet: fleetModelServices({

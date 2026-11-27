@@ -71,7 +71,6 @@ export function createIngestion({ state, services, parts, source }) {
     entry.marker = null;
     entry.detectContact = null;
     state._visible.delete(entry);
-    parts.height.releaseVehicle(key, entry.heightCell);
     // A vehicle removed mid-glide takes its share of the hold with it, so the
     // set stays true without waiting for a frame that may never be requested.
     state._moving.delete(entry);

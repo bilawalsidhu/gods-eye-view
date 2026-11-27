@@ -82,9 +82,6 @@ export function createHeight({ state, services, parts }) {
     };
   }
 
-  /** A vehicle no longer rendered needs nothing released: cells are shared. */
-  function releaseVehicle() {}
-
   let cellCursors = new WeakMap();
   let budgetAt = -Infinity;
   let demUsed = new Set(),
@@ -243,7 +240,6 @@ export function createHeight({ state, services, parts }) {
   return {
     nearGround,
     requestHeight,
-    releaseVehicle,
     anchorFloors,
     rereadFloors,
     clear,
