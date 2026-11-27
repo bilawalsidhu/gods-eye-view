@@ -1740,6 +1740,7 @@
   "Moving dots colored by live flow": "Rörliga punkter färgade efter trafikflödet live",
   "Moving dots": "Rörliga punkter",
   "TomTom key unavailable": "TomTom-nyckel otillgänglig",
+  "TomTom key rejected": "TomTom-nyckeln avvisades",
   "TomTom daily budget reached": "TomTom-dagsbudgeten är förbrukad",
   "Monthly traffic allowance used": "Månadens trafikkvot är förbrukad",
   "Traffic rate limit reached": "Trafiktjänsten har nått gränsen för förfrågningar",

@@ -1224,6 +1224,7 @@
   "src/sources/militaryTileGeometry.test.mjs",
   "src/layers/traffic/surface.test.mjs",
   "src/layers/traffic/roadModes.test.mjs",
+  "src/layers/traffic/flowDecode.test.mjs",
   "scripts/qa-traffic-motion.mjs",
   "src/layers/traffic/motion.test.mjs",
   "scripts/qa-journey-recorder.mjs",

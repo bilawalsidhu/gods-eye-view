@@ -1181,6 +1181,7 @@
   "Moving dots colored by live flow": "ライブの交通流で色分けした移動ドット",
   "Moving dots": "移動ドット",
   "TomTom key unavailable": "TomTomキーを利用できません",
+  "TomTom key rejected": "TomTomキーが拒否されました",
   "TomTom daily budget reached": "TomTomの1日の上限に達しました",
   "Monthly traffic allowance used": "今月の交通情報の上限に達しました",
   "Traffic rate limit reached": "交通情報のリクエスト上限に達しました",

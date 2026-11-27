@@ -1246,6 +1246,7 @@
   "Moving dots colored by live flow": "Рухомі точки, забарвлені за потоком онлайн",
   "Moving dots": "Рухомі точки",
   "TomTom key unavailable": "Ключ TomTom недоступний",
+  "TomTom key rejected": "Ключ TomTom відхилено",
   "TomTom daily budget reached": "Вичерпано денний ліміт TomTom",
   "Monthly traffic allowance used": "Місячний ліміт даних про дорожній рух вичерпано",
   "Traffic rate limit reached": "Перевищено ліміт запитів до сервісу руху",

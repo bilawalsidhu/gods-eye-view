@@ -18,6 +18,18 @@ import { admitSameSite } from './common/same-site.js';
  * "Traffic flow"). The key comes from TOMTOM_API_KEY server-side only — the
  * browser fetches same-origin `/api/tomtom/flow/{z}/{x}/{y}.pbf`.
  *
+ * Orbis fallback: TomTom keys are assigned products, and a key without the
+ * TomTom Maps traffic product gets 403 on the endpoint above while the same
+ * key works on the TomTom Orbis Maps one,
+ * https://api.tomtom.com/maps/orbis/traffic/flow/vector/tile/{z}/{x}/{y}?apiVersion=2
+ * (same "Traffic flow" layer; `relative_speed` and `road_category` replace
+ * `traffic_level` and `road_type`, which the client decoder reads either
+ * way). On 403 the proxy asks the other endpoint and keeps whichever
+ * answered for the rest of the process. When both refuse the key, tiles
+ * answer 403 {error:'key_rejected'} and upstream is left alone for
+ * KEY_REJECTED_TTL_MS, so a rejected key does not spend the daily budget one
+ * tile at a time. Changing the key clears both.
+ *
  * Cache: memory + disk (.gev-cache/tomtom/), TTL 120 s (traffic is fresh
  * data), single-flight per tile, serve-stale-on-failure — the celestrakProxy
  * pattern. Cache hits never count against the budget.
@@ -43,7 +55,7 @@ import { admitSameSite } from './common/same-site.js';
  * at distinct tiles, spend the TomTom quota and leave the traffic layer on
  * 429 budget for the rest of the UTC day.
  *
- * GET /api/tomtom/status → {hasKey, dailyCount, budget, date}. Keyless mode:
+ * GET /api/tomtom/status → {hasKey, keyRejected, dailyCount, budget, date}. Keyless mode:
  * status reports hasKey:false and the tile endpoint 503s {error:'no_key'}
  * without touching upstream — the traffic layer then stays in simulation mode.
  *
@@ -59,6 +71,37 @@ export function tomtomProxy() {
   const UPSTREAM_TIMEOUT_MS = 15000;
   /** Flow tiles are well under 1 MB; this bounds a runaway body, not a budget. */
   const TOMTOM_TILE_MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
+  /** How long a key both endpoints refused is left alone before a retry. */
+  const KEY_REJECTED_TTL_MS = 5 * 60_000;
+
+  /** Upstream flow-tile endpoints, in the order a new key is tried. */
+  const ENDPOINTS = {
+    legacy: (z, x, y, key) => ({
+      url:
+        'https://api.tomtom.com/traffic/map/4/tile/flow/relative/' +
+        `${z}/${x}/${y}.pbf?key=${encodeURIComponent(key)}`,
+    }),
+    orbis: (z, x, y, key) => ({
+      url:
+        'https://api.tomtom.com/maps/orbis/traffic/flow/vector/tile/' +
+        `${z}/${x}/${y}?apiVersion=2`,
+      headers: { 'TomTom-Api-Key': key },
+    }),
+  };
+  /**
+   * What is known about the configured key: the endpoint that last served
+   * it, and until when both endpoints are known to refuse it. Reset when the
+   * key changes (Provider Settings rewrites process.env at runtime).
+   * @type {{key:string, endpoint:'legacy'|'orbis', rejectedUntil:number}}
+   */
+  let keyState = { key: '', endpoint: 'legacy', rejectedUntil: 0 };
+  function currentKeyState() {
+    const key = process.env.TOMTOM_API_KEY || '';
+    if (keyState.key !== key)
+      keyState = { key, endpoint: 'legacy', rejectedUntil: 0 };
+    return keyState;
+  }
+  const isKeyRejected = () => Date.now() < currentKeyState().rejectedUntil;
 
   /** @type {Map<string, {at:number, buf:Buffer}>} tile key `z/x/y` -> cached tile (kept past TTL for serve-stale). */
   const mem = new Map();
@@ -149,14 +192,17 @@ export function tomtomProxy() {
     mem.set(key, entry);
   }
 
-  async function fetchUpstream(z, x, y) {
-    const url =
-      'https://api.tomtom.com/traffic/map/4/tile/flow/relative/' +
-      `${z}/${x}/${y}.pbf?key=${encodeURIComponent(process.env.TOMTOM_API_KEY)}`;
+  async function fetchEndpoint(name, z, x, y, key) {
+    const { url, headers } = ENDPOINTS[name](z, x, y, key);
     recordUpstreamFetch(); // attempts count — upstream bills the request either way
     const signal = AbortSignal.timeout(UPSTREAM_TIMEOUT_MS);
-    const res = await fetch(url, { signal });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const res = await fetch(url, { signal, ...(headers ? { headers } : {}) });
+    if (!res.ok) {
+      await res.body?.cancel().catch(() => {});
+      throw Object.assign(new Error(`HTTP ${res.status}`), {
+        status: res.status,
+      });
+    }
     const bytes = await readResponseBytesCapped(
       res,
       TOMTOM_TILE_MAX_RESPONSE_BYTES,
@@ -165,6 +211,41 @@ export function tomtomProxy() {
     const buf = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     if (buf.length === 0) throw new Error('empty tile body');
     return buf;
+  }
+
+  /**
+   * Fetch one tile from the endpoint this key last worked on, asking the
+   * other one only when TomTom refuses the key (403). Both refusing marks
+   * the key rejected; any other failure is an ordinary upstream error.
+   */
+  async function fetchUpstream(z, x, y) {
+    const state = currentKeyState();
+    const other = state.endpoint === 'legacy' ? 'orbis' : 'legacy';
+    try {
+      return await fetchEndpoint(state.endpoint, z, x, y, state.key);
+    } catch (err) {
+      if (err?.status !== 403) throw err;
+    }
+    try {
+      const buf = await fetchEndpoint(other, z, x, y, state.key);
+      if (keyState === state) {
+        state.endpoint = other;
+        console.warn(
+          `[tomtom-proxy] key refused on the ${other === 'orbis' ? 'TomTom Maps' : 'Orbis'} flow endpoint (HTTP 403); using the ${other === 'orbis' ? 'Orbis' : 'TomTom Maps'} one`,
+        );
+      }
+      return buf;
+    } catch (err) {
+      if (err?.status !== 403) throw err;
+      if (keyState === state)
+        state.rejectedUntil = Date.now() + KEY_REJECTED_TTL_MS;
+      throw Object.assign(
+        new Error(
+          'HTTP 403 on both flow endpoints: check the products assigned to the key and its domain whitelist at https://my.tomtom.com/keys',
+        ),
+        { status: 403 },
+      );
+    }
   }
 
   const installMiddleware = (server) => {
@@ -204,6 +285,7 @@ export function tomtomProxy() {
           const b = currentBudget();
           sendJson(200, {
             hasKey,
+            keyRejected: hasKey && isKeyRejected(),
             dailyCount: b.count,
             budget: dailyBudgetLimit(),
             date: b.date,
@@ -242,6 +324,14 @@ export function tomtomProxy() {
           return;
         }
 
+        // TomTom refused the key on both endpoints: asking again per tile
+        // would only spend the budget. Last-good data still beats nothing.
+        if (isKeyRejected()) {
+          if (entry) sendTile(entry, 'STALE-ERROR');
+          else sendJson(403, { error: 'key_rejected' });
+          return;
+        }
+
         // Budget governor: over the soft cap, last-good data beats a dead layer.
         if (isTomTomOverBudget(currentBudget(), dailyBudgetLimit())) {
           if (entry) {
@@ -277,6 +367,8 @@ export function tomtomProxy() {
           sendTile(fresh, 'MISS');
         } else if (entry) {
           sendTile(entry, 'STALE-ERROR'); // upstream down — stale beats empty
+        } else if (isKeyRejected()) {
+          sendJson(403, { error: 'key_rejected' });
         } else {
           sendJson(502, { error: 'upstream' });
         }
