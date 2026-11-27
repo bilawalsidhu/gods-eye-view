@@ -1204,7 +1204,7 @@ test('destroy releases every shared registration this layer took', async (t) => 
   );
   assert.equal(app.holds().includes('transit'), false);
   assert.equal(app.state()._viewer, null);
-  assert.equal(app.state()._dataManager, null);
+  assert.equal(app.state()._panel, null);
 });
 
 test('two layers built from the factory share no state', async (t) => {

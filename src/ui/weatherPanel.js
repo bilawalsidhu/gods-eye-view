@@ -1,5 +1,5 @@
 import { h, render as renderVue } from 'vue';
-import { formatUtcDayMonth, t } from '../i18n/index.js';
+import { formatUtcDayMonth, getLocale, t } from '../i18n/index.js';
 import { utcClock } from './rail/utcClock.js';
 import WeatherReadout from './weather/WeatherReadout.vue';
 import { watchDisplayed } from './displayWatch.js';
@@ -103,8 +103,20 @@ export function createWeatherPanel({
     },
   };
   // The readout patches synchronously, so a newly opened card can be measured.
-  const paint = (view) =>
+  // A view equal to the one shown is not rendered again.
+  let shownView = null;
+  const paint = (view) => {
+    let key = null;
+    try {
+      // Its template translates labels too: a new locale renders again.
+      key = `${getLocale()}\u0000${JSON.stringify(view)}`;
+    } catch {
+      // A view that cannot be compared is always rendered.
+    }
+    if (key !== null && key === shownView) return;
+    shownView = key;
     renderVue(h(WeatherReadout, { view, ...handlers }), container);
+  };
   paint({
     hidden: true,
     observed: false,
@@ -329,7 +341,8 @@ export function createWeatherPanel({
         panel.querySelector('[data-collapse-target="weather-panel"]')?.click();
     }
   };
-  const unsubscribe = clock?.subscribe(render);
+  // The scene time is read here, never followed: the layer panel calls
+  // `update` again when the time moves (see LayerPanel.invalidate).
   return {
     update(nextEntries) {
       entries = nextEntries.filter(({ summary }) => summary);
@@ -372,7 +385,6 @@ export function createWeatherPanel({
     },
     destroy() {
       destroyed = true;
-      unsubscribe?.();
       body.disconnect();
       offOpening();
       renderVue(null, container);

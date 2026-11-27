@@ -101,8 +101,12 @@ const screenAt = (lat, lon) =>
     lon,
   );
 
+// The row paints on the frame after the layer changes: read it after one.
 const layerState = () =>
-  page.evaluate(() => {
+  page.evaluate(async () => {
+    await new Promise((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(resolve)),
+    );
     const gev = window.__godsEyeView;
     const manager = gev.dataManager;
     const module = manager.layers.get('directions').module;

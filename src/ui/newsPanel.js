@@ -2,6 +2,7 @@ import { h, render as renderVue } from 'vue';
 import NewsFeed from './news/NewsFeed.vue';
 import { watchDisplayed } from './displayWatch.js';
 import { onPanelOpening } from './rail/panelContent.js';
+import { getLocale } from '../i18n/index.js';
 
 const LAYER_ID = 'news';
 const LOAD_MORE_MARGIN_PX = 160;
@@ -9,6 +10,15 @@ const LOAD_MORE_MARGIN_PX = 160;
 const appearedPanels = new WeakSet();
 const set = (node, key, value) => {
   if (node[key] !== value) node[key] = value;
+};
+// What a render shows: its template translates labels too, so the locale is
+// part of it. Null for a view that cannot be compared.
+const viewKey = (view) => {
+  try {
+    return `${getLocale()}\u0000${JSON.stringify(view)}`;
+  } catch {
+    return null;
+  }
 };
 
 /**
@@ -34,6 +44,8 @@ export function createNewsPanel({ container, setLayerParams = () => {} } = {}) {
   // at once when the panel is presented open or shown open, otherwise when a
   // ResizeObserver reports the body displayed.
   let owed = false;
+  // The view the feed shows: an equal one is not rendered again.
+  let shownKey;
   const body = watchDisplayed(container, () => {
     if (owed) render();
   });
@@ -54,7 +66,12 @@ export function createNewsPanel({ container, setLayerParams = () => {} } = {}) {
       !hidden &&
       !panel.classList?.contains('collapsed');
     owed = !force && !showsOpen && !body.shown();
-    if (!owed) renderVue(h(NewsFeed, { view, onParams }), container);
+    if (!owed) {
+      const key = viewKey(view);
+      if (force || key === null || key !== shownKey)
+        renderVue(h(NewsFeed, { view, onParams }), container);
+      shownKey = key;
+    }
     if (panel) set(panel, 'hidden', hidden);
     // The count is the shown section's: Local's list, else the feed.
     const shown =

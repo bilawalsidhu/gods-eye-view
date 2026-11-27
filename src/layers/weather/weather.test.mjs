@@ -584,6 +584,7 @@ function layerHarness({
   id,
   eventTarget = target(),
   enable = true,
+  panel = null,
 } = {}) {
   const stages = [];
   const motion = target({ matches: reducedMotion });
@@ -657,7 +658,7 @@ function layerHarness({
     matchMedia: () => motion,
     createRendering: () => rendering,
   });
-  layer.init(viewer);
+  layer.init(viewer, { panel });
   if (enable) layer.enable();
   harnessed.add(layer);
   return {
@@ -1937,6 +1938,7 @@ test('a delayed installation failure retains the replacement and does not throw 
 test('a row steps the world clock through every registered observation; missing frames hide and latest goes live', async (t) => {
   const clock = createWeatherClock();
   const radar = layerHarness({ clock });
+  let satelliteChanges = 0;
   const satellite = layerHarness({
     clock,
     id: 'weather-satellite',
@@ -1948,6 +1950,7 @@ test('a row steps the world clock through every registered observation; missing 
         latest: times[1],
       }),
     },
+    panel: { invalidate: () => satelliteChanges++ },
   });
   t.after(() => {
     radar.layer.destroy();
@@ -1959,8 +1962,7 @@ test('a row steps the world clock through every registered observation; missing 
   radar.stages.at(-1).finish();
   satellite.stages.at(-1).finish();
   await Promise.all(updates);
-  let satelliteChanges = 0;
-  satellite.layer.setRowControlsListener(() => satelliteChanges++);
+  satelliteChanges = 0;
   const transport = (h) =>
     h.layer
       .getRowControls()

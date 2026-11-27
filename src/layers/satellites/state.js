@@ -166,7 +166,8 @@ export function createState({ services }) {
 
   /** @type {(() => void)|null} Manager callback: "this layer's row controls changed". */
 
-  state._rowControlsListener = null;
+  /** @type {{ invalidate: () => void } | null} the panels' handle, from init */
+  state._panel = null;
 
   /** @type {Set<number>} NORAD ids co-located with the tracked satellite. */
 

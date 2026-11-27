@@ -157,8 +157,13 @@ function installPageHelpers() {
   };
 }
 
+// The readout paints on the frame after the layer changes, so the DOM is
+// read after a frame has passed.
 const state = () =>
-  page.evaluate(() => {
+  page.evaluate(async () => {
+    await new Promise((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(resolve)),
+    );
     const qa = window.__riQa;
     const snapshot = qa.snap();
     const gev = window.__godsEyeView;
@@ -657,13 +662,20 @@ try {
     current.diagnostics.ownedCount === 1,
     hostsDetail(current),
   );
-  const flag = await page.evaluate(
+  // The readout paints on the frame after the layer changes: wait for it.
+  const cardFlag = (key) =>
+    document.querySelector(
+      `#recent-imagery-panel .ri-card[data-key="${key}"] .ri-card-flag`,
+    )?.textContent;
+  await until(
     (key) =>
       document.querySelector(
         `#recent-imagery-panel .ri-card[data-key="${key}"] .ri-card-flag`,
-      )?.textContent,
+      )?.textContent === 'PREVIEW',
     targetKey,
+    2_000,
   );
+  const flag = await page.evaluate(cardFlag, targetKey);
   check('the previewed card wears PREVIEW', flag === 'PREVIEW', flag);
 
   // ── IMAGE: S pins the focused day; focus no longer moves the map ────────
@@ -1476,7 +1488,12 @@ try {
     cleared,
     `${hostsDetail(current)} split=${current.splitVisible}`,
   );
-  check('the panel hides when the layer is off', current.panelHidden === true);
+  check(
+    'the panel hides when the layer is off',
+    await until(
+      () => document.getElementById('recent-imagery-panel')?.hidden === true,
+    ),
+  );
   onPhotorealOnly('disabling hands Google 3D back', await backOnPhotoreal());
   await wait(1_500);
   onPhotorealOnly(

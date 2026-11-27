@@ -113,7 +113,7 @@ export function createControls({ state: layerState, services, parts, source }) {
 
   function _notifyRowControls() {
     try {
-      layerState._rowControlsListener?.();
+      layerState._panel?.invalidate();
     } catch (error) {
       console.warn('[Data:Satellites] row-controls listener failed:', error);
     }
@@ -802,17 +802,6 @@ export function createControls({ state: layerState, services, parts, source }) {
         return chip;
       });
       return { chips, ...classEvidenceNotice() };
-    },
-
-    /**
-     * Install the manager's "row controls changed" callback. The dense load is
-     * asynchronous, so completion and failure have to push a re-render — nothing
-     * else would repaint this row before the 5-minute catalog refresh.
-     * @param {(() => void)|null} listener Callback, or null to detach.
-     */
-    setRowControlsListener(listener) {
-      layerState._rowControlsListener =
-        typeof listener === 'function' ? listener : null;
     },
 
     getStats() {
