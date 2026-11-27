@@ -40,9 +40,10 @@ export function createLifecycle({
      * the package's `./render/cesium/unbound` export first.
      * @param {object} viewer - The viewer the layer draws on.
      */
-    init(viewer) {
+    init(viewer, { panel = null } = {}) {
       parts.rendering.attachSets(viewer);
       layerState._viewer = viewer;
+      layerState._panel = panel;
 
       layerState._enabled = false;
       layerState._cameraDebounceTimer = null;
@@ -162,7 +163,7 @@ export function createLifecycle({
       detachCamera();
       parts.ingestion.abortAllInFlight();
       parts.rendering.detachSets();
-      layerState._dataManager = null;
+      layerState._panel = null;
       layerState._viewer = null;
     },
   };

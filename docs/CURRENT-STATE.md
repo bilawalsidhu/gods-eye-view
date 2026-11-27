@@ -2236,8 +2236,8 @@ endpoints; standalone entries provide scene services and the satellite dependenc
 The satellites layer draws through the renderer's draw port and no longer
 reaches Cesium: the dots are one point set moved in a single write a frame, the
 tracked satellite's dot a set of its own drawn where the follow camera framed
-it, and the orbit rings a line set dimmed behind the globe and turned with the
-Earth each second. A caller handing it a Cesium viewer, with no
+it, and the orbit rings a line set hidden by the Earth behind it (no part drawn
+through the globe) and turned with the Earth each second. A caller handing it a Cesium viewer, with no
 renderer bound, loads the `./render/cesium/unbound` export once first.
 
 The ISS (NORAD 25544, by number, not name) is drawn as NASA's 3D model within
@@ -3375,6 +3375,16 @@ shown without a fade once it is decoded (or after one second if its decode never
 settles), so a new camera's preview is blank only while its frame loads. Disposal
 releases listeners, subscriptions, image handlers, summary timers and chip-hide timers.
 
+A camera source may give each frame's capture time: one that sets
+`framesCarryTime: true` answers its frame URLs with the time in milliseconds
+since the epoch in an `X-CCTV-Frame-Time` header (listed in
+`Access-Control-Expose-Headers` when the frames come from another origin). Its
+frames are then fetched rather than loaded as images, shown from an object URL
+of the bytes read, and the CCTV panel, the camera's card and its bigger view
+show that time as text (`2026-11-26 18:04:31Z`, UTC) with the picture. A frame
+without the header, or a source that does not set the flag, shows no time. A
+refresh that fails keeps the shown frame and its time.
+
 The panel opens when a camera becomes active and collapses when the layer is
 switched off, from its own switch or anywhere else. The panel chrome applies
 the collapse, so a panel the desktop accordion only folded has its saved and
@@ -3570,6 +3580,47 @@ Layer rows, feed feedback, counts, focus-preserving chips and toggle listeners
 are owned by a renderer-free panel component. The layer manager supplies current
 snapshots, lifecycle actions and row descriptors. Remount and teardown remove
 listeners and row subscriptions; obsolete completions do not repaint old rows.
+A refresh (a layer's status or row controls, such as every step of a scene
+whose time advances) skips a row list whose panel is not displayed (collapsed
+or hidden) and repaints it once, with its current rows, when it is displayed
+again; the Weather and News rail readouts do the same for their bodies, while
+the panels still appear, count and open as before. Whatever shows a panel
+repaints what it owes at once, through `src/ui/rail/panelContent.js`, before
+anything measures the panel or reads its rows: the panel chrome opening a panel
+(a click, voice or any other caller), a phone sheet (every panel of its rail,
+expanded ones included), and leaving clean view, Cockpit or scene playback
+(every panel that is not collapsed). Each repaints only the owed lists inside
+the panel it shows. Each panel layout pass first repaints the owed lists that
+have a layout box and presents nothing when none is owed; content still not
+displayed stays owed. Each list is owed on its own. Content repainted this way
+counts as displayed until the ResizeObserver's next report, so a refresh in
+between paints it instead of owing it again. A ResizeObserver
+catches every other way a panel is
+displayed, before the browser draws it. A list whose presented rows equal the
+ones it shows is not rendered again.
+
+One interface joins a layer to the panel. A layer describes its row and
+readout as data, `getRowControls()` (a read with no side effects, carrying the
+readout summary, the news feed and list items) beside `getStats()`. At `init`
+the manager hands it `panel.invalidate()` (`init(viewer, { signal, panel })`,
+in `src/data/lifecycle.js`): no arguments, no result, it marks the layer
+dirty and asks for one frame, and never paints. A layer whose row or readout
+depends on the scene time declares `panelFollowsTime: true` (wind and the
+weather products) and does not follow the timeline itself: the panel follows
+it once and reads those layers again when it moves. One scheduler in
+`LayerPanel` (`invalidate`, `paintPending`) paints, once per frame, the row
+lists, the Weather and News readouts and the Recent Imagery readout, only the
+displayed ones and only what changed; invalidations while a surface or the
+page is hidden leave exactly one catch-up paint for when it is shown. The
+readouts are plain views with no subscriptions of their own; the Recent
+Imagery readout takes what changed from `takePanelChanges()`. The manager
+refuses a layer that still defines `setRowControlsListener`,
+`scripts/check-import-directions.mjs` stops `src/layers/**` and
+`src/library/**` from importing the panel UI, its stores or Vue (existing
+imports are on an allow list that only shrinks), and
+`src/data/layerPanelContract.test.mjs` holds the interface for every
+registered layer.
+
 The clear control presents busy state while its existing action owns the transaction.
 The Wildlife group follows Events and precedes Weather; Wildlife Sightings
 provides its confirmed toggle, taxa presets and fixed-order, nonempty legend.
@@ -4618,7 +4669,7 @@ which embeds the MAP_KEY.
 > **2026-08-23 — first-run mission launcher** (`src/firstRunExperience.js`,
 > `#first-run-launcher`, styles in `src/ui/styles/first-run.css`). After startup
 > settles, a fresh session gets three steps: mode introduction, a starting
-> mission, then quick tips and links. God mode is available; Analyst is
+> mission, then quick tips and links. Default mode is available; Analyst is
 > marked coming soon. **Space Missions · Environmental · Explore
 > manually** are the starting choices, with Explore selected by default; Live
 > Contacts is no longer offered as a starting mission (its Context tab is
@@ -4633,7 +4684,7 @@ which embeds the MAP_KEY.
 > Stories card's BROWSE STORIES button closes the card (a session dismissal,
 > like Skip) and opens the in-app Stories Explore view, keeping the Stories
 > announcement hidden while Stories loads. Next and Back preserve that selection without starting
-> a mission. Only **Enter God mode** runs it; Back is inert while it is loading.
+> a mission. Only **Enter Default mode** runs it; Back is inert while it is loading.
 > Step changes focus the main action, announce the new heading separately from
 > mission progress, and refresh the scrolling affordance after the transition. Repeated Enter keys,
 > double-clicks and activation during a step transition cannot launch a mission; a quick second
@@ -4691,7 +4742,7 @@ which embeds the MAP_KEY.
 > `localStorage['gev:first-run-mission:v1'] === 'suppressed'`, written **only**
 > by the "Don't show this again" checkbox → the per-session
 > `sessionStorage['gev:first-run-mission-session:v1'] === 'dismissed'`, written
-> by **every** close path (a mission or Explore from ENTER GOD MODE, ESC, the
+> by **every** close path (a mission or Explore from ENTER DEFAULT MODE, ESC, the
 > header Skip button, BROWSE STORIES). So
 > it returns each fresh browser session until the visitor ticks the box; clearing
 > storage un-ticks it, which is accepted. Both stores fail open — an unreadable
@@ -7931,10 +7982,10 @@ silently demoting every later lookup for the session.
 - **Satellites**: core catalog from CelesTrak's stations, visual, GPS, GLONASS, Galileo, GEO, resource, weather, planet, SAR and science groups, tracking lands ~726km out via `viewFrom` (tracked entity owns a point graphic so the tracking camera engages), rings realign via primitive modelMatrix (no per-second rebuild flicker), optional `setParams({catalog:'dense'})` Starlink mode.
 - **Satellite classes** (`src/layers/satellites/classes.js`): every satellite is filed under one of six classes, each with its own point colour and toggle chip (the chip shows the colour while the class is on): STATIONS (warm white), IMAGING (cyan), TELECOM (violet; communications and navigation, so GPS, GLONASS, Galileo and BeiDou read as one family), STARLINK (dim slate), PROBES (muted blue-gray) and DEBRIS (receding brown-gray). That module is the single source of truth for class, label and colour, so the dot, the card and the chip's swatch cannot disagree. Two deliberate palette rules: no class may sit in the 40–48° amber band, which is the app-wide known-military convention; and STARLINK stays far below PROBES in Rec.601 luminance so the dense shell stays separable when NVG/FLIR collapse the scene to one channel. The ISS keeps its long-standing red hero dot rather than the STATIONS colour — it carries a permanent name label and its card still reads `STATIONS · ISS`; it is a station whichever group ingested it, so a stations-feed outage cannot refile it. `src/data/satelliteClass.js` keeps the group-based labels beneath the classes: the constellation subtype and a group's own label for a satellite with no class. The tracked satellite's dot keeps that colour too: tracking draws it larger (14 px), white-outlined and over everything, never in another colour (`_addTrackedEntity`, `src/layers/satellites/rendering.js`).
 - Class is also a **text field**, not just a color: `TELECOM · GPS` / `STARLINK` / `STATIONS · ISS` leads the tracked card's detail block and replaces the raw CelesTrak tag on the detection-overlay label. Because that canvas composites above the post-FX chain, the class stays readable in NVG/FLIR after the in-scene dot colors are flattened.
-- The satellites row in DATA LAYERS carries per-layer sub-controls (`DataLayerManager._syncRowControls`, the first consumer of the optional `getRowControls()` layer hook): one chip per class (the STARLINK chip exposes the existing `catalog` param); a class that is on shows its point colour, its name and its live count in its chip (`swatch` and `count`, drawn by `src/ui/rail/RailChips.vue`), and a class that is off shows only its name; and an info line while SATCAT is stale or unavailable (`Classes may lag: SATCAT is a cached copy` / `Classes may lag: SATCAT unavailable`). Default is the sparse core catalog. The chips are stateless — each declares the params to apply and the manager owns the write — so the Space Missions capture/restore path over the same param stays authoritative. Controls stay hidden while the layer is off. An explicit CORE or DENSE choice participates in versioned local and share-link state; temporary Space Missions overrides do not.
+- The satellites row in DATA LAYERS carries per-layer sub-controls (the first consumer of the optional `getRowControls()` layer hook, which the layer panel reads in `src/ui/layerPanel.js`): one chip per class (the STARLINK chip exposes the existing `catalog` param); a class that is on shows its point colour, its name and its live count in its chip (`swatch` and `count`, drawn by `src/ui/rail/RailChips.vue`), and a class that is off shows only its name; and an info line while SATCAT is stale or unavailable (`Classes may lag: SATCAT is a cached copy` / `Classes may lag: SATCAT unavailable`). Default is the sparse core catalog. The chips are stateless — each declares the params to apply and the manager owns the write — so the Space Missions capture/restore path over the same param stays authoritative. Controls stay hidden while the layer is off. An explicit CORE or DENSE choice participates in versioned local and share-link state; temporary Space Missions overrides do not.
 - **Class toggles** (`src/layers/satellites/classes.js`): the layer row carries one chip per class — STATIONS, IMAGING, TELECOM (communications and navigation), PROBES (science, technology development and demonstration, unknown purpose) and DEBRIS (rocket bodies, fragments, unknown objects launched before last year and dead payloads) on by default, so the layer shows what it did before classes; STARLINK off, as DENSE was. Points of a hidden class stay built and are only hidden, so a toggle needs no reload; hidden classes are left out of the detection overlay, the voice/framing position lists and analyst answers (the tracked satellite still answers), and only the chips of classes on screen carry a colour and a count; an on class with nothing loaded shows its colour without a count. The class comes, strongest evidence first, from CelesTrak SATCAT (object type and operational status, fetched per group through `/api/celestrak-satcat/<group>`, cached a day by the proxy; the layer keeps a current read six hours rather than asking on every five-minute update), the bundled UCS Satellite Database pack (UCS-Satellite-Database 5-1-2023: operator, owner country and purpose; `src/data/local_data/ucs_satellites/`), name patterns for satellites launched after May 2023, and finally the CelesTrak groups the TLE came in (a mission group such as `weather` before the orbit group `geo`; a UCS purpose of "Unknown" counts as none). Only crewed stations and the craft that visit them, by name, are STATIONS: the CubeSats CelesTrak's stations group also carries after their deployment from the ISS are classed like any other satellite. A payload whose SATCAT record gives no status, with no UCS record and no recognisable name, that launched 20 or more years ago (SATCAT's launch date, else the TLE designator's year) is presumed dead and filed as debris; without a SATCAT record (a failed read) nothing is presumed. To cover imaging launched after the UCS snapshot the core catalog also reads CelesTrak's `resource`, `weather`, `planet`, `sar` and `science` groups. Debris can be tracked but is never ridden: the orbital entry gate (`orbitEntryAllowed`) refuses it, so no ORBIT entry is offered and double-click does nothing for it. Retired stations and the shuttles have re-entered and have no orbit to show. An explicit class choice is kept in local and share-link state as the `classes` option, one letter per class shown (`sitpd`: stations, imaging, telecom, probes, debris; `0`: none; `src/data/satelliteClassMask.js`), and the layer takes those letters back through `setParams({classes})`; STARLINK maps to the existing `catalog: 'dense'` param instead.
 - The satellite Cockpit subject (`getCockpitSubject()`) also carries `satelliteClass`, `cosparId` (from SATCAT, else TLE line 1), `tle` (`{line1, line2, epochMs}`), `owner` (`{countryCode, label}`: ISO 3166-1 alpha-2 for a single country, `null` code for organisations such as ESA, EUMETSAT or Intelsat and for joint owners) and `operator` (UCS; SpaceX for Starlink). UCS names the operator's country and wins over the SATCAT owner code; CelesTrak's CIS (former USSR) is filed under Russia.
-- **The STARLINK chip (formerly DENSE) reports the dense LOAD, not the catalog param.** The param flips synchronously while the Starlink shell takes seconds to arrive over a chunked load, and CelesTrak 502s that feed regularly. So the chip reads `STARLINK ···` (busy, disabled) while loading, ACTIVE only once dense points are actually on screen, and `STARLINK ✕` with the reason on hover when the load fails — a failure also reverts `catalog` to `core`, drops any partial chunk, and leaves the chip clickable to retry. A load is judged by points added, not by HTTP status: a 200 carrying an empty body, a passed-through HTML error page, or only TLEs the core catalog already owns fails with the same revert semantics as a 502. Any explicit request for `core` clears a latched error even when the mode does not change, so a Space Missions restore of an already-core snapshot never leaves the user with a failure they did not cause. Because the load settles asynchronously, the layer pushes a re-render through the optional `setRowControlsListener()` hook; nothing else would repaint that row before the 5-minute catalog refresh, so the counts would otherwise sit stale.
+- **The STARLINK chip (formerly DENSE) reports the dense LOAD, not the catalog param.** The param flips synchronously while the Starlink shell takes seconds to arrive over a chunked load, and CelesTrak 502s that feed regularly. So the chip reads `STARLINK ···` (busy, disabled) while loading, ACTIVE only once dense points are actually on screen, and `STARLINK ✕` with the reason on hover when the load fails — a failure also reverts `catalog` to `core`, drops any partial chunk, and leaves the chip clickable to retry. A load is judged by points added, not by HTTP status: a 200 carrying an empty body, a passed-through HTML error page, or only TLEs the core catalog already owns fails with the same revert semantics as a 502. Any explicit request for `core` clears a latched error even when the mode does not change, so a Space Missions restore of an already-core snapshot never leaves the user with a failure they did not cause. Because the load settles asynchronously, the layer calls `panel.invalidate()` (the handle `init` receives); nothing else would repaint that row before the 5-minute catalog refresh, so the counts would otherwise sit stale.
 - **A dependency owner takes the row with it.** Space Missions borrows this layer for TLE lookup with `showPoints:false`; while points are hidden the layer returns empty row controls, so no count describes an empty sky and the chip cannot accept a write that the owner's restore would silently revert.
 - The detection-overlay record cache (`_detectionObjects`) is cleared with the catalog on every rebuild: it stamps id/class at creation only, and a rebuild can re-tag a satellite when a partial CelesTrak outage changes which group wins dedupe.
 - **Catalog numbers above 99999** can be written in a TLE as Alpha-5: a letter A–Z, skipping I and O, for the first two digits, so `A0000` is 100000 and `Z9999` is 339999. CelesTrak's TLE feed carries no satellite above 99999 (that needs the OMM feed, #1191), so this is compatibility with Alpha-5 TLEs. `src/sources/tle.js` decodes the field through one shared helper: `noradIdFromSatnum()` for the satellites layer, which keys and deduplicates its catalog by that number, and `tleCatalogNumber()` for the satellite tools. Plain digits read as before (`noradIdFromSatnum()` accepts any length, as an OMM satrec carries the number unpadded); a malformed field — a sign, decimal point, hex, exponent, embedded space, stray or lowercase letter, or blank — is rejected rather than partly read, as `NaN` in the layer and `null` in the tools.
@@ -8572,12 +8623,7 @@ row does (so the keyboard does not stay over the map), and so do Ask GEV, the mi
 walk, and any row while drawing is on (the draw tool reads Enter, Backspace
 and Esc). Escape closes the list, and on an empty, closed field lets go of
 it, so the app's own keys work again. While voice
-is on, the list is closed (not expanded) and Enter runs nothing. Text that
-may be private is never looked up or searched while typed or on Enter: only
-things already loaded on the map may match it, locally, and when only a
-long run of digits makes it look private and it has words (an address can:
-"Москва, ул. Тверская, д. 13, 125009") one row searches it as a place only
-when picked (see below).
+is on, the list is closed (not expanded) and Enter runs nothing.
 
 After "go to" (or "fly to" and the like) the rest of the clause, and a
 following part after a comma that has no verb, is the place, read before
@@ -8599,6 +8645,25 @@ code puts them first, and otherwise the place row keeps the top, so
 "Hamburg" goes to the city before the ship HAMBURG. An unrecognized explicit command
 stays in search. Questions can be sent through Ask GEV, which uses the
 existing typed chat.
+
+A host that passes `entityLookup` to `createApplicationControls`
+(docs/CODE-BOUNDARIES.md, "Entity lookup provider") also has aircraft,
+ships, cameras and satellites anywhere offered for a bare name, code or
+number once typing pauses (`lookupQuery` in `src/ui/omnibarRows.js`: never a
+command, a layer switch, a question, a sentence or coordinates, and never
+while voice has the field). One whose name, id or MMSI is the line (case,
+spaces and punctuation aside) leads the rows and Enter picks it; the others
+come after the loaded items listed before any place row, ahead of the
+places. A line the privacy check keeps from the place service (an MMSI is a
+long number) still lists the host's answers, and is not said to be kept
+back. One already loaded in its layer is listed once, as loaded. Choosing
+one switches its layer on if it is off; one the layer holds is picked as a
+Context row picks it, and one it does not hold yet is centred on once and
+picked with the layer's `pickById` when its next load has it (by id, then by
+MMSI, never by a name; `src/ui/entityLookup.js`). Editing or closing the
+line, picking another row or voice taking the field aborts the request and
+any pick still waiting. The CCTV layer's `pickById` makes a camera the
+active one, its feed shown in the camera panel.
 
 Han, Hangul and Kana names are looked up from two characters (東京), others
 from three.
@@ -8622,8 +8687,7 @@ and errors, keeping the separate Location draft intact.
 
 While typing, a short line (six words or fewer, ten with a number in it
 as an address has, no `?`, not a command,
-coordinates, a hex code, a callsign such as UAL2110 or N123AB, and nothing
-that may be private) is sent to
+coordinates, a hex code or a callsign such as UAL2110 or N123AB) is sent to
 Photon for place suggestions (the suggester itself never sends a line of
 more than eight words, or ten with a number): at most one request every
 500 ms per tab,
@@ -8632,102 +8696,11 @@ place search already uses; a submitted search is not part of this spacing.
 A line that may be one name ("Satellite Beach") is looked up whole. While
 its suggestions show, or a recent-place chip that came from them, the
 OpenStreetMap credit shows too; recent chips from the bundled packs credit
-Wikidata. Private text, by `mayBePrivate` in
-`src/search/placeSuggestions.js`, is never sent to Photon, offered as a
-place, searched or sent to GEV; only things already loaded on the map may
-match it, locally. The line is read after NFKC, so full-width letters,
-digits and "＠" count, and digits of any script count as digits. It is
-any line with: an "@" with something right on both sides, ending a word,
-starting a lowercase handle ("@jdoe"), or spaced before a domain ("john @
-gmail.com") (an email address or a handle, also while it is typed; spaced, as in "Nanjampeta @
-Chandambylu", it is part of a name); an email spelled around a filter
-("john(at)gmail.com", "john[at]gmail[dot]com", "john at gmail dot de",
-"john at gmail.com", "john at gmail (dot) com"); an IP address
-("10.0.0.1", "::1", "fe80::1", "https://[::1]/"); a wallet's recovery
-phrase (see below); seven digits or more with nothing but spaces,
-punctuation, symbols or format characters between them (a phone, card,
-SSN or account number or its start: "+1 415 555", "4111 1111", "123 45
-6789", "123456789", "4111.1111.1111.1111", "123–45–6789"; a street address's house number
-and its postcode are read apart (a house number never starts with 0, and
-a polite word such as "thanks" after the digits is not a city): five digits, or between the street and
-the city "00-950", "111 21", "125009", "1100-053", or four digits after a
-comma ("Straße 120, 1070 Wien"); and so are a US ZIP+4 after a state's
-code or name ("Alice 12345-6789" and "Jo 12345-6789" stay private),
-a Brazilian CEP, a Japanese postcode after "〒" or next to the address in
-Japanese script ("東京都千代田区100-0001"; after a Latin name, as in
-"Shibuya 150-0002", it reads as a phone number), and
-digits on either side of "#", so "Hauptstrasse 12 10115 Berlin", "DC
-20500-0003", "〒100-0001 東京都千代田区" and "Calle 100 # 19-61" are places,
-while a seven-digit postcode alone such as "Tel Aviv 6100000" still reads
-as private); a phone number written with dots; two letters, two
-digits and ten more letters or digits (an IBAN's shape); "password",
-"passcode", "passwd", "pw" or "pwd" followed by anything, "bearer"
-followed by anything but a short capitalised name or a place word such as
-island or lake ("Bearer Island", "bearer island" are places),
-"ssn" followed by a digit, also after "ending", "ends in" or "last four"
-("SSN Station" is a place), "token", "secret",
-"api key", "key" or "pass" followed by ":" or "=", a licence, plate,
-passport, membership, account, policy, ticket, booking, confirmation or
-reference number with a digit after its label ("license ABC1234",
-"passport no. 123456"), "ID" in capitals followed by a number ("ID
-AB123"), "otp", "2fa", "mfa", "cvv", "cvc" or a verification, one-time,
-security, auth or login code followed by a code (any value after a label
-in lower case, "verification code Abc", also before "thanks", ", thanks", "cheers" or "thanks a lot"; after a label
-written as a name, any value that is not one: "OTP Bank" and "Security
-Code Plaza" are places), a "pin" or door, access, gate, alarm or entry
-code followed by a value in mixed case ("PIN aBcD"), a
-door, access, gate, alarm, entry or security code followed by a digit, "api
-key", "access token" or "secret key" followed by a word of six characters
-or more, the word for "password" in the interface's languages
-(contraseña, Passwort, mot de passe, пароль…) followed by anything, or "pin"
-(also "pin code", "pin number", "pin is") followed by a digit; a word
-starting `sk_`, `sk-`, `rk_`, `pk_live`, `ghp_`, `github_pat_`, `glpat-`, `hf_`, a SendGrid
-`SG.` key or a Slack token's `xoxb-` and the like (any case) or
-`AIza` or `eyJ`, or an AWS key id (`AKIA` and twelve capitals or digits
-more; "Akiak" is a place); or a word that may be a password or key, with letters and digits mixed
-within one run (a number beside a word, as in "Yanino-1", "2-chōme" or
-"Route-66", is a name): eight characters or more, six or more with four
-letters and a digit ("hunter22", "Area51"), or six or more with letters,
-digits and a symbol ("Tr0ub4dor&3"). The password words match whole words
-only ("Sachsenhausen" is a place). Over the bundled names (139,502), six
-read as private: two with stray digits ("Maliga0N", "Jerónim67"), two
-joined by "@" to a lower-case handle ("Pulipadu @Govardhanagiri") and two
-with number lists or dates. When the text may be private the field says
-so ("Looks private, so nothing is searched or sent"), and a line whose
-only private sign is an address-sized run of digits (no group over six
-digits, nine at most in all, counted as they fold, no three digits
-followed by four as a phone number writes them, and no word such as
-card, code, key, phone or account beside them, in English and some other
-European languages; compounds such as "Kreditkartennummer" and words in
-other scripts are not read), with words beside it, gets a row
-to search it as a place on purpose ("Search … as a place anyway"), which
-runs the ordinary place search and its online services only when picked; a
-bare number, an email or handle, a password, key, code or IBAN gets none.
-A suggested house is named by its number and its street (or, without a
-street, its locality, district or city) in the order its country writes them: "10 Downing
-Street", "Hauptstraße 12".
-A nine-digit number or a short phone number written with no such word
-still gets the row: only picking it sends anything. One-time and verification codes,
-OTP, 2FA, MFA, CVV and CVC values, "card ending" digits, passphrases,
-recovery or seed phrases (twelve words in a row on the BIP39 English list
-in `src/search/bip39Words.js`, also with commas, numbered, quoted, joined by
-dashes or slashes, or after "my seed is", so a long question or request
-still goes to Ask GEV; twelve with four words for places or for asking about
-them, such as "park", "airport", "near" or "today", are a list or a request,
-which lets about one phrase in a hundred through), "my secret is …", an email spelled
-out ("john at example dot com", "punto com", or letter by letter), a door,
-alarm or lockbox number ("code 4821"; "zip code 90210" and "area code 415"
-are places), "Authorization: Bearer …", a code in a link (`?code=…`), a
-spaced UK National Insurance number and "my id is …" are private too.
-"Boise ID 83702" names Idaho. Some private text is not caught: a
-passphrase run together as one word (a long place name is one word too),
-a lower-case word after "otp", "2fa" or "mfa" ("mfa boston" is a name;
-"otp ABCDEF" is caught) and a code of lower-case letters after "pin" or
-"gate code" ("PIN ABCD" is caught).
-A Japanese postcode after a Latin name is refused ("Shibuya 150-0002"), and
-so is a name in capitals after a code's label ("MFA BOSTON", which cannot
-be told from "OTP ABCDEF"). Text that parses as coordinates or a
-grid reference is not private. A place's name is six words at most, or ten
+Wikidata. A suggested house is named by its number and its street (or,
+without a street, its locality, district or city) in the order its country
+writes them: "10 Downing Street", "Hauptstraße 12". Nothing typed is held
+back as private: what is typed goes to place suggestions, the place search
+and Ask GEV as any other line does. A place's name is six words at most, or ten
 when it has a number in it (an address: "1600 Pennsylvania Ave NW
 Washington DC 20500"). The places picked from the Omnibar's rows and chips that carry a position
 (a typed name searched as a place, or a plan's place, is not kept; the last 20:
@@ -10306,6 +10279,17 @@ changes or ten minutes pass; any other 403 fails only that request.
 An unresolved camera never launches a global scan. All views share conservative
 45/minute and 1,800/hour process limits; a shared key's other clients still count.
 
+The route's `at` (ms) asks a past hour (floored to the hour; within the
+current hour it is now, and a time after now is refused). Every pollutant is
+read from OpenAQ's hourly means up to that hour (`sensors/{id}/hours` with
+`datetime_to` at it): the US AQI view folds PM2.5, PM10, O3 and CO hours with
+`aqiStations` as at now, with NO2 and SO2 from their newest hour within six
+hours; a pollutant view shows that hour's means. Readings are aged against the
+hour, and stations that began reporting after it are skipped. An hour within
+three days of now is checked again hourly, as networks file hours late; an
+older hour's stations and means are read once. Each hour asked is a view with
+its own `VIEW_SHARE` under the same process limits.
+
 OpenAQ's selected pollutant uses explicit sensor hourly averages, with period,
 coverage and quality checks. Supported PM2.5, PM10, NO2, O3 and SO2 measurements
 receive a clearly labelled GEV comparison against the European Air Quality Index's
@@ -10403,9 +10387,12 @@ step to its last with the world clock, follows the clock while the field is on
 and draws the step nearest its time; playing, the clock waits for the next
 step for at most 20 s. A time outside the run held asks the host for the run
 covering it (`atMs`), once per three hours of time (a failed ask again after a
-minute); at now a run that no longer covers now is let go. Stations are
-readings of now and are hidden away from now (their labels, list and count
-too). The card's time line names the model by the manifest's `sourceShort`, else
+minute); at now a run that no longer covers now is let go. Stations follow
+the timeline when the clock follows the layer: an earlier hour than the
+current one asks each provider for that hour (`atMs`, the hour's start) and
+shows its stations once the provider answered for it, aged against that hour;
+ahead of now no station is drawn (their labels, list and count too), and
+nothing is asked. The card's time line names the model by the manifest's `sourceShort`, else
 `source`: "updated {age}" at now, "forecast for {time}" ahead of it, the time
 behind it.
 Outside the run, with no run covering the time on its way, one muted line says

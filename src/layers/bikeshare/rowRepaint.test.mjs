@@ -3,7 +3,7 @@
 // settles, the last row the panel painted must match what the layer reports
 // now. Each case drives the real viewport,
 // ingestion, rendering and controls; the manager is a spy that records the
-// row text (LayerPanel._buildMetaText) at every refreshLayerStats() call.
+// row text (LayerPanel._buildMetaText) at every panel.invalidate() call.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CITY_BY_ID, GBFS_CITY_REGISTRY } from './registry.js';
@@ -157,12 +157,12 @@ function makeLiveLayer() {
       on: () => () => {},
     },
   });
-  parts.lifecycle.methods.init(viewer);
-
   const painted = [];
-  controls.attachDataManager({
-    refreshLayerStats() {
-      painted.push(rowText(controls.getStats()));
+  parts.lifecycle.methods.init(viewer, {
+    panel: {
+      invalidate() {
+        painted.push(rowText(controls.getStats()));
+      },
     },
   });
 

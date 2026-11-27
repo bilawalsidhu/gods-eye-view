@@ -2701,7 +2701,7 @@ test('the installations layer draws its site dots, outlines and selected dot on 
   assert.equal(scene.added.length, 0, 'gone with the layer');
 });
 
-test('the satellites layer draws its dots as one point collection and its rings as depth-fail primitives out of picks', async () => {
+test('the satellites layer draws its dots as one point collection and its rings as depth-tested polylines out of picks', async () => {
   const { createRendering } =
     await import('../../layers/satellites/rendering.js');
   const { POINT_STYLES, TRACKED_ORBIT_COLOR } =
@@ -2753,13 +2753,23 @@ test('the satellites layer draws its dots as one point collection and its rings 
     host instanceof Cesium.PrimitiveCollection
       ? Array.from({ length: host.length }, (_, i) => all(host.get(i))).flat()
       : [host];
-  const primitive = scene.added
-    .flatMap(all)
-    .find(
+  const drawn = scene.added.flatMap(all);
+  assert.ok(
+    !drawn.some(
       (host) => host instanceof Cesium.Primitive && host.depthFailAppearance,
-    );
-  assert.ok(primitive, 'a ring with a dimmed part behind the globe');
-  assert.equal(primitive.allowPicking, false, 'ring clicks fall through');
+    ),
+    'no part of a ring draws through the Earth',
+  );
+  const polylines = drawn.find(
+    (host) => host instanceof Cesium.PolylineCollection && host.length > 0,
+  );
+  assert.ok(polylines, 'the ring is a polyline, hidden behind the Earth');
+  const ringLine = polylines.get(0);
+  assert.equal(ringLine.id.id, '25544');
+  assert.equal(ringLine.width, 2.5);
+  // In the rings' set, which takes no part in picks: ring clicks fall
+  // through to the satellites (`query.pick` drills past it).
+  assert.match(ringLine.id.set, /^satellites:\d+:rings$/);
   rendering._detach(viewer);
   assert.equal(scene.added.length, 0, 'gone with the layer');
 });

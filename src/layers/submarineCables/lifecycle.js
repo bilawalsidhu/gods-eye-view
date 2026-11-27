@@ -78,6 +78,7 @@ export function createLifecycle({ state, parts, source, mapStackEventTarget }) {
 
     disable() {
       state._enabled = false;
+      parts.rendering.select(null);
       state._overlayPublisher.hide();
       parts.rendering.resetPublishSignature();
       if (state._loading && state._abort) {
@@ -110,6 +111,8 @@ export function createLifecycle({ state, parts, source, mapStackEventTarget }) {
       state._overlayPublisher.hide();
       state._clickSubscription?.();
       state._clickSubscription = null;
+      state._selectionYield?.();
+      state._selectionYield = null;
       if (state._preRenderRemover) {
         state._preRenderRemover();
         state._preRenderRemover = null;
@@ -134,6 +137,7 @@ export function createLifecycle({ state, parts, source, mapStackEventTarget }) {
       state._lastUpdate = null;
       state._loadingLabel = '';
       state._referenceRecords = [];
+      parts.rendering.select(null);
       state._surfaceItems = [];
       state._referenceLabelCount = 0;
       state._publishScratch.length = 0;

@@ -31,7 +31,7 @@ const ENVIRONMENTAL_SUB = msg(
   'Live earthquakes and active fires, from USGS and NASA',
 );
 
-// Where the visitor starts: a tile selects it, ENTER GOD MODE runs it. A clean
+// Where the visitor starts: a tile selects it, ENTER DEFAULT MODE runs it. A clean
 // globe unless they pick a mission.
 const start = ref('explore');
 const settling = ref(false);
@@ -199,7 +199,7 @@ function onSuppress(event) {
           <div class="first-run-mode" role="listitem" data-first-run-mode="god">
             <div class="first-run-preview first-run-preview--god" aria-hidden="true"><i><svg class="first-run-globe" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1"><circle cx="32" cy="32" r="26" /><path d="M6 32h52M10 19h44M10 45h44" /><g class="first-run-meridians"><ellipse cx="32" cy="32" rx="26" ry="26" style="--m: 0" /><ellipse cx="32" cy="32" rx="26" ry="26" style="--m: 0.38" /><ellipse cx="32" cy="32" rx="26" ry="26" style="--m: 0.71" /><ellipse cx="32" cy="32" rx="26" ry="26" style="--m: 0.92" /></g></svg></i><svg class="first-run-callouts" viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="1"><path class="first-run-brackets" d="M8 18V8h10M102 8h10v10M112 102v10h-10M18 112H8v-10" /><circle class="first-run-orbit" cx="60" cy="60" r="34" /><g class="first-run-callout first-run-callout--a"><circle class="first-run-blip" cx="69" cy="50" r="1.6" /><circle class="first-run-ping" cx="69" cy="50" r="1.6" /><polyline class="first-run-leader" points="69,50 86,33 108,33" pathLength="1" /><path class="first-run-label" d="M88 29h18M88 37h11" /></g><g class="first-run-callout first-run-callout--b"><circle class="first-run-blip" cx="50" cy="71" r="1.6" /><circle class="first-run-ping" cx="50" cy="71" r="1.6" /><polyline class="first-run-leader" points="50,71 33,88 12,88" pathLength="1" /><path class="first-run-label" d="M14 84h18M14 92h11" /></g><g class="first-run-time"><line class="first-run-time-track" x1="26" y1="106" x2="94" y2="106" /><path class="first-run-time-ticks" d="M26 104v4 M34.5 105v2 M43 104v4 M51.5 105v2 M60 104v4 M68.5 105v2 M77 104v4 M85.5 105v2 M94 104v4" /><line class="first-run-time-played" x1="26" y1="106" x2="94" y2="106" /><g class="first-run-time-head"><line x1="26" y1="101" x2="26" y2="111" /><path d="M24 100h4l-2 2.5z" /></g></g></svg></div>
             <div class="first-run-mode-body">
-              <p class="first-run-mode-title"><strong>{{ t('God') }}</strong> <span class="first-run-tag">{{ t('FUN') }}</span></p>
+              <p class="first-run-mode-title"><strong>{{ t('Default') }}</strong> <span class="first-run-tag">{{ t('FUN') }}</span></p>
               <p class="first-run-mode-copy">{{ t('The spy-satellite keyhole: circular viewport, tactical HUD, cinematic camera. For exploring.') }}</p>
               <ul class="first-run-mode-points">
                 <li>{{ t('Keyhole HUD') }}</li>
@@ -319,11 +319,11 @@ function onSuppress(event) {
            error. It sits in the footer row, so it never changes the card's
            height. -->
       <p class="first-run-note" data-first-run-status role="status" aria-live="polite">{{ launcher?.status ?? '' }}</p>
-      <!-- The card's main action: God mode, starting where the selected tile
+      <!-- The card's main action: Default mode, starting where the selected tile
            says (a clean globe by default). -->
       <UiButton v-if="step > 1" class="first-run-back" :aria-disabled="String(settling || launcher?.busy === 'true')" @click="go(step - 1, $event)">{{ t('BACK') }}</UiButton>
       <UiButton class="first-run-enter" :data-first-run-choice="step === STEPS ? start : undefined" :data-first-run-next="step < STEPS ? '' : undefined" data-first-run-primary aria-describedby="first-run-title first-run-description" @pointerdown="onPrimaryDown" @keydown.enter="onPrimaryKeydown" :aria-disabled="String(settling || launcher?.busy === 'true')" @click="onPrimary">
-        {{ step < STEPS ? t('NEXT') : t('ENTER GOD MODE') }} <UiIcon name="arrow_forward" :size="null" />
+        {{ step < STEPS ? t('NEXT') : t('ENTER DEFAULT MODE') }} <UiIcon name="arrow_forward" :size="null" />
       </UiButton>
     </div>
 

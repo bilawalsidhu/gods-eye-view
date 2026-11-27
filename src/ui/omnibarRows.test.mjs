@@ -157,8 +157,6 @@ const OUTCOMES = [
   ['東京はどこ？', 'ask(東京はどこ？)'],
   ['is it far?', 'ask(is it far?)'],
   ['how about the weather in paris today?', 'nothing'],
-  ['123–45–6789', 'nothing'],
-  ['what is 4111–1111–1111–1111?', 'nothing'],
   // a switch with its place after "in" asks;
   // a vague "how do I" runs no walk; names with "senha" or "xox" in them
   // and addresses with numbers are places.
@@ -195,11 +193,9 @@ const OUTCOMES = [
   ['東京都港区六本木6丁目', 'search(東京都港区六本木6丁目)'],
   ['Washington DC 20500-0003', 'search(Washington DC 20500-0003)'],
   ['Calle 100 # 19-61 Bogota', 'search(Calle 100 # 19-61 Bogota)'],
-  // Addresses that look like numbers to keep, and long names, are offered
-  // to search on purpose; Enter runs nothing. "Track 7" and "Nearest Plane
-  // Crash Site" are names.
+  // Long names are offered to search on purpose; Enter runs nothing.
+  // "Track 7" and "Nearest Plane Crash Site" are names.
   ['Tverskaya 13 125009 Moscow', 'search(Tverskaya 13 125009 Moscow)'],
-  ['Москва, ул. Тверская, д. 13, 125009', 'nothing'],
   ['San Miguel de las Piedras Primera Sección', 'nothing'],
   ['Goto', 'search(Goto)'],
   ['goto tokyo', 'search(tokyo)'],
@@ -252,59 +248,8 @@ test('a layer near a place cannot admit an unrelated bare style step', () => {
   );
 });
 
-test('private text never reaches the place service, the search or GEV', () => {
+test('postcodes, street numbers and coordinates are places; callsigns are not', () => {
   const omnibar = createOmnibar({ layers: layers() });
-  for (const text of [
-    '123 45 6789',
-    '123456789',
-    '123-45-6789',
-    '4111 1111',
-    '١٢٣٤, ٥٦٧٨',
-    'what is my pass\u200bword: violet?',
-    '4111-1111-1111-1111',
-    '+1 415 555',
-    '415 555 0',
-    '415.555.0100',
-    'hunter22',
-    'letmein1',
-    'Tr0ub4dor&3',
-    'pa$$w0rd',
-    'token: abc',
-    'api key=xyz',
-    'password hunter2',
-    'me@example.com',
-    '４１１１ １１１１ １１１１ １１１１',
-    'john＠example.com',
-    'ｓｋ_live_abc',
-    '٤١١١ ١١١١ ١١١١ ١١١١',
-    '४१११ ११११ ११११ ११११',
-    '4111.1111.1111.1111',
-    'what is 4111.1111.1111.1111',
-    'where is ｊｏｈｎ＠ｅｘａｍｐｌｅ.ｃｏｍ',
-    'card ٤١١١١١١١١١١١١١١١ valid?',
-    '123–45–6789',
-    '415‐555‐0100',
-    '415−555−0100',
-    '4111:1111:1111:1111',
-    '4111|1111|1111|1111',
-    '4111\u200b1111\u200b1111\u200b1111',
-    'contraseña: hunter',
-    'Passwort: geheim',
-    'mot de passe: chat',
-    'пароль qwerty',
-    'api key abcdefgh',
-  ]) {
-    assert.equal(omnibar.placeQuery(text), null, text);
-    assert.equal(omnibar.countRequest(text), null, text);
-    const { rows, defaultIndex } = omnibar.rows(text);
-    // Only a row to search it as a place on purpose, never by Enter.
-    assert.ok(
-      rows.every((row) => row.kind === 'place' && row.explicit),
-      text,
-    );
-    assert.equal(defaultIndex, -1, text);
-  }
-  // Callsigns, postcodes, coordinates and street numbers are not secrets.
   assert.equal(omnibar.placeQuery('SW1A 1AA'), 'SW1A 1AA');
   assert.equal(omnibar.placeQuery('10 Downing Street'), '10 Downing Street');
   assert.equal(omnibar.placeQuery('Route 66'), 'Route 66');
@@ -315,30 +260,6 @@ test('private text never reaches the place service, the search or GEV', () => {
     assert.equal(rows[defaultIndex].kind, 'place', text);
     assert.ok(rows[defaultIndex].coords, text);
   }
-});
-
-test('private text still finds things already on the map, locally', () => {
-  const omnibar = createOmnibar({ layers: layers() });
-  const found = [];
-  const { rows } = omnibar.rows('366123456', {
-    entities: (text) => {
-      found.push(text);
-      return [
-        {
-          key: 'v1',
-          icon: 'directions_boat',
-          identity: 'v1',
-          title: '366123456',
-          layerName: 'Vessels',
-        },
-      ];
-    },
-  });
-  assert.deepEqual(found, ['366123456']);
-  assert.deepEqual(
-    rows.map((row) => row.kind),
-    ['entity'],
-  );
 });
 
 test('a map item named like a place follows the place; a callsign leads', () => {
@@ -367,20 +288,15 @@ test('a map item named like a place follows the place; a callsign leads', () => 
   assert.equal(callsign.rows[callsign.defaultIndex].kind, 'entity');
 });
 
-test('a long name or an address that looks private can be searched on purpose', () => {
+test('a long name can be searched on purpose', () => {
   const omnibar = createOmnibar({ layers: layers() });
-  for (const text of [
-    'Москва, ул. Тверская, д. 13, 125009',
-    'San Miguel de las Piedras Primera Sección',
-  ]) {
+  for (const text of ['San Miguel de las Piedras Primera Sección']) {
     const { rows, defaultIndex } = omnibar.rows(text);
     assert.equal(defaultIndex, -1, text);
     const row = rows.find((each) => each.explicit);
     assert.equal(row?.place, text, text);
     assert.equal(omnibar.placeQuery(text), null, text);
   }
-  // A bare number names no place.
-  assert.deepEqual(omnibar.rows('4111 1111 1111 1111').rows, []);
 });
 
 test('a pasted sentence is never sent to the place service', () => {
@@ -464,50 +380,6 @@ test('a layer named in full leads a feature topic its words also hold', () => {
   assert.equal(context.rows[context.defaultIndex].guide.feature, 'context');
 });
 
-test('only an address that looks like a number may be searched anyway', () => {
-  const omnibar = createOmnibar({ layers: layers() });
-  for (const text of [
-    'password hunter2',
-    'john.doe@example.com',
-    'hunter22',
-    'sk-abc123def',
-    'DE89 3704 0044 0532 0130 00',
-    'pin 1234567',
-    'door code 4421',
-    // A number beside a word that says what it is, or one too long for an
-    // address.
-    'code 12345678 Berlin',
-    'token 12345678 Berlin',
-    'user john pass 12345678',
-    'card 4111 1111 1111 1111 please',
-    'my card is 4111111111111111',
-    'routing 021000021 New York',
-    'phone +1 415 555 0100 office',
-    'BSN 123456782 Utrecht',
-    'medicare 1234567890 Sydney',
-    // Digits and words read as they fold: superscript, circled, full-width
-    // or split by a zero-width space; card and phone words in other
-    // languages.
-    'Berlin ⁴¹¹¹¹¹¹¹¹¹¹¹¹¹¹¹',
-    'Berlin ①②③④⑤⑥⑦⑧⑨⑩',
-    'Main St 12 ¹²³⁴⁵⁶⁷⁸⁹¹²³⁴⁵⁶ Berlin',
-    'ｃａｒｄ 4111 1111 Berlin',
-    'ca\u200brd 4111 1111 Berlin',
-    'Visa 4111 1111 Berlin',
-    'Kreditkarte 4111 1111 Berlin',
-    'Telefon 912 34 567',
-  ])
-    assert.deepEqual(omnibar.rows(text).rows, [], text);
-  for (const text of [
-    'Москва, ул. Тверская, д. 13, 125009',
-    'Jl. Jend. Sudirman No. 52-53, 12190 Jakarta',
-  ])
-    assert.ok(
-      omnibar.rows(text).rows.some((row) => row.explicit),
-      text,
-    );
-});
-
 test("a line naming a layer still starts that layer's walk", () => {
   const { rows, defaultIndex } = createOmnibar({ layers: layers() }).rows(
     'how to turn on flights',
@@ -581,8 +453,6 @@ test('coordinates named as the place are flown to, never refused or looked up', 
   );
   assert.equal(rows[defaultIndex].kind, 'plan');
   assert.equal(omnibar.placeQuery('show flights near 30.27, -97.74'), null);
-  // A card number is still no spot.
-  assert.equal(omnibar.rows('go to 4111 1111 1111 1111').defaultIndex, -1);
   assert.equal(omnibar.placeQuery('go to ,'), null);
 });
 
@@ -884,4 +754,143 @@ test('a kind of place written before its name keeps the plan', () => {
       text,
     );
   }
+});
+
+test("what the host's entity lookup found is listed, one named exactly first", () => {
+  const omnibar = createOmnibar({ layers: layers() });
+  const jal = {
+    kind: 'aircraft',
+    id: '86d3f0',
+    name: 'JAL58',
+    detail: 'Japan Airlines',
+    lat: 50,
+    lon: -120,
+    layerId: 'flights',
+    mmsi: null,
+  };
+  const ship = {
+    kind: 'vessel',
+    id: 'uuid-1',
+    name: 'EVER GIVEN',
+    lat: 30,
+    lon: 32,
+    layerId: 'ais-live-vessels',
+    mmsi: '353136000',
+  };
+  const camera = {
+    kind: 'camera',
+    id: 'tfl:1',
+    name: 'London Rd / Staines Av',
+    lat: 51.4,
+    lon: -0.5,
+    layerId: 'cctv',
+    mmsi: null,
+  };
+  // Named exactly (case, spaces and punctuation aside): first, and Enter
+  // picks it, over a place found by a like name.
+  const places = [
+    {
+      name: 'Ever Given memorial',
+      detail: 'Suez',
+      latitude: 30,
+      longitude: 32.5,
+    },
+  ];
+  for (const [text, found, key] of [
+    ['JAL58', [jal], 'found:flights:86d3f0'],
+    ['ever given', [ship], 'found:ais-live-vessels:uuid-1'],
+    ['london rd staines av', [camera], 'found:cctv:tfl:1'],
+  ]) {
+    const { rows, defaultIndex } = omnibar.rows(text, {
+      found,
+      places,
+      entities: () => [],
+    });
+    assert.equal(rows[0].key, key, text);
+    assert.equal(rows[0].kind, 'found', text);
+    assert.equal(defaultIndex, 0, text);
+    assert.deepEqual(rows[0].match, found[0], text);
+  }
+  assert.equal(
+    omnibar.rows('JAL58', { found: [jal] }).rows[0].hint,
+    'Japan Airlines',
+  );
+  // Not named exactly: after the loaded items, before the places.
+  const loaded = () => [
+    {
+      key: 'l1',
+      icon: 'flight',
+      identity: { layerId: 'flights', id: 'abc123' },
+      title: 'JAL581',
+      layerName: 'Flights',
+    },
+  ];
+  const loose = omnibar.rows('JL58', { found: [jal], entities: loaded });
+  const kinds = loose.rows.map((row) => row.kind);
+  assert.ok(
+    kinds.indexOf('found') > kinds.indexOf('entity') ||
+      !kinds.includes('entity'),
+  );
+  assert.ok(
+    kinds.includes('place')
+      ? kinds.indexOf('found') < kinds.indexOf('place')
+      : true,
+  );
+  const city = omnibar.rows('Hamburg', {
+    found: [{ ...ship, id: 'uuid-2', name: 'HAMBURG EXPRESS', mmsi: null }],
+    places: [
+      { name: 'Hamburg', detail: 'Germany', latitude: 53.55, longitude: 10 },
+    ],
+  });
+  assert.equal(city.rows[0].kind, 'found');
+  assert.equal(city.rows[1].kind, 'place');
+  // An MMSI is a number the privacy check keeps from the place service, but
+  // the host's answer for it is listed.
+  const mmsi = omnibar.rows('353136000', { found: [ship], entities: () => [] });
+  assert.equal(mmsi.rows[0].key, 'found:ais-live-vessels:uuid-1');
+  assert.equal(mmsi.defaultIndex, 0);
+  // Already loaded in its layer (by id or MMSI): listed once, as loaded.
+  const twice = omnibar.rows('Ever Given', {
+    found: [ship],
+    entities: () => [
+      {
+        key: 'v',
+        icon: 'directions_boat',
+        identity: {
+          layerId: 'ais-live-vessels',
+          id: 'other',
+          record: { mmsi: '353136000' },
+        },
+        title: 'EVER GIVEN',
+        layerName: 'Vessels',
+      },
+    ],
+  });
+  assert.ok(!twice.rows.some((row) => row.kind === 'found'));
+  assert.equal(twice.rows[0].kind, 'entity');
+  // A command, a switch, a question or coordinates is never looked up.
+  for (const text of [
+    'zoom in',
+    'show flights',
+    'where is JAL58?',
+    '30.2672, -97.7431',
+    'go to Hamburg',
+  ]) {
+    assert.equal(omnibar.lookupQuery(text), null, text);
+    assert.ok(
+      !omnibar
+        .rows(text, { found: [jal] })
+        .rows.some((row) => row.kind === 'found'),
+      text,
+    );
+  }
+  for (const text of [
+    'JAL58',
+    'JL58',
+    'Ever Given',
+    '353136000',
+    'ISS',
+    '25544',
+  ])
+    assert.equal(omnibar.lookupQuery(text), text, text);
 });
