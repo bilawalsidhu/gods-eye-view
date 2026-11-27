@@ -17,7 +17,7 @@ export function realtimeSessionTools(additional = []) {
 }
 
 /** Tools that need an operator-configured Overpass (OVERPASS_UPSTREAMS). */
-export const OVERPASS_ONLY_TOOLS = Object.freeze(['osm_query']);
+const OVERPASS_ONLY_TOOLS = Object.freeze(['osm_query']);
 
 /**
  * The tools one session is offered. Bulk OpenStreetMap place search runs

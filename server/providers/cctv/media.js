@@ -616,7 +616,7 @@ export function cctvUpstreamUserAgent(url) {
 }
 
 /** Largest single JPEG the MJPEG first-frame reader will buffer. */
-export const CCTV_MJPEG_FRAME_MAX_BYTES = 2 * 1024 * 1024;
+const CCTV_MJPEG_FRAME_MAX_BYTES = 2 * 1024 * 1024;
 
 /**
  * Read one bounded JPEG part from an open MJPEG response, then stop the stream.

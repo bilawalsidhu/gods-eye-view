@@ -13,7 +13,7 @@ import { readResponseTextCapped } from '../common/http.js';
  * standard, published keyless and refreshed daily (~1,800 cameras). */
 export const TAIWAN_FREEWAY_CCTV_URL =
   'https://tisvcloud.freeway.gov.tw/history/motc20/CCTV.xml';
-export const TAIWAN_HIGHWAY_CCTV_URL =
+const TAIWAN_HIGHWAY_CCTV_URL =
   'https://cctv-maintain.thb.gov.tw/opendataCCTVs.xml';
 /** The whole network is ~1.2 MB. */
 export const TAIWAN_MAX_CATALOG_BYTES = 6 * 1024 * 1024;
@@ -226,7 +226,7 @@ export function taiwanCameraToSource(row) {
  * @param {object} row - Output of parseTaiwanCctvXml.
  * @returns {?object}
  */
-export function taiwanHighwayCameraToSource(row) {
+function taiwanHighwayCameraToSource(row) {
   if (!row || typeof row !== 'object') return null;
   const { lat, lon } = row;
   if (!isLikelyTaiwanCoordinate(lat, lon)) return null;

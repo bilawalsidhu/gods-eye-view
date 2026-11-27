@@ -142,7 +142,7 @@ const media = ({ image, video }) =>
   video ? ['video'] : image ? ['photo'] : [];
 
 /** A Liveuamap item as a report of the Conflicts section. */
-export function liveuamapReport(item) {
+function liveuamapReport(item) {
   const id = `lum-${item.id}`;
   const report = {
     id,

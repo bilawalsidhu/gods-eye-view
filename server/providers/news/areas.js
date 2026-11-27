@@ -86,7 +86,7 @@ function loadDisputed() {
 }
 
 /** The disputed area at a point, or null. */
-export function disputedAt(lat, lon) {
+function disputedAt(lat, lon) {
   return (
     loadDisputed().find((area) =>
       area.rings.some((ring) => pointInRing(ring, lat, lon)),

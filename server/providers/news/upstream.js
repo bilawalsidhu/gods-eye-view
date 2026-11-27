@@ -19,7 +19,7 @@ const WORLD_NEWS_MAX_BYTES = 8 * 1024 * 1024;
 // `categories` filter is not asked for: it classifies few articles outside
 // English, so it would drop most of a country's own outlets; an article it
 // left unclassified is kept.
-export const WORLD_NEWS_LEFT_OUT = Object.freeze(
+const WORLD_NEWS_LEFT_OUT = Object.freeze(
   new Set(['sports', 'entertainment', 'lifestyle', 'travel']),
 );
 const DAY_MS = 86_400_000;
@@ -62,7 +62,7 @@ export function webLink(value) {
 }
 
 /** A clip a browser plays itself (an https MP4 or WebM file), or null. */
-export function playableVideo(value) {
+function playableVideo(value) {
   const url = webLink(value);
   return url && /\.(?:mp4|m4v|webm)$/i.test(new URL(url).pathname) ? url : null;
 }
@@ -150,7 +150,7 @@ function parseJson(text, what) {
  * Liveuamap's items with a headline, a point and a page:
  * `{id, title, lat, lon, place, publishedAt, url, image, video}`.
  */
-export function parseLiveuamap(payload) {
+function parseLiveuamap(payload) {
   if (!Array.isArray(payload?.venues))
     throw new UpstreamError('Liveuamap answer unreadable');
   const items = [];
@@ -223,7 +223,7 @@ function worldNewsDate(value) {
  * out, newest first:
  * `{id, title, url, publisher, language, category, publishedAt, image, video}`.
  */
-export function parseWorldNews(payload) {
+function parseWorldNews(payload) {
   if (!Array.isArray(payload?.news))
     throw new UpstreamError('World News API answer unreadable');
   const seen = new Set();

@@ -15,7 +15,7 @@ import { inflateRawSync } from 'node:zlib';
  * own area (`dangerArea`), never as a cone of centre-track uncertainty.
  */
 
-export const JTWC_ORIGIN = 'https://www.metoc.navy.mil';
+const JTWC_ORIGIN = 'https://www.metoc.navy.mil';
 export const JTWC_RSS_URL = `${JTWC_ORIGIN}/jtwc/rss/jtwc.rss`;
 export const JTWC_PRODUCTS_URL = `${JTWC_ORIGIN}/jtwc/products`;
 const WARNING_ITEMS = [

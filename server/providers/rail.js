@@ -10,7 +10,7 @@ import { RAIL_FEED_ID_PATTERN } from '../../src/data/railFeeds.js';
  * Where development and preview look for path and schedule packs when
  * RAIL_PATHS_DIR is unset: the default output of scripts/build-rail-paths.mjs.
  */
-export const DEFAULT_RAIL_PATHS_DIR = path.resolve(
+const DEFAULT_RAIL_PATHS_DIR = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '../../.cache/rail-paths',
 );
@@ -19,7 +19,7 @@ export const DEFAULT_RAIL_PATHS_DIR = path.resolve(
  * Pack bytes the development server keeps in memory, across path and
  * schedule packs: a few of the largest national packs.
  */
-export const RAIL_PACK_CACHE_MAX_BYTES = 64 * 1024 * 1024;
+const RAIL_PACK_CACHE_MAX_BYTES = 64 * 1024 * 1024;
 
 /**
  * A bounded cache of pack files' bytes, by path, least recently read first
@@ -198,7 +198,7 @@ export function createFsSchedulePackVersion(dir) {
  * @param {string} dir
  * @returns {(feedId: string) => Promise<string|null>}
  */
-export function createFsPathPackVersion(dir) {
+function createFsPathPackVersion(dir) {
   return createFsPackVersion(dir, '.json');
 }
 
