@@ -1116,17 +1116,6 @@ function warningEntries(record) {
   return found;
 }
 
-/**
- * Warnings a record carries, most serious first: an aircraft emergency or
- * emergency squawk, a tsunami flag, or a layer's own alert text. These lead
- * the card, ahead of any facts.
- * @param {?object} record
- * @returns {string[]} In English; cards and alerts also carry their words.
- */
-export function recordWarnings(record) {
-  return warningEntries(record).map((entry) => entry.value);
-}
-
 /** What a routine transponder code says, for the codes with a meaning. */
 const SQUAWK_MEANINGS = Object.freeze({
   1200: msg('VFR, no flight plan'),

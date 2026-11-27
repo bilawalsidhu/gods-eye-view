@@ -67,27 +67,6 @@ export function surfaceOcclusionMargin(contactDistance, sinElevation = 0) {
 }
 
 /**
- * Whether a drawn surface hides a contact.
- * @param {number} contactDistance Camera-to-contact distance in metres.
- * @param {number|undefined} surfaceDistance Camera-to-drawn-surface distance
- *   along the contact's ray; undefined or non-finite when nothing was drawn.
- * @param {number} [sinElevation] See `surfaceOcclusionMargin`.
- * @returns {boolean}
- */
-export function surfaceHidesContact(
-  contactDistance,
-  surfaceDistance,
-  sinElevation = 0,
-) {
-  if (!Number.isFinite(contactDistance) || !Number.isFinite(surfaceDistance))
-    return false;
-  return (
-    surfaceDistance <
-    contactDistance - surfaceOcclusionMargin(contactDistance, sinElevation)
-  );
-}
-
-/**
  * Unpack a depth the renderer stored across the four bytes of an RGBA8 texel
  * (most significant byte first, each byte a base-255 digit).
  * @param {ArrayLike<number>} bytes

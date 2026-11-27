@@ -11,7 +11,6 @@ import {
   SurfaceOcclusion,
   depthToViewDistance,
   projectContact,
-  surfaceHidesContact,
   surfaceOcclusionMargin,
   unpackDepth,
 } from './detectionOcclusion.js';
@@ -44,26 +43,14 @@ test('looking down on a contact, the margin is what a 2 m rise on its line of si
   // A low wall 15 m in front of a street 1 km off, seen from 25 degrees up,
   // stands about 6 m above the vehicle's line of sight: it hides it.
   const sin25 = Math.sin((25 * Math.PI) / 180);
-  assert.equal(surfaceHidesContact(1000, 985, sin25), true);
-  assert.equal(surfaceHidesContact(1000, 985), false, 'unknown angle: 2%');
-  assert.equal(surfaceHidesContact(1000, 996, sin25), false, 'its own road');
+  assert.ok(surfaceOcclusionMargin(1000, sin25) < 15);
 });
 
 test('a surface hides a contact only when nearer by more than the margin', () => {
   // 500 m away: margin 10 m.
-  assert.equal(surfaceHidesContact(500, 489), true, 'a facade 11 m in front');
-  assert.equal(surfaceHidesContact(500, 491), false, 'its own road or dot');
-  assert.equal(surfaceHidesContact(500, 500), false);
-  assert.equal(surfaceHidesContact(500, 520), false, 'the ground behind it');
+  assert.equal(surfaceOcclusionMargin(500), 10);
   // Close range keeps the 3 m floor.
-  assert.equal(surfaceHidesContact(60, 56), true);
-  assert.equal(surfaceHidesContact(60, 58), false);
-});
-
-test('nothing drawn, or no distance, never hides a contact', () => {
-  assert.equal(surfaceHidesContact(500, undefined), false);
-  assert.equal(surfaceHidesContact(500, Number.NaN), false);
-  assert.equal(surfaceHidesContact(Number.NaN, 10), false);
+  assert.equal(surfaceOcclusionMargin(60), 3);
 });
 
 test('packed depth unpacks most significant byte first', () => {
@@ -163,7 +150,7 @@ test('the threshold is the margin rule restated as a view distance', () => {
   for (const surfaceView of [out.threshold - 0.01, out.threshold + 0.01]) {
     const alongRay = (surfaceView * range) / 400;
     assert.equal(
-      surfaceHidesContact(range, alongRay),
+      alongRay < range - surfaceOcclusionMargin(range),
       surfaceView < out.threshold,
     );
   }

@@ -21,7 +21,7 @@
  * instead of holding it.
  */
 import { eastNorthUp } from '../geo/frames.js';
-import { motionCourse, motionPosition } from '../render/motion/iconMotion.js';
+import { motionPosition } from '../render/motion/iconMotion.js';
 import { norm180, norm360 } from '../geo/vector.js';
 
 /** @constant {number} Pairs slower than this (m/s) are joined straight. */
@@ -268,16 +268,6 @@ export function curvePieceAt(curve, tMs) {
   for (let i = 0; i < pieces.length - 1; i++)
     if (tMs < pieces[i].t1) return pieces[i];
   return pieces[pieces.length - 1];
-}
-
-/** Where the curve puts the aircraft at `tMs`, and its course. */
-export function curvePositionAt(curve, tMs) {
-  const piece = curvePieceAt(curve, tMs);
-  const t = Math.min(tMs, piece.t1);
-  return {
-    position: motionPosition(piece.segment, null, t),
-    courseDeg: motionCourse(piece.segment, undefined, t),
-  };
 }
 
 /**
