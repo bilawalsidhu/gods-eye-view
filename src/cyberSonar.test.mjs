@@ -2,21 +2,14 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 import { transformWithEsbuild } from 'vite';
-import { BillboardCollection, Color, PointPrimitive } from 'cesium';
 import {
   syncCyberSonarAnimation,
-  applyCyberSonarPrimitive,
-  cyberSonarBaseAlpha,
   applyCyberSonarThemePhase,
+  createCyberSonarSampler,
   cyberSonarAngleDeg,
   cyberSonarAnimationDelay,
   cyberSonarFrameDelay,
-  cyberSonarIntensityAtScreenPoint,
-  cyberSonarLabelIntensity,
-  cyberSonarTintColor,
   applyCyberSonarSettings,
-  CYBER_SONAR_DIM_FACTOR,
-  CYBER_SONAR_LABEL_DIM_FACTOR,
   CYBER_SONAR_PERIOD_MS,
   isCyberSonarEnabled,
   isCyberSonarActive,
@@ -65,30 +58,6 @@ test('production-transformed sonar defaults retain the document method receiver'
   }
 });
 
-test('hue-only aircraft restyles retain owner alpha across sonar opacity changes', () => {
-  const collection = new BillboardCollection();
-  const visual = collection.add({ color: Color.WHITE.withAlpha(0.8) });
-  try {
-    for (const opacity of [0.84, 0.35, 0.81, 1, 0.84]) {
-      for (let i = 0; i < 8; i++) {
-        visual.color = Color.CYAN.withAlpha(cyberSonarBaseAlpha(visual));
-        applyCyberSonarPrimitive(visual, opacity);
-        assert.equal(visual.color.alpha, 0.8 * opacity);
-      }
-    }
-    // A true owner freshness update must not be mistaken for our old alpha.
-    visual.color = Color.YELLOW.withAlpha(0.4);
-    assert.equal(cyberSonarBaseAlpha(visual), 0.4);
-    applyCyberSonarPrimitive(visual, 0.35);
-    visual.color = Color.CYAN.withAlpha(cyberSonarBaseAlpha(visual));
-    applyCyberSonarPrimitive(visual, 0.84);
-    applyCyberSonarPrimitive(visual, 1, false);
-    assert.ok(Color.equals(visual.color, Color.CYAN.withAlpha(0.4)));
-  } finally {
-    collection.destroy();
-  }
-});
-
 test('the Cyber sonar clock advances clockwise and wraps cleanly', () => {
   assert.equal(cyberSonarAngleDeg(0), 0);
   assert.equal(cyberSonarAngleDeg(CYBER_SONAR_PERIOD_MS / 4), 90);
@@ -108,33 +77,13 @@ test('the sweep brightens contacts inside its sector and dims the remainder', ()
   const height = 800;
   const centerX = width / 2;
   const centerY = height / 2;
+  const at = (now) => createCyberSonarSampler(width, height, now, { dataset: {} }).at;
 
-  assert.equal(
-    cyberSonarIntensityAtScreenPoint(centerX, centerY - 200, width, height, 0),
-    1,
-  );
-  assert.equal(
-    cyberSonarIntensityAtScreenPoint(centerX + 200, centerY, width, height, 0),
-    CYBER_SONAR_DIM_FACTOR,
-  );
-  assert.equal(
-    cyberSonarIntensityAtScreenPoint(
-      centerX + 200,
-      centerY,
-      width,
-      height,
-      CYBER_SONAR_PERIOD_MS / 4,
-    ),
-    1,
-  );
-  assert.equal(
-    cyberSonarIntensityAtScreenPoint(centerX, centerY - 401, width, height, 0),
-    CYBER_SONAR_DIM_FACTOR,
-  );
-  assert.equal(
-    cyberSonarIntensityAtScreenPoint(Number.NaN, 0, width, height, 0),
-    1,
-  );
+  assert.equal(at(0)(centerX, centerY - 200), 1);
+  assert.equal(at(0)(centerX + 200, centerY), 0.84);
+  assert.equal(at(CYBER_SONAR_PERIOD_MS / 4)(centerX + 200, centerY), 1);
+  assert.equal(at(0)(centerX, centerY - 401), 0.84);
+  assert.equal(at(0)(Number.NaN, 0), 1);
 });
 
 test('the sonar activates only while on, over a visible map HUD with motion enabled', () => {
@@ -181,19 +130,6 @@ test('the sonar activates only while on, over a visible map HUD with motion enab
   );
 });
 
-test('labels keep a more readable baseline while tracking the same sweep', () => {
-  assert.equal(CYBER_SONAR_DIM_FACTOR, 0.84);
-  assert.equal(CYBER_SONAR_LABEL_DIM_FACTOR, 0.92);
-  assert.equal(
-    cyberSonarLabelIntensity(CYBER_SONAR_DIM_FACTOR),
-    CYBER_SONAR_LABEL_DIM_FACTOR,
-  );
-  assert.equal(cyberSonarLabelIntensity(1), 1);
-  assert.ok(
-    cyberSonarLabelIntensity(CYBER_SONAR_DIM_FACTOR) > CYBER_SONAR_DIM_FACTOR,
-  );
-});
-
 test('the opacity setting controls every contact floor and preserves brighter labels', () => {
   const values = new Map();
   const root = {
@@ -203,19 +139,9 @@ test('the opacity setting controls every contact floor and preserves brighter la
   const settings = applyCyberSonarSettings({ opacity: 62 }, root);
   assert.equal(settings.opacity, 62);
   assert.equal(root.dataset.cyberSonarOpacity, '62');
-  assert.equal(
-    cyberSonarIntensityAtScreenPoint(900, 400, 1_000, 800, 0, root),
-    0.62,
-  );
-  assert.equal(cyberSonarLabelIntensity(0.62, root), 0.81);
-  assert.equal(cyberSonarLabelIntensity(1, root), 1);
-
-  applyCyberSonarSettings({ opacity: 100 }, root);
-  assert.equal(cyberSonarLabelIntensity(1, root), 1);
-  assert.deepEqual(
-    cyberSonarTintColor({ red: 1, green: 1, blue: 1, alpha: 1 }, 1, root),
-    { red: 1, green: 0.8848, blue: 0.8848, alpha: 1 },
-  );
+  const s = createCyberSonarSampler(1_000, 800, 0, root);
+  assert.equal(s.at(900, 400), 0.62);
+  assert.equal(s.label(0.62), 0.81);
 });
 
 test('the sonar control defaults off and records explicit operator state', () => {
@@ -230,83 +156,6 @@ test('the sonar control defaults off and records explicit operator state', () =>
   assert.equal(setCyberSonarEnabled(false, root), false);
   assert.equal(root.dataset.cyberSonar, 'off');
   assert.equal(isCyberSonarEnabled(root), false);
-});
-
-test('real Cesium points and billboards recover after repeated low/high opacity cycles', () => {
-  const collection = new BillboardCollection();
-  const base = new Color(0.7, 0.5, 0.25, 0.8);
-  const visuals = [
-    new PointPrimitive({ color: base }),
-    collection.add({ color: base }),
-  ];
-  try {
-    for (const visual of visuals) {
-      for (const factor of [0.35, 1, 0.5, 1, 0.35]) {
-        for (let frame = 0; frame < 60; frame++) {
-          applyCyberSonarPrimitive(visual, factor);
-        }
-        assert.equal(visual.color.alpha, base.alpha * factor);
-      }
-      // Owner setters mutate the same Cesium Color object, even when the new
-      // alpha equals the last sonar output. Its new RGB must become the base.
-      const refreshed = new Color(0.2, 0.8, 0.4, visual.color.alpha);
-      visual.color = refreshed;
-      applyCyberSonarPrimitive(visual, 0.5);
-      assert.equal(visual.color.alpha, refreshed.alpha * 0.5);
-      applyCyberSonarPrimitive(visual, 1, false);
-      assert.ok(Color.equals(visual.color, refreshed));
-    }
-  } finally {
-    collection.destroy();
-  }
-});
-
-test('generic Cesium primitives dim, accept owner style refreshes, and restore', () => {
-  const makeColor = (alpha, red = 1) => ({
-    red,
-    green: 0.5,
-    blue: 0.25,
-    alpha,
-    clone() {
-      return makeColor(this.alpha, this.red);
-    },
-  });
-  const visual = { color: makeColor(0.8) };
-  applyCyberSonarPrimitive(visual, 0.25, true);
-  assert.equal(visual.color.alpha, 0.2);
-  const paintedColor = visual.color;
-  applyCyberSonarPrimitive(visual, 0.25, true);
-  assert.equal(visual.color, paintedColor);
-  visual.color = makeColor(0.6, 0.7);
-  applyCyberSonarPrimitive(visual, 0.5, true);
-  assert.equal(visual.color.alpha, 0.3);
-  assert.notEqual(visual.color.red, 0.7);
-  applyCyberSonarPrimitive(visual, 1, false);
-  assert.equal(visual.color.alpha, 0.6);
-  assert.equal(visual.color.red, 0.7);
-});
-
-test('Cyber contact tint moves from cool-muted to warm-bright with the sector', () => {
-  const root = { dataset: { cyberSonarIntensity: '70' } };
-  const base = { red: 0.2, green: 0.8, blue: 1, alpha: 0.75 };
-  const dim = cyberSonarTintColor(base, CYBER_SONAR_DIM_FACTOR, root);
-  const bright = cyberSonarTintColor(base, 1, root);
-  assert.ok(bright.red > dim.red);
-  assert.ok(bright.green > dim.green);
-  assert.equal(bright.alpha, 0.75);
-});
-
-test('unswept white map symbols retain a bright readable Cyber tint', () => {
-  const root = { dataset: { cyberSonarIntensity: '70' } };
-  const dim = cyberSonarTintColor(
-    { red: 1, green: 1, blue: 1, alpha: 1 },
-    CYBER_SONAR_DIM_FACTOR,
-    root,
-  );
-  assert.ok(dim.red >= 0.72);
-  assert.ok(dim.green >= 0.76);
-  assert.ok(dim.blue >= 0.79);
-  assert.equal(dim.alpha, 1);
 });
 
 test('the sweep corrects delayed starts and reacquires restarted animations without per-frame writes', () => {

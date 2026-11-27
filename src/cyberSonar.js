@@ -9,14 +9,7 @@ export const CYBER_SONAR_PERIOD_MS = 5_200;
 // contacts still compose after layer updates on each actual draw so owner
 // color writes cannot flash through during camera/fleet animation.
 export const CYBER_SONAR_RENDER_INTERVAL_MS = 80;
-export const CYBER_SONAR_SWEEP_DEG = 24;
 export const CYBER_SONAR_FEATHER_DEG = 10;
-// The sector should still read as a clear acquisition pass, but contacts
-// outside it must remain immediately legible against FLIR terrain. Icons and
-// dots keep a strong operator-tunable opacity floor; labels retain an even
-// brighter floor so typography never disappears between passes.
-export const CYBER_SONAR_DIM_FACTOR = 0.84;
-export const CYBER_SONAR_LABEL_DIM_FACTOR = 0.92;
 export const CYBER_SONAR_DEFAULTS = Object.freeze({
   rings: 8,
   range: 100,
@@ -27,7 +20,6 @@ export const CYBER_SONAR_DEFAULTS = Object.freeze({
 
 const clamp01 = (value) => Math.min(1, Math.max(0, value));
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
-const primitiveColors = new WeakMap();
 const sweepAnimations = new WeakMap();
 
 /** Pin the compositor animation to the absolute clock used by contact sampling.
@@ -52,107 +44,6 @@ export function syncCyberSonarAnimation(
   animation.effect.updateTiming({ delay: 0 });
   animation.startTime = 0;
   sweepAnimations.set(root, { element, animation });
-}
-
-const copyColor = (color) => {
-  if (!color || !Number.isFinite(color.alpha)) return null;
-  if (typeof color.clone === 'function') return color.clone();
-  return { ...color };
-};
-
-/** Read owner opacity before a hue-only restyle, never our composited opacity.
- * An independently written color still wins, including real freshness changes.
- */
-export function cyberSonarBaseAlpha(visual, property = 'color') {
-  const current = visual?.[property];
-  const state = primitiveColors.get(visual)?.[property];
-  const applied = state?.lastAppliedColor;
-  return applied &&
-    current &&
-    current.red === applied.red &&
-    current.green === applied.green &&
-    current.blue === applied.blue &&
-    current.alpha === applied.alpha
-    ? state.base.alpha
-    : (current?.alpha ?? 1);
-}
-
-/** Apply the sector factor to a Cesium point/billboard without owning its base style. */
-export function applyCyberSonarPrimitive(
-  visual,
-  factor,
-  active = true,
-  sampler,
-  property = 'color',
-  opaque = false,
-) {
-  if (!visual) return;
-  const current = visual[property];
-  let slots = primitiveColors.get(visual);
-  let state = slots?.[property];
-  const ownsCurrentColor =
-    state &&
-    current &&
-    current.red === state.lastAppliedColor.red &&
-    current.green === state.lastAppliedColor.green &&
-    current.blue === state.lastAppliedColor.blue &&
-    current.alpha === state.lastAppliedColor.alpha;
-  if (!active) {
-    // An owner refresh between the last paint and teardown wins over our cache.
-    if (ownsCurrentColor)
-      visual[property] = state.undefinedBase
-        ? undefined
-        : copyColor(state.base);
-    if (slots) delete slots[property];
-    return;
-  }
-  if (!current && property !== 'color') return;
-  const nextFactor = clamp01(factor);
-  // Cesium setters copy into a stable internal Color instead of retaining the
-  // assigned object. Compare its channels with our snapshot as well, so an
-  // owner's in-place style refresh is still recognized as a new base.
-  if (
-    ownsCurrentColor &&
-    Math.abs(nextFactor - state.lastAppliedFactor) <= 0.002 &&
-    state.floor === sampler?.floor
-  ) {
-    return;
-  }
-  if (!ownsCurrentColor) {
-    if (!state) {
-      state = {
-        base: copyColor(current) || { red: 1, green: 1, blue: 1, alpha: 1 },
-        lastAppliedFactor: Number.NaN,
-      };
-      if (!slots) primitiveColors.set(visual, (slots = Object.create(null)));
-      slots[property] = state;
-    } else {
-      state.base.red = current?.red ?? 1;
-      state.base.green = current?.green ?? 1;
-      state.base.blue = current?.blue ?? 1;
-      state.base.alpha = current?.alpha ?? 1;
-    }
-    state.undefinedBase = current === undefined;
-  }
-  const next = state.lastAppliedColor || copyColor(state.base);
-  if (!next) return;
-  const tint =
-    property === 'outlineColor' || property === 'backgroundColor'
-      ? state.base
-      : sampler
-        ? sampler.tint(state.base, nextFactor, next)
-        : cyberSonarTintColor(state.base, nextFactor);
-  next.red = tint.red * (opaque ? nextFactor : 1);
-  next.green = tint.green * (opaque ? nextFactor : 1);
-  next.blue = tint.blue * (opaque ? nextFactor : 1);
-  // Keep models in their owner's opaque/translucent render pass. Dimming RGB
-  // avoids rebuilding model draw commands twice on every sector crossing.
-  next.alpha = state.base.alpha * (opaque ? 1 : nextFactor);
-  visual[property] = next;
-  state.appliedColor = visual[property];
-  state.lastAppliedColor = next;
-  state.lastAppliedFactor = nextFactor;
-  state.floor = sampler?.floor;
 }
 
 /** One settings read and one clock/viewport calculation per paint, not contact. */
@@ -408,48 +299,6 @@ export function applyCyberSonarSettings(
   return next;
 }
 
-const cyberSonarDimFactor = (root = globalThis.document?.documentElement) =>
-  readCyberSonarSettings(root).opacity / 100;
-
-const cyberSonarLabelDimFactor = (
-  root = globalThis.document?.documentElement,
-) => {
-  const contactFloor = cyberSonarDimFactor(root);
-  return Number((contactFloor + (1 - contactFloor) * 0.5).toFixed(4));
-};
-
-export function cyberSonarNeutralIntensity(
-  root = globalThis.document?.documentElement,
-) {
-  const dimFactor = cyberSonarDimFactor(root);
-  return dimFactor + (1 - dimFactor) * 0.46;
-}
-
-export function cyberSonarTintColor(
-  baseColor,
-  contactIntensity,
-  root = globalThis.document?.documentElement,
-) {
-  const dimFactor = cyberSonarDimFactor(root);
-  const remainingRange = 1 - dimFactor;
-  const coverage =
-    remainingRange <= 0.0001
-      ? 1
-      : clamp01((contactIntensity - dimFactor) / remainingRange);
-  const target = {
-    red: 0.62 + 0.38 * coverage,
-    green: 0.68 + 0.16 * coverage,
-    blue: 0.72 + 0.12 * coverage,
-  };
-  const retain = 0.28;
-  return {
-    red: (baseColor?.red ?? 1) * retain + target.red * (1 - retain),
-    green: (baseColor?.green ?? 1) * retain + target.green * (1 - retain),
-    blue: (baseColor?.blue ?? 1) * retain + target.blue * (1 - retain),
-    alpha: baseColor?.alpha ?? 1,
-  };
-}
-
 const normalizedPhaseMs = (nowMs) => {
   if (!Number.isFinite(nowMs)) return 0;
   return (
@@ -466,65 +315,6 @@ export function cyberSonarAngleDeg(nowMs) {
 /** Negative CSS animation delay that synchronizes the sector to the shared clock. */
 export function cyberSonarAnimationDelay(nowMs) {
   return `${-normalizedPhaseMs(nowMs)}ms`;
-}
-
-/**
- * Brightness/alpha multiplier for one screen-projected contact.
- * Invalid projections fail open so a render edge case never hides a contact.
- */
-export function cyberSonarIntensityAtScreenPoint(
-  x,
-  y,
-  viewportWidth,
-  viewportHeight,
-  nowMs,
-  root = globalThis.document?.documentElement,
-) {
-  if (
-    ![x, y, viewportWidth, viewportHeight, nowMs].every(Number.isFinite) ||
-    viewportWidth <= 0 ||
-    viewportHeight <= 0
-  ) {
-    return 1;
-  }
-
-  const centerX = viewportWidth / 2;
-  const centerY = viewportHeight / 2;
-  const dx = x - centerX;
-  const dy = y - centerY;
-  const settings = readCyberSonarSettings(root);
-  const dimFactor = cyberSonarDimFactor(root);
-  const radius =
-    Math.min(viewportWidth * 0.4, viewportHeight * 0.52) *
-    (settings.range / 100);
-  const distance = Math.hypot(dx, dy);
-
-  if (distance > radius) return dimFactor;
-  if (distance < radius * 0.025) return 1;
-
-  const pointAngle = ((Math.atan2(dx, -dy) * 180) / Math.PI + 360) % 360;
-  const delta = (pointAngle - cyberSonarAngleDeg(nowMs) + 360) % 360;
-  const sweepDeg = settings.sector;
-  const featherDeg = Math.min(CYBER_SONAR_FEATHER_DEG, sweepDeg * 0.42);
-  if (delta > sweepDeg) return dimFactor;
-
-  const featherStart = sweepDeg - featherDeg;
-  const coverage =
-    delta <= featherStart ? 1 : clamp01((sweepDeg - delta) / featherDeg);
-  return dimFactor + (1 - dimFactor) * coverage;
-}
-
-/** Preserve label legibility while keeping it synchronized with the stronger contact sweep. */
-export function cyberSonarLabelIntensity(
-  contactIntensity,
-  root = globalThis.document?.documentElement,
-) {
-  const dimFactor = cyberSonarDimFactor(root);
-  const labelDimFactor = cyberSonarLabelDimFactor(root);
-  const remainingRange = 1 - dimFactor;
-  if (remainingRange <= 0.0001) return 1;
-  const normalized = clamp01((contactIntensity - dimFactor) / remainingRange);
-  return labelDimFactor + (1 - labelDimFactor) * normalized;
 }
 
 /**
