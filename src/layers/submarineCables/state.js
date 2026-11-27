@@ -48,10 +48,7 @@ export function createState({ sweepClock, overlayHost }) {
 
   state._surfaceItems = [];
 
-  /**
-   * Landing pins drawn but not added to their set yet, in view first; added
-   * a few per frame (CABLE_LANDING_REVEALS_PER_FRAME).
-   */
+  /** Landing pins drawn but not in their set yet, in view first. */
 
   state._pendingLandingReveals = [];
 

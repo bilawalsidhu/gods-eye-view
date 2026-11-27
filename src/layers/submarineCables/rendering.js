@@ -374,6 +374,7 @@ export function createRendering({ state }) {
   /**
    * Draw both sources' features, replacing what was drawn. Items start
    * culled for the camera as it is, so the first sweep has nothing to redo.
+   * Landing pins go in one batch now and the rest over the next frames.
    */
   function drawFeatures(cableFeatures, landingFeatures) {
     const out = {
@@ -405,13 +406,14 @@ export function createRendering({ state }) {
     sets.lines.set(out.lines);
     sets.fills.set(out.fills);
     state._pendingLandingReveals = inViewFirst(out.pins);
-    sets.pins.set([]);
-    revealLandingMarkers();
+    sets.pins.set(
+      state._pendingLandingReveals.splice(0, CABLE_LANDING_REVEALS_PER_FRAME),
+    );
     sets.stems.set(out.references.map((record) => record.stem));
     sets.references.set(out.references.map((record) => record.point));
   }
 
-  /** Pins in view from the camera as it is first, then the rest. */
+  /** In view first, judged once from the camera at draw time; later moves do not reorder. */
   function inViewFirst(pins) {
     const eye = state._viewer && cameraOf(state._viewer).pose()?.position;
     if (!eye) return pins;
@@ -426,9 +428,9 @@ export function createRendering({ state }) {
   }
 
   /**
-   * Add the next few landing pins to their set, and ask for another frame
-   * while any are left. Called after a draw and then once per rendered
-   * frame, so a parked camera costs nothing once the list is empty.
+   * Add the next few landing pins to their set, once per rendered frame. The
+   * scene renders on demand, so while any are left this asks for the next
+   * frame; otherwise a parked camera would stop the reveal.
    */
   function revealLandingMarkers() {
     const pending = state._pendingLandingReveals;

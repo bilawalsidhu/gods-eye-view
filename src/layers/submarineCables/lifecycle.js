@@ -40,13 +40,12 @@ export function createLifecycle({ state, parts, source, mapStackEventTarget }) {
       };
       if (!state._preRenderRemover) {
         state._preRenderRemover = frameOf(viewer).on('preRender', () => {
+          if (!state._enabled || !state._loaded) return;
+          parts.rendering.revealLandingMarkers();
           // The camera is handed to the gate so tracked/orbit cameras — which
           // never emit moveEnd — reach the motion fallback. No render is
           // requested for a fallback sweep: it only fires while the camera is
           // already moving, so frames are flowing by construction.
-          if (!state._enabled || !state._loaded) return;
-          // Landing pins left over from the draw, a few per frame.
-          parts.rendering.revealLandingMarkers();
           if (!state._referenceSweepGate.shouldRun(eye)) return;
           parts.rendering.updateReferenceVisibility();
         });

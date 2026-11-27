@@ -65,12 +65,10 @@ export const CABLE_LABEL_DEPTH_DECISION = Object.freeze({
 });
 
 /**
- * Landing pins added to their set per rendered frame. Each one is a
- * ground-clamped billboard, and Cesium reads the terrain height when it
- * creates one. Adding all 1,917 in the frame after the layer was switched on
- * did those reads in a single task (measured 1.2 s on a loaded globe); a few
- * dozen per frame keeps each frame short and the pins still fill in within a
- * second.
+ * Landing pins added to their set per rendered frame. A pin without a
+ * height is a ground-clamped billboard, and Cesium reads the terrain height
+ * synchronously as it creates one, so adding every pin at once is one long
+ * task. The bundled ~1,900 pins take about 40 frames.
  */
 
 export const CABLE_LANDING_REVEALS_PER_FRAME = 48;

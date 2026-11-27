@@ -10001,11 +10001,11 @@ Cesium's multipart suffixes. Each segment gets its own feature's styling, click
 destination and horizon-culling reference, and each source feature has one
 reference stem. The source collections are not modified.
 
-Landing pins are ground-clamped billboards, and Cesium reads the terrain
-height as it creates each one. A load adds them to the pin set 48 per
-rendered frame (`CABLE_LANDING_REVEALS_PER_FRAME`), those in view from the
-camera first, so switching the layer on does not do every read in one task;
-a disable drops the ones still waiting.
+Landing pins without a height are ground-clamped billboards, and Cesium
+reads the terrain height as it creates each one. A load adds the pins to
+their set `CABLE_LANDING_REVEALS_PER_FRAME` per rendered frame, those in
+view from the camera first, so switching the layer on does not do every
+read in one task; a disable drops the ones still waiting.
 
 Natural Earth regions and neighborhood polygon lookup are package exports.
 Their existing lazy loaders, retry behavior, bundled datasets and attribution

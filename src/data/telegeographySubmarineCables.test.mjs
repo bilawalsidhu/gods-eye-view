@@ -1378,8 +1378,9 @@ test('landing pins go into their set a few per frame, those in view first', asyn
   // The camera looks down on the North Atlantic (-40°, 35°): the far-side
   // pins come first in the source, so only the in-view ordering puts them
   // last.
-  const far = CABLE_LANDING_REVEALS_PER_FRAME;
-  const near = CABLE_LANDING_REVEALS_PER_FRAME + 10;
+  const batch = CABLE_LANDING_REVEALS_PER_FRAME;
+  const far = batch;
+  const near = batch + 10;
   const point = (i, lon, lat) => ({
     type: 'Feature',
     id: `landing-${i}`,
@@ -1399,29 +1400,44 @@ test('landing pins go into their set a few per frame, those in view first', asyn
   env.viewer.scene.requestRender = () => {
     renderRequests++;
   };
-  await env.load();
+  // In view first, each group in source order.
+  const order = [
+    ...Array.from({ length: near }, (_, i) => far + i),
+    ...Array.from({ length: far }, (_, i) => i),
+  ];
   const pins = env.set('pins');
   // Pin ids are `landing-point:<feature index>:pin:<part>`.
-  const inView = (id) => Number(id.split(':')[1]) >= far;
-  assert.equal(pins.items.size, CABLE_LANDING_REVEALS_PER_FRAME);
-  assert.ok([...pins.items.keys()].every(inView), 'pins in view go first');
+  const drawn = () =>
+    [...pins.items.keys()].map((id) => Number(id.split(':')[1]));
 
+  await env.load();
+  assert.deepEqual(drawn(), order.slice(0, batch), 'pins in view go first');
   renderRequests = 0;
   env.raiseSweep();
-  assert.equal(pins.items.size, CABLE_LANDING_REVEALS_PER_FRAME * 2);
+  assert.deepEqual(drawn(), order.slice(0, batch * 2));
   assert.ok(renderRequests > 0, 'another frame is asked for');
-  assert.equal([...pins.items.keys()].filter(inView).length, near);
-  env.raiseSweep();
-  assert.equal(pins.items.size, near + far, 'every pin ends up drawn');
-
   renderRequests = 0;
   env.raiseSweep();
-  assert.equal(renderRequests, 0, 'a finished reveal asks for no frames');
+  assert.deepEqual(drawn(), order, 'every pin ends up drawn');
+  assert.equal(
+    renderRequests,
+    0,
+    'the frame that drains the queue asks for no more',
+  );
 
-  // A disable drops what was still queued; the next enable starts over.
+  // A disable mid-reveal empties the set and reveals nothing more; the next
+  // enable (from the cached JSON) starts over.
+  env.layer.disable();
+  env.layer.enable(env.viewer);
+  assert.deepEqual(drawn(), order.slice(0, batch));
   env.layer.disable();
   assert.equal(pins.items.size, 0);
   env.raiseSweep();
   assert.equal(pins.items.size, 0);
+  env.layer.enable(env.viewer);
+  assert.deepEqual(drawn(), order.slice(0, batch), 'only pins in view again');
+  env.raiseSweep();
+  env.raiseSweep();
+  assert.deepEqual(drawn(), order, 'every pin drawn again');
   env.layer.destroy();
 });
