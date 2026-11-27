@@ -206,6 +206,8 @@ const HIDDEN_FACTS = new Set([
   'emergencySource',
   'emergencyKind',
   'military',
+  // Shown as the card's paragraph instead.
+  'description',
   // Repeats of what another fact already says, and feed bookkeeping.
   'parts',
   // Controls whether a sighting's position can be shared.
@@ -727,7 +729,12 @@ export function recordFacts(
     ...Object.keys(record || {}).filter((field) => !FACT_ORDER.includes(field)),
   ];
   for (const field of fields) {
-    if (field.startsWith('__gev') || HIDDEN_FACTS.has(field) || seen.has(field))
+    if (
+      field.startsWith('__gev') ||
+      HIDDEN_FACTS.has(field) ||
+      seen.has(field) ||
+      linksAs(field, record[field])
+    )
       continue;
     seen.add(field);
     // A US AQI reads as the Weather card shows it: above 500 it is "500+"
@@ -777,6 +784,51 @@ function propertyFacts(properties) {
   return recordFacts(keep);
 }
 
+/** Longest description a card shows, in characters. */
+const MAX_DESCRIPTION = 1000;
+
+/**
+ * A record's description (or, for a context-store record, its feature's), as
+ * the card's paragraph, or null.
+ */
+function recordDescription(record, properties) {
+  const said = (
+    text(record?.description) || text(properties?.description)
+  ).replace(/\s+/g, ' ');
+  if (!said) return null;
+  const letters = Array.from(said);
+  return letters.length > MAX_DESCRIPTION
+    ? `${letters
+        .slice(0, MAX_DESCRIPTION - 1)
+        .join('')
+        .trimEnd()}…`
+    : said;
+}
+
+/** A Wikipedia reference's language and title ("en:MAREA", or a title). */
+function wikipediaParts(value) {
+  const wikipedia = text(value);
+  const [lang, ...title] = wikipedia.includes(':')
+    ? wikipedia.split(':')
+    : ['en', wikipedia];
+  // The language part becomes the link's host, so only a language code is
+  // let through.
+  return wikipedia && /^[a-z]{2,3}(-[a-z0-9]+)*$/.test(lang)
+    ? { lang, title: title.join(':') }
+    : null;
+}
+
+/**
+ * Whether a field is one of the card's links (recordLinks) rather than a fact:
+ * a Wikipedia article, a Wikidata item or a web address.
+ */
+function linksAs(field, value) {
+  if (field === 'wikipedia') return Boolean(wikipediaParts(value));
+  if (field === 'wikidata') return /^Q\d+$/.test(text(value));
+  if (field === 'website') return /^https?:\/\//.test(text(value));
+  return false;
+}
+
 /** Reference links a record carries. */
 function recordLinks(record, properties) {
   const flat = {
@@ -787,29 +839,22 @@ function recordLinks(record, properties) {
     ...(record || {}),
   };
   const links = [];
-  const wikipedia = text(flat.wikipedia);
-  if (wikipedia) {
-    const [lang, ...title] = wikipedia.includes(':')
-      ? wikipedia.split(':')
-      : ['en', wikipedia];
-    // The language part becomes the link's host, so only a language code is
-    // let through.
-    if (/^[a-z]{2,3}(-[a-z0-9]+)*$/.test(lang))
-      links.push({
-        kind: 'wikipedia',
-        label: msg('Wikipedia'),
-        href: `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(title.join(':').replace(/ /g, '_'))}`,
-      });
-  }
+  const wikipedia = wikipediaParts(flat.wikipedia);
+  if (wikipedia)
+    links.push({
+      kind: 'wikipedia',
+      label: msg('Wikipedia'),
+      href: `https://${wikipedia.lang}.wikipedia.org/wiki/${encodeURIComponent(wikipedia.title.replace(/ /g, '_'))}`,
+    });
   const wikidata = text(flat.wikidata);
-  if (/^Q\d+$/.test(wikidata))
+  if (linksAs('wikidata', wikidata))
     links.push({
       kind: 'wikidata',
       label: msg('Wikidata'),
       href: `https://www.wikidata.org/wiki/${wikidata}`,
     });
   const website = text(flat.website);
-  if (/^https?:\/\//.test(website))
+  if (linksAs('website', website))
     links.push({ kind: 'website', label: msg('Website'), href: website });
   const geolocationLabel = text(record?.geolocation?.label);
   const geolocationHref = text(record?.geolocation?.href);
@@ -1375,6 +1420,9 @@ export function describeEntity(
             }
           : null,
     observedAgeMs: fromRecord?.observedAgeMs ?? null,
+    // What the item's data says it is, as a paragraph; null when it says
+    // nothing.
+    description: recordDescription(record, stored?.properties),
     links: recordLinks(record, stored?.properties),
     observationHref:
       layerId === 'wildlife-sightings' &&

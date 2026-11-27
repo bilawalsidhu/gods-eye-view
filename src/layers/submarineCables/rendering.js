@@ -1,3 +1,4 @@
+import { claimSelection, releaseSelection } from '../../data/clickSelect.js';
 import { fromDegrees, fromRadians } from '../../geo/ellipsoid.js';
 import { horizonFrom } from '../../geo/horizon.js';
 import { densifyRhumb } from '../../geo/rhumb.js';
@@ -11,6 +12,7 @@ import {
 } from '../../render/rendererOf.js';
 import {
   clampLabel,
+  createCableNameCard,
   createCableOverlayEntry,
   updateCableReferenceStem,
   selectCableReferenceLabelWinners,
@@ -20,6 +22,7 @@ import { featureLabel, featureReference, geometryParts } from './geometry.js';
 import { cablePinImage } from './pin.js';
 import {
   CABLE_LANDING_REVEALS_PER_FRAME,
+  CABLE_LAYER_ID,
   CABLE_LINE_GRANULARITY_M,
   CABLE_PIN_SIZE_PX,
   CABLE_PIN_SIZES,
@@ -340,6 +343,7 @@ export function createRendering({ state }) {
       tip,
       reference,
       kind,
+      featureId: info.featureId,
       label: clampLabel(label),
       visible: true,
       distanceM: Infinity,
@@ -377,6 +381,8 @@ export function createRendering({ state }) {
    * Landing pins go in one batch now and the rest over the next frames.
    */
   function drawFeatures(cableFeatures, landingFeatures) {
+    // Redrawn features are new records: a card from before puts itself away.
+    select(null);
     const out = {
       lines: [],
       fills: [],
@@ -438,6 +444,17 @@ export function createRendering({ state }) {
     state._sets.pins.upsert(pending.splice(0, CABLE_LANDING_REVEALS_PER_FRAME));
     if (pending.length)
       findFrame(state._viewer)?.requestRender('submarine-cables');
+  }
+
+  /**
+   * Whether a hit is on the layer's lines or areas, which lie on the ground
+   * where they are clicked (not a pin, stem or reference standing above it).
+   */
+  function onSurface(hit) {
+    const sets = state._sets;
+    return Boolean(
+      hit && sets && (hit.set === sets.lines.id || hit.set === sets.fills.id),
+    );
   }
 
   /** What a pick on one of the layer's sets names, or null. */
@@ -505,31 +522,84 @@ export function createRendering({ state }) {
     if (!state._enabled || !state._viewer) return;
     if (!sweep()) return;
     const winners = selectCableReferenceLabelWinners(state._referenceRecords);
-    let changed = winners.length !== state._lastPublishedCount;
     for (let i = 0; i < winners.length; i++) {
       const record = winners[i];
-      const priority = cableReferencePriority(record.distanceM);
-      record.entry.priority = priority;
+      record.entry.priority = cableReferencePriority(record.distanceM);
       state._publishScratch[i] = record.entry;
-      if (
-        !changed &&
-        (state._lastPublishedIds[i] !== record.entry.id ||
-          state._lastPublishedPriorities[i] !== priority)
-      ) {
-        changed = true;
-      }
     }
     state._publishScratch.length = winners.length;
     state._referenceLabelCount = winners.length;
+    if (state._selected && selectedRecord())
+      state._publishScratch.push(state._selected.card);
+    const count = state._publishScratch.length;
+    let changed = count !== state._lastPublishedCount;
+    for (let i = 0; !changed && i < count; i++) {
+      changed =
+        state._lastPublishedIds[i] !== state._publishScratch[i].id ||
+        state._lastPublishedPriorities[i] !== state._publishScratch[i].priority;
+    }
     if (!changed) return;
     state._overlayPublisher.publish(state._publishScratch);
-    state._lastPublishedCount = winners.length;
-    for (let i = 0; i < winners.length; i++) {
+    state._lastPublishedCount = count;
+    for (let i = 0; i < count; i++) {
       state._lastPublishedIds[i] = state._publishScratch[i].id;
       state._lastPublishedPriorities[i] = state._publishScratch[i].priority;
     }
-    state._lastPublishedIds.length = winners.length;
-    state._lastPublishedPriorities.length = winners.length;
+    state._lastPublishedIds.length = count;
+    state._lastPublishedPriorities.length = count;
+  }
+
+  /** The reference record of the selected cable or landing point, or null. */
+  function selectedRecord() {
+    const selected = state._selected;
+    if (!selected) return null;
+    return (
+      state._referenceRecords.find(
+        (record) =>
+          record.kind === selected.kind &&
+          record.featureId === selected.featureId,
+      ) ?? null
+    );
+  }
+
+  let selections = 0;
+  /**
+   * Show the name card of what a click named (a pick record, as `pickInfo`
+   * gives it) at `position`, where the click met it (ECEF), or with null,
+   * put it away.
+   */
+  function select(info, position = null) {
+    if (!info && !state._selected) return;
+    const previous = state._selected;
+    state._selected =
+      info?.featureId != null && position
+        ? {
+            kind: info.kind,
+            featureId: info.featureId,
+            card: createCableNameCard({
+              id: `${info.kind}:${info.featureId}:${++selections}`,
+              kind: info.kind,
+              label: clampLabel(info.label),
+              position,
+            }),
+          }
+        : null;
+    // The one map selection: naming a cable makes every other layer let its
+    // selected thing go; putting the card away lets the cable's go.
+    if (state._selected)
+      claimSelection(CABLE_LAYER_ID, selectionId(state._selected));
+    else if (previous) releaseSelection(CABLE_LAYER_ID, selectionId(previous));
+    // The card may move along the same cable: publish it whatever the ids.
+    resetPublishSignature();
+    updateReferenceVisibility();
+  }
+  /**
+   * What the selection is named by: the selected item's record id
+   * (records.js), `cable:<id>` or `landing:<id>`, the id Nearby and search
+   * know it by.
+   */
+  function selectionId({ kind, featureId }) {
+    return `${kind === 'landing-point' ? 'landing' : 'cable'}:${featureId}`;
   }
   return {
     attach,
@@ -539,8 +609,10 @@ export function createRendering({ state }) {
     updateVisibility,
     applyCableClassification,
     drawFeatures,
+    onSurface,
     pickInfo,
     revealLandingMarkers,
+    select,
     updateReferenceVisibility,
   };
 }

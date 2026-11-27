@@ -331,6 +331,22 @@ export function createControls({ state: layerState, services, parts, source }) {
     },
 
     /**
+     * Picks a camera as a click on it does: it becomes the active camera, its
+     * feed shown in the camera panel. `center: false` leaves the view to the
+     * caller (a pick from a list frames it); otherwise the view flies to it.
+     * @param {string} cameraId
+     * @param {{origin?: string, center?: boolean}} [options]
+     * @returns {boolean} True when the camera is loaded and now active.
+     */
+    pickById(cameraId, { center = true } = {}) {
+      if (!layerState._enabled || !cameraId) return false;
+      const result = parts.selection.setActiveCamera(String(cameraId));
+      if (result === CCTV_ACTIVATION_RESULT.NOT_FOUND) return false;
+      if (center) parts.navigation.focusCamera(String(cameraId), 1.8);
+      return true;
+    },
+
+    /**
      * Flies the viewer to a specific camera.
      * @param {string} cameraId - Camera ID to focus on.
      * @param {number} [durationSec=2.2] - Flight duration in seconds.

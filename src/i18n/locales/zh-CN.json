@@ -4069,7 +4069,6 @@
   "Opens chat": "打开聊天",
   "Go to {place}": "前往{place}",
   "Place or coordinates": "地点或坐标",
-  "Search “{query}” as a place anyway": "仍将“{query}”作为地点搜索",
   "Turn on": "开启",
   "Turn off": "关闭",
   "Command": "命令",
@@ -4110,10 +4109,9 @@
   "Search places, layers and things on the map, or ask GEV": "搜索地点、图层和地图上的对象，或向 GEV 提问",
   "Search places, layers, flights… or ask GEV  ·  > for commands": "搜索地点、图层、航班… 或问 GEV · > 输入命令",
   "No matching command": "没有匹配的命令",
-  "Looks private, so nothing is searched or sent": "疑似隐私信息，因此不会搜索或发送",
   "Bilawal on YouTube": "Bilawal 的 YouTube",
   "BROWSE STORIES": "浏览 STORIES",
-  "ENTER GOD MODE": "进入上帝模式",
+  "ENTER DEFAULT MODE": "进入默认模式",
   "Go deeper": "深入了解",
   "The studio behind GEV": "GEV 背后的工作室",
   "Visual presets": "视觉预设",
@@ -4124,7 +4122,7 @@
   "A cleaner, readable view where every value shows its source. For research and reporting.": "更简洁易读的视图，每个数值都标明来源。适合研究和报道。",
   "Keyhole HUD": "锁孔 HUD",
   "Analyst": "分析师",
-  "God": "上帝",
+  "Default": "默认",
   "COMING SOON": "即将推出",
   "More from Halfpixel": "更多来自 Halfpixel",
   "Start with": "从这里开始",
@@ -4435,5 +4433,7 @@
   "Low-cost sensor": "低成本传感器",
   "{name} · sensor": "{name} · 传感器",
   "Reference monitor": "参考监测仪",
-  "Needs {envVars} — add one in Provider Settings": "需要 {envVars}，请在服务商设置中添加其中一个"
+  "Needs {envVars} — add one in Provider Settings": "需要 {envVars}，请在服务商设置中添加其中一个",
+  "CABLE \u00b7 {name}": "海缆 · {name}",
+  "LANDING POINT \u00b7 {name}": "登陆点 · {name}"
 }

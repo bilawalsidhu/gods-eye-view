@@ -4369,7 +4369,6 @@
   "Opens chat": "Открывает чат",
   "Go to {place}": "Перейти к {place}",
   "Place or coordinates": "Место или координаты",
-  "Search “{query}” as a place anyway": "Всё равно искать «{query}» как место",
   "Turn on": "Включить",
   "Turn off": "Выключить",
   "Command": "Команда",
@@ -4419,10 +4418,9 @@
   "Search places, layers and things on the map, or ask GEV": "Ищите места, слои и объекты на карте или спросите GEV",
   "Search places, layers, flights… or ask GEV  ·  > for commands": "Ищите места, слои, рейсы… или спросите GEV · > для команд",
   "No matching command": "Подходящая команда не найдена",
-  "Looks private, so nothing is searched or sent": "Похоже на личные данные, поэтому ничего не ищется и не отправляется",
   "Bilawal on YouTube": "Билавал на YouTube",
   "BROWSE STORIES": "СМОТРЕТЬ STORIES",
-  "ENTER GOD MODE": "ВОЙТИ В РЕЖИМ БОГА",
+  "ENTER DEFAULT MODE": "ВОЙТИ В СТАНДАРТНЫЙ РЕЖИМ",
   "Go deeper": "Глубже",
   "The studio behind GEV": "Студия, создавшая GEV",
   "Visual presets": "Визуальные пресеты",
@@ -4433,7 +4431,7 @@
   "A cleaner, readable view where every value shows its source. For research and reporting.": "Более чистый и читаемый вид, где у каждого значения указан источник. Для исследований и отчётов.",
   "Keyhole HUD": "HUD-скважина",
   "Analyst": "Аналитик",
-  "God": "Бог",
+  "Default": "Стандартный",
   "COMING SOON": "СКОРО",
   "More from Halfpixel": "Ещё от Halfpixel",
   "Start with": "Начать с",
@@ -4750,5 +4748,7 @@
   "Low-cost sensor": "Недорогой датчик",
   "{name} · sensor": "{name} · датчик",
   "Reference monitor": "Эталонный прибор",
-  "Needs {envVars} — add one in Provider Settings": "Нужен {envVars} — добавьте любой из них в «Настройках провайдеров»"
+  "Needs {envVars} — add one in Provider Settings": "Нужен {envVars} — добавьте любой из них в «Настройках провайдеров»",
+  "CABLE \u00b7 {name}": "КАБЕЛЬ · {name}",
+  "LANDING POINT \u00b7 {name}": "ТОЧКА ВЫХОДА НА БЕРЕГ · {name}"
 }

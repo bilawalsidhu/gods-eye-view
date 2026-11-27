@@ -251,7 +251,8 @@ test('the rendering part draws the dots, the tracked dot and the rings through t
     assert.equal(rings.spec.pickable, false, 'ring clicks fall through');
     const ring = rings.items.get('25544');
     assert.deepEqual(ring.style, { kind: 'solid', color: [1, 1, 0, 0.6] });
-    assert.deepEqual(ring.depthFail, { kind: 'solid', color: [1, 1, 0, 0.35] });
+    // The Earth hides the part of the ring behind it: no depth-fail style.
+    assert.equal(ring.depthFail, undefined, 'no ring draws through the Earth');
     assert.equal(ring.widthPx, 2.5, 'the ISS ring is wider');
     assert.equal(ring.mode, 'geodesic');
     assert.deepEqual([...ring.positions.slice(0, 3)], [7e6, 0, 0]);

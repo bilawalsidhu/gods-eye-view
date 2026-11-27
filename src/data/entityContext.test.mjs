@@ -3,7 +3,11 @@ import assert from 'node:assert/strict';
 import { twoline2satrec } from 'satellite.js';
 import { EARTH_RADIUS_KM } from '../geoDistance.js';
 import { fromDegrees } from '../geo/ellipsoid.js';
-import { CONTEXT_LINES, contextLine } from './contextGeometry.js';
+import {
+  CONTEXT_FEATURE,
+  CONTEXT_LINES,
+  contextLine,
+} from './contextGeometry.js';
 import { createControls } from '../layers/awareness/controls.js';
 import { createControls as createInstallationControls } from '../layers/installations/controls.js';
 import { createOrbits } from '../layers/satellites/orbits.js';
@@ -1249,4 +1253,43 @@ test('installation and its Contacts record exclude each other', () => {
     { radiusKm: 25, excludeKey: contactKey },
   );
   assert.equal(list.count, 0, 'the Contacts card lists its own subject');
+});
+
+test("a feature's description is the card's paragraph, not one of its facts", () => {
+  const pier = {
+    id: 'pier-1',
+    name: 'Ferry pier',
+    lat: 47.6,
+    lon: -122.3,
+    [CONTEXT_FEATURE]: {
+      properties: {
+        description: 'Old ferry   pier,\nrebuilt 1990',
+        operator: 'Port',
+      },
+    },
+  };
+  const dm = manager({ places: { name: 'Places', records: [pier] } });
+  const card = describeEntity(dm, { layerId: 'places', id: 'pier-1' });
+  assert.equal(card.description, 'Old ferry pier, rebuilt 1990');
+  assert.equal(
+    card.facts.some((fact) => fact.field === 'description'),
+    false,
+  );
+
+  const long = 'é'.repeat(999) + '😀😀';
+  const told = describeEntity(dm, {
+    layerId: 'places',
+    id: 'told',
+    record: { id: 'told', name: 'Told', description: long },
+  });
+  assert.equal(Array.from(told.description).length, 1000);
+  assert.ok(told.description.endsWith('…'));
+  assert.equal(
+    describeEntity(dm, {
+      layerId: 'places',
+      id: 'quiet',
+      record: { id: 'quiet', name: 'Quiet' },
+    }).description,
+    null,
+  );
 });

@@ -4369,7 +4369,6 @@
   "Opens chat": "Відкриває чат",
   "Go to {place}": "Перейти до {place}",
   "Place or coordinates": "Місце або координати",
-  "Search “{query}” as a place anyway": "Усе одно шукати «{query}» як місце",
   "Turn on": "Увімкнути",
   "Turn off": "Вимкнути",
   "Command": "Команда",
@@ -4419,10 +4418,9 @@
   "Search places, layers and things on the map, or ask GEV": "Шукайте місця, шари й об’єкти на карті або запитайте GEV",
   "Search places, layers, flights… or ask GEV  ·  > for commands": "Шукайте місця, шари, рейси… або запитайте GEV · > для команд",
   "No matching command": "Відповідної команди не знайдено",
-  "Looks private, so nothing is searched or sent": "Схоже на особисті дані, тому нічого не шукається й не надсилається",
   "Bilawal on YouTube": "Білавал на YouTube",
   "BROWSE STORIES": "ПЕРЕГЛЯНУТИ STORIES",
-  "ENTER GOD MODE": "УВІЙТИ В РЕЖИМ БОГА",
+  "ENTER DEFAULT MODE": "УВІЙТИ В СТАНДАРТНИЙ РЕЖИМ",
   "Go deeper": "Глибше",
   "The studio behind GEV": "Студія, що створила GEV",
   "Visual presets": "Візуальні пресети",
@@ -4433,7 +4431,7 @@
   "A cleaner, readable view where every value shows its source. For research and reporting.": "Чистіший і зручний для читання вигляд, де кожне значення показує своє джерело. Для досліджень і звітів.",
   "Keyhole HUD": "HUD-шпарина",
   "Analyst": "Аналітик",
-  "God": "Бог",
+  "Default": "Стандартний",
   "COMING SOON": "НЕЗАБАРОМ",
   "More from Halfpixel": "Більше від Halfpixel",
   "Start with": "Почати з",
@@ -4750,5 +4748,7 @@
   "Low-cost sensor": "Недорогий датчик",
   "{name} · sensor": "{name} · датчик",
   "Reference monitor": "Еталонний прилад",
-  "Needs {envVars} — add one in Provider Settings": "Потрібен {envVars} — додайте будь-який із них у «Налаштуваннях постачальників»"
+  "Needs {envVars} — add one in Provider Settings": "Потрібен {envVars} — додайте будь-який із них у «Налаштуваннях постачальників»",
+  "CABLE \u00b7 {name}": "КАБЕЛЬ · {name}",
+  "LANDING POINT \u00b7 {name}": "ТОЧКА ВИХОДУ НА БЕРЕГ · {name}"
 }

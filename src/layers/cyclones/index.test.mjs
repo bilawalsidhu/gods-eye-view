@@ -140,8 +140,7 @@ test('map selection yields to pointer owners and owns only its enabled handler',
   };
   bindFakeCesiumCamera(viewer);
   recordHandlers(viewer, handlers);
-  layer.init(viewer);
-  layer.setRowControlsListener(() => notices++);
+  layer.init(viewer, { panel: { invalidate: () => notices++ } });
   assert.equal(handlers.length, 0, 'disabled module installs no handler');
   layer.enable();
   layer.enable();

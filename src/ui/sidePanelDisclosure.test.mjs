@@ -173,3 +173,32 @@ test('PanelChrome reads a panel’s state from its store, not classes written ou
     globalThis.document = prior;
   }
 });
+
+test('presenting a panel open repaints the content it owes before anything reads it', async () => {
+  const { createPinia } = await import('pinia');
+  const { usePanelChromeStore } = await import('./stores/panelChrome.js');
+  const { onPanelOpening } = await import('./rail/panelContent.js');
+  const store = usePanelChromeStore(createPinia());
+  const owner = {
+    _chromeStore: store,
+    _chromeToken: store.connect({}),
+    _shownPanel: PanelChrome.prototype._shownPanel,
+  };
+  const panel = {
+    id: 'data-panel',
+    classList: { contains: (name) => name === 'collapsed' },
+  };
+  let flushes = 0;
+  const off = onPanelOpening(panel, () => {
+    flushes++;
+    // The store already holds the open state when the content catches up.
+    assert.equal(store.panels['data-panel'].collapsed, false);
+  });
+  PanelChrome.prototype._presentPanel.call(owner, panel, { collapsed: true });
+  assert.equal(flushes, 0, 'closing owes nothing');
+  PanelChrome.prototype._presentPanel.call(owner, panel, { collapsed: false });
+  assert.equal(flushes, 1);
+  off();
+  PanelChrome.prototype._presentPanel.call(owner, panel, { collapsed: false });
+  assert.equal(flushes, 1, 'a released surface is not called');
+});

@@ -184,8 +184,7 @@ test('STARLINK reports loading, then ACTIVE only once the points exist', async (
   const refreshes = [];
   try {
     globalThis.fetch = async () => ({ ok: true, text: async () => DENSE_TLE });
-    _setDenseCatalogStateForTest({});
-    satellitesLayer.setRowControlsListener(() => refreshes.push(satellitesLayer.getRowControls()));
+    _setDenseCatalogStateForTest({ panel: { invalidate: () => refreshes.push(satellitesLayer.getRowControls()) } });
 
     satellitesLayer.setParams({ catalog: 'dense' });
     // The param flips synchronously, but the shell has not arrived yet — the
@@ -220,9 +219,8 @@ test('a failed STARLINK load reverts the mode rather than leaving an active chip
   console.warn = () => {};
   try {
     globalThis.fetch = async () => ({ ok: false, status: 502 });
-    _setDenseCatalogStateForTest({});
     let pushes = 0;
-    satellitesLayer.setRowControlsListener(() => { pushes += 1; });
+    _setDenseCatalogStateForTest({ panel: { invalidate: () => { pushes += 1; } } });
 
     satellitesLayer.setParams({ catalog: 'dense' });
     const settled = await settleChip();
@@ -380,6 +378,10 @@ test('a catalog rebuild refreshes the detection overlay class strings', async ()
     await satellitesLayer.update(viewer);
     const first = satellitesLayer.getDetectableObjects().find((o) => o.sourceId === 33333);
     assert.ok(first, 'the seeded satellite is collectable');
+    // Collected on every paint: one array refilled, each satellite's own object.
+    const list = satellitesLayer.getDetectableObjects();
+    assert.equal(satellitesLayer.getDetectableObjects(), list);
+    assert.equal(list.find((o) => o.sourceId === 33333), first);
     // A payload with no SATCAT record and no recognisable name takes its
     // group's class (src/layers/satellites/classes.js).
     assert.equal(first.klass, 'TELECOM');
