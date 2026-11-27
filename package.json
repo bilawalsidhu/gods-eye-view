@@ -86,11 +86,11 @@
     "vue-i18n": "^11.4.15"
   },
   "devDependencies": {
-    "@happy-dom/global-registrator": "^20.14.6",
+    "@happy-dom/global-registrator": "^21.0.4",
     "@vitejs/plugin-vue": "^5.2.4",
-    "@vue/test-utils": "^2.5.1",
+    "@vue/test-utils": "^2.6.0",
     "flag-icons": "7.5.0",
-    "happy-dom": "^20.14.6",
+    "happy-dom": "^21.0.4",
     "opencc-js": "1.4.2",
     "prettier": "3.9.6",
     "puppeteer": "^25.16.0",
@@ -357,5 +357,9 @@
     "./fleet": "./src/fleet/index.js",
     "./layers/wildlife-sightings": "./src/layers/wildlifeSightings/index.js",
     "./layers/wildlife-sightings/source": "./src/layers/wildlifeSightings/source.js"
+  },
+  "overrides": {
+    "glob": "^14.0.6",
+    "minimatch": "^11.0.9"
   }
 }
