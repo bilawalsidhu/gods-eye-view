@@ -2526,8 +2526,9 @@ trail, a route. A layer under another layer's card or label
 treats the click as empty space, so a tracked aircraft stays tracked and a
 selection stays selected. Context (`src/ui/entityContextBridge.js`) names
 nothing under a card. A layer can claim a target it paints outside the overlay's
-entries (`registerClickClaim`) where no card or label is on top. A CCTV count
-claims each click that zooms to it, so a tracked aircraft stays tracked.
+entries (`registerClickClaim`) where no card or label is on top. A CCTV or Datacenters count
+claims each click that zooms to it, so a tracked aircraft stays tracked. Where
+two layers' counts overlap, the one painted on top takes the click.
 With no card or claim on top, the scene rules are unchanged.
 World-overlay hit rectangles are what is painted on screen until the next
 paint: an overlay change (a click subscriber publishing its selection card)
@@ -4328,8 +4329,20 @@ loading keeps the result hidden; destruction aborts the fetch and rejects late
 parse/add results. Destruction and failed setup remove owned context records,
 so replacing a layer cannot retain stale entities or listeners.
 
-Datacenters and dams retain their full datasets while limiting active marker
-stems per layer: 80 at camera heights of 3,000 km or above, 200 from 200 km,
+Datacenters draw count markers instead of stems, as CCTV does: cyan rings with a
+server-rack glyph over ground cells about 44 px across, merged so none overlap.
+A lone site draws one ground-anchored marker with its footprint and card, never
+a "1" count. Below 60 m cells every site stands alone. Clicking a count frames
+its sites, approaching long groups in halves; picking a site flies no farther
+out than the eye was. Grouping measures range to the loaded globe terrain under
+each site (with the globe hidden, to the ellipsoid) and reruns when the camera
+settles, when terrain finishes loading, or, in motion, once the camera has moved
+2% of its height (at least 250 m), checked at most once a second; never per frame.
+Datacenters take no surface height samples. A site counted in a marker keeps its
+card selection and point-and-ask context while it is above the horizon.
+
+Dams retain their full datasets while limiting active marker
+stems: 80 at camera heights of 3,000 km or above, 200 from 200 km,
 and 420 below 200 km. Selection favors existing label priority and nearby
 features, retains stable choices across small camera movements, and refreshes
 during continuous motion. Disable/re-enable resets selection cleanly.

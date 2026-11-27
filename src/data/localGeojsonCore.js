@@ -14,8 +14,8 @@ import {
 } from '../render/rendererOf.js';
 import { cssColor } from '../render/color.js';
 import { fromDegrees, fromDegreesInto, toLonLatH } from '../geo/ellipsoid.js';
-import { frustumPlanes } from '../geo/frustum.js';
-import { horizonFrom } from '../geo/horizon.js';
+import { frustumPlanes, poseProjector } from '../geo/frustum.js';
+import { horizonFrom, liftedForHorizon } from '../geo/horizon.js';
 import { sphereFromPoints } from '../geo/sphere.js';
 import { densifyRhumb } from '../geo/rhumb.js';
 import { heightsOf } from '../queries/heights.js';
@@ -27,12 +27,30 @@ import {
 import { createInfrastructureOverlayEntry } from './infrastructureOverlayEntry.js';
 import { createGeojsonPins } from './geojsonPins.js';
 import { inputFor as defaultInputFor } from '../input/dispatcher.js';
-import { isUnderOtherCard } from './pickRegistry.js';
+import {
+  findPickOwner,
+  isUnderOtherCard,
+  registerClickClaim,
+  resolvePickId,
+  unregisterClickClaim,
+} from './pickRegistry.js';
 import {
   selectInfraLod,
   applyInfraEvictionGrace,
   shouldRecomputeInfraLod,
 } from './localGeojsonLod.js';
+import {
+  LOCAL_CLUSTER_CELL_PX,
+  LOCAL_CLUSTER_MIN_CELL_M,
+  LOCAL_MARKER_PX,
+  localClusterCells,
+  rackCountGlyph,
+  rackMarkerImage,
+} from './localClusters.js';
+import { isTrackingClickGesture } from './trackingClickGesture.js';
+import { isFollowing } from './followed.js';
+import { flyToCountCell } from './countCellFraming.js';
+import { createCountMarkerLane } from '../overlays/countMarkers.js';
 
 const DEFAULT_LABEL_MAX = 900;
 const DEFAULT_LABEL_GRID_PX = 132;
@@ -50,6 +68,8 @@ const LOCAL_OVERLAY_CELL_SURPLUS = 2;
 const GROUND_SAMPLE_MAX_DISTANCE_M = 75000;
 const GROUND_SAMPLE_RETRY_MS = 2000;
 const GROUND_SAMPLE_MAX_ABS_HEIGHT_M = 9000;
+/** Clusters mode: drawn-terrain reads per grouping pass, at most half off screen; the rest wait for the next pass. */
+const CLUSTER_GROUND_READS = 300;
 /**
  * Bounded give-up for the self-armed retry. Sampling can be SUPPORTED and still
  * never succeed (no sampleable surface under the feature), in which case each
@@ -323,6 +343,8 @@ let layerInstances = 0;
 
 /** The stem's starting height above the ellipsoid, until the first walk sizes it. */
 const INITIAL_TIP_HEIGHT_M = 2000;
+/** Height a picked feature's fly-to ends at, in metres above the ellipsoid. */
+const PART_FLIGHT_HEIGHT_M = 5000;
 /** A polygon's fill alpha, and the line widths, as the GeoJSON loader drew them. */
 const FILL_ALPHA = 0.3;
 const FEATURE_LINE_WIDTH_PX = 2;
@@ -638,13 +660,20 @@ function wideFov(pose) {
  * port: polygons and lines on the ground, and on each polygon or point a
  * 3D stem with a dot on its tip, sized to the camera and lifted onto the
  * sampled surface. Clicking any of it selects the feature and flies there.
+ * With `markers: 'clusters'` there are no stems: far out, sites are grouped
+ * into count markers that never overlap on screen (clicking one frames its
+ * members), and each site that stands alone draws one ground-anchored marker
+ * with its footprint. Grouping reruns when the camera settles, has moved far
+ * enough or terrain loads, never per frame.
  * @param {object} options Dataset URL (or a `loadFeatures({signal})` loader
  *   resolving to GeoJSON features), identity, appearance (an optional
- *   `featureColor(properties)` returns a CSS colour per feature) and optional
- *   adapters.
+ *   `featureColor(properties)` returns a CSS colour per feature; `markers`
+ *   is `'stems'` or `'clusters'`) and optional adapters.
  * @param {object} services Caller-owned operations; see docs/INFRASTRUCTURE-LAYERS.md.
  *   An optional `getSelectedEntityContext()` lets `replaceFeatures` keep the
- *   selection on a feature the new set still has.
+ *   selection on a feature the new set still has. Count markers paint through
+ *   an optional `registerPaintLane` (the world overlay's), faded by an
+ *   optional `keyholeAlpha`; without it every site in view draws alone.
  * @returns {object} A fresh layer implementing init/enable/disable/update/destroy/getStats/getAnalystRecords.
  * One live instance per layer id is allowed in a given viewer/context/overlay host.
  * Destroy the previous instance before replacing it. Importing creates no layers.
@@ -663,6 +692,7 @@ export function createLocalGeoJsonLayer(
     labelGridPx = DEFAULT_LABEL_GRID_PX,
     loadFeatures = null,
     featureColor = null,
+    markers = 'stems',
     inputFor = defaultInputFor,
     projectToWindow = (viewer, position) =>
       findQuery(viewer)?.project(position) ?? null,
@@ -677,8 +707,12 @@ export function createLocalGeoJsonLayer(
     governorRequestRender,
     showOsmCredit,
     hideOsmCredit,
+    registerPaintLane = null,
+    keyholeAlpha = null,
   },
 ) {
+  const clusters = markers === 'clusters';
+  const markerImage = clusters ? rackMarkerImage(color) : null;
   const setPrefix = `${id}:${++layerInstances}`;
   /** Builds made so far: each draws under set ids of its own. */
   let builds = 0;
@@ -751,6 +785,12 @@ export function createLocalGeoJsonLayer(
   let _groundRetryArms = 0;
   /** Last observed height-sampling support; null until the first walk. */
   let _lastGroundSampleCapability = null;
+  /** Clusters mode: the count painter, made on the first enable. */
+  let _counts = null;
+  /** Clusters mode: regroups when terrain loads or the surface changes. */
+  let _terrainListener = null;
+  /** Overlay source a count marker answers clicks as (`clickCard`). */
+  const countCardSource = `${id}:count`;
 
   /**
    * Coalesced one-shot: ask the governor for a frame once the retry window
@@ -835,6 +875,10 @@ export function createLocalGeoJsonLayer(
     _lastLodBudgetLimit = 0;
     _lodComputed = false;
     _lastLodProbeMs = Number.NEGATIVE_INFINITY;
+    _counts?.hide();
+    _terrainListener?.();
+    _terrainListener = null;
+    if (clusters) unregisterClickClaim(id);
     releaseDrawn();
     _overlayPublisher.hide();
     clearSelectedEntityContextForLayer(id);
@@ -894,8 +938,18 @@ export function createLocalGeoJsonLayer(
       sets.raised = draw.shapes({ id: `${prefix}:raised`, show: false });
       sets.lines = draw.lines({ id: `${prefix}:lines`, show: false });
       sets.pins = draw.icons({ id: `${prefix}:pins`, show: false });
-      sets.stems = draw.lines({ id: `${prefix}:stems`, show: false });
-      sets.dots = draw.points({ id: `${prefix}:dots`, show: false });
+      if (clusters) {
+        sets.markers = draw.icons({
+          id: `${prefix}:markers`,
+          show: false,
+          horizonCull: true,
+        });
+      } else {
+        sets.stems = draw.lines({ id: `${prefix}:stems`, show: false });
+        sets.dots = draw.points({ id: `${prefix}:dots`, show: false });
+      }
+      // Clusters mode: the record that stands for each feature.
+      const sites = new Map();
 
       const fills = [];
       const lines = [];
@@ -952,8 +1006,8 @@ export function createLocalGeoJsonLayer(
             own.rgba === rgba
               ? fillOf(style, fillColor)
               : withAlpha(own.rgba, FILL_ALPHA);
-          // The stem stands on the centre of the outer ring's bounding
-          // sphere, carried to the surface.
+          // The stem or site marker stands on the centre of the outer ring's
+          // bounding sphere, carried to the surface.
           const center = toLonLatH(
             sphereFromPoints(
               part.coordinates[0].map(([x, y, h]) =>
@@ -966,19 +1020,24 @@ export function createLocalGeoJsonLayer(
         } else {
           lon = part.coordinates[0];
           lat = part.coordinates[1];
-          part.pinClamped = part.coordinates.length <= 2;
-          part.pinPos = { lon, lat };
-          const marker = markerOf(style, own.rgba);
-          part.pin = pinMaker.pin({
-            ...marker,
-            symbol: style?.['marker-symbol'],
-          });
-          part.pinSize = marker.size;
+          // In clusters mode the site's marker stands in for its pin.
+          if (!clusters) {
+            part.pinClamped = part.coordinates.length <= 2;
+            part.pinPos = { lon, lat };
+            const marker = markerOf(style, own.rgba);
+            part.pin = pinMaker.pin({
+              ...marker,
+              symbol: style?.['marker-symbol'],
+            });
+            part.pinSize = marker.size;
+          }
         }
 
         const groundHeight = 0; // Ellipsoid surface until a scene sample lands
         const base = fromDegrees(lon, lat, groundHeight);
-        const tip = fromDegrees(lon, lat, INITIAL_TIP_HEIGHT_M);
+        const tip = clusters
+          ? copy(base)
+          : fromDegrees(lon, lat, INITIAL_TIP_HEIGHT_M);
         const recordId = part.id;
         const priority = labelPriorityFromProperties(properties, id);
         const record = {
@@ -996,7 +1055,10 @@ export function createLocalGeoJsonLayer(
           priority,
           properties,
           rgba: own.rgba,
-          visible: true,
+          // Clusters mode shows nothing until the first grouping pass.
+          visible: !clusters,
+          // Clusters mode: its site is above the horizon; its context is active while it is.
+          inView: false,
           entry: labels
             ? createLocalInfrastructureOverlayEntry({
                 id: recordId,
@@ -1016,27 +1078,42 @@ export function createLocalGeoJsonLayer(
             properties,
             latitude: Number(lat.toFixed(6)),
             longitude: Number(lon.toFixed(6)),
-            // The surface base voice targeting projects. Ground sampling
-            // re-grounds it in place, so this stays current.
+            // The surface base voice targeting projects. Ground sampling (stems) or
+            // the grouping pass's terrain reads (clusters, where the globe is drawn)
+            // re-ground it in place, so this stays current.
             targetPosition: base,
           },
         };
+        if (clusters) {
+          if (record.entry) record.entry.cullPosition = liftedForHorizon(base);
+          const key = localFeatureKey(part.feature);
+          record.site = sites.get(key) ?? record;
+          sites.set(key, record.site);
+          (record.site.partRecords ??= []).push(record);
+          record.markerImage = markerImage;
+        }
         carrier.record = record;
-        // A context record is active while its feature shows.
+        // A context record is active while its feature shows (clusters mode:
+        // while its site is in view, counted or not).
         Object.defineProperty(carrier, 'show', {
-          get: () => record.visible,
+          get: () => (clusters ? record.inView : record.visible),
           enumerable: true,
         });
         built.records.push(record);
         if (part.kind === 'polygon') fills.push(fillItem(record));
-        else pins.push(pinItem(record));
+        else if (!clusters) pins.push(pinItem(record));
       }
+      built.sites = [...sites.values()];
       sets.fills.set(fills.filter((item) => item.height === 'clampGround'));
       sets.raised.set(fills.filter((item) => item.height !== 'clampGround'));
       sets.lines.set(lines);
       sets.pins.set(pins);
-      sets.stems.set(built.records.map(stemItem));
-      sets.dots.set(built.records.map(dotItem));
+      if (clusters) {
+        sets.markers.set(built.sites.map(markerItem));
+      } else {
+        sets.stems.set(built.records.map(stemItem));
+        sets.dots.set(built.records.map(dotItem));
+      }
     } catch (error) {
       disposeSets(sets);
       throw error;
@@ -1046,21 +1123,27 @@ export function createLocalGeoJsonLayer(
 
   /**
    * Write what a walk changed: the stems and dots that moved or showed or
-   * hid, the fills and pins that showed or hid (changed in place), and the
-   * pins standing on a tip that moved.
+   * hid (in clusters mode, the site markers that showed or hid), the fills
+   * and pins that showed or hid (changed in place), and the pins standing
+   * on a tip that moved.
    */
   function writeChanges(drawn, moved, shown) {
     if (!moved.size && !shown.size) return;
     const stems = new Set([...moved, ...shown]);
-    drawn.sets.stems.upsert([...stems].map(stemItem));
-    drawn.sets.dots.upsert([...stems].map(dotItem));
+    if (clusters) {
+      const sites = [...shown].filter((record) => record.site === record);
+      if (sites.length) drawn.sets.markers.upsert(sites.map(markerItem));
+    } else {
+      drawn.sets.stems.upsert([...stems].map(stemItem));
+      drawn.sets.dots.upsert([...stems].map(dotItem));
+    }
     const fills = [];
     const pins = [];
     for (const record of stems) {
       const { kind, pinClamped } = record.part;
       if (!shown.has(record) && (kind !== 'point' || pinClamped)) continue;
       if (kind === 'polygon') fills.push(fillItem(record));
-      else pins.push(pinItem(record));
+      else if (!clusters) pins.push(pinItem(record));
     }
     const ground = fills.filter((item) => item.height === 'clampGround');
     const raised = fills.filter((item) => item.height !== 'clampGround');
@@ -1069,11 +1152,207 @@ export function createLocalGeoJsonLayer(
     if (pins.length) drawn.sets.pins.upsert(pins);
   }
 
+  /** Publish the label cohort of the records shown now. */
+  function publishOverlay(viewer, records) {
+    const canvas = canvasOf(viewer);
+    const cohort = selectLocalInfrastructureOverlayCohort(records, {
+      maxEntries: labelMax,
+      gridPx: labelGridPx,
+      width: canvas?.clientWidth || canvas?.width || 0,
+      height: canvas?.clientHeight || canvas?.height || 0,
+      cohortLimit: LOCAL_OVERLAY_COHORT_LIMIT,
+      project: (record) => projectToWindow(viewer, record.tip),
+    });
+    _overlayPublisher.publish(cohort);
+  }
+
+  /** Group again on the next walk, for the count painter's own changes. */
+  function refreshClusters(viewer) {
+    if (!_enabled) return;
+    _stemGeometryDirty = true;
+    _lastVisibilityUpdate = Number.NEGATIVE_INFINITY;
+    findFrame(viewer)?.requestRender('local-geojson');
+  }
+
+  /**
+   * Stand records on drawn terrain before grouping. Read again on a new surface,
+   * once terrain settles, or from under half the previous range (finer tiles).
+   * Never a surface sample or timer; at most CLUSTER_GROUND_READS a pass.
+   */
+  function groundClusterSites(viewer, pose, width, height, groundHeight) {
+    const globe = findGlobe(viewer);
+    const surface = globe?.surfaceVersion?.() ?? 0;
+    const settled = globe?.isSettled?.('terrain') !== false;
+    const project = poseProjector(pose, width, height);
+    const horizon = horizonFrom(pose.position);
+    let reads = CLUSTER_GROUND_READS;
+    let offscreenReads = CLUSTER_GROUND_READS / 2;
+    for (const record of _stemRecords) {
+      if (reads <= 0) break;
+      const range = distance(pose.position, record.base);
+      const read = record.groundRead;
+      if (
+        read &&
+        read.surface === surface &&
+        (read.settled || !settled) &&
+        read.rangeM <= 2 * range
+      )
+        continue;
+      if (!horizon.isPointVisible(record.base)) continue;
+      // The projector reuses its result object.
+      const screen = project(record.base);
+      if (
+        !screen ||
+        screen.x < -width ||
+        screen.x > 2 * width ||
+        screen.y < -height ||
+        screen.y > 2 * height
+      )
+        continue;
+      const onScreen =
+        screen.x >= 0 &&
+        screen.x <= width &&
+        screen.y >= 0 &&
+        screen.y <= height;
+      if (!onScreen) {
+        if (offscreenReads <= 0) continue;
+        offscreenReads--;
+      }
+      reads--;
+      const ground = groundHeight(record.lon, record.lat);
+      if (ground === null || Math.abs(ground) > GROUND_SAMPLE_MAX_ABS_HEIGHT_M)
+        continue;
+      record.groundRead = { surface, settled, rangeM: range };
+      if (ground === record.groundHeight) continue;
+      // Moves `base` in place, so the context's targetPosition follows.
+      setLocalGroundHeight(record, ground);
+      record.absoluteHeightM = ground;
+    }
+  }
+
+  /**
+   * Clusters mode: group the sites in view into count markers, show each
+   * site left alone (its marker, footprint and label) and hide the rest.
+   */
+  function clusterPass(viewer, drawn, pose, now) {
+    const canvas = canvasOf(viewer);
+    const width = canvas?.clientWidth || canvas?.width || 0;
+    const height = canvas?.clientHeight || canvas?.height || 0;
+    if (registerPaintLane)
+      _counts ??= createCountMarkerLane(
+        registerPaintLane,
+        `${setPrefix}:counts`,
+        () => refreshClusters(viewer),
+        keyholeAlpha,
+        { color, glyph: rackCountGlyph(color), iconPx: LOCAL_MARKER_PX },
+      );
+    const alone = new Set();
+    let anchors = new Map();
+    // The projector needs the whole pose; without it nothing can be placed.
+    if (width && height && pose.direction && pose.up) {
+      const groundHeight = drawnTerrainOf(viewer);
+      if (groundHeight)
+        groundClusterSites(viewer, pose, width, height, groundHeight);
+      const grouped = localClusterCells(drawn.sites, { pose, width, height });
+      const { cells, project, near } = grouped;
+      anchors = grouped.anchors;
+      if (_counts) {
+        // Sets `cell.absorbed` on each lone cell a count took in.
+        _counts.update(cells, project, groundHeight);
+        for (const cell of cells)
+          if (cell.count === 1 && !cell.absorbed) alone.add(cell.winner);
+      } else {
+        // Nothing paints counts: every site near the screen stands alone.
+        for (const site of near) alone.add(site);
+      }
+    } else {
+      _counts?.hide();
+    }
+    const shown = new Set();
+    const labelled = [];
+    for (const record of _stemRecords) {
+      record.inView = anchors.has(record.site);
+      const visible = alone.has(record.site);
+      if (record.visible !== visible) {
+        record.visible = visible;
+        shown.add(record);
+      }
+      if (visible && record.entry && record.site === record)
+        labelled.push(record);
+    }
+    // Each site's marker and label stand on the part it was grouped at.
+    for (const [site, at] of anchors) {
+      if ((site.markerAt ?? site) !== at) {
+        site.markerAt = at;
+        shown.add(site);
+      }
+      if (distanceSquared(site.tip, at.base) > 0) {
+        Object.assign(site.tip, at.base);
+        if (site.entry) site.entry.cullPosition = liftedForHorizon(at.base);
+      }
+    }
+    _stemGeometryDirty = false;
+    _lodComputed = true;
+    Object.assign(_lastLodCameraPos, copy(pose.position));
+    _lastLodProbeMs = now;
+    writeChanges(drawn, new Set(), shown);
+    publishOverlay(viewer, labelled);
+  }
+
+  /** Whether another layer's scene object owns the click at a count. */
+  function sceneTakesCountClick(event) {
+    const top = event.topHit;
+    if (!top) return false;
+    const hit = event.drawHit;
+    if (hit?.set?.startsWith(`${setPrefix}:`)) return false;
+    const pickId = resolvePickId(hit ?? top);
+    return pickId !== null && findPickOwner(pickId) !== null;
+  }
+
+  /** The count marker painted at a click, unless something else takes it. */
+  function clickedCount(event) {
+    if (
+      !isTrackingClickGesture(event?.gesture) ||
+      !_counts ||
+      !_enabled ||
+      event?.overlay
+    )
+      return null;
+    const cell = _counts.pickedCell(event.screenPosition);
+    if (!cell) return null;
+    return sceneTakesCountClick(event) ? null : cell;
+  }
+
+  /** The count marker as the card on top of a click, for every layer's clickCard. */
+  function countClickCard(event) {
+    const cell = clickedCount(event);
+    return cell
+      ? { sourceId: countCardSource, entryId: String(cell.key) }
+      : null;
+  }
+
+  /** Fly to frame a count marker's sites, holding camera input meanwhile. */
+  function flyToCount(viewer, input, cell) {
+    // Tracking or the cockpit holds the view, as for a CCTV count.
+    if (
+      isFollowing(viewer) ||
+      globalThis.document?.body?.classList.contains('cockpit-mode')
+    )
+      return;
+    // Before the hold: with no camera, nothing would end it.
+    if (!cameraOf(viewer)) return;
+    const releaseCamera = input.suspendCamera('local-geojson-flight');
+    flyToCountCell(viewer, cell, {
+      cellPx: LOCAL_CLUSTER_CELL_PX,
+      minCellM: LOCAL_CLUSTER_MIN_CELL_M,
+      onComplete: releaseCamera,
+      onCancel: releaseCamera,
+    });
+  }
+
   /** Fly to where a clicked part stands, holding camera input meanwhile. */
-  function flyToPart(viewer, input, part) {
-    const target = part.carrier.record
-      ? { lon: part.carrier.record.lon, lat: part.carrier.record.lat }
-      : part.flyTo;
+  function flyToPart(viewer, input, part, at = part.carrier.record) {
+    const target = at ? { lon: at.lon, lat: at.lat } : part.flyTo;
     if (!target) return;
     // Before the hold: with no camera, nothing would end it.
     const camera = cameraOf(viewer);
@@ -1081,8 +1360,14 @@ export function createLocalGeoJsonLayer(
     // A hold, not a flag: the flight ending must not hand input back under
     // a drag or the cockpit.
     const releaseCamera = input.suspendCamera('local-geojson-flight');
+    // Clusters mode flies no farther out than the eye already is from the
+    // site: higher up it would join a count again and lose its marker.
+    const eye = clusters && at ? camera.pose()?.position : null;
+    const height = eye
+      ? at.groundHeight + Math.min(PART_FLIGHT_HEIGHT_M, distance(eye, at.base))
+      : PART_FLIGHT_HEIGHT_M;
     camera.flyTo(
-      { lon: target.lon, lat: target.lat, height: 5000 },
+      { lon: target.lon, lat: target.lat, height },
       {
         durationS: 1.5,
         onComplete: releaseCamera,
@@ -1141,14 +1426,24 @@ export function createLocalGeoJsonLayer(
      * full materialized set. `active < total` means the declutter is engaged.
      * `budgetLimit` is the cap the last camera-height band produced; `computed`
      * is false until the first post-enable walk has run the selection.
-     * @returns {{total:number, active:number, budgetLimit:number, computed:boolean}}
+     * In clusters mode: the sites, how many stand alone, the count markers
+     * and whether a grouping pass has run.
+     * @returns {{total:number, active:number, budgetLimit:number, computed:boolean}|{sites:number, lone:number, counts:number, computed:boolean}}
      */
-    getLodDiagnostics: () => ({
-      total: _stemRecords.length,
-      active: _activeLodIds.size,
-      budgetLimit: _lastLodBudgetLimit,
-      computed: _lodComputed,
-    }),
+    getLodDiagnostics: () =>
+      clusters
+        ? {
+            sites: _drawn?.sites.length ?? 0,
+            lone: _drawn?.sites.filter((site) => site.visible).length ?? 0,
+            counts: _counts?.markers.length ?? 0,
+            computed: _lodComputed,
+          }
+        : {
+            total: _stemRecords.length,
+            active: _activeLodIds.size,
+            budgetLimit: _lastLodBudgetLimit,
+            computed: _lodComputed,
+          },
 
     /**
      * Snapshot in-memory infrastructure features as plain JSON-safe objects
@@ -1285,6 +1580,7 @@ export function createLocalGeoJsonLayer(
     enable: async (viewer) => {
       if (_destroyed) return;
       _enabled = true;
+      if (clusters) registerClickClaim(id, countClickCard);
       _stemGeometryDirty = true;
       _lastVisibilityUpdate = Number.NEGATIVE_INFINITY;
       _groundRetryArms = 0; // fresh give-up budget per enable-cycle
@@ -1372,6 +1668,13 @@ export function createLocalGeoJsonLayer(
               const input = inputFor(viewer);
               _clickSubscription = input.onClick((event) => {
                 if (!_enabled || !_drawn) return;
+                const count = clusters ? clickedCount(event) : null;
+                if (count) {
+                  // A card or label painted above the count takes the click.
+                  if (!isUnderOtherCard(event, [countCardSource]))
+                    flyToCount(viewer, input, count);
+                  return;
+                }
                 // Another layer's card or label on top takes the click: the
                 // item under it neither acts nor reads as empty space.
                 if (isUnderOtherCard(event)) return;
@@ -1380,8 +1683,14 @@ export function createLocalGeoJsonLayer(
                 const part = _drawn.parts.get(hit.id);
                 if (!part) return;
                 selectEntityContext(part.carrier);
-                // To the surface base of the stem, or the line's start.
-                flyToPart(viewer, input, part);
+                const record = part.carrier.record;
+                // A site's marker can stand on another of its parts (the one in view).
+                const at =
+                  record && hit.set === _drawn.sets.markers?.id
+                    ? (record.markerAt ?? record)
+                    : record;
+                // To the feature's base point, or the line's start.
+                flyToPart(viewer, input, part, at);
               });
             }
           })();
@@ -1438,6 +1747,13 @@ export function createLocalGeoJsonLayer(
               // Re-selecting demands fresh stem geometry: a record admitted
               // mid-motion has never had its tip sized for this camera.
               if (probe.recompute) _stemGeometryDirty = true;
+            }
+
+            // Clusters mode groups only on a dirty walk (moveEnd, the motion
+            // probe, a painter refresh or loaded terrain), never per frame.
+            if (clusters) {
+              if (_stemGeometryDirty) clusterPass(viewer, drawn, pose, now);
+              return;
             }
 
             const visibleOverlayRecords = [];
@@ -1573,20 +1889,7 @@ export function createLocalGeoJsonLayer(
             // so the records still waiting get their own bounded run of retries.
             if (groundSampleProgress) _groundRetryArms = 0;
             if (groundRetryPending) scheduleGroundRetryRender(viewer);
-
-            const canvas = canvasOf(viewer);
-            const cohort = selectLocalInfrastructureOverlayCohort(
-              visibleOverlayRecords,
-              {
-                maxEntries: labelMax,
-                gridPx: labelGridPx,
-                width: canvas?.clientWidth || canvas?.width || 0,
-                height: canvas?.clientHeight || canvas?.height || 0,
-                cohortLimit: LOCAL_OVERLAY_COHORT_LIMIT,
-                project: (record) => projectToWindow(viewer, record.tip),
-              },
-            );
-            _overlayPublisher.publish(cohort);
+            publishOverlay(viewer, visibleOverlayRecords);
           }) ?? null;
       }
       if (_enabled && !_cameraMoveEndRemover) {
@@ -1600,6 +1903,22 @@ export function createLocalGeoJsonLayer(
             // parked camera may have spent.
             _groundRetryArms = 0;
             findFrame(viewer)?.requestRender('local-geojson');
+          }) ?? null;
+      }
+
+      if (clusters && _enabled && !_terrainListener) {
+        const globe = findGlobe(viewer);
+        let version = globe?.surfaceVersion?.();
+        let pending = globe?.isSettled?.('terrain') === false;
+        _terrainListener =
+          globe?.on?.('progress', (progress) => {
+            const next = globe.surfaceVersion?.();
+            const loaded = pending && progress?.terrainPending === 0;
+            const swapped = next !== version;
+            version = next;
+            if (Number.isFinite(progress?.terrainPending))
+              pending = progress.terrainPending > 0;
+            if (loaded || swapped) refreshClusters(viewer);
           }) ?? null;
       }
 
@@ -1759,6 +2078,8 @@ export function createLocalGeoJsonLayer(
       _clickSubscription?.();
       _clickSubscription = null;
       _overlayPublisher.destroy();
+      _counts?.dispose();
+      _counts = null;
       _cachedFeatures = null;
       anonymousGroups = undefined;
       pinMaker.clear();
@@ -1821,6 +2142,25 @@ const pinItem = (record) => ({
   show: record.visible,
 });
 
+/**
+ * A site's marker on the ground in clusters mode, drawn over depth so the
+ * terrain or a building mesh never buries it, showing as its record does.
+ */
+const markerItem = (record) => {
+  const at = record.markerAt ?? record;
+  return {
+    id: record.id,
+    pos: { lon: at.lon, lat: at.lat },
+    height: 'clampGround',
+    image: record.markerImage,
+    size: [LOCAL_MARKER_PX, LOCAL_MARKER_PX],
+    anchor: 'center',
+    disableDepthTest: Number.POSITIVE_INFINITY,
+    meta: record.carrier,
+    show: record.visible,
+  };
+};
+
 /** A record's stem, from its base to its tip, in the feature's colour. */
 const stemItem = (record) => ({
   id: record.id,
@@ -1849,9 +2189,18 @@ const dotItem = (record) => ({
 });
 
 /**
- * What a walk asks of the ground under its records: heights now, and
- * whether the globe is shown and its terrain has finished loading.
+ * Drawn-terrain heights where the globe is the surface, as CCTV's view
+ * pass reads them, or null: the photoreal stack has no reader. Unloaded
+ * tiles answer null.
  */
+function drawnTerrainOf(viewer) {
+  const globe = findGlobe(viewer);
+  if (!findQuery(viewer) || globe?.isGlobeVisible?.() !== true) return null;
+  const heights = heightsOf(viewer);
+  return (lon, lat) => heights.now({ lon, lat }, { against: 'terrain' });
+}
+
+/** What a stems walk asks of the ground under its records. */
 function groundOf(viewer) {
   const globe = findGlobe(viewer);
   const heights = heightsOf(viewer);

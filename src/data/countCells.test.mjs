@@ -4,13 +4,13 @@ import { fromDegrees } from '../geo/ellipsoid.js';
 import { distance } from '../geo/vector.js';
 import { getLocale, setLocale } from '../i18n/index.js';
 import {
-  createCameraCell,
-  addCellCamera,
+  createCountCell,
+  addCellPoint,
   cellCenter,
   cellBounds,
-  formatCameraCount,
+  formatCount,
   mergeCountCells,
-} from './cctvCellCounts.js';
+} from './countCells.js';
 
 test('camera counts use Latin digits and K notation whatever the UI language', () => {
   const previous = getLocale();
@@ -29,7 +29,7 @@ test('camera counts use Latin digits and K notation whatever the UI language', (
   try {
     setLocale('ar');
     for (const [count, label] of examples)
-      assert.equal(formatCameraCount(count), label);
+      assert.equal(formatCount(count), label);
   } finally {
     setLocale(previous);
   }
@@ -41,8 +41,8 @@ test('the marker mean weights every mount and the flight bounds cover the outlie
     { lon: 12, lat: 52, absoluteHeightM: 40 },
     { lon: 12.003, lat: 52.006, absoluteHeightM: 50 },
   ];
-  const cell = createCameraCell();
-  for (const camera of cameras) addCellCamera(cell, camera);
+  const cell = createCountCell();
+  for (const camera of cameras) addCellPoint(cell, camera);
   const expected = fromDegrees(12.001, 52.002, 40);
   assert.ok(distance(cellCenter(cell), expected) < 0.001);
   const bounds = cellBounds(cell);
@@ -56,7 +56,7 @@ test('the marker mean weights every mount and the flight bounds cover the outlie
 
 function mergeCounts(sizes, counts, positions) {
   const cells = counts.map((count, i) => ({
-    ...createCameraCell(String(i)),
+    ...createCountCell(String(i)),
     count,
   }));
   let i = 0;
@@ -130,11 +130,11 @@ test('a lone camera joins a count it touches, and lone cameras alone stay apart'
 test('cells merged across the antimeridian stay at the antimeridian', () => {
   for (const lon of [179.9, 179.99, 179.999]) {
     for (const reversed of [false, true]) {
-      const east = createCameraCell('e');
-      const west = createCameraCell('w');
+      const east = createCountCell('e');
+      const west = createCountCell('w');
       for (let i = 0; i < 2; i++) {
-        addCellCamera(east, { lon, lat: 0, absoluteHeightM: 0 });
-        addCellCamera(west, { lon: -lon, lat: 0, absoluteHeightM: 0 });
+        addCellPoint(east, { lon, lat: 0, absoluteHeightM: 0 });
+        addCellPoint(west, { lon: -lon, lat: 0, absoluteHeightM: 0 });
       }
       const cells = reversed ? [west, east] : [east, west];
       const screens = [
@@ -164,9 +164,9 @@ test('cells merged across the antimeridian stay at the antimeridian', () => {
 
 test('flight bounds on drawn ground still contain every mount', () => {
   // Flat ellipsoid terrain (Re:Earth terrain failed), mounts at 1,800 m.
-  const flat = createCameraCell('k');
-  addCellCamera(flat, { lon: 10, lat: 46, absoluteHeightM: 1800 });
-  addCellCamera(flat, { lon: 10, lat: 46, absoluteHeightM: 1800 });
+  const flat = createCountCell('k');
+  addCellPoint(flat, { lon: 10, lat: 46, absoluteHeightM: 1800 });
+  addCellPoint(flat, { lon: 10, lat: 46, absoluteHeightM: 1800 });
   flat.groundM = 0;
   const fb = cellBounds(flat);
   assert.ok(
@@ -175,9 +175,9 @@ test('flight bounds on drawn ground still contain every mount', () => {
   );
   // Ravine: mounts 200 m apart at 600 m, the floor at 0 m between them.
   const east = 10 + 200 / (111_320 * Math.cos((46 * Math.PI) / 180));
-  const ravine = createCameraCell('r');
-  addCellCamera(ravine, { lon: 10, lat: 46, absoluteHeightM: 600 });
-  addCellCamera(ravine, { lon: east, lat: 46, absoluteHeightM: 600 });
+  const ravine = createCountCell('r');
+  addCellPoint(ravine, { lon: 10, lat: 46, absoluteHeightM: 600 });
+  addCellPoint(ravine, { lon: east, lat: 46, absoluteHeightM: 600 });
   ravine.groundM = 0;
   const rb = cellBounds(ravine);
   for (const lon of [10, east])

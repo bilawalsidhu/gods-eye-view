@@ -1,7 +1,11 @@
+import {
+  countTextDocument,
+  recordingContext,
+} from '../../testSupport/countPaintFakes.mjs';
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { createCountMarkers } from './countMarkers.js';
-import { addCellCamera, createCameraCell } from '../../data/cctvCellCounts.js';
+import { addCellPoint, createCountCell } from '../../data/countCells.js';
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { horizonFrom } from '../../geo/horizon.js';
 
@@ -31,31 +35,15 @@ const matrix = new Float64Array([
 ]);
 
 function cellAt(key, x, count, height = 0) {
-  const cell = createCameraCell(key);
+  const cell = createCountCell(key);
   for (let i = 0; i < count; i++)
-    addCellCamera(cell, { lon: lonFor(x), lat: 0, absoluteHeightM: height });
+    addCellPoint(cell, { lon: lonFor(x), lat: 0, absoluteHeightM: height });
   return cell;
 }
 
 let painter;
-function makeCtx() {
-  return {
-    labels: [],
-    globalAlpha: 1,
-    save() {},
-    restore() {},
-    beginPath() {},
-    roundRect() {},
-    stroke() {},
-    fill() {},
-    drawImage() {},
-    fillText(text, x, y) {
-      this.labels.push({ text, x, y, alpha: this.globalAlpha });
-    },
-  };
-}
 function paint(overrides = {}) {
-  const ctx = makeCtx();
+  const ctx = recordingContext();
   painter({
     ctx,
     width: W,
@@ -81,17 +69,7 @@ function counts(refresh = () => {}, keyholeAlpha) {
 }
 
 beforeEach(() => {
-  globalThis.document = {
-    createElement: () => ({
-      getContext: () => ({
-        measureText: (text) => ({
-          width: text.length * 7,
-          actualBoundingBoxAscent: 4,
-          actualBoundingBoxDescent: 4,
-        }),
-      }),
-    }),
-  };
+  globalThis.document = countTextDocument();
 });
 afterEach(() => {
   delete globalThis.document;
@@ -176,4 +154,26 @@ test('counts fade with the Scope keyhole like the callouts', () => {
   assert.deepEqual(paint({ keyhole: { alpha: 0 } }), []);
   assert.equal(m.pickedCell({ x: 400, y: 300 }), null);
   assert.equal(paint()[0].alpha, 1);
+});
+
+test('a count painted over another takes its clicks', () => {
+  const lower = counts();
+  const paintLower = painter;
+  const upper = counts();
+  const paintUpper = painter;
+  try {
+    lower.update([cellAt('a', 400, 3)], project);
+    upper.update([cellAt('b', 400, 2)], project);
+    painter = paintLower;
+    paint();
+    painter = paintUpper;
+    paint();
+    assert.equal(upper.pickedCell({ x: 400, y: 300 })?.key, 'b');
+    assert.equal(lower.pickedCell({ x: 400, y: 300 }), null);
+    upper.hide();
+    assert.equal(lower.pickedCell({ x: 400, y: 300 })?.key, 'a');
+  } finally {
+    upper.dispose();
+    lower.dispose();
+  }
 });

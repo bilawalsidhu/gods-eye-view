@@ -89,9 +89,6 @@ export const VIEW_GROUND_READS = 300;
  */
 export const CAMERA_ICON_PX = 24;
 
-// Minimum gap between the outer rims of two separate markers.
-export const COUNT_MERGE_GAP_PX = 4;
-
 // Icons this far past the screen edge (fraction of its size) still show, so
 // a pan does not reveal empty ground before the next view pass.
 

@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import { bindRenderer } from '../../render/rendererOf.js';
 import { fromDegrees, toLonLatH } from '../../geo/ellipsoid.js';
 import {
-  addCellCamera,
-  createCameraCell,
+  addCellPoint,
+  createCountCell,
   mergeCountCells,
-} from '../../data/cctvCellCounts.js';
+} from '../../data/countCells.js';
 import { createNavigation } from './navigation.js';
 
 const M = 111_320;
@@ -27,15 +27,15 @@ test('a count click does not fly to a lone camera that joined the count', () => 
     canvas: { clientHeight: 600, clientWidth: 800 },
   });
   try {
-    const crowd = createCameraCell('crowd');
+    const crowd = createCountCell('crowd');
     const counted = [];
     for (let i = 0; i < 40; i++) {
       const lat = (40_000 + i / 4) / M;
-      addCellCamera(crowd, { lat, lon: 0, absoluteHeightM: 8 });
+      addCellPoint(crowd, { lat, lon: 0, absoluteHeightM: 8 });
       counted.push(lat);
     }
-    const lone = createCameraCell('lone');
-    addCellCamera(lone, { lat: 10_000 / M, lon: 0, absoluteHeightM: 8 });
+    const lone = createCountCell('lone');
+    addCellPoint(lone, { lat: 10_000 / M, lon: 0, absoluteHeightM: 8 });
     const screens = [
       { x: 400, y: 300 },
       { x: 400, y: 330 },

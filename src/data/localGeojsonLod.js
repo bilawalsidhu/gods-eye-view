@@ -2,9 +2,10 @@
 /**
  * @module localGeojsonLod
  *
- * Pure selection policy for the bundled local-infrastructure layers
- * (`local-datacenters`, `local-dams`, and any future `createLocalGeoJsonLayer`
- * dataset). Cesium-specific projection, occlusion, and stem geometry stay in
+ * Pure selection policy for local-infrastructure layers drawn with
+ * `markers: 'stems'` (`local-dams`, and any future `createLocalGeoJsonLayer`
+ * dataset drawn that way); clustered layers such as `local-datacenters`
+ * group in `localClusters.js` instead. Cesium-specific projection, occlusion, and stem geometry stay in
  * `localGeojsonCore.js`; this module turns the resulting in-view records into a
  * bounded "active" set — the only records that layer should spend per-frame
  * stem-geometry and ground-sample work on.

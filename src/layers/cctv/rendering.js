@@ -1,11 +1,16 @@
+import { COUNT_MERGE_GAP_PX } from '../../overlays/countMarkers.js';
 import { createCountMarkers } from './countMarkers.js';
-import { addCellCamera, createCameraCell } from '../../data/cctvCellCounts.js';
+import {
+  addCellPoint,
+  cellLevel,
+  createCountCell,
+  groundCellKey,
+} from '../../data/countCells.js';
 import { isHeadingEstimated } from './headingConfidence.js';
 import {
   ACTIVE_CAMERA_COLOR,
   CAMERA_ICON,
   CAMERA_ICON_PX,
-  COUNT_MERGE_GAP_PX,
   VIEW_SITE_M,
   IDLE_CAMERA_ICON,
   IDLE_CAMERA_COLOR,
@@ -60,9 +65,6 @@ const copyPoint = (p) => ({ x: p.x, y: p.y, z: p.z });
 /** Whether two points are the same, coordinate for coordinate. */
 const samePoint = (a, b) =>
   !!a && !!b && a.x === b.x && a.y === b.y && a.z === b.z;
-
-/** Degrees to radians. */
-const toRadians = (degrees) => (degrees * Math.PI) / 180;
 
 const CAMERA_SCALE_BY_DISTANCE = Object.freeze({
   near: 350,
@@ -524,8 +526,8 @@ export function createRendering({
       if (!(cellM >= VIEW_MIN_CELL_M)) {
         if (!nearScreen) continue;
         // Too close to group, but a count beside it can still take it in.
-        const cell = createCameraCell(`near:${record.camera.id}`);
-        addCellCamera(cell, record.camera);
+        const cell = createCountCell(`near:${record.camera.id}`);
+        addCellPoint(cell, record.camera);
         cell.iconPx = CAMERA_ICON_PX * iconScaleAt(range);
         cell.winner = record;
         cell.rank = 0;
@@ -536,10 +538,10 @@ export function createRendering({
       const key = worldCellKey(record, cellM);
       let cell = cells.get(key);
       if (!cell) {
-        cell = createCameraCell(key);
+        cell = createCountCell(key);
         cells.set(key, cell);
       }
-      addCellCamera(cell, record.camera);
+      addCellPoint(cell, record.camera);
       if (cell.count === 1) cell.iconPx = CAMERA_ICON_PX * iconScaleAt(range);
       record.viewCell = cell;
       if (!nearScreen) continue;
@@ -772,7 +774,7 @@ export function createRendering({
    * can move cameras near the edge of a step to the next one.
    */
   function worldCellKey(record, cellM) {
-    const level = Math.ceil(Math.log2(cellM));
+    const level = cellLevel(cellM);
     const { lat, lon } = record.camera;
     // A camera's key changes only with the level (or an edited position), so
     // it is kept per level.
@@ -782,14 +784,10 @@ export function createRendering({
       record.viewCellLon === lon
     )
       return record.viewCellKey;
-    const latStep = 2 ** level / 111_320;
-    const row = Math.floor(lat / latStep);
-    const rowLat = toRadians((row + 0.5) * latStep);
-    const lonStep = latStep / Math.max(0.05, Math.cos(rowLat));
     record.viewCellLevel = level;
     record.viewCellLat = lat;
     record.viewCellLon = lon;
-    record.viewCellKey = `${level}:${row}:${Math.floor(lon / lonStep)}`;
+    record.viewCellKey = groundCellKey(lat, lon, level);
     return record.viewCellKey;
   }
 
