@@ -187,7 +187,10 @@ export function createRecentImageryLayer({
 
   let _toolActive = false;
   let _toolHandler = null;
-  let _rowListener = null;
+  /** @type {{ invalidate: () => void } | null} the panels' handle, from init */
+  let _panel = null;
+  // What changed since the readout last looked (`takePanelChanges`).
+  const _panelChanges = new Set();
   let _unsubscribeThumbnails = null;
   let _unsubscribeMap = null;
   const _listeners = new Set();
@@ -382,7 +385,9 @@ export function createRecentImageryLayer({
         console.warn('[Data:RecentImagery] listener failed:', error);
       }
     }
-    if (reason === 'state') _rowListener?.();
+    // The row and the readout look again on the panels' next frame.
+    _panelChanges.add(reason);
+    _panel?.invalidate();
   }
 
   /**
@@ -879,8 +884,9 @@ export function createRecentImageryLayer({
     source: 'NASA GIBS · HLS + VIIRS',
     updateInterval: 0,
 
-    init(viewer) {
+    init(viewer, { panel = null } = {}) {
       _viewer = viewer || null;
+      _panel = panel;
       return true;
     },
 
@@ -963,7 +969,8 @@ export function createRecentImageryLayer({
       renderer.destroy();
       thumbnails.destroy();
       _listeners.clear();
-      _rowListener = null;
+      _panel = null;
+      _panelChanges.clear();
       _toolHandler = null;
       _viewer = null;
       _tileset = null;
@@ -1448,8 +1455,15 @@ export function createRecentImageryLayer({
       };
     },
 
-    setRowControlsListener(listener) {
-      _rowListener = typeof listener === 'function' ? listener : null;
+    /**
+     * What changed since the readout last asked, by reason (`state`,
+     * `split`, `alpha`, `thumbnail`); asking clears it.
+     * @returns {Set<string>}
+     */
+    takePanelChanges() {
+      const changes = new Set(_panelChanges);
+      _panelChanges.clear();
+      return changes;
     },
 
     /**

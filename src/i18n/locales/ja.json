@@ -4069,7 +4069,6 @@
   "Opens chat": "チャットを開く",
   "Go to {place}": "{place}に移動",
   "Place or coordinates": "場所または座標",
-  "Search “{query}” as a place anyway": "「{query}」を場所として検索する",
   "Turn on": "オンにする",
   "Turn off": "オフにする",
   "Command": "コマンド",
@@ -4110,10 +4109,9 @@
   "Search places, layers and things on the map, or ask GEV": "場所、レイヤー、マップ上の対象を検索するか、GEVに質問",
   "Search places, layers, flights… or ask GEV  ·  > for commands": "場所、レイヤー、航空便を検索… またはGEVに質問 · > でコマンド",
   "No matching command": "一致するコマンドがありません",
-  "Looks private, so nothing is searched or sent": "個人情報の可能性があるため、検索も送信もしません",
   "Bilawal on YouTube": "YouTube の Bilawal",
   "BROWSE STORIES": "STORIES を見る",
-  "ENTER GOD MODE": "ゴッドモードで開始",
+  "ENTER DEFAULT MODE": "デフォルトモードで開始",
   "Go deeper": "さらに詳しく",
   "The studio behind GEV": "GEV を手がけるスタジオ",
   "Visual presets": "ビジュアルプリセット",
@@ -4124,7 +4122,7 @@
   "A cleaner, readable view where every value shows its source. For research and reporting.": "すべての値に出典が表示される、すっきり読みやすいビュー。調査やレポート向け。",
   "Keyhole HUD": "鍵穴 HUD",
   "Analyst": "アナリスト",
-  "God": "ゴッド",
+  "Default": "デフォルト",
   "COMING SOON": "近日公開",
   "More from Halfpixel": "Halfpixel のその他のコンテンツ",
   "Start with": "ここから始める",
@@ -4435,5 +4433,7 @@
   "Low-cost sensor": "低価格センサー",
   "{name} · sensor": "{name} · センサー",
   "Reference monitor": "基準測定器",
-  "Needs {envVars} — add one in Provider Settings": "{envVars}のいずれかが必要です。プロバイダー設定で追加してください"
+  "Needs {envVars} — add one in Provider Settings": "{envVars}のいずれかが必要です。プロバイダー設定で追加してください",
+  "CABLE \u00b7 {name}": "ケーブル · {name}",
+  "LANDING POINT \u00b7 {name}": "陸揚げ地点 · {name}"
 }

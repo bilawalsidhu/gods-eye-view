@@ -2791,37 +2791,69 @@ test('layer metadata shows a guidance prompt without reporting it as a fault', (
   assert.doesNotMatch(text, /UNAVAILABLE|DEGRADED/);
 });
 
-test('refreshLayerStats reaches presentation through the bare lifecycle', async () => {
+test("a layer's panel.invalidate() reaches presentation through the bare lifecycle", async () => {
   const { LayerLifecycle } = await import('./lifecycle.js');
   const lifecycle = new LayerLifecycle({});
+  let handle;
+  lifecycle.register({
+    id: 'feed',
+    name: 'Feed',
+    getStats: () => ({ count: 0 }),
+    async init(_viewer, { panel }) {
+      handle = panel;
+    },
+    enable() {},
+    disable() {},
+    async update() {},
+  });
+  await lifecycle.setEnabled('feed', true);
   const changes = [];
-  lifecycle.subscribeActivity((change) => changes.push(change.type));
-  lifecycle.refreshLayerStats();
-  assert.deepEqual(changes, ['status']);
+  lifecycle.subscribeActivity((change) => changes.push(change));
+  assert.equal(handle.invalidate(), undefined, 'invalidate returns nothing');
+  assert.deepEqual(changes, [{ type: 'panel', layerId: 'feed' }]);
+  assert.ok(Object.isFrozen(handle));
 });
 
-test('refreshLayerStats(layerId) drops a tick failure the layer no longer reports', async () => {
+test('a layer that still defines setRowControlsListener is refused at registration', async () => {
+  const { LayerLifecycle } = await import('./lifecycle.js');
+  const lifecycle = new LayerLifecycle({});
+  assert.throws(
+    () =>
+      lifecycle.register({
+        id: 'old',
+        name: 'Old',
+        getStats: () => ({}),
+        setRowControlsListener() {},
+      }),
+    /old defines setRowControlsListener; call panel\.invalidate\(\)/,
+  );
+});
+
+test('panel.invalidate() drops a tick failure the layer no longer reports', async () => {
   const { LayerLifecycle } = await import('./lifecycle.js');
   const lifecycle = new LayerLifecycle({});
   let stats = { count: 0, error: 'Feed unavailable' };
+  let handle;
   lifecycle.register({
     id: 'feed',
     name: 'Feed',
     getStats: () => stats,
+    async init(_viewer, { panel }) {
+      handle = panel;
+    },
     async update() {},
   });
   const entry = lifecycle.layers.get('feed');
+  await entry.module.init(null, { panel: entry.panel });
   entry.enabled = true;
   entry.initialized = true;
   entry.managerRefreshError = 'Feed unavailable';
 
-  lifecycle.refreshLayerStats('feed');
+  handle.invalidate();
   assert.equal(entry.managerRefreshError, 'Feed unavailable');
 
   stats = { count: 0 };
-  lifecycle.refreshLayerStats();
-  assert.equal(entry.managerRefreshError, 'Feed unavailable');
-  lifecycle.refreshLayerStats('feed');
+  handle.invalidate();
   assert.equal(entry.managerRefreshError, null);
 });
 

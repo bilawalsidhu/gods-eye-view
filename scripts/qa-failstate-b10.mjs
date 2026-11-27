@@ -90,7 +90,19 @@ function record(name, ok, detail) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * Open Data Layers before reading its rows: they repaint while it is
+ * displayed, and it starts collapsed.
+ */
+const openDataLayers = (page) =>
+  page.evaluate(() => {
+    const panel = document.getElementById('data-panel');
+    if (panel?.classList.contains('collapsed'))
+      panel.querySelector('[data-collapse-target="data-panel"]')?.click();
+  });
+
 async function readLayerControl(page, layerId, expectedLabel) {
+  await openDataLayers(page);
   await page.waitForFunction(
     (id, label) => {
       const button = document.querySelector(`[data-layer-id="${id}"] .data-toggle-btn`);
@@ -358,7 +370,7 @@ async function main() {
     }
     const aisControl = await readLayerControl(page, 'ais-live-vessels', 'UNAVAILABLE');
     const aisChipHonest = aisControl.feedState === 'unavailable'
-      && aisControl.ariaLabel === 'Live AIS Vessels: UNAVAILABLE';
+      && aisControl.ariaLabel === 'Live Vessels: UNAVAILABLE';
     const aisMetaHonest = /^UNAVAILABLE · AISStream · /i.test(aisControl.meta)
       && aisStats.error
       && aisControl.meta.includes(aisStats.error);

@@ -2,6 +2,7 @@
 import { layoutLeftPanelRail, layoutRightPanelRail } from './panelRails.js';
 import { syncRadioPanelPlacement } from './radioPanelPlacement.js';
 import { isPanelRailMutation } from './panelRailCatalog.js';
+import { flushDisplayedPanelContent } from './rail/panelContent.js';
 const COCKPIT_LAYOUT_SETTLE_MS = 240;
 /**
  * Fixed UI regions that can occupy the left accordion's vertical lane.
@@ -277,6 +278,9 @@ export class PanelLayoutController {
     this._rightStackLayoutFrame = requestAnimationFrame(() => {
       if (this.destroyed) return;
       this._rightStackLayoutFrame = null;
+      // Whatever showed a panel since (a mode, a class), its content is
+      // current before this pass measures it.
+      flushDisplayedPanelContent();
       if (this._rightStackReconsiderAutoCollapse) {
         this._rightStackReconsiderAutoCollapse = false;
         for (const panel of this._rightPanelStack.querySelectorAll(
@@ -413,6 +417,9 @@ export class PanelLayoutController {
     this._leftStackLayoutFrame = requestAnimationFrame(() => {
       if (this.destroyed) return;
       this._leftStackLayoutFrame = null;
+      // Whatever showed a panel since (a mode, a class), its content is
+      // current before this pass measures it.
+      flushDisplayedPanelContent();
       if (this._leftStackReconsiderAutoCollapse) {
         this._leftStackReconsiderAutoCollapse = false;
         for (const panel of this._leftPanelStack.querySelectorAll(

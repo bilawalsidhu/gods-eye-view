@@ -267,15 +267,18 @@ test('renderer readiness pushes fresh loading stats and controls to the displaye
       return rendering;
     },
   });
-  layer.init({ container: {} });
-  layer.enable();
   let displayed;
-  layer.setRowControlsListener(() => {
-    displayed = {
-      loading: layer.getStats().loading,
-      info: layer.getRowControls().info,
-    };
+  layer.init({ container: {} }, {
+    panel: {
+      invalidate() {
+        displayed = {
+          loading: layer.getStats().loading,
+          info: layer.getRowControls().info,
+        };
+      },
+    },
   });
+  layer.enable();
   const update = layer.update();
   const loadingInfo = layer.getRowControls().info;
   assert.match(loadingInfo, /Valid: [^\n]+ · loading/);
@@ -391,14 +394,17 @@ test('observed history labels wind as a forecast without changing its data or pa
   const { createWeatherClock } = await import('../weather/clock.js');
   const clock = createWeatherClock();
   const { world } = clock;
-  const layer = createWindLayer({ feed: { getSnapshot: async () => snapshot('gfs') }, clock });
+  const createRendering = () => ({ attach() {}, start() {}, stop() {}, clear() {}, setField() {}, setOptions() {}, getDiagnostics: () => ({}), destroy() {} });
+  const layer = createWindLayer({ feed: { getSnapshot: async () => snapshot('gfs') }, clock, createRendering });
   let changes = 0;
-  layer.setRowControlsListener(() => changes++);
+  layer.init({ container: {} }, { panel: { invalidate: () => changes++ } });
+  // The panel reads the row again when the time moves; the layer does not push it.
+  assert.equal(layer.panelFollowsTime, true);
   const params = layer.getParams();
   world.seek(Date.parse('2026-09-14T12:00:00.000Z'));
   await Promise.resolve();
   assert.equal(layer.getRowControls().summary.status, null, 'history does not mask source status');
-  assert.ok(changes > 0);
+  assert.equal(changes, 0, 'a time step is read by the panel, not pushed');
   assert.match(layer.getRowControls().info, /Forecast · does not follow history/);
   assert.deepEqual(layer.getParams(), params);
   world.goLive();

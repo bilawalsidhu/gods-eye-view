@@ -55,3 +55,32 @@ export function liftedForHorizon(p, minHeightM = HORIZON_LIFT_M) {
   const k = Math.max(0, minHeightM - height) / radius;
   return { x: p.x + p.x * k, y: p.y + p.y * k, z: p.z + p.z * k };
 }
+
+/**
+ * `liftedForHorizon` written into `out`, allocating nothing, for tests run
+ * per contact per frame. Lengths are square roots of sums rather than
+ * `Math.hypot`, which allocates per call; at Earth's scale the two differ
+ * by at most a unit in the last place.
+ * @template {{x: number, y: number, z: number}} T
+ * @param {{x: number, y: number, z: number}} p ECEF.
+ * @param {T} out
+ * @param {number} [minHeightM]
+ * @returns {T}
+ */
+export function liftedForHorizonInto(p, out, minHeightM = HORIZON_LIFT_M) {
+  const o = WGS84.oneOverRadii;
+  const px = p.x;
+  const py = p.y;
+  const pz = p.z;
+  const radius = Math.sqrt(px * px + py * py + pz * pz);
+  const sx = px * o.x;
+  const sy = py * o.y;
+  const sz = pz * o.z;
+  const scaled = Math.sqrt(sx * sx + sy * sy + sz * sz);
+  const height = radius * (1 - 1 / scaled);
+  const k = Math.max(0, minHeightM - height) / radius;
+  out.x = px + px * k;
+  out.y = py + py * k;
+  out.z = pz + pz * k;
+  return out;
+}

@@ -15,7 +15,7 @@ const NETWORK = Object.freeze({
   parameters: ['PM2.5'],
 });
 
-function harness(source, renderer = {}) {
+function harness(source, renderer = {}, panel = null) {
   const events = [];
   const viewer = {};
   const { draw } = bindFakeDraw(viewer, renderer);
@@ -29,7 +29,7 @@ function harness(source, renderer = {}) {
       clearSource() {},
     },
   });
-  layer.init(viewer);
+  layer.init(viewer, { panel });
   layer.enable(viewer);
   const markers = () => draw.find('air-quality:points:');
   return { layer, viewer, draw, markers, events };
@@ -324,20 +324,19 @@ test('the readout reports an error rather than a silent empty card', async () =>
   assert.equal(layer.getStats().error, 'Air quality provider unavailable');
 });
 
-test('row-control listeners are notified on refresh and teardown-safe', async () => {
-  const { layer, viewer } = harness(staticSource([reading('A', 2)]));
+test('a refresh invalidates the panel, and teardown lets the handle go', async () => {
   let calls = 0;
-  layer.setRowControlsListener(() => {
-    calls += 1;
-  });
+  const { layer, viewer } = harness(
+    staticSource([reading('A', 2)]),
+    {},
+    { invalidate: () => (calls += 1) },
+  );
   await layer.update();
   assert.ok(calls >= 1, 'a refresh notifies the card');
   layer.destroy(viewer);
   const after = calls;
-  layer.setRowControlsListener(() => {
-    calls += 1;
-  });
-  assert.equal(calls, after);
+  await layer.update().catch(() => {});
+  assert.equal(calls, after, 'a destroyed layer never invalidates');
 });
 
 // ── feed-state honesty ─────────────────────────────────────────────────────

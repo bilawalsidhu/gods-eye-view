@@ -169,8 +169,20 @@ export class LayerLifecycle {
     if (this.layers.has(layerModule.id)) {
       throw new Error(`Duplicate data-layer id: ${layerModule.id}`);
     }
+    // A layer tells the panels its row changed only through the `panel`
+    // handle its init receives; the old per-module listener hook is gone.
+    if (typeof layerModule.setRowControlsListener === 'function')
+      throw new Error(
+        `Data layer ${layerModule.id} defines setRowControlsListener; call panel.invalidate() from the init options instead`,
+      );
+    const layerId = layerModule.id;
     this.layers.set(layerModule.id, {
       module: layerModule,
+      // What a layer calls when its row or rail readout may have changed. It
+      // only asks the panels to look again on their next frame.
+      panel: Object.freeze({
+        invalidate: () => this._invalidatePanel(layerId),
+      }),
       enabled: false,
       initialized: false,
       intervalId: null,
@@ -1053,7 +1065,10 @@ export class LayerLifecycle {
       if (!entry.initialized) {
         this._setVisibilityIntentPhase(entry, intentEpoch, 'init');
         try {
-          const initialized = await entry.module.init(this.viewer, { signal });
+          const initialized = await entry.module.init(this.viewer, {
+            signal,
+            panel: entry.panel,
+          });
           if (initialized === false)
             throw lifecycleRejectedError(layerId, 'init');
           entry.initialized = true;
@@ -2373,6 +2388,9 @@ export class LayerLifecycle {
         icon: entry.module.icon,
         source: entry.module.source,
         showInTogglePanel: entry.module.showInTogglePanel !== false,
+        // Whose row or readout text follows the scene's time: the panel reads
+        // it again when the time moves, and the layer pushes nothing for it.
+        followsTime: entry.module.panelFollowsTime === true,
         // Registry id of the provider key this layer needs, if any (mirrors
         // showInTogglePanel), or an array of ids when a layer reads several
         // keyed networks (Air quality names those it lacks). The layer reports
@@ -2492,13 +2510,14 @@ export class LayerLifecycle {
   }
 
   /**
-   * Ask presentation to repaint layer rows now, for data that lands outside
-   * the manager tick (Transit's proximity polls, Directions' route steps).
-   * @param {string} [layerId] - The layer whose row changed.
+   * A layer's row or rail readout may have changed (`panel.invalidate()`).
+   * The panels look again on their next frame; nothing paints here.
+   * @param {string} layerId
    */
-  refreshLayerStats(layerId) {
+  _invalidatePanel(layerId) {
+    if (!this.layers.has(layerId)) return;
     this._dropRecoveredRefreshError(layerId);
-    this._publishActivity({ type: 'status' });
+    this._publishActivity({ type: 'panel', layerId });
   }
 
   /**

@@ -4,7 +4,9 @@ import { PbfWriter } from 'pbf';
 import {
   flowSegmentsToRoads,
   resolveRoadMode,
+  defaultRoadSource,
   selectTrafficRoads,
+  trafficSourceLabel,
 } from './roadModes.js';
 import { createFlowTileSource } from './flowSource.js';
 import { createTrafficSource } from './source.js';
@@ -739,4 +741,61 @@ test('private, parking, walking and unknown flow never animate or suppress a pub
   const road = flowSegmentsToRoads([flow])[0];
   assert.equal(road.drivable, true);
   assert.equal(road.roadClass, 'Major road');
+});
+
+test('the row names TomTom alone when the host offers only TomTom roads', () => {
+  assert.equal(trafficSourceLabel(['tomtom']), 'TomTom');
+  for (const modes of [
+    ['tomtom', 'osm', 'hybrid'],
+    ['osm'],
+    ['tomtom', 'hybrid'],
+  ])
+    assert.equal(
+      trafficSourceLabel(modes),
+      'OpenStreetMap / TomTom',
+      modes.join(),
+    );
+  const sourceWith = (roadModes) => ({
+    requestRoads() {},
+    getStatus() {},
+    fetchFlowForBounds() {},
+    getFlowSessionStats: () => ({}),
+    resetFlowTileCache() {},
+    ...(roadModes ? { roadModes } : {}),
+  });
+  const services = { credits: {}, render: {} };
+  assert.equal(
+    createTrafficLayer({ services, source: sourceWith(['tomtom']) }).source,
+    'TomTom',
+  );
+  assert.equal(defaultRoadSource(['tomtom']), 'TomTom');
+  assert.equal(defaultRoadSource(['tomtom', 'osm', 'hybrid']), 'OpenStreetMap');
+  const tomtomOnly = createTrafficLayer({
+    services,
+    source: sourceWith(['tomtom']),
+  });
+  assert.equal(
+    createTrafficLayer({
+      services,
+      source: { ...sourceWith(['tomtom']), label: 'Our traffic feed' },
+    }).source,
+    'Our traffic feed',
+    'a host label wins',
+  );
+  assert.equal(
+    createTrafficSource({ roadModes: ['tomtom'], label: 'Our traffic feed' })
+      .label,
+    'Our traffic feed',
+  );
+  assert.equal(createTrafficSource().label, undefined);
+  assert.throws(() => createTrafficSource({ label: ' ' }), TypeError);
+  assert.equal(
+    tomtomOnly.getStats().source,
+    'TomTom',
+    'before any roads arrive',
+  );
+  assert.equal(
+    createTrafficLayer({ services, source: sourceWith() }).source,
+    'OpenStreetMap / TomTom',
+  );
 });

@@ -98,8 +98,13 @@ const boot = async () => {
   return { page, errors };
 };
 
+// The Weather readout paints on the frame after a layer changes: read the
+// page after one.
 const snapshot = (page) =>
-  page.evaluate(() => {
+  page.evaluate(async () => {
+    await new Promise((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(resolve)),
+    );
     const gev = window.__godsEyeView;
     const v = gev.viewer;
     const s = v.scene;
