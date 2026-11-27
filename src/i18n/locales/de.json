@@ -1142,10 +1142,6 @@
   "EVIDENCE": "BELEGE",
   "{year} HISTORICAL REFERENCE": "HISTORISCHE REFERENZ {year}",
   "{year} POST-EVENT": "NACH DEM EREIGNIS {year}",
-  "{count} GEOLOCATED SOURCE-MAP PLACEMENTS": {
-    "one": "{count} GEOLOKALISIERTE PLATZIERUNG AUF DER QUELLENKARTE",
-    "other": "{count} GEOLOKALISIERTE PLATZIERUNGEN AUF DER QUELLENKARTE"
-  },
   "NO PREVIEW": "KEINE VORSCHAU",
   "YouTube source": "YouTube-Quelle",
   "Facebook source": "Facebook-Quelle",

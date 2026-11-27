@@ -481,21 +481,6 @@ function imageryEndpointText(entry) {
   return [name, date].filter(Boolean).join(' · ');
 }
 
-/** Compact, source-bounded disclosure for multi-source geolocation beats. */
-export function evidenceCorroborationLabel(observation) {
-  const count = Math.max(
-    0,
-    Math.floor(Number(observation?.corroboration?.sourceCount) || 0),
-  );
-  return count > 1
-    ? tn(
-        count,
-        '{count} GEOLOCATED SOURCE-MAP PLACEMENT',
-        '{count} GEOLOCATED SOURCE-MAP PLACEMENTS',
-      )
-    : '';
-}
-
 /** Interpolate headings across north using the shortest angular path. */
 export function interpolateHeadingDegrees(start, end, amount) {
   const from = Number(start) || 0;
@@ -571,42 +556,6 @@ export function sampleCinematicPose(progress, keyframes, result = {}) {
   result.fromId = from.id;
   result.toId = to.id;
   return result;
-}
-
-/** Wrap a compact card summary without clipping a word at the canvas edge. */
-export function evidenceSummaryLines(value, maxChars = 52, maxLines = 2) {
-  const words = String(value || '')
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
-  const limit = Math.max(8, Math.floor(Number(maxChars) || 52));
-  const lineLimit = Math.max(1, Math.floor(Number(maxLines) || 2));
-  const lines = [];
-  let current = '';
-  let consumed = 0;
-
-  for (let index = 0; index < words.length; index += 1) {
-    const word = words[index];
-    const candidate = current ? `${current} ${word}` : word;
-    if (candidate.length <= limit) {
-      current = candidate;
-      consumed = index + 1;
-      continue;
-    }
-    if (current) {
-      lines.push(current);
-      if (lines.length >= lineLimit) break;
-    }
-    current = word;
-    consumed = index + 1;
-  }
-  if (current && lines.length < lineLimit) lines.push(current);
-  if (consumed < words.length && lines.length > 0) {
-    let tail = lines.at(-1);
-    while (tail.length > limit - 1) tail = tail.slice(0, -1);
-    lines[lines.length - 1] = `${tail}…`;
-  }
-  return lines;
 }
 
 function closeFrame(frame) {
@@ -4106,6 +4055,3 @@ export function createBhoteKoshiEventLayer({
     },
   };
 }
-
-const bhoteKoshiEventLayer = createBhoteKoshiEventLayer();
-export default bhoteKoshiEventLayer;

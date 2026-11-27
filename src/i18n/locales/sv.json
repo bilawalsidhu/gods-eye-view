@@ -1058,10 +1058,6 @@
   "EVIDENCE": "BELÄGG",
   "{year} HISTORICAL REFERENCE": "HISTORISK REFERENS {year}",
   "{year} POST-EVENT": "EFTER HÄNDELSEN {year}",
-  "{count} GEOLOCATED SOURCE-MAP PLACEMENTS": {
-    "one": "{count} GEOLOKALISERAD PLACERING PÅ KÄLLKARTAN",
-    "other": "{count} GEOLOKALISERADE PLACERINGAR PÅ KÄLLKARTAN"
-  },
   "NO PREVIEW": "INGEN BILD",
   "YouTube source": "YouTube-källa",
   "Facebook source": "Facebook-källa",

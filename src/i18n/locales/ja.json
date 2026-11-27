@@ -208,9 +208,6 @@
   "EVIDENCE": "証拠",
   "{year} HISTORICAL REFERENCE": "{year}年 過去参照",
   "{year} POST-EVENT": "{year}年 発生後",
-  "{count} GEOLOCATED SOURCE-MAP PLACEMENTS": {
-    "other": "ソースマップ上の位置特定 {count}件"
-  },
   "NO PREVIEW": "プレビューなし",
   "YouTube source": "YouTubeソース",
   "Facebook source": "Facebookソース",

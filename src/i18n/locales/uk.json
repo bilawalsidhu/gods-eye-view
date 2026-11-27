@@ -232,12 +232,6 @@
   "EVIDENCE": "СВІДЧЕННЯ",
   "{year} HISTORICAL REFERENCE": "ІСТОРИЧНИЙ ЗНІМОК {year}",
   "{year} POST-EVENT": "ПІСЛЯ ПОДІЇ {year}",
-  "{count} GEOLOCATED SOURCE-MAP PLACEMENTS": {
-    "one": "{count} ГЕОПРИВʼЯЗАНА МІТКА НА КАРТІ ДЖЕРЕЛ",
-    "few": "{count} ГЕОПРИВʼЯЗАНІ МІТКИ НА КАРТІ ДЖЕРЕЛ",
-    "many": "{count} ГЕОПРИВʼЯЗАНИХ МІТОК НА КАРТІ ДЖЕРЕЛ",
-    "other": "{count} ГЕОПРИВʼЯЗАНОЇ МІТКИ НА КАРТІ ДЖЕРЕЛ"
-  },
   "NO PREVIEW": "НЕМАЄ ПОПЕРЕДНЬОГО ПЕРЕГЛЯДУ",
   "YouTube source": "Джерело YouTube",
   "Facebook source": "Джерело Facebook",

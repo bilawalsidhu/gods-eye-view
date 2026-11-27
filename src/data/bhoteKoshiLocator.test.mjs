@@ -31,7 +31,6 @@ import {
   BHOTE_KOSHI_TRIGGER_RECORD_PRESENTATION,
   closeRegionRing,
   createBhoteKoshiLocatorLayer,
-  largestGeoJsonRing,
   NEPAL_CONTEXT_PRESENTATION,
   revealLengthFraction,
 } from './bhoteKoshiLocator.js';
@@ -146,36 +145,6 @@ test('Bhote Koshi locator closes valid region rings once', () => {
       [80, 26],
       ['bad', 27],
     ]),
-    [],
-  );
-});
-
-test('Bhote Koshi locator selects the largest GeoJSON country exterior', () => {
-  const main = [
-    [80, 26],
-    [88, 26],
-    [88, 30],
-    [80, 30],
-    [80, 26],
-  ];
-  const island = [
-    [82, 25],
-    [83, 25],
-    [82, 25],
-  ];
-  assert.equal(
-    largestGeoJsonRing({ type: 'Polygon', coordinates: [main] }),
-    main,
-  );
-  assert.equal(
-    largestGeoJsonRing({
-      type: 'MultiPolygon',
-      coordinates: [[island], [main]],
-    }),
-    main,
-  );
-  assert.deepEqual(
-    largestGeoJsonRing({ type: 'Point', coordinates: [84, 28] }),
     [],
   );
 });

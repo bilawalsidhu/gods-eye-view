@@ -1207,14 +1207,6 @@
   "EVIDENCE": "الأدلة",
   "{year} HISTORICAL REFERENCE": "مرجع تاريخي {year}",
   "{year} POST-EVENT": "بعد الحدث {year}",
-  "{count} GEOLOCATED SOURCE-MAP PLACEMENTS": {
-    "zero": "{count} موضع محدَّد جغرافيًا على خريطة المصادر",
-    "one": "موضع واحد محدَّد جغرافيًا على خريطة المصادر ({count})",
-    "two": "موضعان محدَّدان جغرافيًا على خريطة المصادر ({count})",
-    "few": "{count} مواضع محدَّدة جغرافيًا على خريطة المصادر",
-    "many": "{count} موضعًا محدَّدًا جغرافيًا على خريطة المصادر",
-    "other": "{count} موضع محدَّد جغرافيًا على خريطة المصادر"
-  },
   "NO PREVIEW": "لا معاينة",
   "YouTube source": "مصدر YouTube",
   "Facebook source": "مصدر Facebook",

@@ -23,9 +23,7 @@ import {
   elapsedLabel,
   evidenceBeatProgress,
   evidenceBeatPresentation,
-  evidenceCorroborationLabel,
   evidenceSequenceWindow,
-  evidenceSummaryLines,
   floodProgressForStoryProgress,
   interpolateHeadingDegrees,
   sampleCinematicPose,
@@ -765,14 +763,6 @@ test('Bhote Koshi camera holds its evidence beat, then travels by the next activ
   assert.equal(sampled.headingDeg, 0);
   assert.equal(sampled.pitchDeg, -40);
   assert.equal(sampled.rangeM, 2000);
-});
-
-test('Bhote Koshi card summaries wrap on words instead of clipping mid-sentence', () => {
-  assert.deepEqual(
-    evidenceSummaryLines('Five geolocated public viewpoints document the flood passage.', 34, 2),
-    ['Five geolocated public viewpoints', 'document the flood passage.'],
-  );
-  assert.deepEqual(evidenceSummaryLines('one two three four five', 9, 1), ['one two…']);
 });
 
 test('Bhote Koshi evidence timeline is ordered by phase and corridor chainage with one active beat', async () => {
@@ -1805,7 +1795,6 @@ test('Bhote Koshi event pack keeps observations separate from reconstruction', a
   assert.equal(timure.corroboration.kind, 'multi-source geolocation cluster');
   assert.equal(timure.corroboration.sourceCount, 5);
   assert.equal(timure.corroboration.displayedSourceCount, 1);
-  assert.equal(evidenceCorroborationLabel(timure), '5 GEOLOCATED SOURCE-MAP PLACEMENTS');
   assert.match(event.reconstruction.caveat, /2021 historical reference versus 2026 post-event/i);
   assert.match(event.reconstruction.caveat, /not modeled arrival time/i);
   assert.match(event.reconstruction.caveat, /2025 Rasuwagadhi flood/i);

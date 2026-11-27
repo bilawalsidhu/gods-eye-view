@@ -133,11 +133,6 @@
   "EVIDENCE": "ראיות",
   "{year} HISTORICAL REFERENCE": "{year} ייחוס היסטורי",
   "{year} POST-EVENT": "{year} אחרי האירוע",
-  "{count} GEOLOCATED SOURCE-MAP PLACEMENTS": {
-    "one": "{count} מיקום מאוכן במפת המקורות",
-    "two": "{count} מיקומים מאוכנים במפת המקורות",
-    "other": "{count} מיקומים מאוכנים במפת המקורות"
-  },
   "NO PREVIEW": "אין תצוגה מקדימה",
   "YouTube source": "מקור YouTube",
   "Facebook source": "מקור Facebook",

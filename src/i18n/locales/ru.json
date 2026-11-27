@@ -1260,12 +1260,6 @@
   "CONSEQUENCE": "ПОСЛЕДСТВИЯ",
   "DOWNSTREAM CONSEQUENCE": "ПОСЛЕДСТВИЯ НИЖЕ ПО ТЕЧЕНИЮ",
   "EVIDENCE": "СВИДЕТЕЛЬСТВА",
-  "{count} GEOLOCATED SOURCE-MAP PLACEMENTS": {
-    "one": "{count} ГЕОПРИВЯЗАННАЯ МЕТКА НА КАРТЕ ИСТОЧНИКОВ",
-    "few": "{count} ГЕОПРИВЯЗАННЫЕ МЕТКИ НА КАРТЕ ИСТОЧНИКОВ",
-    "many": "{count} ГЕОПРИВЯЗАННЫХ МЕТОК НА КАРТЕ ИСТОЧНИКОВ",
-    "other": "{count} ГЕОПРИВЯЗАННОЙ МЕТКИ НА КАРТЕ ИСТОЧНИКОВ"
-  },
   "NO PREVIEW": "НЕТ ПРЕДПРОСМОТРА",
   "SOURCE LINK": "ССЫЛКА НА ИСТОЧНИК",
   "{publisher} / OPEN": "{publisher} / ОТКРЫТЬ",

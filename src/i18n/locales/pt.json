@@ -224,11 +224,6 @@
   "EVIDENCE": "EVIDÊNCIA",
   "{year} HISTORICAL REFERENCE": "REFERÊNCIA HISTÓRICA {year}",
   "{year} POST-EVENT": "PÓS-EVENTO {year}",
-  "{count} GEOLOCATED SOURCE-MAP PLACEMENTS": {
-    "one": "{count} POSIÇÃO GEOLOCALIZADA NO MAPA DE FONTES",
-    "many": "{count} DE POSIÇÕES GEOLOCALIZADAS NO MAPA DE FONTES",
-    "other": "{count} POSIÇÕES GEOLOCALIZADAS NO MAPA DE FONTES"
-  },
   "NO PREVIEW": "SEM PRÉVIA",
   "YouTube source": "Fonte do YouTube",
   "Facebook source": "Fonte do Facebook",

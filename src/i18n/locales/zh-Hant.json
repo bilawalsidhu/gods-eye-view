@@ -208,9 +208,6 @@
   "EVIDENCE": "證據",
   "{year} HISTORICAL REFERENCE": "{year} 年歷史參考",
   "{year} POST-EVENT": "{year} 年災後",
-  "{count} GEOLOCATED SOURCE-MAP PLACEMENTS": {
-    "other": "{count} 個地理定位來源點位"
-  },
   "NO PREVIEW": "無預覽",
   "YouTube source": "YouTube 來源",
   "Facebook source": "Facebook 來源",
