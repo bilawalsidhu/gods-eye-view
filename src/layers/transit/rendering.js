@@ -411,11 +411,8 @@ export function createRendering({ state, services, parts }) {
   // that way.
   let flatVersion = null;
   let flatTerrain = false;
-  function askFlat(globe) {
-    const view = viewOf();
-    if (view.surface === undefined)
-      view.surface = globe.surfaceVersion?.() ?? 0;
-    const version = view.surface;
+  function askFlat() {
+    const version = surfaceVersion();
     if (version === flatVersion) return;
     flatVersion = version;
     const pose = cameraPose();
@@ -445,6 +442,22 @@ export function createRendering({ state, services, parts }) {
   }
 
   /**
+   * The globe's `surfaceVersion`, read once in a task; 0 without one.
+   * @returns {number}
+   */
+  function surfaceVersion() {
+    const view = viewOf();
+    if (view.surface === undefined)
+      view.surface = findGlobe(state._viewer)?.surfaceVersion?.() ?? 0;
+    return view.surface;
+  }
+
+  /** Whether the globe has loaded the terrain tiles in view. */
+  function terrainSettled() {
+    return findGlobe(state._viewer)?.isSettled?.('terrain') !== false;
+  }
+
+  /**
    * What the globe draws under the fleet: `'none'` when it is hidden (the
    * photoreal stack), `'flat'` on the ellipsoid, `'terrain'` otherwise.
    * @returns {'none'|'flat'|'terrain'}
@@ -452,7 +465,7 @@ export function createRendering({ state, services, parts }) {
   function globeSurface() {
     const globe = findGlobe(state._viewer);
     if (globe?.isGlobeVisible?.() !== true) return 'none';
-    askFlat(globe);
+    askFlat();
     return flatTerrain ? 'flat' : 'terrain';
   }
 
@@ -1239,8 +1252,11 @@ export function createRendering({ state, services, parts }) {
     unwatchCamera,
     startFrames,
     stopFrames,
+    cameraPose,
     cameraHeightM,
     globeSurface,
+    surfaceVersion,
+    terrainSettled,
     sampleMeshFloors,
     resumePlayback,
     maintainPresentation,

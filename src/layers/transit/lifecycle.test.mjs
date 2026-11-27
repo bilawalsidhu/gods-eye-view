@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import inspector from 'node:inspector/promises';
 import { createTransitLayer } from './index.js';
+import { createTrack, insertFix } from '../../data/contactPlayback.js';
 import { spriteDrawOrder } from '../../data/spriteOrder.js';
 import {
   FEED_EVICT_AFTER_MS,
@@ -12,7 +13,7 @@ import {
   TRANSIT_SELECTED_OVERLAY_SOURCE_ID,
   VEHICLE_MAX_FIX_AGE_MS,
 } from './policy.js';
-import { FLOOR_WARM_PER_POLL } from './policy.js';
+import { FLOOR_WARM_PER_POLL, TERRAIN_NEED } from './policy.js';
 import { fleetModelFakes } from '../../testSupport/fleetModelFakes.mjs';
 import { layerPlacement } from '../../data/placementProvider.js';
 import { PLACED_WAKE_MS } from './movement.js';
@@ -47,12 +48,23 @@ import { fakeInput } from '../../input/testDoubles.mjs';
 import { setClickCardHitTest } from '../../data/pickRegistry.js';
 import { fakeCameraPort } from '../../testSupport/fakeCameraPort.mjs';
 import { fakeDrawPort } from '../../testSupport/fakeDrawPort.mjs';
-import { bindRenderer, rendererOf } from '../../render/rendererOf.js';
+import {
+  bindRenderer,
+  findGlobe,
+  rendererOf,
+} from '../../render/rendererOf.js';
 import { fakeSceneQuery } from '../../testSupport/fakeCesiumScene.mjs';
 import { framePortFor } from '../../testSupport/fakeFramePort.mjs';
 import { registerStyleStages } from '../../styles/styleStages.js';
 
 const BOSTON = { lat: 42.3601, lon: -71.0589 };
+
+/** A track holding one fix, the vehicle's newest. */
+function newestTrack(fix) {
+  const track = createTrack();
+  insertFix(track, { t: 1, lat: fix.lat, lon: fix.lon });
+  return track;
+}
 
 /** One decoded snapshot in the shape `/api/transit/vehicles/<id>` returns. */
 function snapshot(
@@ -3285,7 +3297,11 @@ test('mesh refinement reaches all 100 retained DEM cells within five poll budget
     lat: i / 1000,
     lon: 0,
   }));
-  const entry = { key: 'selected', to: cells[0], fixes: [cells.at(-1)] };
+  const entry = {
+    key: 'selected',
+    to: cells[0],
+    track: newestTrack(cells.at(-1)),
+  };
   const probed = new Set();
   const state = {
     _enabled: true,
@@ -3316,6 +3332,7 @@ test('mesh refinement reaches all 100 retained DEM cells within five poll budget
         requestVisibility() {},
         cameraHeightM: () => 100,
         globeSurface: () => 'none',
+        surfaceVersion: () => 0,
         sampleMeshFloors(cells) {
           for (const point of cells) probed.add(point.cell);
         },
@@ -3338,7 +3355,7 @@ test('mesh refinement probes the latest point the path offers in a cell', async 
     { lat: 42.3612, lon: -71.0753 },
     { lat: 42.3614, lon: -71.0754 },
   ];
-  const entry = { key: 'train', to: path[0], fixes: [path.at(-1)] };
+  const entry = { key: 'train', to: path[0], track: newestTrack(path.at(-1)) };
   const probed = [];
   const state = {
     _enabled: true,
@@ -3374,6 +3391,7 @@ test('mesh refinement probes the latest point the path offers in a cell', async 
         requestVisibility() {},
         cameraHeightM: () => 100,
         globeSurface: () => 'none',
+        surfaceVersion: () => 0,
         sampleMeshFloors(points) {
           probed.push(...points.map((p) => [p.lat, p.lon]));
         },
@@ -3395,7 +3413,7 @@ test('the selected vehicle is probed at its newest fix in its own cell', async (
     { lat: 42.3612, lon: -71.0753 },
     { lat: 42.3611, lon: -71.0751 },
   ];
-  const entry = { key: 'train', to: offers[0], fixes: [newest] };
+  const entry = { key: 'train', to: offers[0], track: newestTrack(newest) };
   const probed = [];
   const state = {
     _enabled: true,
@@ -3431,6 +3449,7 @@ test('the selected vehicle is probed at its newest fix in its own cell', async (
         requestVisibility() {},
         cameraHeightM: () => 100,
         globeSurface: () => 'none',
+        surfaceVersion: () => 0,
         sampleMeshFloors(points) {
           probed.push(...points.map((p) => [p.lat, p.lon]));
         },
@@ -5148,4 +5167,61 @@ test('holding a vehicle out of view tells its view at once the floor it stands o
   assert.equal(app.layer.setCockpitSubject(entry.key), true);
   const floorM = app.layer.getCockpitSubject().position.groundHeightM;
   assert.ok(Math.abs(floorM - 100) < 1.5, `up the hill, got ${floorM} m`);
+});
+
+test('a reported vehicle asks for the terrain under it as a marker', async (t) => {
+  const app = harness(t);
+  app.serve('mbta', () => ({
+    status: 200,
+    body: snapshot(
+      'mbta',
+      'MBTA',
+      [vehicle('bus', 42.36, -71.06, reported())],
+      {
+        fetchedAt: Date.now(),
+      },
+    ),
+  }));
+  app.layer.enable(app.viewer);
+  const parts = app.layer._transitPartsForTest();
+  const asked = [];
+  const requestHeight = parts.height.requestHeight;
+  parts.height.requestHeight = (lat, lon, entry, need) => {
+    asked.push({ lat, lon, need });
+    return requestHeight(lat, lon, entry, need);
+  };
+  await app.layer.update();
+  assert.ok(
+    asked.some(
+      (a) =>
+        a.lat === 42.36 && a.lon === -71.06 && a.need === TERRAIN_NEED.MARKER,
+    ),
+    JSON.stringify(asked),
+  );
+});
+
+test('the rendering part reads the surface version and terrain loading from the globe port', async (t) => {
+  const app = harness(t);
+  app.viewer.scene.globe.show = true;
+  app.layer.enable(app.viewer);
+  const parts = app.layer._transitPartsForTest();
+  const globe = findGlobe(app.viewer);
+  const first = parts.rendering.surfaceVersion();
+  app.viewer.terrainProvider = new Cesium.EllipsoidTerrainProvider();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.notEqual(
+    parts.rendering.surfaceVersion(),
+    first,
+    'a terrain swap is a new surface',
+  );
+  assert.equal(
+    parts.rendering.terrainSettled(),
+    true,
+    'a port that cannot tell counts as settled',
+  );
+  let loaded = false;
+  globe.isSettled = (kind) => (kind === 'terrain' ? loaded : true);
+  assert.equal(parts.rendering.terrainSettled(), false);
+  loaded = true;
+  assert.equal(parts.rendering.terrainSettled(), true);
 });

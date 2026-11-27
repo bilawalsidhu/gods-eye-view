@@ -7231,6 +7231,15 @@ Noir samples also exclude its deliberately vignetted outer field, using shader
 settings and screen position rather than observed brightness. Selected-trail
 diagnostics report every condition even when selection fails.
 
+On a terrain globe Transit reads vehicle and trail heights from the loaded
+surface (`heightsOf(viewer).now` against `'terrain'`: the finest terrain mesh
+loaded at the point, not necessarily the one drawn) and keeps them per point
+(`src/layers/transit/height.js`). Kept heights are read again within a time
+budget while the view or the tiles change, vehicle positions first, then the
+paths markers are drawn along, then undrawn history; reuse times and budgets
+are in `policy.js`. Checked only against Boston's MBTA feed on a keyless
+terrain globe.
+
 Transit brackets use the normal-composite overlay surface: a 1.25 px mode-colour
 stroke over 3.25 px dark backing. Other contact themes retain their existing
 behavior. The selected trail uses a 3 px core over 5 px backing, mode-coloured
