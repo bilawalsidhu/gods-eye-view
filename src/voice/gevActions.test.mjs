@@ -6109,6 +6109,39 @@ test("analyst_query keeps a fire's discovery time apart from its last growth", a
   assert.equal('lastGrowthTime' in b, false);
 });
 
+test('analyst_query refuses a field the layer source does not carry', async () => {
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
+  const module = {
+    getStats: () => ({ count: 1, lastUpdate: Date.now() }),
+    getAnalystRecords: () => [
+      { id: 'fire-a', name: 'Alpha Fire', lat: 35.2, lon: -108.1, acres: 40 },
+    ],
+    getAnalystFields: () => ['name', 'acres'],
+  };
+  const { runner } = manifestRunner(
+    { 'fire-perimeters': module },
+    { enabled: ['fire-perimeters'] },
+  );
+  const refused = await runner('analyst_query', {
+    layers: ['fire-perimeters'],
+    scope: { kind: 'anywhere' },
+    filters: [{ field: 'state', op: 'eq', value: 'CA' }],
+  });
+  assert.equal(refused.ok, false);
+  assert.equal(refused.code, 'FIELD_UNAVAILABLE', JSON.stringify(refused));
+  const zero = await runner('analyst_query', {
+    layers: ['fire-perimeters'],
+    scope: { kind: 'anywhere' },
+    filters: [{ field: 'acres', op: 'gt', value: 1000 }],
+  });
+  assert.equal(zero.ok, true, JSON.stringify(zero));
+  assert.equal(zero.count, 0);
+});
+
 test('spoken layer names from the manifest reach the newer layers', async () => {
   globalThis.window = globalThis.window || {
     clearTimeout,

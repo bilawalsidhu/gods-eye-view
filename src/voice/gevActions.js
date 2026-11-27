@@ -5991,6 +5991,13 @@ function analystProviders(
         truncated: true,
       };
     },
+    /** The record fields a layer's source declares, or null for every manifest field. */
+    getRecordFields(layerKey) {
+      const fields = dataManager.layers
+        .get(layerKey)
+        ?.module?.getAnalystFields?.();
+      return Array.isArray(fields) ? fields : null;
+    },
     /** The moment a layer's records show when it is not now (a past snapshot), else null. */
     getRecordsAt(layerKey) {
       if (!dataManager.isEnabled(layerKey)) return null;

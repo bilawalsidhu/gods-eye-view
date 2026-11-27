@@ -109,6 +109,9 @@ const INCIWEB_INDEX_TTL_MS = 6 * 3600000;
  *   the card facts (`name`, `acres`, `containedPct`, `state`,
  *   `discoveredTime`, `updatedTime`, …). A fire without an id or anchor is
  *   dropped. A fire may have no pieces: it keeps its card and legend count.
+ *   Optional `analystPoint` (`{lon, lat}` degrees): where analyst queries
+ *   place the fire, for a source whose `anchor` follows the camera; without
+ *   it they use the anchor.
  * - `pieces`: `fireId` (a listed fire's id; any other piece is dropped),
  *   `born` (epoch ms or null; the piece's colour), `polygons` (each
  *   `[outer, ...holes]`, rings of `[lon, lat]`) and `outline` (lines of
@@ -120,6 +123,10 @@ const INCIWEB_INDEX_TTL_MS = 6 * 3600000;
  *   only pieces added, removed or recoloured since the last, in snapshot
  *   order. A piece without an id, or with an id repeated within its fire or
  *   holding a lone UTF-16 surrogate, has the snapshot drawn whole.
+ *
+ * Optional `source.analystFields`: the analyst fields (voice/layerManifest.js)
+ * the source's fires carry. A query on another one is refused rather than
+ * answered with zero; without the list, every field counts as carried.
  *
  * When to read again (a timeline, the camera) is the host's call, through
  * the manager's `refreshLayer`. Given a Cesium viewer with no renderer bound,
@@ -136,6 +143,11 @@ export function createFirePerimetersLayer({
 } = {}) {
   if (typeof source?.getSnapshot !== 'function')
     throw new TypeError('Fire perimeters require a snapshot source');
+  const analystFields = Array.isArray(source.analystFields)
+    ? Object.freeze(
+        source.analystFields.filter((field) => typeof field === 'string'),
+      )
+    : null;
   let _viewer = null;
   let _request = null;
   let _linkRequest = null;
@@ -835,7 +847,10 @@ export function createFirePerimetersLayer({
       _stale = false;
     },
 
-    /** Snapshot incident facts (with card-anchor coordinates) for the analyst query engine. */
+    /**
+     * Snapshot incident facts for the analyst query engine, placed at each
+     * fire's `analystPoint`, else its card anchor.
+     */
     getAnalystRecords(maxCount = 2000) {
       if (!_draw || !_enabled) return [];
       const limit = Number.isFinite(maxCount)
@@ -844,7 +859,8 @@ export function createFirePerimetersLayer({
       const result = [];
       for (const fire of _fireById.values()) {
         if (result.length >= limit) break;
-        const { anchor, id, ...facts } = fire;
+        const { anchor, analystPoint, id, ...facts } = fire;
+        const point = validAnchor(analystPoint) ? analystPoint : anchor;
         // A time after the moment shown is unknown in this snapshot.
         if (_at !== null)
           for (const key of ['discoveredTime', 'updatedTime', 'lastGrowthTime'])
@@ -852,11 +868,16 @@ export function createFirePerimetersLayer({
         result.push({
           id,
           ...facts,
-          lat: anchor.lat,
-          lon: anchor.lon,
+          lat: point.lat,
+          lon: point.lon,
         });
       }
       return result;
+    },
+
+    /** The analyst fields the source declares, or null for all of them. */
+    getAnalystFields() {
+      return analystFields;
     },
 
     /** The moment the analyst records show: the snapshot's `at`, or null for now. */

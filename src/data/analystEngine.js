@@ -18,6 +18,8 @@
  *
  * Providers (injected — keeps the engine pure and node-testable):
  *   getRecords(layerKey) → Array<record>            (layer accessor snapshot)
+ *   getRecordFields?(layerKey) → string[]|null      (fields the layer's source
+ *     carries; null: every manifest field. Others answer FIELD_UNAVAILABLE)
  *   resolveRegionRing(name, {signal}?) → Promise<{name, geometry|ring, prepared?, source?}
  *     |{error:'region-timeout'}|{needsClarification, candidates}|null>
  *     (geometry = MultiPolygon coordinates; islands and holes all count)
@@ -98,6 +100,34 @@ function analystFieldsFor(layerKeys) {
     if (layer.timeField) fields.add(AGE_FIELD);
   }
   return [...fields];
+}
+
+/**
+ * Queried layers whose source lacks `field`, though the manifest lists it
+ * for them: a filter there would drop every record and read as a zero.
+ * @param {string[]} layerKeys Queried layer ids.
+ * @param {string} field Bare field name.
+ * @param {(key: string) => string[]|null|undefined} fieldsOf A layer's
+ *   declared record fields, or null when it has every manifest field.
+ * @returns {Array<{layerKey: string, available: string[]}>} Layers without it.
+ */
+function layersLackingField(layerKeys, field, fieldsOf) {
+  if (COMMON_FIELDS.includes(field)) return [];
+  const lacking = [];
+  for (const key of layerKeys) {
+    const declared = fieldsOf?.(key);
+    if (!Array.isArray(declared)) continue;
+    if (!analystFieldsFor([key]).includes(field)) continue;
+    const layer = ANALYST_LAYERS[key];
+    const available = analystFieldsFor([key]).filter(
+      (name) =>
+        COMMON_FIELDS.includes(name) ||
+        declared.includes(name) ||
+        (name === AGE_FIELD && declared.includes(layer.timeField)),
+    );
+    if (!available.includes(field)) lacking.push({ layerKey: key, available });
+  }
+  return lacking;
 }
 
 /** Epoch ms from a number or an ISO/date string; NaN when neither. */
@@ -775,6 +805,30 @@ export function createAnalystEngine(providers) {
     const normalized = normalizeSpec(spec, layers);
     if (normalized.refusal) return normalized.refusal;
     spec = normalized.spec;
+    // A field the layer's source does not carry is refused, not counted:
+    // every record would fail the filter and the answer would be zero.
+    for (const field of [
+      ...spec.filters.map((filter) => filter.field),
+      ...(spec.sortBy && spec.sortBy !== 'distance' ? [spec.sortBy] : []),
+    ]) {
+      const lacking = layersLackingField(
+        layers,
+        field,
+        providers.getRecordFields,
+      );
+      if (!lacking.length) continue;
+      const names = lacking.map(({ layerKey }) => layerKey).join(', ');
+      return refusal(
+        'FIELD_UNAVAILABLE',
+        `${field} is not available for ${names}: its source does not carry it. Available: ${lacking[0].available.join(', ')}.`,
+        {
+          field,
+          layers: lacking.map(({ layerKey }) => layerKey),
+          allowed: lacking[0].available,
+          coverage: { layersQueried: [], scope: 'none' },
+        },
+      );
+    }
 
     // 1) Source records, grouped by layer and never copied.
     const recordsAt = followUp ? lastResult.recordsAt : new Map();
