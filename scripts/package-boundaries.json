@@ -820,6 +820,7 @@
       "server/providers/openai/codex-auth.js",
       "server/providers/openai/constants.js",
       "server/providers/openai/debug-log.js",
+      "server/providers/common/http.js",
       "server/providers/openai/hud-summary.js",
       "server/providers/openai/instructions.js",
       "server/providers/openai/rate-limit.js",

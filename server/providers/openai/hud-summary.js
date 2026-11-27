@@ -10,8 +10,13 @@ import {
   keylessHudSummaryResponse,
 } from '../../../src/hudSummaryResponse.js';
 import { enforceRateLimit, openAiRateLimiter } from './rate-limit.js';
+import { readResponseJsonCapped } from '../common/http.js';
 import { readRequestBody } from '../common/request.js';
 import { OPENAI_HUD_SUMMARY_MODEL_DEFAULT } from './constants.js';
+
+// Bound the upstream request through the last byte of the reply.
+const HUD_SUMMARY_TIMEOUT_MS = 10_000;
+const HUD_SUMMARY_MAX_RESPONSE_BYTES = 256 * 1024;
 
 function extractOpenAiResponseText(data) {
   if (typeof data?.output_text === 'string' && data.output_text.trim()) {
@@ -118,8 +123,11 @@ async function handleHudSummary(req, res) {
   try {
     const body = await readRequestBody(req, 64 * 1024);
     const context = JSON.parse(body || '{}');
+    const deadline = AbortSignal.timeout(HUD_SUMMARY_TIMEOUT_MS);
     const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
+      redirect: 'error',
+      signal: deadline,
       headers: {
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
@@ -135,7 +143,11 @@ async function handleHudSummary(req, res) {
         max_output_tokens: 200,
       }),
     });
-    const data = await response.json().catch(() => ({}));
+    const data = await readResponseJsonCapped(
+      response,
+      HUD_SUMMARY_MAX_RESPONSE_BYTES,
+      deadline,
+    ).catch(() => ({}));
     const { summary, feedState } = parseHudSummaryReply(
       extractOpenAiResponseText(data),
       context?.locale,

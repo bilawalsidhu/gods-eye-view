@@ -287,11 +287,7 @@ async function postHudSummary(context, reply) {
   let sent = null;
   globalThis.fetch = async (url, init) => {
     sent = JSON.parse(init.body);
-    return {
-      ok: true,
-      status: 200,
-      json: async () => ({ output_text: reply }),
-    };
+    return Response.json({ output_text: reply });
   };
   try {
     // The handler itself: the installed route adds a same-site gate that a
