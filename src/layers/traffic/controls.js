@@ -65,7 +65,7 @@ export function createControls({ state: layerState, services, parts, source }) {
 
     icon: '🚗',
 
-    source: trafficSourceLabel(layerState._roadModes),
+    source: source?.label ?? trafficSourceLabel(layerState._roadModes),
 
     /** @type {number} Zero — layer is self-managed via camera listener + preRender */
     updateInterval: 0,

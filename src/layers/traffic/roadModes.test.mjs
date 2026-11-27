@@ -775,6 +775,21 @@ test('the row names TomTom alone when the host offers only TomTom roads', () => 
     source: sourceWith(['tomtom']),
   });
   assert.equal(
+    createTrafficLayer({
+      services,
+      source: { ...sourceWith(['tomtom']), label: 'Our traffic feed' },
+    }).source,
+    'Our traffic feed',
+    'a host label wins',
+  );
+  assert.equal(
+    createTrafficSource({ roadModes: ['tomtom'], label: 'Our traffic feed' })
+      .label,
+    'Our traffic feed',
+  );
+  assert.equal(createTrafficSource().label, undefined);
+  assert.throws(() => createTrafficSource({ label: ' ' }), TypeError);
+  assert.equal(
     tomtomOnly.getStats().source,
     'TomTom',
     'before any roads arrive',

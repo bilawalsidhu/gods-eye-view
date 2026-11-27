@@ -65,7 +65,8 @@ export function normalizeRoadModes(value) {
 }
 
 /**
- * The layer's data source as its row names it: TomTom alone when the host
+ * The layer's data source as its row names it when the host gives no `label`
+ * (createTrafficSource): TomTom alone when the host
  * offers only TomTom roads, since then no OpenStreetMap data is drawn; every
  * other set of modes draws OpenStreetMap roads somewhere (`osm` matches TomTom
  * flow onto them).
