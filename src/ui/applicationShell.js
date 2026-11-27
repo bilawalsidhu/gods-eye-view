@@ -1,3 +1,5 @@
+import { findMatch } from './entityLookup.js';
+import { worldClock } from '../time/worldClock.js';
 import { readEntityRecord } from '../data/entityRecords.js';
 import { nextTick, watch } from 'vue';
 import { getConfiguredLayerCounts } from '../services/application.js';
@@ -93,6 +95,7 @@ import {
 } from '../data/dataCredits.js';
 import { withPlacePacks } from './placePacksLoading.js';
 import { preloadOwnerFlags } from './ownerFlag.js';
+import { flushAllPanelContent } from './rail/panelContent.js';
 
 /**
  * Central UI orchestrator for the God's Eye View application.
@@ -124,12 +127,16 @@ export class StyleManager extends ShellFacade {
    *   back to (degrees): the view the app started from.
    * @param {string[]} [options.startLayers] - the layers a bare address (one
    *   that carries no link) starts with; none by default.
+   * @param {?Function} [options.entityLookup] - the host's lookup of things
+   *   anywhere for the search box (createApplicationControls in
+   *   src/app/controls.js).
    */
   constructor(
     viewer,
     {
       mapStackController = null,
       placeSearch,
+      entityLookup = null,
       services,
       requestServices,
       initialShareCode = null,
@@ -206,6 +213,32 @@ export class StyleManager extends ShellFacade {
         shown
           ? showOsmCredit(this.viewer, 'omnibar')
           : hideOsmCredit(this.viewer, 'omnibar'),
+      // Things anywhere, from the host's lookup when it gives one.
+      lookupEntities:
+        typeof entityLookup === 'function'
+          ? (request) => entityLookup(request)
+          : null,
+      // A looked-up thing found in its layer, its layer switched on if need
+      // be (src/ui/entityLookup.js); the search box picks it.
+      findLookedUp: (match, { signal } = {}) =>
+        findMatch({
+          match,
+          dataManager: this._dataManager,
+          setLayer: (id, enabled) =>
+            this._dataManager?.setEnabled(id, enabled, { origin: 'user' }),
+          centre: (lat, lon) =>
+            this.runImmediateNavigation('target', () =>
+              this.services.flyToLandmark?.(this.viewer, lat, lon, {
+                range: 6000,
+                pitch: -45,
+                heading: 0,
+                buildingHeight: 0,
+                duration: 2.0,
+              }),
+            ),
+          seek: (ms) => worldClock.seek(ms),
+          signal,
+        }),
     });
     // Scrolling at a screen edge steps through that side's rail panels.
     this._removeRailEdgeScroll = installRailEdgeScroll();
@@ -1359,6 +1392,8 @@ export class StyleManager extends ShellFacade {
         ? forceEnabled
         : !document.body.classList.contains('ui-clean-view');
     document.body.classList.toggle('ui-clean-view', shouldEnable);
+    // Leaving clean view shows the panels again: repaint what they owe first.
+    if (!shouldEnable) flushAllPanelContent();
     if (this._cleanViewBtn) {
       this._cleanViewBtn.classList.toggle('active', shouldEnable);
     }

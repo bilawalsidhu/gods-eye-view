@@ -183,6 +183,133 @@ test('a landing point reads as a cable landing point, not a cable', () => {
   assert.equal(entityKind(layerId).kind, 'submarine cable');
 });
 
+test("a cable's record keeps its data's facts, which describeEntity lists", () => {
+  const described = {
+    ...cable,
+    properties: {
+      ...cable.properties,
+      color: '#ff0000',
+      // Drawing fields, never facts.
+      fid: 3,
+      quality: 'stylized',
+      facts: {
+        owners: 'Kunoa Telecom, Nybor Net',
+        lengthKm: 2400,
+        status: 'In service',
+        description: 'A cable joining   Kunoa and Nybor.',
+        wikipedia: 'en:Kunoa North',
+        website: 'www.kunoa.example',
+        // Not facts: a list, an empty word, the record's own fields, an
+        // identity another layer reads, and the source line.
+        countries: ['Kunoa', 'Denmark'],
+        station: ' ',
+        feature: 'landing point',
+        planned: true,
+        mmsi: '123456789',
+        source: 'Elsewhere',
+        warning: 'Cut',
+        lastContactAtMs: 1_700_000_000_000,
+      },
+    },
+  };
+  const state = loaded({
+    _cachedCableJson: { features: [described] },
+    _cachedLandingJson: {
+      features: [
+        {
+          ...landing,
+          properties: {
+            ...landing.properties,
+            n: 1,
+            facts: { country: 'Denmark' },
+          },
+        },
+      ],
+    },
+  });
+  const [record, landed] = cableAnalystRecords(state);
+  assert.equal(record.feature, 'cable');
+  assert.equal(record.owners, 'Kunoa Telecom, Nybor Net');
+  assert.equal(record.lengthKm, 2400);
+  for (const field of [
+    'color',
+    'fid',
+    'quality',
+    'facts',
+    'countries',
+    'station',
+    'planned',
+    'mmsi',
+    'source',
+    'warning',
+    'lastContactAtMs',
+  ])
+    assert.equal(field in record, false, field);
+  assert.equal(landed.country, 'Denmark');
+  assert.equal(landed.planned, true);
+  assert.equal('n' in landed, false);
+
+  const layer = {
+    id: 'telegeography-submarine-cables',
+    enabled: true,
+    module: { getAnalystRecords: () => cableAnalystRecords(state) },
+  };
+  const manager = { layers: new Map([[layer.id, layer]]) };
+  const card = describeEntity(manager, {
+    layerId: layer.id,
+    id: record.id,
+    label: record.name,
+  });
+  assert.equal(card.description, 'A cable joining Kunoa and Nybor.');
+  // The Wikipedia article is a link, not a fact; a web address that is no
+  // link stays a fact.
+  assert.deepEqual(
+    card.facts.map((fact) => [fact.label, fact.value]),
+    [
+      ['Owners', 'Kunoa Telecom, Nybor Net'],
+      ['Length km', '2,400 km'],
+      ['Status', 'In service'],
+      ['Website', 'www.kunoa.example'],
+      ['Feature', 'Cable'],
+    ],
+  );
+  assert.deepEqual(
+    card.links.map((link) => link.href),
+    ['https://en.wikipedia.org/wiki/Kunoa_North'],
+  );
+});
+
+test("TeleGeography's bundled cables say nothing beyond their names", () => {
+  const read = (name) =>
+    JSON.parse(
+      readFileSync(
+        new URL(
+          `../../data/local_data/telegeography_submarine_cables/${name}`,
+          import.meta.url,
+        ),
+      ),
+    );
+  const state = loaded({
+    _cachedCableJson: read('cable-geo.json'),
+    _cachedLandingJson: read('landing-point-geo.json'),
+  });
+  const own = new Set([
+    'id',
+    'name',
+    'feature',
+    'lat',
+    'lon',
+    'parts',
+    'planned',
+  ]);
+  for (const record of cableAnalystRecords(state))
+    assert.deepEqual(
+      Object.keys(record).filter((field) => !own.has(field)),
+      [],
+      record.id,
+    );
+});
+
 test('a bundled cable laid in pieces is one record, listed and counted once near any piece', () => {
   const read = (name) =>
     JSON.parse(

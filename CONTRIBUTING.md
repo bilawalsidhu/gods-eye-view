@@ -262,6 +262,26 @@ template has a section for them.
 
 Maintainers may hold a layer PR until all four are there.
 
+### The layer panel interface
+
+A layer never draws its own panel row or readout and never imports the panel
+UI, its stores or Vue (`npm run check:boundaries` refuses it):
+
+- **Describe the row as data.** `getRowControls()` returns the row's chips,
+  legend, info line, list items and readout summary. It is a read: no fetches,
+  no state changes, no notifications. The panel calls it whenever it paints.
+- **Say when it changed.** `init(viewer, { signal, panel })` hands the layer
+  `panel.invalidate()`. Call it whenever something `getRowControls()` or
+  `getStats()` reports has changed outside the manager's own refresh tick (a
+  load settles, a filter changes). It takes nothing, returns nothing and only
+  asks for a paint on the next frame, so calling it often costs nothing.
+- **Read the time, don't follow it.** If the row or readout depends on the
+  scene time, set `panelFollowsTime: true` on the layer and read the clock in
+  `getRowControls()`; the panel reads the row again when the time moves.
+
+`src/data/layerPanelContract.test.mjs` checks every registered layer against
+this interface.
+
 ## Maintainers
 
 God's Eye View is maintained by [Bilawal Sidhu](https://github.com/bilawalsidhu)

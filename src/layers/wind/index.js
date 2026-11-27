@@ -113,16 +113,20 @@ export function createWindLayer({
   const requestedScalar = () =>
     ['temperature', 'pressure'].includes(overlay) ? overlay : 'none';
   let generation = 0;
-  let rowControlsListener = null;
-  const notify = () => rowControlsListener?.();
-  const unsubscribeClock = clock?.subscribe(notify);
+  /** @type {{ invalidate: () => void } | null} the panels' handle, from init */
+  let _panel = null;
+  const notify = () => _panel?.invalidate();
   const layer = {
     id: 'wind',
     name: 'Wind',
     icon: '🌬',
     source: 'GFS / ECMWF IFS · FORECAST',
     updateInterval: 3600_000,
-    init(nextViewer) {
+    // The row and the Weather readout read the scene time; the panel reads
+    // them again when it moves.
+    panelFollowsTime: true,
+    init(nextViewer, { panel = null } = {}) {
+      _panel = panel;
       viewer = nextViewer;
       rendering = createRendering({
         container: container ?? nextViewer.container,
@@ -454,17 +458,13 @@ export function createWindLayer({
       return controls;
     },
 
-    setRowControlsListener(listener) {
-      rowControlsListener = typeof listener === 'function' ? listener : null;
-    },
     destroy() {
       layer.disable();
-      unsubscribeClock?.();
       rendering?.destroy();
       rendering = null;
       imageryHost = null;
       viewer = null;
-      rowControlsListener = null;
+      _panel = null;
       inspectionMarker?.destroy();
       inspectionMarker = null;
     },

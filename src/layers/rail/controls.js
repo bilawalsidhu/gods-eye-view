@@ -20,7 +20,7 @@ import {
  */
 export function createControls({ state, parts, timetable }) {
   function notify() {
-    state._controlsListener?.();
+    state._panel?.invalidate();
   }
 
   /** Regions with at least one pollable feed, for the empty-coverage note. */
@@ -76,14 +76,6 @@ export function createControls({ state, parts, timetable }) {
   }
 
   const methods = {
-    /** Wired by the application so polls can repaint the panel row. */
-    attachDataManager(manager) {
-      state._dataManager = manager;
-    },
-    setRowControlsListener(listener) {
-      state._controlsListener =
-        typeof listener === 'function' ? listener : null;
-    },
     /** The category toggles, for share links and restoration. */
     getParams() {
       return { ...state._categories };
@@ -106,7 +98,6 @@ export function createControls({ state, parts, timetable }) {
       parts.rendering.applyCategoryVisibility();
       state._revision += 1;
       notify();
-      state._dataManager?.refreshLayerStats?.();
       return true;
     },
     /** One chip per category, with the colour and live count as the legend. */

@@ -135,7 +135,10 @@ function fixture({ fetchImpl, controller = fakeController() } = {}) {
   };
   const globe = fakeGlobePort();
   bindFakeCesiumCamera(viewer, { globe });
-  layer.init(viewer);
+  // The layer panel updates the readout on the frame after the layer
+  // invalidates it; here it updates at once.
+  let readout = null;
+  layer.init(viewer, { panel: { invalidate: () => readout?.update() } });
   layer.attachMapStackController(controller);
   let active = false;
   const tool = {
@@ -155,7 +158,7 @@ function fixture({ fetchImpl, controller = fakeController() } = {}) {
   const splits = [];
   const fetches = [];
   const urls = { created: [], revoked: [] };
-  const readout = createRecentImageryPanel({
+  readout = createRecentImageryPanel({
     container: dom.body,
     layer,
     viewer,

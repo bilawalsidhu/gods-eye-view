@@ -1524,6 +1524,10 @@ async function runBrowserGroup(record) {
     // that says nothing is exactly the silent-failure this check must catch —
     // count === 0 is NOT evidence of an honest UNAVAILABLE state.
     const chipR = await mustEval(() => {
+      // Rows repaint while Data Layers is displayed; it starts collapsed.
+      const panel = document.getElementById('data-panel');
+      if (panel?.classList.contains('collapsed'))
+        panel.querySelector('[data-collapse-target="data-panel"]')?.click();
       const row = document.querySelector('[data-layer-id="ais-live-vessels"]');
       const btn = row?.querySelector('.data-toggle-btn');
       return {

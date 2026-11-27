@@ -28,6 +28,18 @@ import {
 import { displayDay, displayMetres } from '../layers/recentImagery/display.js';
 import { formatQuantity } from './unitLabels.js';
 import { canvasOf, findFrame, findGlobe } from '../render/rendererOf.js';
+import { watchDisplayed } from './displayWatch.js';
+import { onPanelOpening } from './rail/panelContent.js';
+
+/** Layer reads, which change nothing for the readout to show. */
+const LAYER_READS = new Set([
+  'getSnapshot',
+  'takePanelChanges',
+  'subscribe',
+  'setToolHandler',
+]);
+/** Changes a readout shows without a full render. */
+const LIGHT_CHANGES = new Set(['split', 'alpha', 'thumbnail']);
 
 const PANEL_ID = 'recent-imagery-panel';
 const OVERVIEW_MIN_BOX_KM = 25;
@@ -204,7 +216,7 @@ function revealCard(scroller, card) {
 /**
  * Mount the readout into the panel body.
  * @param {{ container: HTMLElement, layer: object, viewer?: object, tool?: object, createSplit?: Function, fetchImpl?: typeof fetch, createObjectUrl?: Function, revokeObjectUrl?: Function, requestRender?: Function }} deps
- * @returns {{ root: HTMLElement, exportImage: (slot?: 'a' | 'b') => Promise<boolean>, destroy: () => void } | null}
+ * @returns {{ root: HTMLElement, exportImage: (slot?: 'a' | 'b') => Promise<boolean>, update: () => void, destroy: () => void } | null}
  */
 export function createRecentImageryPanel({
   container,
@@ -219,6 +231,23 @@ export function createRecentImageryPanel({
 } = {}) {
   const document = container?.ownerDocument;
   if (!document?.createElement || !layer) return null;
+  // The readout follows the layer through the layer panel, which calls
+  // `update` on its next frame after the layer invalidates it. The readout's
+  // own actions show at once: each layer call it makes applies what the call
+  // changed before the handler goes on (a key moves the focus, then scrolls
+  // to it).
+  const source = layer;
+  layer = new Proxy(source, {
+    get(target, key) {
+      const value = target[key];
+      if (typeof value !== 'function' || LAYER_READS.has(key)) return value;
+      return (...args) => {
+        const result = value.apply(target, args);
+        applyChanges();
+        return result;
+      };
+    },
+  });
   const panel = document.getElementById?.(PANEL_ID) || null;
   const count = document.getElementById?.(`${PANEL_ID}-count`) || null;
 
@@ -243,10 +272,29 @@ export function createRecentImageryPanel({
   // Days whose thumbnail has been shown: their image stays, hidden when gone.
   const imaged = new Set();
 
+  // The body is not painted while it is not displayed (the panel collapsed or
+  // hidden); it is painted once when it is displayed again: at once when the
+  // panel is shown open, otherwise when a ResizeObserver reports it.
+  let owed = false;
+  const body = watchDisplayed(container, () => {
+    if (owed) render();
+  });
+  const offOpening = onPanelOpening(panel, ({ displayedOnly = false } = {}) => {
+    if (!owed) return;
+    if (displayedOnly && !(container.getClientRects?.().length > 0)) return;
+    body.assumeShown();
+    render();
+  });
+
   // The readout patches synchronously, so it can be measured at once. Once
   // destroyed nothing paints: a late export would mount it again.
-  const paint = () =>
-    !destroyed &&
+  const paint = ({ force = false } = {}) => {
+    if (destroyed) return;
+    if (!force && !body.shown()) {
+      owed = true;
+      return;
+    }
+    owed = false;
     renderVue(
       h(RecentImageryReadout, {
         view: buildView(),
@@ -256,7 +304,8 @@ export function createRecentImageryPanel({
       }),
       container,
     );
-  paint();
+  };
+  paint({ force: true });
   const root = container.lastElementChild;
   const strip = root.querySelector('#ri-strip');
   const zoomIn = root.querySelector('#ri-zoom-in');
@@ -770,7 +819,10 @@ export function createRecentImageryPanel({
     // The strip a full render showed: thumbnails for it take the short path.
     stripKeys = snapshot.candidates.map((candidate) => candidate.key).join('|');
     preserveScroll(() => {
+      const wasHidden = Boolean(panel?.hidden);
       renderPanel();
+      // A render that shows the panel displays its body before a size report.
+      if (wasHidden && panel && !panel.hidden) body.assumeShown();
       paint();
       renderSplit();
       reportVisibleRange();
@@ -941,25 +993,33 @@ export function createRecentImageryPanel({
   layer.setToolHandler?.(() => {
     if (tool?.isActive()) tool.cancel('layer');
   });
-  const unsubscribe = layer.subscribe((next, reason) => {
+  /**
+   * Show what the layer changed since the readout last looked: the divider's
+   * place, the opacity or a thumbnail without a full render, anything else
+   * with one.
+   */
+  function applyChanges() {
     if (destroyed) return;
-    snapshot = next || layer.getSnapshot();
-    if (reason === 'split') {
-      split?.setValue(snapshot.split);
-    } else if (reason === 'alpha') {
-      preserveScroll(paint);
-    } else if (
-      reason === 'thumbnail' &&
-      snapshot.candidates.map((candidate) => candidate.key).join('|') ===
-        stripKeys
-    ) {
-      // A probe that emptied a day hides its card; only an unchanged strip
-      // takes this in-place path, without the divider or visible range.
-      preserveScroll(paint);
-    } else {
+    const changes =
+      typeof source.takePanelChanges === 'function'
+        ? source.takePanelChanges()
+        : new Set(['state']);
+    if (!changes?.size) return;
+    snapshot = source.getSnapshot();
+    if (changes.has('split')) split?.setValue(snapshot.split);
+    const keys = snapshot.candidates
+      .map((candidate) => candidate.key)
+      .join('|');
+    if (
+      [...changes].some((change) => !LIGHT_CHANGES.has(change)) ||
+      (changes.has('thumbnail') && keys !== stripKeys)
+    )
       render();
-    }
-  });
+    // A probe that emptied a day hides its card; only an unchanged strip
+    // takes this in-place path, without the divider or visible range.
+    else if (changes.has('alpha') || changes.has('thumbnail'))
+      preserveScroll(paint);
+  }
   // The readout's text is translated here; show it again in a new locale.
   const offLocale = onLocaleChange(render);
   render();
@@ -967,10 +1027,12 @@ export function createRecentImageryPanel({
   return {
     root,
     exportImage,
+    update: applyChanges,
     destroy() {
       if (destroyed) return;
       destroyed = true;
-      unsubscribe();
+      body.disconnect();
+      offOpening();
       offLocale();
       layer.setToolHandler?.(null);
       split?.destroy();

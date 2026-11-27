@@ -16,6 +16,7 @@ import { t } from '../../i18n/index.js';
 import { formatQuantity, unitLabel } from '../../ui/unitLabels.js';
 import {
   CONTEXT_REFRESH_INTERVAL_MS,
+  DESELECT_GLOBE_VIEW,
   HIGH_ORBIT_ALTITUDE_M,
   ISS_NORAD,
   STATIONS,
@@ -83,11 +84,14 @@ export function createTracking({ state: layerState, services, parts, source }) {
    *   the follow-camera (viewer.trackedEntityChanged), tear down our own state
    *   but do NOT clear viewer.trackedEntity — the new owner controls it now,
    *   and clearing it would yank the camera off their target (mirror of flights).
+   * @param {{origin?: string, globeView?: boolean}} [options] With
+   *   `globeView`, a camera that was following the satellite flies to the
+   *   globe view over its ground point (`_flyToGlobeViewOver`) once it lets go.
    */
 
   function _clearTracking(
     skipViewerUntrack = false,
-    { origin = 'programmatic' } = {},
+    { origin = 'programmatic', globeView = false } = {},
   ) {
     // Untracking dissolves the cluster: every companion returns to its own
     // ambient label on the next collection.
@@ -99,6 +103,12 @@ export function createTracking({ state: layerState, services, parts, source }) {
       return;
     }
     const clearedNorad = layerState._trackedNorad;
+    // Read before the follow ends: whether the camera rode the satellite, and
+    // where it is over the ground now.
+    const ground =
+      globeView && !skipViewerUntrack && _trackedIsFollowed()
+        ? _groundPointNow(clearedNorad)
+        : null;
     clearFocusTarget('satellites', clearedNorad);
 
     // Re-show the dot (hidden while the tracked dot drew it) and
@@ -127,6 +137,7 @@ export function createTracking({ state: layerState, services, parts, source }) {
     layerState._trackedNorad = null;
     if (layerState._viewer && !skipViewerUntrack)
       stopFollowing(layerState._viewer);
+    if (ground) _flyToGlobeViewOver(ground);
     layerState._followTarget = null;
     if (layerState._trackedEntity) {
       parts.rendering._removeTrackedEntity(layerState._trackedEntity);
@@ -147,6 +158,52 @@ export function createTracking({ state: layerState, services, parts, source }) {
       origin,
     });
     releaseSelection('satellites', clearedNorad);
+  }
+
+  /**
+   * Where satellite `noradId` is over the ground now (degrees), or null:
+   * propagated at the world clock's time, else the last frame's sample.
+   */
+  function _groundPointNow(noradId) {
+    const sat = layerState._catalog.get(noradId);
+    const now = sat
+      ? parts.orbits.propagatePosition(sat.satrec, new Date(layerState.now()))
+      : null;
+    const pos = now ?? layerState._trackedFrameGeo;
+    if (!Number.isFinite(pos?.longitude) || !Number.isFinite(pos?.latitude))
+      return null;
+    return { lon: pos.longitude, lat: pos.latitude };
+  }
+
+  /**
+   * Let go of a followed satellite into the globe view: a flight to straight
+   * down over its ground point, north up and level, so the whole Earth is
+   * centred. The follow leaves the eye wherever its own frame had it, often
+   * tilted with the Earth at the edge of the screen. The height is the globe
+   * view's (`DESELECT_GLOBE_VIEW`), or the eye's own when it is already
+   * farther out, so letting go never pulls a far eye in.
+   * @param {{lon: number, lat: number}} ground Degrees.
+   */
+  function _flyToGlobeViewOver(ground) {
+    if (!layerState._viewer) return;
+    const camera = cameraOf(layerState._viewer);
+    const height = camera.pose().height;
+    camera.cancelFlight();
+    camera.flyTo(
+      {
+        lon: ground.lon,
+        lat: ground.lat,
+        height: Math.max(
+          DESELECT_GLOBE_VIEW.heightM,
+          Number.isFinite(height) ? height : 0,
+        ),
+      },
+      {
+        orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+        durationS: DESELECT_GLOBE_VIEW.durationS,
+        endFrame: 'world',
+      },
+    );
   }
 
   /** Have the camera follow the tracked satellite (an explicit follow). */

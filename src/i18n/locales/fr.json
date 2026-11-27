@@ -4269,7 +4269,6 @@
   "Opens chat": "Ouvre le chat",
   "Go to {place}": "Aller à {place}",
   "Place or coordinates": "Lieu ou coordonnées",
-  "Search “{query}” as a place anyway": "Rechercher « {query} » comme lieu quand même",
   "Turn on": "Activer",
   "Turn off": "Désactiver",
   "Command": "Commande",
@@ -4316,10 +4315,9 @@
   "Search places, layers and things on the map, or ask GEV": "Recherchez des lieux, des couches et des éléments sur la carte, ou interrogez GEV",
   "Search places, layers, flights… or ask GEV  ·  > for commands": "Recherchez des lieux, des couches, des vols… ou interrogez GEV · > pour les commandes",
   "No matching command": "Aucune commande correspondante",
-  "Looks private, so nothing is searched or sent": "Semble privé, donc rien n’est recherché ni envoyé",
   "Bilawal on YouTube": "Bilawal sur YouTube",
   "BROWSE STORIES": "PARCOURIR LES STORIES",
-  "ENTER GOD MODE": "ENTRER EN MODE DIEU",
+  "ENTER DEFAULT MODE": "ENTRER EN MODE PAR DÉFAUT",
   "Go deeper": "Aller plus loin",
   "The studio behind GEV": "Le studio derrière GEV",
   "Visual presets": "Préréglages visuels",
@@ -4330,7 +4328,7 @@
   "A cleaner, readable view where every value shows its source. For research and reporting.": "Une vue plus épurée et lisible où chaque valeur indique sa source. Pour la recherche et le reportage.",
   "Keyhole HUD": "HUD viseur",
   "Analyst": "Analyste",
-  "God": "Dieu",
+  "Default": "Par défaut",
   "COMING SOON": "BIENTÔT",
   "More from Halfpixel": "Plus de Halfpixel",
   "Start with": "Commencer par",
@@ -4645,5 +4643,7 @@
   "Low-cost sensor": "Capteur à bas coût",
   "{name} · sensor": "{name} · capteur",
   "Reference monitor": "Appareil de référence",
-  "Needs {envVars} — add one in Provider Settings": "Nécessite {envVars} — en ajouter une dans les paramètres des fournisseurs"
+  "Needs {envVars} — add one in Provider Settings": "Nécessite {envVars} — en ajouter une dans les paramètres des fournisseurs",
+  "CABLE \u00b7 {name}": "CÂBLE · {name}",
+  "LANDING POINT \u00b7 {name}": "POINT D'ATTERRAGE · {name}"
 }

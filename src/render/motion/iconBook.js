@@ -11,7 +11,7 @@
  * less its `delayMs` for a live clock, the frame port's time for a scene
  * clock). An item's course eases only by its `courseGlide`.
  */
-import { iconCourse, iconPosition } from './iconMotion.js';
+import { iconCourse, motionPosition } from './iconMotion.js';
 
 /**
  * @param {import('../contract/draw').DrawSet<object>|null} [drawSet] Where
@@ -27,6 +27,8 @@ export function createIconBook(drawSet = null, { capabilities = null } = {}) {
   const items = new Map();
   // Until when (epoch ms) each item's motion holds, for those given one.
   const expiries = new Map();
+  // The drawn ids in order, kept while no id comes or goes (`idList`).
+  let idList = null;
 
   /** An item as the renderer draws it. */
   function asDrawn(item) {
@@ -54,6 +56,13 @@ export function createIconBook(drawSet = null, { capabilities = null } = {}) {
     },
     /** The drawn ids, in the order first drawn. */
     ids: () => [...items.keys()],
+    /**
+     * The drawn ids, in the order first drawn, as one array kept until an id
+     * is drawn anew or removed: for per-frame readers, which must not change
+     * it or keep it past the frame.
+     * @returns {ReadonlyArray<string>}
+     */
+    idList: () => (idList ??= [...items.keys()]),
     /** Whether an id is drawn. */
     has: (id) => items.has(id),
     /** The item drawn under an id, or undefined. */
@@ -71,6 +80,7 @@ export function createIconBook(drawSet = null, { capabilities = null } = {}) {
         (typeof expiresAt !== 'number' || Number.isNaN(expiresAt))
       )
         throw new TypeError(`expiresAt must be epoch ms, not ${expiresAt}`);
+      if (!items.has(item.id)) idList = null;
       items.set(item.id, item);
       if (expiresAt === null) expiries.delete(item.id);
       else if (expiresAt !== undefined) expiries.set(item.id, expiresAt);
@@ -82,12 +92,18 @@ export function createIconBook(drawSet = null, { capabilities = null } = {}) {
      */
     putMany(list) {
       if (!list.length) return;
-      for (const item of list) items.set(item.id, item);
+      for (const item of list) {
+        if (!items.has(item.id)) idList = null;
+        items.set(item.id, item);
+      }
       drawSet?.upsert(list);
     },
     remove(id) {
       expiries.delete(id);
-      if (items.delete(id)) drawSet?.remove([id]);
+      if (items.delete(id)) {
+        idList = null;
+        drawSet?.remove([id]);
+      }
     },
     /**
      * When an id's motion runs out (epoch ms; `Infinity`: never), or
@@ -100,10 +116,20 @@ export function createIconBook(drawSet = null, { capabilities = null } = {}) {
       for (const [id, at] of expiries) if (at <= t) ids.push(id);
       return ids;
     },
-    /** Where an id's icon is drawn at `t` (epoch ms), ECEF, or null. */
-    position(id, t) {
+    /**
+     * Where an id's icon is drawn at `t` (epoch ms), ECEF, or null: written
+     * into `result` when given, allocating nothing (it is read per frame).
+     * Without `motionSegments` the icon is where its item puts it, as drawn.
+     */
+    position(id, t, result) {
       const item = items.get(id);
-      return item?.pos ? iconPosition(asDrawn(item), t) : null;
+      if (!item?.pos) return null;
+      return motionPosition(
+        motionSegments ? item.motion : undefined,
+        item.pos,
+        t,
+        result,
+      );
     },
     /** The course an id's icon is drawn with at `t`, or null. */
     course(id, t) {
@@ -118,6 +144,7 @@ export function createIconBook(drawSet = null, { capabilities = null } = {}) {
     },
     dispose() {
       items.clear();
+      idList = null;
       expiries.clear();
       drawSet?.dispose();
     },

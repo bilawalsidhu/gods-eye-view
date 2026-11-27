@@ -1,4 +1,8 @@
-import { normalizeRoadMode, normalizeRoadModes } from './roadModes.js';
+import {
+  defaultRoadSource,
+  normalizeRoadMode,
+  normalizeRoadModes,
+} from './roadModes.js';
 import { FLOW_BUCKET_COLORS } from './policy.js';
 
 export function createState({ services, source }) {
@@ -261,7 +265,7 @@ export function createState({ services, source }) {
   layerState._retryDelayMs = 1500;
   layerState._retryBoundsKey = null;
   layerState._roadError = null;
-  layerState._roadSource = 'OpenStreetMap';
+  layerState._roadSource = defaultRoadSource(layerState._roadModes);
   layerState._roadPartial = false;
   layerState._roadRetryStopped = false;
   layerState._retryAttempts = 0;
