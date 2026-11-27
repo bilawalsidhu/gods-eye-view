@@ -220,6 +220,9 @@ export function createMagnetosphereLayer({
       tracing = traceFilaments(coefficients, fieldLineSeeds(meridians));
       filaments = await tracing;
       tracing = null;
+      // These are the internal-field lines, so a feed with no usable model
+      // keeps them instead of tracing the same field again.
+      tracedKey = 'internal';
     },
 
     /**

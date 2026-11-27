@@ -464,3 +464,13 @@ test('tells the panels its row changed through the handle its init receives', as
   layer.setParams({ opacity: 'strong' });
   assert.equal(invalidations, before + 2);
 });
+
+test('without a usable feed the first update keeps the lines init traced', async () => {
+  const unavailable = { unavailable: true, reason: 'offline' };
+  const { layer } = harness([unavailable]);
+  await layer.init(null);
+  await layer.enable(null, { sunDirection: SUN });
+  // Tracing every seed is seconds of arithmetic; the internal field has not
+  // changed since init.
+  assert.equal(await layer.retrace(), false);
+});
