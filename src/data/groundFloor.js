@@ -3,12 +3,9 @@ import * as terrain from './terrainHeights.js';
 const groundFloor = createGroundFloor({ terrain });
 export const {
   GROUND_FLOOR_LIFT_M,
-  MESH_FLOOR_BELOW_PRIOR_M,
-  MESH_FLOOR_ABOVE_PRIOR_M,
   coarseFloorCoord,
   floorAltitudeM,
   displayFloorHeightM,
-  FLOOR_CELL_DEG,
   NEIGHBOR_FLOOR_MIN_SAMPLES,
   neighborFloorM,
   CORRIDOR_MAX_CELLS,
