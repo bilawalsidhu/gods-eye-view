@@ -2,6 +2,7 @@ import {
   normalizeRoadMode,
   resolveRoadMode,
   roadModesSimulate,
+  trafficSourceLabel,
 } from './roadModes.js';
 import {
   trafficBucketTier,
@@ -64,7 +65,7 @@ export function createControls({ state: layerState, services, parts, source }) {
 
     icon: '🚗',
 
-    source: 'OpenStreetMap / TomTom',
+    source: source?.label ?? trafficSourceLabel(layerState._roadModes),
 
     /** @type {number} Zero — layer is self-managed via camera listener + preRender */
     updateInterval: 0,

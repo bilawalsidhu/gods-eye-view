@@ -28,6 +28,8 @@ export function createState({ services }) {
   /** Stable lightweight records reused by the detection overlay between updates. */
 
   state._detectionObjects = new Map();
+  /** The array getDetectableObjects fills and returns on every call. */
+  state._detectionResult = [];
 
   // noradId → { base, gmstAtBake, item }, owned by the rendering part: base
   // is the ring baked in ECEF at gmstAtBake; the preRender tick turns it to

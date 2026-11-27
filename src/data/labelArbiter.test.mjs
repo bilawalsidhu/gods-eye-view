@@ -508,6 +508,40 @@ test('live identities expose selected and temporal fading membership by layer/so
   assert.equal(arbiter.liveIdentities({ includeFading: true, now: 1501 }).size, 0);
 });
 
+test('live identities refill a caller-owned map in place', () => {
+  const arbiter = new LabelArbiter();
+  const out = new Map();
+  arbiter.solve([candidate('flights', 42), candidate('satellites', 7)], {
+    capacity: 2,
+    now: 1000,
+  });
+  assert.equal(
+    arbiter.liveIdentities({ includeFading: true, now: 1100 }, out),
+    out,
+  );
+  assert.deepEqual(
+    out,
+    arbiter.liveIdentities({ includeFading: true, now: 1100 }),
+  );
+  const flights = out.get('flights');
+  assert.ok(flights.has(42));
+  // Asked again with nothing changed: the same map and the same sets.
+  arbiter.liveIdentities({ includeFading: true, now: 1150 }, out);
+  assert.equal(out.get('flights'), flights);
+  assert.deepEqual(
+    out,
+    arbiter.liveIdentities({ includeFading: true, now: 1150 }),
+  );
+  // A layer with nothing live left is dropped, as a fresh answer would have it.
+  arbiter.solve([candidate('satellites', 7)], { capacity: 1, now: 1200 });
+  arbiter.liveIdentities({ includeFading: false, now: 1250 }, out);
+  assert.deepEqual(
+    out,
+    arbiter.liveIdentities({ includeFading: false, now: 1250 }),
+  );
+  assert.equal(out.has('flights'), false);
+});
+
 
 test('stateless labels yield occupied slots and re-rank by area on each solve', () => {
   const make = (key, x, priority) => ({ key, layerId: 'installations', sourceId: key,
