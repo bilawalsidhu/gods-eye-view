@@ -9902,6 +9902,7 @@ test("the retired Street Level panel opens the open photo's card, or its Data La
     });
   const runner = runnerWith({ layers: new Map(), getAll: () => [] });
   const streetLevel = useStreetLevelStore(applicationPinia());
+  const cards = useEntityCardStore(applicationPinia());
   const saved = streetLevel.view;
   try {
     streetLevel.view = null;
@@ -9933,7 +9934,15 @@ test("the retired Street Level panel opens the open photo's card, or its Data La
       },
     };
     const photos = [];
-    const onPhoto = (event) => photos.push(event.detail);
+    const onPhoto = (event) => {
+      photos.push(event.detail);
+      // The bridge shows the photo's card (entityContextBridge.js onStreetPhoto).
+      cards.card = {
+        key: `street-level:${event.detail.id}`,
+        layerId: 'street-level',
+        identity: { layerId: 'street-level', id: event.detail.id },
+      };
+    };
     globalThis.document?.addEventListener?.(STREET_LEVEL_PHOTO_EVENT, onPhoto);
     // The viewer has accepted that photo.
     const shown = await runnerWith(acceptedStreetLevel())('set_panel_open', {
@@ -9961,6 +9970,7 @@ test("the retired Street Level panel opens the open photo's card, or its Data La
     ]);
   } finally {
     streetLevel.view = saved;
+    cards.card = null;
   }
 });
 
@@ -10004,6 +10014,48 @@ test('the retired Street Level panel reports a Context panel that cannot open', 
       STREET_LEVEL_PHOTO_EVENT,
       onPhoto,
     );
+    streetLevel.view = saved;
+  }
+});
+
+test("the retired Street Level panel says so when the photo's card does not come up", async () => {
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
+  const runner = createGevActionRunner({
+    viewer: {
+      clock: { onTick: { addEventListener: () => () => {} } },
+      scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+      camera: { moveEnd: { addEventListener() {} } },
+    },
+    styleManager: {
+      getCockpitState: () => ({ active: false }),
+      setPanelCollapsed() {},
+      revealPanel() {},
+    },
+    dataManager: acceptedStreetLevel(),
+  });
+  const streetLevel = useStreetLevelStore(applicationPinia());
+  const cards = useEntityCardStore(applicationPinia());
+  const saved = streetLevel.view;
+  try {
+    streetLevel.view = {
+      viewer: {
+        open: true,
+        photo: { id: 'mapillary:1', lat: 30.26, lon: -97.74 },
+      },
+    };
+    cards.card = null; // nothing picks the card, as when Context is off screen
+    const result = await runner('set_panel_open', {
+      panelId: 'street-level-panel',
+      open: true,
+    });
+    assert.equal(result.ok, false);
+    assert.equal(result.applied, false);
+    assert.match(result.say, /card is not showing/);
+  } finally {
     streetLevel.view = saved;
   }
 });
@@ -10896,7 +10948,17 @@ test('the retired Street Level panel opens a shown photo while an unrelated look
     dataManager,
   });
   const streetLevel = useStreetLevelStore(applicationPinia());
+  const cards = useEntityCardStore(applicationPinia());
   const saved = streetLevel.view;
+  // The bridge shows the photo's card (entityContextBridge.js onStreetPhoto).
+  const onPhoto = (event) => {
+    cards.card = {
+      key: `street-level:${event.detail.id}`,
+      layerId: 'street-level',
+      identity: { layerId: 'street-level', id: event.detail.id },
+    };
+  };
+  globalThis.document?.addEventListener?.(STREET_LEVEL_PHOTO_EVENT, onPhoto);
   try {
     streetLevel.view = {
       viewer: {
@@ -10908,10 +10970,17 @@ test('the retired Street Level panel opens a shown photo while an unrelated look
       panelId: 'street-level-panel',
       open: true,
     });
+    assert.equal(shown.ok, true);
+    assert.match(shown.say, /latest request failed/);
     assert.equal(shown.panelId, 'global-context-panel');
     assert.deepEqual(opened, ['global-context-panel:open']);
   } finally {
+    globalThis.document?.removeEventListener?.(
+      STREET_LEVEL_PHOTO_EVENT,
+      onPhoto,
+    );
     streetLevel.view = saved;
+    cards.card = null;
   }
 });
 

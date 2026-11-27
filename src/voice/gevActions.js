@@ -1,6 +1,9 @@
 import { announceCameraReselection } from '../ui/cctvEvents.js';
 import { nextTick } from 'vue';
-import { isContextRailCovered } from '../ui/mobileSheets.js';
+import {
+  isContextRailCovered,
+  isContextSurfaceVisible,
+} from '../ui/mobileSheets.js';
 import { isFollowing, stopFollowing } from '../data/followed.js';
 import { interruptGlobeRotation } from '../cameraVerbs.js';
 import { normalizeDisplayText } from '../data/displayText.js';
@@ -1222,6 +1225,16 @@ export function createGevActionRunner({
         if (!openContext())
           return refusePanel('There is no panel to open here.');
         announceStreetLevelPhoto(photo, { explicit: true });
+        // The bridge picks the card synchronously while Context is on screen
+        // (entityContextBridge.js onStreetPhoto): report only what shows.
+        if (
+          useEntityCardStore(applicationPinia()).card?.key !==
+            streetLevelCardKey(photo.id) ||
+          !isContextSurfaceVisible()
+        )
+          return refusePanel(
+            "Context opened, but the street-level photo's card is not showing. Pick the photo in Context's Nearby list.",
+          );
         // A later request that did not open leaves its error beside the
         // photo still shown: say which one this is.
         const lastError = layer?.getUIState?.()?.street?.error;
