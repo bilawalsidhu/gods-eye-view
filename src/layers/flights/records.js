@@ -236,7 +236,7 @@ export class FlightRecords {
           // landing the previous render height is the approach height, and
           // holding it left the plane hanging there until a cell warmed —
           // forever for a contact far from the viewer, whose cell is never
-          // queued (HAL-1032).
+          // queued.
           priorRenderM:
             prevMeta?.onGround === true ? prevMeta.renderAltitudeM : null,
           geoidN,

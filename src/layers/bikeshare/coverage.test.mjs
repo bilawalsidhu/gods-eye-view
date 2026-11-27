@@ -1,4 +1,4 @@
-// Bike Share's covered cities on the globe (HAL-921): above the height
+// Bike Share's covered cities on the globe: above the height
 // stations draw at, every system in the registry has a marker, so the globe
 // says where bike share is, and a click on one flies down into its city.
 import { test } from 'node:test';

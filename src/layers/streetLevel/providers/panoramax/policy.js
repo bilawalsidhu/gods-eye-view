@@ -1,5 +1,6 @@
 import { COLORS as SHARED_COLORS, PROVIDER_COLORS } from '../../policy.js';
 import { msg } from '../../../../i18n/index.js';
+import { publicRadioHttpsUrl } from '../../../../sources/radioBrowser.js';
 
 export { NEAREST_RADIUS_M } from '../../policy.js';
 
@@ -182,16 +183,6 @@ export function panoramaxTimeMs(value) {
   return Number.isFinite(ms) && ms > Date.UTC(1990, 0, 1) ? ms : null;
 }
 
-/** An https address, or null (asset links come from federated instances). */
-function httpsUrl(value) {
-  try {
-    const url = new URL(String(value));
-    return url.protocol === 'https:' ? url.href : null;
-  } catch {
-    return null;
-  }
-}
-
 /** Last path segment of an item's `rel` link: the linked picture's id. */
 function linkedId(item, rel) {
   const href = item?.links?.find?.((link) => link?.rel === rel)?.href;
@@ -303,10 +294,11 @@ export function normalizeItem(item) {
     width: Number.isFinite(width) && width > 0 ? width : null,
     prevId: linkedId(item, 'prev'),
     nextId: linkedId(item, 'next'),
+    // Federated instances name these hosts: only public https ones load (the radio rule).
     urls: {
-      thumb: httpsUrl(assets.thumb?.href),
-      sd: httpsUrl(assets.sd?.href),
-      hd: httpsUrl(assets.hd?.href),
+      thumb: publicRadioHttpsUrl(assets.thumb?.href),
+      sd: publicRadioHttpsUrl(assets.sd?.href),
+      hd: publicRadioHttpsUrl(assets.hd?.href),
     },
   };
 }

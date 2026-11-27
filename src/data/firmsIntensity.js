@@ -12,7 +12,7 @@
  * strongest fires. No cold hues: ~90% of detections are under 20 MW and a
  * blue start painted most of the map blue. The thresholds are GEV's own, set
  * on a real week's percentiles so every color appears: Portolan's
- * 0/10/50/200/500/1000 MW leaves one hottest fire a week (HAL-675).
+ * 0/10/50/200/500/1000 MW leaves one hottest fire a week.
  */
 
 /**

@@ -318,7 +318,7 @@ const OPTION_GROUPS = Object.freeze({
       },
     ),
   ]),
-  // Active Fires intensity filter (HAL-676). `minFrp` is whole megawatts on
+  // Active Fires intensity filter. `minFrp` is whole megawatts on
   // the codec side; the panel's log slider rounds to it. Both default to
   // "show everything": many of the strongest fires are rated low confidence.
   // The bounds and modes mirror MIN_FRP_MW_MAX / FIRMS_CONFIDENCE_MODES in

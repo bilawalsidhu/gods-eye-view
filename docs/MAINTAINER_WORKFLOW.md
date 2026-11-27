@@ -16,8 +16,8 @@ continue static inspection only until a trusted revision is obtained.
 
 Record PR URL, author, head SHA, target branch/base SHA, and final candidate SHA.
 Protect ongoing working changes; resolve unexpected target branches before merging.
-A review request authorizes findings, not posting or integration. Existing explicit
-integration authorization covers necessary in-scope cleanup; do not ask again.
+A review request authorizes findings, not posting or integration. Confirm each
+integration step (push, comment, merge) with the maintainer before taking it.
 
 ## 2. Review the contribution
 
