@@ -7,7 +7,7 @@ import { useEntityCardStore } from '../../stores/entityCard.js';
 import { OPENFREEMAP_CARD_CREDIT, OPENFREEMAP_CARD_CREDIT_FULL } from '../../../maps/attribution.js';
 import { legacyPinMap } from '../../mapTiles.js';
 import { pinTitle } from '../../placeCard.js';
-import { streetPhotoCredit } from '../../streetPhotoCredit.js';
+import { savedStillShown, streetPhotoCredit } from '../../streetPhotoCredit.js';
 import { cameraCredit } from '../../cameraCredit.js';
 import { useDockedStore } from '../../stores/docked.js';
 import { stationFailureText, stationPlayback, useRadioLayer } from '../../radioContext.js';
@@ -83,7 +83,7 @@ const MAP_FRAME = Object.freeze({ width: 256, height: 160 });
 const tiles = computed(() => pins.value.map((pin) => {
   const still = pinned.stillOf(pin.key);
   // A remote street-photo URL is a fresh provider request even for a saved pin.
-  const hideStreetImage = pin.kind === 'street' && cards.layerOff('street-level') && !/^(data:image\/|blob:)/i.test(still);
+  const hideStreetImage = pin.kind === 'street' && !savedStillShown(still, cards.layerOff('street-level'));
   const legacyMap = still.startsWith('card-map:');
   return { pin, title: pinTitle(pin), map: mapsAllowed.value && !cards.privatePositionWithheld(pin.identity?.layerId) ? pin.map || (legacyMap && legacyPinMap(still)) : null, image: pin.map || legacyMap || hideStreetImage ? '' : still };
 }));

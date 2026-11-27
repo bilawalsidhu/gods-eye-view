@@ -11701,6 +11701,60 @@ test('the accepted docked street photo keeps its still and credit after another 
   assert.equal(useDockedStore(pinia).view, null);
 });
 
+test('a pin opened with Street Level off shows its saved credit and date, and asks for no remote still', async (t) => {
+  const photo = {
+    id: 'panoramax:A',
+    name: 'Rue du Dôme',
+    lat: 48.58,
+    lon: 7.75,
+    providerId: 'panoramax',
+    provider: 'Panoramax',
+    capturedAt: Date.UTC(2023, 5, 6),
+    capturedAtPrecision: 'day',
+    still: 'https://panoramax.invalid/A.jpg',
+    creator: 'Ana',
+    license: 'Licence Ouverte 2.0',
+  };
+  const layer = {
+    id: 'street-level',
+    name: 'Street Level',
+    enabled: true,
+    records: [photo],
+    module: {
+      photo: (id) => (layer.enabled && id === photo.id ? photo : null),
+      providerCredit: () => 'Panoramax',
+    },
+  };
+  const { $, cards, pinia, notifyLayers } = fixture(t, [layer]);
+  const street = useStreetLevelStore(pinia);
+  street.publish({ enabled: true, viewer: { open: false, photo: null } });
+  cards.select({ layerId: 'street-level', id: photo.id }, { follow: false });
+  await nextTick();
+  $('.entity-card__action--pin').click();
+  cards.clear();
+  layer.enabled = false;
+  notifyLayers({ type: 'visibility', layerId: layer.id, enabled: false });
+  street.publish({ enabled: false, viewer: { open: false, photo: null } });
+  usePinnedStore(pinia).show('pinned');
+  await nextTick();
+  assert.equal($('.pinned-grid__frame'), null, 'the tile asks nothing');
+  $('.pinned-grid__open').click();
+  await nextTick();
+  assert.equal($('.sl-hero__still img'), null, 'nor does the card');
+  assert.match(
+    $('.sl-hero .paused-chip')?.getAttribute('aria-label') ?? '',
+    /Street Level off/,
+  );
+  assert.equal(
+    $('.sl-hero__credit')?.textContent,
+    'Panoramax · Image by Ana · Licence Ouverte 2.0',
+  );
+  assert.equal(
+    $('.entity-card__source-line').textContent.trim(),
+    'Panoramax · Jun 6, 2023',
+  );
+});
+
 test('a docked street-level photo that another item replaces closes, unless its card shows it', async (t) => {
   const { cards, pinia } = fixture(t, [
     {

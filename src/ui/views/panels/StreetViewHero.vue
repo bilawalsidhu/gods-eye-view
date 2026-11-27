@@ -10,7 +10,7 @@ import UiButton from '../../kit/UiButton.vue';
 import UiIcon from '../../kit/UiIcon.vue';
 import PausedChip from './PausedChip.vue';
 import { isStreetViewerExpanded, placeStreetLevelViewer, returnStreetLevelViewerHome } from '../../streetLevelViewerPlacement.js';
-import { streetPhotoCredit } from '../../streetPhotoCredit.js';
+import { savedStillShown, streetPhotoCredit } from '../../streetPhotoCredit.js';
 
 // The accepted photo uses the persistent viewer from Context's home. A
 // selected Nearby row opens its photo; failures stay with the row for Retry.
@@ -48,22 +48,33 @@ const still = computed(() => {
   const url = layerOn.value
     ? cards.layerModule(STREET_LEVEL_LAYER)?.photo?.(photoId.value)?.still || pinned.stillOf(props.card.key)
     : pinned.stillOf(props.card.key);
-  return url && url !== brokenStill.value ? url : '';
+  // The Pinned tile's rule: with Street Level off a remote still would ask its provider again.
+  return url && url !== brokenStill.value && savedStillShown(url, !layerOn.value) ? url : '';
 });
 
 // The still carries the photo's credit (its provider's, who took it, its
 // licence) while it shows, as a pinned tile and the dock do; the open
 // viewer's caption credits it otherwise.
 const pausedReason = computed(() =>
-  !layerOn.value && still.value
-    ? t('Street Level off · last image')
+  !layerOn.value
+    ? still.value
+      ? t('Street Level off · last image')
+      : pinned.isPinned(props.card.key)
+        ? t('{layer} off', { layer: t('Street Level') })
+        : ''
     : layerOn.value && !providerOn.value && cards.fromPin
       ? t('Source off')
       : '',
 );
+// A pin keeps the credit it was made with: it stands in once the layer has
+// forgotten the photo (Street Level off, or past its history).
+const savedCredit = computed(() => pinned.pinFor(props.card.key)?.photoCredit || null);
 const credit = computed(() => {
   void tick.value;
-  return still.value ? streetPhotoCredit(cards.layerModule(STREET_LEVEL_LAYER), photoId.value) : '';
+  if (!still.value && !savedCredit.value) return '';
+  const module = cards.layerModule(STREET_LEVEL_LAYER);
+  const live = layerOn.value && module?.photo?.(photoId.value);
+  return streetPhotoCredit(module, photoId.value, live ? null : savedCredit.value);
 });
 
 // Keep this card's request failure separate from a later provider message.

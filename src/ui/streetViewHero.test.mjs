@@ -58,6 +58,7 @@ function mountHero(
     layerEnabled = true,
     savedStill = null,
     recordStill = null,
+    savedCredit = null,
   } = {},
 ) {
   document.body.replaceChildren();
@@ -93,6 +94,7 @@ function mountHero(
       kind: 'street',
       identity: { layerId: 'street-level', id },
       still: savedStill,
+      ...(savedCredit && { photoCredit: savedCredit }),
     });
   }
   const asked = [];
@@ -125,6 +127,7 @@ function mountHero(
   return {
     host,
     remount: () => mountKey.value++,
+    cards,
     street,
     view,
     asked,
@@ -380,7 +383,7 @@ test('a superseded Nearby card offers Retry without adopting the other lookup er
 });
 
 test('when Street Level is off only a pin can supply the hero still', async (t) => {
-  const saved = 'https://example.invalid/street.jpg';
+  const saved = 'data:image/png;base64,AA==';
   const { host, asked } = mountHero(t, 'mapillary:saved', {
     layerEnabled: false,
     savedStill: saved,
@@ -398,4 +401,35 @@ test('when Street Level is off only a pin can supply the hero still', async (t) 
   await nextTick();
   assert.equal(host.querySelector('.sl-hero__still img'), null);
   assert.deepEqual(asked, []);
+});
+
+test('with Street Level off a remote pinned still is not asked for: the card says the layer is off', async (t) => {
+  const { host, asked } = mountHero(t, 'panoramax:saved', {
+    layerEnabled: false,
+    savedStill: 'https://example.invalid/street.jpg',
+  });
+  await nextTick();
+  assert.equal(host.querySelector('.sl-hero__still img'), null, 'no request');
+  const chip =
+    host.querySelector('.paused-chip')?.getAttribute('aria-label') ?? '';
+  assert.match(chip, /Street Level off/);
+  assert.doesNotMatch(chip, /last image/);
+  assert.deepEqual(asked, []);
+});
+
+test('a pinned photo keeps its saved credit while Street Level is off', async (t) => {
+  const { host } = mountHero(t, 'panoramax:saved', {
+    layerEnabled: false,
+    savedStill: 'https://example.invalid/street.jpg',
+    savedCredit: {
+      source: 'Panoramax',
+      creator: 'Ana',
+      license: 'Licence Ouverte 2.0',
+    },
+  });
+  await nextTick();
+  assert.equal(
+    host.querySelector('.sl-hero__credit')?.textContent,
+    'Panoramax · Image by Ana · Licence Ouverte 2.0',
+  );
 });

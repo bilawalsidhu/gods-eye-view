@@ -75,6 +75,7 @@ export const usePinnedStore = defineStore('gev-pinned', () => {
       : last?.all?.find(({ pin }) => pin.key === entry.key);
     if (!still && previous?.still && previous.pin.photoCredit)
       kept.photoCredit = previous.pin.photoCredit;
+    if (!kept.photo && previous?.pin.photo) kept.photo = previous.pin.photo;
     pins.value = [...pins.value, markRaw(kept)];
     setStill(kept, still || previous?.still);
     if (repinned) clearNotice();

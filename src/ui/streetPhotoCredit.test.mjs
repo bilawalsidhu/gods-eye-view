@@ -6,7 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { useStreetLevelStore } from './stores/streetLevel.js';
 import { h, nextTick } from 'vue';
-import { streetPhotoCredit } from './streetPhotoCredit.js';
+import { savedStillShown, streetPhotoCredit } from './streetPhotoCredit.js';
 import { createPhotoHistory } from '../layers/streetLevel/photos.js';
 import { createStreetLevelLayer } from '../layers/streetLevel/index.js';
 import { KARTAVIEW_CREDIT_HTML } from '../layers/streetLevel/providers/kartaview/policy.js';
@@ -244,4 +244,12 @@ test('a waiting street card credits its own still', async (t) => {
     foot?.querySelector('.sl-hero__credit')?.textContent,
     `${KARTAVIEW_TEXT} · Image by mapfool · CC BY-SA 4.0`,
   );
+});
+
+test('a saved street still shows without its provider only as a local copy', () => {
+  assert.equal(savedStillShown('https://x.invalid/a.jpg', false), true);
+  assert.equal(savedStillShown('https://x.invalid/a.jpg', true), false);
+  assert.equal(savedStillShown('data:image/png;base64,AA==', true), true);
+  assert.equal(savedStillShown('blob:https://app.invalid/1', true), true);
+  assert.equal(savedStillShown('', false), false);
 });

@@ -31,3 +31,10 @@ export function streetPhotoCredit(module, id, saved) {
     .filter(Boolean)
     .join(' · ');
 }
+
+/**
+ * Whether a saved street still can show without asking its provider again:
+ * any still while Street Level is on, only a local copy (data:, blob:) while it is off.
+ */
+export const savedStillShown = (still, layerOff) =>
+  Boolean(still) && (!layerOff || /^(data:image\/|blob:)/i.test(still));

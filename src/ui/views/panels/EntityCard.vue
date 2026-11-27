@@ -254,7 +254,8 @@ const streetPhoto = computed(() => {
   void tick.value;
   const current = card.value;
   if (current?.layerId !== STREET_LEVEL_LAYER || !current.identity?.id) return null;
-  const record = store.layerModule(STREET_LEVEL_LAYER)?.photo?.(current.identity.id);
+  const record = store.layerModule(STREET_LEVEL_LAYER)?.photo?.(current.identity.id) ||
+    pinned.pinFor(current.key)?.photo;
   if (!record) return null;
   const at = record.capturedAt;
   const captured = Number.isFinite(at)
@@ -392,7 +393,11 @@ function togglePin() {
     // The sprite its tile wears (EntityMark.vue), as the map draws it now.
     mark: markKind(current.layerId, current),
     ...pinImage(current),
-    ...(current.layerId === STREET_LEVEL_LAYER && { photoCredit: savedPhotoCredit(store.layerModule(STREET_LEVEL_LAYER), current.identity.id) }),
+    ...(current.layerId === STREET_LEVEL_LAYER && {
+      photoCredit: savedPhotoCredit(store.layerModule(STREET_LEVEL_LAYER), current.identity.id),
+      // Its record (provider, capture date, heading, credit), for the card while the layer is off.
+      photo: store.layerModule(STREET_LEVEL_LAYER)?.photo?.(current.identity.id) || null,
+    }),
     // Keep the credit and browser-only capability when the feed record is gone.
     ...(current.layerId === 'cctv' && {
       source: cameraSource(camera.value),
