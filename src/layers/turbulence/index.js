@@ -328,9 +328,14 @@ export function createTurbulenceLayer({
     icon: '≋',
     source: 'NOAA AWC',
     updateInterval: 600_000,
+    // The readout reads the scene time ("No frame within … of {time}"); the
+    // panel reads it again when the time moves.
+    panelFollowsTime: true,
 
-    init(nextViewer) {
+    init(nextViewer, { panel = null } = {}) {
       if (viewer) throw new Error('Turbulence layer is already initialized');
+      // The panels' handle: invalidated when the row or readout changed.
+      listener = panel ? () => panel.invalidate() : null;
       viewer = nextViewer;
       rendering = createRendering({ viewer });
       uncover = clock.register({ id: ID, coverage });
@@ -512,10 +517,6 @@ export function createTurbulenceLayer({
           'NOAA Aviation Weather Center turbulence. Forecast areas are US G-AIRMETs, each valid at one time, three hours apart; the timeline shows the one nearest its time. Warnings are SIGMETs for severe turbulence and mountain waves, worldwide where issued. Pilot reports are what crews reported in the three hours before the time shown. Volumes span each area’s floor to its top; a volume is hidden while the camera is inside it. Click the map inside a volume, or a report, for details. Informational only, not for flight planning.',
         ),
       };
-    },
-
-    setRowControlsListener(value) {
-      listener = typeof value === 'function' ? value : null;
     },
 
     getAnalystRecords(maxCount = 2000) {

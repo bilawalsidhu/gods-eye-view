@@ -78,7 +78,13 @@ function harness({ feed = { getSnapshot: async () => snapshot() } } = {}) {
     clock,
     groundLonLat: () => ground,
   });
-  layer.init(viewer);
+  const panel = {
+    invalidations: 0,
+    invalidate() {
+      panel.invalidations++;
+    },
+  };
+  layer.init(viewer, { panel });
   layer.enable(viewer);
   const live = (part) =>
     [...draw.sets.values()].filter(
@@ -89,6 +95,7 @@ function harness({ feed = { getSnapshot: async () => snapshot() } } = {}) {
     draw,
     clock,
     overlay,
+    panel,
     forecastSets: () => live('forecast:'),
     shownForecast: () => live('forecast:').filter((set) => set.show),
     warnings: () => live('warnings')[0],
@@ -209,6 +216,23 @@ test('filters hide records; the panel chips carry the toggles', async (t) => {
     true,
     'unknown or non-boolean params are ignored',
   );
+});
+
+test('the row repaints through the panel handle init receives', async (t) => {
+  const h = harness();
+  t.after(() => h.layer.destroy());
+  // The readout reads the scene time, so the panel reads it again when the
+  // time moves; the old listener hook is gone (the manager refuses it).
+  assert.equal(h.layer.panelFollowsTime, true);
+  assert.equal(h.layer.setRowControlsListener, undefined);
+  await h.layer.update();
+  const afterLoad = h.panel.invalidations;
+  assert.ok(afterLoad >= 2, 'loading and loaded both invalidate the row');
+  h.layer.setParams({ high: false });
+  assert.ok(h.panel.invalidations > afterLoad, 'a filter change invalidates');
+  const afterFilter = h.panel.invalidations;
+  h.layer.setParams({ high: false });
+  assert.equal(h.panel.invalidations, afterFilter, 'no change, no repaint');
 });
 
 test('a map click inside a volume opens its card; outside clears it', async (t) => {
