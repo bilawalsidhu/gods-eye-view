@@ -3,6 +3,7 @@ import { t, msg, onLocaleChange } from '../i18n/index.js';
 import { sceneButtonsDisabled, scenePercent } from './scenePresentation.js';
 import { useSceneStore } from './stores/scenes.js';
 import { applicationPinia } from './vueRuntime.js';
+import { flushAllPanelContent } from './rail/panelContent.js';
 
 export class SceneControls {
   /**
@@ -275,6 +276,8 @@ export class SceneControls {
   setPlaybackActive(active) {
     if (this.destroyed && active) return;
     document.body.classList.toggle('scene-playback-mode', active);
+    // Leaving playback shows the panels again: repaint what they owe first.
+    if (!active) flushAllPanelContent();
   }
 
   setPlaybackKeyboardEnabled(enabled) {

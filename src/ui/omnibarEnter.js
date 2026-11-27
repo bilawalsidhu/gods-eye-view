@@ -121,6 +121,7 @@ export function mayRunOnEnter(item, text, parsed, context) {
       return !item.explicit;
     case 'count-show':
     case 'entity':
+    case 'found':
     case 'view-ask':
     case 'sel-fly':
     case 'sel-follow':

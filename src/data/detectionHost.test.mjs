@@ -1,4 +1,6 @@
 import { bindOverlayPorts } from '../testSupport/fakeOverlayPorts.mjs';
+import { setFlagsFromString } from 'node:v8';
+import { runInNewContext } from 'node:vm';
 import { readShellSource } from '../testSupport/readShellSource.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -48,17 +50,25 @@ import { createSceneOcclusionTest } from '../render/cesium/sceneOcclusionProbe.j
 import { rendererOf } from '../render/rendererOf.js';
 
 test('detection diagnostics count rendered fading rows instead of absent selected identities', () => {
-  assert.equal(countFadingRenderEntries([
-    { selected: true },
-    { selected: false },
-    { selected: true },
-    { selected: false },
-  ]), 2);
-  assert.equal(countFadingRenderEntries([{ selected: true }, { selected: true }]), 0);
+  assert.equal(
+    countFadingRenderEntries([
+      { selected: true },
+      { selected: false },
+      { selected: true },
+      { selected: false },
+    ]),
+    2,
+  );
+  assert.equal(
+    countFadingRenderEntries([{ selected: true }, { selected: true }]),
+    0,
+  );
 });
 
 class MockEvent {
-  constructor() { this.listeners = new Set(); }
+  constructor() {
+    this.listeners = new Set();
+  }
 
   addEventListener(listener) {
     this.listeners.add(listener);
@@ -71,9 +81,15 @@ class MockEvent {
 }
 
 class MockPath2D {
-  constructor() { this.points = []; }
-  moveTo(x, y) { this.points.push([x, y]); }
-  lineTo(x, y) { this.points.push([x, y]); }
+  constructor() {
+    this.points = [];
+  }
+  moveTo(x, y) {
+    this.points.push([x, y]);
+  }
+  lineTo(x, y) {
+    this.points.push([x, y]);
+  }
   roundRect() {}
   arcTo() {}
   closePath() {}
@@ -91,62 +107,133 @@ function mockContext(target, trace) {
   return {
     calls,
     font: '',
-    get filter() { return filter; },
-    set filter(value) { filter = value; record('filter', value); },
+    get filter() {
+      return filter;
+    },
+    set filter(value) {
+      filter = value;
+      record('filter', value);
+    },
     fillStyle: '',
-    get strokeStyle() { return strokeStyle; },
-    set strokeStyle(value) { strokeStyle = value; record('strokeStyle', value); },
+    get strokeStyle() {
+      return strokeStyle;
+    },
+    set strokeStyle(value) {
+      strokeStyle = value;
+      record('strokeStyle', value);
+    },
     globalAlpha: 1,
-    get globalCompositeOperation() { return globalCompositeOperation; },
-    set globalCompositeOperation(value) { globalCompositeOperation = value; record('globalCompositeOperation', value); },
+    get globalCompositeOperation() {
+      return globalCompositeOperation;
+    },
+    set globalCompositeOperation(value) {
+      globalCompositeOperation = value;
+      record('globalCompositeOperation', value);
+    },
     lineWidth: 1,
-    measureText(text) { return { width: String(text).length * 6 }; },
-    setTransform(...args) { record('setTransform', ...args); },
-    clearRect(...args) { record('clearRect', ...args); },
-    save() { record('save'); },
-    restore() { record('restore'); },
-    translate(...args) { record('translate', ...args); },
-    scale(...args) { record('scale', ...args); },
-    beginPath() { record('beginPath'); },
-    rect(...args) { record('rect', ...args); },
-    clip(...args) { record('clip', ...args); },
-    moveTo(...args) { record('moveTo', ...args); },
-    lineTo(...args) { record('lineTo', ...args); },
-    arc(...args) { record('arc', ...args); },
-    arcTo(...args) { record('arcTo', ...args); },
-    closePath() { record('closePath'); },
+    measureText(text) {
+      return { width: String(text).length * 6 };
+    },
+    setTransform(...args) {
+      record('setTransform', ...args);
+    },
+    clearRect(...args) {
+      record('clearRect', ...args);
+    },
+    save() {
+      record('save');
+    },
+    restore() {
+      record('restore');
+    },
+    translate(...args) {
+      record('translate', ...args);
+    },
+    scale(...args) {
+      record('scale', ...args);
+    },
+    beginPath() {
+      record('beginPath');
+    },
+    rect(...args) {
+      record('rect', ...args);
+    },
+    clip(...args) {
+      record('clip', ...args);
+    },
+    moveTo(...args) {
+      record('moveTo', ...args);
+    },
+    lineTo(...args) {
+      record('lineTo', ...args);
+    },
+    arc(...args) {
+      record('arc', ...args);
+    },
+    arcTo(...args) {
+      record('arcTo', ...args);
+    },
+    closePath() {
+      record('closePath');
+    },
     // The style is recorded AT fill time, not on assignment, so a pin can prove
     // which plate token actually reached the canvas rather than which one was
     // set at some point during the frame. globalAlpha rides along for the same
     // reason: the backdrop feather is an alpha, not a colour.
-    fill(path) { record('fill', path, this.fillStyle, this.globalAlpha); },
-    stroke(path) { record('stroke', path, this.strokeStyle, this.lineWidth, this.globalAlpha); },
-    fillRect(...args) { record('fillRect', ...args); },
-    fillText(...args) { record('fillText', ...args); },
-    drawImage(...args) { record('drawImage', ...args); },
+    fill(path) {
+      record('fill', path, this.fillStyle, this.globalAlpha);
+    },
+    stroke(path) {
+      record(
+        'stroke',
+        path,
+        this.strokeStyle,
+        this.lineWidth,
+        this.globalAlpha,
+      );
+    },
+    fillRect(...args) {
+      record('fillRect', ...args);
+    },
+    fillText(...args) {
+      record('fillText', ...args);
+    },
+    drawImage(...args) {
+      record('drawImage', ...args);
+    },
   };
 }
 
 // `search` seeds window.location.search. The detection mode banner is developer
 // telemetry gated behind ?detectDebug=1, so any test that uses the banner as its
 // "did this frame repaint" probe must opt in explicitly.
-function installEnvironment({ width = 800, height = 600, dpr = 2, search = '' } = {}) {
+function installEnvironment({
+  width = 800,
+  height = 600,
+  dpr = 2,
+  search = '',
+} = {}) {
   const byId = new Map();
   const paintTrace = [];
   const ctx = mockContext('shared', paintTrace);
   const detectionCtx = mockContext('detection', paintTrace);
-  const originalPerformance = Object.getOwnPropertyDescriptor(globalThis, 'performance');
+  const originalPerformance = Object.getOwnPropertyDescriptor(
+    globalThis,
+    'performance',
+  );
   const originalDateNow = Date.now;
   const originalPath2D = globalThis.Path2D;
   let currentTime = 1_000;
   let performanceStep = 0;
   Object.defineProperty(globalThis, 'performance', {
     configurable: true,
-    value: { now: () => {
-      const value = currentTime;
-      currentTime += performanceStep;
-      return value;
-    } },
+    value: {
+      now: () => {
+        const value = currentTime;
+        currentTime += performanceStep;
+        return value;
+      },
+    },
   });
   Date.now = () => currentTime;
   globalThis.Path2D = MockPath2D;
@@ -189,7 +276,9 @@ function installEnvironment({ width = 800, height = 600, dpr = 2, search = '' } 
       register(this);
     }
 
-    getBoundingClientRect() { return this._rect; }
+    getBoundingClientRect() {
+      return this._rect;
+    }
     getContext() {
       if (this.tagName !== 'CANVAS') return null;
       return this.id === 'world-overlay-detection-surface' ? detectionCtx : ctx;
@@ -202,13 +291,17 @@ function installEnvironment({ width = 800, height = 600, dpr = 2, search = '' } 
 
     remove() {
       if (this.parentElement) {
-        this.parentElement.children = this.parentElement.children.filter((child) => child !== this);
+        this.parentElement.children = this.parentElement.children.filter(
+          (child) => child !== this,
+        );
       }
       unregister(this);
       this.parentElement = null;
     }
 
-    get nextSibling() { return null; }
+    get nextSibling() {
+      return null;
+    }
   }
 
   function register(element) {
@@ -222,14 +315,26 @@ function installEnvironment({ width = 800, height = 600, dpr = 2, search = '' } 
   }
 
   const body = new MockElement('body');
-  body.classList = { contains() { return false; } };
+  body.classList = {
+    contains() {
+      return false;
+    },
+  };
   const document = {
     body,
-    createElement(tagName) { return new MockElement(tagName); },
-    getElementById(id) { return byId.get(id) || null; },
-    querySelector(selector) { return byId.get(selector.slice(1)) || null; },
+    createElement(tagName) {
+      return new MockElement(tagName);
+    },
+    getElementById(id) {
+      return byId.get(id) || null;
+    },
+    querySelector(selector) {
+      return byId.get(selector.slice(1)) || null;
+    },
     querySelectorAll(selector) {
-      const element = selector.startsWith('#') ? byId.get(selector.slice(1)) : null;
+      const element = selector.startsWith('#')
+        ? byId.get(selector.slice(1))
+        : null;
       return element ? [element] : [];
     },
   };
@@ -238,10 +343,18 @@ function installEnvironment({ width = 800, height = 600, dpr = 2, search = '' } 
     location: { search },
     addEventListener() {},
     removeEventListener() {},
-    getComputedStyle() { return { display: 'block', visibility: 'visible', opacity: '1' }; },
+    getComputedStyle() {
+      return { display: 'block', visibility: 'visible', opacity: '1' };
+    },
   };
-  globalThis.ResizeObserver = class { observe() {} disconnect() {} };
-  globalThis.MutationObserver = class { observe() {} disconnect() {} };
+  globalThis.ResizeObserver = class {
+    observe() {}
+    disconnect() {}
+  };
+  globalThis.MutationObserver = class {
+    observe() {}
+    disconnect() {}
+  };
   globalThis.document = document;
   globalThis.window = window;
 
@@ -263,7 +376,9 @@ function installEnvironment({ width = 800, height = 600, dpr = 2, search = '' } 
       positionWC: new Cesium.Cartesian3(0, 0, 10_000_000),
       positionCartographic: { height: 1_000_000 },
       viewMatrix: Cesium.Matrix4.clone(Cesium.Matrix4.IDENTITY),
-      frustum: { projectionMatrix: Cesium.Matrix4.clone(Cesium.Matrix4.IDENTITY) },
+      frustum: {
+        projectionMatrix: Cesium.Matrix4.clone(Cesium.Matrix4.IDENTITY),
+      },
       moveEnd: new MockEvent(),
     },
     scene: { postRender, requestRender() {} },
@@ -277,8 +392,12 @@ function installEnvironment({ width = 800, height = 600, dpr = 2, search = '' } 
     ctx,
     detectionCtx,
     paintTrace,
-    advance(ms) { currentTime += ms; },
-    setPerformanceStep(ms) { performanceStep = ms; },
+    advance(ms) {
+      currentTime += ms;
+    },
+    setPerformanceStep(ms) {
+      performanceStep = ms;
+    },
     cleanup() {
       destroyDetection();
       destroyWorldOverlay();
@@ -289,7 +408,8 @@ function installEnvironment({ width = 800, height = 600, dpr = 2, search = '' } 
       delete globalThis.window;
       delete globalThis.ResizeObserver;
       delete globalThis.MutationObserver;
-      if (originalPerformance) Object.defineProperty(globalThis, 'performance', originalPerformance);
+      if (originalPerformance)
+        Object.defineProperty(globalThis, 'performance', originalPerformance);
       else delete globalThis.performance;
     },
   };
@@ -318,14 +438,16 @@ function militaryLayer() {
   return {
     id: 'military',
     getDetectableObjects() {
-      return [{
-        position: new Cesium.Cartesian3(0, 0, 6_356_752),
-        sourceId: 'military-pin',
-        id: 'MIL-PIN',
-        metric: 'FL450',
-        type: 'AIR',
-        tier: 'military',
-      }];
+      return [
+        {
+          position: new Cesium.Cartesian3(0, 0, 6_356_752),
+          sourceId: 'military-pin',
+          id: 'MIL-PIN',
+          metric: 'FL450',
+          type: 'AIR',
+          tier: 'military',
+        },
+      ];
     },
   };
 }
@@ -381,7 +503,9 @@ test('detection lifecycle re-hosts unchanged painters behind the sole host liste
     assert.equal(env.postRender.listeners.size, 1);
     assert.equal(env.document.getElementById('detection-overlay'), null);
     assert.ok(env.document.getElementById('world-overlay-canvas'));
-    const surface = env.document.getElementById('world-overlay-detection-surface');
+    const surface = env.document.getElementById(
+      'world-overlay-detection-surface',
+    );
     const root = env.document.getElementById('world-overlay-root');
     const mainCanvas = env.document.getElementById('world-overlay-canvas');
     assert.ok(surface);
@@ -404,19 +528,36 @@ test('detection lifecycle re-hosts unchanged painters behind the sole host liste
     assert.equal(first.profile, 'DENSE');
     assert.ok(Array.isArray(first.calloutRects));
     if (first.calloutRects.length) {
-      const x=first.calloutRects[0].x;
-      first.calloutRects[0].x=NaN;
-      assert.equal(getDetectionDiagnostics().calloutRects[0].x,x,'QA owns a copy, never a live plate');
+      const x = first.calloutRects[0].x;
+      first.calloutRects[0].x = NaN;
+      assert.equal(
+        getDetectionDiagnostics().calloutRects[0].x,
+        x,
+        'QA owns a copy, never a live plate',
+      );
     }
     assert.equal(first.observationCount, 2);
     assert.equal(first.didSolve, true);
     assert.ok(first.solveRevision > 0);
     assert.ok(first.collectiveLabelBudget > 0);
-    assert.ok(first.bracketOpacityCounts.full + first.bracketOpacityCounts.partial > 0);
-    assert.ok(env.detectionCtx.calls.some(([name, text]) => name === 'fillText'
-      && String(text).startsWith('DENSE  VIS:')));
-    assert.ok(env.detectionCtx.calls.some(([name, path]) => name === 'stroke' && path instanceof MockPath2D));
-    assert.ok(env.detectionCtx.calls.some(([name]) => name === 'fillRect'), 'scanlines and banner still paint');
+    assert.ok(
+      first.bracketOpacityCounts.full + first.bracketOpacityCounts.partial > 0,
+    );
+    assert.ok(
+      env.detectionCtx.calls.some(
+        ([name, text]) =>
+          name === 'fillText' && String(text).startsWith('DENSE  VIS:'),
+      ),
+    );
+    assert.ok(
+      env.detectionCtx.calls.some(
+        ([name, path]) => name === 'stroke' && path instanceof MockPath2D,
+      ),
+    );
+    assert.ok(
+      env.detectionCtx.calls.some(([name]) => name === 'fillRect'),
+      'scanlines and banner still paint',
+    );
     assert.equal(env.detectionCtx.globalCompositeOperation, 'source-over');
     assert.equal(env.detectionCtx.filter, 'none');
     assert.equal(surface.style.display, 'block');
@@ -432,8 +573,16 @@ test('detection lifecycle re-hosts unchanged painters behind the sole host liste
     // screen-blended sensor surface: `screen` can only lighten, so a callout's
     // dark backing plate is a no-op over sunlit ground and the text dissolves
     // into it. Brackets, banner and scanlines stay on the sensor surface.
-    assert.ok(env.ctx.calls.some(([name, text]) => name === 'fillText' && text === 'TEST0'));
-    assert.ok(!env.detectionCtx.calls.some(([name, text]) => name === 'fillText' && text === 'TEST0'));
+    assert.ok(
+      env.ctx.calls.some(
+        ([name, text]) => name === 'fillText' && text === 'TEST0',
+      ),
+    );
+    assert.ok(
+      !env.detectionCtx.calls.some(
+        ([name, text]) => name === 'fillText' && text === 'TEST0',
+      ),
+    );
     env.advance(1);
     env.postRender.raise();
     assert.ok(getDetectionDiagnostics().solveRevision > first.solveRevision);
@@ -443,7 +592,10 @@ test('detection lifecycle re-hosts unchanged painters behind the sole host liste
     assert.equal(getMode(), 'SPARSE');
     assert.equal(getDetectionDiagnostics().profile, 'SPARSE');
     assert.equal(getDetectionDiagnostics().allocationStrategy, 'WEIGHTED');
-    assert.ok(env.detectionCtx.calls.some(([name]) => name === 'arc'), 'sparse focus ring remains available');
+    assert.ok(
+      env.detectionCtx.calls.some(([name]) => name === 'arc'),
+      'sparse focus ring remains available',
+    );
 
     setMode('BALANCED');
     env.postRender.raise();
@@ -452,9 +604,12 @@ test('detection lifecycle re-hosts unchanged painters behind the sole host liste
     env.postRender.raise();
     assert.equal(getDetectionDiagnostics().profile, 'DENSE');
 
-    const bannerCount = () => env.detectionCtx.calls.filter(([name, text]) => (
-      name === 'fillText' && /^(SPARSE|BALANCED|DENSE)  VIS:/.test(String(text))
-    )).length;
+    const bannerCount = () =>
+      env.detectionCtx.calls.filter(
+        ([name, text]) =>
+          name === 'fillText' &&
+          /^(SPARSE|BALANCED|DENSE)  VIS:/.test(String(text)),
+      ).length;
     const beforeSuspend = bannerCount();
     suspendDetection('intercity');
     assert.equal(isDetectionSuspended(), true);
@@ -471,9 +626,12 @@ test('detection lifecycle re-hosts unchanged painters behind the sole host liste
     // These are the exact engine calls made by military style presets after
     // their production UI gate chooses CRT/NVG/FLIR defaults.
     const expectedThemes = {
-      retro: 'contrast(1.08) saturate(1.04) drop-shadow(0 0 3px rgba(255, 176, 56, 0.45))',
-      surveillance: 'contrast(1.12) saturate(1.12) drop-shadow(0 0 3px rgba(120, 255, 120, 0.42))',
-      thermal: 'contrast(1.1) saturate(1.08) drop-shadow(0 0 3px rgba(255, 224, 170, 0.42))',
+      retro:
+        'contrast(1.08) saturate(1.04) drop-shadow(0 0 3px rgba(255, 176, 56, 0.45))',
+      surveillance:
+        'contrast(1.12) saturate(1.12) drop-shadow(0 0 3px rgba(120, 255, 120, 0.42))',
+      thermal:
+        'contrast(1.1) saturate(1.08) drop-shadow(0 0 3px rgba(255, 224, 170, 0.42))',
     };
     for (const style of ['retro', 'surveillance', 'thermal']) {
       setMode('OFF');
@@ -499,17 +657,28 @@ test('detection lifecycle re-hosts unchanged painters behind the sole host liste
     assert.equal(getMode(), 'OFF');
     assert.equal(surface.style.display, 'none');
     assert.equal(env.postRender.listeners.size, 1);
-    assert.ok(modes.includes('SPARSE') && modes.includes('BALANCED') && modes.includes('DENSE'));
+    assert.ok(
+      modes.includes('SPARSE') &&
+        modes.includes('BALANCED') &&
+        modes.includes('DENSE'),
+    );
 
     destroyDetection();
-    assert.equal(env.postRender.listeners.size, 1, 'detection never owns the listener');
+    assert.equal(
+      env.postRender.listeners.size,
+      1,
+      'detection never owns the listener',
+    );
     setMode('DENSE');
     env.postRender.raise();
     assert.equal(env.document.getElementById('detection-overlay'), null);
     destroyWorldOverlay();
     assert.equal(env.postRender.listeners.size, 0);
     assert.equal(env.document.getElementById('world-overlay-canvas'), null);
-    assert.equal(env.document.getElementById('world-overlay-detection-surface'), null);
+    assert.equal(
+      env.document.getElementById('world-overlay-detection-surface'),
+      null,
+    );
   } finally {
     env.cleanup();
   }
@@ -522,16 +691,22 @@ test('callouts stop painting the moment the last detectable object goes away', (
   // clear the replay buffer, or the final callsigns stay stranded on the
   // shared canvas after the last data layer is switched off.
   const env = installEnvironment();
-  let objects = [{
-    position: new Cesium.Cartesian3(0, 0, 6_356_752),
-    sourceId: 'lonely-1',
-    id: 'LASTONE',
-    metric: 'FL120',
-    type: 'AIR',
-  }];
+  let objects = [
+    {
+      position: new Cesium.Cartesian3(0, 0, 6_356_752),
+      sourceId: 'lonely-1',
+      id: 'LASTONE',
+      metric: 'FL120',
+      type: 'AIR',
+    },
+  ];
   try {
     initWorldOverlay(env.viewer);
-    initDetection(env.viewer, [{ id: 'flights', getDetectableObjects: () => objects }], () => {});
+    initDetection(
+      env.viewer,
+      [{ id: 'flights', getDetectableObjects: () => objects }],
+      () => {},
+    );
     setMode('DENSE');
     env.advance(250);
     env.postRender.raise();
@@ -540,7 +715,9 @@ test('callouts stop painting the moment the last detectable object goes away', (
     env.advance(250);
     env.postRender.raise();
     assert.ok(
-      env.ctx.calls.some(([name, text]) => name === 'fillText' && text === 'LASTONE'),
+      env.ctx.calls.some(
+        ([name, text]) => name === 'fillText' && text === 'LASTONE',
+      ),
       'the callout paints on the shared canvas while the contact exists',
     );
 
@@ -551,7 +728,9 @@ test('callouts stop painting the moment the last detectable object goes away', (
     env.advance(250);
     env.postRender.raise();
     assert.ok(
-      !env.ctx.calls.some(([name, text]) => name === 'fillText' && text === 'LASTONE'),
+      !env.ctx.calls.some(
+        ([name, text]) => name === 'fillText' && text === 'LASTONE',
+      ),
       'an empty field must drop the replay buffer, not strand the last callsign',
     );
   } finally {
@@ -563,7 +742,11 @@ test('the view scale reads the camera height the overlay host gives each paint',
   const env = installEnvironment();
   try {
     initWorldOverlay(env.viewer);
-    initDetection(env.viewer, [{ id: 'flights', getDetectableObjects: () => [] }], () => {});
+    initDetection(
+      env.viewer,
+      [{ id: 'flights', getDetectableObjects: () => [] }],
+      () => {},
+    );
     setMode('DENSE');
     const scaleAt = (height) => {
       env.viewer.camera.positionCartographic.height = height;
@@ -642,32 +825,57 @@ function ambientVesselCard(mmsi, position) {
 
 test('a callout stays readable when its own card is faded out at the keyhole rim', () => {
   // Default keyhole tuning: 7% feather, 1% outside opacity.
-  assert.deepEqual(getKeyholeFadeTuning(), { fadeRatio: 0.07, outsideOpacity: 0.01 });
+  assert.deepEqual(getKeyholeFadeTuning(), {
+    fadeRatio: 0.07,
+    outsideOpacity: 0.01,
+  });
   const width = 1600;
   const height = 900;
   const keyhole = getKeyholeGeometry(width, height);
   const env = installEnvironment({ width, height, dpr: 1 });
   // Just outside the keyhole's left rim: the card sits above or below the
   // anchor (outside, 1% alpha), the callout to its right (inside the feather).
-  const position = new Cesium.Cartesian3(270 / (width / 2) - 1, 1 - 460 / (height / 2), 6_356_752);
+  const position = new Cesium.Cartesian3(
+    270 / (width / 2) - 1,
+    1 - 460 / (height / 2),
+    6_356_752,
+  );
   const ship = shipWithCard('200', position);
   try {
     initWorldOverlay(env.viewer);
-    initDetection(env.viewer, [{ id: 'ais-live-vessels', getDetectableObjects: () => [ship] }], () => {});
+    initDetection(
+      env.viewer,
+      [{ id: 'ais-live-vessels', getDetectableObjects: () => [ship] }],
+      () => {},
+    );
     setMode('DENSE');
     for (let i = 0; i < 4; i++) settleFrame(env);
     const [alone] = getDetectionDiagnostics().calloutRects;
-    assert.ok(alone && alone.alpha >= 0.5, 'without a card the callout is clearly visible');
+    assert.ok(
+      alone && alone.alpha >= 0.5,
+      'without a card the callout is clearly visible',
+    );
 
     setOverlayEntries('ais-live-vessels', [ambientVesselCard('200', position)]);
     for (let i = 0; i < 4; i++) settleFrame(env);
     const rect = getOverlayPaintRect('ais-live-vessels', 'vessel:200');
     assert.ok(rect, 'the host paints the card (at the outside opacity)');
-    const cardAlpha = keyholeLabelAlphaFromGeometry(rect.x + rect.w / 2, rect.y + rect.h / 2, keyhole);
-    assert.ok(cardAlpha <= 0.05, `the card is invisible at the rim (keyhole alpha ${cardAlpha})`);
+    const cardAlpha = keyholeLabelAlphaFromGeometry(
+      rect.x + rect.w / 2,
+      rect.y + rect.h / 2,
+      keyhole,
+    );
+    assert.ok(
+      cardAlpha <= 0.05,
+      `the card is invisible at the rim (keyhole alpha ${cardAlpha})`,
+    );
 
     const callouts = getDetectionDiagnostics().calloutRects;
-    assert.equal(callouts.length, 1, 'the callout keeps painting while its card is faded out');
+    assert.equal(
+      callouts.length,
+      1,
+      'the callout keeps painting while its card is faded out',
+    );
     assert.ok(callouts[0].alpha >= 0.4, 'and stays readable');
   } finally {
     destroyDetection();
@@ -680,7 +888,10 @@ test('a callout stays hidden while its card fades out after leaving the publishe
   const env = installEnvironment({ width: 1600, height: 900, dpr: 1 });
   const at = (x, y) => new Cesium.Cartesian3(x, y, 6_356_752);
   const ship = shipWithCard('200', at(0.1, 0.1));
-  const painted = (text) => env.ctx.calls.some(([name, value]) => name === 'fillText' && value === text);
+  const painted = (text) =>
+    env.ctx.calls.some(
+      ([name, value]) => name === 'fillText' && value === text,
+    );
   const frame = (ms) => {
     env.ctx.calls.length = 0;
     env.advance(ms);
@@ -688,18 +899,32 @@ test('a callout stays hidden while its card fades out after leaving the publishe
   };
   try {
     initWorldOverlay(env.viewer);
-    initDetection(env.viewer, [{ id: 'ais-live-vessels', getDetectableObjects: () => [ship] }], () => {});
+    initDetection(
+      env.viewer,
+      [{ id: 'ais-live-vessels', getDetectableObjects: () => [ship] }],
+      () => {},
+    );
     setMode('DENSE');
-    setOverlayEntries('ais-live-vessels', [ambientVesselCard('200', ship.position)]);
+    setOverlayEntries('ais-live-vessels', [
+      ambientVesselCard('200', ship.position),
+    ]);
     for (let i = 0; i < 6; i++) frame(250);
     frame(16);
-    assert.ok(painted('CARD-200') && !painted('SHIP-200'), 'steady state: card only');
+    assert.ok(
+      painted('CARD-200') && !painted('SHIP-200'),
+      'steady state: card only',
+    );
 
     // The vessel layer republishes its screen-grid cohort after a camera move:
     // this vessel's card is replaced by another one, the vessel stays detectable.
-    setOverlayEntries('ais-live-vessels', [ambientVesselCard('300', at(-0.5, -0.4))]);
+    setOverlayEntries('ais-live-vessels', [
+      ambientVesselCard('300', at(-0.5, -0.4)),
+    ]);
     frame(16);
-    assert.ok(getOverlayPaintRect('ais-live-vessels', 'vessel:200'), 'the dropped card is still fading out');
+    assert.ok(
+      getOverlayPaintRect('ais-live-vessels', 'vessel:200'),
+      'the dropped card is still fading out',
+    );
     assert.ok(painted('CARD-200'), 'and its text still paints');
     assert.ok(!painted('SHIP-200'), 'no full callout under the fading card');
 
@@ -718,12 +943,22 @@ test('a vessel whose ambient card loses the collision keeps its callout', () => 
   // Four vessels a few pixels apart: their cards collide (a card goes only
   // above or below its anchor), so the arbiter paints only some of them.
   const ships = [0, 1, 2, 3].map((i) =>
-    shipWithCard(String(100 + i), new Cesium.Cartesian3(-0.2 + i * 0.005, i * 0.005, 6_356_752)),
+    shipWithCard(
+      String(100 + i),
+      new Cesium.Cartesian3(-0.2 + i * 0.005, i * 0.005, 6_356_752),
+    ),
   );
-  const painted = (text) => env.ctx.calls.some(([name, value]) => name === 'fillText' && value === text);
+  const painted = (text) =>
+    env.ctx.calls.some(
+      ([name, value]) => name === 'fillText' && value === text,
+    );
   try {
     initWorldOverlay(env.viewer);
-    initDetection(env.viewer, [{ id: 'ais-live-vessels', getDetectableObjects: () => ships }], () => {});
+    initDetection(
+      env.viewer,
+      [{ id: 'ais-live-vessels', getDetectableObjects: () => ships }],
+      () => {},
+    );
     setOverlayEntries(
       'ais-live-vessels',
       ships.map((ship) => ambientVesselCard(ship.sourceId, ship.position)),
@@ -733,7 +968,9 @@ test('a vessel whose ambient card loses the collision keeps its callout', () => 
     env.ctx.calls.length = 0;
     settleFrame(env);
 
-    const winners = ships.filter((ship) => getOverlayPaintRect('ais-live-vessels', ship.cardEntryId));
+    const winners = ships.filter((ship) =>
+      getOverlayPaintRect('ais-live-vessels', ship.cardEntryId),
+    );
     assert.ok(
       winners.length >= 1 && winners.length < ships.length,
       `the colliding cards leave some unpainted (${winners.length} of ${ships.length} painted)`,
@@ -743,7 +980,9 @@ test('a vessel whose ambient card loses the collision keeps its callout', () => 
       assert.equal(
         painted(ship.id),
         !carded,
-        carded ? `${ship.id} draws no callout under its card` : `${ship.id} keeps its callout`,
+        carded
+          ? `${ship.id} draws no callout under its card`
+          : `${ship.id} keeps its callout`,
       );
     }
     assert.equal(
@@ -763,13 +1002,19 @@ test('a callout fades out while its card fades in instead of vanishing at once',
   const ship = shipWithCard('200', new Cesium.Cartesian3(0.1, 0.1, 6_356_752));
   try {
     initWorldOverlay(env.viewer);
-    initDetection(env.viewer, [{ id: 'ais-live-vessels', getDetectableObjects: () => [ship] }], () => {});
+    initDetection(
+      env.viewer,
+      [{ id: 'ais-live-vessels', getDetectableObjects: () => [ship] }],
+      () => {},
+    );
     setMode('DENSE');
     for (let i = 0; i < 4; i++) settleFrame(env);
     const [alone] = getDetectionDiagnostics().calloutRects;
     assert.ok(alone.alpha >= 0.9, 'the callout starts fully visible');
 
-    setOverlayEntries('ais-live-vessels', [ambientVesselCard('200', ship.position)]);
+    setOverlayEntries('ais-live-vessels', [
+      ambientVesselCard('200', ship.position),
+    ]);
     const alphas = [];
     for (let i = 0; i < 30; i++) {
       env.advance(16);
@@ -809,12 +1054,24 @@ test('space-tier callouts take the heavier plate while air contacts keep the lig
       theme.calloutPlateSpace,
       'the fixture is only meaningful while the two tiers differ',
     );
-    const painted = (text) => env.ctx.calls.some(([name, value]) => name === 'fillText' && value === text);
-    assert.ok(painted('AIRONE') && painted('SATONE'), 'both tiers reached the frame under test');
+    const painted = (text) =>
+      env.ctx.calls.some(
+        ([name, value]) => name === 'fillText' && value === text,
+      );
+    assert.ok(
+      painted('AIRONE') && painted('SATONE'),
+      'both tiers reached the frame under test',
+    );
 
     const fills = sharedFillStyles(env);
-    assert.ok(fills.includes(theme.calloutPlate), 'the air contact keeps the light plate');
-    assert.ok(fills.includes(theme.calloutPlateSpace), 'the space contact takes the heavier plate');
+    assert.ok(
+      fills.includes(theme.calloutPlate),
+      'the air contact keeps the light plate',
+    );
+    assert.ok(
+      fills.includes(theme.calloutPlateSpace),
+      'the space contact takes the heavier plate',
+    );
   } finally {
     env.cleanup();
   }
@@ -831,11 +1088,16 @@ test('surveillance military tier reaches the dedicated render target as shipped 
     env.postRender.raise();
 
     assert.ok(
-      env.detectionCtx.calls.some(([name, value]) => name === 'strokeStyle' && value === '#ff5a47'),
+      env.detectionCtx.calls.some(
+        ([name, value]) => name === 'strokeStyle' && value === '#ff5a47',
+      ),
       'the production projection/tier/batched-bracket paint path emits surveillance military red',
     );
-    assert.ok(env.detectionCtx.calls.some(([name, path]) => name === 'stroke'
-      && path instanceof MockPath2D));
+    assert.ok(
+      env.detectionCtx.calls.some(
+        ([name, path]) => name === 'stroke' && path instanceof MockPath2D,
+      ),
+    );
   } finally {
     env.cleanup();
   }
@@ -859,7 +1121,13 @@ function echoField(layerIds) {
     center: Cesium.Cartesian3.fromDegrees(0, 89, 0),
     radiusM: 250_000,
     pulse: { count: 1000, periodMs: 1000, startFraction: 0 },
-    echo: { layerIds, fadeMs: 60_000, color: 'rgb(1, 2, 3)', spreadPx: 8, lineWidth: 3.25 },
+    echo: {
+      layerIds,
+      fadeMs: 60_000,
+      color: 'rgb(1, 2, 3)',
+      spreadPx: 8,
+      lineWidth: 3.25,
+    },
   };
 }
 
@@ -868,7 +1136,10 @@ test('Global Context echo brackets reach the canvas in the detection style colou
   const field = echoField(['military']);
   const echoStrokes = () =>
     env.detectionCtx.calls
-      .filter(([name, , , width]) => name === 'stroke' && width === field.echo.lineWidth)
+      .filter(
+        ([name, , , width]) =>
+          name === 'stroke' && width === field.echo.lineWidth,
+      )
       .map(([, , style]) => style);
   try {
     setAwarenessEchoField(field);
@@ -892,7 +1163,6 @@ test('Global Context echo brackets reach the canvas in the detection style colou
         `${style} echoes take the style line colour, got ${strokes}`,
       );
     }
-
   } finally {
     clearAwarenessEchoField();
     env.cleanup();
@@ -925,26 +1195,48 @@ test('a Global Context echo bracket is drawn outside its contact bracket and dim
     settleFrame(env);
     env.detectionCtx.calls.length = 0;
     settleFrame(env);
-    const strokes = env.detectionCtx.calls.filter(([name]) => name === 'stroke');
-    const echoStroke = strokes.find(([, , style, width]) => style === echo.color && width === echo.lineWidth);
+    const strokes = env.detectionCtx.calls.filter(
+      ([name]) => name === 'stroke',
+    );
+    const echoStroke = strokes.find(
+      ([, , style, width]) => style === echo.color && width === echo.lineWidth,
+    );
     assert.ok(echoStroke, 'the echo bracket is painted');
-    const bracketStroke = strokes.find(([, path, style, width]) =>
-      path instanceof MockPath2D && path.points.length && width !== echo.lineWidth && style !== echo.color);
+    const bracketStroke = strokes.find(
+      ([, path, style, width]) =>
+        path instanceof MockPath2D &&
+        path.points.length &&
+        width !== echo.lineWidth &&
+        style !== echo.color,
+    );
     assert.ok(bracketStroke, 'the contact bracket is painted');
     const extent = (path) => {
       const xs = path.points.map(([x]) => x);
       const ys = path.points.map(([, y]) => y);
-      return { halfW: (Math.max(...xs) - Math.min(...xs)) / 2, halfH: (Math.max(...ys) - Math.min(...ys)) / 2 };
+      return {
+        halfW: (Math.max(...xs) - Math.min(...xs)) / 2,
+        halfH: (Math.max(...ys) - Math.min(...ys)) / 2,
+      };
     };
     const echoBox = extent(echoStroke[1]);
     const bracketBox = extent(bracketStroke[1]);
-    assert.ok(Math.abs(echoBox.halfW - bracketBox.halfW - echo.spreadPx / 2) < 1e-3,
-      `echo ${echoBox.halfW} vs bracket ${bracketBox.halfW}`);
-    assert.ok(Math.abs(echoBox.halfH - bracketBox.halfH - echo.spreadPx / 2) < 1e-3);
+    assert.ok(
+      Math.abs(echoBox.halfW - bracketBox.halfW - echo.spreadPx / 2) < 1e-3,
+      `echo ${echoBox.halfW} vs bracket ${bracketBox.halfW}`,
+    );
+    assert.ok(
+      Math.abs(echoBox.halfH - bracketBox.halfH - echo.spreadPx / 2) < 1e-3,
+    );
     const echoAlpha = echoStroke[4];
     const bracketAlpha = bracketStroke[4];
-    assert.ok(echoAlpha > 0 && echoAlpha < bracketAlpha, `${echoAlpha} vs ${bracketAlpha}`);
-    assert.ok(Math.abs(echoAlpha - bracketAlpha / 2) < 1e-6, `${echoAlpha} vs ${bracketAlpha}`);
+    assert.ok(
+      echoAlpha > 0 && echoAlpha < bracketAlpha,
+      `${echoAlpha} vs ${bracketAlpha}`,
+    );
+    assert.ok(
+      Math.abs(echoAlpha - bracketAlpha / 2) < 1e-6,
+      `${echoAlpha} vs ${bracketAlpha}`,
+    );
   } finally {
     clearAwarenessEchoField();
     env.cleanup();
@@ -964,14 +1256,16 @@ test('under the sonar sweep an echo is never brighter than its own bracket', () 
   };
   const contact = {
     id: 'military',
-    getDetectableObjects: () => [{
-      position: new Cesium.Cartesian3(0.5, 0.3, 6_356_752),
-      sourceId: 'sonar-pin',
-      id: 'SONAR',
-      metric: 'FL300',
-      type: 'AIR',
-      tier: 'military',
-    }],
+    getDetectableObjects: () => [
+      {
+        position: new Cesium.Cartesian3(0.5, 0.3, 6_356_752),
+        sourceId: 'sonar-pin',
+        id: 'SONAR',
+        metric: 'FL300',
+        type: 'AIR',
+        tier: 'military',
+      },
+    ],
   };
   try {
     setAwarenessEchoField({
@@ -991,10 +1285,20 @@ test('under the sonar sweep an echo is never brighter than its own bracket', () 
     for (let frame = 0; frame < 40; frame++) {
       env.detectionCtx.calls.length = 0;
       settleFrame(env);
-      const strokes = env.detectionCtx.calls.filter(([name]) => name === 'stroke');
-      const echoStroke = strokes.find(([, , style, width]) => style === echo.color && width === echo.lineWidth);
-      const bracketStroke = strokes.find(([, path, style, width]) =>
-        path instanceof MockPath2D && path.points.length && width !== echo.lineWidth && style !== echo.color);
+      const strokes = env.detectionCtx.calls.filter(
+        ([name]) => name === 'stroke',
+      );
+      const echoStroke = strokes.find(
+        ([, , style, width]) =>
+          style === echo.color && width === echo.lineWidth,
+      );
+      const bracketStroke = strokes.find(
+        ([, path, style, width]) =>
+          path instanceof MockPath2D &&
+          path.points.length &&
+          width !== echo.lineWidth &&
+          style !== echo.color,
+      );
       if (!bracketStroke) continue;
       const bracketAlpha = bracketStroke[4];
       if (bracketAlpha < 0.99) dimmed++;
@@ -1053,7 +1357,10 @@ test('resting Global Context pulses skip echo work for the whole frame, not per 
     assert.equal(painted, flights.length, 'every flight is on screen');
     // One check per painted frame, however many contacts are on screen.
     assert.ok(levelCalls >= 1, 'the frame asks whether echoes are live');
-    assert.ok(levelCalls < painted, `${levelCalls} level checks for ${painted} contacts`);
+    assert.ok(
+      levelCalls < painted,
+      `${levelCalls} level checks for ${painted} contacts`,
+    );
     assert.ok(
       !env.detectionCtx.calls.some(
         ([name, , style]) => name === 'stroke' && style === 'rgb(1, 2, 3)',
@@ -1072,44 +1379,71 @@ test('pathological detection paint holds alternate frames without freezing share
   try {
     initWorldOverlay(env.viewer);
     initDetection(env.viewer, [detectableLayer()], () => {});
-    setOverlayEntries('valve-card', [{
-      id: 'ambient-card',
-      position: new Cesium.Cartesian3(0, 0, 0),
-      variant: 'label',
-      title: 'AMBIENT-CONTINUES',
-      selected: true,
-      protected: true,
-      horizonCull: false,
-      edgeFade: 'none',
-    }]);
+    setOverlayEntries('valve-card', [
+      {
+        id: 'ambient-card',
+        position: new Cesium.Cartesian3(0, 0, 0),
+        variant: 'label',
+        title: 'AMBIENT-CONTINUES',
+        selected: true,
+        protected: true,
+        horizonCull: false,
+        edgeFade: 'none',
+      },
+    ]);
     setMode('DENSE');
     env.advance(250);
     env.setPerformanceStep(30);
 
     env.postRender.raise();
     env.postRender.raise();
-    const detectionClears = env.detectionCtx.calls.filter(([name]) => name === 'clearRect').length;
-    const detectionBanners = env.detectionCtx.calls.filter(([name, text]) => name === 'fillText'
-      && String(text).startsWith('DENSE  VIS:')).length;
-    const sharedClears = env.ctx.calls.filter(([name]) => name === 'clearRect').length;
-    const sharedCards = env.ctx.calls.filter(([name, text]) => name === 'fillText'
-      && text === 'AMBIENT-CONTINUES').length;
+    const detectionClears = env.detectionCtx.calls.filter(
+      ([name]) => name === 'clearRect',
+    ).length;
+    const detectionBanners = env.detectionCtx.calls.filter(
+      ([name, text]) =>
+        name === 'fillText' && String(text).startsWith('DENSE  VIS:'),
+    ).length;
+    const sharedClears = env.ctx.calls.filter(
+      ([name]) => name === 'clearRect',
+    ).length;
+    const sharedCards = env.ctx.calls.filter(
+      ([name, text]) => name === 'fillText' && text === 'AMBIENT-CONTINUES',
+    ).length;
 
     env.postRender.raise();
-    assert.equal(env.detectionCtx.calls.filter(([name]) => name === 'clearRect').length, detectionClears,
-      'the host preserves detection pixels on the held odd frame');
-    assert.equal(env.detectionCtx.calls.filter(([name, text]) => name === 'fillText'
-      && String(text).startsWith('DENSE  VIS:')).length, detectionBanners);
-    assert.equal(env.ctx.calls.filter(([name]) => name === 'clearRect').length, sharedClears + 1,
-      'the shared surface still clears');
-    assert.equal(env.ctx.calls.filter(([name, text]) => name === 'fillText'
-      && text === 'AMBIENT-CONTINUES').length, sharedCards + 1,
-      'the shared lane still repaints');
+    assert.equal(
+      env.detectionCtx.calls.filter(([name]) => name === 'clearRect').length,
+      detectionClears,
+      'the host preserves detection pixels on the held odd frame',
+    );
+    assert.equal(
+      env.detectionCtx.calls.filter(
+        ([name, text]) =>
+          name === 'fillText' && String(text).startsWith('DENSE  VIS:'),
+      ).length,
+      detectionBanners,
+    );
+    assert.equal(
+      env.ctx.calls.filter(([name]) => name === 'clearRect').length,
+      sharedClears + 1,
+      'the shared surface still clears',
+    );
+    assert.equal(
+      env.ctx.calls.filter(
+        ([name, text]) => name === 'fillText' && text === 'AMBIENT-CONTINUES',
+      ).length,
+      sharedCards + 1,
+      'the shared lane still repaints',
+    );
     assert.equal(getDetectionDiagnostics().throttleSkipCount, 1);
 
     env.postRender.raise();
-    assert.equal(env.detectionCtx.calls.filter(([name]) => name === 'clearRect').length,
-      detectionClears + 1, 'the next even frame repaints detection');
+    assert.equal(
+      env.detectionCtx.calls.filter(([name]) => name === 'clearRect').length,
+      detectionClears + 1,
+      'the next even frame repaints detection',
+    );
     assert.equal(getDetectionDiagnostics().throttleSkipCount, 1);
   } finally {
     env.cleanup();
@@ -1117,9 +1451,14 @@ test('pathological detection paint holds alternate frames without freezing share
 });
 
 test('detection cannot resurrect a private canvas, listener, matrix, resize, clear, or UI inventory', () => {
-  const source = readFileSync(new URL('./detection.js', import.meta.url), 'utf8');
-  const uiSource = readShellSource()
-  + '\n' + readFileSync(new URL('../ui/visualPresets.js', import.meta.url), 'utf8');
+  const source = readFileSync(
+    new URL('./detection.js', import.meta.url),
+    'utf8',
+  );
+  const uiSource =
+    readShellSource() +
+    '\n' +
+    readFileSync(new URL('../ui/visualPresets.js', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /createElement\(\s*['"]canvas['"]\s*\)/);
   assert.doesNotMatch(source, /postRender\.addEventListener/);
   assert.doesNotMatch(source, /['"]detection-overlay['"]/);
@@ -1129,11 +1468,20 @@ test('detection cannot resurrect a private canvas, listener, matrix, resize, cle
   assert.doesNotMatch(source, /CALLOUT_OCCLUSION_SELECTORS/);
   assert.doesNotMatch(source, /_ctx\.(?:filter|globalCompositeOperation)\s*=/);
   assert.match(source, /_hostSurface\.style\.mixBlendMode = _theme\.blend;/);
-  assert.match(source, /_hostSurface\.style\.filter = `\$\{_theme\.filter\} drop-shadow\(0 0 \$\{GLOW_PX\}px \$\{_theme\.glow\}\)`;/);
+  assert.match(
+    source,
+    /_hostSurface\.style\.filter = `\$\{_theme\.filter\} drop-shadow\(0 0 \$\{GLOW_PX\}px \$\{_theme\.glow\}\)`;/,
+  );
   assert.match(source, /const LABEL_SOLVE_INTERVAL_MS = 125;/);
   assert.match(source, /const _labelArbiter = new LabelArbiter\(\);/);
-  assert.match(source, /const clipW = vp3 \* px \+ vp7 \* py \+ vp11 \* pz \+ vp15;/);
-  assert.match(source, /registerWorldOverlayPaintLane\('detection', _paintDetectionLane/);
+  assert.match(
+    source,
+    /const clipW = vp3 \* px \+ vp7 \* py \+ vp11 \* pz \+ vp15;/,
+  );
+  assert.match(
+    source,
+    /registerWorldOverlayPaintLane\('detection', _paintDetectionLane/,
+  );
   assert.match(source, /target: 'detection'/);
   assert.match(source, /shouldPaint: _shouldPaintDetectionLane/);
   // The three military styles used to carry three copies of these numbers.
@@ -1150,7 +1498,10 @@ test('detection cannot resurrect a private canvas, listener, matrix, resize, cle
     3,
     'CRT, NVG, and FLIR retain their Dense auto-enable defaults',
   );
-  assert.match(uiSource, /preset\.detection && !this\._detectionUserOverridden/);
+  assert.match(
+    uiSource,
+    /preset\.detection && !this\._detectionUserOverridden/,
+  );
 });
 
 // ── Developer telemetry gate (2026-08-20 QA hunt) ───────────────────────────
@@ -1164,15 +1515,22 @@ test('detectionDebugRequested parses the query-string gate and nothing else', ()
   assert.equal(detectionDebugRequested(''), false);
   assert.equal(detectionDebugRequested('?detectDebug=0'), false);
   assert.equal(detectionDebugRequested('?detectDebug'), false);
-  assert.equal(detectionDebugRequested('?detectdebug=1'), false, 'the flag is case-sensitive');
+  assert.equal(
+    detectionDebugRequested('?detectdebug=1'),
+    false,
+    'the flag is case-sensitive',
+  );
   assert.equal(detectionDebugRequested(undefined), false);
   assert.equal(detectionDebugRequested(null), false);
 });
 
 test('the mode banner is absent by default and present behind the flag', () => {
-  const bannerPaints = (env) => env.detectionCtx.calls.filter(([name, text]) => (
-    name === 'fillText' && /^(SPARSE|BALANCED|DENSE)  VIS:/.test(String(text))
-  )).length;
+  const bannerPaints = (env) =>
+    env.detectionCtx.calls.filter(
+      ([name, text]) =>
+        name === 'fillText' &&
+        /^(SPARSE|BALANCED|DENSE)  VIS:/.test(String(text)),
+    ).length;
 
   const painted = (search) => {
     const env = installEnvironment({ search });
@@ -1184,7 +1542,9 @@ test('the mode banner is absent by default and present behind the flag', () => {
       env.postRender.raise();
       // The overlay is alive either way — brackets still stroke.
       assert.ok(
-        env.detectionCtx.calls.some(([name, path]) => name === 'stroke' && path instanceof MockPath2D),
+        env.detectionCtx.calls.some(
+          ([name, path]) => name === 'stroke' && path instanceof MockPath2D,
+        ),
         'detection still paints its contacts regardless of the debug gate',
       );
       return bannerPaints(env);
@@ -1195,8 +1555,15 @@ test('the mode banner is absent by default and present behind the flag', () => {
     }
   };
 
-  assert.equal(painted(''), 0, 'users must never see the engine telemetry banner');
-  assert.ok(painted('?detectDebug=1') > 0, 'the flag brings the telemetry back');
+  assert.equal(
+    painted(''),
+    0,
+    'users must never see the engine telemetry banner',
+  );
+  assert.ok(
+    painted('?detectDebug=1') > 0,
+    'the flag brings the telemetry back',
+  );
 });
 
 test('detection telemetry stays reachable programmatically with the banner hidden', () => {
@@ -1233,7 +1600,11 @@ test('civilian and military AIR brackets cover front, left, and right at Sparse 
         type: 'AIR',
       }));
       initWorldOverlay(env.viewer);
-      initDetection(env.viewer, [{ id: layerId, getDetectableObjects: () => objects }], () => {});
+      initDetection(
+        env.viewer,
+        [{ id: layerId, getDetectableObjects: () => objects }],
+        () => {},
+      );
       setDetectionTuning({ densityPct: 25 });
       setMode('SPARSE');
       settleFrame(env);
@@ -1246,8 +1617,10 @@ test('civilian and military AIR brackets cover front, left, and right at Sparse 
       assert.equal(diagnostics.visibleCount, 3);
       assert.equal(diagnostics.densityPct, 25);
       assert.equal(diagnostics.profile, 'SPARSE');
-      assert.ok(diagnostics.selectedCount <= diagnostics.collectiveLabelBudget,
-        'Sparse keeps its documented budget instead of silently becoming Dense');
+      assert.ok(
+        diagnostics.selectedCount <= diagnostics.collectiveLabelBudget,
+        'Sparse keeps its documented budget instead of silently becoming Dense',
+      );
     } finally {
       destroyDetection();
       destroyWorldOverlay();
@@ -1282,7 +1655,10 @@ test('vessels, like aircraft, are asked for every contact they draw', () => {
       Number.POSITIVE_INFINITY,
       'a sample of a worldwide vessel list leaves most ships in view unbracketed',
     );
-    assert.ok(Number.isFinite(asked.get('traffic')), 'other layers keep the cap');
+    assert.ok(
+      Number.isFinite(asked.get('traffic')),
+      'other layers keep the cap',
+    );
   } finally {
     destroyDetection();
     destroyWorldOverlay();
@@ -1306,11 +1682,17 @@ function backdropLayer() {
       return [
         {
           position: new Cesium.Cartesian3(-0.4, 0.2, 6_356_752),
-          sourceId: 'ground-1', id: 'GROUNDED', metric: 'FL100', type: 'AIR',
+          sourceId: 'ground-1',
+          id: 'GROUNDED',
+          metric: 'FL100',
+          type: 'AIR',
         },
         {
           position: new Cesium.Cartesian3(0.4, -0.2, 20_000_000),
-          sourceId: 'sky-1', id: 'SKYBACK', metric: 'FL400', type: 'AIR',
+          sourceId: 'sky-1',
+          id: 'SKYBACK',
+          metric: 'FL400',
+          type: 'AIR',
         },
       ];
     },
@@ -1332,8 +1714,14 @@ test('the backdrop feather reaches the canvas as a lighter plate against sky', (
     env.ctx.calls.length = 0;
     settleFrame(env);
 
-    const painted = (text) => env.ctx.calls.some(([name, value]) => name === 'fillText' && value === text);
-    assert.ok(painted('GROUNDED') && painted('SKYBACK'), 'both backdrops reached the frame under test');
+    const painted = (text) =>
+      env.ctx.calls.some(
+        ([name, value]) => name === 'fillText' && value === text,
+      );
+    assert.ok(
+      painted('GROUNDED') && painted('SKYBACK'),
+      'both backdrops reached the frame under test',
+    );
 
     const plate = DETECTION_THEME_MAP._default.calloutPlate;
     const plateAlphas = env.ctx.calls
@@ -1344,7 +1732,10 @@ test('the backdrop feather reaches the canvas as a lighter plate against sky', (
     const heaviest = Math.max(...plateAlphas);
     const lightest = Math.min(...plateAlphas);
     assert.ok(heaviest > 0, 'the grounded contact still gets a plate');
-    assert.ok(lightest > 0, 'the sky contact keeps a whisper rather than vanishing');
+    assert.ok(
+      lightest > 0,
+      'the sky contact keeps a whisper rather than vanishing',
+    );
     // Reverting the feature makes both plates equal, which fails here first.
     assert.ok(
       lightest < heaviest * 0.5,
@@ -1410,9 +1801,23 @@ test('a transit vehicle is a contact: box, route, mode and operator on the share
       painted.some((text) => String(text).includes('34 KM/H')),
       'and so does what the vehicle is doing',
     );
-    assert.ok(env.ctx.calls.some(([name, , color, width]) => name === 'stroke' && color === '#5EF08A' && width === 1.25));
-    assert.ok(env.ctx.calls.some(([name, , color, width]) => name === 'stroke' && color === '#05080C' && width === 3.25));
-    assert.ok(!env.detectionCtx.calls.some(([name, , color]) => name === 'stroke' && color === '#5EF08A'));
+    assert.ok(
+      env.ctx.calls.some(
+        ([name, , color, width]) =>
+          name === 'stroke' && color === '#5EF08A' && width === 1.25,
+      ),
+    );
+    assert.ok(
+      env.ctx.calls.some(
+        ([name, , color, width]) =>
+          name === 'stroke' && color === '#05080C' && width === 3.25,
+      ),
+    );
+    assert.ok(
+      !env.detectionCtx.calls.some(
+        ([name, , color]) => name === 'stroke' && color === '#5EF08A',
+      ),
+    );
     // The operator travels on the object for the two-tier card form, which is
     // where `klass` is read; the host's track label does not paint it.
     assert.equal(composeLabel(objects[0]).secondary, 'MBTA · BUS 34 KM/H');
@@ -1444,11 +1849,15 @@ function installDepthScene(env, surfaceDistance, { webgl2 = true } = {}) {
   const far = 100_000_000;
   const gl = createFakeGl({ webgl2 });
   const camera = env.viewer.camera;
-  camera.viewMatrix = Cesium.Matrix4.fromTranslation(new Cesium.Cartesian3(0, 0, -10_000_000));
+  camera.viewMatrix = Cesium.Matrix4.fromTranslation(
+    new Cesium.Cartesian3(0, 0, -10_000_000),
+  );
   camera.frustum.fovy = Math.PI / 2;
   camera.frustum.aspectRatio = 800 / 600;
   const paint = () =>
-    depthImage(8, 6, () => viewDistanceToDepth(surfaceDistance(), near, far, true));
+    depthImage(8, 6, () =>
+      viewDistanceToDepth(surfaceDistance(), near, far, true),
+    );
   const image = paint();
   const scene = createFakeDepthScene({ gl, ranges: [{ near, far, image }] });
   Object.assign(env.viewer.scene, scene, { camera });
@@ -1472,22 +1881,40 @@ function occlusionLayers() {
     {
       id: 'traffic',
       getDetectableObjects: () => [
-        { position: new Cesium.Cartesian3(-0.4, 0, 6_356_752), id: 'VEH-0001', type: 'VEH', depthTested: true },
-        { position: new Cesium.Cartesian3(0.4, 0, 8_000_000), id: 'VEH-0002', type: 'VEH', depthTested: true },
+        {
+          position: new Cesium.Cartesian3(-0.4, 0, 6_356_752),
+          id: 'VEH-0001',
+          type: 'VEH',
+          depthTested: true,
+        },
+        {
+          position: new Cesium.Cartesian3(0.4, 0, 8_000_000),
+          id: 'VEH-0002',
+          type: 'VEH',
+          depthTested: true,
+        },
       ],
     },
     {
       id: 'flights',
       // The same nearer surface is in front of it, but it is not depth-tested.
       getDetectableObjects: () => [
-        { position: new Cesium.Cartesian3(-0.4, 0.3, 6_356_752), sourceId: 'f1', id: 'AIR1', metric: 'FL300', type: 'AIR' },
+        {
+          position: new Cesium.Cartesian3(-0.4, 0.3, 6_356_752),
+          sourceId: 'f1',
+          id: 'AIR1',
+          metric: 'FL300',
+          type: 'AIR',
+        },
       ],
     },
   ];
 }
 
 function paintedText(env) {
-  return env.ctx.calls.filter(([name]) => name === 'fillText').map(([, text]) => text);
+  return env.ctx.calls
+    .filter(([name]) => name === 'fillText')
+    .map(([, text]) => text);
 }
 
 /** One rendered frame 16 ms on; `settleFrame` is one 250 ms on (a solve). */
@@ -1508,13 +1935,25 @@ test('a depth-tested contact behind drawn geometry loses its bracket and callout
     settleFrame(env);
     let diagnostics = getDetectionDiagnostics();
     assert.equal(diagnostics.surfaceDepthMode, 'async');
-    assert.equal(diagnostics.surfaceTestedCount, 2, 'only the depth-tested contacts');
+    assert.equal(
+      diagnostics.surfaceTestedCount,
+      2,
+      'only the depth-tested contacts',
+    );
     assert.equal(diagnostics.surfaceProbeTests, 2);
     // New to the view, so held back for the frame or two the first answer
     // takes: neither is drawn yet. The flight is.
-    assert.equal(diagnostics.surfaceHiddenCount, 2, 'no answer has arrived yet');
+    assert.equal(
+      diagnostics.surfaceHiddenCount,
+      2,
+      'no answer has arrived yet',
+    );
     assert.equal(diagnostics.visibleCount, 1);
-    assert.equal(depth.gl.counts.queries, 3, 'a control point and one query per contact');
+    assert.equal(
+      depth.gl.counts.queries,
+      3,
+      'a control point and one query per contact',
+    );
 
     // Frames before the GPU answers start nothing new and wait for nothing.
     nextFrame(env);
@@ -1544,7 +1983,11 @@ test('a depth-tested contact behind drawn geometry loses its bracket and callout
     settleFrame(env);
     diagnostics = getDetectionDiagnostics();
     assert.equal(diagnostics.surfaceHiddenCount, 1);
-    assert.equal(diagnostics.visibleCount, 2, 'the hidden contact has no bracket');
+    assert.equal(
+      diagnostics.visibleCount,
+      2,
+      'the hidden contact has no bracket',
+    );
     assert.ok(diagnostics.labeledKeys.includes('traffic:VEH-0002'));
     assert.ok(!diagnostics.labeledKeys.includes('traffic:VEH-0001'));
     assert.ok(diagnostics.labeledKeys.includes('flights:f1'));
@@ -1590,7 +2033,9 @@ test('a labelled contact that goes behind something loses its callout at once, a
     initDetection(env.viewer, layers, () => {});
     setMode('DENSE');
     answerAndSolve(6);
-    assert.ok(getDetectionDiagnostics().labeledKeys.includes('traffic:VEH-0001'));
+    assert.ok(
+      getDetectionDiagnostics().labeledKeys.includes('traffic:VEH-0001'),
+    );
     env.ctx.calls.length = 0;
     nextFrame(env);
     assert.ok(paintedText(env).includes('VEH-0001'));
@@ -1716,7 +2161,10 @@ test('a WebGL 1 scene reads depth synchronously and reports it once', () => {
     assert.equal(diagnostics.visibleCount, 2);
     // Half a second of frames: a read about every eighth of one, not one per
     // frame and not one per contact.
-    assert.ok(depth.gl.counts.readPixels >= 3 && depth.gl.counts.readPixels <= 6, `${depth.gl.counts.readPixels} reads`);
+    assert.ok(
+      depth.gl.counts.readPixels >= 3 && depth.gl.counts.readPixels <= 6,
+      `${depth.gl.counts.readPixels} reads`,
+    );
     assert.equal(reported.length, 1);
     assert.match(reported[0], /synchronously/);
   } finally {
@@ -1734,21 +2182,51 @@ test('a WebGL 1 scene reads depth synchronously and reports it once', () => {
  */
 function steadyContacts({ fresh = false } = {}) {
   const objects = [
-    { position: new Cesium.Cartesian3(-0.4, 0.2, 6_356_752), sourceId: 'air-1', id: 'AIRONE', metric: 'FL350', type: 'AIR' },
-    { position: new Cesium.Cartesian3(0.4, -0.2, 6_356_752), sourceId: 'sat-1', id: 'SATONE', metric: '412KM', type: 'SAT' },
-    { position: new Cesium.Cartesian3(0.1, 0.5, 6_356_752), sourceId: 'sea-1', id: 'SEAONE', metric: '12 kn', type: 'SEA' },
-    { position: new Cesium.Cartesian3(-0.2, -0.5, 6_356_752), sourceId: 'mil-1', id: 'MILONE', metric: 'FL410', type: 'AIR', tier: 'military' },
+    {
+      position: new Cesium.Cartesian3(-0.4, 0.2, 6_356_752),
+      sourceId: 'air-1',
+      id: 'AIRONE',
+      metric: 'FL350',
+      type: 'AIR',
+    },
+    {
+      position: new Cesium.Cartesian3(0.4, -0.2, 6_356_752),
+      sourceId: 'sat-1',
+      id: 'SATONE',
+      metric: '412KM',
+      type: 'SAT',
+    },
+    {
+      position: new Cesium.Cartesian3(0.1, 0.5, 6_356_752),
+      sourceId: 'sea-1',
+      id: 'SEAONE',
+      metric: '12 kn',
+      type: 'SEA',
+    },
+    {
+      position: new Cesium.Cartesian3(-0.2, -0.5, 6_356_752),
+      sourceId: 'mil-1',
+      id: 'MILONE',
+      metric: 'FL410',
+      type: 'AIR',
+      tier: 'military',
+    },
   ];
   let calls = 0;
   return {
     objects,
-    get calls() { return calls; },
+    get calls() {
+      return calls;
+    },
     layer: {
       id: 'flights',
       getDetectableObjects() {
         calls += 1;
         return fresh
-          ? objects.map((object) => ({ ...object, position: Cesium.Cartesian3.clone(object.position) }))
+          ? objects.map((object) => ({
+              ...object,
+              position: Cesium.Cartesian3.clone(object.position),
+            }))
           : objects;
       },
     },
@@ -1758,14 +2236,20 @@ function steadyContacts({ fresh = false } = {}) {
 /** Everything painted since the trace was last emptied, with each path as its points. */
 function takePainted(env) {
   const painted = env.paintTrace.map((call) =>
-    call.map((value) => (value instanceof MockPath2D ? value.points.map((point) => [...point]) : value)));
+    call.map((value) =>
+      value instanceof MockPath2D
+        ? value.points.map((point) => [...point])
+        : value,
+    ),
+  );
   env.paintTrace.length = 0;
   return painted;
 }
 
-const bracketPointCount = (env) => env.detectionCtx.calls
-  .filter(([name]) => name === 'stroke')
-  .reduce((sum, [, path]) => sum + (path?.points?.length ?? 0), 0);
+const bracketPointCount = (env) =>
+  env.detectionCtx.calls
+    .filter(([name]) => name === 'stroke')
+    .reduce((sum, [, path]) => sum + (path?.points?.length ?? 0), 0);
 
 test('a paint with the same view and the same contacts reuses the last sweep, and paints exactly what a full sweep paints', () => {
   // The same frames twice: once with contacts a paint can reuse, once with
@@ -1813,7 +2297,11 @@ test('a paint with the same view and the same contacts reuses the last sweep, an
         painted.push(takePainted(env));
         counts.push(pick());
       }
-      return { painted, counts, reused: getDetectionDiagnostics().paintReuseCount };
+      return {
+        painted,
+        counts,
+        reused: getDetectionDiagnostics().paintReuseCount,
+      };
     } finally {
       env.cleanup();
     }
@@ -1823,17 +2311,36 @@ test('a paint with the same view and the same contacts reuses the last sweep, an
   assert.equal(sweeping.reused, 0, 'copies are swept on every paint');
   // 40 frames 16 ms apart: a solve about every eighth, four changes, and the
   // rest reuse the sweep before them.
-  assert.ok(reusing.reused >= 28, `${reusing.reused} of 40 paints reused a sweep`);
+  assert.ok(
+    reusing.reused >= 28,
+    `${reusing.reused} of 40 paints reused a sweep`,
+  );
   assert.equal(reusing.painted.length, sweeping.painted.length);
   reusing.painted.forEach((frame, index) => {
-    assert.ok(frame.some(([target, name]) => target === 'detection' && name === 'stroke'), `frame ${index} strokes brackets`);
+    assert.ok(
+      frame.some(
+        ([target, name]) => target === 'detection' && name === 'stroke',
+      ),
+      `frame ${index} strokes brackets`,
+    );
     assert.deepEqual(frame, sweeping.painted[index], `frame ${index}`);
-    assert.ok(frame.some(([target, name, , color]) => target === 'shared' && name === 'stroke' && color === '#5EF08A'),
-      `frame ${index} strokes the transit bracket`);
+    assert.ok(
+      frame.some(
+        ([target, name, , color]) =>
+          target === 'shared' && name === 'stroke' && color === '#5EF08A',
+      ),
+      `frame ${index} strokes the transit bracket`,
+    );
   });
-  assert.deepEqual(reusing.counts, sweeping.counts, 'restored counts equal a full sweep, frame for frame');
+  assert.deepEqual(
+    reusing.counts,
+    sweeping.counts,
+    'restored counts equal a full sweep, frame for frame',
+  );
   assert.ok(
-    reusing.painted.some((frame) => frame.some(([, name, text]) => name === 'fillText' && text === 'AIRONE')),
+    reusing.painted.some((frame) =>
+      frame.some(([, name, text]) => name === 'fillText' && text === 'AIRONE'),
+    ),
     'callouts were painted during the run',
   );
 });
@@ -1843,7 +2350,10 @@ test('a reused paint builds no bracket paths and still strokes the kept ones', (
   const contacts = steadyContacts();
   const builtPaths = [];
   class CountingPath2D extends MockPath2D {
-    constructor() { super(); builtPaths.push(this); }
+    constructor() {
+      super();
+      builtPaths.push(this);
+    }
   }
   try {
     globalThis.Path2D = CountingPath2D;
@@ -1853,17 +2363,32 @@ test('a reused paint builds no bracket paths and still strokes the kept ones', (
     settleFrame(env);
     assert.equal(getDetectionDiagnostics().paintReuseCount, 0);
     const built = builtPaths.length;
-    const points = builtPaths.reduce((sum, path) => sum + path.points.length, 0);
+    const points = builtPaths.reduce(
+      (sum, path) => sum + path.points.length,
+      0,
+    );
     assert.ok(points >= 4 * 12, 'four brackets of twelve points were built');
 
     env.detectionCtx.calls.length = 0;
     nextFrame(env);
     assert.equal(getDetectionDiagnostics().paintReuseCount, 1);
     assert.equal(builtPaths.length, built, 'no path was built');
-    assert.equal(builtPaths.reduce((sum, path) => sum + path.points.length, 0), points, 'no point was added to a kept path');
-    assert.equal(bracketPointCount(env), 4 * 12, 'the kept brackets are stroked');
+    assert.equal(
+      builtPaths.reduce((sum, path) => sum + path.points.length, 0),
+      points,
+      'no point was added to a kept path',
+    );
+    assert.equal(
+      bracketPointCount(env),
+      4 * 12,
+      'the kept brackets are stroked',
+    );
     assert.equal(getDetectionDiagnostics().visibleCount, 4);
-    assert.equal(getDetectionDiagnostics().placementBuildCount, 0, 'no placement was built on the reused paint');
+    assert.equal(
+      getDetectionDiagnostics().placementBuildCount,
+      0,
+      'no placement was built on the reused paint',
+    );
   } finally {
     env.cleanup();
   }
@@ -1871,32 +2396,67 @@ test('a reused paint builds no bracket paths and still strokes the kept ones', (
 
 test('any change to a contact or to the view is swept on the very next paint', () => {
   const changes = {
-    'a contact moves': (contacts) => { contacts.objects[0].position.y -= 0.01; },
+    'a contact moves': (contacts) => {
+      contacts.objects[0].position.y -= 0.01;
+    },
     'a contact gets a new position object': (contacts) => {
       contacts.objects[0].position = new Cesium.Cartesian3(0.3, 0.3, 6_356_752);
     },
-    'a contact is renamed': (contacts) => { contacts.objects[1].id = 'SATTWO'; },
-    'a contact reading changes': (contacts) => { contacts.objects[0].metric = 'FL360'; },
-    'a contact becomes the tracked one': (contacts) => { contacts.objects[0].skipLabel = true; },
-    'a contact changes tier': (contacts) => { contacts.objects[3].tier = undefined; },
-    'a contact changes type': (contacts) => { contacts.objects[2].type = 'VEH'; },
-    'a contact joins': (contacts) => {
-      contacts.objects.push({ position: new Cesium.Cartesian3(0.6, 0.6, 6_356_752), sourceId: 'air-2', id: 'AIRTWO', type: 'AIR' });
+    'a contact is renamed': (contacts) => {
+      contacts.objects[1].id = 'SATTWO';
     },
-    'a contact leaves': (contacts) => { contacts.objects.pop(); },
-    'a contact is replaced by an equal one': (contacts) => { contacts.objects[1] = { ...contacts.objects[1] }; },
-    'two contacts swap places in the list': (contacts) => { contacts.objects.reverse(); },
-    'the camera turns': (contacts, env) => { env.viewer.camera.viewMatrix[13] = 0.02; },
+    'a contact reading changes': (contacts) => {
+      contacts.objects[0].metric = 'FL360';
+    },
+    'a contact becomes the tracked one': (contacts) => {
+      contacts.objects[0].skipLabel = true;
+    },
+    'a contact changes tier': (contacts) => {
+      contacts.objects[3].tier = undefined;
+    },
+    'a contact changes type': (contacts) => {
+      contacts.objects[2].type = 'VEH';
+    },
+    'a contact joins': (contacts) => {
+      contacts.objects.push({
+        position: new Cesium.Cartesian3(0.6, 0.6, 6_356_752),
+        sourceId: 'air-2',
+        id: 'AIRTWO',
+        type: 'AIR',
+      });
+    },
+    'a contact leaves': (contacts) => {
+      contacts.objects.pop();
+    },
+    'a contact is replaced by an equal one': (contacts) => {
+      contacts.objects[1] = { ...contacts.objects[1] };
+    },
+    'two contacts swap places in the list': (contacts) => {
+      contacts.objects.reverse();
+    },
+    'the camera turns': (contacts, env) => {
+      env.viewer.camera.viewMatrix[13] = 0.02;
+    },
     'the camera moves': (contacts, env) => {
       env.viewer.camera.positionWC = new Cesium.Cartesian3(0, 100, 10_000_000);
     },
-    'the style changes': () => { setDetectionStyle('thermal'); },
-    'the profile changes': () => { setMode('SPARSE'); },
-    'the keyhole feather widens': () => { setKeyholeFadeTuning({ fadeRatio: 0.2 }); },
-    'the OUTSIDE opacity changes': () => { setKeyholeFadeTuning({ outsideOpacity: 0.5 }); },
+    'the style changes': () => {
+      setDetectionStyle('thermal');
+    },
+    'the profile changes': () => {
+      setMode('SPARSE');
+    },
+    'the keyhole feather widens': () => {
+      setKeyholeFadeTuning({ fadeRatio: 0.2 });
+    },
+    'the OUTSIDE opacity changes': () => {
+      setKeyholeFadeTuning({ outsideOpacity: 0.5 });
+    },
     'the Cyber map theme comes on without the sonar sweep': (contacts, env) => {
       enableSonar(env);
-      globalThis.matchMedia = (query) => ({ matches: query.includes('reduce') });
+      globalThis.matchMedia = (query) => ({
+        matches: query.includes('reduce'),
+      });
     },
   };
   const keyholeTuning = getKeyholeFadeTuning();
@@ -1910,12 +2470,24 @@ test('any change to a contact or to the view is swept on the very next paint', (
       setMode('DENSE');
       settleFrame(env);
       nextFrame(env);
-      assert.equal(getDetectionDiagnostics().paintReuseCount, 1, `${name}: steady paints reuse`);
+      assert.equal(
+        getDetectionDiagnostics().paintReuseCount,
+        1,
+        `${name}: steady paints reuse`,
+      );
 
       change(contacts, env);
       nextFrame(env);
-      assert.equal(getDetectionDiagnostics().paintReuseCount, 1, `${name}: swept again`);
-      assert.equal(getDetectionDiagnostics().observationCount, contacts.objects.length, name);
+      assert.equal(
+        getDetectionDiagnostics().paintReuseCount,
+        1,
+        `${name}: swept again`,
+      );
+      assert.equal(
+        getDetectionDiagnostics().observationCount,
+        contacts.objects.length,
+        name,
+      );
     } finally {
       setKeyholeFadeTuning(keyholeTuning);
       delete globalThis.matchMedia;
@@ -2002,5 +2574,156 @@ test('reuse resumes after the camera stops, whatever the phase of the label solv
       env.cleanup();
     }
   }
-  assert.deepEqual(stalled, [], 'still paints after a camera move reuse a sweep');
+  assert.deepEqual(
+    stalled,
+    [],
+    'still paints after a camera move reuse a sweep',
+  );
 });
+
+test('each paint asks each layer once, with one kept query, and brackets follow every paint', () => {
+  const env = installEnvironment();
+  const position = new Cesium.Cartesian3(0, 0, 6_356_752);
+  const objects = [
+    {
+      position,
+      sourceId: 'kept-1',
+      id: 'KEPT1',
+      metric: 'FL300',
+      type: 'AIR',
+    },
+  ];
+  const queries = [];
+  const layer = {
+    id: 'flights',
+    getDetectableObjects(options) {
+      queries.push(options);
+      return objects;
+    },
+  };
+  const bracketXs = () =>
+    env.detectionCtx.calls
+      .filter(([name, path]) => name === 'stroke' && path instanceof MockPath2D)
+      .flatMap(([, path]) => path.points.map(([x]) => x));
+  try {
+    initWorldOverlay(env.viewer);
+    initDetection(env.viewer, [layer], () => {});
+    setMode('DENSE');
+    env.advance(250);
+    env.postRender.raise();
+    const solved = getDetectionDiagnostics().solveRevision;
+    assert.equal(queries.length, 1);
+    // Paints between solves: the solve keeps its 125 ms cadence, the layer is
+    // asked once per paint, and the bracket moves with its contact each time.
+    for (let i = 1; i <= 4; i++) {
+      position.x = i * 0.05;
+      env.detectionCtx.calls.length = 0;
+      env.ctx.calls.length = 0;
+      env.advance(20);
+      env.postRender.raise();
+      assert.equal(queries.length, 1 + i, 'one collection per paint');
+      assert.equal(
+        getDetectionDiagnostics().solveRevision,
+        solved,
+        'no solve between ticks',
+      );
+      const expected = (position.x * 0.5 + 0.5) * 800;
+      assert.ok(
+        bracketXs().some((x) => Math.abs(x - expected) <= 12),
+        `the bracket follows the contact to x≈${expected}: ${bracketXs()}`,
+      );
+      assert.ok(
+        env.ctx.calls.some(
+          ([name, text]) => name === 'fillText' && text === 'KEPT1',
+        ),
+        'the held label repaints between solves',
+      );
+    }
+    // One query object, kept: nothing is made per layer per paint.
+    assert.ok(queries.every((query) => query === queries[0]));
+    // Flights is uncapped; every other layer is asked for at most 2600.
+    assert.deepEqual(
+      { ...queries[0] },
+      { mode: 'DENSE', maxCount: Number.POSITIVE_INFINITY, seed: 0 },
+    );
+    // The layer's own objects are what detection paints: no copies.
+    assert.equal(objects[0]._layerId, 'flights');
+  } finally {
+    env.cleanup();
+  }
+});
+
+/** A full collection, for proving what detection no longer keeps alive. */
+function collectGarbage() {
+  setFlagsFromString('--expose-gc');
+  runInNewContext('gc')();
+}
+
+/**
+ * Paint one contact through detection, keeping only a weak reference to it,
+ * then hand back that reference once the frame's job has ended (a WeakRef
+ * holds its target until then).
+ */
+async function paintOneContact(env, layer) {
+  let contact = {
+    position: new Cesium.Cartesian3(0, 0, 6_356_752),
+    sourceId: 'weak-1',
+    id: 'WEAK1',
+    metric: 'FL300',
+    type: 'AIR',
+  };
+  layer.objects = [contact];
+  const held = new WeakRef(contact);
+  contact = null;
+  env.advance(250);
+  env.postRender.raise();
+  env.advance(250);
+  env.postRender.raise();
+  assert.ok(
+    env.ctx.calls.some(
+      ([name, text]) => name === 'fillText' && text === 'WEAK1',
+    ),
+    'the contact was painted and labelled',
+  );
+  await new Promise((resolve) => setImmediate(resolve));
+  return held;
+}
+
+for (const [name, release] of [
+  ['detection is switched off', (layer) => setMode('OFF')],
+  [
+    'its layer is disabled and the next paint finds nothing',
+    (layer, env) => {
+      layer.objects = [];
+      env.advance(250);
+      env.postRender.raise();
+    },
+  ],
+]) {
+  test(`nothing from the last paint stays reachable once ${name}`, async () => {
+    const env = installEnvironment();
+    const layer = {
+      id: 'flights',
+      objects: [],
+      getDetectableObjects() {
+        return this.objects;
+      },
+    };
+    try {
+      initWorldOverlay(env.viewer);
+      initDetection(env.viewer, [layer], () => {});
+      setMode('DENSE');
+      const held = await paintOneContact(env, layer);
+      // The layer lets go of it; detection alone would keep it alive.
+      layer.objects = [];
+      release(layer, env);
+      env.ctx.calls.length = 0;
+      env.detectionCtx.calls.length = 0;
+      await new Promise((resolve) => setImmediate(resolve));
+      collectGarbage();
+      assert.equal(held.deref(), undefined, 'the contact was collected');
+    } finally {
+      env.cleanup();
+    }
+  });
+}

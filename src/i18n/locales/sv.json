@@ -4169,7 +4169,6 @@
   "Opens chat": "Öppnar chatten",
   "Go to {place}": "Gå till {place}",
   "Place or coordinates": "Plats eller koordinater",
-  "Search “{query}” as a place anyway": "Sök ”{query}” som plats ändå",
   "Turn on": "Slå på",
   "Turn off": "Slå av",
   "Command": "Kommando",
@@ -4213,7 +4212,6 @@
   "Search places, layers and things on the map, or ask GEV": "Sök efter platser, lager och objekt på kartan eller fråga GEV",
   "Search places, layers, flights… or ask GEV  ·  > for commands": "Sök efter platser, lager, flyg… eller fråga GEV · > för kommandon",
   "No matching command": "Inget matchande kommando",
-  "Looks private, so nothing is searched or sent": "Ser privat ut, så inget söks eller skickas",
   "Where do you want to start?": "Var vill du börja?",
   "Three things to know": "Tre saker att känna till",
   "Pick one to begin with. You can change everything later.": "Välj ett alternativ att börja med. Du kan ändra allt senare.",
@@ -4231,7 +4229,7 @@
   "BACK": "TILLBAKA",
   "Welcome to God's Eye View": "Välkommen till God's Eye View",
   "Choose your mode": "Välj läge",
-  "God": "Gud",
+  "Default": "Standard",
   "FUN": "NÖJE",
   "The spy-satellite keyhole: circular viewport, tactical HUD, cinematic camera. For exploring.": "Spionsatellitens nyckelhål: rund vy, taktisk HUD och filmisk kamera. För utforskning.",
   "Keyhole HUD": "Nyckelhåls-HUD",
@@ -4246,7 +4244,7 @@
   "Bilawal on YouTube": "Bilawal på YouTube",
   "The studio behind GEV": "Studion bakom GEV",
   "Open source. Self-host, fork, add a layer.": "Öppen källkod. Kör själv, skapa en egen variant, lägg till ett lager.",
-  "ENTER GOD MODE": "STARTA GUDLÄGE",
+  "ENTER DEFAULT MODE": "STARTA STANDARDLÄGE",
   "Finding it…": "Söker…",
   "No reading at this time": "Ingen avläsning vid den här tiden",
   "Last reading · {age}": "Senaste avläsning · {age}",
@@ -4540,5 +4538,7 @@
   "Low-cost sensor": "Lågkostnadssensor",
   "{name} · sensor": "{name} · sensor",
   "Reference monitor": "Referensinstrument",
-  "Needs {envVars} — add one in Provider Settings": "Kräver {envVars} – lägg till en av dem i Leverantörsinställningar"
+  "Needs {envVars} — add one in Provider Settings": "Kräver {envVars} – lägg till en av dem i Leverantörsinställningar",
+  "CABLE \u00b7 {name}": "KABEL · {name}",
+  "LANDING POINT \u00b7 {name}": "LANDNINGSPUNKT · {name}"
 }

@@ -124,12 +124,12 @@ context's place and layer chips) are `UiButton`s too; the key setup chip
 is still a plain button. `UiChip`
 is a non-interactive label chip, used by the voice card.
 The welcome card's buttons (SKIP, the three start tiles, BROWSE STORIES,
-BACK and the main NEXT / ENTER GOD MODE action) are ghost `UiButton`s:
+BACK and the main NEXT / ENTER DEFAULT MODE action) are ghost `UiButton`s:
 the start tiles are pressed toggles, and all but SKIP keep `aria-disabled`
 rather than `disabled`, so they stay focusable while the card is busy. Its
 tile, tip, Stories and arrow glyphs are `UiIcon`s with `:size="null"`, so
 first-run.css still sizes them (`src/ui/kit/welcomeControls.test.mjs` pins
-it). God mode's preview globe and callouts stay inline SVG drawings, and
+it). Default mode's preview globe and callouts stay inline SVG drawings, and
 its outbound links stay links.
 Every button in the Stories views (the Stories entry and its popup and
 toast, Explore, the Story screen, its header, rail, timeline and context

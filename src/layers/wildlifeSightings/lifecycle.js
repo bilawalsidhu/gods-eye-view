@@ -535,11 +535,12 @@ export function createLifecycle({ state, services, parts }) {
 
   const methods = {
     /** Attach this layer's draw sets and listeners to one viewer. */
-    init(viewer, { signal } = {}) {
+    init(viewer, { signal, panel = null } = {}) {
       if (state.viewer)
         throw new Error('Wildlife sightings layer is already initialized');
       if (state.destroyed || signal?.aborted) return false;
       state.viewer = viewer;
+      state.panel = panel;
       parts.rendering.init();
       return true;
     },
@@ -835,7 +836,7 @@ export function createLifecycle({ state, services, parts }) {
       state.gridParams = null;
       state.pendingParams = null;
       state.failedParams = null;
-      state.controlsListener = null;
+      state.panel = null;
       state.manager = null;
       state.viewer = null;
     },
