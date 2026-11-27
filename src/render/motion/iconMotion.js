@@ -21,9 +21,13 @@
  *   course at `rateDps`, then follows it; a rate of 0 or less holds
  *   `fromCourseDeg` for the whole segment.
  */
-import { positionToEcef } from '../../geo/ellipsoid.js';
-import { eastNorthUp } from '../../geo/frames.js';
-import { norm180, norm360 } from '../../geo/vector.js';
+import { WGS84, fromDegreesInto } from '../../geo/ellipsoid.js';
+import {
+  EPSILON14,
+  equalsEpsilon,
+  norm180,
+  norm360,
+} from '../../geo/vector.js';
 
 export { norm180, norm360 };
 
@@ -60,22 +64,29 @@ function sinc(x) {
 
 /**
  * Where `segment` puts an icon at `t`, ECEF.
+ *
+ * Read every frame for every moving contact (labels, brackets, picks), so it
+ * allocates nothing when given `result`: the point is written into it, and
+ * the arc's east-north-up axes are worked out in scalars, bit for bit
+ * `eastNorthUp` (geo/frames.js).
  * @param {import('../contract/draw').MotionSegment|undefined} segment
  * @param {import('../contract/common').Position} pos The item's own
  *   position (a `hold`'s, or with no segment).
  * @param {number} t Epoch ms on the set's motion clock.
+ * @param {{x: number, y: number, z: number}} [result] Written and returned
+ *   when given; a new object otherwise.
  * @returns {{x: number, y: number, z: number}}
  */
-export function motionPosition(segment, pos, t) {
+export function motionPosition(segment, pos, t, result) {
+  const out = result || { x: 0, y: 0, z: 0 };
   switch (segment?.kind) {
     case 'lerp': {
       const f = lerpFraction(segment, t);
       const { from, to } = segment;
-      return {
-        x: from.x + (to.x - from.x) * f,
-        y: from.y + (to.y - from.y) * f,
-        z: from.z + (to.z - from.z) * f,
-      };
+      out.x = from.x + (to.x - from.x) * f;
+      out.y = from.y + (to.y - from.y) * f;
+      out.z = from.z + (to.z - from.z) * f;
+      return out;
     }
     case 'arc': {
       const dt = arcSeconds(segment, t);
@@ -87,17 +98,55 @@ export function motionPosition(segment, pos, t) {
       const e = reach * Math.sin(heading);
       const n = reach * Math.cos(heading);
       const u = (segment.climbMps || 0) * dt;
-      const { x: east, y: north, z: up } = eastNorthUp(segment.fix);
       const fix = segment.fix;
-      return {
-        x: fix.x + east.x * e + north.x * n + up.x * u,
-        y: fix.y + east.y * e + north.y * n + up.y * u,
-        z: fix.z + east.z * e + north.z * n + up.z * u,
-      };
+      const fx = fix.x;
+      const fy = fix.y;
+      const fz = fix.z;
+      let ex, ey, ez, nx, ny, nz, ux, uy, uz;
+      if (equalsEpsilon(fx, 0, EPSILON14) && equalsEpsilon(fy, 0, EPSILON14)) {
+        // At a pole: east is +y, north points away from the pole.
+        const sign = Math.sign(fz) || 1;
+        ex = 0;
+        ey = 1;
+        ez = 0;
+        nx = -sign;
+        ny = 0;
+        nz = 0;
+        ux = 0;
+        uy = 0;
+        uz = sign;
+      } else {
+        const o = WGS84.oneOverRadiiSquared;
+        const gx = fx * o.x;
+        const gy = fy * o.y;
+        const gz = fz * o.z;
+        const gm = Math.sqrt(gx * gx + gy * gy + gz * gz);
+        ux = gx / gm;
+        uy = gy / gm;
+        uz = gz / gm;
+        const ax = -fy;
+        const ay = fx;
+        const am = Math.sqrt(ax * ax + ay * ay + 0 * 0);
+        ex = ax / am;
+        ey = ay / am;
+        ez = 0 / am;
+        nx = uy * ez - uz * ey;
+        ny = uz * ex - ux * ez;
+        nz = ux * ey - uy * ex;
+      }
+      out.x = fx + ex * e + nx * n + ux * u;
+      out.y = fy + ey * e + ny * n + uy * u;
+      out.z = fz + ez * e + nz * n + uz * u;
+      return out;
     }
     case 'hold':
     case undefined:
-      return positionToEcef(pos);
+      if ('lon' in pos && 'lat' in pos)
+        return fromDegreesInto(pos.lon, pos.lat, pos.height ?? 0, out);
+      out.x = pos.x;
+      out.y = pos.y;
+      out.z = pos.z;
+      return out;
     default:
       throw new Error(`unknown motion segment ${segment.kind}`);
   }
@@ -170,9 +219,11 @@ export function motionCourse(segment, course, t, glide) {
  * Pass the item without `motion` for a renderer without `motionSegments`.
  * @param {{pos: object, motion?: object}} item
  * @param {number} t Epoch ms on the set's motion clock.
+ * @param {{x: number, y: number, z: number}} [result] Written and returned
+ *   when given (see `motionPosition`).
  */
-export function iconPosition(item, t) {
-  return motionPosition(item.motion, item.pos, t);
+export function iconPosition(item, t, result) {
+  return motionPosition(item.motion, item.pos, t, result);
 }
 
 /**
