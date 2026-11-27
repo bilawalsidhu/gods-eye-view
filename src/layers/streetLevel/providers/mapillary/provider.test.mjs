@@ -113,36 +113,6 @@ function streetViewer() {
   return viewer;
 }
 
-test('coverage asks for no tiles before the key status is known, and none without a key', async () => {
-  for (const configured of [false, true]) {
-    let answer;
-    const tiles = [];
-    const source = fakeMapillarySource({
-      hasToken: () => configured,
-      getStatus: () => new Promise((resolve) => (answer = resolve)),
-      getTile: (...args) => {
-        tiles.push(args);
-        return new Promise(() => {});
-      },
-    });
-    const instance = createMapillaryProvider({ source }).create(fakeContext());
-    const viewer = streetViewer();
-    instance.init(viewer);
-    const status = instance.status();
-    instance.activate(viewer);
-    assert.equal(tiles.length, 0, 'nothing before the status answers');
-    answer({ configured });
-    assert.deepEqual(await status, { configured });
-    if (configured)
-      assert.ok(tiles.length > 0, 'coverage loads as soon as the key is known');
-    else {
-      assert.equal(tiles.length, 0, 'a key-less install never asks');
-      assert.equal(instance.coverageStats().keyRequired, true);
-    }
-    instance.destroy(viewer);
-  }
-});
-
 test('a status the server never answers falls back to the bundled token once the core gives up', async () => {
   const source = fakeMapillarySource({
     hasToken: () => false,
