@@ -857,6 +857,11 @@ test('the click card lists identity, kinematics, freshness and the receiver line
     'V/S -1,280 FPM',
     'POSITION 0 S AGO · 1 MSG',
   ]);
+  assert.equal(
+    localAdsbCardModel(record({ trackDeg: 359.7 }), 100_000).details[1],
+    'ALT 10,000 FT · GS 180 KT · TRK 0°',
+    'a 359.7° track reads 0°, not 360°',
+  );
 });
 
 test('layer stats guide the operator to the Radio card until ADS-B is streaming', () => {
