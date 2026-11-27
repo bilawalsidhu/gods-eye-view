@@ -1078,3 +1078,24 @@ test('the Recent Imagery readout updates on its layer invalidation, once per fra
     f.restore();
   }
 });
+
+test('a rebuild between an invalidation and its frame keeps it: the readout still updates', async () => {
+  const f = await schedulerFixture({
+    layers: [{ id: 'recent-imagery' }, { id: 'flights' }],
+  });
+  try {
+    f.readout.updates = 0;
+    f.panel.invalidate('recent-imagery');
+    // A Data Library add or remove rebuilds the rows before the frame.
+    f.panel.rerender();
+    await f.frame();
+    await f.frame();
+    assert.equal(f.readout.updates, 1, 'the invalidation was not dropped');
+    f.panel.invalidate('recent-imagery');
+    f.panel.destroy();
+    await f.frame();
+    assert.equal(f.readout.updates, 1, 'destroy drops what was pending');
+  } finally {
+    f.restore();
+  }
+});

@@ -72,6 +72,7 @@ function surfaces() {
   document.body.replaceChildren();
   const make = (id, panelId) => {
     const panel = document.body.appendChild(document.createElement('section'));
+    panel.id = panelId;
     panel.dataset.panelId = panelId;
     const body = panel.appendChild(document.createElement('div'));
     body.id = id;
@@ -370,5 +371,35 @@ test(
       NONE,
       'unchanged rows and readouts are not painted again',
     );
+
+    // ── Shown: what changes shows on the next frame ─────────────────────────
+    // Through the manager, the presentation and the scheduler, as the
+    // application changes a layer.
+    const active = (id) =>
+      el.rows
+        .querySelector(`[data-layer-id="${id}"] .data-toggle-btn`)
+        .classList.contains('active');
+    assert.equal(active('earthquakes'), true);
+    assert.equal(await lifecycle.setEnabled('earthquakes', false), true);
+    await frame();
+    assert.equal(active('earthquakes'), false, 'the row shows the layer off');
+    assert.match(
+      el.rows.querySelector('[data-layer-id="earthquakes"] .data-toggle-btn')
+        .textContent,
+      /OFF/,
+    );
+    const imageryPanel = document.getElementById('recent-imagery-panel');
+    assert.equal(imageryPanel.hidden, false, 'the imagery readout is shown');
+    assert.equal(await lifecycle.setEnabled('recent-imagery', false), true);
+    await frame();
+    assert.equal(
+      imageryPanel.hidden,
+      true,
+      'the imagery readout hides with its layer',
+    );
+    assert.equal(active('recent-imagery'), false);
+    assert.equal(await lifecycle.setEnabled('recent-imagery', true), true);
+    await frame();
+    assert.equal(imageryPanel.hidden, false, 'and returns with it');
   },
 );

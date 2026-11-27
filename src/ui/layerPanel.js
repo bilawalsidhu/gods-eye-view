@@ -544,12 +544,10 @@ export class LayerPanel {
   }
   _releaseBindings() {
     this._generation++;
-    // New bindings render every list again.
+    // New bindings render every list again. What was invalidated stays
+    // pending, with its frame: a rebuild repaints the rows, and the frame
+    // still updates every surface the invalidations were for.
     this._paintedRows = new Map();
-    this._cancelFrame?.();
-    this._cancelFrame = null;
-    this._dirty.clear();
-    this._dirtyAll = false;
     this._stale = null;
     for (const remove of this._removers.splice(0)) remove();
   }
@@ -557,6 +555,10 @@ export class LayerPanel {
     if (this._destroyed) return;
     this._destroyed = true;
     this._releaseBindings();
+    this._cancelFrame?.();
+    this._cancelFrame = null;
+    this._dirty.clear();
+    this._dirtyAll = false;
     this._unwatchRowLists();
     this._owedLists.clear();
     this._offTime?.();
