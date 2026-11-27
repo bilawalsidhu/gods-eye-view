@@ -5299,18 +5299,12 @@ async function getBasemapContext(
 
   const latitude = Number(toDegrees(target.latitude).toFixed(6));
   const longitude = Number(toDegrees(target.longitude).toFixed(6));
-  const inferredCountry = inferCountryFromSamples(samples);
   const knownLandmarks = nearbyKnownLandmarks(
     latitude,
     longitude,
     cameraHeightM,
   );
-  const fallbackPlace = coarseBasemapPlace(
-    viewScale,
-    latitude,
-    longitude,
-    inferredCountry,
-  );
+  const fallbackPlace = coarseBasemapPlace(viewScale, latitude, longitude);
   const cachedPlace = shouldReverseGeocode(cameraHeightM)
     ? reverseGeocodeCache.get(
         reverseGeocodeKey(latitude, longitude, service),
@@ -5420,12 +5414,7 @@ function nearbyKnownLandmarks(latitude, longitude, cameraHeightM) {
   return matches.sort((a, b) => a.distanceKm - b.distanceKm).slice(0, 5);
 }
 
-function coarseBasemapPlace(
-  viewScale,
-  latitude,
-  longitude,
-  inferredCountry = null,
-) {
+function coarseBasemapPlace(viewScale, latitude, longitude) {
   if (viewScale === 'global') {
     return {
       formattedAddress: 'Global Earth view',
@@ -5437,14 +5426,11 @@ function coarseBasemapPlace(
     };
   }
   return {
-    formattedAddress: inferredCountry?.country
-      ? `${viewScale[0].toUpperCase()}${viewScale.slice(1)} basemap view over ${inferredCountry.country}`
-      : `${viewScale[0].toUpperCase()}${viewScale.slice(1)} basemap view centered near ${latitude.toFixed(2)}, ${longitude.toFixed(2)}`,
+    formattedAddress: `${viewScale[0].toUpperCase()}${viewScale.slice(1)} basemap view centered near ${latitude.toFixed(2)}, ${longitude.toFixed(2)}`,
     locality: null,
     region: null,
-    country: inferredCountry?.country || null,
+    country: null,
     precision: viewScale,
-    confidence: inferredCountry?.confidence || null,
     note: 'Camera altitude is high, so this is approximate basemap context rather than a precise address.',
   };
 }
@@ -5558,58 +5544,6 @@ function sampleViewportCartographics(viewer) {
     });
   }
   return samples;
-}
-
-function inferCountryFromSamples(samples) {
-  if (!samples.length) return null;
-  const counts = new Map();
-  for (const sample of samples) {
-    const country = inferCountry(sample.latitude, sample.longitude);
-    if (!country) continue;
-    counts.set(country, (counts.get(country) || 0) + 1);
-  }
-  if (!counts.size) return null;
-  const [country, count] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
-  return {
-    country,
-    confidence: Number((count / samples.length).toFixed(2)),
-    sampleCount: count,
-    totalSamples: samples.length,
-  };
-}
-
-function inferCountry(latitude, longitude) {
-  const regions = [
-    { name: 'Iran', south: 24.0, north: 40.2, west: 44.0, east: 63.5 },
-    { name: 'Iraq', south: 29.0, north: 37.5, west: 38.5, east: 49.0 },
-    { name: 'Turkey', south: 35.5, north: 42.5, west: 25.5, east: 45.2 },
-    { name: 'Saudi Arabia', south: 16.0, north: 32.5, west: 34.0, east: 56.5 },
-    { name: 'Afghanistan', south: 29.0, north: 38.8, west: 60.0, east: 75.5 },
-    { name: 'Pakistan', south: 23.0, north: 37.2, west: 60.5, east: 77.5 },
-    { name: 'Turkmenistan', south: 35.0, north: 42.9, west: 52.0, east: 66.8 },
-    { name: 'Azerbaijan', south: 38.3, north: 41.9, west: 44.6, east: 50.8 },
-    { name: 'Armenia', south: 38.7, north: 41.4, west: 43.4, east: 46.7 },
-    { name: 'Japan', south: 24.0, north: 46.5, west: 122.0, east: 146.5 },
-    { name: 'South Korea', south: 33.0, north: 38.8, west: 124.0, east: 132.0 },
-    { name: 'North Korea', south: 37.5, north: 43.2, west: 124.0, east: 131.0 },
-    { name: 'China', south: 18.0, north: 53.8, west: 73.0, east: 135.2 },
-    { name: 'Russia', south: 41.0, north: 82.0, west: 19.0, east: 180.0 },
-    {
-      name: 'United States',
-      south: 24.0,
-      north: 49.8,
-      west: -125.0,
-      east: -66.0,
-    },
-  ];
-  const region = regions.find(
-    (item) =>
-      latitude >= item.south &&
-      latitude <= item.north &&
-      longitude >= item.west &&
-      longitude <= item.east,
-  );
-  return region?.name || null;
 }
 
 async function reverseGeocode(latitude, longitude, service) {
