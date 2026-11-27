@@ -2,9 +2,9 @@
 // Context, or in the `#cctv-tools-slot` of Context's Camera settings tab.
 // The same element moves, so the controls CctvControls read once at
 // start-up keep working. The frame and video surfaces stay in the home.
-// Context registers the home, asks for a placement whenever the tab's slot
-// appears, and returns the tools home before the slot is removed, so they
-// never leave the page with it.
+// Context registers the home; the tab's slot places the tools when it
+// mounts and returns them home before it unmounts (its vnode hooks), so the
+// move always sees the slot that is in the page.
 
 let home = null;
 let tools = null;
@@ -21,9 +21,10 @@ export function registerCctvToolsHome(element) {
  * tab while calibration's Adjust is on turns it off, so its handles on the
  * globe do not outlive the only control that ends them.
  */
-export function placeCctvTools() {
+export function placeCctvTools(
+  slot = globalThis.document?.getElementById('cctv-tools-slot') ?? null,
+) {
   if (!home || !tools) return;
-  const slot = globalThis.document?.getElementById('cctv-tools-slot') ?? null;
   const target = slot || home;
   if (tools.parentElement === target) return;
   if (target === home) {

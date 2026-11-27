@@ -11,7 +11,14 @@ import { useLiveStore } from './stores/live.js';
 import { useStationStore } from './stores/station.js';
 import { LiveControls } from './liveControls.js';
 import { createPinia, setActivePinia } from 'pinia';
-import { computed, createApp, h, nextTick } from 'vue';
+import {
+  computed,
+  createApp,
+  h,
+  nextTick,
+  render as renderVue,
+  watch,
+} from 'vue';
 import ContextView from './views/ContextView.vue';
 import { resetListCardMemory } from './kit/ContextListCard.vue';
 import LayerPanelsView from './views/LayerPanelsView.vue';
@@ -4385,6 +4392,56 @@ test('Camera settings follows only the camera that owns the selected card', asyn
     'a quiet selection change closes the tools',
   );
   assert.equal(state.settingsCameraId, null);
+});
+
+test('Camera settings fills its tab, and empties it, while another root renders in the same flush', async (t) => {
+  const camera = { id: 'cam-tools', name: 'Tools camera', ...HERE };
+  const { $, cards, pinia } = fixture(t, [
+    {
+      id: 'cctv',
+      name: 'Cameras',
+      enabled: true,
+      records: [camera],
+      module: { selectCamera: () => true },
+    },
+  ]);
+  const state = useCctvStore(pinia);
+  state.publish(
+    presentCctvPanel({ enabled: true, activeCameraId: camera.id }, true),
+  );
+  // CctvControls repaints the Québec overlay, a root of its own, from a
+  // watcher outside any component when the settings camera changes.
+  // render() on a mounted root runs the pending post watchers at once,
+  // before Context has rendered the tab.
+  const host = document.createElement('div');
+  renderVue(h('span'), host);
+  const stop = watch(
+    () => [state.settingsCameraId, state.settingsVisible],
+    () => renderVue(h('span', String(state.settingsCameraId)), host),
+  );
+  t.after(() => {
+    stop();
+    renderVue(null, host);
+  });
+  cards.select({ layerId: 'cctv', id: camera.id }, { fly: false });
+  await settleTicks();
+  $('#context-tab-camera').click();
+  await settleTicks();
+  assert.equal($('#context-tab-camera').getAttribute('aria-selected'), 'true');
+  assert.ok(
+    $('#context-tab-panel #cctv-tools-slot #cctv-tools'),
+    'the tools are in the tab',
+  );
+  $('#context-tab-inspect').click();
+  await settleTicks();
+  assert.equal($('#cctv-tools-slot'), null);
+  assert.ok($('.cctv-tools-home #cctv-tools'), 'the tools are home, not lost');
+  $('#context-tab-camera').click();
+  await settleTicks();
+  assert.ok(
+    $('#context-tab-panel #cctv-tools-slot #cctv-tools'),
+    'and in the tab again',
+  );
 });
 
 test('the Camera settings guide reveals the phone Context sheet before targeting its tab', async (t) => {

@@ -537,8 +537,11 @@ watch(
 );
 const radioFoldHome = ref(null);
 
-// The camera tools return home before their settings tab unmounts and move
-// back into its slot after it mounts.
+// The camera tools move into the Camera settings slot when it mounts and
+// back home before it unmounts (its vnode hooks in the template). A post
+// watcher cannot do it: any render() of another root inside the same flush
+// (the Québec overlay's repaint) runs post watchers before this panel has
+// rendered.
 const cctvToolsHome = ref(null);
 onMounted(() => registerCctvToolsHome(cctvToolsHome.value));
 const cctvToolsSlotShown = computed(() => contextOpen.value && contextOnScreen.value && tab.value === 'camera' && !contextNeedle.value);
@@ -555,7 +558,6 @@ watch(cctvToolsSlotShown, (shown) => {
     (doc.getElementById(`context-tab-${tab.value}`) ?? contextScroller.value)?.focus({ preventScroll: true }),
   );
 }, { flush: 'pre' });
-watch([cctvToolsSlotShown, () => entityCard.value?.key], placeCctvTools, { flush: 'post' });
 onBeforeUnmount(() => {
   returnCctvToolsHome();
   registerCctvToolsHome(null);
@@ -875,7 +877,7 @@ watch(contextOpen, (open) => open || pinned.releaseNotice());
             </div>
             <!-- The camera's tools, moved in while this tab shows. -->
             <div v-else-if="tab === 'camera'" class="context-camera-settings">
-              <div v-if="cctvToolsSlotShown" id="cctv-tools-slot"></div>
+              <div v-if="cctvToolsSlotShown" id="cctv-tools-slot" @vue:mounted="({ el }) => placeCctvTools(el)" @vue:before-unmount="returnCctvToolsHome"></div>
               <p v-else class="context-camera-settings__hint">{{ t('Clear the search to see the camera tools.') }}</p>
             </div>
             <PinnedGrid v-else :radio-on="Boolean(radioUi?.enabled)" />
