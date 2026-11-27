@@ -60,6 +60,7 @@ test('raw app-file values override Pinokio-global values, including blanks', () 
       'PINOKIO_SHARE_CLOUDFLARE=false',
       'PINOKIO_SHARE_LOCAL=false',
       'PINOKIO_SHARE_VAR=__gev_sharing_disabled__',
+      'OPENAQ_API_KEY=',
       '',
     ].join('\n'));
     const environment = {
@@ -71,6 +72,7 @@ test('raw app-file values override Pinokio-global values, including blanks', () 
       PINOKIO_SHARE_CLOUDFLARE: 'true',
       PINOKIO_SHARE_LOCAL: 'true',
       PINOKIO_SHARE_PASSCODE: 'global-passcode',
+      OPENAQ_API_KEY: 'global-openaq',
     };
 
     applyPinokioEnvironment({ environment, filepath });
@@ -84,6 +86,7 @@ test('raw app-file values override Pinokio-global values, including blanks', () 
     assert.equal(environment.PINOKIO_SHARE_LOCAL, 'false');
     assert.equal(environment.PINOKIO_SHARE_VAR, '__gev_sharing_disabled__');
     assert.equal(environment.PINOKIO_SHARE_PASSCODE, '');
+    assert.equal(environment.OPENAQ_API_KEY, '');
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
