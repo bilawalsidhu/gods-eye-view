@@ -111,5 +111,5 @@ export function createSelection({ state, parts }) {
     picking?.unregisterPickOwner?.(STREET_LEVEL_LAYER_ID);
   }
 
-  return { install, uninstall, ownsPick };
+  return { install, uninstall };
 }

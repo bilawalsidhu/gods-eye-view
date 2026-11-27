@@ -608,7 +608,6 @@ export function createLineCoverage({
     rebuild,
     reload,
     highlight,
-    sequenceCount,
     stats,
   };
 }

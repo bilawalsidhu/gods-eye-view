@@ -54,29 +54,6 @@ export function clampFov(degrees) {
   return Math.max(PANO_FOV_MIN_DEG, Math.min(PANO_FOV_MAX_DEG, degrees));
 }
 
-/**
- * Texture coordinates the shader samples for a view ray, for tests and
- * picking: `yaw`/`pitch` in degrees, the ray in camera space (x right, y up,
- * z backward).
- */
-export function rayToUv(ray, { yaw = 0, pitch = 0 } = {}) {
-  const p = (pitch * Math.PI) / 180;
-  const w = (yaw * Math.PI) / 180;
-  const length = Math.hypot(ray[0], ray[1], ray[2]) || 1;
-  let [x, y, z] = ray.map((v) => v / length);
-  [y, z] = [
-    y * Math.cos(p) - z * Math.sin(p),
-    y * Math.sin(p) + z * Math.cos(p),
-  ];
-  [x, z] = [
-    x * Math.cos(w) - z * Math.sin(w),
-    x * Math.sin(w) + z * Math.cos(w),
-  ];
-  const lon = Math.atan2(x, -z);
-  const lat = Math.asin(Math.max(-1, Math.min(1, y)));
-  return [0.5 + lon / (2 * Math.PI), 0.5 - lat / Math.PI];
-}
-
 function compile(gl, type, source) {
   const shader = gl.createShader(type);
   gl.shaderSource(shader, source);

@@ -4,6 +4,7 @@ import * as Cesium from 'cesium';
 import { createSelection } from './selection.js';
 import { fakeInput } from '../../input/testDoubles.mjs';
 import * as pickRegistry from '../../data/pickRegistry.js';
+import { STREET_LEVEL_LAYER_ID } from './policy.js';
 
 /** The selection installed on a stand-in viewer, with what its clicks reach. */
 function harness({
@@ -89,7 +90,7 @@ function harness({
     opened,
     groundClicks,
     scene,
-    ownsPick: selection.ownsPick,
+    ownsPick: (id) => pickRegistry.findPickOwner(id) === STREET_LEVEL_LAYER_ID,
     click: (x = 10) => input.click({ x, y: 10 }),
     /** A keydown reaching the document from `target`; the event as handled. */
     key(key, target, { defaultPrevented = false } = {}) {

@@ -4,7 +4,6 @@ import {
   MAX_LINE_POINTS,
   MAX_TILE_SEGMENTS,
   chainSegments,
-  decodeCoverageTile,
   maskedSegments,
   tileSegments,
 } from './decode.js';
@@ -13,14 +12,14 @@ const at = (lng, lat) => ({ lat: String(lat), lng: String(lng) });
 const TILE = { x: 4412, y: 6061, z: 14 };
 
 test('segments that meet end to start chain into one line', () => {
-  const { sequences } = decodeCoverageTile(
-    {
+  const { sequences } = chainSegments(
+    tileSegments({
       lines: [
         { track: [at(1, 1), at(2, 1)], matched: '1' },
         { track: [at(5, 5), at(6, 6)], matched: '1' },
         { track: [at(2, 1), at(3, 1), at(4, 2)], matched: '1' },
       ],
-    },
+    }),
     TILE,
   );
   assert.equal(sequences.length, 2);
@@ -40,8 +39,8 @@ test('segments that meet end to start chain into one line', () => {
 });
 
 test('a junction continues one way only, and every segment is drawn exactly once', () => {
-  const { sequences } = decodeCoverageTile(
-    {
+  const { sequences } = chainSegments(
+    tileSegments({
       lines: [
         { track: [at(0, 0), at(1, 0)] },
         { track: [at(1, 0), at(2, 0)] },
@@ -50,7 +49,7 @@ test('a junction continues one way only, and every segment is drawn exactly once
         { track: [at(9, 9), at(9, 8)] },
         { track: [at(9, 8), at(9, 9)] },
       ],
-    },
+    }),
     TILE,
   );
   const points = sequences.reduce((sum, s) => sum + s.parts[0].length, 0);
@@ -60,15 +59,15 @@ test('a junction continues one way only, and every segment is drawn exactly once
 });
 
 test('bad points, repeats and one-point tracks are skipped; an empty tile has no lines', () => {
-  const { sequences } = decodeCoverageTile(
-    {
+  const { sequences } = chainSegments(
+    tileSegments({
       lines: [
         { track: [at(1, 1), at(1, 1), { lat: 'x', lng: '2' }, at(2, 2)] },
         { track: [at(3, 3)] },
         { track: null },
         null,
       ],
-    },
+    }),
     TILE,
   );
   assert.equal(sequences.length, 1);
@@ -76,7 +75,10 @@ test('bad points, repeats and one-point tracks are skipped; an empty tile has no
     [1, 1],
     [2, 2],
   ]);
-  assert.deepEqual(decodeCoverageTile({ lines: [] }, TILE).sequences, []);
+  assert.deepEqual(
+    chainSegments(tileSegments({ lines: [] }), TILE).sequences,
+    [],
+  );
 });
 
 test('a tile that is not a line list fails, so it is asked for again rather than kept empty', () => {
@@ -87,7 +89,7 @@ test('a tile that is not a line list fails, so it is asked for again rather than
     { status: { apiCode: 690 } },
   ])
     assert.throws(
-      () => decodeCoverageTile(payload, TILE),
+      () => chainSegments(tileSegments(payload), TILE),
       /unreadable coverage tile/,
     );
 });
@@ -100,7 +102,7 @@ test('a tile whose segments all share one point decodes in linear time', () => {
     track: [at(0, 0), at(1 + i * 1e-6, 1), at(0, 0)],
   }));
   const started = performance.now();
-  const { sequences } = decodeCoverageTile({ lines }, TILE);
+  const { sequences } = chainSegments(tileSegments({ lines }), TILE);
   const ms = performance.now() - started;
   assert.ok(
     ms < 1_000,
@@ -119,7 +121,7 @@ test('a tile is capped in segments and in points per line', () => {
   const lines = Array.from({ length: MAX_TILE_SEGMENTS + 500 }, (_, i) => ({
     track: [at(i, 0), at(i + 1, 0)],
   }));
-  const { sequences } = decodeCoverageTile({ lines }, TILE);
+  const { sequences } = chainSegments(tileSegments({ lines }), TILE);
   const points = sequences.reduce((sum, s) => sum + s.parts[0].length, 0);
   // One long chain, cut into lines of at most MAX_LINE_POINTS.
   assert.ok(sequences.every((s) => s.parts[0].length <= MAX_LINE_POINTS));
@@ -168,7 +170,7 @@ test('a mask keeps the segments it draws over, chained as before', () => {
   assert.equal(maskedSegments(segments, rowsMask([[0, 511]]), TILE).length, 5);
 });
 
-test('decoding is segments then chaining: the same lines either way', () => {
+test('a tile decodes into its segments; an unreadable one throws', () => {
   const payload = {
     lines: [
       { track: [at(1, 1), at(2, 1)] },
@@ -178,9 +180,5 @@ test('decoding is segments then chaining: the same lines either way', () => {
   };
   const segments = tileSegments(payload);
   assert.equal(segments.length, 3);
-  assert.deepEqual(
-    chainSegments(segments, TILE),
-    decodeCoverageTile(payload, TILE),
-  );
   assert.throws(() => tileSegments({}), /unreadable coverage tile/);
 });

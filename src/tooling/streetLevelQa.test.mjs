@@ -234,7 +234,7 @@ test('Panoramax fixtures: two sequences on one street, searches honour sequence 
     panoramaxTile,
     resetPanoramaxFixture,
   } = await import('../../scripts/fixtures/street-level/panoramax.mjs');
-  const { decodeCoverageTile, decodePictures } =
+  const { decodeCoverageTileSliced, decodePictures } =
     await import('../layers/streetLevel/providers/panoramax/decode.js');
   const { normalizeItem } =
     await import('../layers/streetLevel/providers/panoramax/policy.js');
@@ -249,7 +249,11 @@ test('Panoramax fixtures: two sequences on one street, searches honour sequence 
   const z = 14;
   const x = lonToTileX((PNX_LINE.west + PNX_LINE.east) / 2, z);
   const y = latToTileY(PNX_LINE.lat, z);
-  const lines = decodeCoverageTile(panoramaxTile(z, x, y), { x, y, z });
+  const lines = await decodeCoverageTileSliced(panoramaxTile(z, x, y), {
+    x,
+    y,
+    z,
+  });
   assert.deepEqual(
     lines.sequences.map((s) => s.id).sort(),
     [...PNX_SEQUENCES].sort(),

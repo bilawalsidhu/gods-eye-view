@@ -60,7 +60,7 @@ export function createState({ services }) {
     groundClickReady: false,
 
     /** The open image's marker: its draw set and drawn icon. */
-    marker: { set: null, placed: null, look: null },
+    marker: { set: null, placed: null },
     clickSubscription: null,
   };
 }

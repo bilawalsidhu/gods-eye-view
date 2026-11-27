@@ -42,8 +42,5 @@ export function createLimiter(limit, { lifo = false } = {}) {
         next();
       });
     },
-    get pending() {
-      return running + queue.length;
-    },
   };
 }

@@ -56,6 +56,13 @@ function dayMs(value) {
   return panoramaxTimeMs(typeof value === 'string' ? value : '') ?? 0;
 }
 
+/** Give the page a turn: input and rendering run before the next slice. */
+function nextTask() {
+  if (typeof globalThis.scheduler?.yield === 'function')
+    return globalThis.scheduler.yield();
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 /**
  * Decode a Panoramax coverage tile (`/api/map/{z}/{x}/{y}.mvt`).
  *
@@ -65,34 +72,14 @@ function dayMs(value) {
  * - `grid` (z0–6, density cells) is not read: nothing is drawn from orbit.
  * - `pictures` (z15) is left for `decodePictures`.
  *
- * In one go; `decodeCoverageTileSliced` gives the page a turn between
- * slices.
- * @param {Uint8Array} bytes
- * @param {{x: number, y: number, z: number}} address
- * @returns {{sequences: Array<{id: string, parts: Array<Array<[number, number]>>, capturedAt: number, isPano: boolean}>}}
- */
-export function decodeCoverageTile(bytes, address) {
-  const steps = coverageSteps(bytes, address);
-  let step = steps.next();
-  while (!step.done) step = steps.next();
-  return step.value;
-}
-
-/** Give the page a turn: input and rendering run before the next slice. */
-function nextTask() {
-  if (typeof globalThis.scheduler?.yield === 'function')
-    return globalThis.scheduler.yield();
-  return new Promise((resolve) => setTimeout(resolve, 0));
-}
-
-/**
- * `decodeCoverageTile` in slices of about `sliceMs`, the page getting a
- * turn between them: a 2 MB z10 tile over Paris is ~200 ms of decoding on
- * a fast laptop, more on a phone, and would freeze the globe while the
- * camera approaches. Stops at the next slice once `signal` aborts.
+ * Decodes in slices of about `sliceMs`, the page getting a turn between
+ * them: a 2 MB z10 tile over Paris is ~200 ms of decoding on a fast
+ * laptop, more on a phone, and would freeze the globe while the camera
+ * approaches. Stops at the next slice once `signal` aborts.
  * @param {Uint8Array} bytes
  * @param {{x: number, y: number, z: number}} address
  * @param {{signal?: AbortSignal, sliceMs?: number, pause?: () => Promise<void>, now?: () => number}} [options]
+ * @returns {Promise<{sequences: Array<{id: string, parts: Array<Array<[number, number]>>, capturedAt: number, isPano: boolean}>}>}
  */
 export async function decodeCoverageTileSliced(
   bytes,
@@ -118,7 +105,7 @@ export async function decodeCoverageTileSliced(
   return step.value;
 }
 
-/** The decode, a step a feature (see `decodeCoverageTile`). */
+/** The decode, a step a feature (see `decodeCoverageTileSliced`). */
 function* coverageSteps(bytes, address) {
   const result = { sequences: [] };
   if (!bytes || !bytes.length) return result;

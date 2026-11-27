@@ -24,13 +24,11 @@ test('at most `limit` tasks run; queued ones start first in, first out', async (
   const results = tasks.map(({ task }) => gate.run(task));
   await tick();
   assert.deepEqual(log, ['a', 'b']);
-  assert.equal(gate.pending, 4);
   tasks[0].finish();
   await tick();
   assert.deepEqual(log, ['a', 'b', 'c']);
   for (const { finish } of tasks) finish();
   assert.deepEqual(await Promise.all(results), ['a', 'b', 'c', 'd']);
-  assert.equal(gate.pending, 0);
 });
 
 test('lifo starts the newest queued task next', async () => {
@@ -55,10 +53,8 @@ test('a queued task whose signal aborts never runs, leaves the queue and rejects
   const controller = new AbortController();
   const queued = gate.run(held(log, 'b').task, { signal: controller.signal });
   await tick();
-  assert.equal(gate.pending, 2);
   controller.abort(new Error('overtaken'));
   await assert.rejects(queued, /overtaken/);
-  assert.equal(gate.pending, 1, 'out of the queue');
   first.finish();
   await running;
   await tick();
@@ -97,6 +93,4 @@ test('a failing task frees its slot: the next one still runs', async () => {
   await assert.rejects(failing, /a failed/);
   assert.equal(await second, 'b');
   assert.deepEqual(order, ['a', 'b']);
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  assert.equal(limiter.pending, 0);
 });

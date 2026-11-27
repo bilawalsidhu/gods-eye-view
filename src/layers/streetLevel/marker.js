@@ -88,7 +88,6 @@ export function createMarker({ state }) {
       return;
     }
     const look = markerLook(style);
-    state.marker.look = look.key;
     // Culled before it is drawn, so a marker past the horizon never shows.
     const marker = {
       position: fromDegrees(position.lon, position.lat),
