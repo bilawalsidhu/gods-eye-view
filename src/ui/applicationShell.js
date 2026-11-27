@@ -1,4 +1,5 @@
 import { findMatch } from './entityLookup.js';
+import { worldClock } from '../time/worldClock.js';
 import { readEntityRecord } from '../data/entityRecords.js';
 import { nextTick, watch } from 'vue';
 import { getConfiguredLayerCounts } from '../services/application.js';
@@ -235,6 +236,7 @@ export class StyleManager extends ShellFacade {
                 duration: 2.0,
               }),
             ),
+          seek: (ms) => worldClock.seek(ms),
           signal,
         }),
     });

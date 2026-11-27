@@ -343,7 +343,6 @@
       "src/search/gridReference.js",
       "src/search/coordinateParser.js",
       "src/search/placeSuggestions.js",
-      "src/search/bip39Words.js",
       "src/ui/stores/station.js",
       "src/ui/views/panels/StationPanel.vue",
       "src/ui/stores/live.js",

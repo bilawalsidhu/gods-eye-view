@@ -341,7 +341,9 @@ export function _renderCctvState(state) {
       (panelShown || cardShown || popupShown) &&
       (cameraChanged || (!frameLoading && this._frame.currentSrc !== nextSrc))
     ) {
-      this._queueCctvFrame(nextSrc, nextCameraId, cameraChanged);
+      this._queueCctvFrame(nextSrc, nextCameraId, cameraChanged, {
+        readTime: activeCamera?.framesCarryTime === true,
+      });
     } else if (!nextSrc || (cameraChanged && this._frame.cameraId)) {
       this._clearCctvFrame();
     }

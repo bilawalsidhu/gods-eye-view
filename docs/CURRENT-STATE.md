@@ -3372,6 +3372,16 @@ shown without a fade once it is decoded (or after one second if its decode never
 settles), so a new camera's preview is blank only while its frame loads. Disposal
 releases listeners, subscriptions, image handlers, summary timers and chip-hide timers.
 
+A camera source may give each frame's capture time: one that sets
+`framesCarryTime: true` answers its frame URLs with the time in milliseconds
+since the epoch in an `X-CCTV-Frame-Time` header (listed in
+`Access-Control-Expose-Headers` when the frames come from another origin). Its
+frames are then fetched rather than loaded as images, shown from an object URL
+of the bytes read, and the CCTV panel, the camera's card and its bigger view
+show that time as text (`2026-11-26 18:04:31Z`, UTC) with the picture. A frame
+without the header, or a source that does not set the flag, shows no time. A
+refresh that fails keeps the shown frame and its time.
+
 The panel opens when a camera becomes active and collapses when the layer is
 switched off, from its own switch or anywhere else. The panel chrome applies
 the collapse, so a panel the desktop accordion only folded has its saved and
@@ -8587,12 +8597,7 @@ row does (so the keyboard does not stay over the map), and so do Ask GEV, the mi
 walk, and any row while drawing is on (the draw tool reads Enter, Backspace
 and Esc). Escape closes the list, and on an empty, closed field lets go of
 it, so the app's own keys work again. While voice
-is on, the list is closed (not expanded) and Enter runs nothing. Text that
-may be private is never looked up or searched while typed or on Enter: only
-things already loaded on the map may match it, locally, and when only a
-long run of digits makes it look private and it has words (an address can:
-"Москва, ул. Тверская, д. 13, 125009") one row searches it as a place only
-when picked (see below).
+is on, the list is closed (not expanded) and Enter runs nothing.
 
 After "go to" (or "fly to" and the like) the rest of the clause, and a
 following part after a comma that has no verb, is the place, read before
@@ -8656,8 +8661,7 @@ and errors, keeping the separate Location draft intact.
 
 While typing, a short line (six words or fewer, ten with a number in it
 as an address has, no `?`, not a command,
-coordinates, a hex code, a callsign such as UAL2110 or N123AB, and nothing
-that may be private) is sent to
+coordinates, a hex code or a callsign such as UAL2110 or N123AB) is sent to
 Photon for place suggestions (the suggester itself never sends a line of
 more than eight words, or ten with a number): at most one request every
 500 ms per tab,
@@ -8666,102 +8670,11 @@ place search already uses; a submitted search is not part of this spacing.
 A line that may be one name ("Satellite Beach") is looked up whole. While
 its suggestions show, or a recent-place chip that came from them, the
 OpenStreetMap credit shows too; recent chips from the bundled packs credit
-Wikidata. Private text, by `mayBePrivate` in
-`src/search/placeSuggestions.js`, is never sent to Photon, offered as a
-place, searched or sent to GEV; only things already loaded on the map may
-match it, locally. The line is read after NFKC, so full-width letters,
-digits and "＠" count, and digits of any script count as digits. It is
-any line with: an "@" with something right on both sides, ending a word,
-starting a lowercase handle ("@jdoe"), or spaced before a domain ("john @
-gmail.com") (an email address or a handle, also while it is typed; spaced, as in "Nanjampeta @
-Chandambylu", it is part of a name); an email spelled around a filter
-("john(at)gmail.com", "john[at]gmail[dot]com", "john at gmail dot de",
-"john at gmail.com", "john at gmail (dot) com"); an IP address
-("10.0.0.1", "::1", "fe80::1", "https://[::1]/"); a wallet's recovery
-phrase (see below); seven digits or more with nothing but spaces,
-punctuation, symbols or format characters between them (a phone, card,
-SSN or account number or its start: "+1 415 555", "4111 1111", "123 45
-6789", "123456789", "4111.1111.1111.1111", "123–45–6789"; a street address's house number
-and its postcode are read apart (a house number never starts with 0, and
-a polite word such as "thanks" after the digits is not a city): five digits, or between the street and
-the city "00-950", "111 21", "125009", "1100-053", or four digits after a
-comma ("Straße 120, 1070 Wien"); and so are a US ZIP+4 after a state's
-code or name ("Alice 12345-6789" and "Jo 12345-6789" stay private),
-a Brazilian CEP, a Japanese postcode after "〒" or next to the address in
-Japanese script ("東京都千代田区100-0001"; after a Latin name, as in
-"Shibuya 150-0002", it reads as a phone number), and
-digits on either side of "#", so "Hauptstrasse 12 10115 Berlin", "DC
-20500-0003", "〒100-0001 東京都千代田区" and "Calle 100 # 19-61" are places,
-while a seven-digit postcode alone such as "Tel Aviv 6100000" still reads
-as private); a phone number written with dots; two letters, two
-digits and ten more letters or digits (an IBAN's shape); "password",
-"passcode", "passwd", "pw" or "pwd" followed by anything, "bearer"
-followed by anything but a short capitalised name or a place word such as
-island or lake ("Bearer Island", "bearer island" are places),
-"ssn" followed by a digit, also after "ending", "ends in" or "last four"
-("SSN Station" is a place), "token", "secret",
-"api key", "key" or "pass" followed by ":" or "=", a licence, plate,
-passport, membership, account, policy, ticket, booking, confirmation or
-reference number with a digit after its label ("license ABC1234",
-"passport no. 123456"), "ID" in capitals followed by a number ("ID
-AB123"), "otp", "2fa", "mfa", "cvv", "cvc" or a verification, one-time,
-security, auth or login code followed by a code (any value after a label
-in lower case, "verification code Abc", also before "thanks", ", thanks", "cheers" or "thanks a lot"; after a label
-written as a name, any value that is not one: "OTP Bank" and "Security
-Code Plaza" are places), a "pin" or door, access, gate, alarm or entry
-code followed by a value in mixed case ("PIN aBcD"), a
-door, access, gate, alarm, entry or security code followed by a digit, "api
-key", "access token" or "secret key" followed by a word of six characters
-or more, the word for "password" in the interface's languages
-(contraseña, Passwort, mot de passe, пароль…) followed by anything, or "pin"
-(also "pin code", "pin number", "pin is") followed by a digit; a word
-starting `sk_`, `sk-`, `rk_`, `pk_live`, `ghp_`, `github_pat_`, `glpat-`, `hf_`, a SendGrid
-`SG.` key or a Slack token's `xoxb-` and the like (any case) or
-`AIza` or `eyJ`, or an AWS key id (`AKIA` and twelve capitals or digits
-more; "Akiak" is a place); or a word that may be a password or key, with letters and digits mixed
-within one run (a number beside a word, as in "Yanino-1", "2-chōme" or
-"Route-66", is a name): eight characters or more, six or more with four
-letters and a digit ("hunter22", "Area51"), or six or more with letters,
-digits and a symbol ("Tr0ub4dor&3"). The password words match whole words
-only ("Sachsenhausen" is a place). Over the bundled names (139,502), six
-read as private: two with stray digits ("Maliga0N", "Jerónim67"), two
-joined by "@" to a lower-case handle ("Pulipadu @Govardhanagiri") and two
-with number lists or dates. When the text may be private the field says
-so ("Looks private, so nothing is searched or sent"), and a line whose
-only private sign is an address-sized run of digits (no group over six
-digits, nine at most in all, counted as they fold, no three digits
-followed by four as a phone number writes them, and no word such as
-card, code, key, phone or account beside them, in English and some other
-European languages; compounds such as "Kreditkartennummer" and words in
-other scripts are not read), with words beside it, gets a row
-to search it as a place on purpose ("Search … as a place anyway"), which
-runs the ordinary place search and its online services only when picked; a
-bare number, an email or handle, a password, key, code or IBAN gets none.
-A suggested house is named by its number and its street (or, without a
-street, its locality, district or city) in the order its country writes them: "10 Downing
-Street", "Hauptstraße 12".
-A nine-digit number or a short phone number written with no such word
-still gets the row: only picking it sends anything. One-time and verification codes,
-OTP, 2FA, MFA, CVV and CVC values, "card ending" digits, passphrases,
-recovery or seed phrases (twelve words in a row on the BIP39 English list
-in `src/search/bip39Words.js`, also with commas, numbered, quoted, joined by
-dashes or slashes, or after "my seed is", so a long question or request
-still goes to Ask GEV; twelve with four words for places or for asking about
-them, such as "park", "airport", "near" or "today", are a list or a request,
-which lets about one phrase in a hundred through), "my secret is …", an email spelled
-out ("john at example dot com", "punto com", or letter by letter), a door,
-alarm or lockbox number ("code 4821"; "zip code 90210" and "area code 415"
-are places), "Authorization: Bearer …", a code in a link (`?code=…`), a
-spaced UK National Insurance number and "my id is …" are private too.
-"Boise ID 83702" names Idaho. Some private text is not caught: a
-passphrase run together as one word (a long place name is one word too),
-a lower-case word after "otp", "2fa" or "mfa" ("mfa boston" is a name;
-"otp ABCDEF" is caught) and a code of lower-case letters after "pin" or
-"gate code" ("PIN ABCD" is caught).
-A Japanese postcode after a Latin name is refused ("Shibuya 150-0002"), and
-so is a name in capitals after a code's label ("MFA BOSTON", which cannot
-be told from "OTP ABCDEF"). Text that parses as coordinates or a
-grid reference is not private. A place's name is six words at most, or ten
+Wikidata. A suggested house is named by its number and its street (or,
+without a street, its locality, district or city) in the order its country
+writes them: "10 Downing Street", "Hauptstraße 12". Nothing typed is held
+back as private: what is typed goes to place suggestions, the place search
+and Ask GEV as any other line does. A place's name is six words at most, or ten
 when it has a number in it (an address: "1600 Pennsylvania Ave NW
 Washington DC 20500"). The places picked from the Omnibar's rows and chips that carry a position
 (a typed name searched as a place, or a plan's place, is not kept; the last 20:
@@ -10340,6 +10253,17 @@ changes or ten minutes pass; any other 403 fails only that request.
 An unresolved camera never launches a global scan. All views share conservative
 45/minute and 1,800/hour process limits; a shared key's other clients still count.
 
+The route's `at` (ms) asks a past hour (floored to the hour; within the
+current hour it is now, and a time after now is refused). Every pollutant is
+read from OpenAQ's hourly means up to that hour (`sensors/{id}/hours` with
+`datetime_to` at it): the US AQI view folds PM2.5, PM10, O3 and CO hours with
+`aqiStations` as at now, with NO2 and SO2 from their newest hour within six
+hours; a pollutant view shows that hour's means. Readings are aged against the
+hour, and stations that began reporting after it are skipped. An hour within
+three days of now is checked again hourly, as networks file hours late; an
+older hour's stations and means are read once. Each hour asked is a view with
+its own `VIEW_SHARE` under the same process limits.
+
 OpenAQ's selected pollutant uses explicit sensor hourly averages, with period,
 coverage and quality checks. Supported PM2.5, PM10, NO2, O3 and SO2 measurements
 receive a clearly labelled GEV comparison against the European Air Quality Index's
@@ -10437,9 +10361,12 @@ step to its last with the world clock, follows the clock while the field is on
 and draws the step nearest its time; playing, the clock waits for the next
 step for at most 20 s. A time outside the run held asks the host for the run
 covering it (`atMs`), once per three hours of time (a failed ask again after a
-minute); at now a run that no longer covers now is let go. Stations are
-readings of now and are hidden away from now (their labels, list and count
-too). The card's time line names the model by the manifest's `sourceShort`, else
+minute); at now a run that no longer covers now is let go. Stations follow
+the timeline when the clock follows the layer: an earlier hour than the
+current one asks each provider for that hour (`atMs`, the hour's start) and
+shows its stations once the provider answered for it, aged against that hour;
+ahead of now no station is drawn (their labels, list and count too), and
+nothing is asked. The card's time line names the model by the manifest's `sourceShort`, else
 `source`: "updated {age}" at now, "forecast for {time}" ahead of it, the time
 behind it.
 Outside the run, with no run covering the time on its way, one muted line says
