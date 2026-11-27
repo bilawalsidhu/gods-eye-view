@@ -2,10 +2,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import { buildVesselCard, buildSelectedVesselCard } from './aisLiveVessels.js';
+import aisLiveVesselsLayer from './aisLiveVessels.js';
 import { displayVesselType } from './vesselLabels.js';
 import { setLocale } from '../i18n/index.js';
 
+const { buildVesselCard, buildSelectedVesselCard } =
+  aisLiveVesselsLayer.testing.parts.cards;
 const POS = new Cesium.Cartesian3(1, 2, 3);
 const rec = (type) => ({
   name: 'X',

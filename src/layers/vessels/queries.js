@@ -311,11 +311,6 @@ export function createQueries({
     return text || null;
   }
   const methods = {
-    mapAnalystRecord,
-    deriveAisFeedError,
-    classifyAisFeedSnapshot,
-    vesselDatumHeightM,
-
     id: 'ais-live-vessels',
 
     name: 'Live AIS Vessels',

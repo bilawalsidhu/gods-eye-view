@@ -5,17 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import {
-  AIS_FIRST_CONNECT_GRACE_MS,
-  deriveAisFeedError,
-  classifyAisFeedSnapshot,
-  buildVesselCard,
-  buildSelectedVesselCard,
-  cardScreenSeparated,
-  vesselDatumHeightM,
-  applyVesselFocusDeemphasis,
-  mapAnalystRecord,
-} from './aisLiveVessels.js';
+import { AIS_FIRST_CONNECT_GRACE_MS } from './aisLiveVessels.js';
 import aisLiveVesselsLayer from './aisLiveVessels.js';
 import { registerEntityContext, selectEntityContext } from './contextStore.js';
 import { WORLD_FOCUS_REQUEST_EVENT } from '../worldFocus.js';
@@ -46,6 +36,15 @@ const {
   parts,
   vesselState,
 } = aisLiveVesselsLayer.testing;
+const {
+  deriveAisFeedError,
+  classifyAisFeedSnapshot,
+  mapAnalystRecord,
+  vesselDatumHeightM,
+} = parts.queries;
+const { buildVesselCard, buildSelectedVesselCard, cardScreenSeparated } =
+  parts.cards;
+const { applyVesselFocusDeemphasis } = parts.rendering;
 
 test('open feed with vessels is healthy (null)', () => {
   assert.equal(

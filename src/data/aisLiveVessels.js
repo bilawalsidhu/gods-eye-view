@@ -15,15 +15,4 @@ const aisLiveVesselsLayer = createApplicationVessels({
   },
 });
 export { AIS_FIRST_CONNECT_GRACE_MS } from '../layers/vessels/policy.js';
-export const deriveAisFeedError = aisLiveVesselsLayer.deriveAisFeedError;
-export const classifyAisFeedSnapshot =
-  aisLiveVesselsLayer.classifyAisFeedSnapshot;
-export const mapAnalystRecord = aisLiveVesselsLayer.mapAnalystRecord;
-export const vesselDatumHeightM = aisLiveVesselsLayer.vesselDatumHeightM;
-export const applyVesselFocusDeemphasis =
-  aisLiveVesselsLayer.applyVesselFocusDeemphasis;
-export const buildVesselCard = aisLiveVesselsLayer.buildVesselCard;
-export const buildSelectedVesselCard =
-  aisLiveVesselsLayer.buildSelectedVesselCard;
-export const cardScreenSeparated = aisLiveVesselsLayer.cardScreenSeparated;
 export default aisLiveVesselsLayer;

@@ -2,7 +2,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { setLocale, translateKnown } from '../i18n/index.js';
-import { deriveAisFeedError } from './aisLiveVessels.js';
+import aisLiveVesselsLayer from './aisLiveVessels.js';
+
+const { deriveAisFeedError } = aisLiveVesselsLayer.testing.parts.queries;
 
 test('AIS degraded-feed reasons are localized in es', () => {
   setLocale('es');

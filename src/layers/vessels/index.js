@@ -91,10 +91,6 @@ export function createVesselLayer({ source, services, options = {} } = {}) {
   );
   layer.source = source?.label || 'Vessels';
   Object.assign(layer, {
-    applyVesselFocusDeemphasis: parts.rendering.applyVesselFocusDeemphasis,
-    buildVesselCard: parts.cards.buildVesselCard,
-    buildSelectedVesselCard: parts.cards.buildSelectedVesselCard,
-    cardScreenSeparated: parts.cards.cardScreenSeparated,
     /** The vessel's Open Vessel Photos photo, once its lookup answered. */
     getVesselPhoto: (id) =>
       parts.photos.vesselPhoto(vesselState.state.records.byId.get(id)),
