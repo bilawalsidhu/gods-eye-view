@@ -239,7 +239,8 @@ test('an animated style holds frames and advances time only while it draws', () 
 });
 
 test('a style with timeHz steps its clock and asks for one frame a step', (t) => {
-  // The port's clock and the ticks read one clock: no stall moves a step.
+  // Pin the port's start at 0 so a pause during setup cannot shift the
+  // step boundaries.
   t.mock.method(performance, 'now', () => 0);
   const f = fixture();
   f.effects.defineStyle(style('nvg', { animated: true, timeHz: 15 }));
@@ -302,14 +303,12 @@ test('a style with passes is one composite whose uniforms reach every pass', () 
   assert.equal(main.uniforms.rowsTexture, rows.name);
   assert.deepEqual(Object.keys(rows.uniforms), ['intensity', 'time', 'grain']);
   assert.equal(composite.enabled, false);
-  // Cesium swaps a stage's uniforms object on its first frame.
-  main.uniforms = { ...main.uniforms };
   f.effects.setStyleParams('nvg', { grain: 0.9 });
-  assert.equal(main.uniforms.grain, 0.9);
+  assert.equal(main.uniforms.grain(), 0.9);
   assert.equal(rows.uniforms.grain(), 0.9);
   f.effects.setStyle('nvg');
   f.effects.setStyleIntensity('nvg', 0.5);
-  assert.equal(main.uniforms.intensity, 0.5);
+  assert.equal(main.uniforms.intensity(), 0.5);
   assert.equal(rows.uniforms.intensity(), 0.5);
   assert.equal(rows.enabled, true);
   assert.equal(main.enabled, true);

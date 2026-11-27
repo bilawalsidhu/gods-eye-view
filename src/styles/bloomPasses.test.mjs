@@ -52,7 +52,7 @@ test('FLIR blooms with two 9-sample sums, not 81 samples', () => {
 });
 
 for (const shader of [nightVisionShader, thermalShader])
-  test(`${shader.name}: each pass reads style uniforms and feeds the main shader`, () => {
+  test(`${shader.name}: each pass reads style uniforms and is read at texel centres`, () => {
     assert.ok(shader.passes.length > 0);
     for (const pass of shader.passes) {
       for (const [, uniform] of pass.fragmentShader.matchAll(
@@ -68,9 +68,14 @@ for (const shader of [nightVisionShader, thermalShader])
         shader.fragmentShader,
         new RegExp(`uniform sampler2D ${pass.texture};`),
       );
-      assert.match(
-        shader.fragmentShader,
-        new RegExp(`texture\\(${pass.texture},`),
-      );
+      // Read at texel centres: Cesium may sample the pass's output LINEAR.
+      const reads = [
+        ...shader.fragmentShader.matchAll(
+          new RegExp(`texture\\(${pass.texture}, ([^\\n]*)`, 'g'),
+        ),
+      ].map((match) => match[1]);
+      assert.ok(reads.length > 0, `${pass.texture} is read`);
+      for (const read of reads)
+        assert.match(read, /^\(floor\(.+\) \+ 0\.5\) \/ dims\)/);
     }
   });

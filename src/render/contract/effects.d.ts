@@ -36,11 +36,10 @@ export interface StyleShader {
   glsl: string;
   wgsl?: string;
   /**
-   * GLSL passes drawn before `glsl`, each over the frame's colour. A pass
-   * declares what it reads as `glsl` does, `time` moving only for an
-   * animated style; `glsl` reads each pass's output as
-   * `uniform sampler2D <texture>`. A renderer that cannot draw the passes
-   * cannot draw the style's GLSL either.
+   * GLSL passes drawn before `glsl`, each over the frame's colour. A pass can
+   * declare the same uniforms as `glsl` (`time` moves only for an animated
+   * style); `glsl` reads each pass's output as `uniform sampler2D <texture>`.
+   * A renderer that cannot draw the passes cannot draw the style's GLSL either.
    */
   passes?: StylePass[];
 }

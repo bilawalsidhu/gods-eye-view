@@ -38,7 +38,7 @@ const OFF = 0.001;
 /** Bloom below this strength runs no pass. */
 const BLOOM_FLOOR = 0.06;
 /** The reason a stepped style asks for its frame; `whenSettled` does not wait on it. */
-export const STYLE_STEP_REASON = 'effects:animated';
+export const STYLE_STEP_REASON = 'effects:step';
 /** Uniform names a parameter key or a pass's texture may not take. */
 const RESERVED = new Set([
   'colorTexture',
@@ -181,42 +181,34 @@ export function createCesiumEffects(
   }
 
   /**
-   * Cesium replaces a stage's `uniforms` object on its first frame, so the
-   * composite's uniforms and the passes' read the main stage's current
-   * object each time rather than the one it was created with.
+   * The composite's `uniforms` is the style's own object, which Cesium leaves
+   * as it is; every stage reads it through functions, which Cesium calls each
+   * frame.
    */
   function makeComposite(name, record, uniforms) {
-    let main = null;
-    const shared = {};
-    for (const key of Object.keys(uniforms))
-      Object.defineProperty(shared, key, {
-        enumerable: true,
-        get: () => main.uniforms[key],
-        set: (value) => {
-          main.uniforms[key] = value;
-        },
-      });
+    const read = Object.fromEntries(
+      Object.keys(uniforms).map((key) => [key, () => uniforms[key]]),
+    );
+    const textures = {};
     const passes = record.passes.map((pass) => {
       const passName = `${name}_${pass.texture}`;
-      uniforms[pass.texture] = passName;
+      textures[pass.texture] = passName;
       return createStage({
         name: passName,
         fragmentShader: pass.glsl,
-        uniforms: Object.fromEntries(
-          Object.keys(shared).map((key) => [key, () => main.uniforms[key]]),
-        ),
+        uniforms: { ...read },
       });
     });
-    main = createStage({
+    const main = createStage({
       name: `${name}_main`,
       fragmentShader: record.glsl,
-      uniforms,
+      uniforms: { ...read, ...textures },
     });
     return new Cesium.PostProcessStageComposite({
       name,
       stages: [...passes, main],
       inputPreviousStageTexture: false,
-      uniforms: shared,
+      uniforms,
     });
   }
 
@@ -331,7 +323,8 @@ export function createCesiumEffects(
       const keys = new Set(params.map((p) => p.key));
       const textures = new Set();
       for (const pass of passes) {
-        // `main` is the style's own stage (`makeComposite`).
+        // A pass's stage is named <style>_<texture>; <style>_main is the
+        // style's own stage.
         if (
           typeof pass.texture !== 'string' ||
           !IDENTIFIER.test(pass.texture) ||

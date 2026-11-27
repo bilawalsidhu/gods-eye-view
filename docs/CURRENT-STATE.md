@@ -3725,7 +3725,8 @@ sharpen, and drives them through the renderer's effects port: it defines each
 preset there as a style, and the renderer runs the passes and animates the
 animated ones. NVG and FLIR set `timeHz` to 15. The renderer advances their
 `time` in steps and requests one frame per step. `whenSettled` ignores frames
-requested only by those steps. CRT holds the loop continuous while it draws.
+only those steps asked for, unless the scene would have drawn that tick
+anyway. CRT holds the loop continuous while it draws.
 Display supplies actions and renders settings; effect execution has no DOM
 dependency. Existing presets and the 500 ms transition remain
 unchanged. Stopping the controller revokes animation before asynchronous UI

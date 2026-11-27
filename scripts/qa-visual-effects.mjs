@@ -79,13 +79,10 @@ try {
     await tilesSettled(60_000),
   );
   fs.mkdirSync('qa-shots/visual-effects', { recursive: true });
-  // Draws a second on a still scene: NVG and FLIR step at 15 Hz, CRT holds
-  // the loop, the others draw nothing by themselves.
-  const RATES = {
-    surveillance: [8, 25],
-    thermal: [8, 25],
-    retro: [25, Infinity],
-  };
+  // A still scene: NVG and FLIR step at 15 Hz, CRT holds the loop and draws
+  // every tick, the others draw nothing by themselves.
+  const RATES = { surveillance: [8, 25], thermal: [8, 25] };
+  const STEPPED = new Set(['surveillance', 'thermal']);
   for (const style of [
     'normal',
     'retro',
@@ -121,25 +118,59 @@ try {
       throw new Error(
         `${style}: tile loading did not settle before frame sampling`,
       );
-    const draws = await page.evaluate(async () => {
+    const { seconds, times } = await page.evaluate(async (name) => {
       const scene = window.__godsEyeView.viewer.scene;
-      let n = 0;
-      const off = scene.postRender.addEventListener(() => (n += 1));
-      // Overlay layout can briefly request extra frames on a still scene.
-      const samples = [];
+      const stage = scene.postProcessStages.getStageByName(
+        `effects_style_${name}`,
+      );
+      let ticks = 0;
+      let draws = 0;
+      const times = new Set();
+      const offTick = scene.preUpdate.addEventListener(() => (ticks += 1));
+      const offDraw = scene.postRender.addEventListener(() => {
+        draws += 1;
+        if (stage) times.add(stage.uniforms.time);
+      });
+      // Overlay layout can briefly request extra frames on a still scene:
+      // three one-second windows, the median one checked.
+      const seconds = [];
       for (let i = 0; i < 3; i++) {
         await new Promise((resolve) => setTimeout(resolve, 1000));
-        samples.push(n);
-        n = 0;
+        seconds.push({ ticks, draws });
+        ticks = 0;
+        draws = 0;
       }
-      off();
-      return Math.min(...samples);
-    });
-    const [low, high] = RATES[style] ?? [0, 5];
-    check(
-      `${style}: the renderer draws ${low}-${high} frames a second on a still scene (${draws})`,
-      draws >= low && draws <= high,
-    );
+      offTick();
+      offDraw();
+      return { seconds, times: [...times] };
+    }, style);
+    const median = (key) => seconds.map((s) => s[key]).sort((a, b) => a - b)[1];
+    const seen = JSON.stringify(seconds);
+    if (style === 'retro') {
+      check(
+        `${style}: the renderer draws every tick on a still scene (${seen})`,
+        seconds.every((s) => s.ticks > 0 && s.draws >= s.ticks - 1),
+      );
+    } else {
+      const [low, high] = RATES[style] ?? [0, 5];
+      check(
+        `${style}: the renderer draws ${low}-${high} frames a second on a still scene (${seen})`,
+        median('draws') >= low && median('draws') <= high,
+      );
+    }
+    if (STEPPED.has(style)) {
+      check(
+        `${style}: time moves in 1/15 s steps (${times.length} values)`,
+        times.length >= 3 * RATES[style][0] &&
+          times.every((t) => Math.abs(t * 15 - Math.round(t * 15)) < 1e-6),
+      );
+      // A loop slower than the steps draws every tick, rightly.
+      if (median('ticks') > 16)
+        check(
+          `${style}: ticks between steps draw nothing (${seen})`,
+          seconds.every((s) => s.draws < s.ticks),
+        );
+    }
     if (['normal', 'surveillance', 'thermal'].includes(style)) {
       await page.screenshot({ path: `qa-shots/visual-effects/${style}.png` });
       if (style === 'surveillance')
