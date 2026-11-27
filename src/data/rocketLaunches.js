@@ -21,5 +21,5 @@ export {
   ROCKET_MISSION_AMBIENT_OVERLAY_COLLISION_CAPACITY,
   ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_OPTIONS,
   LAUNCH_PAD_ZONE_RADIUS_M,
-} from '../layers/launches/index.js';
+} from '../layers/launches/policy.js';
 export default layer;

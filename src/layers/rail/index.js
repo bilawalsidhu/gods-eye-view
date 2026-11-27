@@ -233,10 +233,3 @@ export function createRailLayer({
     },
   );
 }
-
-export {
-  RAIL_CATEGORY_COLORS,
-  RAIL_POLL_MS,
-  buildRailSelectionCopy,
-  railTrainKey,
-} from './policy.js';

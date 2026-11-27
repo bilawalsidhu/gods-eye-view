@@ -36,6 +36,7 @@ const layer = createTransitLayer({
 export const _setTransitOverlayHostForTest =
   layer._setTransitOverlayHostForTest;
 export const _transitStateForTest = layer._transitStateForTest;
+export { createTransitLayer } from '../layers/transit/index.js';
 export {
   TRANSIT_MODE_COLORS,
   TRANSIT_POLL_MS,
@@ -51,6 +52,5 @@ export {
   transitDetectionMetric,
   transitVehicleKey,
   vehicleFixAgeMs,
-  createTransitLayer,
-} from '../layers/transit/index.js';
+} from '../layers/transit/policy.js';
 export default layer;

@@ -84,20 +84,3 @@ export function createTransitLayer({
     parts.testing,
   );
 }
-
-export {
-  TRANSIT_MODE_COLORS,
-  TRANSIT_POLL_MS,
-  TRANSIT_SELECTED_OVERLAY_SOURCE_ID,
-  TRANSIT_SELECTED_OVERLAY_SOURCE_OPTIONS,
-  aggregateTransitFeedHealth,
-  buildTransitSelectionCopy,
-  createTransitSelectedOverlayEntry,
-  interpolatedVehiclePosition,
-  isStaleVehicleFix,
-  transitDetectionClass,
-  transitDetectionId,
-  transitDetectionMetric,
-  transitVehicleKey,
-  vehicleFixAgeMs,
-} from './policy.js';

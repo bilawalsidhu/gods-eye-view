@@ -102,16 +102,3 @@ export function createVesselLayer({ source, services, options = {} } = {}) {
   Object.defineProperty(layer, 'testing', { value: parts.testing });
   return layer;
 }
-export { AIS_FIRST_CONNECT_GRACE_MS } from './policy.js';
-export {
-  VESSEL_OVERLAY_SOURCE_ID,
-  VESSEL_LABEL_GRID_PX,
-  VESSEL_DEFAULT_LABEL_LIMIT,
-  VESSEL_OVERLAY_MAX_COHORT,
-  VESSEL_CARD_FADE_DISTANCE_M,
-  normalizeVesselType,
-  vesselTypeCss,
-  accentForVesselType,
-  vesselOverlayCohortLimit,
-  applyVesselOverlayPolicy,
-} from '../../data/vesselLabels.js';

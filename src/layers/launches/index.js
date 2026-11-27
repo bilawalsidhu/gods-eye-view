@@ -54,12 +54,4 @@ export function createRocketLaunchesLayer({ services, source }) {
   Object.defineProperty(layer, 'testing', { value: parts.testing });
   return layer;
 }
-export {
-  ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID,
-  ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_ID,
-  ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT,
-  ROCKET_MISSION_AMBIENT_OVERLAY_COLLISION_CAPACITY,
-  ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_OPTIONS,
-  LAUNCH_PAD_ZONE_RADIUS_M,
-} from './policy.js';
 export { createLaunchSource } from './source.js';
