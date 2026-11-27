@@ -50,7 +50,7 @@ for (const [name, fly] of [
   ['a launch site focus', (r) => r.selection.focusLaunchSite(PAD)],
   ['a roster preview', (r) => r.policy.previewMissionFromRoster(PAD)],
 ])
-  test(`${name} flies to the pad at sea level`, () => {
+  test(`${name} flies to the pad at zero height above the WGS84 ellipsoid`, () => {
     const r = rig();
     fly(r);
     assert.equal(r.spheres.length, 1);

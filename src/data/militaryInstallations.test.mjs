@@ -256,7 +256,6 @@ test('Context focus past the render cap selects for real instead of flying blind
     tags: { military: 'base', name: `Installation ${index}` },
   }));
   const run = await runInstallationLoad({ elements });
-  const flights = [];
   try {
     const renderedIds = new Set(run.entities().map((entity) => entity.id));
     assert.equal(renderedIds.size, 700, 'the ambient paint stays capped');
@@ -270,6 +269,10 @@ test('Context focus past the render cap selects for real instead of flying blind
     const beyondCap = cohort.find((record) => !renderedIds.has(record.id));
     assert.ok(beyondCap, 'a cohort item exists outside the rendered window');
 
+    // The site stands on a rendered floor above the ellipsoid.
+    setMeshFloorPreferred(true);
+    _clearMeshFloorCellsForTest();
+    reportMeshFloorCell(beyondCap.latitude, beyondCap.longitude, 182.25);
     const focused = militaryInstallationsLayer.focusById(beyondCap.id);
     assert.equal(focused, true, 'focus succeeds');
     // The proof: a real entity now backs the selection, so the Context subject
@@ -281,8 +284,16 @@ test('Context focus past the render cap selects for real instead of flying blind
       beyondCap.name,
       'the selection reached the context store',
     );
+    // The camera flies to the selected site, at its drawn surface height.
+    assert.equal(run.cameraFlights.length, 1, 'focus flies the camera once');
+    const site = Cesium.Cartographic.fromCartesian(run.cameraFlights[0].sphere.center);
+    const height = installationSurfaceHeightM(beyondCap);
+    assert.ok(height > 0, `the site's surface height is above the ellipsoid (${height})`);
+    assert.ok(Math.abs(Cesium.Math.toDegrees(site.longitude) - beyondCap.longitude) < 1e-9);
+    assert.ok(Math.abs(Cesium.Math.toDegrees(site.latitude) - beyondCap.latitude) < 1e-9);
+    assert.ok(Math.abs(site.height - height) < 1e-6, `height ${site.height}, want ${height}`);
   } finally {
-    void flights;
+    _clearMeshFloorCellsForTest();
     run.restore();
   }
 });
