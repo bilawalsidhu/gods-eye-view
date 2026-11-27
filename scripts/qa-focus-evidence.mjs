@@ -85,8 +85,7 @@ function parseParams() {
   ]);
   const horizonKeys = new Set([
     'startLimbRatio', 'scaleFloor', 'alphaFloor', 'combinedAlphaFloor',
-    'globeViewBlendStartM', 'globeViewBlendEndM', 'globeViewHeightM',
-    'earthRadiusM', 'writeEpsilon',
+    'globeViewBlendStartM', 'globeViewBlendEndM', 'earthRadiusM',
   ]);
   const focus = {};
   const horizon = {};

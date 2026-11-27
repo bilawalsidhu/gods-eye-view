@@ -10,7 +10,6 @@
  */
 import {
   RECEDE_DEFAULTS,
-  limbDistanceM,
   recedeFactors,
   recedeFrame,
   recedeParams,
@@ -54,18 +53,10 @@ function aircraftRecessionFactorsResolved(
  * @returns {typeof DEFAULT_AIRCRAFT_RECESSION_PARAMS}
  */
 export function setAircraftRecessionParams(patch = {}) {
-  // Backward-compatible evidence override: the former hard threshold now
-  // names the identity end of the blend band.
-  const given = Number.isFinite(patch.globeViewHeightM)
-    ? { ...patch, globeViewBlendEndM: patch.globeViewHeightM }
-    : patch;
-  const next = {
-    ...recedeParams(given, _params),
-    writeEpsilon: _params.writeEpsilon,
+  _params = {
+    ...recedeParams(patch, _params),
+    writeEpsilon: DEFAULT_AIRCRAFT_RECESSION_PARAMS.writeEpsilon,
   };
-  if (Number.isFinite(patch.writeEpsilon))
-    next.writeEpsilon = Math.max(0, patch.writeEpsilon);
-  _params = next;
   return { ..._params };
 }
 
@@ -91,16 +82,6 @@ export function getAircraftRecessionParams() {
 export function resetAircraftRecessionParams() {
   _params = { ...DEFAULT_AIRCRAFT_RECESSION_PARAMS };
 }
-
-/**
- * Straight-line tangent distance from a camera above a spherical Earth to its
- * geometric limb. The WGS84 semi-major radius is sufficient for a visual
- * taper; the occluder remains the authoritative far-side visibility test.
- * @param {number} cameraHeightM
- * @param {number} [earthRadiusM]
- * @returns {number}
- */
-export const cameraLimbDistanceM = limbDistanceM;
 
 /**
  * Pure recession factors for one aircraft.
@@ -149,34 +130,4 @@ export function aircraftTreatmentAlpha({
     _scratchFactors,
   );
   return baseAlpha * recededAlpha(focusFactor, factors.alpha, tuning);
-}
-
-/**
- * Apply layer-owned hue and composed aircraft alpha to an ambient glTF model without
- * changing the model's colour blend mode or amount.
- * @param {object} input
- * @param {object} input.model
- * @param {{withAlpha:(alpha:number)=>object}} input.baseColor
- * @param {number} input.alpha
- * @param {Partial<typeof DEFAULT_AIRCRAFT_RECESSION_PARAMS>} [input.params]
- * @returns {number} One when a color write occurred, otherwise zero.
- */
-export function applyAircraftModelTreatment({
-  model,
-  baseColor,
-  alpha,
-  params,
-}) {
-  const tuning = resolvedParams(params);
-  if (!model || !baseColor || !Number.isFinite(alpha)) return 0;
-  if (
-    Number.isFinite(model.color?.alpha) &&
-    Math.abs(model.color.alpha - alpha) <= tuning.writeEpsilon &&
-    model.color.red === baseColor.red &&
-    model.color.green === baseColor.green &&
-    model.color.blue === baseColor.blue
-  )
-    return 0;
-  model.color = baseColor.withAlpha(alpha);
-  return 1;
 }
