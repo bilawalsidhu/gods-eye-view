@@ -1,8 +1,9 @@
 /**
  * @module detectionPaintCache
- * @description Lets the detection overlay use what one sweep built (bracket
- * paths, counts, callout candidates) again on a later paint whose view and
- * objects are exactly the ones that sweep read. Nothing announces a change:
+ * @description Lets the detection overlay use what one sweep built (its
+ * bracket paths and counts; detection.js keeps the callout candidates beside
+ * it) again on a later paint whose view and objects are exactly the ones that
+ * sweep read. Nothing announces a change:
  * each paint hands over its view values and objects, and the cache compares
  * them value by value, so an object that moved, appeared, left or was
  * relabelled is always swept again. Pure: no Cesium, no DOM.
@@ -29,14 +30,6 @@ export const PAINTED_OBJECT_FIELDS = Object.freeze([
   'cardSourceId',
   'cardEntryId',
 ]);
-
-/**
- * After RECORD_STRIDE sweeps in a row without a reuse, a sweep is recorded
- * only on every RECORD_STRIDE-th one or when `keep` is told it always must,
- * since objects that move on every paint are never reused. A scene that
- * settles is picked up again within RECORD_STRIDE paints.
- */
-export const RECORD_STRIDE = 8;
 
 const FIELD_COUNT = PAINTED_OBJECT_FIELDS.length;
 
@@ -75,7 +68,7 @@ function recordFields(object, fields, f) {
 /**
  * @returns {{
  *   reuse: (view: Array, objects: Array<object>) => (object|null),
- *   keep: (view: Array, objects: Array<object>, result: object, always?: boolean) => boolean,
+ *   keep: (view: Array, objects: Array<object>, result: object) => void,
  *   forget: () => void,
  *   clear: () => void,
  * }}
@@ -88,7 +81,6 @@ export function createDetectionPaintCache() {
   let fields = [];
   let coordinates = new Float64Array(0);
   let positioned = new Uint8Array(0);
-  let sweepsSinceReuse = 0;
 
   /** Let go of the recorded objects from index `from` on. */
   function release(from) {
@@ -116,8 +108,6 @@ export function createDetectionPaintCache() {
       if (object !== references[i]) return false;
       const position = object.position;
       if (position) {
-        // A coordinate that is not a number never equals the kept one, so such
-        // an object is swept again on every paint.
         if (
           positioned[i] !== 1 ||
           position.x !== coordinates[c] ||
@@ -140,26 +130,14 @@ export function createDetectionPaintCache() {
      */
     reuse(view, objects) {
       if (!built || !sameView(view) || !sameObjects(objects)) return null;
-      sweepsSinceReuse = 0;
       return built;
     },
 
     /**
      * Keep `result` as the result of sweeping `objects` under `view`. `view` is
      * kept as it is, so the caller hands over a new array on each paint.
-     * `always` records even while recording backs off (see RECORD_STRIDE).
-     * @returns {boolean} False when recording was skipped.
      */
-    keep(view, objects, result, always = false) {
-      sweepsSinceReuse++;
-      if (
-        !always &&
-        sweepsSinceReuse > RECORD_STRIDE &&
-        sweepsSinceReuse % RECORD_STRIDE !== 0
-      ) {
-        forget();
-        return false;
-      }
+    keep(view, objects, result) {
       viewKept = view;
       if (objects.length < count) release(objects.length);
       count = objects.length;
@@ -185,13 +163,12 @@ export function createDetectionPaintCache() {
         recordFields(object, fields, f);
       }
       built = result;
-      return true;
     },
 
-    /** Reuse nothing until the next `keep`. */
+    /** Reuse nothing until the next `keep`, and let go of the recorded objects. */
     forget,
 
-    /** Forget the kept paint and let go of its objects. */
+    /** As `forget`, and also drop the kept view and the recording buffers. */
     clear() {
       built = null;
       viewKept = [];
@@ -200,7 +177,6 @@ export function createDetectionPaintCache() {
       fields = [];
       coordinates = new Float64Array(0);
       positioned = new Uint8Array(0);
-      sweepsSinceReuse = 0;
     },
   };
 }

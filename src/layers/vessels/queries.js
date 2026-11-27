@@ -89,13 +89,16 @@ export function createQueries({
     if (!position) return null;
     let object = detectionObjects.get(record);
     if (!object) {
+      const cardEntryId = components.cards.vesselOverlayEntryId(record);
       object = {
-        sourceId: record.id,
+        // A vessel with neither id nor MMSI has no id of its own; its card
+        // identity keeps two of them from being one detection contact.
+        sourceId: record.id || cardEntryId,
         type: 'SEA',
         // Detection hides the callout while this card paints. A record
         // keeps its card identity (an unkeyed one is rebuilt every poll).
         cardSourceId: VESSEL_OVERLAY_SOURCE_ID,
-        cardEntryId: components.cards.vesselOverlayEntryId(record),
+        cardEntryId,
       };
       detectionObjects.set(record, object);
     }

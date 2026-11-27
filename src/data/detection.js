@@ -110,7 +110,7 @@ const THEME_MAP = DETECTION_THEME_MAP;
 
 /** @constant {number} SPARSE_ZONE_FRACTION - Fraction of viewport half-extent used as sparse focus ring radius */
 const SPARSE_ZONE_FRACTION = 0.5;
-/** Solve cadence for membership/collision; accepted identities still reproject every frame. */
+/** Solve cadence for membership/collision; between solves, accepted identities reproject whenever the view or a contact changes. */
 const LABEL_SOLVE_INTERVAL_MS = 125;
 /** Own-card opacity that fully hides a callout; below it the callout fades in. */
 const CARD_ALPHA_HIDING_CALLOUT = 0.5;
@@ -338,8 +338,12 @@ const _uncappedQuery = {
 /** Per-paint containers, emptied and refilled rather than made per paint. */
 const _selectedIdentities = new Map();
 const _renderIdentities = new Map();
-const _candidateMap = new Map();
 const _renderEntries = [];
+/**
+ * The last sweep's callout candidates. A paint that reuses that sweep reads
+ * them, so only a sweep or `_releaseKeptPaintState` empties the map.
+ */
+const _candidateMap = new Map();
 let _surfaceDepthFallbackReported = false;
 let _lastLabelSolveAt = 0;
 let _labelSolveDirty = true;
@@ -422,11 +426,14 @@ export function initDetection(viewer, layers, onModeChange) {
  * Empty the containers kept between paints. They hold the last paint's
  * contacts (the layers' own objects and the candidates made from them), so
  * whenever no paint will refill them — detection off, torn down, or a paint
- * that found nothing — they are emptied rather than keeping those alive.
+ * that found nothing — they are emptied rather than keeping those alive. The
+ * kept paint reads the candidates and transit paths, so it goes with them.
  */
 function _releaseKeptPaintState() {
   _collected.length = 0;
   _candidateMap.clear();
+  _transitBracketPaths.clear();
+  _paintCache.clear();
   _renderEntries.length = 0;
   _selectedIdentities.clear();
   _renderIdentities.clear();
@@ -449,8 +456,6 @@ export function destroyDetection() {
   _hostLane = null;
   _calloutLane?.unregister?.();
   _calloutLane = null;
-  _transitBracketPaths.clear();
-  _paintCache.clear();
   _paintReuseCount = 0;
   _calloutCount = 0;
   _layers = [];
@@ -792,7 +797,6 @@ function _applyModeState() {
     _syncSurfaceVisibility();
     _setLanesActive(false);
     _labelArbiter.clear();
-    _paintCache.clear();
     _surfaceOcclusion.clear();
     _surfaceSuppressedKeys.clear();
     _releaseKeptPaintState();
@@ -1395,9 +1399,11 @@ function _paintViewOf(frame, keyholeOutsideOpacity, cyberMapActive) {
 }
 
 /**
- * Paint detection against the shared host frame. Brackets remain broad and
- * per-frame; rich placements rebuild only for selected/fading identities and
- * for a bounded cohort on solve ticks.
+ * Paint detection against the shared host frame. Brackets are stroked on
+ * every paint, but a paint whose view and contacts match the last kept
+ * sweep rebuilds neither their paths nor any placement (`_paintCache`). A
+ * sweep rebuilds placements for selected/fading identities, and for a
+ * bounded cohort on solve ticks.
  */
 function _drawOverlay(frame) {
   const { width, height } = frame;
@@ -1449,8 +1455,6 @@ function _drawOverlay(frame) {
     // leaving rows here would strand the final callsigns on screen after the
     // last data layer is switched off. The kept containers go with it: no
     // paint refills them while nothing is detectable.
-    _transitBracketPaths.clear();
-    _paintCache.clear();
     _calloutCount = 0;
     _releaseKeptPaintState();
     _ctx.font = FONT;
@@ -1535,12 +1539,25 @@ function _drawOverlay(frame) {
   if (!_charWidth) _charWidth = _ctx.measureText('0000000000').width / 10 || 6;
   const tiers = _theme.tiers || null;
   const colorFor = (key) => (tiers && tiers[key]) || _theme.line;
-  let bracketPaths = new Map();
   // Global Context sonar echoes: a second bracket, banded by strength, around
   // each flight or vessel a pulse front has just crossed.
   // Resting pulses light nothing, so the per-contact echo work is skipped.
   const echoField = awarenessEchoActive(now) ? getAwarenessEchoField() : null;
   const echoPaths = echoField ? new Array(ECHO_ALPHA_STEPS + 1) : null;
+  // A paint whose view and objects are what the last kept sweep read reuses
+  // its paths and counts, and the candidates it left (see
+  // detectionPaintCache and docs/CURRENT-STATE.md). The sweep also reads the
+  // render identities, but between solves they only shrink and callouts are
+  // placed from the arbiter's own rows, so a kept candidate map stays valid.
+  const paintKeepable = !sonarActive && !echoField;
+  const paintView = paintKeepable
+    ? _paintViewOf(frame, keyholeOutsideOpacity, cyberMapActive)
+    : null;
+  const kept =
+    paintKeepable && !shouldSolve
+      ? _paintCache.reuse(paintView, objects)
+      : null;
+  const bracketPaths = kept ? kept.bracketPaths : new Map();
   const pathFor = (map, color, alpha) => {
     const band = Math.max(
       1,
@@ -1559,37 +1576,22 @@ function _drawOverlay(frame) {
     return entry.path;
   };
 
-  let visibleCount = 0;
-  let bracketOpacityCounts = { full: 0, partial: 0, hidden: 0 };
-  let aircraftBracketSectors = { left: 0, front: 0, right: 0 };
-  let protectedVisibleCount = 0;
+  let visibleCount = kept ? kept.visibleCount : 0;
+  const bracketOpacityCounts = kept
+    ? kept.bracketOpacityCounts
+    : { full: 0, partial: 0, hidden: 0 };
+  const aircraftBracketSectors = kept
+    ? kept.aircraftBracketSectors
+    : { left: 0, front: 0, right: 0 };
+  let protectedVisibleCount = kept ? kept.protectedVisibleCount : 0;
   const candidateMap = _candidateMap;
   const cohortBuilders = shouldSolve ? new Map() : null;
   const demandByLayer = shouldSolve ? new Map() : null;
   let placementBuildCount = 0;
-
-  // When the view and the objects are exactly what the last kept sweep read,
-  // its paths, counts and callout candidates are used again and only the
-  // strokes and callouts are repainted (see detectionPaintCache). The sweep
-  // also reads the render identities, but between solves they only shrink and
-  // callouts are placed from the arbiter's own rows, so a kept candidate map
-  // stays valid. A solve always sweeps, to gather its cohort, and is kept.
-  // Never reused or kept: paints with the Cyber sonar sweep or a Global
-  // Context echo live (brackets change with the clock), and sweeps that reach
-  // a depth-tested contact (the answer comes from the scene).
-  const paintKeepable = !sonarActive && !echoField;
-  const paintView = paintKeepable
-    ? _paintViewOf(frame, keyholeOutsideOpacity, cyberMapActive)
-    : null;
-  const kept =
-    paintKeepable && !shouldSolve
-      ? _paintCache.reuse(paintView, objects)
-      : null;
   let depthTestedSwept = false;
-  let identityLayerId;
-  let renderSources;
-  let selectedSources;
-  // A reused paint reads the candidates its kept sweep left in the map.
+  // A reused paint reads the callout candidates and transit paths its kept
+  // sweep left, so whatever else empties them clears `_paintCache` with them
+  // (`_releaseKeptPaintState` does).
   if (!kept) {
     _transitBracketPaths.clear();
     candidateMap.clear();
@@ -1734,14 +1736,7 @@ function _drawOverlay(frame) {
     if (!primary && !micro) continue;
     const layerId = obj._layerId || 'unknown';
     const sourceId = obj.sourceId ?? obj.id ?? i;
-    // Objects arrive a layer at a time, so the layer's sets are looked up once
-    // per run of objects, not once per object.
-    if (layerId !== identityLayerId) {
-      identityLayerId = layerId;
-      renderSources = renderIdentities.get(layerId);
-      selectedSources = selectedIdentities?.get(layerId);
-    }
-    const liveForRender = renderSources?.has(sourceId) || false;
+    const liveForRender = renderIdentities.get(layerId)?.has(sourceId) || false;
     if (!shouldSolve && !liveForRender) continue;
 
     obj._cohortSourceId = sourceId;
@@ -1762,7 +1757,8 @@ function _drawOverlay(frame) {
       demandByLayer.set(layerId, (demandByLayer.get(layerId) || 0) + 1);
       if (!cohortBuilders.has(layerId))
         cohortBuilders.set(layerId, new BoundedCohort(256));
-      const incumbent = selectedSources?.has(sourceId) || false;
+      const incumbent =
+        selectedIdentities?.get(layerId)?.has(sourceId) || false;
       cohortBuilders.get(layerId).consider(obj, incumbent);
     }
 
@@ -1784,29 +1780,14 @@ function _drawOverlay(frame) {
   _occlusionProbe.endFrame();
   if (kept) {
     _paintReuseCount++;
-    ({
+  } else if (paintKeepable && !depthTestedSwept) {
+    _paintCache.keep(paintView, objects, {
       bracketPaths,
       visibleCount,
       bracketOpacityCounts,
       aircraftBracketSectors,
       protectedVisibleCount,
-    } = kept);
-  } else if (paintKeepable && !depthTestedSwept) {
-    // A solve is always recorded, or a recording stride in step with the solves
-    // leaves the paints between them nothing to reuse.
-    // The candidates stay in `_candidateMap`, which only a sweep empties.
-    _paintCache.keep(
-      paintView,
-      objects,
-      {
-        bracketPaths,
-        visibleCount,
-        bracketOpacityCounts,
-        aircraftBracketSectors,
-        protectedVisibleCount,
-      },
-      shouldSolve,
-    );
+    });
   } else {
     _paintCache.forget();
   }

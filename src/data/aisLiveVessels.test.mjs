@@ -2462,6 +2462,49 @@ test('detection objects name the vessel card their callout gives way to', () => 
   }
 });
 
+test('vessels with neither id nor MMSI are separate detection contacts', () => {
+  const vessel = (name, lat, lon) => ({
+    name,
+    mmsi: '',
+    type: 'Cargo',
+    destination: '',
+    speed: 9.5,
+    course: 80,
+    heading: 80,
+    lastPositionUtc: '',
+    missedRefreshes: 0,
+    position: POS,
+    lat,
+    lon,
+    // Drawn and on screen (a record with no visual of its own is its own).
+    visible: true,
+  });
+  // The last two both read VESSEL, so a key from the name would still collide.
+  const records = [
+    vessel('WEST', 37.8, -122.5),
+    vessel('CENTER', 37.8, -122.4),
+    vessel('', 37.7, -122.4),
+    vessel('', 37.6, -122.4),
+  ];
+  _setVesselStateForTest({ viewer: {}, records });
+  try {
+    const objects = aisLiveVesselsLayer.getDetectableObjects();
+    assert.equal(objects.length, 4);
+    const sourceIds = objects.map((object) => object.sourceId);
+    for (const sourceId of sourceIds) {
+      assert.equal(typeof sourceId, 'string');
+      assert.ok(sourceId.length > 0, 'each has a detection key of its own');
+    }
+    assert.equal(new Set(sourceIds).size, 4);
+    assert.deepEqual(
+      sourceIds,
+      objects.map((object) => object.cardEntryId),
+    );
+  } finally {
+    _setVesselStateForTest({ enabled: false });
+  }
+});
+
 test('the selected vessel is a detection object first, even when a cap samples the list', () => {
   const vessel = (mmsi, visible = true) => ({
     name: `SHIP ${mmsi}`,

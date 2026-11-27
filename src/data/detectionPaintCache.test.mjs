@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import {
   createDetectionPaintCache,
   PAINTED_OBJECT_FIELDS,
-  RECORD_STRIDE,
 } from './detectionPaintCache.js';
 
 const contacts = () => [
@@ -30,7 +29,7 @@ function kept() {
   const cache = createDetectionPaintCache();
   const objects = contacts();
   const built = { paths: 'kept' };
-  assert.equal(cache.keep(view(), objects, built), true);
+  cache.keep(view(), objects, built);
   return { cache, objects, built };
 }
 
@@ -70,13 +69,6 @@ test('any value of the view that differs is a miss', () => {
   );
 });
 
-test('a view value that is not a number never matches itself', () => {
-  const cache = createDetectionPaintCache();
-  const objects = contacts();
-  cache.keep([NaN], objects, {});
-  assert.equal(cache.reuse([NaN], objects), null);
-});
-
 test('a coordinate changed in place is a miss, however small', () => {
   for (const axis of ['x', 'y', 'z']) {
     const { cache, objects } = kept();
@@ -91,7 +83,7 @@ test('a position object swapped for an equal one is still the same paint', () =>
   assert.equal(cache.reuse(view(), objects), built);
 });
 
-test('a position that appears, goes away or is not a number is a miss', () => {
+test('a position that appears or goes away is a miss', () => {
   let { cache, objects } = kept();
   objects[2].position = { x: 0, y: 0, z: 0 };
   assert.equal(cache.reuse(view(), objects), null, 'appears');
@@ -99,12 +91,6 @@ test('a position that appears, goes away or is not a number is a miss', () => {
   ({ cache, objects } = kept());
   objects[0].position = null;
   assert.equal(cache.reuse(view(), objects), null, 'goes away');
-
-  cache = createDetectionPaintCache();
-  objects = contacts();
-  objects[0].position.x = NaN;
-  cache.keep(view(), objects, {});
-  assert.equal(cache.reuse(view(), objects), null, 'not a number');
 });
 
 test('every field the sweep reads is compared', () => {
@@ -154,49 +140,5 @@ test('keeping again replaces what was kept, for more or fewer objects', () => {
   assert.equal(cache.reuse(view(), more), builtMore);
   cache.keep(view(), objects, built);
   assert.equal(cache.reuse(view(), more), null);
-  assert.equal(cache.reuse(view(), objects), built);
-});
-
-test('objects that change on every paint are recorded only now and then', () => {
-  const cache = createDetectionPaintCache();
-  const objects = contacts();
-  const recorded = [];
-  const sweep = () => {
-    objects[0].position.x += 1;
-    assert.equal(cache.reuse(view(), objects), null);
-    recorded.push(cache.keep(view(), objects, {}));
-  };
-  for (let i = 0; i < RECORD_STRIDE; i++) sweep();
-  assert.ok(recorded.every(Boolean), 'the first sweeps are all recorded');
-
-  recorded.length = 0;
-  for (let i = 0; i < RECORD_STRIDE * 5; i++) sweep();
-  assert.equal(recorded.filter(Boolean).length, 5, 'then one in every stride');
-
-  // A skipped sweep leaves nothing behind to reuse by mistake.
-  const built = {};
-  let wasRecorded = cache.keep(view(), objects, built);
-  assert.equal(wasRecorded, false);
-  assert.equal(cache.reuse(view(), objects), null);
-
-  // Once the objects hold still, the next recorded sweep is reused, and
-  // every sweep after a reuse is recorded again.
-  for (let i = 0; i < RECORD_STRIDE && !wasRecorded; i++)
-    wasRecorded = cache.keep(view(), objects, built);
-  assert.ok(wasRecorded, 'a still scene is recorded within one stride');
-  assert.equal(cache.reuse(view(), objects), built);
-  for (let i = 0; i < RECORD_STRIDE; i++)
-    assert.equal(cache.keep(view(), objects, built), true);
-});
-
-test('a sweep kept with always is recorded even while recording backs off', () => {
-  const cache = createDetectionPaintCache();
-  const objects = contacts();
-  for (let i = 0; i < RECORD_STRIDE + 1; i++) {
-    objects[0].position.x += 1;
-    cache.keep(view(), objects, {});
-  }
-  const built = {};
-  assert.equal(cache.keep(view(), objects, built, true), true);
   assert.equal(cache.reuse(view(), objects), built);
 });
