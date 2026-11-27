@@ -7,6 +7,7 @@ import {
 import { bindRenderer } from '../render/rendererOf.js';
 import { entityFollowTarget, followedOf } from './followed.js';
 import { fakeDrawPort } from '../testSupport/fakeDrawPort.mjs';
+import { fakeInput } from '../input/testDoubles.mjs';
 import {
   buildRadioTunerBand,
   buildRadioTunerTicks,
@@ -1814,4 +1815,76 @@ test('voice playback confirmation accepts fallback buffering but times out safel
   });
   assert.equal(confirmed, false);
   assert.ok(Date.now() - startedAt >= 8);
+});
+
+test('voice playback stays voice-owned and a station click plays as the user', async () => {
+  const station = radioStationRow();
+  const played = [];
+  const controls = [];
+  const originalAudio = globalThis.Audio;
+  const originalFetch = globalThis.fetch;
+  const viewer = {
+    camera: { positionWC: { x: 7_000_000, y: 0, z: 0 } },
+    scene: {
+      canvas: { disableRootEvents: true, onwheel: null, addEventListener() {}, removeEventListener() {} },
+      pick: () => ({ id: `radio:${station.id}` }),
+      drillPick: () => [],
+    },
+    dataSources: { add() {}, remove() {} },
+    entities: { add(entity) { return entity; }, remove() {} },
+  };
+  const fake = fakeInput(viewer);
+  radioLayer.destroy();
+  try {
+    globalThis.Audio = class FakeAudio {
+      async play() { played.push(this.src); }
+      addEventListener() {}
+      pause() {}
+      removeAttribute() { this.src = ''; }
+      load() {}
+    };
+    globalThis.fetch = async (url) => String(url).startsWith('/api/radio/click/')
+      ? { ok: true }
+      : {
+        ok: true,
+        json: async () => ({
+          stations: [station],
+          updatedAt: new Date().toISOString(),
+          stale: false,
+          degraded: false,
+          acceptedGeneration: 1,
+          catalogInstance: 'qa-instance-a',
+        }),
+      };
+    radioLayer.init(bindFakeCesiumCamera(viewer, { draw: fakeDrawPort() }));
+    radioLayer.enable();
+    await radioLayer.update();
+    radioLayer.setLifecyclePresentation({ lifecycleState: 'enabled', enabled: true, uncertain: false });
+    radioLayer.subscribePlaybackControls((event) => {
+      controls.push({ ...event, audioState: radioLayer.getUIState().audioState });
+    });
+
+    radioLayer.selectStation(station.id, { autoplay: false });
+    setRadioVoiceDucking(true);
+    assert.equal(await radioLayer.playForVoice({ attemptId: 'voice-1' }), true);
+    assert.deepEqual(played, [station.streamUrl]);
+    assert.deepEqual(controls, []);
+
+    setRadioVoiceDucking(false);
+    radioLayer.stopPlayback();
+    controls.length = 0;
+    fake.tap();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(played.length, 2);
+    assert.deepEqual(
+      controls.map(({ action, origin, audioState }) => [action, origin, audioState]),
+      [['play', 'user', 'playing']],
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalAudio === undefined) delete globalThis.Audio;
+    else globalThis.Audio = originalAudio;
+    radioLayer.destroy();
+    fake.destroy();
+  }
 });

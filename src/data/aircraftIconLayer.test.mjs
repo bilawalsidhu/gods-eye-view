@@ -877,7 +877,15 @@ test('with view sheets, every aircraft class draws from the sheet along its cour
   assert.deepEqual(p1.size, [20, 20]);
   assert.equal(p1.scale, 1.25);
   assert.deepEqual(p1.color, [1, 1, 1, 1]);
-  assert.equal(p1.scaleByDistance.nearValue, 3);
+  assert.deepEqual(
+    {
+      near: p1.scaleByDistance.near,
+      nearValue: p1.scaleByDistance.nearValue,
+      far: p1.scaleByDistance.far,
+      farValue: p1.scaleByDistance.farValue,
+    },
+    { near: 1000, nearValue: 3, far: 8000000, farValue: 0.5 },
+  );
   assert.equal(state._icons.item('p2').image, aircraftViewRef('glider'));
   assert.equal(
     state._icons.item('h1').image,

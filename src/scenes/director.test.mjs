@@ -1617,8 +1617,7 @@ test('a newer LOAD aborts the previous LOAD transition rather than disowning it'
 test('applyVisualState gates the map-stack switch on both sides of its await', () => {
   // The other half of the contract, and the half these doubles cannot see.
   // ui.js cannot be imported here (its mgrs dependency is CJS), so this pins
-  // the structure the way the repo pins other cross-module shape
-  // (cockpitMarkup.test.mjs), while qa-shots/scenes-audit.mjs proves the
+  // the structure, while qa-shots/scenes-audit.mjs proves the
   // BEHAVIOUR against the real StyleManager in a browser.
   //
   // Gating only the post-await uniform commit is not enough: the stack switch

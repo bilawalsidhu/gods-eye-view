@@ -131,3 +131,10 @@ test('spoken aliases resolve to real layers, keep every legacy phrase and never 
       claimed.set(alias, entry.id);
     }
 });
+
+test('drone airspace and wildlife sightings stay out of voice and the analyst', () => {
+  for (const id of ['drone-airspace', 'wildlife-sightings']) {
+    assert.ok(Object.hasOwn(VOICE_OFF_LAYERS, id), `${id} is voice-off`);
+    assert.ok(!Object.hasOwn(ANALYST_LAYERS, id), `${id} has no analyst records`);
+  }
+});

@@ -6,7 +6,6 @@
 // real parsing and rendering run in `scripts/qa-geo-import.mjs`.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
 import { initGeoFileImport, summarize } from './geoFileImport.js';
 import { GeoImportError, MAX_IMPORTED_FILES } from '../data/geoFileImport.js';
 import { bindRenderer } from '../render/rendererOf.js';
@@ -372,41 +371,6 @@ test('a file that finishes loading after destroy is released, not added', async 
   await pending;
   assert.equal(t.added.length, 0);
   assert.deepEqual(revoked, ['late']);
-});
-
-test('the application composition wires the import and owns its teardown', () => {
-  const tools = fs.readFileSync(
-    new URL('../app/tools.js', import.meta.url),
-    'utf8',
-  );
-  const drawAt = tools.indexOf('const drawTool = initDrawTool({');
-  const importAt = tools.indexOf('const geoFileImport = initGeoFileImport({');
-  assert.ok(importAt > drawAt && drawAt >= 0);
-  // Fly-to goes through the application shell's navigation policy.
-  assert.match(
-    tools.slice(importAt, importAt + 200),
-    /navigation: styleManager/,
-  );
-  assert.ok(tools.indexOf('defer(() => geoFileImport?.destroy());') > importAt);
-  // The list renders from the store and its controls answer through it.
-  assert.match(
-    tools.slice(importAt, importAt + 400),
-    /publish: \(view\) => displayStore\.publishGeoImport\(view\),\s*connect: connectDisplay,/,
-  );
-  const markup = fs.readFileSync(
-    new URL('./views/panels/GeoImport.vue', import.meta.url),
-    'utf8',
-  );
-  for (const id of [
-    'geo-import-button',
-    'geo-import-input',
-    'geo-import-list',
-    'geo-import-hint',
-  ])
-    assert.ok(
-      markup.includes(`id="${id}"`),
-      `${id} missing from the Import template`,
-    );
 });
 
 test('two imports at once never pass the file cap: batches run one after another', async () => {

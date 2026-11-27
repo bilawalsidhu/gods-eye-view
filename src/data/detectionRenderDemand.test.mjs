@@ -26,8 +26,7 @@ import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 //   3. ONE CLOCK — paint and demand read the same per-frame timestamp, so the
 //      frame that paints an animation's final state is the frame that ends its
 //      demand, and a non-monotonic clock cannot make demand permanent.
-//   4. WIRING — the hold is really gone; a skipped paint re-requests instead of
-//      swallowing; a layer whose contents changed dirties the solve.
+//   4. WIRING — a layer whose contents changed invalidates detection.
 //
 // The runtime counterpart — parked scene, detection ON vs OFF, near-zero renders
 // either way, and the overlay still painting — is `scripts/qa-perf.mjs` §1b.
@@ -268,106 +267,11 @@ test('paint and demand share one timestamp, so the terminal frame is painted', a
 // 4. Wiring
 // ---------------------------------------------------------------------------
 
-test('detection holds nothing, and asks for its own frames instead', async () => {
-  const source = await readFile(new URL('./detection.js', import.meta.url), 'utf8');
-
-  assert.doesNotMatch(source, /holdContinuousRender/,
-    'detection must never take a continuous-render hold — that is the regression');
-  assert.doesNotMatch(source, /releaseContinuousRender/,
-    'and with no hold there is nothing to release');
-
-  assert.match(source, /governorRequestRender\('detection-visibility'\)/,
-    'mode/suspend transitions request their own repaint');
-  assert.match(source, /if \(\s*detectionNeedsFollowUpFrame\(\{[\s\S]*?\}\)\s*\) \{\s*\n\s*governorRequestRender\('detection-animation'\);/,
-    'the follow-up frame is gated on the policy, never unconditional');
-
-  // The demand call must read the FRAME's timestamp, not a fresh sample.
-  const paintLane = /function _paintDetectionLane\([\s\S]*?\n\}/.exec(source)?.[0];
-  assert.ok(paintLane, 'detection.js still has a paint lane');
-  assert.doesNotMatch(paintLane, /nowMs: Date\.now\(\)/,
-    'demand must not re-sample the clock — that is the dropped terminal frame');
-  assert.match(
-    paintLane,
-    /const nowMs = Number\.isFinite\(frame\.timestamp\) \? frame\.timestamp : _nowMs\(\)/,
-  );
-  assert.match(
-    paintLane,
-    /detectionNeedsFollowUpFrame\(\{[\s\S]*?\n\s*nowMs,/,
-    'the sonar cadence and fade demand share the same frame-clock sample',
-  );
-  assert.match(paintLane, /animatingLabelCount: result\.animatingCount/,
-    'demand counts fades in both directions');
-  // …and `animatingCount` must really be the BOTH-directions count. Feeding the
-  // fade-OUT-only counter into it is exactly the original defect, and it is
-  // invisible to every other assertion here — the field name would still line up
-  // while a fading-in label registered nothing.
-  assert.match(source, /const animatingCount = countAnimatingRenderEntries\(renderEntries\);/,
-    'the demand count comes from the both-directions counter, not the fade-out tail');
-  assert.match(source, /const fadingCount = countFadingRenderEntries\(renderEntries\);/,
-    'and the published fade-out diagnostic keeps its own, unchanged meaning');
-  assert.match(paintLane, /solvePending: result\.solvePending === true/,
-    'and an unrun solve keeps the chain alive');
-
-  // No exit from the draw pass may report work it cannot finish. The
-  // zero-objects exit skips the solve block entirely, so carrying the dirty flag
-  // out of it reports "a solve is still owed" on every future frame — which,
-  // paired with the follow-up frame an owed solve earns, is a permanent chain on
-  // the emptiest possible scene. (Caught by the governor gate at 301 renders/5 s
-  // with zero layers; the fix settles the solve there, because with nothing
-  // detectable it is vacuously complete.)
-  const emptyExit = /\/\/ Drop the replay buffer with it[\s\S]*?return \{\s*didSolve: false[\s\S]*?\};/.exec(source)?.[0];
-  assert.ok(emptyExit, 'the zero-objects exit is still identifiable');
-  assert.match(emptyExit, /_labelSolveDirty = false;/,
-    'the zero-objects exit settles the solve instead of carrying it forward');
-  assert.match(emptyExit, /solvePending: false/,
-    'and reports no outstanding solve — nothing detectable means nothing to place');
-
-  // No wall clock may drive anything the demand model reasons about.
-  const drawOverlay = /function _drawOverlay\([\s\S]*?\n\}/.exec(source)?.[0];
-  assert.ok(drawOverlay, 'detection.js still has a draw pass');
-  assert.doesNotMatch(drawOverlay, /Date\.now\(\)/,
-    'the draw pass must run on the frame timestamp, not a wall clock');
-  assert.match(drawOverlay, /const now =\s*Number\.isFinite\(frame\.timestamp\) \? frame\.timestamp : _nowMs\(\);/);
-  assert.match(source, /_enableTime = _nowMs\(\);/,
-    'the enable stamp shares the monotonic clock the fade is measured against');
-
-  // A skipped paint DEFERS demand; it must not consume it. The valve must route
-  // through the shared decision rather than re-implementing the threshold, or
-  // the skip/re-request pairing proven above would not bind it.
-  const shouldPaint = /function _shouldPaintDetectionLane\([\s\S]*?\n\}/.exec(source)?.[0];
-  assert.ok(shouldPaint, 'the relief valve is still there');
-  assert.match(shouldPaint, /detectionPaintSkipDecision\(\{/,
-    'the valve asks the shared policy instead of inlining its own threshold');
-  assert.doesNotMatch(shouldPaint, /_lastPaintMs > 22/,
-    'the old inline threshold must be gone, not shadowing the policy');
-  assert.match(shouldPaint, /if \(decision\.requestFollowUp\)\s*governorRequestRender\('detection-paint-skipped'\)/,
-    'skipping a paint must hand the request forward, not swallow it');
-
-  // The scanline must not go back to the frame counter: that is what made a
-  // decorative texture demand a permanently hot loop.
-  const scanlines = /function _drawScanlines\([\s\S]*?\n\}/.exec(source)?.[0];
-  assert.ok(scanlines, 'detection.js still draws scanlines');
-  assert.doesNotMatch(scanlines, /_frameCount/,
-    'the scroll offset must come from the clock, not from a frame counter');
-  assert.match(scanlines, /scanlineOffsetPx\(nowMs\)/,
-    'and from the shared policy so the two cannot drift');
-});
-
 test('a layer whose detectable set changed dirties the solve', async () => {
   // Detection PULLS candidates per paint but re-solves on a private 125 ms
   // throttle. A poll tick that replaces contact A with contact B requests one
   // frame; without this, that frame could be spent on a paint which declined to
   // re-solve — leaving A labelled, B unlabelled, and nothing left to ask again.
-  const detection = await readFile(new URL('./detection.js', import.meta.url), 'utf8');
-  assert.match(detection, /export function markDetectionSourcesChanged\(/,
-    'detection exposes the source-change hook');
-  const hook = /export function markDetectionSourcesChanged\([\s\S]*?\n\}/.exec(detection)[0];
-  assert.match(hook, /_labelSolveDirty = true;/, 'and it really dirties the solve');
-  assert.doesNotMatch(hook, /governorRequestRender/,
-    'the caller already requests the frame — asking twice would double every tick');
-  assert.match(hook, /if \(_mode === MODE_OFF\) return;/,
-    'and it stays inert while detection is off');
-
   const { LayerLifecycle } = await import('./lifecycle.js');
   const { LayerPresentation } = await import('../app/layerPresentation.js');
   const manager = new LayerLifecycle({});

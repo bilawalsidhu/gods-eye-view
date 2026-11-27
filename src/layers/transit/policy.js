@@ -392,9 +392,7 @@ export function buildTransitSelectionCopy(
   // tell a reader that the dot on Tremont Street is a subway train, and a
   // subway drawn on a street reads as a bug until the card says what it is.
   // An operator's own mode word (feed.modeWords) is a name and stays as is.
-  const kindWord =
-    feed?.modeWords?.[mode]?.word ||
-    t(TRANSIT_MODE_WORD[mode] || TRANSIT_MODE_WORD.unknown);
+  const kindWord = transitModeWord(mode, feed, t);
   const details = [`${kindWord} · ${feed.name} · ${feed.region}`];
   const motion = [];
   // What the SCREEN is doing leads, because that is what the reader can check.
@@ -564,13 +562,13 @@ const TRANSIT_MODE_ABBR = Object.freeze({
  * to the shared table, so an override renames one word and nothing else.
  * @param {string} mode Resolved transit mode.
  * @param {object|null} [feed] Registry entry.
+ * @param {Function} [t] Translator for the shared table's words; an operator's own word stays as is.
  * @returns {string}
  */
-export function transitModeWord(mode, feed = null) {
+export function transitModeWord(mode, feed = null, t = englishText) {
   return (
     feed?.modeWords?.[mode]?.word ||
-    TRANSIT_MODE_WORD[mode] ||
-    TRANSIT_MODE_WORD.unknown
+    t(TRANSIT_MODE_WORD[mode] || TRANSIT_MODE_WORD.unknown)
   );
 }
 

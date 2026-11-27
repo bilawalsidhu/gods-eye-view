@@ -1,7 +1,6 @@
 import '../testSupport/registerDom.mjs';
 import assert from 'node:assert/strict';
 import { assertSameNode } from '../testSupport/domAssert.mjs';
-import fs from 'node:fs';
 import test from 'node:test';
 import { createPinia } from 'pinia';
 import { createApp, nextTick } from 'vue';
@@ -872,13 +871,11 @@ test('a note under SINCE says what date it compares, only while one is given', (
     assert.equal(note().textContent, '(by upload date)');
     await layer.publish(state);
     assert.equal(note().hidden, true);
-    // The panel's own markup has it, read out with the slider.
-    const template = fs.readFileSync(
-      new URL('./views/panels/StreetLevelPanel.vue', import.meta.url),
-      'utf8',
+    // Read out with the slider.
+    assert.equal(
+      dom.root.querySelector('#sl-since').getAttribute('aria-describedby'),
+      'sl-since-label sl-since-note',
     );
-    assert.match(template, /<small id="sl-since-note"[^>]* :hidden="!view/);
-    assert.match(template, /aria-describedby="sl-since-label sl-since-note"/);
   }));
 
 test('Street View lit hides the imagery filters; Mapillary lit shows them', () =>

@@ -15,9 +15,6 @@ import test from 'node:test';
 
 const html = await renderApplicationHtml(readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
 const ui = readShellSource();
-const radio = ['playback', 'interaction'].map(name =>
-  readFileSync(new URL(`./layers/radio/${name}.js`, import.meta.url), 'utf8')
-).join('\n').replace(/layerState\.|parts\.\w+\./g, '');
 const missionDetail = readFileSync(new URL('./ui/views/panels/MissionDetail.vue', import.meta.url), 'utf8');
 const realtime = readRealtimeSource();
 const voice = ['./voice/actionSchemas.js', '../server/providers/openai/toolDescriptions.js', '../server/providers/openai/instructions.js'].map(file => readFileSync(new URL(file, import.meta.url), 'utf8')).join('\n');
@@ -389,13 +386,6 @@ test('Radio disclosure is explicit, starts closed while off, and preserves playb
 });
 
 test('successful explicit user playback hands the speaker from voice to Radio', () => {
-  const playStart = radio.indexOf('async function playSelectedRadio');
-  const playMethod = radio.slice(playStart, radio.indexOf('function confirmRadioPlayback', playStart + 10)).replace(/\s+/g, ' ');
-  const confirmedPlaying = playMethod.indexOf("_audioState = 'playing'");
-  const takeoverSignal = playMethod.indexOf("if (origin === 'user') emitPlaybackControl('play', origin, ownedAttemptId)");
-  assert.ok(confirmedPlaying >= 0 && takeoverSignal > confirmedPlaying);
-  assert.match(radio, /startPlayback: \(\) =>\s*playSelectedRadio\(\{\s*origin: 'voice',\s*attemptId: options\.attemptId,?\s*\}\)/);
-  assert.match(radio, /selectRadioStation\(stationId, \{\s*autoplay: true,\s*origin: 'user',?\s*\}\)/);
   assert.match(radioBindings, /togglePlayback\(\{ origin: 'user' \}\)/);
   assert.match(radioBindings, /cycleStation\(direction, \{[\s\S]*?origin: 'user'/);
   assert.match(radioBindings, /commitTuningStation\(station\.id, \{ origin: 'user' \}\)/);

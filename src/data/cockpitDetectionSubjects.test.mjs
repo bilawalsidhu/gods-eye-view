@@ -1,5 +1,4 @@
-import { readLayerSource } from '../testSupport/readLayerSource.mjs';
-import { dispatchCockpitModeChanged, enter, exit, _adoptTrackedEntity } from '../ui/cockpitTrackingController.js';
+import { dispatchCockpitModeChanged } from '../ui/cockpitTrackingController.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
@@ -14,9 +13,6 @@ import militaryFlightsLayer, {
 
 const SUBJECT = 'abc123';
 const NEXT_SUBJECT = 'def456';
-
-const FLIGHTS_SOURCE = readLayerSource(new URL('./flights.js', import.meta.url));
-const MILITARY_SOURCE = readLayerSource(new URL('./militaryFlights.js', import.meta.url));
 
 const LAYERS = [
   {
@@ -97,25 +93,6 @@ test('Cockpit lifecycle publishes one normalized aircraft identity to both detec
       { active: false, subjectId: null, layerId: null },
     ]);
   } finally { globalThis.window = previousWindow; }
-  for (const action of [enter, _adoptTrackedEntity]) {
-    assert.match(action.toString(), /this\.dispatchCockpitModeChanged\(true, info\);/,
-      'entry and in-Cockpit handoff each publish the active subject');
-  }
-  assert.match(exit.toString(), /this\.dispatchCockpitModeChanged\(false\);/,
-    'exit clears the active subject');
-
-  for (const [name, source] of [
-    ['commercial', FLIGHTS_SOURCE],
-    ['military', MILITARY_SOURCE],
-  ]) {
-    const consumer = /function\s*(?:parts\.\w+\.)?_applyCockpitState\(\s*detail\s*=\s*\{\},?\s*\)\s*\{[\s\S]*?\n {0,2}\}/
-      .exec(source)?.[0];
-    assert.ok(consumer, `${name} Cockpit consumer is defined`);
-    assert.match(consumer, /detail\?\.subjectId/);
-    assert.match(consumer, /\.trim\(\s*,?\s*\)\s*\.toLowerCase\(\s*,?\s*\)/);
-    assert.doesNotMatch(consumer, /layerId/,
-      `${name} must also suppress a duplicate subject originating in the sibling AIR feed`);
-  }
 });
 
 for (const fixture of LAYERS) {

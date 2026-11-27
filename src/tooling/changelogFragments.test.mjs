@@ -81,8 +81,6 @@ test('fragment text is spliced in unchanged, above the existing entries', () => 
     result,
     `# Changelog\n\n${entry}\n\n- An entry that was already released (someone, #1).\n`,
   );
-  // The entry survives byte for byte: drawTool.test.mjs reads this file as
-  // prose and slices a fixed window, so reflowing would move text across it.
   assert.ok(result.includes(entry));
 });
 

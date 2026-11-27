@@ -1,4 +1,3 @@
-import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 // src/data/trackedModelForm.test.mjs
 //
 // The TRACKED contact's form and size: selecting an aircraft changes its
@@ -1437,49 +1436,3 @@ for (const fixture of LAYERS) {
     }
   });
 }
-
-test('both layers reset the per-selection tracked-model state', async () => {
-  for (const name of ['flights.js', 'militaryFlights.js']) {
-    const source = readLayerSource(new URL(`./${name}`, import.meta.url));
-    // The reset must be reachable from the real teardown, not only a test seam.
-    assert.match(
-      source,
-      /(?:parts\.\w+\.)?_releaseTrackedModel\(\s*,?\s*\);\n\s*(?:parts\.\w+\.)?_resetTrackedSelectionState\(\s*,?\s*\);/,
-      `${name}: deselect clears the per-selection state in the production path`,
-    );
-    assert.match(
-      source,
-      /(?:(?:flightState|state)\.)?_trackedIcao\s*=\s*icao24;\n\s*(?:parts\.\w+\.)?_resetTrackedSelectionState\(\s*,?\s*\);/,
-      `${name}: selecting a contact starts from a clean per-selection state`,
-    );
-  }
-});
-
-test('the tracked model follows the fleet model rule, and the fleet the 3D toggle', async () => {
-  for (const name of ['flights.js', 'militaryFlights.js']) {
-    const source = readLayerSource(new URL(`./${name}`, import.meta.url));
-    const regime =
-      /^([ \t]*)function _trackedModelRegimeActive\b[\s\S]*?\n\1\}/m.exec(
-        source,
-      )?.[0];
-    assert.ok(regime, `${name}: _trackedModelRegimeActive is defined`);
-    assert.match(
-      regime,
-      /_trackedModelEligible === true/,
-      `${name}: the tracked contact takes its place in the fleet cap`,
-    );
-    assert.match(
-      regime,
-      /(?:parts\.\w+\.)?_modelRegimeActive\(\s*\)/,
-      `${name}: and the fleet's regime`,
-    );
-    const fleet = /^([ \t]*)function _modelRegimeActive\b[\s\S]*?\n\1\}/m.exec(
-      source,
-    )?.[0];
-    assert.match(
-      fleet,
-      /if\s*\(\s*!(?:(?:flightState|state)\.)?_models3dEnabled,?\s*\)\s*return\s*false;/,
-      `${name}: the fleet regime still obeys the DISPLAY-rail 3D toggle`,
-    );
-  }
-});

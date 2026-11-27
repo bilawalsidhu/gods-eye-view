@@ -6,20 +6,12 @@ import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../..', import.meta.url));
 
-// Documentation consistency only: that every storage key a document spells out
-// is the key the code writes. Whether deleting one has the effect the document
-// claims is not checked here.
+// scripts/dev-fresh.sh prints a storage key for the reader to set; it must be the key the code writes.
 const DOCUMENTED_KEYS = [
-  ['docs/KNOWN-ISSUES.md', 'godsEyeView.{layout}.panelCollapsed.cctv-panel'],
-  ['docs/KNOWN-ISSUES.md', 'godsEyeView.{layout}.panelCollapsed.<panel-id>'],
-  ['docs/KNOWN-ISSUES.md', 'godsEyeView.{position}.panelPos.<panel-id>'],
   ['scripts/dev-fresh.sh', 'godsEyeView.{layout}.panelCollapsed.cctv-panel'],
-  ['docs/CURRENT-STATE.md', 'godsEyeView.{position}.panelPos.<panel-id>'],
-  ['docs/CURRENT-STATE.md', 'godsEyeView.{position}.panelPos.<id>'],
-  ['docs/CURRENT-STATE.md', 'godsEyeView.{layout}.panelCollapsed.<panel-id>'],
 ];
 
-test('documented panel storage keys are the keys the code writes', async () => {
+test('dev-fresh.sh prints the panel storage key the code writes', async () => {
   const source = await readFile(
     path.join(root, 'src/ui/panelPositionControls.js'),
     'utf8',

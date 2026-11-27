@@ -298,6 +298,9 @@ test('the HUD and Sonar controls render what VisualSettings shows', async (t) =>
       true,
       name,
     );
+  // Whole steps, so the browser never snaps an accepted integer away.
+  for (const name of ['rings', 'range', 'intensity', 'opacity', 'sector'])
+    assert.equal($(`cyber-sonar-${name}`).getAttribute('step'), '1', name);
 });
 
 test('Scope and Celestial render what VisualSettings shows', async (t) => {

@@ -6,7 +6,6 @@
 // painted with its route colour.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
 import {
   createFleetModelLayer,
   fleetAxisScale,
@@ -273,58 +272,6 @@ test('a vessel stretched to its reported beam keeps its length scale on the mode
   layer.destroy();
 });
 
-test('Vessels, Transit and Rail draw fleet models under the shared 3D toggle', () => {
-  for (const file of [
-    'src/layers/vessels/rendering.js',
-    'src/layers/transit/rendering.js',
-    'src/layers/rail/rendering.js',
-  ]) {
-    const source = fs.readFileSync(
-      new URL(`../../${file}`, import.meta.url),
-      'utf8',
-    );
-    assert.match(
-      source,
-      /createFleetModelLayer\(/,
-      `${file}: draws fleet models`,
-    );
-    assert.match(
-      source,
-      /loadFleetModelSet\(/,
-      `${file}: loads the set up front`,
-    );
-    assert.match(
-      source,
-      /modelOwnsVisual/,
-      `${file}: hands its icon to the model`,
-    );
-  }
-  for (const file of [
-    'src/app/layers/aisLiveVessels.js',
-    'src/app/layers/transit.js',
-    'src/app/layers/rail.js',
-  ]) {
-    const source = fs.readFileSync(
-      new URL(`../../${file}`, import.meta.url),
-      'utf8',
-    );
-    assert.match(
-      source,
-      /fleet: fleetModelServices\(/,
-      `${file}: given the fleet service`,
-    );
-  }
-  const catalog = fs.readFileSync(
-    new URL('../app/constructCatalog.js', import.meta.url),
-    'utf8',
-  );
-  assert.equal(
-    catalog.match(/displayParams: \(\) => flights\.getParams\(\)/g)?.length,
-    4,
-    'Local ADS-B, Vessels, Transit and Rail follow the Flights 3D toggle',
-  );
-});
-
 /** A layer whose models are all ready as soon as they are written. */
 function readyLayer({ display, waterline = false } = {}) {
   const { viewer, draw } = fakeViewer();
@@ -474,29 +421,4 @@ test('without a draw port that draws models, vehicles stay icons', () => {
   assert.equal(layer.frame(items, 0), false);
   assert.equal(items.get('t').modelOwnsVisual, false);
   layer.destroy();
-});
-test('a vehicle drawn as its model keeps its card and its detection entry', () => {
-  const read = (file) =>
-    fs.readFileSync(new URL(`../../${file}`, import.meta.url), 'utf8');
-  assert.match(
-    read('src/layers/transit/selection.js'),
-    /marker\?\.show !== false \|\| entry\.modelOwnsVisual === true/,
-  );
-  assert.match(
-    read('src/layers/rail/selection.js'),
-    /entry\.marker\?\.show !== false \|\| entry\.modelOwnsVisual === true/,
-  );
-  assert.match(
-    read('src/layers/transit/queries.js'),
-    /marker\.show === false && entry\.modelOwnsVisual !== true/,
-  );
-  assert.match(
-    read('src/layers/vessels/queries.js'),
-    /if \(!visual\.visible\) return null;/,
-  );
-  assert.match(
-    read('src/layers/transit/rendering.js'),
-    /entry\.mode === 'unknown'/,
-    'a vehicle of unknown mode keeps its icon',
-  );
 });

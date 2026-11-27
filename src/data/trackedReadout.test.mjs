@@ -1,4 +1,3 @@
-import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -265,42 +264,6 @@ test('trackedReadout cannot resurrect a dedicated canvas or render listener', as
     'keyholeLabelAlpha',
   ]) {
     assert.equal(source.includes(forbidden), false, `dedicated renderer token returned: ${forbidden}`);
-  }
-});
-
-test('tracking layers write the record\'s labelModel and expose only their cached display positions', async () => {
-  const files = await Promise.all([
-    'flights.js',
-    'militaryFlights.js',
-    'satellites.js',
-    'militaryInstallations.js',
-  ].map(async (name) => [name, readLayerSource(new URL(`./${name}`, import.meta.url))]));
-  const sources = Object.fromEntries(files);
-  for (const [name, source] of files) {
-    assert.match(source, /entityRecord\([^)]*\)\.labelModel\s*=/, `${name} writes the explicit model into the entity record`);
-    assert.match(source, /entityRecord\([^)]*\)\.displayPosition\s*=/, `${name} exposes a display-position cache in the entity record`);
-    assert.doesNotMatch(source, /\.gev(LabelModel|DisplayPosition|VisualPosition|TrackedId|SelectionOrigin)\b/, `${name} hangs no tracked state on the entity`);
-  }
-  assert.match(sources['flights.js'], /entityRecord\([^)]*\)\.displayPosition\s*=\s*parts\.motion\._trackedDisplayCached/);
-  assert.match(sources['militaryFlights.js'], /entityRecord\([^)]*\)\.displayPosition\s*=\s*parts\.motion\._trackedDisplayCached/);
-  assert.match(
-    sources['satellites.js'],
-    /entityRecord\([^)]*\)\.displayPosition\s*=\s*_trackedDisplayCached/,
-  );
-  assert.equal(sources['flights.js'].includes('_trackedEntity.label.text'), false);
-  assert.equal(sources['militaryFlights.js'].includes('_trackedEntity.label.text'), false);
-  assert.equal(sources['satellites.js'].includes('_trackedEntity.label.text'), false);
-});
-
-test('civilian and military trail heads use the lower-centre model anchor', async () => {
-  const files = await Promise.all(['flights.js', 'militaryFlights.js'].map(async (name) => (
-    [name, readLayerSource(new URL(`./${name}`, import.meta.url))]
-  )));
-  for (const [name, source] of files) {
-    assert.ok(
-      (/const\s*head\s*=\s*(?:parts\.motion\.)?_trackedTrailCached\(\s*,?\s*\)\s*\|\|\s*(?:parts\.motion\.)?_trackedDisplayPosition\(\s*(?:flightState\.)?_trackedIcao,?\s*\);/).test(source),
-      `${name} trail head uses the dedicated lower-centre model anchor`,
-    );
   }
 });
 

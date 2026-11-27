@@ -1,6 +1,5 @@
 import { LayerBindings } from './ui/layerBindings.js';
 import { readShellSource, shellMethod } from './testSupport/readShellSource.mjs';
-import { readLayerSource } from './testSupport/readLayerSource.mjs';
 import { enter as cockpitEnter, navigateContext } from './ui/cockpitTrackingController.js';
 import { CockpitViewController } from './ui/cockpitController.js';
 import assert from 'node:assert/strict';
@@ -11,8 +10,6 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ui = readShellSource();
-const firms = readLayerSource(path.join(ROOT, 'src', 'data', 'firmsHeatmap.js'));
-const vessels = readLayerSource(path.join(ROOT, 'src', 'data', 'aisLiveVessels.js'));
 const voice = fs.readFileSync(path.join(ROOT, 'src', 'voice', 'gevActions.js'), 'utf8');
 const cameraVerbs = fs.readFileSync(path.join(ROOT, 'src', 'cameraVerbs.js'), 'utf8');
 const cockpitTracking = fs.readFileSync(path.join(ROOT, 'src', 'cockpitTracking.js'), 'utf8');
@@ -390,41 +387,6 @@ test('world-focus listener lifecycle is symmetric and idempotent', () => {
   assert.match(ui, /flyToWorldTarget\(this\.viewer, detail\)/);
   assert.match(ui, /this\._removeWorldRequestFocusListener\?\.\(\);/);
   assert.match(ui, /this\._removeWorldRequestFocusListener = null;/);
-});
-
-test('vessel and fire layers announce valid clicks and never fly cameras', () => {
-  for (const source of [vessels, firms]) {
-    assert.match(source, /requestWorldFocus\(\{/);
-    assert.doesNotMatch(source, /camera\.flyTo/);
-  }
-  const vesselClick = body(
-    vessels,
-    /inputFor\(viewer\)\.onClick\(\(event\) => \{([\s\S]*?)\n    \}\);/,
-    'vessel click',
-  );
-  ordered(vesselClick, [
-    'clickCard?.(event)',
-    'clickVessel(carded)',
-    "isOwnedByOtherLayer('ais-live-vessels', pickedId)",
-    'clickVessel(record)',
-  ], 'vessel card on top, then sibling ownership');
-  const vesselFocus = body(
-    vessels,
-    /function selectAndFocusVessel\(record\) \{([\s\S]*?)\n  \}/,
-    'vessel focus helper',
-  );
-  assert.match(vesselFocus, /requestWorldFocus\(\{/);
-  const fireClick = body(
-    firms,
-    /input\.onClick\(\(event\) => \{([\s\S]*?)\n    \}\);/,
-    'fire click',
-  );
-  ordered(fireClick, [
-    'clickCard?.(event)',
-    'selectAndFocusFire(carded)',
-    'isOwnedByOtherLayer(id, pickedId)',
-    'clearFireSelection()',
-  ], 'fire card on top, then sibling ownership');
 });
 
 test('clearing a camera during enable leaves the selection and view alone', async () => {

@@ -415,12 +415,11 @@ const OPTION_GROUPS = Object.freeze({
     // materialize once the camera is close enough and only for the nearest
     // contacts in view — so "on" costs nothing at globe scale, and an operator
     // who wants every in-view plane still opts into `all` deliberately.
-    // This default must stay in lockstep with `_models3dEnabled` in BOTH flight
-    // layers, `this._models3dEnabled` in ui.js, and the `active` / `visible`
-    // classes in index.html: the fresh-boot path skips restoration entirely (see
-    // `start()` below), so nothing ever pushes this value into the layers — those
-    // four initializers ARE the agreement, and they are pinned together in
-    // layerState.test.mjs.
+    // This default must match _models3dEnabled/_models3dMode in both flight
+    // layers' state.js and in ui/aircraftDisplay.js. The fresh-boot path skips
+    // restoration entirely (see start() below), so nothing pushes this value
+    // into them. layerState.test.mjs checks the layers against it, and
+    // displayPanel.test.mjs checks the panel.
     //
     // `absentValue: false` is what keeps the flip out of links already in the
     // wild. Schema v2 shipped with OFF as the omitted default, so `v=2&l=f`

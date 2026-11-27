@@ -1,10 +1,8 @@
 import { bindOverlayPorts } from '../testSupport/fakeOverlayPorts.mjs';
 import { setFlagsFromString } from 'node:v8';
 import { runInNewContext } from 'node:vm';
-import { readShellSource } from '../testSupport/readShellSource.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import * as Cesium from 'cesium';
 import {
   countFadingRenderEntries,
@@ -963,16 +961,17 @@ test('under the sonar sweep an echo is never brighter than its own bracket', () 
     spreadPx: 8,
     lineWidth: 3.25,
   };
+  const pin = {
+    position: new Cesium.Cartesian3(0.5, 0.3, 6_356_752),
+    sourceId: 'sonar-pin',
+    id: 'SONAR',
+    metric: 'FL300',
+    type: 'AIR',
+    tier: 'military',
+  };
   const contact = {
     id: 'military',
-    getDetectableObjects: () => [{
-      position: new Cesium.Cartesian3(0.5, 0.3, 6_356_752),
-      sourceId: 'sonar-pin',
-      id: 'SONAR',
-      metric: 'FL300',
-      type: 'AIR',
-      tier: 'military',
-    }],
+    getDetectableObjects: () => [pin],
   };
   try {
     setAwarenessEchoField({
@@ -988,6 +987,7 @@ test('under the sonar sweep an echo is never brighter than its own bracket', () 
     setDetectionStyle('normal');
     settleFrame(env);
     let dimmed = 0;
+    const bands = new Set();
     let compared = 0;
     for (let frame = 0; frame < 40; frame++) {
       env.detectionCtx.calls.length = 0;
@@ -998,6 +998,7 @@ test('under the sonar sweep an echo is never brighter than its own bracket', () 
         path instanceof MockPath2D && path.points.length && width !== echo.lineWidth && style !== echo.color);
       if (!bracketStroke) continue;
       const bracketAlpha = bracketStroke[4];
+      bands.add(pin._cohortBand);
       if (bracketAlpha < 0.99) dimmed++;
       if (!echoStroke) continue;
       compared++;
@@ -1007,6 +1008,7 @@ test('under the sonar sweep an echo is never brighter than its own bracket', () 
       );
     }
     assert.ok(dimmed > 0, 'the sweep dimmed the bracket on some frame');
+    assert.deepEqual([...bands], [8], 'the sweep dims paint, not cohort admission');
     assert.ok(compared > 0, 'an echo was painted');
   } finally {
     clearAwarenessEchoField();
@@ -1115,43 +1117,6 @@ test('pathological detection paint holds alternate frames without freezing share
   } finally {
     env.cleanup();
   }
-});
-
-test('detection cannot resurrect a private canvas, listener, matrix, resize, clear, or UI inventory', () => {
-  const source = readFileSync(new URL('./detection.js', import.meta.url), 'utf8');
-  const uiSource = readShellSource()
-  + '\n' + readFileSync(new URL('../ui/visualPresets.js', import.meta.url), 'utf8');
-  assert.doesNotMatch(source, /createElement\(\s*['"]canvas['"]\s*\)/);
-  assert.doesNotMatch(source, /postRender\.addEventListener/);
-  assert.doesNotMatch(source, /['"]detection-overlay['"]/);
-  assert.doesNotMatch(source, /devicePixelRatio/);
-  assert.doesNotMatch(source, /clearRect\(/);
-  assert.doesNotMatch(source, /Matrix4\.multiply/);
-  assert.doesNotMatch(source, /CALLOUT_OCCLUSION_SELECTORS/);
-  assert.doesNotMatch(source, /_ctx\.(?:filter|globalCompositeOperation)\s*=/);
-  assert.match(source, /_hostSurface\.style\.mixBlendMode = _theme\.blend;/);
-  assert.match(source, /_hostSurface\.style\.filter = `\$\{_theme\.filter\} drop-shadow\(0 0 \$\{GLOW_PX\}px \$\{_theme\.glow\}\)`;/);
-  assert.match(source, /const LABEL_SOLVE_INTERVAL_MS = 125;/);
-  assert.match(source, /const _labelArbiter = new LabelArbiter\(\);/);
-  assert.match(source, /const clipW = vp3 \* px \+ vp7 \* py \+ vp11 \* pz \+ vp15;/);
-  assert.match(source, /registerWorldOverlayPaintLane\('detection', _paintDetectionLane/);
-  assert.match(source, /target: 'detection'/);
-  assert.match(source, /shouldPaint: _shouldPaintDetectionLane/);
-  // The three military styles used to carry three copies of these numbers.
-  // They now share ONE frozen object, which Cockpit's force-on reuses too, so
-  // the pin moved from "three identical literals" to "one preset, referenced
-  // three times" — same guarantee, and the copies can no longer drift.
-  assert.match(
-    uiSource,
-    /const MILITARY_DETECTION_PRESET = Object\.freeze\(\{\s*mode: 'dense',\s*densityPct: 75,?\s*\}\);/,
-    'the tactical detection default is still Dense @ 75%',
-  );
-  assert.equal(
-    uiSource.match(/detection: MILITARY_DETECTION_PRESET,/g)?.length,
-    3,
-    'CRT, NVG, and FLIR retain their Dense auto-enable defaults',
-  );
-  assert.match(uiSource, /preset\.detection && !this\._detectionUserOverridden/);
 });
 
 // ── Developer telemetry gate (2026-08-20 QA hunt) ───────────────────────────

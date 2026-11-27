@@ -221,3 +221,11 @@ test('repeated collection with nothing moved hands back the same array, objects 
   assert.equal(f.queries.getDetectableObjects(), first);
   assert.equal(first.length, 0);
 });
+
+test('hasContact declines while the contact icons are hidden, whatever they still hold', () => {
+  const { flightState, queries } = fixture();
+  flightState._icons = { show: true, count: 1, has: (id) => id === 'abc123' };
+  assert.equal(queries.hasContact('abc123'), true);
+  flightState._icons.show = false;
+  assert.equal(queries.hasContact('abc123'), null);
+});

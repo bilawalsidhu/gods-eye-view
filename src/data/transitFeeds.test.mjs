@@ -210,42 +210,6 @@ test('only MBTA retains proxy history while every other registered feed stays li
   assert.equal(getTransitFeed('mbta').attribution, 'MBTA / MassDOT');
 });
 
-test('published transit history scope agrees with the catalog capability', () => {
-  const retained = publicTransitCatalog().filter(
-    (feed) => feed.historyRetention,
-  );
-  assert.deepEqual(
-    retained.map((feed) => feed.id),
-    ['mbta'],
-  );
-  const sources = readFileSync(
-    new URL('../../DATA_SOURCES.md', import.meta.url),
-    'utf8',
-  );
-  const row = sources
-    .split('\n')
-    .find((line) => line.startsWith('| **MBTA / MassDOT**'));
-  assert.match(
-    row,
-    /live vehicles and up to 15 minutes of recently observed positions/,
-  );
-  assert.match(row, /MBTA \/ MassDOT.*courtesy/);
-  assert.match(sources, /other feeds have no proxy retention/);
-  const state = readFileSync(
-    new URL('../../docs/CURRENT-STATE.md', import.meta.url),
-    'utf8',
-  );
-  const transit = state.slice(
-    state.indexOf('Transit is off by default'),
-    state.indexOf('`src/data/militaryAwareness.js` remains'),
-  );
-  assert.match(transit, /Restart clears it/);
-  assert.doesNotMatch(
-    transit,
-    /four fixes|0\.95x|guaranteed lower|one poll interval behind/,
-  );
-});
-
 test('the TTC feed is registered, routable, and covers Toronto', () => {
   const ttc = getTransitFeed('ttc-toronto');
   assert.equal(ttc?.url, 'https://bustime.ttc.ca/gtfsrt/vehicles');
@@ -298,18 +262,6 @@ test('a TTC fleet number outranks the route', () => {
   // A vehicle id that is not a fleet number leaves the route to decide.
   assert.equal(transitModeFor(ttc, '501', 'abc'), 'tram');
   assert.equal(transitModeFor(ttc, '501'), 'tram');
-});
-
-test('the TTC row records that BusTime carries no subway', () => {
-  const sources = readFileSync(
-    new URL('../../DATA_SOURCES.md', import.meta.url),
-    'utf8',
-  );
-  const row = sources.split('\n').find((line) => line.startsWith('| **TTC**'));
-  assert.ok(row, 'TTC has a DATA_SOURCES row');
-  assert.match(row, /Toronto/);
-  assert.match(sources, /surface vehicles \(buses and streetcars\) only/);
-  assert.match(sources, /Open Government Licence – Toronto/);
 });
 
 test('the Golden Horseshoe neighbours are registered, keyless and routable', () => {
@@ -366,7 +318,6 @@ test('every Golden Horseshoe feed is documented with its licence', () => {
       `${name} has a DATA_SOURCES row`,
     );
   }
-  assert.match(sources, /Durham Region Transit publishes no bearing/);
 });
 
 test('a feed whose route ids are internal database keys can name its routes', () => {

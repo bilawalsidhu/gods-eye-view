@@ -10,10 +10,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
  * flight no longer write into the same few lines at the top of one file. A
  * release splices the fragments in and empties the directory.
  *
- * Fragment text is copied through unchanged apart from trailing whitespace:
- * `src/annotations/drawTool.test.mjs` reads `CHANGELOG.md` as prose and slices a
- * fixed window after a heading, so reflowing an entry here could move text
- * across that window.
+ * Fragment text is copied through unchanged apart from trailing whitespace.
  *
  * A write is staged so that a failure at any point leaves a rerun unable to
  * duplicate or lose an entry. The assembled file is written into

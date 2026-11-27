@@ -27,7 +27,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TESTS = [
   'src/firstRunExperience.test.mjs',
-  'src/standalone/startupChrome.test.mjs',
+  'src/app/startupChrome.test.mjs',
   'src/firstRunLauncherView.test.mjs',
 ];
 

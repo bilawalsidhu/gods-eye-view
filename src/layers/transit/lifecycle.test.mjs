@@ -16,10 +16,8 @@ import { FLOOR_WARM_PER_POLL } from './policy.js';
 import { fleetModelFakes } from '../../testSupport/fleetModelFakes.mjs';
 import { layerPlacement } from '../../data/placementProvider.js';
 import { PLACED_WAKE_MS } from './movement.js';
-import {
-  FUTURE_STAMP_TOLERANCE_MS,
-  ORDER_REJECTS_BEFORE_RESET,
-} from './ingestion.js';
+import { FUTURE_STAMP_TOLERANCE_MS } from './ingestion.js';
+import { ORDER_REJECTS_BEFORE_RESET } from '../../data/contactPlayback.js';
 
 /**
  * Fixes in these tests are AGE_MS old when they arrive, which makes the lag
@@ -45,7 +43,6 @@ import {
 } from '../../renderGovernor.js';
 import { fakeInput } from '../../input/testDoubles.mjs';
 import { setClickCardHitTest } from '../../data/pickRegistry.js';
-import { fakeCameraPort } from '../../testSupport/fakeCameraPort.mjs';
 import { fakeDrawPort } from '../../testSupport/fakeDrawPort.mjs';
 import { bindRenderer, rendererOf } from '../../render/rendererOf.js';
 import { fakeSceneQuery } from '../../testSupport/fakeCesiumScene.mjs';
@@ -4213,135 +4210,6 @@ test('reject then selected history backfill cannot resurrect a 111 km displaceme
   assert.equal(entry.track.resets, 0);
 });
 
-test('the actual Transit lifecycle keeps exactly its own camera listener in every enable/disable order, Traffic and Bikeshare among them', async (t) => {
-  const { createLifecycle: trafficLifecycle } =
-    await import('../traffic/lifecycle.js');
-  const { createLifecycle: bikeLifecycle } =
-    await import('../bikeshare/lifecycle.js');
-  const app = harness(t);
-  const noop = () => {};
-  const traffic = trafficLifecycle({
-    state: { _pointCollection: {}, _loadGeneration: 0 },
-    services: {
-      render: { holdContinuousRender: noop, releaseContinuousRender: noop },
-    },
-    source: {},
-    parts: {
-      flow: { ensureFlowStatus: noop },
-      animation: { animate: noop, clearDots: noop, syncRenderDemand: noop },
-      viewport: { onCameraChanged: noop },
-      ingestion: { cancelActiveFetch: noop },
-    },
-  }).methods;
-  const bike = bikeLifecycle({
-    state: {
-      _stationSet: {},
-      _overlayHost: { setVisible: noop },
-      _cityRuntime: new Map(),
-      _failedCityIds: new Set(),
-    },
-    services: {
-      sprites: { spriteDrawOrder },
-      picking: { registerPickOwner: noop, unregisterPickOwner: noop },
-    },
-    source: {},
-    parts: {
-      selection: {
-        _installClickHandler: noop,
-        _clearSelection: noop,
-        _onKeyDown: noop,
-      },
-      viewport: {
-        onCameraChanged: noop,
-        runProximityCheck: noop,
-        deactivateAllCities: noop,
-        showCoverage: noop,
-      },
-      ingestion: { abortAllInFlight: noop },
-    },
-  }).methods;
-  app.viewer.camera.moveEnd = new Cesium.Event();
-  // Bikeshare listens through its renderer's camera port, at its own
-  // threshold: it takes no claim on the shared camera's sensitivity.
-  const bikeCamera = fakeCameraPort();
-  const bikeViewer = {};
-  const unbindBike = bindRenderer(bikeViewer, { camera: bikeCamera.port });
-  t.after(unbindBike);
-  // So does traffic, which animates on its renderer's frame port.
-  const trafficCamera = fakeCameraPort();
-  const trafficViewer = {};
-  const trafficFrames = new Set();
-  const unbindTraffic = bindRenderer(trafficViewer, {
-    camera: trafficCamera.port,
-    frame: {
-      on(_phase, cb) {
-        trafficFrames.add(cb);
-        return () => trafficFrames.delete(cb);
-      },
-      requestRender: noop,
-    },
-  });
-  t.after(unbindTraffic);
-  const layers = {
-    traffic: {
-      enable: () => traffic.enable(trafficViewer),
-      disable: () => traffic.disable(trafficViewer),
-    },
-    bikeshare: {
-      enable: () => bike.enable(bikeViewer),
-      disable: () => bike.disable(bikeViewer),
-    },
-    transit: app.layer,
-  };
-  // Only transit listens on this viewer's camera port.
-  const claimants = new Set(['transit']);
-  const orders = [
-    ['traffic', 'bikeshare', 'transit'],
-    ['traffic', 'transit', 'bikeshare'],
-    ['bikeshare', 'traffic', 'transit'],
-    ['bikeshare', 'transit', 'traffic'],
-    ['transit', 'traffic', 'bikeshare'],
-    ['transit', 'bikeshare', 'traffic'],
-  ];
-  try {
-    for (const enable of orders)
-      for (const disable of orders) {
-        const active = new Set();
-        for (const id of enable) {
-          layers[id].enable(app.viewer);
-          if (claimants.has(id)) active.add(id);
-          if (id === 'bikeshare')
-            assert.equal(bikeCamera.listenerCount('changed'), 1);
-          if (id === 'traffic') {
-            assert.equal(trafficCamera.listenerCount('changed'), 1);
-            assert.equal(trafficFrames.size, 1);
-          }
-          assert.deepEqual(
-            app.cameraThresholds(),
-            active.has('transit') ? [0.05] : [],
-          );
-          assert.equal(app.viewer.camera.percentageChanged, 0.5);
-        }
-        for (const id of disable) {
-          layers[id].disable(app.viewer);
-          active.delete(id);
-          assert.deepEqual(
-            app.cameraThresholds(),
-            active.has('transit') ? [0.05] : [],
-            `${enable} / ${disable} after ${id}`,
-          );
-          assert.equal(app.viewer.camera.percentageChanged, 0.5);
-        }
-        assert.equal(bikeCamera.listenerCount('changed'), 0);
-        assert.equal(trafficCamera.listenerCount('changed'), 0);
-        assert.equal(trafficCamera.listenerCount('moveEnd'), 0);
-        assert.equal(trafficFrames.size, 0);
-      }
-  } finally {
-    for (const layer of Object.values(layers)) layer.disable(app.viewer);
-  }
-});
-
 test('moving and stationary transit draw next to each other, above CCTV and Bikeshare and under flights', (t) => {
   const app = harness(t);
   app.layer.enable(app.viewer);
@@ -4844,6 +4712,12 @@ test('a held vehicle draws no 3D model either; let go, its model draws again', a
   assert.equal(models.drawn(key).length, 1, 'near the camera: its model');
   assert.equal(entry.modelOwnsVisual, true);
   assert.equal(entry.marker.show, false, 'its icon hands over');
+  assert.ok(
+    app.layer
+      .getDetectableObjects({ maxCount: 10, seed: 0 })
+      .some((contact) => contact.sourceId === key),
+    'drawn as its model, it keeps its detection entry',
+  );
 
   assert.equal(app.layer.setCockpitSubject(key), true);
   app.frame();

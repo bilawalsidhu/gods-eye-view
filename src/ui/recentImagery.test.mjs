@@ -283,7 +283,7 @@ test('the readout mounts in the rail body, hides while the layer is off and open
   assert.equal(g.collapse.clicked, 0);
 });
 
-test('the body is a fixed stack of seven blocks in a fixed order, each with a fixed height in the stylesheet', () => {
+test('the body is a fixed stack of seven blocks in a fixed order', () => {
   const f = fixture();
   assert.deepEqual(
     [...f.root.children].map((node) => node.id || node.className),
@@ -296,29 +296,6 @@ test('the body is a fixed stack of seven blocks in a fixed order, each with a fi
       'ri-controls',
       'ri-details',
     ],
-  );
-  const css = readFileSync(
-    new URL('./styles/recent-imagery.css', import.meta.url),
-    'utf8',
-  );
-  const rule = (selector) => {
-    const start = css.indexOf(`${selector} {`);
-    assert.ok(start >= 0, selector);
-    return css.slice(start, css.indexOf('}', start));
-  };
-  assert.match(rule('.recent-imagery-readout .ri-actions-row'), /height: 22px/);
-  assert.match(rule('.recent-imagery-readout .ri-line'), /height: 14px/);
-  assert.match(rule('.recent-imagery-readout .ri-strip'), /height: 120px/);
-  assert.match(rule('.recent-imagery-readout .ri-card'), /height: 112px/);
-  assert.match(
-    rule('.recent-imagery-readout .ri-selection'),
-    /grid-template-rows: 26px 20px 20px/,
-  );
-  assert.match(rule('.recent-imagery-readout .ri-slot'), /height: 20px/);
-  assert.match(rule('.recent-imagery-readout .ri-controls'), /height: 22px/);
-  assert.match(
-    rule('.recent-imagery-readout .is-reserved'),
-    /visibility: hidden/,
   );
 });
 

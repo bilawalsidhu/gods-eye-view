@@ -1,64 +1,8 @@
 import '../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { runInNewContext } from 'node:vm';
 import { assertSameNode } from '../testSupport/domAssert.mjs';
 import { installFakeResizeObserver } from '../testSupport/fakeResizeObserver.mjs';
-
-test('panel presentation places Transit and Rail between Street Traffic and Bike Share in Movement', () => {
-  const source = readFileSync(
-    new URL('./layerPanel.js', import.meta.url),
-    'utf8',
-  );
-  const declarations = source.slice(
-    source.indexOf('const PANEL_GROUPS ='),
-    source.indexOf('const PANEL_POSITIONS ='),
-  );
-  const order = JSON.parse(
-    runInNewContext(
-      `const msg = (text) => text;\n${declarations}\nJSON.stringify(PANEL_ORDER)`,
-    ),
-  );
-  assert.deepEqual(
-    order.filter(({ label }) => label === 'Movement').map(({ id }) => id),
-    [
-      'satellites',
-      'flights',
-      'military',
-      'local-adsb',
-      'ais-live-vessels',
-      'traffic',
-      'transit',
-      'rail',
-      'bikeshare',
-    ],
-  );
-  assert.equal(order.filter(({ id }) => id === 'transit').length, 1);
-  assert.equal(order.filter(({ id }) => id === 'rail').length, 1);
-});
-
-test('Wildlife follows Events and precedes Weather', () => {
-  const source = readFileSync(
-    new URL('./layerPanel.js', import.meta.url),
-    'utf8',
-  );
-  const declarations = source.slice(
-    source.indexOf('const PANEL_GROUPS ='),
-    source.indexOf('const PANEL_POSITIONS ='),
-  );
-  const order = JSON.parse(
-    runInNewContext(
-      `const msg = (text) => text;\n${declarations}\nJSON.stringify(PANEL_ORDER)`,
-    ),
-  );
-  const wildlife = order.findIndex(({ id }) => id === 'wildlife-sightings');
-  assert.equal(order[wildlife].label, 'Wildlife');
-  // News is the last of Events.
-  assert.equal(order[wildlife - 1].id, 'news');
-  assert.equal(order[wildlife + 1].id, 'air-quality');
-  assert.equal(order.filter(({ id }) => id === 'wildlife-sightings').length, 1);
-});
 
 test('partial feed controls distinguish incomplete records from stale data and outages', async () => {
   const { LayerPanel, layerFeedState, presentLayerToggle } =

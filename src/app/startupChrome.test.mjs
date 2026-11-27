@@ -1,14 +1,8 @@
-import test from 'node:test';
+import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import vm from 'node:vm';
+import { startApplicationChrome } from './startupChrome.js';
 
-const source = readFileSync(
-  new URL('../app/startupChrome.js', import.meta.url),
-  'utf8',
-)
-  .replace(/^import .*;\n/gm, '')
-  .replace('export function', 'function');
+test.afterEach(() => mock.restoreAll());
 
 function fixture({
   playOpening,
@@ -22,26 +16,14 @@ function fixture({
   let restored;
   let nextTimer = 0;
   const controller = new AbortController();
-  const context = {
-    console,
-    setTimeout(fn, delay) {
-      const id = ++nextTimer;
-      timers.set(id, { fn, delay });
-      return id;
-    },
-    clearTimeout(id) {
-      timers.delete(id);
-    },
-    initFirstRunExperience() {
-      events.push('welcome');
-      return { destroy: () => events.push('welcome:destroy') };
-    },
-    async initKeySetup() {
-      return { destroy: () => events.push('settings:destroy') };
-    },
-  };
-  vm.createContext(context);
-  vm.runInContext(source, context);
+  mock.method(globalThis, 'setTimeout', (fn, delay) => {
+    const id = ++nextTimer;
+    timers.set(id, { fn, delay });
+    return id;
+  });
+  mock.method(globalThis, 'clearTimeout', (id) => {
+    timers.delete(id);
+  });
   const styleManager = {
     _navigationGeneration: navigationGeneration,
     hasShareState,
@@ -51,8 +33,14 @@ function fixture({
       restored = resolve;
     }),
   };
-  const stop = context.startApplicationChrome({
-    initializeSettings: context.initKeySetup,
+  const stop = startApplicationChrome({
+    initializeWelcome() {
+      events.push('welcome');
+      return { destroy: () => events.push('welcome:destroy') };
+    },
+    async initializeSettings() {
+      return { destroy: () => events.push('settings:destroy') };
+    },
     loadingScreen: {
       classList: { add: (value) => events.push(value) },
       addEventListener: (type, listener) => listeners.set(type, listener),

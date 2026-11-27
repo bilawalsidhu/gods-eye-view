@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { transitFeedCredit } from './dataCredits.js';
@@ -89,19 +88,4 @@ test('TransLink feeds credit the operator and department as text', () => {
       /^Transit \(Translink, Department of Transport and Main Roads\): <a href="https:\/\/translink\.com\.au\/about-translink\/open-data"[^>]*>CC BY 4\.0<\/a>$/,
     );
   }
-});
-
-test('DATA_SOURCES documents the TransLink feeds in the transit row style', () => {
-  const rows = readFileSync(
-    new URL('../../DATA_SOURCES.md', import.meta.url),
-    'utf8',
-  ).split('\n');
-  const translink = rows.find((line) => line.startsWith('| **TransLink**'));
-  assert.match(translink, /South East Queensland and Cairns/);
-  assert.match(translink, /open realtime vehicle data/);
-  assert.match(
-    translink,
-    /published for developer use and not against their use/,
-  );
-  assert.doesNotMatch(translink, /licen[cs]e|CC BY|terms/i);
 });

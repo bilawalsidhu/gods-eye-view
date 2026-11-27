@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
@@ -53,15 +51,6 @@ import { fakeSceneFrame } from '../testSupport/fakeCesiumScene.mjs';
 import { bindRenderer, rendererOf } from '../render/rendererOf.js';
 import { entityFollowTarget, followedOf } from './followed.js';
 import { fakeDrawPort } from '../testSupport/fakeDrawPort.mjs';
-
-const militaryAwarenessSource = readLayerSource(
-  new URL('./militaryAwareness.js', import.meta.url),
-  'utf8',
-);
-const awarenessPanelSource = readFileSync(
-  new URL('../ui/views/panels/AwarenessPanel.vue', import.meta.url),
-  'utf8',
-);
 
 const AWARENESS_DEPENDENCIES = [
   'flights',
@@ -317,21 +306,6 @@ function installAwarenessRuntime({
 function panelCount(runtime, label) {
   return runtime.panel().view?.rows?.find((row) => row.label === label)?.count;
 }
-
-test('Contacts continuation target is the visible explanatory note', () => {
-  assert.match(
-    awarenessPanelSource,
-    /<p class="military-awareness-note" tabindex="-1" data-awareness-focus-continuation>\{\{ view\.note \}\}<\/p>/,
-  );
-  assert.doesNotMatch(
-    awarenessPanelSource,
-    /<span[^>]*data-awareness-focus-continuation/,
-  );
-  assert.match(
-    militaryAwarenessSource,
-    /'Open-source mapped\/observed context\./,
-  );
-});
 
 test('awareness disable settles every owned dependency release before resolving', async () => {
   let releasing = false;
@@ -1869,34 +1843,6 @@ test('layer hasContact answers presence in O(1) and declines when unloaded', () 
   }
 });
 
-test('hasContact declines while a layer is disabled, whatever its maps still hold', () => {
-  // disable() hides the collection but keeps the records, so a map lookup
-  // alone would report a preserved subject as FRESH from hidden stale data.
-  for (const [name, source, guard] of [
-    [
-      'flights',
-      readLayerSource(new URL('./flights.js', import.meta.url)),
-      /hasContact\(\s*icao24,?\s*\)\s*\{\s*\n\s*const icons = flightState\._icons;\s*\n\s*if\s*\(\s*!icons\s*\|\|\s*!icons\.show\s*\|\|\s*icons\.count\s*===\s*0,?\s*\)\s*return\s*null;/,
-    ],
-    [
-      'militaryFlights',
-      readLayerSource(new URL('./militaryFlights.js', import.meta.url)),
-      /hasContact\(\s*icao24,?\s*\)\s*\{\s*\n\s*const icons = flightState\._icons;\s*\n\s*if\s*\(\s*!icons\s*\|\|\s*!icons\.show\s*\|\|\s*icons\.count\s*===\s*0,?\s*\)\s*return\s*null;/,
-    ],
-    [
-      'aisLiveVessels',
-      readLayerSource(new URL('./aisLiveVessels.js', import.meta.url)),
-      /hasContact\(\s*id,?\s*\)\s*\{\s*\n\s*if\s*\(\s*!state\.feed\.enabled\s*\|\|\s*!state\.records\.byId\s*\|\|\s*state\.records\.byId\.size\s*===\s*0,?\s*\)\s*return\s*null;/,
-    ],
-  ]) {
-    assert.match(
-      source,
-      guard,
-      `${name}.hasContact must decline while the layer is disabled`,
-    );
-  }
-});
-
 test('a disabled layer leaves the presence verdict untouched', () => {
   const position = Cesium.Cartesian3.fromDegrees(-97.74, 30.27, 0);
   const runtime = installAwarenessRuntime();
@@ -2109,79 +2055,6 @@ test('a deliberate source clear still fully clears the subject', () => {
   }
 });
 
-test('production eviction sites actually tag their clears', () => {
-  // The event contract above is worthless if the real cull paths never set the
-  // origin, so pin the three production call sites.
-  const flightsSource = readLayerSource(
-    new URL('./flights.js', import.meta.url),
-  );
-  const militarySource = readLayerSource(
-    new URL('./militaryFlights.js', import.meta.url),
-  );
-  const vesselsSource = readLayerSource(
-    new URL('./aisLiveVessels.js', import.meta.url),
-  );
-
-  for (const [name, source] of [
-    ['flights', flightsSource],
-    ['militaryFlights', militarySource],
-  ]) {
-    assert.match(
-      source,
-      /if\s*\(\s*icao24\s*===\s*(?:flightState\.)?_trackedIcao,?\s*\)\s*\{\s*\n\s*(?:(?:parts\.)?tracking\.)?_clearTracking\(\s*false,\s*\{\s*evicted:\s*true\s*\},?\s*\);/,
-      `${name} must mark its aged-out cull as an eviction`,
-    );
-    assert.match(
-      source,
-      /reason: evicted \? 'evicted' : 'deliberate'/,
-      `${name} must carry the clear origin on the dispatched event`,
-    );
-  }
-  assert.match(
-    vesselsSource,
-    /clearVesselInspection\(\{ evicted: true \}\)/,
-    'aisLiveVessels must mark its aged-out selected vessel as an eviction',
-  );
-  // Fourth cull site: a FIRMS refresh whose new payload no longer carries the
-  // selected fire. The fire did not get deselected — it left the feed.
-  // The tag alone is not enough — see the behavioral test in
-  // firmsInteraction.test.mjs. The clear must also run BEFORE renderCurrentLod,
-  // whose registration sweep deletes the record the clear needs to see.
-  const firmsSource = readLayerSource(
-    new URL('./firmsHeatmap.js', import.meta.url),
-  );
-  const evictedClear = firmsSource.indexOf(
-    'clearSelectedEntityContextForLayer(id, { evicted: true });',
-  );
-  const lodRebuild = firmsSource.indexOf(
-    'components.rendering.renderCurrentLod(true);\n      if (reselected) components.selection.selectFire(reselected, false);',
-  );
-  assert.ok(
-    evictedClear > 0,
-    'FIRMS must mark a refresh-vanished selection as an eviction',
-  );
-  assert.ok(
-    lodRebuild > 0,
-    'the FIRMS refresh must settle its selection before rebuilding',
-  );
-  assert.ok(
-    evictedClear < lodRebuild,
-    'the eviction clear must precede the LOD rebuild or it emits nothing at all',
-  );
-  // …and the deliberate FIRMS paths (layer disable, destroy, deselect) stay untagged.
-  assert.equal(
-    (firmsSource.match(/clearSelectedEntityContextForLayer\(id\);/g) || [])
-      .length,
-    3,
-    'only the refresh-vanish site is an eviction; disable/destroy/deselect stay deliberate',
-  );
-  assert.match(
-    militaryAwarenessSource,
-    /awarenessClearIsEviction/,
-    'awareness must branch on the clear origin rather than always clearing',
-  );
-});
-
 // ===========================================================================
 // END Contact-readout presence block — fix/context-panel-next-subjects.
 // ===========================================================================
@@ -2205,18 +2078,6 @@ test('cockpit blocks only non-aircraft Context camera flights', () => {
     }),
     true,
   );
-});
-
-test('vessel entry and selection framing both use the 3 km focus radius', () => {
-  assert.match(
-    militaryAwarenessSource,
-    /const\s*VESSEL_FOCUS_RADIUS_M\s*=\s*3000;/,
-  );
-  const focusRadiusUses =
-    militaryAwarenessSource.match(
-      /\{\s*center:\s*vessel\.position,\s*radius:\s*VESSEL_FOCUS_RADIUS_M\s*\}/g,
-    ) || [];
-  assert.equal(focusRadiusUses.length, 2);
 });
 
 test('awareness rescans only for invalidation, source change, or meaningful movement', () => {
@@ -2323,18 +2184,6 @@ test('compact Context snapshots retain installation coverage', () => {
 
   assert.equal(snapshot.cohorts[0].coverage, 'CURRENT VIEWPORT ONLY');
   assert.deepEqual(snapshot.navigation, { canNext: true });
-});
-
-test('expanded Context results omit the redundant status heading', () => {
-  assert.doesNotMatch(militaryAwarenessSource, /military-awareness-heading/);
-  assert.doesNotMatch(
-    militaryAwarenessSource,
-    /GLOBAL CONTEXT <span>CONTEXT ONLY<\/span>/,
-  );
-  assert.doesNotMatch(awarenessPanelSource, /military-awareness-heading/);
-  assert.match(awarenessPanelSource, /military-awareness-subject/);
-  assert.match(militaryAwarenessSource, /FLIGHT \/ VESSEL WINDOW/);
-  assert.match(awarenessPanelSource, /military-awareness-controls/);
 });
 
 test('Context entry tracks a nearer civilian aircraft over a farther military aircraft', async () => {

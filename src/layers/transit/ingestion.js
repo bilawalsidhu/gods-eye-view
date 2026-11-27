@@ -34,12 +34,6 @@ import {
  * the honest bound.
  */
 export const FUTURE_STAMP_TOLERANCE_MS = 10_000;
-/**
- * Consecutive out-of-order refusals after which the history is reset to the
- * incoming fix. A feed whose clock was corrected backwards would otherwise be
- * refused until real time caught up with its old mistake.
- */
-export const ORDER_REJECTS_BEFORE_RESET = 3;
 
 /**
  * Fetching feeds through the proxy and turning snapshots into rendered points.
