@@ -18,8 +18,9 @@ const flushers = new Map();
  * Call `flush` whenever `panel` is shown.
  * @param {Element | null | undefined} panel The panel's root (`[data-panel-id]`).
  * @param {(options: { displayedOnly: boolean }) => void} flush Repaints what
- *   the surface owes, with `displayedOnly` only what has a layout box now;
- *   cheap when nothing is owed.
+ *   the surface owes inside `panel`, the panel being shown; with
+ *   `displayedOnly` only what has a layout box now. Cheap when nothing is
+ *   owed.
  * @returns {() => void} Stops calling it.
  */
 export function onPanelOpening(panel, flush) {
@@ -53,9 +54,14 @@ export function flushPanelContent(panel, { displayedOnly = false } = {}) {
   }
 }
 
-/** Repaint now whatever every panel's surfaces owe. */
+/**
+ * Repaint now whatever every panel that is not collapsed owes: a change of
+ * mode shows panels but never opens a collapsed one, which repaints when it
+ * is opened.
+ */
 export function flushAllPanelContent() {
-  for (const panel of [...flushers.keys()]) flushPanelContent(panel);
+  for (const panel of [...flushers.keys()])
+    if (!panel.classList?.contains('collapsed')) flushPanelContent(panel);
 }
 
 /** Repaint now what every panel's surfaces owe and have a layout box for. */

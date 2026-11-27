@@ -317,7 +317,8 @@ export class LayerPanel {
     this._openingRemovers = [];
     /** @type {Map<HTMLElement, string | null>} the rows each list shows */
     this._paintedRows = new Map();
-    this._rowsOwed = false;
+    // Row lists a refresh skipped while they were not displayed.
+    this._owedLists = new Set();
   }
   mount(container) {
     if (this._destroyed) return;
@@ -393,7 +394,7 @@ export class LayerPanel {
       this._displayWatches.set(
         element,
         watchDisplayed(element, () => {
-          if (this._rowsOwed && !this._destroyed)
+          if (this._owedLists.has(element) && !this._destroyed)
             this._paint({ whileShown: true });
         }),
       );
@@ -401,7 +402,9 @@ export class LayerPanel {
       if (panel && !panels.has(panel)) {
         panels.add(panel);
         this._openingRemovers.push(
-          onPanelOpening(panel, (options) => this.flushOwedRows(options)),
+          onPanelOpening(panel, (options) =>
+            this.flushOwedRows({ ...options, panel }),
+          ),
         );
       }
     }
@@ -414,20 +417,24 @@ export class LayerPanel {
   /**
    * Paint now the rows a refresh skipped while their panel was not displayed.
    * Whatever shows a panel calls this first (see `rail/panelContent.js`); a
-   * no-op when nothing is owed. With `displayedOnly`, only lists that have a
-   * layout box now are painted and the others stay owed.
-   * @param {{ displayedOnly?: boolean }} [options]
+   * no-op when no list concerned is owed. Only the owed lists inside `panel`
+   * are painted, or with `displayedOnly` only the owed lists that have a
+   * layout box now; the others stay owed.
+   * @param {{ displayedOnly?: boolean, panel?: Element | null }} [options]
    */
-  flushOwedRows({ displayedOnly = false } = {}) {
-    if (!this._rowsOwed || this._destroyed) return;
-    const shown = [...this._displayWatches].filter(
-      ([element]) => !displayedOnly || element.getClientRects?.().length > 0,
+  flushOwedRows({ displayedOnly = false, panel = null } = {}) {
+    if (this._owedLists.size === 0 || this._destroyed) return;
+    const shown = [...this._owedLists].filter((element) =>
+      displayedOnly
+        ? element.getClientRects?.().length > 0
+        : !panel || panel.contains(element),
     );
-    if (displayedOnly && shown.length === 0) return;
-    // The lists are being shown: a refresh before the observer's next report
-    // paints them rather than owing them again.
-    for (const [, watch] of shown) watch.assumeShown();
-    this._paint({ whileShown: displayedOnly });
+    if (shown.length === 0) return;
+    // These lists are being shown: a refresh before the observer's next
+    // report paints them rather than owing them again.
+    for (const element of shown)
+      this._displayWatches.get(element)?.assumeShown();
+    this._paint({ whileShown: true });
   }
   _isDisplayed(element) {
     return this._displayWatches.get(element)?.shown() ?? true;
@@ -445,7 +452,7 @@ export class LayerPanel {
     this._destroyed = true;
     this._releaseBindings();
     this._unwatchRowLists();
-    this._rowsOwed = false;
+    this._owedLists.clear();
     this._weatherPanel?.destroy();
     this._weatherPanel = null;
     this._newsPanel?.destroy();
@@ -530,16 +537,17 @@ export class LayerPanel {
    */
   _paint({ whileShown = false } = {}) {
     if (this._destroyed || !this._toggleContainer) return;
+    const containers = [
+      this._toggleContainer,
+      ...this._groupContainers.values(),
+    ];
     if (
       whileShown &&
-      ![this._toggleContainer, ...this._groupContainers.values()].some(
-        (element) => this._isDisplayed(element),
-      )
+      !containers.some((element) => this._isDisplayed(element))
     ) {
-      this._rowsOwed = true;
+      for (const element of containers) this._owedLists.add(element);
       return;
     }
-    this._rowsOwed = false;
     const layers = new Map(this.getAll().map((layer) => [layer.id, layer]));
     // Each list renders its own rows: Data Layers, and any group's own list.
     const lists = new Map([[null, []]]);
@@ -574,9 +582,10 @@ export class LayerPanel {
    */
   _listNeedsRender(container, items, whileShown) {
     if (whileShown && !this._isDisplayed(container)) {
-      this._rowsOwed = true;
+      this._owedLists.add(container);
       return false;
     }
+    this._owedLists.delete(container);
     let rows = null;
     try {
       rows = JSON.stringify(items);
@@ -594,7 +603,7 @@ export class LayerPanel {
    * and the Data Layers list renders even when its rows are unchanged.
    */
   _onFinderInputs() {
-    if (!this._rowsOwed) return this._paintFinder();
+    if (!this._owedLists.has(this._toggleContainer)) return this._paintFinder();
     this._paintedRows.delete(this._toggleContainer);
     this._paint();
   }

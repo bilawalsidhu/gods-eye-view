@@ -371,6 +371,7 @@ test('the Weather readout receives enabled air-quality alongside weather layers'
 async function utilitiesFixture({
   withUtilities = true,
   prepare = (list) => document.body.append(list),
+  prepareUtilities = (list) => document.body.append(list),
 } = {}) {
   const { LayerPanel } = await import('./layerPanel.js');
   document.body.replaceChildren();
@@ -379,7 +380,7 @@ async function utilitiesFixture({
   container.id = 'data-toggles';
   const utilities = document.createElement('div');
   utilities.id = 'utilities-toggles';
-  if (withUtilities) document.body.append(utilities);
+  if (withUtilities) prepareUtilities(utilities);
   const layers = ['radio', 'directions', 'flights'].map((id) => ({
     id,
     name: id,
@@ -646,6 +647,97 @@ test('a layout pass repaints owed rows only where a list is displayed', async ()
         .querySelector('[data-layer-id="flights"] .data-toggle-btn')
         .classList.contains('active'),
     );
+  } finally {
+    restore();
+    sizes.restore();
+  }
+});
+
+/** Data Layers and Utilities lists, each inside its own panel. */
+function twoPanels() {
+  const panelOf = (id) => {
+    const panelEl = document.createElement('div');
+    panelEl.id = id;
+    panelEl.dataset.panelId = id;
+    return panelEl;
+  };
+  const dataPanel = panelOf('data-panel');
+  const utilitiesPanel = panelOf('utilities-panel');
+  return {
+    dataPanel,
+    utilitiesPanel,
+    prepare: (list) => {
+      dataPanel.append(list);
+      document.body.append(dataPanel);
+    },
+    prepareUtilities: (list) => {
+      utilitiesPanel.append(list);
+      document.body.append(utilitiesPanel);
+    },
+  };
+}
+
+test('opening one panel paints and marks displayed only the lists inside it', async () => {
+  const sizes = installFakeResizeObserver();
+  const { flushPanelContent } = await import('./rail/panelContent.js');
+  const panels = twoPanels();
+  const { container, utilities, panel, layers, restore } =
+    await utilitiesFixture(panels);
+  try {
+    const renders = countRenders(panel);
+    sizes.report(container, 0, 0);
+    sizes.report(utilities, 0, 0);
+    layers.find(({ id }) => id === 'flights').enabled = true;
+    panel._refreshTogglePanel();
+    assert.deepEqual(renders, []);
+    // The panel chrome opens Data Layers; Utilities stays collapsed.
+    flushPanelContent(panels.dataPanel);
+    assert.equal(renders.length, 1);
+    assertSameNode(renders[0], container);
+    // Utilities was not shown: later refreshes still skip it.
+    layers.find(({ id }) => id === 'directions').enabled = true;
+    panel._refreshTogglePanel();
+    assert.ok(
+      renders.every((element) => element === container),
+      'the collapsed Utilities list is never rendered',
+    );
+    // Opening Utilities paints it then, current.
+    flushPanelContent(panels.utilitiesPanel);
+    assert.ok(renders.includes(utilities));
+    assert.ok(
+      utilities
+        .querySelector('[data-layer-id="directions"] .data-toggle-btn')
+        .classList.contains('active'),
+    );
+  } finally {
+    restore();
+    sizes.restore();
+  }
+});
+
+test('a layout pass presents no rows when no displayed list is owed', async () => {
+  const sizes = installFakeResizeObserver();
+  const { flushDisplayedPanelContent } = await import('./rail/panelContent.js');
+  const panels = twoPanels();
+  const { container, utilities, panel, layers, restore } =
+    await utilitiesFixture(panels);
+  try {
+    // Data Layers is open and current; Utilities is collapsed and owed.
+    sizes.report(container, 240, 600);
+    sizes.report(utilities, 0, 0);
+    layers.find(({ id }) => id === 'flights').enabled = true;
+    panel._refreshTogglePanel();
+    container.getClientRects = () => [{}];
+    utilities.getClientRects = () => [];
+    let presented = 0;
+    const present = panel._presentRow;
+    panel._presentRow = function (...args) {
+      presented++;
+      return present.apply(this, args);
+    };
+    flushDisplayedPanelContent();
+    flushDisplayedPanelContent();
+    assert.equal(presented, 0);
   } finally {
     restore();
     sizes.restore();

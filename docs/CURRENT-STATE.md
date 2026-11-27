@@ -3575,11 +3575,13 @@ the panels still appear, count and open as before. Whatever shows a panel
 repaints what it owes at once, through `src/ui/rail/panelContent.js`, before
 anything measures the panel or reads its rows: the panel chrome opening a panel
 (a click, voice or any other caller), a phone sheet (every panel of its rail,
-expanded ones included), and leaving clean view, Cockpit or scene playback.
-Each panel layout pass first repaints what is owed where a list or readout has
-a layout box, and content still not displayed stays owed. Content repainted
-this way counts as displayed until the ResizeObserver's next report, so a
-refresh in between paints it instead of owing it again. A ResizeObserver
+expanded ones included), and leaving clean view, Cockpit or scene playback
+(every panel that is not collapsed). Each repaints only the owed lists inside
+the panel it shows. Each panel layout pass first repaints the owed lists that
+have a layout box and presents nothing when none is owed; content still not
+displayed stays owed. Each list is owed on its own. Content repainted this way
+counts as displayed until the ResizeObserver's next report, so a refresh in
+between paints it instead of owing it again. A ResizeObserver
 catches every other way a panel is
 displayed, before the browser draws it. A list whose presented rows equal the
 ones it shows is not rendered again.
