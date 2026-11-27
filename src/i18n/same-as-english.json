@@ -766,7 +766,8 @@
     "train",
     "UTC",
     "air quality monitors|STATIONS",
-    "{count} stations"
+    "{count} stations",
+    "Turbulence"
   ],
   "it": [
     "1 min/s",

@@ -96,6 +96,7 @@ const PANEL_GROUPS = [
       'weather-satellite',
       'weather-lightning',
       'weather-cyclones',
+      'weather-turbulence',
     ],
   },
   // Directions renders in the Utilities panel, beside Draw and Import, and
@@ -279,6 +280,7 @@ const WEATHER_PANEL_IDS = Object.freeze([
   'weather-lightning',
   'weather-cyclones',
   'air-quality',
+  'weather-turbulence',
 ]);
 const RECENT_IMAGERY_ID = 'recent-imagery';
 /** Marks the scene time as moved among the dirty layer ids. */

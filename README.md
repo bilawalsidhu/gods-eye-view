@@ -467,6 +467,7 @@ Twenty-three layers and map sources. **Twenty-one have a keyless path, twenty of
 | 🌬️ **Wind**                 | Animated 10 m forecast wind with an optional speed, temperature or pressure color field and a reading at map center                                                                                                                                                                                                                                                                 | NOAA GFS / ECMWF IFS                    | 🟢                                                                                                  |
 | 🌦️ **Observed Weather**     | Rain radar (contiguous US), Satellite clouds (GOES regional or global infrared, Clouds only or Full image) and Lightning density (Americas and Pacific) on one history timeline                                                                                                                                                                                                     | NOAA nowCOAST                           | 🟢                                                                                                  |
 | 🌀 **Cyclones**             | Advisory positions, forecast tracks and uncertainty cones (Atlantic, eastern/central North Pacific); warnings with 34-knot wind danger areas elsewhere                                                                                                                                                                                                                             | NOAA NHC / CPHC · JTWC                  | 🟢                                                                                                  |
+| ≋ **Turbulence**            | Turbulence forecast areas (contiguous US, 0–12 h) and SIGMET warnings (worldwide) as translucent 3D volumes at their altitude band, plus pilot reports at their flight level. Follows the timeline; informational only, not for flight planning                                                                                                                                     | NOAA Aviation Weather Center            | 🟢                                                                                                  |
 
 </details>
 
@@ -565,7 +566,7 @@ each provider enables; none is required to start. See the
 and configuration details.
 
 No key needed for Wind, Rain radar, Satellite clouds, Lightning density,
-Cyclone advisories, Mapped ALPR Cameras, Transit, Directions, Delaware live
+Cyclone advisories, Turbulence, Mapped ALPR Cameras, Transit, Directions, Delaware live
 video, the News layer's Conflicts section, and coordinate or bundled-place
 search. A layer row waiting on a key
 names it.
