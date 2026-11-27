@@ -8,7 +8,7 @@ import {
   TRANSIT_MODE_ICON,
   transitRouteLabel,
 } from '../../data/transitFeeds.js';
-import { displayMotion, playbackPosition } from '../../data/transitMovement.js';
+import { displayMotion } from '../../data/transitMovement.js';
 import {
   SELECTED_VEHICLE_OVERLAY_SOURCE_OPTIONS,
   createSelectedVehicleOverlayEntry,
@@ -186,22 +186,6 @@ export const TRANSIT_MODE_COLORS = Object.freeze({
  */
 export function transitVehicleKey(feedId, vehicleId) {
   return `${feedId}:${vehicleId}`;
-}
-
-/**
- * Where the vehicle is drawn: the display clock's position along its fix
- * history. `now` is accepted for the older callers and ignored — the clock is
- * advanced by the frame pass, and reading it here must not move it.
- * @param {{fixes?:Array, to?:{lat:number,lon:number}}} entry
- * @param {number} [now] Unused.
- * @returns {{lat:number, lon:number, settled:boolean}}
- */
-export function interpolatedVehiclePosition(entry, now) {
-  void now;
-  const played = entry?.track ? playbackPosition(entry) : null;
-  if (played) return played;
-  const to = entry?.to || { lat: NaN, lon: NaN };
-  return { lat: to.lat, lon: to.lon, settled: true };
 }
 
 /** GTFS-realtime OccupancyStatus in words. */

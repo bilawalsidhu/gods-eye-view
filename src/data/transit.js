@@ -45,7 +45,6 @@ export {
   aggregateTransitFeedHealth,
   buildTransitSelectionCopy,
   createTransitSelectedOverlayEntry,
-  interpolatedVehiclePosition,
   isStaleVehicleFix,
   transitDetectionClass,
   transitDetectionId,

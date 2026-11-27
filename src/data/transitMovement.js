@@ -263,14 +263,6 @@ export function playbackMoving(entry) {
   const sample = entry.sample;
   return sample?.phase === 'playing' && sample.segmentSpeedMps > 0;
 }
-export function playbackPosition(entry) {
-  if (!entry?.track) return null;
-  return {
-    lat: entry.sample.lat,
-    lon: entry.sample.lon,
-    settled: entry.sample.phase !== 'playing',
-  };
-}
 export function attachFloorToPlace(entry, fix, heightM) {
   if (!entry.track || !Number.isFinite(heightM)) return;
   const scratch = {};
