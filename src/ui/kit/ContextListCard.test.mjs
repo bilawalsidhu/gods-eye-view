@@ -325,7 +325,7 @@ test('on a phone Esc in the detail is the sheet’s: the detail stays open', asy
   assert.equal(state.selected, 'f2');
 });
 
-test('Back restores the original row when detail advances beyond its page', async (t) => {
+test('Back lands on the page and row of the item last shown when the detail walks beyond its page', async (t) => {
   const { $, state, range } = mount(t, {
     headerClose: true,
     returnRevision: 0,
@@ -343,8 +343,43 @@ test('Back restores the original row when detail advances beyond its page', asyn
   assert.equal(focused($('[data-list-back]')), true);
   $('[data-list-back]').click();
   await settle();
+  assert.equal(range(), '11–12 of 12');
+  assert.equal(focused($('[data-list-key="f11"]')), true);
+});
+
+test('a walk from row one moves the page with the open item; one the filter hides keeps it', async (t) => {
+  const { $, state, range } = mount(t, {
+    headerClose: true,
+    returnRevision: 0,
+  });
+  await settle();
+  const first = $('[data-list-key="f1"]');
+  first.focus();
+  first.click();
+  await settle();
+  // Next camera five times: row one of page two.
+  for (const id of ['f2', 'f3', 'f4', 'f5', 'f6']) {
+    state.selected = id;
+    await settle();
+  }
+  $('[data-list-back]').click();
+  await settle();
   assert.equal(range(), '6–10 of 12');
-  assert.equal(focused($('[data-list-key="f10"]')), true);
+  assert.equal(focused($('[data-list-key="f6"]')), true);
+
+  // An item the list does not show leaves the page where it is.
+  state.filter = (item) => item.id !== 'f12';
+  await settle();
+  const row = $('[data-list-key="f7"]');
+  row.focus();
+  row.click();
+  await settle();
+  state.selected = 'f12';
+  await settle();
+  $('[data-list-back]').click();
+  await settle();
+  assert.equal(range(), '6–10 of 11');
+  assert.equal(focused($('[data-list-key="f7"]')), true);
 });
 
 test('a focused row that leaves hands focus on: the same item, the row in its place, the last row, the panel', async (t) => {

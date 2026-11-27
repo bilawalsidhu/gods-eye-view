@@ -323,6 +323,28 @@ function pointerMove(item) {
   emit('row-pointer', item);
 }
 
+// The open item's page is the list's page: a walk to the next item (Next or
+// Previous on its layer row) or an item opened elsewhere moves the page with
+// it, and Back lands on that item's row. An item the list does not show
+// (filtered out, or not listed) leaves the page where it is.
+watch(
+  () => (detailShown.value ? props.selected : null),
+  (key, before) => {
+    const open = key ?? before;
+    if (open === null || open === undefined) return;
+    const index = orderedItems.value.findIndex(
+      (item) => String(props.itemKey(item)) === String(open),
+    );
+    if (index < 0) return;
+    memory.page = Math.floor(index / memory.size);
+    if (returnOrder.value) {
+      returnOrder.value.key = open;
+      returnOrder.value.index = index % memory.size;
+    }
+  },
+  { immediate: true },
+);
+
 // Focus is never sent back to the page. Opening a detail moves it onto Back
 // and Back moves it onto the item's row (else the heading), when focus was
 // in the card or the card's own control was used. A focused row that the rows leave (or move) hands it to the
