@@ -624,6 +624,11 @@ watch(entityCard, (next, previous) => {
     return;
   }
   streetLevel.act('closePhoto', previous.identity?.id, { pendingOnly: !dismissed });
+  // Escape or open ground leaves the photo open in its offscreen home: its
+  // sequence stops there. A photo still visible (EXPAND, the embed overlay)
+  // or a street dock (the one viewer is the dock's) plays on; × already closed it.
+  if (!next && !dismissed && !streetLevel.expanded && !streetLevel.embedOverlay &&
+      dockedViews.view?.kind !== 'street') streetLevel.act('stopPlayback');
 });
 // The docked view and the radio mini player are part of the right column:
 // at its foot under an open Context, with the panel's edges and width; the

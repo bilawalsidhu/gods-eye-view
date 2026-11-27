@@ -9499,6 +9499,60 @@ test('picking something else closes a shown photo and shows the new card; open g
   assert.equal(withdrawn, 1, 'only the flight closed the photo');
 });
 
+test('Escape or open ground keeps an ordinary photo open but stops its sequence', async (t) => {
+  const photo = {
+    id: 'mapillary:1',
+    name: 'Congress Ave',
+    lat: 30.27,
+    lon: -97.74,
+  };
+  const { cards, pinia } = fixture(t, [
+    {
+      id: 'street-level',
+      name: 'Street Level',
+      enabled: true,
+      records: [photo],
+      stats: { count: 1 },
+    },
+  ]);
+  const identity = { layerId: 'street-level', id: photo.id };
+  const actions = [];
+  useStreetLevelStore(pinia).attach({
+    closePhoto: (id, options) =>
+      actions.push(['closePhoto', id, options?.pendingOnly === true]),
+    stopPlayback: () => actions.push(['stopPlayback']),
+  });
+  cards.select(identity, { follow: false });
+  await nextTick();
+  cards.clear();
+  await nextTick();
+  assert.deepEqual(actions, [['closePhoto', photo.id, true], ['stopPlayback']]);
+
+  actions.length = 0;
+  cards.select(identity, { follow: false });
+  await nextTick();
+  cards.clear({ dismiss: true });
+  await nextTick();
+  assert.deepEqual(
+    actions,
+    [['closePhoto', photo.id, false]],
+    '× closes it; nothing is left to stop',
+  );
+
+  actions.length = 0;
+  useDockedStore(pinia).dock({
+    key: `street-level:${photo.id}`,
+    kind: 'street',
+    title: photo.name,
+    identity,
+  });
+  cards.select(identity, { follow: false });
+  await nextTick();
+  cards.clear();
+  await nextTick();
+  assert.deepEqual(actions, [], 'the dock keeps showing and playing its photo');
+});
+
 test('on a phone a new pick closes the photo and shows its card in the Context sheet, without reopening the photo', async (t) => {
   const photo = {
     id: 'mapillary:1',
