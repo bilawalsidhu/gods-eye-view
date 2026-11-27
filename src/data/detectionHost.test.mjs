@@ -5,14 +5,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import {
-  countFadingRenderEntries,
   destroyDetection,
   detectionDebugRequested,
   getDetectionDiagnostics,
-  getDetectionTheme,
   getMode,
   initDetection,
-  isDetectionSuspended,
   resumeDetection,
   setDetectionStyle,
   setDetectionTuning,
@@ -45,16 +42,6 @@ import {
 } from '../render/cesium/fixtures/fakeDepthScene.mjs';
 import { createSceneOcclusionTest } from '../render/cesium/sceneOcclusionProbe.js';
 import { rendererOf } from '../render/rendererOf.js';
-
-test('detection diagnostics count rendered fading rows instead of absent selected identities', () => {
-  assert.equal(countFadingRenderEntries([
-    { selected: true },
-    { selected: false },
-    { selected: true },
-    { selected: false },
-  ]), 2);
-  assert.equal(countFadingRenderEntries([{ selected: true }, { selected: true }]), 0);
-});
 
 class MockEvent {
   constructor() { this.listeners = new Set(); }
@@ -453,14 +440,12 @@ test('detection lifecycle re-hosts unchanged painters behind the sole host liste
     )).length;
     const beforeSuspend = bannerCount();
     suspendDetection('intercity');
-    assert.equal(isDetectionSuspended(), true);
     assert.equal(surface.style.opacity, '0');
     env.postRender.raise();
     assert.equal(bannerCount(), beforeSuspend);
     assert.equal(env.postRender.listeners.size, 1);
     resumeDetection();
     env.postRender.raise();
-    assert.equal(isDetectionSuspended(), false);
     assert.equal(surface.style.opacity, '1');
     assert.ok(bannerCount() > beforeSuspend);
 
@@ -480,7 +465,6 @@ test('detection lifecycle re-hosts unchanged painters behind the sole host liste
       setMode('DENSE');
       env.postRender.raise();
       assert.equal(getDetectionDiagnostics().profile, 'DENSE');
-      assert.ok(getDetectionTheme().line);
       assert.equal(env.postRender.listeners.size, 1);
     }
 
@@ -524,6 +508,12 @@ test('callouts stop painting the moment the last detectable object goes away', (
     id: 'LASTONE',
     metric: 'FL120',
     type: 'AIR',
+  }, {
+    position: new Cesium.Cartesian3(0.3, 0, 6_356_752),
+    sourceId: 'leaving-1',
+    id: 'LEAVING',
+    metric: 'FL200',
+    type: 'AIR',
   }];
   try {
     initWorldOverlay(env.viewer);
@@ -539,6 +529,16 @@ test('callouts stop painting the moment the last detectable object goes away', (
       env.ctx.calls.some(([name, text]) => name === 'fillText' && text === 'LASTONE'),
       'the callout paints on the shared canvas while the contact exists',
     );
+
+    // One contact goes first. Its row fades out of the selection, and the
+    // diagnostics count that rendered row until its fade ends.
+    objects = objects.slice(0, 1);
+    for (const expected of [1, 1, 0]) {
+      env.advance(250);
+      env.postRender.raise();
+      assert.equal(getDetectionDiagnostics().selectedCount, 1);
+      assert.equal(getDetectionDiagnostics().fadingCount, expected);
+    }
 
     objects = [];
     env.ctx.calls.length = 0;

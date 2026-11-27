@@ -176,7 +176,7 @@ function _nowMs() {
  * @param {Array<{selected?: boolean}>} renderEntries - Arbiter render rows.
  * @returns {number} Number of rendered rows no longer selected.
  */
-export function countFadingRenderEntries(renderEntries) {
+function countFadingRenderEntries(renderEntries) {
   let count = 0;
   for (let i = 0; i < renderEntries.length; i++) {
     if (!renderEntries[i].selected) count++;
@@ -547,14 +547,6 @@ function _setLanesActive(active) {
 }
 
 /**
- * Checks whether overlay rendering is currently suspended.
- * @returns {boolean} True if suspended.
- */
-export function isDetectionSuspended() {
-  return _suspended;
-}
-
-/**
  * Adjusts runtime tuning parameters for the detection overlay.
  * @param {Object} [options={}] - Tuning options.
  * @param {number} [options.densityPct] - Density percentage canonicalized to 0/25/50/75/100.
@@ -673,21 +665,6 @@ function _syncSurfaceVisibility() {
   if (!_hostSurface) return;
   _hostSurface.style.display = _mode === MODE_OFF ? 'none' : 'block';
   _hostSurface.style.opacity = _suspended ? '0' : '1';
-}
-
-/**
- * Returns the active theme's key colors so other overlays (e.g. the tracked-target
- * readout) can match the current visual mode (cyan/green/amber/white-hot).
- * @returns {{label: string, line: string, dim: string, glow: string, labelBg: string}}
- */
-export function getDetectionTheme() {
-  return {
-    label: _theme.label,
-    line: _theme.line,
-    dim: _theme.dim || _theme.label,
-    glow: _theme.glow,
-    labelBg: _theme.labelBg,
-  };
 }
 
 /**
