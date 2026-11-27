@@ -9,15 +9,6 @@ import { formatQuantity } from '../../ui/unitLabels.js';
 import { AWARENESS_PAGE_SIZE, AWARENESS_PAGE_ROTATE_MS } from './policy.js';
 import { distanceParts } from '../../data/distanceFormat.js';
 
-/** Format a cohort total without presenting a retained cap as exact. */
-export function formatAwarenessCount(summary = {}) {
-  if (!Number.isFinite(summary.count)) return '?';
-  const count = summary.count.toLocaleString('en-US');
-  return summary.complete === false || summary.truncated === true
-    ? `At least ${count}`
-    : count;
-}
-
 /** The count as the panel shows it, in the UI language. */
 function presentAwarenessCount(summary = {}) {
   if (!Number.isFinite(summary.count)) return '?';

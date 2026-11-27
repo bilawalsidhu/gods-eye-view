@@ -36,7 +36,6 @@ import {
 } from './militaryAwarenessEngine.js';
 import {
   awarenessResultsAreLive,
-  formatAwarenessCount,
   presentAwarenessDistance,
 } from '../layers/awareness/panel.js';
 import { NAVIGATION_AUTHORITY_EVENT } from '../navigationPolicy.js';
@@ -68,18 +67,6 @@ const AWARENESS_DEPENDENCIES = [
   'ais-live-vessels',
   'military-installations',
 ];
-
-test('Contacts labels a capped cohort as a lower bound', () => {
-  assert.equal(
-    formatAwarenessCount({ count: 20_000, complete: false, truncated: true }),
-    'At least 20,000',
-  );
-  assert.equal(
-    formatAwarenessCount({ count: 19_999, complete: true, truncated: false }),
-    '19,999',
-  );
-  assert.equal(formatAwarenessCount({ count: null }), '?');
-});
 
 test('Contacts moves a distance that rounds to 1,000 m into kilometres', () => {
   assert.equal(presentAwarenessDistance(999.4), '999\u00a0m');
