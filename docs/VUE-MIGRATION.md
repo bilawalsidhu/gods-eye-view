@@ -481,14 +481,8 @@ slot whenever its view is drawn.
    the rail cards and card blocks (`src/ui/rail/`) render through
    Vue's synchronous `render()` behind `createRailCards()` and
    `createRailCardBlocks()`. A control that moves between panels can keep one
-   mounted tree in a Teleport. `PortalSlot` registers a destination for its
-   lifetime. The owner supplies whether the slot is visible and an optional
-   focus fallback. An enabled Teleport always receives a DOM element, even
-   for the embed overlay. At home, the disabled Teleport keeps its children
-   and uses `'body'` for server rendering. The source repairs focus only when
-   a move sent focus to the page body, trying the moved control and then the
-   slot and source fallbacks. A viewer keeps its provider host connected and
-   retains its media nodes through the move.
+   mounted tree in a Teleport (Radio's tuner fold and the Cameras list in
+   `ContextView.vue`).
 
    Order: Scenes (done: `SceneOptions` and
    `SceneShotList` over the `gev-scenes` store; the panel's buttons, status

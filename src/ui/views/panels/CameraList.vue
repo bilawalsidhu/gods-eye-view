@@ -168,7 +168,6 @@ function openCamera(camera) {
     :item-key="(camera) => String(camera.id)"
     :query="listQuery"
     :page-size="5"
-    :stable-page="true"
     :filter="matchesCity"
     :group-by="providerOf"
     :return-revision="0"

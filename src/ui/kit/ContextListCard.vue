@@ -103,8 +103,6 @@ const props = defineProps({
   items: { type: Array, default: () => [] },
   pageWindow: { type: Object, default: null },
   pageSize: { type: Number, default: LIST_PAGE_SIZES[0] },
-  /** Hold the last settled page while the same catalog query refreshes. */
-  stablePage: Boolean,
   /** An item's key, unique in `items`. */
   itemKey: { type: Function, default: (item) => item.id },
   /** The items in list order; their own order when not given. */
@@ -184,16 +182,8 @@ const providerGroups = computed(() => {
   }));
 });
 
-const pageView = computed((previous) => {
-  const { pageWindow, query, state } = props;
-  if (
-    props.stablePage &&
-    state === 'loading' &&
-    previous?.query === query &&
-    previous.state === 'ready' &&
-    previous.rows.length
-  )
-    return previous;
+const pageView = computed(() => {
+  const { pageWindow, state } = props;
   const order = orderedItems.value;
   const total = pageWindow?.total ?? order.length;
   const size = memory.size;
@@ -201,7 +191,6 @@ const pageView = computed((previous) => {
   const page = Math.min(memory.page, pages - 1);
   const first = page * size;
   return {
-    query,
     state,
     hasItems: props.items.length > 0,
     order,

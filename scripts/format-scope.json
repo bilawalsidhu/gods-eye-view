@@ -1782,7 +1782,6 @@
   "src/layers/transit/clickSelect.test.mjs",
   "src/layers/launches/selectionFollow.test.mjs",
   "src/ui/styles/listCardDetail.test.mjs",
-  "src/ui/portalTargets.test.mjs",
   "src/data/aircraftCountry.test.mjs",
   "src/data/airports.test.mjs",
   "scripts/build-ourairports.mjs",

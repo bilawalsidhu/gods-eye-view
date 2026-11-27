@@ -269,7 +269,6 @@ const metaDistance = computed(() => (selected.value ? distance(away(selected.val
     class="radio-stations"
     :title="playback === 'live' ? t('Radio · now playing') : t('Radio')"
     :page-size="5"
-    :stable-page="true"
     icon="radio"
     :tone="tone"
     :tone-text="toneText"

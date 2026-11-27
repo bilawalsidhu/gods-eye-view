@@ -405,49 +405,6 @@ test('states: loading, failed, empty and no matches, each its slot or default', 
   assert.equal($('[data-list-key]'), null);
 });
 
-test('a catalog holds its settled page and provider breakdown only while refreshing', async (t) => {
-  const { $, state, names, range } = mount(t, {
-    stablePage: true,
-    pageSize: 5,
-    state: 'loading',
-    items: [],
-    groupBy: (item) => item.kind,
-  });
-  await settle();
-  assert.equal($('.context-list-card__state').textContent, 'Loading');
-  state.items = fruit(8);
-  state.state = 'ready';
-  await settle();
-  $('[data-list-next]').click();
-  await settle();
-  const list = $('.nearby-lists__layer ul');
-  const row = $('[data-list-key="f6"]');
-  const breakdown = $('.view-context__bar-key').textContent;
-  row.focus();
-  assert.equal(names().length, 3);
-
-  state.items = [];
-  state.state = 'loading';
-  await settle();
-  assert.equal($('.nearby-lists__layer ul'), list);
-  assert.equal(document.activeElement, row);
-  assert.equal(names().length, 3);
-  assert.equal(range(), '6–8 of 8');
-  assert.equal($('.view-context__bar-key').textContent, breakdown);
-
-  state.items = fruit(7);
-  state.state = 'ready';
-  await settle();
-  assert.equal($('.nearby-lists__layer ul'), list);
-  assert.equal(document.activeElement, row);
-  assert.equal(names().length, 2);
-  assert.equal(range(), '6–7 of 7');
-  assert.equal(
-    $('section').style.getPropertyValue('--context-list-page-size'),
-    '',
-  );
-});
-
 test('the filter slot sits above the list; rows with their own controls get select', async (t) => {
   const { $, events } = mount(
     t,
