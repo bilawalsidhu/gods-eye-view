@@ -1,6 +1,6 @@
-import { fetchText, fetchRange, loadOptionalScalar } from './gfs.js';
+import { fetchText, loadWeatherSnapshot } from './gfs.js';
 import { decodeWindGribMessage } from './decode.js';
-import { resampleWeatherSnapshot, weatherScalarMetadata } from './grid.js';
+import { weatherScalarMetadata } from './grid.js';
 
 /** Keyless ECMWF Open Data root for real-time IFS forecasts. */
 const IFS_BASE = 'https://data.ecmwf.int/forecasts';
@@ -102,8 +102,7 @@ export function nearestIfsStep(hours, cycleHour) {
 
 /**
  * Fetch and decode the IFS 10 m wind field valid closest to now.
- * @param {{fetchImpl?: Function, now?: Function, targetDx?: number,
- *   decodeImpl?: Function}} [options]
+ * @param {object} [options] - As for fetchGfsWind (./gfs.js).
  * @returns {Promise<{cycle: object, level: string, units: string, grid: object}>}
  */
 export async function fetchIfsWind({
@@ -113,6 +112,8 @@ export async function fetchIfsWind({
   decodeImpl = decodeWindGribMessage,
   signal,
   overlay = 'none',
+  scalarSignal,
+  windCache,
 } = {}) {
   weatherScalarMetadata(overlay);
   const nowMs = now();
@@ -137,24 +138,19 @@ export async function fetchIfsWind({
       /* A missing optional field does not discard valid wind. */
     }
   }
-  // All selected messages come from this one issue/valid-time object.
-  const load = async (range) =>
-    decodeImpl(
-      await fetchRange({ url: urls.grib, ...range, fetchImpl, signal }),
-    );
-  const [u, v, scalar] = await Promise.all([
-    load(ranges.u),
-    load(ranges.v),
-    loadOptionalScalar({
-      range: scalarRange,
-      url: urls.grib,
-      fetchImpl,
-      decodeImpl,
-      signal,
-    }),
-  ]);
-  signal?.throwIfAborted();
-  const fields = resampleWeatherSnapshot({ u, v, scalar, overlay, targetDx });
+  const fields = await loadWeatherSnapshot({
+    model: 'ifs',
+    url: urls.grib,
+    ranges,
+    scalarRange,
+    overlay,
+    targetDx,
+    fetchImpl,
+    decodeImpl,
+    signal,
+    scalarSignal,
+    windCache,
+  });
   const runIso = new Date(runMs).toISOString();
   const validIso = new Date(runMs + forecastHour * 3600_000).toISOString();
   return {

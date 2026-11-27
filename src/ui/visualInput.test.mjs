@@ -46,11 +46,9 @@ class Element {
 
 function shortcuts() {
   const documentRef = new Element();
-  const searchInput = new Element();
   const calls = [];
   const names = [
     'setStyle',
-    'dismissSearch',
     'toggleHud',
     'toggleOrbit',
     'toggleCleanView',
@@ -61,14 +59,10 @@ function shortcuts() {
   const actions = Object.fromEntries(
     names.map((name) => [name, (...args) => calls.push([name, ...args])]),
   );
-  const controller = bindApplicationShortcuts({
-    documentRef,
-    searchInput,
-    actions,
-  });
+  const controller = bindApplicationShortcuts({ documentRef, actions });
   const press = (key, target = new Element(), rest = {}) =>
     documentRef.emit('keydown', { key, target, ...rest });
-  return { documentRef, searchInput, calls, controller, press };
+  return { documentRef, calls, controller, press };
 }
 
 test('number keys retain the six style mappings', () => {
@@ -100,22 +94,13 @@ test('letter shortcuts retain uppercase handling and existing actions', () => {
 });
 
 for (const tag of ['INPUT', 'SELECT', 'TEXTAREA']) {
-  test(`${tag} retains native editing, while Escape reaches search dismissal`, () => {
+  test(`${tag} retains native editing`, () => {
     const f = shortcuts();
-    for (const key of ['1', 'h', 'o', 'v', 'f', 'd', 'c'])
+    for (const key of ['1', 'h', 'o', 'v', 'f', 'd', 'c', 'Escape'])
       f.press(key, new Element(tag));
     assert.deepEqual(f.calls, []);
-    f.press('Escape', new Element(tag));
-    assert.deepEqual(f.calls, [['dismissSearch']]);
   });
 }
-
-test('the supplied search target retains editing even without form markup', () => {
-  const f = shortcuts();
-  f.press('1', f.searchInput);
-  f.press('Escape', f.searchInput);
-  assert.deepEqual(f.calls, [['dismissSearch']]);
-});
 
 test('a held key still repeats its shortcut, and Shift is not a chord', () => {
   const f = shortcuts();
@@ -132,8 +117,7 @@ test('browser and system chords on a shortcut key run no shortcut', () => {
   // Copying (Cmd+C, Ctrl+C) used to turn CCTV on and open the nearest camera.
   assert.deepEqual(f.calls, []);
   f.press('c');
-  f.press('Escape', new Element(), { ctrlKey: true });
-  assert.deepEqual(f.calls, [['toggleCctv'], ['dismissSearch']]);
+  assert.deepEqual(f.calls, [['toggleCctv']]);
 });
 
 test('destroy synchronously removes shortcuts and a replacement binds once', () => {
@@ -145,7 +129,6 @@ test('destroy synchronously removes shortcuts and a replacement binds once', () 
   assert.equal(f.documentRef.listeners.get('keydown').size, 0);
   const replacement = bindApplicationShortcuts({
     documentRef: f.documentRef,
-    searchInput: f.searchInput,
     actions: { toggleHud: () => f.calls.push('new') },
   });
   f.press('h');

@@ -432,7 +432,7 @@ async function main() {
         enabled: true,
         uncertain: true,
       });
-      gev.dataManager.refreshLayerStats();
+      entry.panel.invalidate();
       const staticResult = module.setTuningStatic(true);
       const filterBefore = module.getUIState().filter;
       const filterControl = document.getElementById('radio-filter');
@@ -462,6 +462,10 @@ async function main() {
         stationIds: module.getTunerStations(3).map(({ id }) => id),
       });
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      // The Data Layers rows repaint while the panel is displayed; it starts collapsed.
+      const dataPanel = document.getElementById('data-panel');
+      if (dataPanel?.classList.contains('collapsed'))
+        dataPanel.querySelector('[data-collapse-target="data-panel"]')?.click();
       const result = {
         presentationActive: module.getUIState().presentationActive,
         markerSourceVisible: (window.__qaRadioRows('stations')[0]?.setShown ?? false),
@@ -501,7 +505,7 @@ async function main() {
         enabled: true,
         uncertain: false,
       });
-      gev.dataManager.refreshLayerStats();
+      entry.panel.invalidate();
       module.cancelTuning();
       camera.flyTo = originalFlyTo;
       return result;
@@ -1754,8 +1758,6 @@ async function main() {
           const has = (name) => panel.classList.contains(name);
           manager._presentPanel(panel, {
             collapsed: has('collapsed'),
-            pinned: has('dock-pinned'),
-            pinnedTop: has('dock-pinned-top'),
             auto: has('layout-auto-collapsed') ? 'layout' : has('accordion-collapsed') ? 'accordion' : null,
           });
         }
@@ -2331,8 +2333,6 @@ async function main() {
           const has = (name) => panel.classList.contains(name);
           manager._presentPanel(panel, {
             collapsed: has('collapsed'),
-            pinned: has('dock-pinned'),
-            pinnedTop: has('dock-pinned-top'),
             auto: has('layout-auto-collapsed') ? 'layout' : has('accordion-collapsed') ? 'accordion' : null,
           });
         }

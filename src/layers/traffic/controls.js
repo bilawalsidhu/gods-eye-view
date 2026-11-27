@@ -2,6 +2,7 @@ import {
   normalizeRoadMode,
   resolveRoadMode,
   roadModesSimulate,
+  trafficSourceLabel,
 } from './roadModes.js';
 import {
   trafficBucketTier,
@@ -10,6 +11,7 @@ import {
 import { TRAFFIC_TIMING_ENABLED } from './policy.js';
 import { t, translateKnown } from '../../i18n/index.js';
 import { findFrame } from '../../render/rendererOf.js';
+import { trafficAnalystRecords } from './records.js';
 
 export function createControls({ state: layerState, services, parts, source }) {
   /** One status line: feed, drawn road source, then degraded-coverage notes. */
@@ -63,7 +65,7 @@ export function createControls({ state: layerState, services, parts, source }) {
 
     icon: '🚗',
 
-    source: 'OpenStreetMap / TomTom',
+    source: source?.label ?? trafficSourceLabel(layerState._roadModes),
 
     /** @type {number} Zero — layer is self-managed via camera listener + preRender */
     updateInterval: 0,
@@ -369,6 +371,11 @@ export function createControls({ state: layerState, services, parts, source }) {
       };
     },
 
+    /** The drawn road segments as plain records (records.js). */
+    getAnalystRecords(maxCount = Infinity) {
+      return trafficAnalystRecords(layerState, maxCount);
+    },
+
     getStats() {
       // Outstanding flow work counts as loading: the paint race can leave a
       // TomTom request in flight after the roads have settled, and the shared
@@ -407,6 +414,7 @@ export function createControls({ state: layerState, services, parts, source }) {
         motion: { ...layerState._motion },
         surfaceBudgetOmitted: layerState._surfaceBudgetOmitted || 0,
         lastUpdate: layerState._lastUpdate,
+        recordsRevision: layerState._flowRevision,
         loading,
         mode: feed.mode,
         // Cached proxy tiles (TomTom budget spent or upstream failing): the

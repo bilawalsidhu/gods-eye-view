@@ -13,6 +13,7 @@ import { vClassToggle } from '../rail/classToggle.js';
 // descriptor before acting.
 defineProps({
   items: { type: Array, required: true },
+  filtered: Set,
   onToggle: { type: Function, default: () => {} },
   onChip: { type: Function, default: () => {} },
   onListItem: { type: Function, default: () => {} },
@@ -26,6 +27,7 @@ defineProps({
     ><h3
       v-if="item.heading"
       class="data-layer-group-heading"
+      v-class-toggle="{ 'is-filtered': filtered?.has(item.key) }"
       :data-group="item.key"
       >{{ item.heading }}</h3
     ><div
@@ -33,6 +35,7 @@ defineProps({
       class="data-toggle-row"
       v-class-toggle="{
         'data-toggle-row--count-line': item.count?.countLine,
+        'is-filtered': filtered?.has(item.key),
       }"
       :data-layer-id="item.id"
       :data-layer-name="item.englishName"

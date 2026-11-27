@@ -40,8 +40,8 @@ one-panel rule too. Share links continue to record which panels are open.
 `UiButton`, `UiCloseButton`, `UiPanel`, `UiPanelToggle` (a panel's collapse
 button, which `UiPanel` and `PanelCollapseButton` draw), `UiPanelEdge` (a
 panel header's edge switch), `UiSegmented`, `UiSlider`, `UiChip`,
-`UiSelect`, `UiSearchField`, `UiCheckbox`, `UiDialog`, `UiBadge` and
-`UiEmpty` so far, with more joining as the controls they serve are
+`UiSelect`, `UiSearchField`, `UiCheckbox`, `UiSwitch`, `UiDialog`,
+`UiBadge` and `UiEmpty` so far, with more joining as the controls they serve are
 converted. One component
 serves every use of a control, with props for the differences (`UiPanel`'s
 `sideways`, `glow`, `scroll`), rather than a copy per panel. The components
@@ -59,6 +59,7 @@ never copied:
 | `UiCloseButton` | a close, dismiss or clear button: a bare glyph (× with `glyph="times"`, the Material `close` symbol with `glyph="icon"`) with no padding, border or background of its own and a pointer; the site's feature class sets size, colour, hover and any surface, and `bare` leaves the look off for a skin that sets its own padding and border | `src/ui/styles/close-button.css` |
 | `UiSearchField` | a search field: the Material `search` glyph and a search input in a flex row, the input bare (no border or background, free to shrink); the site's feature classes set the frame's size, surface and focus ring and the input's type and outline, and the browser's own cancel button is left to each skin | `src/ui/styles/search-field.css` |
 | `UiCheckbox` | a checkbox: a label wrapping a native box and its words in a centred flex row; the box keeps each site's size, margin and accent colour, and the site's feature class sets the row's gap, direction and colour | `src/ui/styles/checkbox.css` |
+| `UiSwitch` | an on/off switch: a `role="switch"` button drawn as a 30 by 16 px pill track whose knob slides to the end and takes the accent while it is on (mirrored right to left); a disabled switch dims | `src/ui/styles/switch.css` |
 | `UiDialog` | none: a native modal `<dialog>`; the site's feature class or inline style draws it | — |
 | `UiChip` | the read-only chip (a pill of uppercase mono text); `selected` takes the accent | `src/ui/styles/chip.css` |
 | `UiEmpty` | the one-line empty state (dim mono text), its hint on a line below | `src/ui/styles/empty-state.css` |
@@ -87,7 +88,7 @@ adapter is gone.
 No view hand-writes a control the kit has: every button in an SFC outside
 the kit is a `UiButton`, `UiCloseButton` or another kit control, every
 Material Symbols glyph a `UiIcon`, every checkbox a `UiCheckbox`, every
-select a `UiSelect`, and every range a `UiSlider` except the radio
+on/off switch a `UiSwitch`, every select a `UiSelect`, and every range a `UiSlider` except the radio
 tuner's and the world timeline's, for the reasons given below. No module
 outside the kit, and no SFC's script, builds a button, select, field or
 Material glyph in script or writes one as markup in a string, apart from
@@ -123,12 +124,12 @@ context's place and layer chips) are `UiButton`s too; the key setup chip
 is still a plain button. `UiChip`
 is a non-interactive label chip, used by the voice card.
 The welcome card's buttons (SKIP, the three start tiles, BROWSE STORIES,
-BACK and the main NEXT / ENTER GOD MODE action) are ghost `UiButton`s:
+BACK and the main NEXT / ENTER DEFAULT MODE action) are ghost `UiButton`s:
 the start tiles are pressed toggles, and all but SKIP keep `aria-disabled`
 rather than `disabled`, so they stay focusable while the card is busy. Its
 tile, tip, Stories and arrow glyphs are `UiIcon`s with `:size="null"`, so
 first-run.css still sizes them (`src/ui/kit/welcomeControls.test.mjs` pins
-it). God mode's preview globe and callouts stay inline SVG drawings, and
+it). Default mode's preview globe and callouts stay inline SVG drawings, and
 its outbound links stay links.
 Every button in the Stories views (the Stories entry and its popup and
 toast, Explore, the Story screen, its header, rail, timeline and context
@@ -188,13 +189,8 @@ context view shows too). Their glyphs are `UiIcon`s with `:size="null"`,
 so entity-card.css and spot-conditions.css still size them
 (`src/ui/kit/entityCardControls.test.mjs` pins it). Ask GEV's chat bubble
 stays inline SVG, since no Material symbol the page loads draws it.
-The command dock's buttons (the six style buttons, the two tray toggles,
-Location's collapse and the search toggle, beside the pins and pills that
-already were) are ghost `UiButton`s. The style buttons are pressed toggles
-with `active` as their pressed class, so they now carry `aria-pressed`;
-Normal is the pressed one until a style is published. Their glyphs, the
-search 🔎 and the collapse + are text characters, not Material symbols, and
-stay plain text. The Context panel's buttons (its two tabs, Contacts, the
+The command dock holds only the voice control, whose buttons are its own.
+The Context panel's buttons (its two tabs, Contacts, the
 cockpit entry and SEARCH NEARBY SITES, beside the header's search and
 expand and the TR-3B chip) are ghost `UiButton`s; the tabs and Contacts
 are `role="tab"` controls, chosen through `aria-selected` with their own
@@ -366,6 +362,16 @@ preferences, the Data Library's filter and the welcome card's box are
 keeps its `fopt` class (`src/ui/kit/checkboxes.test.mjs` pins it). Its kit
 rule holds the centred row the checkbox-only labels drew, moved rather than
 copied.
+`UiSwitch` is a `role="switch"` button whose `aria-checked` shows
+`modelValue` (`v-model`) or `checked`, and `label` is its accessible name.
+A click emits `update:modelValue` and `change` with the state asked for,
+and the switch keeps showing the prop until its owner passes the new one, so
+a refused change never shows; `disabled` makes it a disabled button. The
+rail cards' toggle rows (the air-quality card's station switch) are
+`UiSwitch`es with `checked` and `change`, since the card applies the change
+through its params (`src/ui/kit/UiSwitch.test.mjs`; no view hand-writes
+`role="switch"`, which `src/ui/kit/viewControls.test.mjs` pins). Its kit
+rules hold the rail card's switch look, moved rather than copied.
 `UiDialog` is a native `<dialog>` its owner opens and closes with `open`:
 true opens it with `showModal()` (on mount, for one mounted open), false
 closes it, and unmounting closes it. Each change is applied once the content
@@ -434,21 +440,19 @@ slot whenever its view is drawn.
    mirrors each side's panels and the rail renders from it. The rail panels
    are `RailPanel`s: the kit's `UiPanel` drawing Core's panel markup, bound to the `gev-panel-chrome`
    store, with their titles rendered by `t()` rather than `data-i18n`. Each panel's
-   collapse button, the dock tray toggles and the
-   dock pins render the open and pinned state PanelChrome presents to the
-   `gev-panel-chrome` store, and their clicks call it there. Each panel's
+   collapse button renders the open state PanelChrome presents to the
+   `gev-panel-chrome` store, and its clicks call it there. Each panel's
    root draws its own state from there too (`v-panel-state`: `collapsed`,
-   `dock-pinned`, `dock-pinned-top`, `layout-auto-collapsed`,
-   `accordion-collapsed`): PanelChrome, the rails and the accordion present
+   `layout-auto-collapsed`, `accordion-collapsed`): PanelChrome, the rails
+   and the accordion present
    it rather than writing classes. The directive applies it in a synchronous
    watcher, not on Vue's next render, because the rails measure a panel in
    the same task that opens or closes it. PanelChrome and its preference
    restore, and the phone shell, read a panel's state back from the store
    (`_shownPanel`; the markup's classes before its first presentation), so
    once a panel is presented a class written outside the store no longer
-   counts. The rails, the accordion and the hover disclosure
-   (`panelDisclosure.js`), which act within the same task as a layout, read
-   the classes the directive has just drawn. Done.
+   counts. The rails and the accordion, which act within the same task as a
+   layout, read the classes the directive has just drawn. Done.
 3. **Panels.** Each template and its wiring become a component, keeping ids,
    classes and CSS; text a template renders with `t()` drops its `data-i18n`
    marker. The page places each view with a
@@ -543,15 +547,12 @@ slot whenever its view is drawn.
    publishes through `subscribePanel()`, the first layer to hand its rail
    content to a view, and `MissionRoster` and `MissionDetail` the Space
    Missions roster and selected mission that the launches layer publishes
-   the same way), the command dock (in progress: the style buttons, the
-   dock's style mini status and the ACTIVE STYLE corner render the style
-   VisualSettings publishes to the `gev-display` store; the buttons keep
-   their owner's listeners; the map source chips and status badge render
-   what `createMapSourceControls()` publishes beside it, so `./ui/maps`
-   needs no Vue; the location tray's city and landmark pills, mini status
-   and search error render what `LocationControls` publishes to the
-   `gev-location` store, and the search field keeps its listeners; beside
-   the voice control, the dock teleports each voice pointer reticle to the
+   the same way), the command dock (the ACTIVE STYLE corner renders the
+   style VisualSettings publishes to the `gev-display` store; Visual's map
+   source chips and status badge render what `createMapSourceControls()`
+   publishes beside it, so `./ui/maps` needs no Vue; the Omnibar's city and
+   landmark chips and search error render what `LocationControls` publishes
+   to the `gev-location` store; beside the voice control, the dock teleports each voice pointer reticle to the
    body where its `PointerReticle` presents it in the `gev-pointer-reticle`
    store; `startGuide()` renders the Omnibar's guided walk, `OmnibarGuide`,
    synchronously from the view it computes for each step, teleported to the

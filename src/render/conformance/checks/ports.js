@@ -13,7 +13,7 @@ import {
 import { AUSTIN, SCRIPT_VIEWPORT } from '../cameraScripts.js';
 import { deepEqual, equal, near, nearVec, ok, throws } from '../expect.js';
 import { iconPosition } from '../../motion/iconMotion.js';
-import { encodeVectorTile } from '../../vectorBase/encode.js';
+import { encodeVectorTile } from '../vectorTileFixture.js';
 import { partsModelGlb } from '../partsModel.js';
 
 /** 1 × 1 PNGs (red, green, blue), so imagery checks load nothing from the network. */
@@ -5534,6 +5534,81 @@ export function portChecks() {
         b.remove();
         deepEqual(ours(), [], 'both removed');
       },
+    ),
+    check(
+      'globe.imagery.canvas',
+      'a single-image layer takes its picture from a canvas, and only a single-image layer without a url does',
+      async (h, r) => {
+        await overAustin(h, r, 200000);
+        const page = typeof document !== 'undefined';
+        const pixels = h.pixels !== false && page;
+        /** A solid red canvas, or a stand-in of its size where no page makes one. */
+        let image = { width: 16, height: 16 };
+        if (page) {
+          image = document.createElement('canvas');
+          image.width = 16;
+          image.height = 16;
+          const g = image.getContext('2d');
+          g.fillStyle = '#ff0000';
+          g.fillRect(0, 0, 16, 16);
+        }
+        const before = r.globe.imagery.list().length;
+        // A layer a non-conforming renderer adds anyway is removed again, so
+        // a failing check leaves the scene as it found it.
+        const refused = (spec) => () => r.globe.imagery.add(spec)?.remove?.();
+        throws(
+          refused({
+            kind: 'xyz',
+            url: 'https://a.invalid/{z}/{x}/{y}.png',
+            image,
+          }),
+          'an image on xyz imagery',
+        );
+        throws(
+          refused({ kind: 'single-image', url: PIXEL_PNG, image }),
+          'an image and a url',
+        );
+        equal(
+          r.globe.imagery.list().length,
+          before,
+          'a refused spec adds no layer',
+        );
+        const layer = r.globe.imagery.add({
+          kind: 'single-image',
+          image,
+          rectangle: {
+            west: AUSTIN.lon - 2,
+            south: AUSTIN.lat - 2,
+            east: AUSTIN.lon + 2,
+            north: AUSTIN.lat + 2,
+          },
+        });
+        try {
+          ok(r.globe.imagery.list().includes(layer), 'the layer is listed');
+          if (pixels) {
+            await settled(r);
+            r.frame.renderNow();
+            const s = r.query.project(h.toEcef({ ...AUSTIN, height: 0 }));
+            const read = r.readPixels({
+              crop: {
+                x: Math.round(s.x),
+                y: Math.round(s.y),
+                width: 1,
+                height: 1,
+              },
+            });
+            const [red, green, blue] = read.data;
+            ok(
+              red > 180 && green < 70 && blue < 70,
+              `the canvas is drawn: (${red}, ${green}, ${blue})`,
+            );
+          }
+        } finally {
+          layer.remove();
+        }
+        ok(!r.globe.imagery.list().includes(layer), 'and leaves on remove');
+      },
+      { bareSky: true },
     ),
     check(
       'globe.base.vector',

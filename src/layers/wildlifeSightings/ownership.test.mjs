@@ -1303,6 +1303,7 @@ test('legend keeps semantic order, omits zero groups and puts one blurb first; s
   const allowed = new Set([
     'count',
     'lastUpdate',
+    'recordsRevision',
     'error',
     'stale',
     'loading',
@@ -1315,7 +1316,12 @@ test('legend keeps semantic order, omits zero groups and puts one blurb first; s
     'statusMessage',
     'retryInSec',
   ]);
-  assert.ok(Object.keys(h.layer.getStats()).every((key) => allowed.has(key)));
+  const stats = h.layer.getStats();
+  assert.deepEqual(
+    Object.keys(stats).filter((key) => !allowed.has(key)),
+    [],
+  );
+  assert.equal(stats.recordsRevision, null);
   h.layer.destroy();
 });
 
@@ -1477,11 +1483,19 @@ test('a successful empty page keeps the selected observation until explicit dese
   const h = harness({ getSnapshot: async () => rows });
   await h.update();
   h.layer.selectSighting(base.stableId);
+  assert.equal(h.layer.getStats().recordsRevision, base.stableId);
   rows = [];
   await h.update();
   assert.equal(h.clicks.collection.values.length, 1);
   assert.equal(h.store.selectedEntityId, base.stableId);
+  assert.equal(h.layer.getAnalystRecords()[0].positionUnconfirmed, true);
+  h.layer.selectSighting(base.stableId);
+  assert.equal(h.layer.getAnalystRecords()[0].positionUnconfirmed, true);
+  const { lastUpdate, recordsRevision } = h.layer.getStats();
+  assert.equal(recordsRevision, base.stableId);
   h.layer.clearSightingSelection();
+  assert.equal(h.layer.getStats().recordsRevision, null);
+  assert.equal(h.layer.getStats().lastUpdate, lastUpdate);
   await h.update();
   assert.equal(h.clicks.collection.values.length, 0);
   assert.equal(h.store.selectedEntityId, null);

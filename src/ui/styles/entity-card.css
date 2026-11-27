@@ -181,14 +181,16 @@
   font-size: 0.68rem;
 }
 
-.entity-card__links {
+.entity-card__links,
+.entity-card__attribution-links {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
   margin: 0 0 0.55rem;
 }
 
-.entity-card__links a {
+.entity-card__links a,
+.entity-card__attribution-links a {
   padding: 0.15rem 0.5rem;
   color: #36dcff;
   font-size: 0.64rem;
@@ -198,7 +200,9 @@
 }
 
 .entity-card__links a:hover,
-.entity-card__links a:focus-visible {
+.entity-card__links a:focus-visible,
+.entity-card__attribution-links a:hover,
+.entity-card__attribution-links a:focus-visible {
   background: rgba(48, 194, 224, 0.12);
 }
 
@@ -363,162 +367,6 @@
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
-/* ── In view: what the panel shows while nothing is picked ───────────── */
-.view-context {
-  margin: 0 0 0.75rem;
-  padding: 0.7rem 0.75rem 0.6rem;
-  color: rgba(225, 236, 242, 0.92);
-  background: rgba(40, 44, 52, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 10px;
-}
-
-.view-context__head {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.view-context__icon {
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: 1.9rem;
-  height: 1.9rem;
-  color: #36dcff;
-  font-size: 1.1rem;
-  background: rgba(29, 69, 81, 0.35);
-  border: 1px solid rgba(48, 194, 224, 0.35);
-  border-radius: 7px;
-}
-
-.view-context__kind {
-  display: flex;
-  flex-direction: column;
-  font-size: 0.62rem;
-  letter-spacing: 0.06rem;
-  text-transform: uppercase;
-}
-
-.view-context__sub {
-  color: rgba(199, 214, 222, 0.5);
-}
-
-.view-context__title {
-  margin: 0.55rem 0 0.1rem;
-  overflow-wrap: anywhere;
-  font-family: var(--font-mono);
-  font-size: 1rem;
-  font-weight: 600;
-}
-
-.view-context__where {
-  margin: 0 0 0.55rem;
-  color: rgba(199, 214, 222, 0.5);
-  font-family: var(--font-mono);
-  font-size: 0.62rem;
-  white-space: pre;
-}
-
-.view-context__total,
-.view-context__empty {
-  margin: 0 0 0.4rem;
-  color: rgba(199, 214, 222, 0.7);
-  font-size: 0.68rem;
-  line-height: 1.45;
-}
-
-.view-context__group + .view-context__group {
-  margin-top: 0.45rem;
-}
-
-.view-context__group h4 {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin: 0 0 0.15rem;
-  color: rgba(199, 214, 222, 0.6);
-  font-size: 0.58rem;
-  font-weight: 500;
-  letter-spacing: 0.06rem;
-  text-transform: uppercase;
-}
-
-.view-context__group h4 .material-symbols-outlined {
-  font-size: 0.95rem;
-}
-
-.view-context__count {
-  margin-inline-start: auto;
-  color: #36dcff;
-  font-family: var(--font-mono);
-}
-
-.view-context__group ul {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.view-context__group button {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  width: 100%;
-  padding: 0.28rem 0.35rem 0.28rem 1.75rem;
-  color: rgba(225, 236, 242, 0.85);
-  font-size: 0.68rem;
-  text-align: left;
-  background: none;
-  border: 0;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.view-context__group button:hover,
-.view-context__group button:focus-visible {
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.view-context__row-title {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* A moving item's state on its row: green moving, amber stopped, grey
-   while its feed has nothing new. */
-.view-context__row-motion {
-  flex: none;
-  margin-right: 6px;
-  color: rgba(199, 214, 222, 0.5);
-  font-size: 14px;
-}
-
-.view-context__row-motion[data-motion='moving'] {
-  color: #5dff9f;
-}
-
-.view-context__row-motion[data-motion='stopped'] {
-  color: #ffb86b;
-}
-
-.view-context__row-meta {
-  flex: none;
-  color: rgba(199, 214, 222, 0.55);
-  font-family: var(--font-mono);
-  font-size: 0.6rem;
-}
-
-.view-context__actions {
-  display: flex;
-  margin-top: 0.6rem;
-  padding-top: 0.5rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.07);
-}
-
 .context-empty {
   display: grid;
   justify-items: start;
@@ -593,8 +441,7 @@
 
 /* The icon font's own rules (display: block, 24px) beat the badge's; keep
    the glyph centred in its square at the badge's size. */
-.entity-card__head .entity-card__icon.material-symbols-outlined,
-.view-context__head .view-context__icon.material-symbols-outlined {
+.entity-card__head .entity-card__icon.material-symbols-outlined {
   display: grid;
   place-items: center;
   box-sizing: border-box;
@@ -736,6 +583,14 @@
   margin: 0.55rem 0 0.15rem;
 }
 
+/* What the item is, in its data's own words. */
+.entity-card__description {
+  margin: 0.45rem 0 0.6rem;
+  color: rgba(225, 236, 242, 0.82);
+  font-size: 0.66rem;
+  line-height: 1.45;
+}
+
 #entity-card .entity-card__where {
   margin: 0;
   font-size: 0.6rem;
@@ -821,92 +676,6 @@
 /* Exit: text first, then the leader retracts toward the dot, then the dot. */
 
 /* The route on its small globe, and the Route / Model switch above it. */
-
-/* In view, richer: region, the view's figures as tiles, places in view and
-   layer switches as chips. */
-.view-context__region {
-  margin: 0 0 0.15rem;
-  color: rgba(225, 236, 242, 0.7);
-  font-size: 0.7rem;
-}
-
-.view-context__facts {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.35rem;
-  margin: 0.4rem 0 0.7rem;
-}
-
-.view-context__fact {
-  display: grid;
-  gap: 0.18rem;
-  padding: 0.45rem 0.5rem;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 8px;
-}
-
-.view-context__fact span {
-  color: rgba(199, 214, 222, 0.5);
-  font-size: 0.54rem;
-  letter-spacing: 0.06rem;
-  text-transform: uppercase;
-}
-
-.view-context__fact strong {
-  overflow: hidden;
-  color: rgba(236, 244, 248, 0.95);
-  font-family: var(--font-mono);
-  font-size: 0.78rem;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.view-context__towns {
-  margin: 0.2rem 0 0.7rem;
-}
-
-.view-context__towns h4 {
-  margin: 0 0 0.35rem;
-  padding-bottom: 0.3rem;
-  color: rgba(199, 214, 222, 0.55);
-  font-size: 0.56rem;
-  font-weight: 500;
-  letter-spacing: 0.08rem;
-  text-transform: uppercase;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.view-context__chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-}
-
-.view-context__chips button {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.2rem;
-  padding: 0.28rem 0.6rem;
-  color: rgba(225, 236, 242, 0.85);
-  font-size: 0.66rem;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 999px;
-  cursor: pointer;
-}
-
-.view-context__chips button:hover,
-.view-context__chips button:focus-visible {
-  color: #fff;
-  background: rgba(54, 220, 255, 0.12);
-  border-color: rgba(54, 220, 255, 0.4);
-}
-
-.view-context__chips .material-symbols-outlined {
-  font-size: 0.85rem;
-}
 
 /* A scheduled route that does not fit the plane's position: amber, dashed,
    with a note, so it cannot pass for the flight's actual route. */
@@ -1010,8 +779,6 @@
 }
 
 /* ── Context refinements: one heading style, one tile style, even rhythm ── */
-.view-context__towns h4,
-.view-context__group h4,
 .spot-conditions__block h4,
 .entity-card__section h4,
 .entity-card__nearby h4 {
@@ -1024,145 +791,15 @@
   text-transform: uppercase;
 }
 
-.view-context__towns,
-.view-context__groups,
 .spot-conditions__block,
 .entity-card__section {
   margin-top: 0.85rem;
 }
 
-.view-context__fact,
 .entity-card__tile,
 .spot-conditions__weather {
   border-radius: 8px;
   border-color: rgba(255, 255, 255, 0.07);
-}
-
-.view-context__title {
-  letter-spacing: 0.02em;
-}
-
-.view-context__where {
-  margin-bottom: 0.2rem;
-}
-
-/* Place chips match the omnibox's chips. */
-.view-context__chips button {
-  border-radius: 999px;
-}
-
-/* ── In view: the layers that are on ── */
-.view-context__live {
-  margin-top: 0.85rem;
-}
-
-.view-context__live h4 {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin: 0 0 0.4rem;
-  color: rgba(199, 214, 222, 0.55);
-  font-family: var(--font-mono);
-  font-size: 0.56rem;
-  font-weight: 500;
-  letter-spacing: 0.14rem;
-  text-transform: uppercase;
-}
-
-.view-context__live h4 .view-context__count {
-  margin-inline-start: auto;
-}
-
-.view-context__live ul {
-  display: grid;
-  gap: 0.25rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.view-context__live-row {
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  padding: 0.4rem 0.45rem 0.4rem 0.55rem;
-  background: rgba(255, 255, 255, 0.035);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.view-context__live-icon {
-  flex: none;
-  font-size: 0.95rem;
-}
-
-.view-context__live-main {
-  display: grid;
-  flex: 1 1 auto;
-  gap: 0.08rem;
-  min-width: 0;
-}
-
-.view-context__live-name {
-  overflow: hidden;
-  color: rgba(236, 244, 248, 0.94);
-  font-size: 0.72rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.view-context__live-meta {
-  overflow: hidden;
-  color: rgba(199, 214, 222, 0.55);
-  font-family: var(--font-mono);
-  font-size: 0.58rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.view-context__live-state {
-  flex: none;
-  padding: 0.12rem 0.4rem;
-  font-family: var(--font-mono);
-  font-size: 0.52rem;
-  letter-spacing: 0.1rem;
-  text-transform: uppercase;
-  border: 1px solid currentColor;
-  border-radius: 999px;
-}
-
-.view-context__live-state--live {
-  color: #4be3a0;
-}
-.view-context__live-state--loading {
-  color: #36dcff;
-}
-.view-context__live-state--stale {
-  color: #ffb547;
-}
-.view-context__live-state--error {
-  color: #ff5c6c;
-}
-
-/* A UiCloseButton (close-button.css). */
-.view-context__live-off {
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  color: rgba(199, 214, 222, 0.5);
-  border: 1px solid transparent;
-  border-radius: 6px;
-}
-
-.view-context__live-off .material-symbols-outlined {
-  font-size: 14px;
-}
-
-.view-context__live-off:hover,
-.view-context__live-off:focus-visible {
-  color: #fff;
-  border-color: rgba(255, 255, 255, 0.18);
 }
 
 /* ── Selected camera: thumbnail, facts, More info ── */
@@ -1210,6 +847,15 @@
   background: rgba(5, 8, 11, 0.8);
   border: 1px solid rgba(75, 227, 160, 0.45);
   border-radius: 999px;
+}
+
+/* The frame's time, under the picture. */
+.cctv-preview__time {
+  margin-top: -0.25rem;
+  color: rgba(199, 214, 222, 0.6);
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.06rem;
 }
 
 .cctv-preview__name {
@@ -1511,81 +1157,6 @@
   background: transparent;
 }
 
-/* ── Worldwide counts (globe view, nothing selected) ─────────────────── */
-.view-context__world {
-  margin: 0.6rem 0 0.75rem;
-}
-
-.view-context__world h4 {
-  margin: 0 0 0.4rem;
-  color: rgba(199, 214, 222, 0.55);
-  font-family: var(--font-mono);
-  font-size: 0.56rem;
-  font-weight: 500;
-  letter-spacing: 0.14rem;
-  text-transform: uppercase;
-}
-
-.view-context__world-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.35rem;
-}
-
-.view-context__world-tile {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: center;
-  gap: 0.05rem 0.5rem;
-  padding: 0.5rem 0.6rem;
-  color: inherit;
-  font: inherit;
-  text-align: start;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 8px;
-}
-
-.view-context__world-tile .material-symbols-outlined {
-  grid-row: 1 / 3;
-  color: #36dcff;
-  font-size: 1.3rem;
-}
-
-.view-context__world-tile strong {
-  color: rgba(240, 247, 250, 0.98);
-  font-family: var(--font-mono);
-  font-size: 1rem;
-  font-weight: 600;
-  line-height: 1.1;
-}
-
-.view-context__world-tile span:last-child {
-  overflow: hidden;
-  color: rgba(199, 214, 222, 0.6);
-  font-size: 0.58rem;
-  letter-spacing: 0.04rem;
-  text-overflow: ellipsis;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.view-context__world-tile.is-off {
-  cursor: pointer;
-  border-style: dashed;
-}
-
-.view-context__world-tile.is-off .material-symbols-outlined,
-.view-context__world-tile.is-off strong {
-  color: rgba(199, 214, 222, 0.45);
-}
-
-.view-context__world-tile.is-off:hover,
-.view-context__world-tile.is-off:focus-visible {
-  background: rgba(54, 220, 255, 0.08);
-  border-color: rgba(54, 220, 255, 0.3);
-}
-
 /* An aircraft's altitude as a filled graph, graded by height: bright at
    the top, fading towards the baseline. */
 .altitude-graph {
@@ -1695,84 +1266,6 @@
   bottom: 1px;
 }
 
-/* What a layer that is on is made of: under its row, a bar per split whose
-   segments are the parts, and a legend with each part's count. */
-.view-context__live-item {
-  background: rgba(255, 255, 255, 0.035);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.view-context__live-item > .view-context__live-row {
-  background: none;
-  border: 0;
-}
-
-.view-context__split {
-  display: grid;
-  gap: 0.45rem;
-  padding: 0 0.55rem 0.55rem;
-}
-
-.view-context__split-basis {
-  margin: 0;
-  color: rgba(199, 214, 222, 0.5);
-  font-family: var(--font-mono);
-  font-size: 0.54rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.view-context__split-bar {
-  display: flex;
-  gap: 2px;
-  height: 6px;
-  overflow: hidden;
-  border-radius: 3px;
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.view-context__split-bar i {
-  min-width: 2px;
-}
-
-.view-context__split-legend {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.15rem 0.6rem;
-  margin: 0.3rem 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.view-context__split-legend li {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  min-width: 0;
-  color: rgba(199, 214, 222, 0.75);
-  font-size: 0.6rem;
-}
-
-.view-context__split-legend i {
-  flex: none;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-}
-
-.view-context__split-legend span {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.view-context__split-legend strong {
-  color: #eef6fa;
-  font-family: var(--font-mono);
-  font-weight: 600;
-}
-
 /* The compact graph: caption, figure and a short line, nothing else. */
 .altitude-graph--compact {
   padding-bottom: 0.5rem;
@@ -1782,11 +1275,6 @@
   height: 1.9rem;
   margin-bottom: 0;
   background: none;
-}
-
-/* "Layers on" leads the view, under the place name. */
-.view-context__live {
-  margin: 0.6rem 0 0.7rem;
 }
 
 /* ── Card previews: the photo, route globe, turning model, cockpit view and
@@ -2873,4 +2361,538 @@
 .flight-cockpit__credit {
   left: auto;
   max-width: calc(100% - 110px);
+}
+
+.view-context__empty {
+  margin: 0 0 0.4rem;
+  color: rgba(199, 214, 222, 0.7);
+  font-size: 0.68rem;
+  line-height: 1.45;
+}
+
+.view-context {
+  margin: 0 0 0.75rem;
+  padding: 0.7rem 0.75rem 0.6rem;
+  color: rgba(225, 236, 242, 0.92);
+  background: rgba(40, 44, 52, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 10px;
+}
+
+.view-context__title {
+  margin: 0.55rem 0 0.1rem;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.view-context__region {
+  margin: 0 0 0.15rem;
+  color: rgba(225, 236, 242, 0.7);
+  font-size: 0.7rem;
+}
+
+.view-context__region--clock {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 0.45rem;
+  white-space: pre;
+}
+
+.view-context__region--clock span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.view-context__region--clock span:last-child {
+  flex-shrink: 0;
+  max-width: 100%;
+}
+
+.view-context__eyebrow,
+.view-context__label,
+.nearby-lists__title {
+  margin: 0;
+  color: rgba(199, 214, 222, 0.55);
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  font-weight: 500;
+  letter-spacing: 0.14rem;
+  text-transform: uppercase;
+}
+
+.view-context__tiles--facts .view-context__tile strong {
+  display: block;
+}
+
+.view-context__tiles--facts .view-context__tile strong:not(.view-context__tile-status) {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.view-context__eyebrow + .view-context__title {
+  margin-top: 0.3rem;
+}
+
+.view-context__label {
+  margin-top: 0.75rem;
+  margin-bottom: 0.4rem;
+}
+
+/* The weather with layers on, zoomed in, under the place and time. */
+.view-context__weather {
+  margin-top: 0.6rem;
+}
+
+.view-context__weather-credit {
+  color: inherit;
+  font-size: 0.65rem;
+}
+
+.view-context__radius {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.15rem 0.6rem;
+  margin-top: 0.7rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.view-context__radius-label {
+  color: rgba(199, 214, 222, 0.7);
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.08rem;
+  text-transform: uppercase;
+}
+
+.view-context__radius-value {
+  color: rgba(240, 247, 250, 0.95);
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 600;
+}
+
+.view-context__radius-steps {
+  display: flex;
+  grid-column: 2;
+  justify-content: space-between;
+  color: rgba(199, 214, 222, 0.45);
+  font-family: var(--font-mono);
+  font-size: 0.5rem;
+}
+
+.view-context__radius-steps .is-on {
+  color: #36dcff;
+}
+
+.view-context__tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(6.2rem, 1fr));
+  gap: 0.35rem;
+}
+
+.view-context__tile-age {
+  color: rgba(199, 214, 222, 0.5);
+  font-family: var(--font-mono);
+  font-size: 0.52rem;
+}
+
+.view-context__tiles--facts {
+  margin-top: 0.7rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.view-context__tile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+  padding: 0.45rem 0.55rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+}
+
+.view-context__tile-name {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+  color: rgba(199, 214, 222, 0.7);
+  font-size: 0.58rem;
+  line-height: 1.25;
+}
+
+.view-context__tile-name > span:last-child {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: break-word;
+}
+
+.view-context__tile-name .material-symbols-outlined {
+  flex: none;
+  color: #36dcff;
+  font-size: 0.85rem;
+}
+
+.view-context__tile strong {
+  /* Tiles in a row are as tall as the tallest; the counts line up below. */
+  margin-top: auto;
+  color: rgba(240, 247, 250, 0.98);
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.view-context__tile strong.view-context__tile-status,
+.view-context__tile--value strong {
+  font-size: 0.72rem;
+  overflow-wrap: anywhere;
+}
+
+.view-context__dot {
+  flex: none;
+  width: 0.45rem;
+  height: 0.45rem;
+  background: #4be3a0;
+  border-radius: 50%;
+}
+
+.view-context__dot--loading {
+  background: #36dcff;
+}
+
+.view-context__dot--stale,
+.view-context__dot--fallback,
+.view-context__dot--degraded,
+.view-context__dot--partial {
+  background: #ffb547;
+}
+
+.view-context__dot--unavailable {
+  background: #ff5c6c;
+}
+
+.view-context__problem,
+.view-context__hint {
+  margin: 0.5rem 0 0;
+  color: rgba(199, 214, 222, 0.65);
+  font-size: 0.62rem;
+  line-height: 1.45;
+}
+
+.view-context__problem {
+  color: #ffcf8a;
+}
+
+.view-context__blocks {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.view-context__block {
+  padding: 0.5rem 0.6rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+}
+
+.view-context__block-head {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  color: rgba(199, 214, 222, 0.8);
+  font-size: 0.66rem;
+}
+
+.view-context__block-head .entity-mark {
+  flex: none;
+  color: #36dcff;
+  font-size: 0.9rem;
+}
+
+.view-context__block-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.view-context__block-head strong {
+  color: rgba(240, 247, 250, 0.98);
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.view-context__block-rows {
+  margin-top: 0.4rem;
+}
+
+.view-context__block-rows ul {
+  display: grid;
+  gap: 0.15rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.view-context__bar {
+  display: flex;
+  gap: 2px;
+  height: 0.3rem;
+  margin-top: 0.45rem;
+  overflow: hidden;
+  border-radius: 3px;
+}
+
+.view-context__bar span {
+  flex-basis: 0;
+  min-width: 2px;
+}
+
+.view-context__bar [data-tone='0'],
+.view-context__bar-key [data-tone='0']::before {
+  background: #36dcff;
+}
+
+.view-context__bar [data-tone='1'],
+.view-context__bar-key [data-tone='1']::before {
+  background: #4be3a0;
+}
+
+.view-context__bar [data-tone='2'],
+.view-context__bar-key [data-tone='2']::before {
+  background: #ffb547;
+}
+
+.view-context__bar [data-tone='3'],
+.view-context__bar-key [data-tone='3']::before {
+  background: #c89bff;
+}
+
+.view-context__bar-key [data-tone='4']::before,
+.view-context__bar [data-tone='4'] {
+  background: rgba(199, 214, 222, 0.35);
+}
+
+.view-context__bar-key,
+.view-context__count-unit {
+  margin: 0.3rem 0 0;
+  color: rgba(199, 214, 222, 0.65);
+  font-size: 0.56rem;
+}
+
+.view-context__bar-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.6rem;
+}
+
+.view-context__bar-key span::before {
+  content: '';
+  display: inline-block;
+  width: 0.4rem;
+  height: 0.4rem;
+  margin-inline-end: 0.25rem;
+  border-radius: 2px;
+}
+
+.view-context__pointer {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  margin-top: 0.7rem;
+  padding: 0.55rem 0.65rem;
+  color: rgba(225, 236, 242, 0.92);
+  font: inherit;
+  font-size: 0.7rem;
+  text-align: start;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.view-context__pointer:hover,
+.view-context__pointer:focus-visible {
+  background: rgba(54, 220, 255, 0.08);
+  border-color: rgba(54, 220, 255, 0.4);
+}
+
+.view-context__pointer-text {
+  flex: 1;
+}
+
+.view-context__pointer-go {
+  color: #36dcff;
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.08rem;
+  text-transform: uppercase;
+}
+
+.nearby-lists {
+  margin-top: 0.85rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.nearby-lists__layer {
+  margin-top: 0.45rem;
+}
+
+.nearby-lists__head {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0 0 0.2rem;
+  color: rgba(199, 214, 222, 0.6);
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  font-weight: 500;
+  letter-spacing: 0.1rem;
+  text-transform: uppercase;
+}
+
+.nearby-lists__head .material-symbols-outlined {
+  font-size: 0.9rem;
+}
+
+.nearby-lists__count {
+  color: #36dcff;
+}
+
+.nearby-lists ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nearby-lists button {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  /* Room at the end for the panel's scrollbar, which draws over the rows. */
+  padding-block: 0.3rem;
+  padding-inline: 0.4rem 0.75rem;
+  color: rgba(225, 236, 242, 0.88);
+  font: inherit;
+  font-size: 0.68rem;
+  text-align: start;
+  background: none;
+  border: 0;
+  border-inline-start: 2px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.nearby-lists button:hover,
+.nearby-lists button:focus-visible {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.nearby-lists__row--nearest button {
+  background: rgba(54, 220, 255, 0.07);
+  border-inline-start-color: #36dcff;
+}
+
+.nearby-lists__name {
+  flex: 1;
+  min-width: 0;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+
+.nearby-lists__badge {
+  flex: none;
+  padding: 0.05rem 0.3rem;
+  color: #36dcff;
+  font-family: var(--font-mono);
+  font-size: 0.48rem;
+  letter-spacing: 0.08rem;
+  text-transform: uppercase;
+  border: 1px solid rgba(54, 220, 255, 0.5);
+  border-radius: 3px;
+}
+
+.nearby-lists__meta {
+  flex: none;
+  color: rgba(199, 214, 222, 0.55);
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+}
+
+.nearby-lists__motion {
+  flex: none;
+  color: rgba(199, 214, 222, 0.5);
+  font-size: 14px;
+}
+
+.nearby-lists__motion[data-motion='moving'] {
+  color: #5dff9f;
+}
+
+.nearby-lists__motion[data-motion='stopped'] {
+  color: #ffb86b;
+}
+
+.view-context__camera.altitude-graph--compact {
+  display: block;
+  margin: 0.55rem 0 0;
+  padding: 0.5rem 0.6rem;
+}
+
+.view-context__camera.altitude-graph--compact .altitude-graph__head {
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.view-context__camera.altitude-graph--compact .altitude-graph__plot {
+  height: 1.9rem;
+}
+
+.view-context__suggest {
+  margin-top: 0.8rem;
+}
+
+.view-context__suggest-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.35rem 0 0;
+}
+
+.view-context__suggest-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.5rem;
+  color: rgba(225, 236, 242, 0.88);
+  font-size: 0.62rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+}
+
+.view-context__suggest-item .material-symbols-outlined {
+  color: #36dcff;
+  font-size: 0.8rem;
 }

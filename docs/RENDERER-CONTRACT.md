@@ -23,7 +23,6 @@ own `.d.ts`:
   `.../stub/harness`: the stub's camera, its view rectangle and its
   conformance harness;
 - `gods-eye-view/render/motion`: where a moving icon is drawn at a time;
-- `gods-eye-view/render/vectorBase`: the vector base painter;
 - `gods-eye-view/render/iconSegment`: icon motion segments;
 - `gods-eye-view/render/recession`: how a set that recedes shrinks and
   fades its items toward the limb;
@@ -263,6 +262,17 @@ optional:
   nothing, a move stretches with `axisScale`, and a slide and a hinge stop
   at their limits. The live layers drive it from each vehicle's record
   (`src/data/modelPartDrivers.js`).
+- `DrawPort.views(id, sheet)` (capability `viewSheets`, type `ViewSheet`)
+  registers a grey sheet of views. Registering the same id again replaces it
+  unless a live view icon's frames would run past the new layout. In that case
+  it throws a `RangeError` and keeps the previous sheet.
+  Register the sheet before drawing an icon with a `ViewRef` image
+  (`{views, first, fallback?}`). The icon draws the frame that shows its subject
+  from the eye. It requires `rotationMode: 'course'`, takes no `imageLod`, and
+  shares one sheet with the set's other view icons. Until the sheet loads, and
+  for good if it fails, the icon draws its fallback or nothing if omitted.
+  Cesium offers this on WebGL 2 and keeps the texture for the context's life.
+  Layers send flat images to renderers without the capability.
 
 The Cesium port lists `gpuTiming` where its context has
 `EXT_disjoint_timer_query_webgl2`: while anyone listens to frame signals,
@@ -440,6 +450,20 @@ once the model is ready, and again only when its numbers change. The check
 `draw.models.nodes` moves the harness model's node off the screen's centre
 and back.
 
+Imagery layers (`globe.imagery`) are required. A `single-image` layer takes
+its picture from `url` or, in place of it, from `image`: a canvas the
+application has painted, whose pixels stay unchanged while the layer uses it
+(a new picture is a new layer). It needs no capability: every renderer
+draws it. A spec that gives both, or gives `image` to any other kind, is
+refused with a `TypeError` and adds no layer. The Cesium port draws the
+canvas as one tile over the layer's rectangle
+(`src/render/cesium/imagery.js`), and the stub refuses the same specs. The check `globe.imagery.canvas` adds one and reads its colour where
+the harness draws pixels. The air-quality model field is drawn this way on
+the globe (`src/layers/airQuality/fieldDrawing.js`), each step's picture added
+clear under the one shown and swapped in once `isSettled('imagery')`, and over
+photorealistic 3D tiles as a `rasterShell` field. The application does not
+test for it, since every renderer draws it.
+
 The Cesium port draws timed imagery (`imageryFrames`): a layer given a timed
 source hides its own imagery and draws each frame its clock shows as a Cesium
 imagery layer just above it (in `blend` mode the later frame over the earlier
@@ -559,88 +583,29 @@ and each capability member present without its capability.
 `contract.test.mjs` type-checks the contract under strict TypeScript, and
 fails when `PORTS` and the types disagree on a single member.
 
-### The vector base painter
+### The vector base
 
-`vectorBase` (`BaseSpec.vector = { styleUrl }`) draws a MapLibre style
-document's vector tiles as the globe's base. They are painted in shared,
-Cesium-free code, `src/render/vectorBase/`, which the renderer draws as
-imagery:
+`vectorBase` draws a MapLibre style document's vector map: as an imagery
+layer (`ImagerySpec` `{ kind: 'vector', styleUrl }`), draped as any imagery
+layer is, at its place among the layers, on the ellipsoid, terrain and
+photoreal tiles, with its labels drawn as text (with `overlay`, its lines
+and labels alone, no background or area fills, for a vector map over other
+imagery); or as the globe's base
+(`BaseSpec.vector = { styleUrl }`), under the base's other imagery. It is
+optional: a renderer without it refuses both (`imagery.add` and `setBase`
+throw, and nothing changes). The Cesium renderer does not have it;
+Cesium draws no vector tiles.
 
-- `loadVectorStyle(styleUrl, fetch)` fetches the style and the TileJSON its
-  vector sources name (a source's `url`; inline `tiles` are used as given,
-  resolved against the style), compiles every layer, and returns the
-  sources (tile templates, `minzoom`, `maxzoom`, `xyz` or `tms`), the layers
-  it draws, the background, the sources' attributions, and `skipped`: each
-  layer it does not draw, with why.
-- `paintVectorTile(style, z, x, y, { size, fetch, signal, canvas })` paints
-  one Web Mercator tile on a canvas at style zoom `z + log2(size / 512)` (at
-  least 0). A source past its `maxzoom` is drawn from its deepest tile,
-  overzoomed; below its `minzoom` it draws nothing. Decoded source tiles
-  (gzipped ones inflated) are kept per style, the last 128.
-
-What it draws of the style specification:
-
-- Layers: `background` (`background-color`, `background-opacity`); `fill`
-  (`fill-color`, `fill-opacity`, `fill-outline-color`); `line`
-  (`line-color`, `line-width`, `line-opacity`, `line-dasharray`,
-  `line-cap`, `line-join`, and `line-gap-width` drawn as one line the full
-  cased width); `circle` (`circle-radius`, `circle-color`,
-  `circle-opacity`, `circle-stroke-width`, `circle-stroke-color`,
-  `circle-stroke-opacity`); `symbol` text only (`text-field` as an
-  expression or with `{name}` tokens, `text-size`, `text-font` as the
-  system's sans-serif or serif in bold or italic as its name says,
-  `text-color`, `text-opacity`, `text-halo-color`, `text-halo-width`,
-  `text-transform`, `text-anchor`, `text-offset`, `text-max-width`).
-  Layer `minzoom`, `maxzoom`, `filter` and `visibility` hold.
-- Labels are painted into the tiles: top layer first (within a layer, its
-  features in their order in the tile), each clear of those placed before
-  it and wholly inside its tile (one across a tile edge is
-  left out). A point labels at itself, a line halfway along it (level, not
-  along the line), a polygon at its outer ring's bounding-box centre.
-- Filters in both syntaxes (legacy, with `$type` and `$id`, and
-  expressions). Legacy `{stops, base, property, type}` functions
-  (exponential, interval, categorical, identity; not zoom-and-property);
-  one without a `type` is exponential on a property that interpolates (a
-  number or colour) and interval on any other (`line-cap`, `line-join`,
-  `text-font`, `text-transform`, `text-anchor`, ...), as the specification
-  says. `has`, `get` and legacy filters see a feature's own properties only.
-- Expressions: `literal`, `get`, `has`, `id`, `geometry-type`, `zoom`,
-  `properties`, `!`, `all`, `any`, `==`, `!=`, `<`, `<=`, `>`, `>=`, `in`,
-  `case`, `match`, `coalesce`, `step`, `interpolate` (`linear` and
-  `exponential`; `-hcl` and `-lab` blend in RGB), `to-string`,
-  `to-number`, `to-boolean`, `to-color`, `number`, `string`, `boolean`,
-  `rgb`, `rgba`, `concat`, `format` (its text), `upcase`, `downcase`,
-  `length`, `at`, and arithmetic (`+ - * / % ^`, `min`, `max`, `abs`,
-  `floor`, `ceil`, `round`, `sqrt`, `ln`, `log10`, `log2`).
-- Skipped whole: `fill-extrusion`, `raster`, `hillshade`, `heatmap` and
-  `sky` layers; layers on raster sources; layers setting a pattern
-  (`fill-pattern`, `line-pattern`, `background-pattern`), `line-offset`,
-  `line-gradient` or a translation; layers whose values use an expression
-  not listed (or are malformed). As MapLibre does, a paint or layout value
-  that cannot be evaluated for a feature (a type that does not fit, a
-  `step` or `interpolate` over what is not a number) or is not of the
-  property's kind (null; not a finite number, a string included, where a
-  number is needed; not a colour `parseColor` reads, which takes the CSS
-  colour names; not one of the property's keywords) is the property's
-  default; a legacy function's miss is its `default`, else the property's.
-  A feature whose filter cannot be evaluated is left out. Nothing
-  unsupported throws.
-- Ignored: icons (`icon-image`, sprites: a symbol layer draws its text
-  alone), text along lines (drawn level), `glyphs` (system fonts), and any
-  other paint or layout property not listed above.
-
-The Cesium port loads the style before the base changes (a style that fails
-leaves the base as it was; a later `setBase`, or disposal, aborts the load and
-the overtaken call changes nothing, resolving with `imagery: []` and
-`settled: false`; `settled` is whether, when the call resolves, its base is
-still the one drawn and has settled, so an earlier call that resolves while a
-later call's style is still loading, or after that style fails, is settled,
-and one that resolves after a later call changed the base is not), draws it as Web Mercator imagery under the
-base's other imagery (`src/render/cesium/vectorBase.js`, 256 px tiles to
-level 20, transparent where the style paints no opaque background; a tile
-whose request is cancelled, its layer removed, is not painted), and credits each source's attribution as plain text. The stub
-loads the style and paints nothing. The check `globe.base.vector` serves a
-style and a tile from data URLs and reads the drawn fill.
+With it, the style loads before the base changes: a style
+that fails leaves the base as it was, and a later `setBase`, or disposal,
+aborts the load and the overtaken call changes nothing, resolving with
+`imagery: []` and `settled: false`. `settled` is whether, when the call
+resolves, its base is still the one drawn and has settled. It credits each
+of the style's sources' attributions as plain text while the base is
+drawn. The stub fetches the style document and paints nothing. The check
+`globe.base.vector` serves a style and a tile from data URLs (the tile built
+with `src/render/conformance/vectorTileFixture.js`) and reads the drawn
+fill.
 
 ### What a renderer does, by role
 
@@ -818,7 +783,8 @@ There are two layers of checks.
 - draw-set bookkeeping, picks and the `meta` round-trip;
 - projection, rays and heights;
 - leases and click picks;
-- imagery order, sky, styles, credits and quality knobs;
+- imagery order, single-image canvases, sky, styles, credits and quality
+  knobs;
 - the camera traces.
 
 **Camera traces.** `cameraScripts.js` lists camera scripts in the contract's
@@ -894,9 +860,10 @@ software rasterizer such as SwiftShader draws the glow line differently.
 It has only the members the scenes need.
 
 Some behaviour is only drawn, so the logic checks cannot see it: course
-easing (`courseGlide`), and a hidden row keeping its eased
-course. The stub keeps no drawn course. These wait for scenes that capture
-an icon mid-turn. Height queries that count a set
-(`includeInHeightQueries`) are not checked either: the stub's heights are
-scripted, so it does not model them. Nor are video frames (a check needs a
-video) or `fetchTile` (the stub fetches nothing).
+easing (`courseGlide`), view sheets (`viewSheets`), and a hidden row keeping
+its eased course. The stub keeps no drawn course. These checks still need
+scenes that capture an icon mid-turn or from an oblique angle. Height
+queries that count a set (`includeInHeightQueries`) are not checked either:
+the stub's heights are scripted, so it does not model them. Nor are video
+frames (a check needs a video) or `fetchTile`, imagery's or terrain's (the
+stub fetches nothing).

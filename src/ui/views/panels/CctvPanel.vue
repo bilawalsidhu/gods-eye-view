@@ -26,6 +26,8 @@ const frameData = computed(() =>
       }
     : {},
 );
+// The time the camera's source gives the frame on screen, if any.
+const frameTime = computed(() => (!live.value && frame.value?.hasFrame && frame.value.timeLabel) || '');
 </script>
 
 <template>
@@ -36,6 +38,7 @@ const frameData = computed(() =>
       <img id="cctv-frame" alt="CCTV feed frame" :class="{ active: frame?.hasFrame }" :src="(!live && frame?.src) || undefined" :hidden="live" v-bind="frameData" />
       <canvas id="cctv-video" class="cctv-frame" :hidden="!live"></canvas>
     </div>
+    <time v-if="frameTime" id="cctv-frame-time" :datetime="frame.timeIso">{{ frameTime }}</time>
     <UiBadge id="cctv-source-badge" role="status" aria-live="polite" :data-frame-state="sourceBadge?.state">{{ sourceBadge?.label ?? t('SOURCE · UNKNOWN') }}</UiBadge>
     <div id="cctv-meta">{{ view?.meta ?? t('Enable CCTV to load camera intersections') }}</div>
     <div class="cctv-controls">

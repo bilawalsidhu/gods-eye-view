@@ -4,8 +4,9 @@ import { storeToRefs } from 'pinia';
 import { getLocale, t, tn } from '../../../i18n/index.js';
 import { EXCLUSIVE_SURFACE_CLASSES } from '../../../exclusiveSurfaces.js';
 import { createOmnibar, drawAsked, escapeRegExp, readLine, VILLAGES } from '../../omnibarRows.js';
+import { lookupMatches } from '../../entityLookup.js';
 import { FEATURE_GUIDES, layerGuide, layerSettingsGuide, startGuide } from '../../omnibarGuide.js';
-import { citiesInRegion, createPlaceSuggester, inExtent, mayBePrivate, minPlaceChars } from '../../../search/placeSuggestions.js';
+import { citiesInRegion, createPlaceSuggester, inExtent, minPlaceChars } from '../../../search/placeSuggestions.js';
 import { greatCircleKm } from '../../../geoDistance.js';
 import { PHOTON_SETTING } from '../../../search/photonSetting.js';
 import { citiesAround, countryName, findPlace, nearestCity, placesNear } from '../../../data/wikidataCities.js';
@@ -16,6 +17,7 @@ import { useGlobeActionsStore } from '../../stores/globeActions.js';
 import { useLocationStore } from '../../stores/location.js';
 import { useOmnibarStore } from '../../stores/omnibar.js';
 import { useVoiceStore } from '../../stores/voice.js';
+import { worldClock } from '../../../time/worldClock.js';
 import UiButton from '../../kit/UiButton.vue';
 import UiIcon from '../../kit/UiIcon.vue';
 import { vRootClass } from '../../rail/rootClass.js';
@@ -36,8 +38,8 @@ const asPlace = (city) => {
 const placeKey = (place) => place.id || `${place.name}@${Number(place.latitude).toFixed(3)},${Number(place.longitude).toFixed(3)}`;
 const globeActions = useGlobeActionsStore();
 const locationStore = useLocationStore();
-// The preset cities and the current city's landmarks, as LocationControls
-// presents them: the omnibox offers them as the dock's location tray did.
+// The current city's landmarks, its lookup error and who ran the lookup, as
+// LocationControls presents them.
 const { view: locationView } = storeToRefs(locationStore);
 // "here", "this spot": the selected item, else the view.
 const HERE = /\b(here|there|this (spot|point|place|location|area)|around it|nearby)\b/i;
@@ -55,6 +57,16 @@ const dismissed = ref(false);
 const error = ref('');
 const busy = ref(false);
 let generation = 0;
+// The choice still running (a looked-up item being found in its layer):
+// aborted as soon as anything newer happens, so nothing it was waiting for
+// takes the selection or the camera afterwards.
+let running = null;
+/** Supersede whatever the field was still running. */
+function supersede() {
+  generation++;
+  running?.abort();
+  running = null;
+}
 let stopGuide;
 // A search's error shows under the line it was for: one that fails after
 // the line was edited says nothing under the new text.
@@ -68,7 +80,7 @@ const voiceOn = computed(() => voice.view?.root?.assistantMode === 'voice');
 // waiting on its flight changes nothing afterwards.
 watch(voiceOn, (active) => {
   if (!active) return;
-  generation++;
+  supersede();
   busy.value = false;
 });
 const assistantOpen = computed(() => voice.view?.root?.chatOpen || voice.view?.voicePanel?.hidden === false);
@@ -139,8 +151,8 @@ watch(query, (value) => {
   clearTimeout(placesTimer);
   placesAbort?.abort();
   // Only text that may name a place goes to the place service, and only the
-  // part that names it: never private text, a question, a sentence, a
-  // command, a switch, coordinates or an aircraft code (see placeQuery).
+  // part that names it: never a question, a sentence, a command, a
+  // switch, coordinates or an aircraft code (see placeQuery).
   // Nothing is looked up for a field hidden under voice.
   const asked = suggester.enabled && !voiceOn.value ? reader.value.placeQuery(text) : null;
   if (!asked) {
@@ -166,6 +178,47 @@ watch(query, (value) => {
 onBeforeUnmount(() => {
   clearTimeout(placesTimer);
   placesAbort?.abort();
+});
+
+// Things anywhere, from the host's lookup when it gives one (the
+// `entityLookup` option, src/app/controls.js), asked with the typed line once
+// typing pauses: only a bare name, code or number (lookupQuery in
+// omnibarRows.js), never while voice has the field. An edit or closing the
+// field aborts the request.
+const found = ref([]);
+const foundFor = ref('');
+let foundAbort = null;
+let foundTimer = null;
+/** Whether the line goes to the host's lookup. */
+const asksHost = (text) => typeof controls.value?.lookupEntities === 'function' && !voiceOn.value && Boolean(reader.value.lookupQuery(text));
+watch(query, (value) => {
+  const text = value.trim();
+  clearTimeout(foundTimer);
+  foundAbort?.abort();
+  foundAbort = null;
+  if (!asksHost(text)) {
+    found.value = [];
+    foundFor.value = '';
+    return;
+  }
+  foundTimer = setTimeout(async () => {
+    const controller = new AbortController();
+    foundAbort = controller;
+    try {
+      // A clock held in the past asks for things as they were then.
+      const at = worldClock.isLive() ? undefined : Math.round(worldClock.now());
+      const answer = await controls.value.lookupEntities({ text, at, signal: controller.signal });
+      if (controller.signal.aborted) return;
+      found.value = lookupMatches(answer);
+      foundFor.value = text;
+    } catch {
+      if (!controller.signal.aborted) found.value = [];
+    }
+  }, 250);
+});
+onBeforeUnmount(() => {
+  clearTimeout(foundTimer);
+  foundAbort?.abort();
 });
 
 // ── Place strip ──────────────────────────────────────────────────────
@@ -277,7 +330,6 @@ watch(stripPlace, async (place) => {
 
 const strip = computed(() => {
   const asked = query.value.trim();
-  if (asked && mayBePrivate(asked)) return null;
   if (asked && countQuery.value) {
     const counted = countQuery.value;
     return {
@@ -286,7 +338,7 @@ const strip = computed(() => {
     };
   }
   if (!asked && !selected.value) {
-    const groups = entityCard.inView({ perLayer: 2 });
+    const groups = entityCard.inView({ perLayer: 2, viewport: true });
     const chips = groups
       .flatMap((group) => group.items.map((item) => ({ ...item, icon: group.icon })))
       .sort((a, b) => a.distanceKm - b.distanceKm)
@@ -397,7 +449,7 @@ async function goTo({ latitude, longitude }) {
 
 function chooseChip(chip, { viaKey = false } = {}) {
   if (screenIsOwned()) return;
-  generation++;
+  supersede();
   busy.value = false;
   // A chip is a new request: the last one's error goes.
   error.value = '';
@@ -521,6 +573,7 @@ const built = computed(() => {
   const card = selected.value;
   return reader.value.rows(text, {
     places: placesFor.value === text ? places.value : [],
+    found: foundFor.value === text ? found.value : [],
     entities: (needle, options) => entityCard.search(needle, options),
     selection: card
       ? { title: card.title, layerName: card.layerName, canFollow: entityCard.canFollow(), canCockpit: entityCard.canCockpit() }
@@ -640,18 +693,16 @@ onBeforeUnmount(() => {
   if (photonShown.value) controls.value?.creditSuggestions?.(false);
 });
 const noCommand = computed(() => focused.value && !dismissed.value && query.value.trim().startsWith('>') && !items.value.length);
-// Text withheld as private says so, rather than showing nothing.
-const privateNote = computed(() => focused.value && !dismissed.value && mayBePrivate(query.value.trim()));
 // An error stays in view while voice is on, even with the voice panel open.
 const showFeedback = computed(() => feedback.value && (focused.value || !assistantOpen.value || voiceOn.value));
-const showResults = computed(() => open.value || showFeedback.value || noCommand.value || privateNote.value);
+const showResults = computed(() => open.value || showFeedback.value || noCommand.value);
 
 function onInput(event) {
   // Text an input method is still composing is read when it is committed
   // (compositionend), not sent to the place service half-written.
   if (event.isComposing) return;
   query.value = event.target.value;
-  generation++;
+  supersede();
   busy.value = false;
   dismissed.value = false;
   locationStore.controls?.editSearch();
@@ -667,7 +718,7 @@ function onInput(event) {
  * waiting on a flight) is superseded, so none of its later steps run.
  */
 function reset({ blur = true } = {}) {
-  generation++;
+  supersede();
   busy.value = false;
   dismissed.value = true;
   query.value = '';
@@ -834,11 +885,15 @@ const keepsFocus = (viaKey) =>
 
 async function choose(item, { viaKey = false } = {}) {
   if (!item || item.kind === 'none' || screenIsOwned()) return;
-  const current = ++generation;
+  supersede();
+  const current = generation;
+  const controller = new AbortController();
+  running = controller;
+  const { signal } = controller;
   busy.value = true;
   error.value = '';
   try {
-    if (item.kind === 'view-ask') entityCard.askAboutView(entityCard.inView());
+    if (item.kind === 'view-ask') entityCard.askAboutView(entityCard.inView({ viewport: true }));
     else if (item.kind === 'sel-fly') entityCard.flyTo();
     else if (item.kind === 'sel-follow') entityCard.follow();
     else if (item.kind === 'sel-cockpit') entityCard.cockpit();
@@ -868,6 +923,21 @@ async function choose(item, { viaKey = false } = {}) {
       if (!live) throw new Error();
       if (Boolean(live.enabled) !== item.enabled && (await controls.value.setLayer(item.id, item.enabled)) === false) throw new Error();
     } else if (item.kind === 'entity') entityCard.select(item.identity, { fly: true });
+    else if (item.kind === 'found') {
+      // Found in its layer (switched on if need be), then picked as a
+      // Context row picks it; one the layer had yet to load is picked there
+      // already, with the camera centred on it, and only its card opens.
+      if (!controls.value?.findLookedUp) throw new Error();
+      const found = await controls.value.findLookedUp(item.match, { signal });
+      if (current !== generation || signal.aborted || found?.reason === 'cancelled') return;
+      // Nothing to pick at this time: the host's line says why, under the field.
+      if (found?.reason === 'unplaced' && item.match.detail) {
+        error.value = `${item.match.name || item.match.id} · ${item.match.detail}`;
+        return;
+      }
+      if (!found?.ok) throw new Error();
+      if (!entityCard.select(found.identity, { fly: !found.picked }) && !found.picked) throw new Error();
+    }
     else if (item.kind === 'plan') await runPlan(item.steps, current);
     else if (item.kind === 'mic') {
       // No voice connected: the row fails rather than passing for done.
@@ -976,13 +1046,22 @@ function onKeydown(event) {
 // `/` from anywhere outside a text input, or ⌘K on a Mac (Ctrl+K elsewhere),
 // focuses the field. Ctrl+K on a Mac is left to the text field it is in.
 const isMac = /Mac|iPhone|iPad/.test(globalThis.navigator?.platform || '');
+
+/** Whether an element is on screen: neither it nor a container is hidden. */
+function isShown(element) {
+  if (element.closest('[hidden]')) return false;
+  return element.checkVisibility ? element.checkVisibility({ visibilityProperty: true }) : element.getClientRects().length > 0;
+}
+
 function onGlobalKeydown(event) {
   // With voice on the field is hidden: the shortcut does not focus it.
   if (event.defaultPrevented || event.isComposing || voiceOn.value || screenIsOwned() || !input.value?.getClientRects().length) return;
   // An open modal dialog, or focus inside any dialog (the guide), keeps its
-  // keys: the shortcut does not pull focus out of it.
+  // keys: the shortcut does not pull focus out of it. A modal counts only
+  // while it is shown: one kept in a hidden container is closed.
   const doc = globalThis.document;
-  if (doc.querySelector('[aria-modal="true"]:not([hidden]), dialog[open]') || doc.activeElement?.closest?.('[role="dialog"], dialog')) return;
+  const modals = doc.querySelectorAll('[aria-modal="true"], dialog[open]');
+  if ([...modals].some(isShown) || doc.activeElement?.closest?.('[role="dialog"], dialog')) return;
   const typing = event.target?.closest?.('input, textarea, select, [contenteditable]');
   const commandK =
     (isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey) &&
@@ -996,16 +1075,16 @@ function onGlobalKeydown(event) {
 
 onMounted(() => document.addEventListener('keydown', onGlobalKeydown));
 onBeforeUnmount(() => {
-  generation++;
+  supersede();
   stopGuide?.();
   document.removeEventListener('keydown', onGlobalKeydown);
 });
 
 /** The mic button; pressing it supersedes a plan still running. */
-function onMic(supersede = false) {
+function onMic(stopRunning = false) {
   if (screenIsOwned()) return;
-  if (supersede) {
-    generation++;
+  if (stopRunning) {
+    supersede();
     busy.value = false;
   }
   voice.controls?.emit('button');
@@ -1119,7 +1198,6 @@ watch(
       </li>
     </ul>
       <p v-show="noCommand" role="status">{{ t('No matching command') }}</p>
-      <p v-show="privateNote" role="status">{{ t('Looks private, so nothing is searched or sent') }}</p>
     </div>
   </section>
 </template>
@@ -1355,39 +1433,6 @@ small {
 }
 @media (pointer: coarse) {
   .omnibar-kbd { display: none; }
-}
-:global(body.mobile-shell #gev-omnibar) {
-  --omnibar-top: calc(var(--mobile-top-inset, 0px) + 88px);
-  --omnibar-credit-bottom: max(
-    calc(var(--mobile-tab-space) + 106px + var(--world-timeline-lift, 0px)),
-    calc(var(--mobile-sheet-cover, 0px) + 6px)
-  );
-  left: auto;
-  inset-inline: 16px;
-  width: auto;
-  transform: none;
-}
-/* The language picker sits at the right edge beside the field; the field leaves it room.
-   `.has-locale-picker`, `.has-world-timeline` and `.has-omnibar` are page-root classes (src/ui/rail/rootClass.js). */
-:global(body.mobile-shell:is(.has-locale-picker *, #locale-picker) #gev-omnibar) {
-  inset-inline: 16px 60px;
-}
-/* A lifted timeline leaves less map above the credits on short phones. */
-@media (max-height: 480px) {
-  :global(body.mobile-shell:is(.has-world-timeline *, #world-timeline) #gev-omnibar) {
-    --omnibar-top: calc(var(--mobile-top-inset, 0px) + 48px);
-    --omnibar-field-room: 34px;
-    --omnibar-field-height: 34px;
-    --omnibar-credit-room: 36px;
-    --omnibar-mic-size: 26px;
-    --omnibar-result-padding: 1px;
-    --omnibar-message-padding: 1px;
-    --omnibar-item-padding: 2px;
-  }
-  /* The field takes the HUD readout's row (48-82px): the readout sits under it. */
-  :global(body.mobile-shell:is(.has-world-timeline *, #world-timeline):is(.has-omnibar *, #gev-omnibar) #intel-hud .hud-bottom-left) {
-    top: calc(var(--mobile-top-inset, 0px) + 88px);
-  }
 }
 :global(body.ui-clean-view #gev-omnibar),
 :global(body.recording-mode #gev-omnibar),

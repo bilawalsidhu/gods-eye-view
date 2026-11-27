@@ -65,6 +65,29 @@ export function normalizeRoadModes(value) {
 }
 
 /**
+ * The layer's data source as its row names it when the host gives no `label`
+ * (createTrafficSource): TomTom alone when the host
+ * offers only TomTom roads, since then no OpenStreetMap data is drawn; every
+ * other set of modes draws OpenStreetMap roads somewhere (`osm` matches TomTom
+ * flow onto them).
+ */
+export function trafficSourceLabel(modes) {
+  return modes?.length === 1 && modes[0] === 'tomtom'
+    ? 'TomTom'
+    : 'OpenStreetMap / TomTom';
+}
+
+/**
+ * The road source named before roads arrive, or for a response that names
+ * none: TomTom on a host that offers only TomTom roads, else OpenStreetMap.
+ */
+export function defaultRoadSource(modes) {
+  return modes?.length === 1 && modes[0] === 'tomtom'
+    ? ROAD_SOURCE_LABELS.tomtom
+    : ROAD_SOURCE_LABELS.osm;
+}
+
+/**
  * Whether a host's modes allow simulated roads. Without OpenStreetMap the
  * layer never simulates: keyless, it draws no roads and says why.
  * @param {ReadonlyArray<string>} [modes]

@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { hazardsNear } from './spotConditions.js';
+import { hazardsNear, weatherLook } from './spotConditions.js';
+
+test('an omitted weather code stays unknown while WMO zero means clear', () => {
+  assert.equal(weatherLook(null).label, 'Conditions unknown');
+  assert.equal(weatherLook(0).label, 'Clear');
+});
 
 test('a wildfire is placed at its card anchor, not its first ring', async (t) => {
   // Two polygons: the larger one, far from the first, carries the anchor.

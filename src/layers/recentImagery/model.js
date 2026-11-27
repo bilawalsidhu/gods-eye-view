@@ -483,6 +483,46 @@ function pointInPolygon(lon, lat, ring) {
   return inside;
 }
 
+// Return the point in each intersecting search box's longitude coordinates.
+export function pointBoxMatches(box, lon, lat) {
+  if (!Number.isFinite(lon) || Math.abs(lon) > 180 || !Number.isFinite(lat))
+    return [];
+  const matches = [];
+  for (const part of nonCrossingBoxes(box)) {
+    if (lat < part.south || lat > part.north) continue;
+    for (const x of [lon + 360, lon, lon - 360]) {
+      if (x >= part.west && x <= part.east)
+        matches.push({ lon: x, key: boxKey(part) });
+    }
+  }
+  return matches;
+}
+
+/**
+ * The part of a day candidate whose known footprints contain the point.
+ * @param {object} candidate
+ * @param {number} lon
+ * @param {number} lat
+ * @returns {?object}
+ */
+export function candidateAtPoint(candidate, lon, lat) {
+  const granules = (candidate?.granules || []).filter((granule) => {
+    const ring = granule?.footprint;
+    if (!Array.isArray(ring) || ring.length < 3) return false;
+    const crossesDateline = ring.some(
+      ([x], i) => Math.abs(x - ring[(i + 1) % ring.length][0]) > 180,
+    );
+    if (!crossesDateline) return pointInPolygon(lon, lat, ring);
+    // Shift the cut to Greenwich so a granule around ±180° stays together.
+    const shift = (value) => (value < 0 ? value + 360 : value);
+    const unwrapped = ring.map(([x, y]) => [shift(x), y]);
+    return pointInPolygon(shift(lon), lat, unwrapped);
+  });
+  return granules.length
+    ? buildCandidate(candidate.product, candidate.day, granules)
+    : null;
+}
+
 /**
  * How much of the box a candidate's granule footprints cover, sampled at the
  * four corners and the centre: `full`, `partial`, or `unknown` without

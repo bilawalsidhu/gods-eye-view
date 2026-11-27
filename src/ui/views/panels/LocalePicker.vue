@@ -17,7 +17,6 @@ import {
   localeOptionCode,
 } from '../../localePicker.js';
 import { vClassToggle } from '../../rail/classToggle.js';
-import { vRootClass } from '../../rail/rootClass.js';
 import UiButton from '../../kit/UiButton.vue';
 
 // The interface language picker. The model in localePicker.js holds the
@@ -189,7 +188,7 @@ defineExpose({ open, close, isOpen: () => model.open });
 </script>
 
 <template>
-  <div id="locale-picker" ref="root" class="locale-picker" v-root-class="{ 'has-locale-picker': true }" v-class-toggle="{ 'is-open': view.open }" @focusout="onFocusOut">
+  <div id="locale-picker" ref="root" class="locale-picker" v-class-toggle="{ 'is-open': view.open }" @focusout="onFocusOut">
     <UiButton ref="button" class="locale-picker-button" aria-haspopup="listbox" :aria-expanded="String(view.open)" :aria-controls="ids.popup" :aria-label="buttonLabel" :title="t('Change the interface language')" @click="onButtonClick" @keydown="onButtonKeyDown" @keyup="onButtonKeyUp">
       <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="locale-picker-globe"><path v-for="d in LOCALE_PICKER_ICONS.globe.stroke" :key="d" :d="d" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" /></svg>
       <span class="locale-picker-code" translate="no" aria-hidden="true">{{ current.toUpperCase() }}</span>

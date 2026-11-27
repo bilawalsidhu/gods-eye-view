@@ -81,8 +81,8 @@ test('the runner discovers every test file in the repository', () => {
   assert.deepEqual(discovered, onDisk);
   for (const file of discovered) {
     assert.ok(
-      UNIT_TEST_ROOTS.some((root) => file.startsWith(`${root}/`)),
-      `${file} should sit under one of ${UNIT_TEST_ROOTS.join(', ')}`,
+      !file.includes('/') || UNIT_TEST_ROOTS.some((root) => file.startsWith(`${root}/`)),
+      `${file} should be at the repository root or under one of ${UNIT_TEST_ROOTS.join(', ')}`,
     );
   }
 });

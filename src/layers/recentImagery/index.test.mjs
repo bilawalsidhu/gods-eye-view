@@ -154,7 +154,8 @@ function fixture({
   bindFakeCesiumCamera(viewer, ports(viewer));
   const reasons = [];
   layer.subscribe((snapshot, reason) => reasons.push(reason));
-  layer.init(viewer);
+  const panel = { invalidations: 0, invalidate: () => panel.invalidations++ };
+  layer.init(viewer, { panel });
   if (controller) layer.attachMapStackController(controller);
   const dataManager = fakeDataManager({ layer });
   layer.attachDataManager(dataManager);
@@ -186,6 +187,7 @@ function fixture({
     hostState,
     viewer,
     reasons,
+    panel,
     timers,
     toolCalls,
     ready,
@@ -1104,10 +1106,9 @@ test('ZOOM IN: an oversized box or view flies top-down to its centre at the heig
 
 test('alpha, split and visible range notify without re-rendering the row', async () => {
   const f = fixture();
-  let rowRenders = 0;
-  f.layer.setRowControlsListener(() => rowRenders++);
   await f.ready();
-  const rows = rowRenders;
+  f.layer.takePanelChanges();
+  const invalidations = f.panel.invalidations;
   f.layer.setAlpha(0.4);
   assert.deepEqual(f.renderer.calls.at(-1), ['alpha', 'b', 0.4]);
   assert.equal(f.owned().a.alpha, 1, 'the fake keeps the look it was given');
@@ -1118,7 +1119,14 @@ test('alpha, split and visible range notify without re-rendering the row', async
     f.thumbnails.retained.at(-1).includes(f.snap().focus.key),
     'the current focus remains in the retained refinement intent',
   );
-  assert.equal(rowRenders, rows);
+  // The panels are told, and what they take back are light changes only:
+  // the readout updates the slider and the strip in place, and the row's
+  // controls are unchanged, so nothing is rebuilt.
+  assert.ok(f.panel.invalidations > invalidations);
+  const changes = f.layer.takePanelChanges();
+  assert.ok(changes.has('alpha') && changes.has('split'));
+  assert.equal(changes.has('state'), false, 'no change rebuilds the readout');
+  assert.equal(f.layer.takePanelChanges().size, 0, 'taking clears them');
   assert.deepEqual(f.reasons.slice(-2), ['alpha', 'split']);
   f.layer.setAlpha('bad');
   assert.equal(f.snap().alpha, 0.4);
@@ -1675,12 +1683,49 @@ test('a VIIRS dateline day with data on one side drapes only that side through t
     [nonCrossingBoxes(FIJI_BOX)[1]],
   );
   assert.equal(loader.get(day.key).status, 'present');
+  assert.match(layer.getValueAt(-17.5, -179)?.detail ?? '', /Daily overview/);
+  assert.equal(layer.getValueAt(-17.5, 179.5), null);
+  assert.deepEqual(layer.getValueAt(-17.5, 180), layer.getValueAt(-17.5, -179));
+  assert.deepEqual(
+    layer.getValueAt(-17.5, -180),
+    layer.getValueAt(-17.5, -179),
+  );
   const snapshot = layer.getSnapshot();
   assert.equal(snapshot.candidates[0].thumbnail.status, 'present');
   assert.equal(snapshot.candidates[0].drapable, true);
   assert.equal(snapshot.auto?.key, day.key);
   layer.destroy();
   assert.equal(globe.layers.length, 0);
+});
+
+test('a crossing HLS footprint cannot report imagery on a half confirmed empty', async () => {
+  const day = candidate('S30', '2026-11-10');
+  day.granules[0].footprint = [
+    [179, -18],
+    [-177, -18],
+    [-177, -17],
+    [179, -17],
+  ];
+  const { layer, loader } = realLayer({
+    candidates: [day],
+    fetchImpl: async (url) => snapshotAnswer(sideOf(url) === 'west'),
+  });
+  layer.enable();
+  layer.setBox(FIJI_BOX);
+  assert.equal(
+    await until(() => loader.get(day.key).status === 'present', {
+      ticks: 2000,
+    }),
+    true,
+  );
+  assert.equal(
+    layer.getValueAt(-17.5, 179.5)?.at,
+    Date.parse(day.timeRange.end),
+  );
+  assert.equal(layer.getValueAt(-17.5, -179), null);
+  assert.equal(layer.getValueAt(-17.5, 180)?.at, Date.parse(day.timeRange.end));
+  assert.deepEqual(layer.getValueAt(-17.5, -180), layer.getValueAt(-17.5, 180));
+  layer.destroy();
 });
 
 test('a dateline day both halves confirm empty never drapes and leaves the strip', async () => {

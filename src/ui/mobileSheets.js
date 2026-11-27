@@ -10,8 +10,7 @@ export const MOBILE_SHEET_PANELS = Object.freeze({
   cameras: Object.freeze(['cctv-panel', 'street-level-panel']),
   context: Object.freeze(['global-context-panel']),
   missions: Object.freeze(['space-missions-panel']),
-  search: Object.freeze(['location-bar']),
-  more: Object.freeze(['control-panel', 'pp-toggles']),
+  more: Object.freeze(['pp-toggles']),
 });
 
 /**

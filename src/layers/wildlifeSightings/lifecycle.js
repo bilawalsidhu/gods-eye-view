@@ -367,12 +367,16 @@ export function createLifecycle({ state, services, parts }) {
         for (const row of snapshot.rows) {
           state.rows.delete(row.stableId);
           state.rows.set(row.stableId, row);
+          state.heldRows.delete(row);
           if (row.stableId === state.selectedId) state.selectedRow = row;
         }
         // Selection owns a real observation until explicit deselection. It is
         // independent of sample/window/filter and ambient-card eligibility.
-        if (state.selectedRow && !state.rows.has(state.selectedId))
+        // A page that dropped the row no longer vouches for its position.
+        if (state.selectedRow && !state.rows.has(state.selectedId)) {
+          state.heldRows.add(state.selectedRow);
           state.rows.set(state.selectedId, state.selectedRow);
+        }
         // Random samples may omit a photograph already displayed. Its bounded
         // incumbent row stays selectable until the card leaves the view/window.
         for (const row of retainedRows) {
@@ -531,11 +535,12 @@ export function createLifecycle({ state, services, parts }) {
 
   const methods = {
     /** Attach this layer's draw sets and listeners to one viewer. */
-    init(viewer, { signal } = {}) {
+    init(viewer, { signal, panel = null } = {}) {
       if (state.viewer)
         throw new Error('Wildlife sightings layer is already initialized');
       if (state.destroyed || signal?.aborted) return false;
       state.viewer = viewer;
+      state.panel = panel;
       parts.rendering.init();
       return true;
     },
@@ -831,7 +836,7 @@ export function createLifecycle({ state, services, parts }) {
       state.gridParams = null;
       state.pendingParams = null;
       state.failedParams = null;
-      state.controlsListener = null;
+      state.panel = null;
       state.manager = null;
       state.viewer = null;
     },

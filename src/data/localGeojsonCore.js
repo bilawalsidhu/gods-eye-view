@@ -1,4 +1,9 @@
 import {
+  CONTEXT_FEATURE,
+  CONTEXT_LINES,
+  contextLine,
+} from './contextGeometry.js';
+import {
   cameraOf,
   canvasOf,
   drawOf,
@@ -418,6 +423,18 @@ export function rhumbPositions(coordinates) {
 const RADIANS = Math.PI / 180;
 
 /**
+ * What a feature is known by: its id, or the feature itself when it has
+ * none. A feature drawn in several parts (a MultiPolygon, or a dam mapped as
+ * its outline and again as its crest lines under one id) is one feature.
+ * @param {object} feature
+ * @returns {string|object}
+ */
+function localFeatureKey(feature) {
+  const { id } = feature;
+  return id == null ? feature : String(id);
+}
+
+/**
  * The drawn parts of a feature collection, one per thing the GeoJSON loader
  * made an entity of, in its order and under its ids: a polygon, line or
  * point per part of a multi-geometry, the feature's id taking `_2`, `_3`…
@@ -482,6 +499,112 @@ export function localGeojsonParts(features) {
     geometry(feature, feature.geometry);
   }
   return parts;
+}
+
+function anonymousContent(feature) {
+  const properties = unwrapProperties(feature.properties ?? {});
+  // The library computes rank from the whole snapshot. Inserting a newer
+  // row can change it even when this source feature is unchanged.
+  delete properties.__gevRank;
+  return JSON.stringify([feature.geometry, properties], (_, value) =>
+    value && typeof value === 'object' && !Array.isArray(value)
+      ? Object.fromEntries(
+          Object.keys(value)
+            .sort()
+            .map((key) => [key, value[key]]),
+        )
+      : value,
+  );
+}
+
+/** Keep anonymous Context keys independent of renderer part order. */
+function anonymousContextKeys(parts, layerId, previous, nextKey) {
+  const keys = new Map();
+  const placeOf = new Map();
+  const sourceIds = new Map();
+  const sourceIdCounts = new Map();
+  for (const { feature, kind, coordinates } of parts) {
+    if (feature.id != null || kind === 'empty' || keys.has(feature)) continue;
+    const point =
+      kind === 'point'
+        ? coordinates
+        : kind === 'line'
+          ? coordinates[0]
+          : coordinates[0][0];
+    const properties = unwrapProperties(feature.properties ?? {});
+    const { name } = mapAnalystRecord({ properties }, layerId);
+    placeOf.set(feature, JSON.stringify([point[1], point[0], name]));
+    const sourceId = Object.hasOwn(properties, '__gevSourceId')
+      ? properties.__gevSourceId
+      : null;
+    if (typeof sourceId === 'string' && sourceId) {
+      sourceIds.set(feature, sourceId);
+      sourceIdCounts.set(sourceId, (sourceIdCounts.get(sourceId) ?? 0) + 1);
+    }
+    keys.set(feature, null);
+  }
+  const uniqueId = (feature) => {
+    const id = sourceIds.get(feature);
+    return id && sourceIdCounts.get(id) === 1 ? id : null;
+  };
+
+  // Match the feed's own id first, wherever the feature moved. Every feature
+  // still claims its place for the next snapshot.
+  const byLocation = new Map();
+  for (const feature of keys.keys()) {
+    keys.set(feature, previous?.sourceKeys.get(uniqueId(feature)) ?? null);
+    const place = placeOf.get(feature);
+    if (!byLocation.has(place)) byLocation.set(place, []);
+    byLocation.get(place).push(feature);
+  }
+
+  const groups = new Map();
+  for (const [place, features] of byLocation) {
+    const before = previous?.places.get(place);
+    if (features.length === 1 && !before?.byContent) {
+      const feature = features[0];
+      const owner = sourceIds.get(feature) ?? null;
+      const key =
+        keys.get(feature) ?? (before?.owner === owner ? before.key : nextKey());
+      keys.set(feature, key);
+      groups.set(place, { feature, key, owner });
+      continue;
+    }
+
+    // Once a place is ambiguous, keep matching its surviving features by
+    // content. A singleton entering a collision can only keep an exact match.
+    const oldKeys =
+      before?.byContent ??
+      (before && new Map([[anonymousContent(before.feature), [before.key]]]));
+    const featuresByContent = new Map();
+    for (const feature of features) {
+      const content = anonymousContent(feature);
+      if (!featuresByContent.has(content)) featuresByContent.set(content, []);
+      featuresByContent.get(content).push(feature);
+    }
+    const byContent = new Map();
+    groups.set(place, { byContent });
+    for (const [content, matches] of featuresByContent) {
+      const prior = oldKeys?.get(content);
+      const own = matches.length === 1 ? keys.get(matches[0]) : null;
+      // A different number of exact duplicates leaves no way to tell
+      // which of those identical features survived.
+      const ids = own
+        ? [own]
+        : prior?.length === matches.length
+          ? prior
+          : matches.map(() => nextKey());
+      byContent.set(content, ids);
+      for (const [index, feature] of matches.entries())
+        keys.set(feature, ids[index]);
+    }
+  }
+  const sourceKeys = new Map();
+  for (const [feature, key] of keys) {
+    const id = uniqueId(feature);
+    if (id) sourceKeys.set(id, key);
+  }
+  return { keys, groups: { places: groups, sourceKeys } };
 }
 
 const lonLatOf = (coordinates) => ({
@@ -559,6 +682,8 @@ export function createLocalGeoJsonLayer(
   const setPrefix = `${id}:${++layerInstances}`;
   /** Builds made so far: each draws under set ids of its own. */
   let builds = 0;
+  let anonymousGroups;
+  let anonymousSequence = 0;
   /** Bumped by each `replaceFeatures`, so only the latest one swaps in. */
   let replacements = 0;
   /** The pins its points stand on, one image per distinct marker. */
@@ -748,7 +873,19 @@ export function createLocalGeoJsonLayer(
     };
     const parts = localGeojsonParts(features);
     const sets = {};
-    const built = { sets, parts: new Map(), records: [], count: parts.length };
+    // The count is of features, not parts: a multi-part feature is one item.
+    const built = {
+      sets,
+      parts: new Map(),
+      records: [],
+      anonymous: anonymousContextKeys(
+        parts,
+        id,
+        anonymousGroups,
+        () => `geojson:anonymous:${setPrefix}:${++anonymousSequence}`,
+      ),
+      count: new Set(parts.map((part) => localFeatureKey(part.feature))).size,
+    };
     const prefix = `${setPrefix}:${++builds}`;
     try {
       sets.fills = draw.shapes({ id: `${prefix}:fills`, show: false });
@@ -774,8 +911,10 @@ export function createLocalGeoJsonLayer(
         // The feature's own simplestyle properties, as the loader read them.
         const style = part.feature.properties;
         if (part.kind === 'line') {
-          const positions = rhumbPositions(part.coordinates).map(
-            ({ lon, lat }) => fromDegrees(lon, lat, 0),
+          const line = rhumbPositions(part.coordinates);
+          part.contextLine = contextLine(line);
+          const positions = line.map(({ lon, lat }) =>
+            fromDegrees(lon, lat, 0),
           );
           part.flyTo = lonLatOf(part.coordinates[0]);
           const stroke = strokeOf(style, rgba);
@@ -952,7 +1091,25 @@ export function createLocalGeoJsonLayer(
     );
   }
 
-  return {
+  const recordFeature = new WeakMap();
+  const siteRecord = (feature, idForAnalyst, lat, lon, properties) => {
+    const record = mapAnalystRecord(
+      { id: idForAnalyst, lat, lon, properties },
+      id,
+    );
+    const key = localFeatureKey(feature);
+    record.key =
+      typeof key === 'object'
+        ? _drawn.anonymous.keys.get(feature)
+        : `geojson:id:${key}`;
+    Object.defineProperty(record, CONTEXT_FEATURE, {
+      value: { layerName: name, source, properties },
+    });
+    recordFeature.set(record, feature);
+    return record;
+  };
+
+  const layer = {
     id,
     name,
     icon,
@@ -1002,28 +1159,127 @@ export function createLocalGeoJsonLayer(
      * @param {number} [maxCount=2000] Maximum records to return (truncation).
      * @returns {Array<Object>} See mapAnalystRecord for the record shape.
      */
-    getAnalystRecords(maxCount = 2000) {
-      if (!_enabled || !_stemRecords.length) return [];
+    getAnalystRecords(maxCount = 2000, onlyFeature = null) {
+      if (!_enabled || (!_stemRecords.length && !_drawn)) return [];
       const limit = Number.isFinite(maxCount)
         ? Math.max(1, Math.floor(maxCount))
         : 2000;
       const result = [];
+      // One record per feature (localFeatureKey), as the layer counts them.
+      // A multi-part polygon or point feature is listed at its first part,
+      // with every part's point in `parts`, so Nearby measures it to the
+      // nearest part. Line features below give one record per feature too.
+      const listed = new Map();
       for (let i = 0; i < _stemRecords.length; i++) {
-        if (result.length >= limit) break;
         const record = _stemRecords[i];
-        result.push(
-          mapAnalystRecord(
-            {
-              id: record.id,
-              lat: record.lat,
-              lon: record.lon,
-              properties: record.properties,
-            },
-            id,
-          ),
+        const key = record.part?.feature
+          ? localFeatureKey(record.part.feature)
+          : null;
+        if (onlyFeature !== null && key !== onlyFeature) continue;
+        const first = key === null ? null : listed.get(key);
+        if (first) {
+          first.parts.push({ lat: record.lat, lon: record.lon });
+          continue;
+        }
+        // The cap stops new rows, but a retained feature can have later parts.
+        if (result.length >= limit) continue;
+        const mapped = siteRecord(
+          record.part.feature,
+          record.id,
+          record.lat,
+          record.lon,
+          record.properties,
         );
+        if (key !== null) {
+          mapped.parts = [{ lat: record.lat, lon: record.lon }];
+          listed.set(key, mapped);
+        }
+        result.push(mapped);
+      }
+      // A one-part feature needs no list of parts.
+      for (const mapped of listed.values())
+        if (mapped.parts.length < 2) delete mapped.parts;
+      // Line features (a dam drawn as its crest line) carry no stem, so they
+      // are not stem records; list each once, at the middle vertex of its
+      // part with the most vertices. Keep each line for rectangle queries,
+      // including the lines of a feature already represented by a stem.
+      const lines = new Map();
+      for (const part of _drawn?.parts?.values() || []) {
+        if (part.kind !== 'line') continue;
+        const key = localFeatureKey(part.feature);
+        if (onlyFeature !== null && key !== onlyFeature) continue;
+        const middle =
+          part.coordinates[Math.floor(part.coordinates.length / 2)];
+        if (!Number.isFinite(middle?.[0]) || !Number.isFinite(middle?.[1]))
+          continue;
+        // The feature keeps its first part's id.
+        const longest = lines.get(key);
+        if (longest) {
+          longest.paths.push(part.contextLine);
+          if (longest.size < part.coordinates.length) {
+            longest.size = part.coordinates.length;
+            longest.middle = middle;
+          }
+        } else {
+          lines.set(key, {
+            id: part.id,
+            size: part.coordinates.length,
+            feature: part.feature,
+            middle,
+            paths: [part.contextLine],
+          });
+        }
+      }
+      for (const [key, { id: recordId, feature, middle, paths }] of lines) {
+        let record = listed.get(key);
+        if (!record) {
+          if (result.length >= limit) continue;
+          record = siteRecord(
+            feature,
+            recordId,
+            middle[1],
+            middle[0],
+            unwrapProperties(feature.properties ?? {}),
+          );
+          result.push(record);
+        }
+        Object.defineProperty(record, CONTEXT_LINES, {
+          value: Object.freeze(paths),
+        });
       }
       return result;
+    },
+
+    getContextRecord(key, { fromDrawnPart = false, drawnPartId = key } = {}) {
+      if (!fromDrawnPart) return undefined;
+      const part = _drawn?.parts.get(drawnPartId);
+      // A missing raw draw ID with significant whitespace must not resolve
+      // through its trimmed sibling. Canonical keys still use record lookup.
+      if (!part)
+        return drawnPartId !== key && !drawnPartId.startsWith('geojson:')
+          ? null
+          : undefined;
+      const record =
+        layer.getAnalystRecords(1, localFeatureKey(part.feature))[0] ?? null;
+      if (
+        record &&
+        part.kind === 'line' &&
+        recordFeature.get(record) !== part.feature
+      ) {
+        const selected = siteRecord(
+          part.feature,
+          record.id,
+          record.lat,
+          record.lon,
+          unwrapProperties(part.feature.properties ?? {}),
+        );
+        if (record.parts) selected.parts = record.parts;
+        Object.defineProperty(selected, CONTEXT_LINES, {
+          value: record[CONTEXT_LINES],
+        });
+        return selected;
+      }
+      return record;
     },
 
     enable: async (viewer) => {
@@ -1096,6 +1352,7 @@ export function createLocalGeoJsonLayer(
               _stemGeometryDirty = true;
               // Setup finished — publish it.
               _drawn = built;
+              anonymousGroups = built.anonymous.groups;
               _lastUpdate = Date.now();
             } catch (e) {
               // The dataset ships with the build, so this is a broken install,
@@ -1372,9 +1629,9 @@ export function createLocalGeoJsonLayer(
     /**
      * Draw a new feature set in place of the current one while the layer is
      * on (a live loader's refresh). The current features stay drawn until
-     * the new ones are built; a selected feature stays selected when the new
-     * set still has it (same id, or same place and label); a failed rebuild
-     * keeps the current features and rejects. Off, the set is only kept for
+     * the new ones are built; a selected feature stays selected when its
+     * source ID or anonymous key survives. A failed rebuild keeps the
+     * current features and rejects. Off, the set is only kept for
      * the next enable().
      * @param {object} viewer
      * @param {object[]} features GeoJSON features.
@@ -1392,14 +1649,16 @@ export function createLocalGeoJsonLayer(
         _enabled &&
         _drawn === outgoing &&
         token === replacements;
-      const selected = getSelectedEntityContext?.();
-      const selectedHere = selected?.layerId === id ? selected : null;
+      let selectedHere;
       let built;
       try {
         // The loader drew its pins' symbols before it finished loading.
         await pinMaker.load(markerSymbols(features));
         if (!current()) return;
         built = buildDrawn(viewer, features);
+        // Read the active selection before the new carriers take its old ID.
+        const selected = getSelectedEntityContext?.();
+        selectedHere = selected?.layerId === id ? selected : null;
         registerContexts(built.records);
       } catch (error) {
         // `buildDrawn` let go of its own sets on a throw; a build whose
@@ -1432,23 +1691,36 @@ export function createLocalGeoJsonLayer(
         record.groundSampled = true;
         setLocalGroundHeight(record, old.groundHeight);
       }
-      // The selected feature in the new set: by its own id (a feature
-      // without one has an id by position, which names another feature
-      // once the set changes), else by place and label.
-      const match = selectedHere
-        ? (built.records.find(
-            (record) =>
-              given(record.part.feature.id) &&
-              record.context.id === selectedHere.id,
-          ) ??
-          built.records.find(
+      let match = null;
+      const feature =
+        selectedHere &&
+        outgoing.parts.get(selectedHere.id?.slice(id.length + 1))?.feature;
+      if (feature) {
+        // Renderer IDs can be reassigned. Match the feature first, then
+        // prefer to keep its previously selected part.
+        const anonymous = feature.id == null;
+        const key = anonymous
+          ? outgoing.anonymous.keys.get(feature)
+          : localFeatureKey(feature);
+        const candidates =
+          key == null
+            ? []
+            : built.records.filter(({ part }) =>
+                anonymous
+                  ? built.anonymous.keys.get(part.feature) === key
+                  : localFeatureKey(part.feature) === key,
+              );
+        match =
+          candidates.find(
             (record) =>
               Math.abs(record.lon - selectedHere.longitude) < 1e-6 &&
-              Math.abs(record.lat - selectedHere.latitude) < 1e-6 &&
-              record.context.label === selectedHere.label,
-          ))
-        : null;
+              Math.abs(record.lat - selectedHere.latitude) < 1e-6,
+          ) ??
+          candidates.find((record) => record.context.id === selectedHere.id) ??
+          candidates[0];
+      }
       _drawn = built;
+      anonymousGroups = built.anonymous.groups;
       _stemRecords = built.records;
       _count = built.count;
       _lastUpdate = Date.now();
@@ -1488,6 +1760,7 @@ export function createLocalGeoJsonLayer(
       _clickSubscription = null;
       _overlayPublisher.destroy();
       _cachedFeatures = null;
+      anonymousGroups = undefined;
       pinMaker.clear();
       _stemRecords = [];
       _count = 0;
@@ -1495,6 +1768,7 @@ export function createLocalGeoJsonLayer(
       _error = null;
     },
   };
+  return layer;
 }
 
 /**
@@ -1789,14 +2063,15 @@ function labelPriorityFromProperties(props, layerId) {
 function unwrapProperties(value) {
   if (!value || typeof value !== 'object') return value;
   if (Array.isArray(value)) return value.map(unwrapProperties);
-  const out = {};
-  for (const [key, entry] of Object.entries(value)) {
-    out[key] =
+  // Keep feed keys, including "__proto__", as own data properties.
+  return Object.fromEntries(
+    Object.entries(value).map(([key, entry]) => [
+      key,
       entry && typeof entry.getValue === 'function'
         ? unwrapProperties(entry.getValue())
-        : unwrapProperties(entry);
-  }
-  return out;
+        : unwrapProperties(entry),
+    ]),
+  );
 }
 
 function cleanLabel(value) {

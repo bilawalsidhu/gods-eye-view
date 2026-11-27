@@ -4,9 +4,10 @@ import { createInteraction } from './interaction.js';
 import * as picking from '../../data/pickRegistry.js';
 
 /** The cable click handler, with its click and overlay seams faked. */
-function harness({ overlayTop = null } = {}) {
+function harness({ overlayTop = null, info = null } = {}) {
   let onClick = null;
   const picked = [];
+  const selected = [];
   let top = overlayTop;
   const interaction = createInteraction({
     state: { _enabled: true, _clickSubscription: null },
@@ -14,8 +15,9 @@ function harness({ overlayTop = null } = {}) {
       rendering: {
         pickInfo: (hit) => {
           picked.push(hit);
-          return null;
+          return info;
         },
+        select: (record) => selected.push(record),
       },
     },
     inputFor: () => ({
@@ -31,6 +33,7 @@ function harness({ overlayTop = null } = {}) {
   interaction.beginInteraction({});
   return {
     picked,
+    selected,
     setTop: (next) => {
       top = next;
     },
@@ -58,4 +61,18 @@ test('a card painted over a cable keeps its click; with none the cable reads the
     1,
     'with no card on top, the cable reads its pick',
   );
+});
+
+// A hit names its cable (and flies to it): the real-layer test in
+// src/data/telegeographySubmarineCables.test.mjs covers it.
+test('a click on nothing clears the name; a card on top leaves it as is', () => {
+  const empty = harness();
+  empty.click();
+  assert.deepEqual(empty.selected, [null], 'a click on nothing clears it');
+
+  const covered = harness({
+    overlayTop: { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' },
+  });
+  covered.click();
+  assert.deepEqual(covered.selected, [], "another layer's card keeps it as is");
 });

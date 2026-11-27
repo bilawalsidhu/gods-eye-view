@@ -1,7 +1,14 @@
+import {
+  ACARTIA_PRECISION_DEG,
+  OBSCURED_CELL_DEG,
+} from '../layers/wildlifeSightings/records.js';
+import { ref, shallowRef, watch } from 'vue';
 import { resolvePickedContext } from '../data/pickedContext.js';
 import { onScreen } from '../data/locate.js';
 import { clickCard } from '../data/pickRegistry.js';
 import { followedOf, onFollowChanged } from '../data/followed.js';
+import { currentSelection, onSelectionChanged } from '../data/clickSelect.js';
+import { _connectContextCard, _mapSelectionChanged } from './contextCard.js';
 import { fromDegreesInto } from '../geo/ellipsoid.js';
 import { inputFor } from '../input/dispatcher.js';
 import {
@@ -10,11 +17,15 @@ import {
 } from '../data/trackingClickGesture.js';
 import { applicationHooksOf } from '../render/applicationHooks.js';
 import { findCamera, rendererOf } from '../render/rendererOf.js';
+import { WORLD_FOCUS_FRAMING } from '../worldFocus.js';
 import { useCockpitStore } from './stores/cockpit.js';
-import { useEntityCardStore } from './stores/entityCard.js';
+import { isGlobeView, useEntityCardStore } from './stores/entityCard.js';
 import { useOmnibarStore } from './stores/omnibar.js';
 import { usePanelChromeStore } from './stores/panelChrome.js';
+import { useSpaceMissionsStore } from './stores/spaceMissions.js';
 import { useVoiceStore } from './stores/voice.js';
+import { inspectorHasLayers } from './layerRowState.js';
+import { createViewWeather } from './viewWeather.js';
 
 /** Camera distance (m) that frames an item of each kind. */
 const FRAME_RANGE = Object.freeze({
@@ -25,13 +36,19 @@ const FRAME_RANGE = Object.freeze({
   storm: 1_500_000,
   fire: 20_000,
   'fire perimeter': 40_000,
+  'road segment': 3_000,
 });
 const DEFAULT_RANGE = 8_000;
 /**
  * Items the camera can follow: their layers follow through the camera port
- * with a key naming the item (src/data/followed.js). A vessel is flown to.
+ * with a key naming the item (src/data/followed.js).
  */
-const FOLLOWABLE = new Set(['flights', 'military', 'satellites']);
+const FOLLOWABLE = new Set([
+  'flights',
+  'military',
+  'satellites',
+  'ais-live-vessels',
+]);
 
 /**
  * Connects the Context panel's entity card to the globe: a click on anything a
@@ -45,8 +62,13 @@ const FOLLOWABLE = new Set(['flights', 'military', 'satellites']);
  * @param {(viewer: object, x: number, y: number) => ({lat: number, lon: number}|null)} [options.pickWorld]
  *   The ground under a normalized screen point; the view's centre falls back
  *   to the point under the camera without it.
- * @param {(lat: number, lon: number) => Promise<object>} [options.regionalBrief]
- *   The app's regional brief service, for the weather and news Context shows.
+ * @param {(lat: number, lon: number, options?: {signal?: AbortSignal}) => Promise<object>} [options.regionalBrief]
+ *   Provides weather for selected cards and is the Inspector's fallback
+ *   when no point-weather adapter is supplied.
+ * @param {(lat: number, lon: number, options?: {signal?: AbortSignal}) => Promise<object>} [options.spotWeather]
+ *   The weather-only service for the unselected view.
+ * @param {(fly: () => void) => unknown} [options.navigateToSelection] Hand an explicit row flight to the navigation owner.
+ * @param {{counts: object}} [options.inspector] The Inspector count owner (createLayerCounts).
  * @returns {() => void} disconnects
  */
 export function installEntityContext({
@@ -55,6 +77,9 @@ export function installEntityContext({
   pinia,
   pickWorld,
   regionalBrief,
+  spotWeather,
+  inspector,
+  navigateToSelection = (fly) => fly(),
 }) {
   const store = useEntityCardStore(pinia);
   const omnibar = useOmnibarStore(pinia);
@@ -86,30 +111,46 @@ export function installEntityContext({
       button.click();
   }
 
-  function flyTo(card) {
+  /**
+   * The flight that frames `card`'s item at its kind's range, or null when
+   * there is no camera or the card has no place.
+   */
+  function framingFlight(card) {
     const port = camera();
     if (!port || !Number.isFinite(card?.lat) || !Number.isFinite(card?.lon))
-      return;
-    const height = Number.isFinite(card.altitudeM) ? card.altitudeM : 0;
-    const range = FRAME_RANGE[card.kind] ?? DEFAULT_RANGE;
-    port.flyToBounds(
-      {
-        center: fromDegreesInto(card.lon, card.lat, Math.max(0, height), {
-          x: 0,
-          y: 0,
-          z: 0,
-        }),
-        radius: 1,
-      },
-      {
-        offset: {
-          heading: port.pose().heading,
-          pitch: ((card.kind === 'satellite' ? -90 : -45) * Math.PI) / 180,
-          range,
+      return null;
+    const height = card.pinHeightM ?? card.altitudeM ?? 0;
+    const framing = card.obscured ? WORLD_FOCUS_FRAMING['sighting-area'] : null;
+    const pitchDeg =
+      framing?.pitchDeg ?? (card.kind === 'satellite' ? -90 : -45);
+    const range = framing?.rangeM ?? FRAME_RANGE[card.kind] ?? DEFAULT_RANGE;
+    const fly = () =>
+      port.flyToBounds(
+        {
+          center: fromDegreesInto(card.lon, card.lat, Math.max(0, height), {
+            x: 0,
+            y: 0,
+            z: 0,
+          }),
+          radius: framing?.radiusM ?? 1,
         },
-        durationS: 2,
-      },
-    );
+        {
+          offset: {
+            heading: port.pose().heading,
+            pitch: (pitchDeg * Math.PI) / 180,
+            range,
+          },
+          durationS: 2,
+        },
+      );
+    return fly;
+  }
+
+  function flyTo(card, { fromSelection = false } = {}) {
+    const fly = framingFlight(card);
+    if (!fly) return;
+    if (fromSelection) return navigateToSelection(fly);
+    return fly();
   }
 
   function follow(card) {
@@ -123,15 +164,60 @@ export function installEntityContext({
     ).catch(() => {});
   }
 
-  // Closing the card lets go of the camera, when the camera follows the
-  // card's own item and nothing else took it over since.
+  /** Whether `card`'s item is the one selection (src/data/clickSelect.js). */
+  // A layer whose cards name an item otherwise than its selection does (a
+  // vehicle's label, a callsign) answers for it (`isSelected`); never a
+  // different item of the same layer.
+  const selectsCard = (card, selection = currentSelection()) => {
+    if (!card || !selection || selection.layerId !== card.layerId) return false;
+    const id = card.identity?.id;
+    const module = getDataManager()?.layers?.get?.(card.layerId)?.module;
+    if (typeof module?.isSelected === 'function') {
+      try {
+        return module.isSelected(id) === true;
+      } catch {
+        return false;
+      }
+    }
+    return selection.id === String(id);
+  };
+
+  // A pick from a Context row or a search selects the item in its layer, as
+  // a click does (track, trail or orbit shown, the one selection), without
+  // following it; the camera frames it at its kind's range, as it always
+  // has for a pick, wherever it is. An item its layer cannot select now
+  // (gone from its feed, its layer off) is framed all the same. True when
+  // its layer can take picks.
+  function pick(card) {
+    const module = getDataManager()?.layers?.get?.(card?.layerId)?.module;
+    const id = card?.identity?.id;
+    if (typeof module?.pickById !== 'function' || !id) return false;
+    const fly = framingFlight(card);
+    navigateToSelection(() => {
+      try {
+        module.pickById(id, { origin: 'user', center: false });
+      } catch {
+        // A layer going away meanwhile has nothing to select.
+      }
+      return fly?.();
+    });
+    return true;
+  }
+
+  // Closing the card lets go of its item: the layer deselects it (and lets
+  // go of the camera, when the camera follows it), unless something else
+  // took over since.
   function letGo(card) {
-    if (!followsCard(card)) return;
+    if (!followsCard(card) && !selectsCard(card)) return;
     // Only the card's own layer lets go, as the person's own action; other
-    // layers' selections stay as they are.
+    // layers' selections stay as they are. A layer that takes `globeView`
+    // (satellites) brings a camera that followed the item back to the globe.
     const layer = getDataManager()?.layers?.get?.(card.layerId);
     try {
-      layer?.module?.stopTracking?.({ origin: 'user' });
+      const module = layer?.module;
+      if (typeof module?.stopTracking === 'function')
+        module.stopTracking({ origin: 'user', globeView: true });
+      else module?.clearSelection?.();
     } catch {
       // A layer going away meanwhile has nothing left to let go of.
     }
@@ -139,14 +225,14 @@ export function installEntityContext({
 
   // An item back in its feed after it left it is selected again in its layer,
   // as the click that picked it: a vessel is highlighted with its trail, and
-  // an aircraft found again (`follow`) is followed.
+  // an aircraft or vessel found again (`follow`) is followed.
   function reselect(card, { follow: andFollow = false } = {}) {
     const layer = getDataManager()?.layers?.get?.(card?.layerId)?.module;
     const id = card?.identity?.id;
     if (!layer || !id) return;
     try {
-      if (card.layerId === 'ais-live-vessels') layer.selectById?.(id);
-      else if (andFollow && FOLLOWABLE.has(card.layerId)) follow(card);
+      if (andFollow && FOLLOWABLE.has(card.layerId)) follow(card);
+      else if (card.layerId === 'ais-live-vessels') layer.selectById?.(id);
     } catch {
       // A layer going away meanwhile has nothing to select.
     }
@@ -190,27 +276,72 @@ export function installEntityContext({
     }
   }
 
-  function askText(prompt) {
+  function askText(prompt, reference, resolveReference) {
     voice.controls?.emit('chat-restore');
-    voice.controls?.emit('chat-prompt', prompt);
+    voice.controls?.emit(
+      'chat-prompt',
+      reference ? { text: prompt, reference, resolveReference } : prompt,
+    );
     voice.controls?.emit('chat-submit');
   }
 
+  function mapItemReference(card) {
+    // A sighting gone from the feed, or no longer confirmed, may have been hidden.
+    const hidden = store.locationWithheld;
+    // Acartia rounds observation coordinates to ACARTIA_PRECISION_DEG.
+    const rounded = !hidden && card.source === 'Acartia';
+    const digits = rounded ? 2 : 3;
+    const coordinates = {
+      ...(rounded && { roundedToDegrees: ACARTIA_PRECISION_DEG }),
+      lat:
+        !hidden && Number.isFinite(card.lat)
+          ? Number(card.lat.toFixed(digits))
+          : null,
+      lon:
+        !hidden && Number.isFinite(card.lon)
+          ? Number(card.lon.toFixed(digits))
+          : null,
+    };
+    return {
+      name: card.title,
+      kind: card.kind,
+      layer: card.layerName,
+      ...(!hidden && card.obscured
+        ? {
+            approximateCellCenter: {
+              ...coordinates,
+              cellSizeDegrees: OBSCURED_CELL_DEG,
+            },
+          }
+        : coordinates),
+    };
+  }
+
   function ask(card) {
-    const where =
-      Number.isFinite(card.lat) && Number.isFinite(card.lon)
-        ? ` at ${card.lat.toFixed(3)}, ${card.lon.toFixed(3)}`
-        : '';
-    const prompt = `Tell me about the ${card.kind} ${card.title} (${card.layerName})${where}, and what is around it.`;
-    voice.controls?.emit('chat-restore');
-    voice.controls?.emit('chat-prompt', prompt);
-    voice.controls?.emit('chat-submit');
+    const reference = mapItemReference(card);
+    // Read the card again at send time. Once another card is open, omit the position.
+    const resolveReference = () => {
+      store.refresh({ forAction: true });
+      return store.card?.key === card.key
+        ? mapItemReference(store.card)
+        : {
+            name: reference.name,
+            kind: reference.kind,
+            layer: reference.layer,
+          };
+    };
+    askText(
+      'Tell me about this map item and what is around it.',
+      reference,
+      resolveReference,
+    );
   }
 
   store.connect({
     dataManager: getDataManager,
     openPanel,
     flyTo,
+    pick,
     follow,
     letGo,
     reselect,
@@ -219,10 +350,16 @@ export function installEntityContext({
       const pose = camera()?.pose();
       if (!pose || !Number.isFinite(card?.lat) || !Number.isFinite(card?.lon))
         return null;
-      return onScreen(pose, card.lat, card.lon, card.altitudeM ?? 0);
+      return onScreen(
+        pose,
+        card.lat,
+        card.lon,
+        card.pinHeightM ?? card.altitudeM ?? 0,
+      );
     },
     isOpen,
     regionalBrief,
+    spotWeather,
     // The renderer's card previews, when it has them.
     previews: () => applicationHooksOf(rendererOf(viewer)).cardPreviews ?? null,
     ask,
@@ -242,12 +379,16 @@ export function installEntityContext({
 
   // What the camera shows, for the Context panel to describe when nothing is
   // picked: the ground under the middle of the screen, the view's bounds and
-  // the height. Read when the camera settles, not every frame.
-  const readView = () => {
+  // the height. Read when the camera settles and at most once a second while it
+  // moves. A read taken during movement has `settled` false.
+  let hasCameraSnapshot = false;
+  const motionPending = ref(false);
+  const readView = ({ settled = !moving && quiet === null } = {}) => {
     const port = camera();
     if (!port || (!isOpen() && doc?.activeElement?.id !== 'gev-omnibar-input'))
       return;
     const pose = port.pose();
+    // An invalid pose keeps the previous snapshot and leaves the motion fence set.
     if (![pose.lat, pose.lon, pose.height].every(Number.isFinite)) return;
     const middle = pickWorld?.(viewer, 0.5, 0.5);
     const center = middle
@@ -259,27 +400,50 @@ export function installEntityContext({
       east: 180,
       north: 90,
     };
-    store.setView({ center, rect, heightM: pose.height });
+    hasCameraSnapshot = true;
+    store.setView(
+      {
+        center,
+        rect,
+        heightM: pose.height,
+        // The horizon is measured from the camera, independently of screen center.
+        eye: { lat: pose.lat, lon: pose.lon },
+      },
+      { settled },
+    );
+    // Release the weather motion fence only after a valid settled snapshot.
+    if (settled) motionPending.value = false;
   };
-  // Read when the camera settles. A camera that keeps moving (following an
-  // aircraft, a long fly-to) never settles, and a jump (a share link, a
-  // restored view) raises no moveEnd, so also read it on large changes: at
-  // most once a second, and once more after the last change, so the view it
-  // stops at is the one described.
   let lastRead = 0;
   let trailing = null;
+  let quiet = null;
+  let moving = false;
+  const stopQuiet = () => {
+    clearTimeout(quiet);
+    quiet = null;
+  };
   const onChanged = () => {
+    motionPending.value = true;
     clearTimeout(trailing);
+    stopQuiet();
+    // A view jump can settle without moveEnd. An ongoing move needs moveEnd.
+    if (!moving) {
+      quiet = setTimeout(() => {
+        quiet = null;
+        readView();
+      }, 1200);
+    }
+    // Following and panning publish at most once a second while moving.
     const now = performance.now();
     if (now - lastRead >= 1000) {
       lastRead = now;
-      readView();
+      readView({ settled: false });
       return;
     }
     trailing = setTimeout(
       () => {
         lastRead = performance.now();
-        readView();
+        readView({ settled: false });
       },
       1000 - (now - lastRead),
     );
@@ -288,7 +452,22 @@ export function installEntityContext({
   const listen = () => {
     const port = camera();
     if (!port || cameraOff.length) return;
-    cameraOff = [port.on('moveEnd', readView), port.on('changed', onChanged)];
+    cameraOff = [
+      port.on('moveStart', () => {
+        moving = true;
+        motionPending.value = true;
+        stopQuiet();
+        readView();
+      }),
+      port.on('moveEnd', () => {
+        moving = false;
+        motionPending.value = true;
+        clearTimeout(trailing);
+        stopQuiet();
+        readView();
+      }),
+      port.on('changed', onChanged),
+    ];
   };
   listen();
   const firstRead = setTimeout(() => {
@@ -309,8 +488,108 @@ export function installEntityContext({
     wasOpen = open;
   });
 
-  /** Layers whose own map click already follows what was clicked. */
-  const CLICK_FOLLOWS = new Set(['flights', 'military', 'satellites']);
+  const stopInspectorWatchers = [];
+  let weather;
+  if (inspector) {
+    const missions = useSpaceMissionsStore(pinia);
+    const shown = () => store.inspector.shown;
+    const mountId = () => store.inspector.mountId;
+    const manager = () => {
+      // A replacement can reveal a new registry without a feed update.
+      void store.managerVersion;
+      return getDataManager?.() ?? null;
+    };
+    const globe = () => isGlobeView(store.view);
+    const countInputs = [
+      shown,
+      () => store.layerRevision,
+      () => missions.enabled,
+      () => store.inspectorPulse,
+    ];
+    const metadataInputs = [...countInputs, manager, globe];
+    const metadataReady = ref(false);
+    const countSample = shallowRef(null);
+    let appliedSample = { inputs: metadataInputs.map((read) => read()) };
+    const readCurrentInput = () => ({
+      center: hasCameraSnapshot && !globe() ? store.view?.center : null,
+      moving: motionPending.value,
+      shown: store.inspector.shown,
+      mountId: mountId(),
+    });
+    store.publishInspectorRows([]);
+    store.publishViewWeather(null);
+    weather = createViewWeather({
+      read: store.readWeather,
+      readCurrentInput,
+      publish: store.publishViewWeather,
+    });
+
+    stopInspectorWatchers.push(
+      watch(
+        [countSample, ...metadataInputs],
+        ([sample, ...live]) => {
+          if (!sample || sample === appliedSample) return;
+          const { inputs, rows } = sample;
+          // A preceding post-flush callback may make the sample stale.
+          // Let the pre-flush publisher sample the latest inputs first.
+          if (inputs.some((value, index) => value !== live[index])) return;
+          const [visible, , missionsEnabled] = inputs;
+          appliedSample = sample;
+          if (!visible || !store.inspector.shown) {
+            inspector.counts.update({ shown: false, nothingOn: false });
+            return;
+          }
+          inspector.counts.update({
+            shown: true,
+            nothingOn: !inspectorHasLayers(rows, missionsEnabled),
+          });
+        },
+        { flush: 'post' },
+      ),
+      // Rows are published pre-flush for rendering and focus recovery. Only
+      // shown, layers, Space Missions and pulse changes take a new count
+      // sample. Manager and globe changes only republish rows.
+      watch(
+        [metadataReady, ...metadataInputs],
+        ([, ...inputs], [initialized, ...previous]) => {
+          const rows = inputs[0] ? store.allLayers() : [];
+          if (inputs[0]) store.publishInspectorRows(rows);
+          const pending =
+            countSample.value && countSample.value !== appliedSample;
+          if (
+            !initialized ||
+            pending ||
+            inputs
+              .slice(0, countInputs.length)
+              .some((value, index) => value !== previous[index])
+          )
+            countSample.value = { inputs, rows };
+        },
+      ),
+      watch(
+        [
+          shown,
+          mountId,
+          () => store.view,
+          motionPending,
+          () => store.inspectorPulse,
+        ],
+        (current, previous) => {
+          const input = readCurrentInput();
+          weather.update(input);
+          if (
+            input.shown &&
+            previous.length &&
+            current.at(-1) !== previous.at(-1)
+          )
+            weather.pulse();
+        },
+        { immediate: true, flush: 'post' },
+      ),
+    );
+    // Let a manager attached later in setup join the first pre-flush sample.
+    metadataReady.value = true;
+  }
 
   // Keep the card's "following" in step with the camera: it says Following
   // while the camera follows the card's own item (the follow's key names
@@ -333,6 +612,14 @@ export function installEntityContext({
     }, 250);
   });
 
+  // Custom layers open the card through ui/contextCard.js.
+  const offSelection = onSelectionChanged(_mapSelectionChanged);
+  const offCard = _connectContextCard({
+    // Nothing opens in Cockpit, as for a click.
+    select: (item) => !inCockpit() && store.select(item),
+    clear: () => store.clear(),
+  });
+
   // A click on anything a layer can identify opens its card. The input
   // dispatcher hands every subscriber the same click, picked once before
   // any layer acts on it, and only while no tool holds the pointer.
@@ -348,10 +635,13 @@ export function installEntityContext({
       dataManager: getDataManager(),
     });
     if (identity) {
-      // These layers start following on their own click; following again
-      // from here would fight them (the flights layer reads a second track
-      // of the same plane as a click on empty map and lets go).
-      store.select(identity, { follow: !CLICK_FOLLOWS.has(identity.layerId) });
+      // The layer's own click selects and centres it; the card only opens
+      // (src/data/clickSelect.js).
+      const picked =
+        identity.layerId === 'ais-live-vessels'
+          ? { ...identity, vesselId: identity.id }
+          : identity;
+      store.select(picked);
       return;
     }
     // A click on open ground, sea or sky lets go of what was selected. A
@@ -365,14 +655,14 @@ export function installEntityContext({
   // installations) announce it; their selection opens the card too.
   const onSelected = ({ detail: record }) => {
     if (!record?.layerId || inCockpit()) return;
+    const vesselId =
+      record.layerId === 'ais-live-vessels'
+        ? record.properties?.vesselId
+        : null;
     store.select({
       layerId: record.layerId,
-      // A vessel goes by its own id, as a click on it names it, not by the
-      // context store's (src/data/pickedContext.js).
-      id:
-        record.layerId === 'ais-live-vessels' && record.properties?.vesselId
-          ? String(record.properties.vesselId)
-          : record.id,
+      id: vesselId ? String(vesselId) : record.id,
+      ...(vesselId ? { vesselId: String(vesselId) } : {}),
       label: record.label || record.properties?.name,
       lat: record.latitude,
       lon: record.longitude,
@@ -381,11 +671,22 @@ export function installEntityContext({
   globalThis.addEventListener?.('gev:entity-selected', onSelected);
 
   return () => {
+    if (disposed) return;
     disposed = true;
+    for (const stop of stopInspectorWatchers) stop();
+    weather?.stop();
+    inspector?.counts.stop();
+    if (inspector) {
+      store.publishInspectorRows([]);
+      store.publishViewWeather(null);
+    }
     clearTimeout(firstRead);
     offClick();
+    offCard();
+    offSelection();
     for (const off of cameraOff) off?.();
     clearTimeout(trailing);
+    clearTimeout(quiet);
     offFollow();
     offChrome();
     doc?.removeEventListener('focusin', onSearchFocus);

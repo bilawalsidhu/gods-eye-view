@@ -17,8 +17,9 @@ const finder = template('LayerFinder.vue');
 
 test('the Layer Finder hand-writes no button; each is a UiButton', () => {
   assert.deepEqual(finder.match(/<button\b/gi) ?? [], []);
-  // Search, Filter, the Status and Category options, and the two chips.
-  assert.equal(finder.match(/<UiButton\b/g)?.length, 6);
+  // Search, Filter, the Status and Category options, and the three chips,
+  // including Suggested, which clears the suggested-layer filter.
+  assert.equal(finder.match(/<UiButton\b/g)?.length, 7);
   assert.equal(finder.match(/<UiSearchField\b/g)?.length, 1);
 });
 
@@ -35,7 +36,7 @@ test('its pressed toggles leave aria-pressed to UiButton', () => {
   );
   assert.match(
     finder,
-    /id="layer-finder-search-btn"[^>]*:class="\{ active: searching \|\| query \}"/,
+    /id="layer-finder-search-btn"[^>]*:class="\{ active: searching \|\| selection\.query \}"/,
   );
 });
 
@@ -43,8 +44,8 @@ test('the Layer Finder hand-writes no Material glyph; each is a UiIcon', () => {
   assert.deepEqual(finder.match(/material-symbols-outlined/g) ?? [], []);
   assert.deepEqual(finder.match(/<svg\b/gi) ?? [], []);
   const icons = finder.match(/<UiIcon\b[^>]*>/g) ?? [];
-  // Search, Filter, the two option radios and the two chips' close.
-  assert.equal(icons.length, 6);
+  // Search, Filter, the two option radios and the three chips' close.
+  assert.equal(icons.length, 7);
   // Without it the kit writes an 18px size that beats layer-finder.css.
   for (const icon of icons) assert.match(icon, /:size="null"/);
 });

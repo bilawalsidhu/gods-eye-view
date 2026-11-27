@@ -207,7 +207,6 @@ function handoffFixture(t) {
       ].map((key) => [key, {}]),
     ),
     cancelOrientation() {},
-    clearLocation() {},
     cancelShareSelection() {},
     getDataManager() {},
     interruptCameraMotion() {},

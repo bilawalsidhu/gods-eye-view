@@ -129,7 +129,7 @@ export function createViewport({ state: layerState, services, parts, source }) {
 
   /** Repaint the row now: it follows the camera, the manager tick is 60 s. */
   function refreshRow() {
-    layerState._dataManager?.refreshLayerStats?.('bikeshare');
+    layerState._panel?.invalidate();
   }
 
   /** Deactivate all currently active cities and clear the active set. */

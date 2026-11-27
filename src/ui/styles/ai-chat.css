@@ -99,11 +99,6 @@
 #command-dock > #gev-voice-control[data-chat-open='true'] {
   z-index: 102;
 }
-/* An open Location or Visual Presets tray draws over an idle assistant panel
-   left undocked above it; active voice or chat stays in front. */
-#command-dock > :is(#location-bar, #control-panel):not(.collapsed) {
-  z-index: 103;
-}
 #command-dock
   > #gev-voice-control:is(
     [data-assistant-mode='voice'],
@@ -337,54 +332,6 @@
   background: transparent;
   box-shadow: none;
 }
-#command-dock:has(
-  #gev-voice-control[data-assistant-mode]:not([data-assistant-mode='idle'])
-) {
-  --dock-side-compact: 3.25rem;
-}
-#command-dock > :is(#location-bar, #control-panel) {
-  transition:
-    width 240ms ease,
-    flex-basis 240ms ease,
-    transform 240ms ease;
-}
-#command-dock:has(
-    #gev-voice-control[data-assistant-mode]:not([data-assistant-mode='idle'])
-  )
-  :is(.location-toolbar-label, .panel-header .panel-title) {
-  font-size: 0;
-  letter-spacing: 0;
-  gap: 0;
-  justify-content: center;
-}
-#command-dock:has(
-    #gev-voice-control[data-assistant-mode]:not([data-assistant-mode='idle'])
-  )
-  .dock-label-icon {
-  width: 1.25rem;
-  height: 1.25rem;
-  flex-basis: 1.25rem;
-}
-/* At this width main shows the wings' icons only (command-dock-trays.css);
-   centre them in the slim wings. */
-@media (max-width: 900px) {
-  :root #command-dock > :is(#location-bar, #control-panel) .dock-tray-toggle {
-    justify-content: center;
-  }
-  :root
-    #command-dock
-    :is(#location-bar, #control-panel)
-    :is(.location-toolbar-label, .panel-title) {
-    width: auto;
-    min-width: 0;
-    justify-content: center;
-  }
-  :root #command-dock .dock-label-icon {
-    width: 1.25rem;
-    height: 1.25rem;
-    flex-basis: 1.25rem;
-  }
-}
 #command-dock #gev-voice-control .gev-panel-layout {
   display: flex;
   align-items: center;
@@ -425,7 +372,7 @@
   width: min(25rem, calc(100vw - 1.5rem));
 }
 @media (prefers-reduced-motion: reduce) {
-  #command-dock > :is(#location-bar, #control-panel, #gev-voice-control) {
+  #command-dock > :is(#gev-voice-control) {
     transition: none;
   }
 }
@@ -495,7 +442,8 @@
   gap: 0.35rem;
   padding: 0.4rem 0.8rem;
 }
-#gev-chat-attachments button {
+#gev-chat-attachments button,
+#gev-chat-attachments .chat-map-reference {
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -507,6 +455,8 @@
   color: var(--accent);
   font: inherit;
   font-size: 0.7rem;
+}
+#gev-chat-attachments button {
   cursor: pointer;
 }
 /* The composer owns focus indication; avoid a second box around its textarea. */
@@ -792,24 +742,6 @@
 #command-dock,
 #command-dock:has(#gev-voice-control[data-assistant-mode]) {
   --dock-voice-width: 11rem;
-}
-#command-dock > :is(#location-bar, #control-panel) {
-  background: linear-gradient(
-    160deg,
-    rgba(26, 30, 34, 0.96),
-    rgba(16, 21, 26, 0.97)
-  );
-  border-color: rgba(125, 158, 169, 0.25);
-  box-shadow:
-    inset 0 1px 0 #b3f1ff0d,
-    inset 0 -1px 0 #74d2e50a,
-    0 6px 18px #0005;
-}
-#command-dock .dock-label-icon {
-  color: #91aab2;
-}
-#command-dock :is(.location-toolbar-label, .panel-header .panel-title) {
-  color: #b8c9cf;
 }
 #command-dock > #gev-voice-control {
   justify-content: space-between;
@@ -1675,24 +1607,6 @@ body[data-assistant-docked='true'] #right-context-rail {
 #command-dock #gev-voice-control #gev-voice-panel .gev-voice-card {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
-}
-
-/* The dock's Location and Visual Presets wings sit 5px narrower on desktop.
-   The chat or voice mode keeps its own compact width; the narrow breakpoints
-   restate theirs (command-dock-compact.css, command-dock-trays.css), which
-   this later rule would otherwise override. */
-#command-dock {
-  --dock-side-compact: calc(clamp(9.5rem, 12vw, 10.5rem) - 5px);
-}
-@media (max-width: 900px) {
-  #command-dock {
-    --dock-side-compact: 4.25rem;
-  }
-}
-@media (max-width: 620px) {
-  #command-dock {
-    --dock-side-compact: 3.25rem;
-  }
 }
 
 /* From 1200px the dock sits 74px up (command-dock.css), 74px - 2vh higher

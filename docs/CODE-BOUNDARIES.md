@@ -76,6 +76,14 @@ portable contract applies to the explicitly reviewed graphs above. Their layer
 controller remains the owner of rendering/cleanup until a focused extraction
 moves it. Do not label all ingestion modules platform-independent by filename.
 
+### Local package boundaries for forks
+
+Upstream ownership changes go only in `scripts/package-boundaries.json`. A fork
+can list extra `modules` and `external` entries for existing groups in the
+git-ignored `scripts/package-boundaries.local.json` and check them with
+`npm run check:boundaries -- --local`. Without `--local`, the check and CI read
+only the main file. Exports, runtimes and new groups belong in the main file.
+
 ## Compatibility entries and owners
 
 | Retained entry                                      | Owner and current reason                                                                                           |
@@ -191,7 +199,9 @@ Callers retain their request admission and transport policy.
 
 `gods-eye-view/sources/firms-csv` exports the existing CSV parser, header
 recognition, acquisition-time conversion and trailing-day filter independently
-of the Node middleware. It imports no Node, DOM, rendering or network code.
+of the Node middleware, and `trailing24hWindow`, which returns that filter's
+records with the span of clock values over which they stay the same. It imports
+no Node, DOM, rendering or network code.
 The Node provider continues using the same implementation; contract fixtures
 cover malformed rows, acquisition times, empty feeds and the inclusive time
 window. The boundary gate checks each entry independently.
@@ -230,6 +240,44 @@ keyless Photon fallback. The application passes this service to location
 controls, annotation resolution and voice/radio actions. Those consumers retain
 framing, landmark recovery, footprint matching and playback decisions. Existing
 reverse geocoding and nearby/text-search routes remain separate.
+
+## Entity lookup provider
+
+A host may find aircraft, ships, cameras and satellites anywhere for the
+search box, beside those already loaded, by passing `entityLookup` to
+`createApplicationControls` (`src/app/controls.js`), next to `placeSearch`:
+
+```js
+entityLookup({ text, at, signal }) => Promise<Array<{
+  kind: 'aircraft' | 'vessel' | 'camera' | 'satellite',
+  id: string, // the id the item's layer holds it under
+  name: string | null,
+  detail?: string | null, // shown beside the name
+  lat: number,
+  lon: number,
+  layerId?: string, // default: flights, ais-live-vessels, cctv, satellites
+  mmsi?: string | null, // a ship's MMSI, when its id is not
+  placed?: boolean, // false: its layer will not draw it at that time
+}>>
+```
+
+`text` is the typed line and `signal` aborts when it changes or the field
+closes. `at` is the world time (epoch ms) while the timeline is held away
+from live, and absent while live: positions are then wanted as of that time.
+An answer marked `placed: false` (no position at that time) is listed with
+its `detail`, and its position, if given, is where it was last seen; picking
+it centres there, if anywhere, and shows its name and `detail` under the
+field instead of waiting for its layer. The search box asks once typing pauses (250 ms), only for a bare
+name, code or number (`lookupQuery` in `src/ui/omnibarRows.js`). Answers
+without an id, without a valid position (unless `placed: false`), and other
+kinds, are left out; eight are
+listed at most (`lookupMatches` in `src/ui/entityLookup.js`). Picking one
+switches its layer on as a click would; one the layer holds (by `id`, else
+by `mmsi`, never by a name) is picked as a Context row picks it, and one it
+does not hold yet is centred on once and picked with the layer's `pickById`
+(`center: false`) when its next load has it, within 20 seconds. It is never
+followed. Rejections are ignored. Without the option the search box finds
+only what is already loaded.
 
 ## Panel controls
 
@@ -445,6 +493,12 @@ subscriptions. Composition supplies the manager, installations search and
 explicit visual/panel actions. `ui/context/policy` exposes the existing pure
 mode and restoration rules. No source transport or renderer is imported by
 these components; initial state and action results retain their existing shape.
+
+`ui/context/card` lets a custom layer open and close the Context panel's item
+card, and hear when the map selection changes
+(`openContextCard`, `closeContextCard`, `onMapSelectionChanged`). It imports
+nothing: the app's Context connects the card and the selection to it when it
+starts, and until then nothing opens and nothing is heard.
 
 ## Cockpit controls
 

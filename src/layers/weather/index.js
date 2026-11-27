@@ -210,10 +210,11 @@ export function createWeatherLayer({
   const getHost = () => imageryHost?.() ?? globeImageryHost(viewer);
   const notify = () => listener?.();
   const shownTime = () => (noFrame ? null : rendering?.getDiagnostics().time);
+  // The row and readout follow the time through the panel
+  // (`panelFollowsTime`); the clock only steers prefetching here.
   const onClock = () => {
     if (!clock.getState().advancing || suspended())
       rendering?.cancelPrefetch?.();
-    notify();
   };
   let unsubscribeClock = clock?.subscribe(onClock) ?? null;
   const ensureClock = () => {
@@ -350,7 +351,12 @@ export function createWeatherLayer({
     icon: radar ? '◉' : lightning ? 'ϟ' : '☁',
     source: sourceName ?? 'NOAA nowCOAST · OBSERVED',
     updateInterval: lightning ? 600_000 : 120_000,
-    init(nextViewer) {
+    // The row and the Weather readout read the scene time; the panel reads
+    // them again when it moves.
+    panelFollowsTime: true,
+    init(nextViewer, { panel = null } = {}) {
+      // The panels' handle: invalidated when the row or readout changed.
+      listener = panel ? () => panel.invalidate() : null;
       viewer = nextViewer;
       rendering = createRendering({
         viewer,
@@ -852,9 +858,6 @@ export function createWeatherLayer({
         ({ id }) => id === 'coverage',
       );
       return controls;
-    },
-    setRowControlsListener(value) {
-      listener = typeof value === 'function' ? value : null;
     },
     getStats() {
       const { source } = weatherDisplay(manifest);

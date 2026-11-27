@@ -455,9 +455,12 @@ export class ShareRestoration {
   }
 
   /**
-   * Select a shared vessel once the vessel feed has it. Vessels are selected,
-   * not followed: the camera is already at the shared view. If the vessel does
-   * not appear in time, the view stays where it was when the link was made.
+   * Select a shared vessel once the vessel feed has it, and follow it when
+   * the link was made following it (`followed`), from the shared offset; a
+   * vessel a link only selected (every link made before the format said
+   * so) is selected, the camera already at the shared view. If the vessel
+   * does not appear in time, the view stays where it was when the link was
+   * made.
    */
   async _restoreSharedVessel(view, current) {
     const generation = ++this._sharedVesselGeneration;
@@ -469,7 +472,15 @@ export class ShareRestoration {
     try {
       while (live()) {
         const vessels = this._dataManager?.layers?.get?.(layerId)?.module;
-        if (vessels?.hasContact?.(id) && vessels.selectById(id)) return true;
+        if (vessels?.hasContact?.(id)) {
+          if (
+            view.followed === true &&
+            typeof vessels.trackById === 'function' &&
+            this._followSharedVessel(vessels, view, layerId)
+          )
+            return true;
+          if (vessels.selectById(id)) return true;
+        }
         if (Date.now() >= deadline) break;
         await new Promise((resolve) =>
           this._lifetime.timeout(resolve, SHARED_VESSEL_POLL_MS),
@@ -487,6 +498,21 @@ export class ShareRestoration {
       ++this._shareTrackingNoticeGeneration,
     );
     return false;
+  }
+
+  /** Follow a shared vessel and put the camera at the link's offset. */
+  _followSharedVessel(vessels, view, layerId) {
+    const { id } = view.entity;
+    if (!vessels.trackById(id)) return false;
+    const followed = followedOf(this.viewer);
+    if (
+      String(followed?.key || '').startsWith(`${layerId}:`) &&
+      view.lastKnown
+    ) {
+      this._stopFollowOffset?.();
+      this._stopFollowOffset = this.applyFollowOffset?.(followed, view.offset);
+    }
+    return true;
   }
 
   /** The current share's thing view when `result` is about its entity. */

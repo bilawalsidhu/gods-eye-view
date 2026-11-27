@@ -7,7 +7,7 @@
  *      [--out qa-shots/context-arrivals] [--only arrivals|contacts]
  *
  * Arrivals: types "Camp Mabry" and "39.7392, -104.9903" (downtown Denver)
- * into the location search, waits for the flight and the photoreal tiles,
+ * into the Omnibar, waits for the flight and the photoreal tiles,
  * orbits a little like a user looking around, and asserts the camera sits at
  * least 60 m above the rendered surface under it and under the view centre.
  *
@@ -246,14 +246,11 @@ async function arrivals() {
   const recorder = await createScreencast(page, dir);
   await recorder.start();
   for (const query of ['Camp Mabry', '39.7392, -104.9903']) {
-    await page.evaluate(() =>
-      document.getElementById('search-toggle')?.click(),
-    );
-    await page.focus('#location-search');
+    await page.focus('#gev-omnibar-input');
     await page.evaluate(() => {
-      document.getElementById('location-search').value = '';
+      document.getElementById('gev-omnibar-input').value = '';
     });
-    await page.type('#location-search', query, { delay: 40 });
+    await page.type('#gev-omnibar-input', query, { delay: 40 });
     await page.keyboard.press('Enter');
     // Wait for the flight to land: the camera still for 1.5 s.
     const landed = Date.now();

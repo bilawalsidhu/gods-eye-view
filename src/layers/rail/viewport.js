@@ -197,7 +197,7 @@ export function createViewport({ state, services, parts, source }) {
     parts.routes.onCamera();
     parts.routes.applyNetwork();
     parts.rendering.syncRenderHold();
-    state._dataManager?.refreshLayerStats?.();
+    state._panel?.invalidate();
     governorRequestRender('rail-proximity');
   }
 

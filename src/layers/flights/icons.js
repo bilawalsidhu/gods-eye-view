@@ -21,11 +21,12 @@ const PIN_TURN_DEG = 0.1;
  * the grounded floor: a floor-pinned row holds a CPU position, so it is not
  * planned, and settling a grounded contact puts it straight onto the floor.
  */
-export function createIcons({ flightState, services, parts }) {
+export function createIcons({ flightState, services, parts, resolveAsset }) {
   const icons = createAircraftIcons({
     state: flightState,
     services,
     parts,
+    resolveAsset,
     layerId: 'flights',
     displayDelay: flightState._displayDelay,
     followsClock: () => followsClock(flightState),
