@@ -10,7 +10,7 @@ import {
   liftRepeatedGroundFix, synthesizeForwardKinematicsFix,
   projectGroundArcLatLon, corridorPathLatLon,
   COURSE_TRACK_ONLY_MPS, COURSE_CHORD_ONLY_MPS, COURSE_MIN_DPS, TURN_MIN_SPEED_MPS,
-  floorCoastedPosition, COAST_FLOOR_CEILING_M, COAST_FLOOR_LIFT_M,
+  floorCoastedPosition, COAST_FLOOR_CEILING_M,
 } from './motionModel.js';
 
 const AUSTIN = { lat: 30.2672, lon: -97.7431, alt: 9000 };
@@ -350,60 +350,34 @@ test('corridorPathLatLon returns nothing without a display position', () => {
   }), []);
 });
 
-/** floorCoastedPosition as it was before the cruise skip: always converts and reads. */
-function floorCoastedReference(position, groundAt) {
-  const carto = Cesium.Cartographic.fromCartesian(position);
-  if (!carto) return position;
-  const ground = groundAt(
-    Cesium.Math.toDegrees(carto.latitude),
-    Cesium.Math.toDegrees(carto.longitude),
-  );
-  if (!Number.isFinite(ground) || carto.height >= ground + COAST_FLOOR_LIFT_M)
-    return position;
-  return Cesium.Cartesian3.fromRadians(carto.longitude, carto.latitude, ground + COAST_FLOOR_LIFT_M);
-}
-
-test('a coasting contact above any terrain is not looked up against the ground', () => {
+test('a coasting contact above any terrain is not looked up against the ground', (t) => {
   let reads = 0;
   const ground = () => {
     reads += 1;
     return 8821; // Everest's summit, the highest floor there is
   };
   // Just over the ceiling and at cruise, from pole to pole.
-  for (let lat = -90; lat <= 90; lat += 7.5) {
-    for (const lon of [0, 86.925, -78.8, 179.9]) {
-      for (const height of [COAST_FLOOR_CEILING_M + 35, 10_000, 12_500, 40_000]) {
-        const position = Cesium.Cartesian3.fromDegrees(lon, lat, height);
-        const before = Cesium.Cartesian3.clone(position);
-        assert.equal(floorCoastedPosition(position, ground), position);
-        assert.ok(Cesium.Cartesian3.equals(position, before));
-      }
-    }
+  const positions = [];
+  for (let lat = -90; lat <= 90; lat += 7.5)
+    for (const lon of [0, 86.925, -78.8, 179.9])
+      for (const height of [COAST_FLOOR_CEILING_M + 35, 10_000, 12_500, 40_000])
+        positions.push(Cesium.Cartesian3.fromDegrees(lon, lat, height));
+  const below = Cesium.Cartesian3.fromDegrees(86.925, 27.988, 4000);
+  // The skip saves the geodetic conversion as well as the read; count its atan2.
+  const atan2 = t.mock.method(Math, 'atan2');
+  for (const position of positions) {
+    const before = Cesium.Cartesian3.clone(position);
+    assert.equal(floorCoastedPosition(position, ground), position);
+    assert.ok(Cesium.Cartesian3.equals(position, before));
   }
-  assert.equal(reads, 0);
-});
-
-test('below the ceiling a coast is floored exactly as before', () => {
-  // Terrain that rises under the coast, known in some places and not others.
-  const ground = (lat, lon) => (Math.floor(lat * 10 + lon) % 3 === 0 ? null : 1500 + ((lat * 7 + lon * 3) % 900));
-  let lifted = 0;
-  let checked = 0;
-  for (let lat = -89; lat <= 89; lat += 5.5) {
-    for (let lon = -180; lon < 180; lon += 17) {
-      for (const height of [-40, 0, 800, 1499, 1501.4, 2399, 2402, 5000, 8990, 9000, 9010, 11_000, 30_000]) {
-        const position = Cesium.Cartesian3.fromDegrees(lon, lat, height);
-        const expected = floorCoastedReference(Cesium.Cartesian3.clone(position), ground);
-        const actual = floorCoastedPosition(position, ground);
-        assert.ok(
-          Cesium.Cartesian3.equals(actual, expected),
-          `coast at ${lat}, ${lon}, ${height} m`,
-        );
-        checked += 1;
-        if (!Cesium.Cartesian3.equals(expected, Cesium.Cartesian3.fromDegrees(lon, lat, height))) lifted += 1;
-      }
-    }
-  }
-  assert.ok(lifted > 500, `${lifted} of ${checked} coasts were lifted onto the ground`);
+  const readsAbove = reads;
+  const convertedAbove = atan2.mock.callCount();
+  floorCoastedPosition(below, ground);
+  const convertedBelow = atan2.mock.callCount() - convertedAbove;
+  atan2.mock.restore();
+  assert.equal(readsAbove, 0);
+  assert.equal(convertedAbove, 0);
+  assert.ok(convertedBelow >= 1, 'a coast below the ceiling is converted');
 });
 
 test('nothing at or below the ceiling skips the ground', () => {

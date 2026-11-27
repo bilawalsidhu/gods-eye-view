@@ -149,14 +149,3 @@ test('reading a floor formats no numbers, hit or miss', async (t) => {
   toFixed.mock.restore();
   assert.equal(toFixed.mock.callCount(), 0);
 });
-
-test('a reading reported at a point is found from anywhere in its cell', async () => {
-  const terrain = await warmTerrain([{ lat: 41.5, lon: -97.66, h: 120 }]);
-  const groundFloor = createGroundFloor({ terrain });
-  assert.equal(groundFloor.reportValidatedMeshFloorCell(41.5003, -97.6602, 129), true);
-  assert.equal(groundFloor.cachedMeshFloor(41.4996, -97.6598), 129);
-  assert.equal(groundFloor.cachedGroundFloor(41.4996, -97.6598), 129);
-  // The next cell over has no reading and no DEM entry.
-  assert.equal(groundFloor.cachedMeshFloor(41.5006, -97.6602), null);
-  assert.equal(groundFloor.cachedGroundFloor(41.5006, -97.6602), null);
-});

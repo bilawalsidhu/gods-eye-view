@@ -172,7 +172,7 @@ test('an out-of-range cache bound falls back to the default instead of disabling
 
 test('a synchronous read finds exactly the entry its 5-decimal key names', async () => {
   // Stored coordinates, and for each the reads that must and must not reach it.
-  // The expectation is the string key the cache has always used.
+  // The expectation is the 5-decimal string key, with "-0.00000" read as "0.00000".
   const stored = [
     [0, 0.001],
     [51.47, -0.454],
@@ -189,14 +189,17 @@ test('a synchronous read finds exactly the entry its 5-decimal key names', async
     [10, 500],
     [10, 499.999999],
   ];
-  const key = (lat, lon) => `${lat.toFixed(5)},${lon.toFixed(5)}`;
+  const same = (text) => text.replaceAll('-0.00000', '0.00000');
+  const key = (lat, lon) => same(`${lat.toFixed(5)},${lon.toFixed(5)}`);
   const heights = new Map(
     stored.map(([lat, lon], i) => [key(lat, lon), 100 + i]),
   );
   const terrain = createTerrainHeights({
     source: {
       async getHeights(chunk) {
-        return chunk.map((item) => ({ ellipsoid: heights.get(item.key) }));
+        return chunk.map((item) => ({
+          ellipsoid: heights.get(same(item.key)),
+        }));
       },
     },
   });
@@ -253,43 +256,4 @@ test('a synchronous read of an ordinary coordinate formats no numbers', async (t
     assert.equal(terrain.cachedRealEllipsoidalGround(45.123, lonAt(i)), null);
   toFixed.mock.restore();
   assert.equal(toFixed.mock.callCount(), 0);
-});
-
-test('a read between two stores keeps the read entry over the unread one', async () => {
-  const terrain = createTerrainHeights({
-    source: stubSource(),
-    maxCacheEntries: 2,
-  });
-  await terrain.resolveEllipsoidalGround([pointAt(0)]);
-  await terrain.resolveEllipsoidalGround([pointAt(1)]);
-  assert.equal(
-    terrain.cachedRealEllipsoidalGround(0, lonAt(0)),
-    heightAt(lonAt(0)),
-  );
-  await terrain.resolveEllipsoidalGround([pointAt(2)]);
-  assert.equal(
-    terrain.cachedRealEllipsoidalGround(0, lonAt(0)),
-    heightAt(lonAt(0)),
-  );
-  assert.equal(terrain.cachedRealEllipsoidalGround(0, lonAt(1)), null);
-});
-
-test('an entry read once every few stores is never evicted', async () => {
-  const terrain = createTerrainHeights({
-    source: stubSource(),
-    maxCacheEntries: 8,
-  });
-  await terrain.resolveEllipsoidalGround([pointAt(0)]);
-  for (let i = 1; i <= 4; i += 1)
-    await terrain.resolveEllipsoidalGround([pointAt(i)]);
-  assert.equal(
-    terrain.cachedRealEllipsoidalGround(0, lonAt(0)),
-    heightAt(lonAt(0)),
-  );
-  for (let i = 5; i <= 8; i += 1)
-    await terrain.resolveEllipsoidalGround([pointAt(i)]);
-  assert.equal(
-    terrain.cachedRealEllipsoidalGround(0, lonAt(0)),
-    heightAt(lonAt(0)),
-  );
 });

@@ -49,13 +49,12 @@ export function createGroundFloor({ terrain, signal }) {
 
   /**
    * One coordinate's coarse cell as an integer: `Number(deg.toFixed(3))` in
-   * thousandths of a degree, through `toFixed` only where `fixedIndex` cannot
-   * answer.
+   * thousandths of a degree (see `fixedIndex`).
    * @param {number} deg
    * @returns {number}
    */
   function coarseCellIndex(deg) {
-    return fixedIndex(deg, 1000) ?? Math.round(Number(deg.toFixed(3)) * 1000);
+    return fixedIndex(deg, 3);
   }
 
   /**

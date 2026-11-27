@@ -77,12 +77,9 @@ export function createTerrainHeights({
       : DEFAULT_MAX_CACHE_ENTRIES;
 
   /**
-   * In-memory cache: rounded coordinate -> `{ellipsoid, source}`, keyed by
-   * `storedKey(cacheKey(lat, lon))`. Instance-scoped — the only reads are through
-   * `cachedEllipsoidalGround`, `cachedRealEllipsoidalGround` and the internal
-   * lookup in `resolveEllipsoidalGround`. Bounded at CACHE_MAX_ENTRIES; write
-   * through `cacheStore` and read a consumer-facing hit through `cacheTouch` so
-   * the eviction order stays least-recently-used.
+   * Rounded coordinate -> entry, keyed by `readKey(lat, lon)`. Write through
+   * `cacheStore` and read hits through `cacheTouch` to keep eviction
+   * least-recently-used.
    * @type {Map<number|string, {ellipsoid: number, source: 'reearth'|'geoid-fallback', retryAt?: number}>}
    */
   const cache = new Map();
@@ -91,44 +88,22 @@ export function createTerrainHeights({
   const CELL_INDEX_LIMIT = FIXED_INDEX_LIMIT_DEG * 1e5;
 
   /**
-   * The `cache` key for a coordinate's `cacheKey` text: its two 5-decimal
-   * indices packed into one integer (below 2^53), or the text itself out of
-   * range and for "-0.00000", a different key from "0.00000". The text is the
-   * rounded coordinate, so the parse is exact.
-   * @param {string} text
-   * @returns {number|string}
-   */
-  function storedKey(text) {
-    const comma = text.indexOf(',');
-    const latIndex = Math.round(Number(text.slice(0, comma)) * 1e5);
-    const lonIndex = Math.round(Number(text.slice(comma + 1)) * 1e5);
-    if (
-      !(Math.abs(latIndex) < CELL_INDEX_LIMIT) ||
-      !(Math.abs(lonIndex) < CELL_INDEX_LIMIT) ||
-      Object.is(latIndex, -0) ||
-      Object.is(lonIndex, -0)
-    )
-      return text;
-    return latIndex * 1e8 + lonIndex;
-  }
-
-  /**
-   * `storedKey(cacheKey(lat, lon))`, formatting the coordinate only where
-   * `fixedIndex` cannot answer or answers -0.
+   * The `cache` key of a coordinate: the two 5-decimal indices of its
+   * `cacheKey` text packed into one integer (below 2^53), or that text where
+   * an index is out of range. The Map treats an index of -0 as 0, so
+   * "-0.00000" and "0.00000", the same point, share an entry.
    * @param {number} lat
    * @param {number} lon
    * @returns {number|string}
    */
   function readKey(lat, lon) {
-    const latIndex = fixedIndex(lat, 1e5);
-    const lonIndex = fixedIndex(lon, 1e5);
+    const latIndex = fixedIndex(lat, 5);
+    const lonIndex = fixedIndex(lon, 5);
     if (
-      latIndex === null ||
-      lonIndex === null ||
-      Object.is(latIndex, -0) ||
-      Object.is(lonIndex, -0)
+      !(Math.abs(latIndex) < CELL_INDEX_LIMIT) ||
+      !(Math.abs(lonIndex) < CELL_INDEX_LIMIT)
     )
-      return storedKey(cacheKey(lat, lon));
+      return cacheKey(lat, lon);
     return latIndex * 1e8 + lonIndex;
   }
 
@@ -169,8 +144,8 @@ export function createTerrainHeights({
   }
 
   /**
-   * Builds the rounded cache key shared between the in-memory cache and the
-   * `points` string sent to the proxy (see file header, point 2).
+   * The 5-decimal text sent to the proxy in `points` (see file header,
+   * point 2); `readKey` turns the same rounding into the `cache` key.
    * @param {number} lat
    * @param {number} lon
    * @returns {string}
@@ -297,9 +272,10 @@ export function createTerrainHeights({
     requestSignal?.throwIfAborted();
     if (!Array.isArray(coords) || coords.length === 0) return [];
 
-    // Build the per-input work list (key + original index) up front so the
-    // final assembly can map back positionally regardless of how many inputs
-    // shared a cache key or a chunk.
+    // Build the per-input work list up front so the final assembly can map
+    // back positionally regardless of how many inputs shared a cache key or a
+    // chunk. `slot` keys `cache` and dedupes requests; `key` is the proxy text,
+    // sent for the first point of a slot.
     const work = coords.map((c, index) => {
       const key = cacheKey(c.lat, c.lon);
       return {
@@ -308,11 +284,11 @@ export function createTerrainHeights({
         lon: c.lon,
         sourceOrthometricM: c.sourceOrthometricM,
         key,
-        slot: storedKey(key),
+        slot: readKey(c.lat, c.lon),
       };
     });
 
-    // Points not yet warm in the cache, deduplicated by key (multiple inputs —
+    // Points not yet warm in the cache, deduplicated by slot (multiple inputs —
     // even within the same call — naming the same rounded coordinate should
     // only ever hit the network once). Round 5: a geoid-FALLBACK entry does
     // NOT count as permanently warm — it was cached when the proxy failed
@@ -321,7 +297,7 @@ export function createTerrainHeights({
     // so warm consumers do not hammer a failing proxy; after it expires, a
     // successful response replaces the fallback entry and clears the path.
     const uncached = [];
-    const seenKeys = new Set();
+    const seenSlots = new Set();
     const now = Date.now();
     // What this call resolved or found warm, so the assembly below can report a
     // point even if a later chunk's writes pushed it past CACHE_MAX_ENTRIES.
@@ -335,11 +311,11 @@ export function createTerrainHeights({
         Number.isFinite(entry.retryAt) &&
         now < entry.retryAt;
       if ((entry && entry.source === 'reearth') || fallbackCooling) {
-        resolvedThisCall.set(item.key, entry);
+        resolvedThisCall.set(item.slot, entry);
         continue;
       }
-      if (seenKeys.has(item.key)) continue;
-      seenKeys.add(item.key);
+      if (seenSlots.has(item.slot)) continue;
+      seenSlots.add(item.slot);
       uncached.push(item);
     }
 
@@ -361,7 +337,7 @@ export function createTerrainHeights({
           // An omitted point now caches nothing and retries on the next warm.
           if (Number.isFinite(ellipsoid)) {
             const entry = { ellipsoid, source: 'reearth' };
-            resolvedThisCall.set(item.key, entry);
+            resolvedThisCall.set(item.slot, entry);
             cacheStore(item.slot, entry);
           }
         }
@@ -386,7 +362,7 @@ export function createTerrainHeights({
             return;
           }
           const entry = { ellipsoid, source: 'reearth' };
-          resolvedThisCall.set(item.key, entry);
+          resolvedThisCall.set(item.slot, entry);
           cacheStore(item.slot, entry);
         });
         if (fallback.length === 0) continue;
@@ -403,7 +379,7 @@ export function createTerrainHeights({
             source: 'geoid-fallback',
             retryAt: Date.now() + GEOID_FALLBACK_COOLDOWN_MS,
           };
-          resolvedThisCall.set(item.key, entry);
+          resolvedThisCall.set(item.slot, entry);
           cacheStore(item.slot, entry);
         }
       }
@@ -413,7 +389,7 @@ export function createTerrainHeights({
     // the upstream omitted has NO entry (round 6 — deliberately uncached so it
     // retries later): report it unresolved instead of throwing.
     return work.map((item) => {
-      const entry = cache.get(item.slot) || resolvedThisCall.get(item.key);
+      const entry = cache.get(item.slot) || resolvedThisCall.get(item.slot);
       return entry
         ? { ellipsoid: entry.ellipsoid, source: entry.source }
         : { ellipsoid: null, source: 'unresolved' };
