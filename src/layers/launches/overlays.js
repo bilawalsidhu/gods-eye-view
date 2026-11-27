@@ -24,14 +24,10 @@ const MAX_RADIUS = Math.max(WGS84.radii.x, WGS84.radii.y, WGS84.radii.z);
  * beyond the horizon from leaking through the hidden globe.
  * @param {{x: number, y: number, z: number}} cameraPosition Camera world position.
  * @param {{x: number, y: number, z: number}} markerPosition Mission anchor world position.
- * @param {number} [limbMargin] Additional normalized horizon clearance.
  * @returns {boolean} Whether the marker belongs on the visible hemisphere.
  */
-export function missionAnchorHorizonVisible(
-  cameraPosition,
-  markerPosition,
-  limbMargin = 0.012,
-) {
+export function missionAnchorHorizonVisible(cameraPosition, markerPosition) {
+  const limbMargin = 0.012;
   if (!cameraPosition || !markerPosition) return false;
   const cameraMagnitude = magnitude(cameraPosition);
   if (!Number.isFinite(cameraMagnitude) || cameraMagnitude <= MAX_RADIUS) {
@@ -192,25 +188,15 @@ export function createRocketMissionElementOverlayEntry({
 }
 
 /** Keep the newest ambient mission markers with stable identity tie-breaking. */
-export function selectRocketMissionMarkerOverlayCohort(
-  entries,
-  limit = ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT,
-) {
-  const cap = Math.max(
-    0,
-    Math.min(
-      ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT,
-      Math.floor(Number(limit) || 0),
-    ),
-  );
-  if (!Array.isArray(entries) || cap === 0) return [];
+export function selectRocketMissionMarkerOverlayCohort(entries) {
+  if (!Array.isArray(entries)) return [];
   return entries
     .slice()
     .sort(
       (a, b) =>
         b.priority - a.priority || String(a.id).localeCompare(String(b.id)),
     )
-    .slice(0, cap);
+    .slice(0, ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT);
 }
 
 /**

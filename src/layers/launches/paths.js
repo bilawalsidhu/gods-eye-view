@@ -211,14 +211,10 @@ export function orbitProgressAtTime(nowMs, periodSec) {
  *   position, ECEF.
  * @param {{x: number, y: number, z: number}} insertionPosition Orbit
  *   insertion position, ECEF.
- * @param {number} [samples] Number of curve intervals.
  * @returns {Array<{x: number, y: number, z: number}>}
  */
-function reconstructedAscentPath(
-  launchPosition,
-  insertionPosition,
-  samples = 512,
-) {
+function reconstructedAscentPath(launchPosition, insertionPosition) {
+  const samples = 512;
   const origin = toCartographicRadians(launchPosition);
   const insertion = toCartographicRadians(insertionPosition);
   if (!origin || !insertion) return [launchPosition, insertionPosition];

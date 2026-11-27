@@ -256,7 +256,7 @@ export function createLifecycle({
           return;
         focusLaunch(
           parts.rendering.launchIdFromPicks(
-            parts.rendering.missionHitsAt(event.position, 12),
+            parts.rendering.missionHitsAt(event.position),
           ),
           { move: !cockpitActive() },
         );

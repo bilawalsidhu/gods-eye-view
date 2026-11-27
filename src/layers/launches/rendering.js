@@ -181,11 +181,11 @@ export function createRendering({
     return null;
   }
 
-  /** The mission items under a screen position (CSS px), at most `limit`. */
-  function missionHitsAt(position, limit = 12) {
+  /** The mission items under a screen position (CSS px), at most 12. */
+  function missionHitsAt(position) {
     const query = findQuery(layerState._viewer);
     if (!query || !position) return [];
-    return query.drillPick(position.x, position.y, { limit });
+    return query.drillPick(position.x, position.y, { limit: 12 });
   }
 
   /** Whether a mission item is under a screen position (CSS px). */

@@ -37,20 +37,14 @@ export function replayVehicleScreenRotation(from, to) {
  * to lag behind a camera jump or a phase transition.
  * @param {{x:number,y:number}|null} previous Previous rendered position.
  * @param {{x:number,y:number}} next Current path projection.
- * @param {number} [alpha] Interpolation amount.
- * @param {number} [snapDistance] Maximum distance to smooth.
  * @returns {{x:number,y:number}}
  */
-export function smoothReplayWindowPosition(
-  previous,
-  next,
-  alpha = 0.55,
-  snapDistance = 24,
-) {
+export function smoothReplayWindowPosition(previous, next) {
+  const amount = 0.55;
+  const snapDistance = 24;
   if (!previous || !next) return next;
   const distance = Math.hypot(next.x - previous.x, next.y - previous.y);
   if (!Number.isFinite(distance) || distance > snapDistance) return next;
-  const amount = clamp(Number(alpha) || 0, 0, 1);
   return {
     x: lerp(previous.x, next.x, amount),
     y: lerp(previous.y, next.y, amount),

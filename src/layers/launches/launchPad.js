@@ -24,7 +24,7 @@ const ZONE_IMAGE_PX = 512;
  * @param {number} r
  * @returns {[number, number, number, number]} `r, g, b, a`, 0..1.
  */
-export function launchPadZoneColour(r) {
+function launchPadZoneColour(r) {
   const [red, green, blue] = hexColor(ZONE_COLOR, 1);
   const inside = 1 - smoothstep(ZONE_EDGE, 1, r);
   const rim = smoothstep(ZONE_EDGE - ZONE_RIM_WIDTH, ZONE_EDGE, r) * inside;
@@ -43,14 +43,11 @@ let zoneImage;
 /**
  * The zone as an image fill: `launchPadZoneColour` across a square canvas,
  * its centre at the middle and its edge at the sides.
- * @param {() => HTMLCanvasElement} [createCanvas]
  * @returns {?{canvas: HTMLCanvasElement, key: string}}
  */
-export function launchPadZoneImage(
-  createCanvas = () => globalThis.document?.createElement('canvas'),
-) {
+function launchPadZoneImage() {
   if (zoneImage !== undefined) return zoneImage;
-  const canvas = createCanvas();
+  const canvas = globalThis.document?.createElement('canvas');
   const context = canvas?.getContext?.('2d');
   if (!context) return (zoneImage = null);
   canvas.width = ZONE_IMAGE_PX;
