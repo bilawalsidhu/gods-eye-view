@@ -849,6 +849,7 @@
       "src/i18n/marker.js",
       "scripts/pinokio-environment.mjs",
       "server/providers/common/source-root.js",
+      "server/providers/common/request.js",
       "server/standalone/key-setup.js",
       "src/keySetupCore.mjs",
       "src/localRequestGate.mjs",

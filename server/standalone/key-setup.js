@@ -6,6 +6,7 @@ import {
   validateKeySetupUpdates,
   upsertDotenvValues,
 } from '../../src/keySetupCore.mjs';
+import { readRequestBody } from '../providers/common/request.js';
 import { defaultSourceRoot } from '../providers/common/source-root.js';
 import path from 'node:path';
 import { readEnvironmentSource as readPinokioEnvironmentSource } from '../../scripts/pinokio-environment.mjs';
@@ -258,7 +259,7 @@ function keySetupEndpoint({ sourceRoot = defaultSourceRoot } = {}) {
           return respond(res, admission.status, refusal(admission));
         respond(res, 200, providerStatus());
       });
-      server.middlewares.use('/api/setup/keys', (req, res) => {
+      server.middlewares.use('/api/setup/keys', async (req, res) => {
         if (req.method !== 'POST')
           return respond(res, 405, {
             error: 'Method not allowed',
@@ -267,97 +268,92 @@ function keySetupEndpoint({ sourceRoot = defaultSourceRoot } = {}) {
         const admission = admit(req);
         if (!admission.ok)
           return respond(res, admission.status, refusal(admission));
-        let body = '';
-        let overflowed = false;
-        req.on('data', (chunk) => {
-          body += chunk;
-          if (body.length > 8192) {
-            overflowed = true;
-            req.destroy();
-          }
-        });
-        req.on('end', () => {
-          if (overflowed)
+        let body;
+        try {
+          body = await readRequestBody(req, 8192);
+        } catch (error) {
+          if (error?.code === 'BODY_TOO_LARGE')
             return respond(res, 413, {
               error: 'Request too large',
               code: 'too-large',
             });
-          let parsed;
-          try {
-            parsed = JSON.parse(body || '{}');
-          } catch {
-            return respond(res, 400, {
-              error: 'Invalid JSON',
-              code: 'invalid-json',
-            });
-          }
-          const verdict = validateKeySetupUpdates(parsed);
-          if (!verdict.ok) return respond(res, 400, refusal(verdict));
-          // Neither a replace NOR a removal may touch an externally-supplied
-          // credential (shell env, Keychain, another workflow). This backs the
-          // UI's read-only "configured externally" state with a real contract —
-          // and it must guard replace too, not just remove: a clickjacked or
-          // scripted same-origin POST could otherwise overwrite the live value.
-          const inStore = storeValues();
-          for (const name of Object.keys(verdict.updates)) {
-            if (isExternallyManaged(name, inStore)) {
-              return respond(res, 409, {
-                error: `${name} is configured outside Provider Settings and can only be changed where it was set`,
-                code: 'external',
-                params: { name },
-              });
-            }
-          }
-          try {
-            persistStore(upsertDotenvValues(readStore(), verdict.updates));
-          } catch (error) {
-            // The hardening failure carries its own honest, path-free message —
-            // "saved world-readable" must never be reported as a generic write
-            // error. Everything else returns a fixed message (a raw filesystem
-            // error can carry an absolute path; that stays in the server log).
-            if (
-              error?.code === 'GEV_HARDEN_FAILED' ||
-              error?.code === 'GEV_STORE_UNREADABLE'
-            ) {
-              return respond(res, 500, {
-                error: `The key was not saved: ${error.message}`,
-                code:
-                  error.code === 'GEV_HARDEN_FAILED'
-                    ? 'harden-failed'
-                    : 'store-unreadable',
-              });
-            }
-            return respond(res, 500, {
-              error: `Could not write the ${storeName()} store`,
-              code: 'write-failed',
-              params: { store: storeName() },
-            });
-          }
-          // Live for the server-side proxies immediately; the restart below is
-          // what re-injects the client-exposed defines (Google, Cesium ion).
-          // Removal sets '' rather than deleting: an empty value stays falsy
-          // through loadEnv after restart, matching the Pinokio launcher's own
-          // blank-field semantics.
-          for (const [name, value] of Object.entries(verdict.updates)) {
-            process.env[name] = value === null ? '' : value;
-          }
-          respond(res, 200, {
-            ok: true,
-            saved: Object.keys(verdict.updates),
-            status: providerStatus(),
-            restarting: true,
+          return;
+        }
+        let parsed;
+        try {
+          parsed = JSON.parse(body || '{}');
+        } catch {
+          return respond(res, 400, {
+            error: 'Invalid JSON',
+            code: 'invalid-json',
           });
-          // One deliberate restart, after the response has flushed. Vite's own
-          // .env watcher may fire too; a second queued restart is harmless.
-          setTimeout(() => {
-            server.restart().catch((error) => {
-              console.warn(
-                '[KeySetup] Dev-server restart failed:',
-                error?.message || error,
-              );
+        }
+        const verdict = validateKeySetupUpdates(parsed);
+        if (!verdict.ok) return respond(res, 400, refusal(verdict));
+        // Neither a replace NOR a removal may touch an externally-supplied
+        // credential (shell env, Keychain, another workflow). This backs the
+        // UI's read-only "configured externally" state with a real contract —
+        // and it must guard replace too, not just remove: a clickjacked or
+        // scripted same-origin POST could otherwise overwrite the live value.
+        const inStore = storeValues();
+        for (const name of Object.keys(verdict.updates)) {
+          if (isExternallyManaged(name, inStore)) {
+            return respond(res, 409, {
+              error: `${name} is configured outside Provider Settings and can only be changed where it was set`,
+              code: 'external',
+              params: { name },
             });
-          }, 250);
+          }
+        }
+        try {
+          persistStore(upsertDotenvValues(readStore(), verdict.updates));
+        } catch (error) {
+          // The hardening failure carries its own honest, path-free message —
+          // "saved world-readable" must never be reported as a generic write
+          // error. Everything else returns a fixed message (a raw filesystem
+          // error can carry an absolute path; that stays in the server log).
+          if (
+            error?.code === 'GEV_HARDEN_FAILED' ||
+            error?.code === 'GEV_STORE_UNREADABLE'
+          ) {
+            return respond(res, 500, {
+              error: `The key was not saved: ${error.message}`,
+              code:
+                error.code === 'GEV_HARDEN_FAILED'
+                  ? 'harden-failed'
+                  : 'store-unreadable',
+            });
+          }
+          return respond(res, 500, {
+            error: `Could not write the ${storeName()} store`,
+            code: 'write-failed',
+            params: { store: storeName() },
+          });
+        }
+        // Live for the server-side proxies immediately; the restart below is
+        // what re-injects the client-exposed defines (Google, Cesium ion).
+        // Removal sets '' rather than deleting: an empty value stays falsy
+        // through loadEnv after restart, matching the Pinokio launcher's own
+        // blank-field semantics.
+        for (const [name, value] of Object.entries(verdict.updates)) {
+          process.env[name] = value === null ? '' : value;
+        }
+        respond(res, 200, {
+          ok: true,
+          saved: Object.keys(verdict.updates),
+          status: providerStatus(),
+          restarting: true,
         });
+        // One deliberate restart, after the response has flushed. Vite's own
+        // .env watcher may fire too; a second queued restart is harmless.
+        setTimeout(() => {
+          server.restart().catch((error) => {
+            console.warn(
+              '[KeySetup] Dev-server restart failed:',
+              error?.message || error,
+            );
+          });
+        }, 250);
       });
     },
   };
