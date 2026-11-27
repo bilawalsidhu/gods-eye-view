@@ -5126,5 +5126,6 @@
   "Overhead within {n} km": "فوق الموقع ضمن {n} كم",
   "Inspector scope|In view": "في مجال الرؤية",
   "Turn on {layer} for more context.": "فعّل {layer} لمزيد من السياق.",
-  "{layer} is unavailable. Showing the saved item.": "طبقة {layer} غير متاحة. يتم عرض العنصر المحفوظ."
+  "{layer} is unavailable. Showing the saved item.": "طبقة {layer} غير متاحة. يتم عرض العنصر المحفوظ.",
+  "Cameras list|{n} loaded": "{n} محمّلة"
 }

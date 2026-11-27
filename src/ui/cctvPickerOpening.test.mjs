@@ -201,7 +201,8 @@ const rowNames = (root = document) =>
 
 test('the opening camera appears in the loaded camera catalog', async (t) => {
   await reopenedAtCambridge(t);
-  assert.deepEqual(rowNames(), ['Camera a-trafalgar', 'Camera b-cambridge']);
+  // Below globe height the list is nearest the view first.
+  assert.deepEqual(rowNames(), ['Camera b-cambridge', 'Camera a-trafalgar']);
 });
 
 test('picking the shown camera from the Cameras list keeps it after a pan', async (t) => {

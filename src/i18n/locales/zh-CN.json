@@ -4576,5 +4576,6 @@
   "Overhead within {n} km": "{n} 公里内的上空",
   "Inspector scope|In view": "视野内",
   "Turn on {layer} for more context.": "开启{layer}以查看更多背景信息。",
-  "{layer} is unavailable. Showing the saved item.": "{layer}不可用，当前显示已保存的项目。"
+  "{layer} is unavailable. Showing the saved item.": "{layer}不可用，当前显示已保存的项目。",
+  "Cameras list|{n} loaded": "已加载 {n} 个"
 }

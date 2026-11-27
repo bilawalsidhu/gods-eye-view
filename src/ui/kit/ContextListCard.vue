@@ -126,6 +126,8 @@ const props = defineProps({
   allowUnlisted: Boolean,
   /** Accessible return-to-list label. */
   backTitle: { type: String, default: '' },
+  /** A line under the head: what the count is of (Cameras: "In view · 7,350 loaded"). */
+  scopeText: { type: String, default: '' },
   /** A caller-supplied revision opts into holding row order after a pick. */
   returnRevision: { type: [Number, String], default: null },
 });
@@ -473,6 +475,13 @@ onBeforeUnmount(() => {
         formatNumber(total)
       }}</strong>
     </h4>
+    <p
+      v-if="scopeText && !detailShown && presentationState === 'ready'"
+      class="view-context__tile-age context-list-card__scope"
+      data-list-scope
+    >
+      {{ scopeText }}
+    </p>
     <!-- The detail in the list's place: Esc here is the card's (Back). -->
     <div
       v-if="detailShown"

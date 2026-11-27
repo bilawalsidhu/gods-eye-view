@@ -4906,5 +4906,6 @@
   "Overhead within {n} km": "Проліт у радіусі {n} км",
   "Inspector scope|In view": "В області огляду",
   "Turn on {layer} for more context.": "Увімкніть шар {layer}, щоб побачити більше відомостей.",
-  "{layer} is unavailable. Showing the saved item.": "Шар {layer} недоступний. Показано збережений об’єкт."
+  "{layer} is unavailable. Showing the saved item.": "Шар {layer} недоступний. Показано збережений об’єкт.",
+  "Cameras list|{n} loaded": "завантажено: {n}"
 }

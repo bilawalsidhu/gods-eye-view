@@ -4796,5 +4796,6 @@
   "Overhead within {n} km": "En survol à moins de {n} km",
   "Inspector scope|In view": "Dans la vue",
   "Turn on {layer} for more context.": "Activez {layer} pour obtenir plus de contexte.",
-  "{layer} is unavailable. Showing the saved item.": "{layer} est indisponible. L’élément enregistré est affiché."
+  "{layer} is unavailable. Showing the saved item.": "{layer} est indisponible. L’élément enregistré est affiché.",
+  "Cameras list|{n} loaded": "{n} chargées"
 }

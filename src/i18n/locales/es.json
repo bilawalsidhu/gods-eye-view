@@ -4796,5 +4796,6 @@
   "Overhead within {n} km": "Por encima dentro de {n} km",
   "Inspector scope|In view": "A la vista",
   "Turn on {layer} for more context.": "Activa {layer} para ver más contexto.",
-  "{layer} is unavailable. Showing the saved item.": "{layer} no está disponible. Se muestra el elemento guardado."
+  "{layer} is unavailable. Showing the saved item.": "{layer} no está disponible. Se muestra el elemento guardado.",
+  "Cameras list|{n} loaded": "{n} cargadas"
 }

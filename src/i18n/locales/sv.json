@@ -4686,5 +4686,6 @@
   "Overhead within {n} km": "Överflygning inom {n} km",
   "Inspector scope|In view": "I vyn",
   "Turn on {layer} for more context.": "Slå på {layer} för mer sammanhang.",
-  "{layer} is unavailable. Showing the saved item.": "{layer} är inte tillgängligt. Det sparade objektet visas."
+  "{layer} is unavailable. Showing the saved item.": "{layer} är inte tillgängligt. Det sparade objektet visas.",
+  "Cameras list|{n} loaded": "{n} inlästa"
 }

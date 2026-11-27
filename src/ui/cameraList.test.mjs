@@ -190,9 +190,11 @@ async function indexReady() {
   await nextTick();
 }
 
-test('the Cameras list pages the loaded catalog in source order at any zoom', async (t) => {
+test('at globe height the Cameras list pages the loaded catalog in source order', async (t) => {
   const { store, names, layer, changeLayers } = fixture(t);
   await indexReady();
+  store.setView({ ...cameraView(HERE), heightM: 25_000_000 });
+  await nextTick();
   const card = () => document.querySelector('[data-list-card="cctv"]');
   const firstPage = CAMERAS.slice(0, 5).map((camera) => camera.name);
   assert.deepEqual(names(), firstPage);
@@ -217,6 +219,53 @@ test('the Cameras list pages the loaded catalog in source order at any zoom', as
   assert.equal(reads.mock.callCount(), 1);
 });
 
+test('below globe height the list is the cameras in view, nearest first, with their distance', async (t) => {
+  const { store, names } = fixture(t);
+  await indexReady();
+  const card = () => document.querySelector('[data-list-card="cctv"]');
+  const scope = () =>
+    card().querySelector('[data-list-scope]')?.textContent.trim();
+  // Dallas is loaded but out of view.
+  assert.deepEqual(names(), [
+    'Camera 1',
+    'Camera 2',
+    'Camera 3',
+    'Camera 4',
+    'Camera 5',
+  ]);
+  assert.equal(card().querySelector('h4 strong').textContent.trim(), '5');
+  assert.equal(scope(), 'In view · 6 loaded');
+  assert.match(
+    card().querySelector('li .nearby-lists__meta').textContent,
+    /km/,
+  );
+  assert.equal(
+    card().querySelector('.view-context__bar-key').textContent.trim(),
+    'TxDOT 5',
+  );
+  // A moving camera keeps the list until the view settles.
+  const empty = { lat: 29, lon: HERE.lon };
+  store.setView(cameraView(empty), { settled: false });
+  await nextTick();
+  assert.equal(names()[0], 'Camera 1');
+  assert.equal(scope(), 'In view · 6 loaded');
+  // Settled with nothing in view: the three closest.
+  store.setView(cameraView(empty));
+  await nextTick();
+  assert.deepEqual(names(), ['Camera 1', 'Camera 2', 'Camera 3']);
+  assert.equal(scope(), 'Closest to view · 6 loaded');
+  // At globe height, the whole catalog in source order, with no distance.
+  store.setView({ ...cameraView(HERE), heightM: 25_000_000 });
+  await nextTick();
+  assert.deepEqual(
+    names(),
+    CAMERAS.slice(0, 5).map((camera) => camera.name),
+  );
+  assert.equal(card().querySelector('h4 strong').textContent.trim(), '6');
+  assert.equal(card().querySelector('[data-list-scope]'), null);
+  assert.equal(card().querySelector('li .nearby-lists__meta'), null);
+});
+
 test('the list searches the complete catalog and reports no matches', async (t) => {
   const { names, list } = fixture(t);
   contextSearchOpen.value = true;
@@ -227,6 +276,10 @@ test('the list searches the complete catalog and reports no matches', async (t) 
   contextSearchText.value = 'dallas';
   await nextTick();
   assert.deepEqual(names(), ['Dallas cam']);
+  assert.match(
+    document.querySelector('[data-list-scope]').textContent,
+    /6 loaded/,
+  );
   contextSearchText.value = 'txdot';
   await nextTick();
   assert.equal(names().length, 5);
@@ -240,7 +293,7 @@ test('the list searches the complete catalog and reports no matches', async (t) 
   );
 });
 
-test('a camera city filters the complete catalog and resets paging and the walk', async (t) => {
+test('a camera city filters the cameras in view and resets paging and the walk', async (t) => {
   const { cctv, list, names } = fixture(t, [
     ...CAMERAS,
     { ...step(6), city: 'Global' },
@@ -253,26 +306,26 @@ test('a camera city filters the complete catalog and resets paging and the walk'
     chips().find((button) => button.textContent.trim() === name);
   assert.deepEqual(
     chips().map((button) => button.textContent.trim()),
-    ['All', 'Austin', 'Dallas'],
+    ['All', 'Austin'],
   );
   card().querySelector('[data-list-next]').click();
   await nextTick();
-  assert.deepEqual(names(), ['Camera 4', 'Camera 6', 'Camera 7']);
+  assert.deepEqual(names(), ['Camera 6', 'Camera 7']);
   chip('Austin').click();
   await nextTick();
   assert.deepEqual(names(), [
-    'Camera 3',
     'Camera 1',
-    'Camera 5',
     'Camera 2',
+    'Camera 3',
     'Camera 4',
+    'Camera 5',
   ]);
   assert.deepEqual(cctv.state._nearbyArea.order, [
-    'cam3',
     'cam1',
-    'cam5',
     'cam2',
+    'cam3',
     'cam4',
+    'cam5',
   ]);
 
   contextSearchOpen.value = true;
@@ -305,8 +358,10 @@ test('a camera city filters the complete catalog and resets paging and the walk'
 });
 
 test('the settled catalog page remains in place while its source refreshes', async (t) => {
-  const { cctv, layer, changeLayers, names } = fixture(t);
+  const { cctv, layer, changeLayers, names, store } = fixture(t);
   await indexReady();
+  store.setView({ ...cameraView(HERE), heightM: 25_000_000 });
+  await nextTick();
   const card = document.querySelector('[data-list-card="cctv"]');
   card.querySelector('[data-list-next]').click();
   await nextTick();
@@ -446,9 +501,13 @@ test('a row opened from the keyboard hands focus to the card that replaces the l
   assert.ok(!document.querySelector('.camera-list--detail'));
 });
 
-for (const [name, changeView] of [
-  ['manual move', (store, center) => store.setView(cameraView(center, 1))],
-  ['view command', (store) => store.noteViewCommand()],
+for (const [name, changeView, keepsOrder] of [
+  [
+    'manual move',
+    (store, center) => store.setView(cameraView(center, 1)),
+    false,
+  ],
+  ['view command', (store) => store.noteViewCommand(), true],
 ]) {
   test(`closing a camera returns to its page and row across a ${name}`, async (t) => {
     const cameras = Array.from({ length: 11 }, (_, i) => step(i + 1));
@@ -478,7 +537,13 @@ for (const [name, changeView] of [
     assert.equal(document.activeElement?.dataset.listKey, 'cam7');
     changeView(store, cameras[6]);
     await nextTick();
-    assert.deepEqual(keys(), before);
+    if (keepsOrder) assert.deepEqual(keys(), before);
+    else
+      assert.notDeepEqual(
+        keys(),
+        before,
+        'a deliberate move re-sorts the list around the new centre',
+      );
   });
 }
 
@@ -494,19 +559,26 @@ test('Prev/Next walk the same list in the same order', async (t) => {
     next.onClick();
     walked.push(nameOf(cctv.picked.at(-1)));
   }
-  assert.deepEqual(
-    walked,
-    CAMERAS.map((camera) => camera.name),
-  );
+  assert.deepEqual(walked, [
+    'Camera 1',
+    'Camera 2',
+    'Camera 3',
+    'Camera 4',
+    'Camera 5',
+    'Camera 1',
+  ]);
 });
 
 test('Prev/Next and auto-hop get the order the card lists, searched', async (t) => {
   const { cctv } = fixture(t);
   await indexReady();
-  assert.deepEqual(
-    cctv.state._nearbyArea.order,
-    CAMERAS.map((camera) => camera.id),
-  );
+  assert.deepEqual(cctv.state._nearbyArea.order, [
+    'cam1',
+    'cam2',
+    'cam3',
+    'cam4',
+    'cam5',
+  ]);
   contextSearchOpen.value = true;
   contextSearchText.value = 'camera 4';
   await indexReady();
@@ -542,12 +614,12 @@ test('a new search restarts the walk; a recentre keeps it', async (t) => {
   await indexReady();
   const step = () =>
     cctv.methods.stepNearbyCamera(1, { focus: false })?.cameraId;
-  assert.equal(step(), 'cam3');
+  assert.equal(step(), 'cam1');
   // Recentring keeps the walk going from where it is.
   store.setView(cameraView({ lat: HERE.lat + 0.001, lon: HERE.lon }));
   await nextTick();
   await nextTick();
-  assert.equal(step(), 'cam1', 'the walk goes on after a recentre');
+  assert.equal(step(), 'cam2', 'the walk goes on after a recentre');
   // A search that drops the next camera starts a walk over what shows.
   contextSearchOpen.value = true;
   contextSearchText.value = 'camera';
@@ -559,7 +631,7 @@ test('a new search restarts the walk; a recentre keeps it', async (t) => {
     null,
     'the search change dropped the walk',
   );
-  assert.equal(step(), shown[(shown.indexOf('cam1') + 1) % shown.length]);
+  assert.equal(step(), shown[(shown.indexOf('cam2') + 1) % shown.length]);
 });
 
 test('long lists show a page at a time, with a breakdown by provider', async (t) => {
@@ -583,7 +655,7 @@ test('the inline list goes when Cameras turns off', async (t) => {
   // Prev/Next walk this list: with no view to go by, a step takes its nearest.
   assert.equal(
     cctv.methods.stepNearbyCamera(1, { focus: false })?.cameraId,
-    'cam3',
+    'cam1',
     'Prev/Next walk this list',
   );
   layer.enabled = false;

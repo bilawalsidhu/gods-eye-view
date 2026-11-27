@@ -4796,5 +4796,6 @@
   "Overhead within {n} km": "מעל המיקום בטווח {n} ק״מ",
   "Inspector scope|In view": "בתצוגה",
   "Turn on {layer} for more context.": "הפעל את {layer} כדי לראות מידע נוסף.",
-  "{layer} is unavailable. Showing the saved item.": "{layer} אינה זמינה. הפריט השמור מוצג."
+  "{layer} is unavailable. Showing the saved item.": "{layer} אינה זמינה. הפריט השמור מוצג.",
+  "Cameras list|{n} loaded": "{n} נטענו"
 }

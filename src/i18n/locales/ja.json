@@ -4576,5 +4576,6 @@
   "Overhead within {n} km": "上空 · {n} km 以内",
   "Inspector scope|In view": "表示範囲内",
   "Turn on {layer} for more context.": "詳細を表示するには、{layer} をオンにしてください。",
-  "{layer} is unavailable. Showing the saved item.": "{layer} は利用できません。保存した項目を表示しています。"
+  "{layer} is unavailable. Showing the saved item.": "{layer} は利用できません。保存した項目を表示しています。",
+  "Cameras list|{n} loaded": "読み込み済み {n} 台"
 }
