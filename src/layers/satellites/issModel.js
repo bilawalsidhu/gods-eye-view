@@ -22,31 +22,10 @@ import {
   ISS_ORBIT_HIDE_M,
   ISS_SPAN_M,
 } from './policy.js';
-import {
-  createStationModel,
-  stationFlightAxes,
-  stationModelShouldShow,
-  temeToEcefAxes,
-} from './stationModel.js';
+import { createStationModel } from './stationModel.js';
 
 /** The model's scale for the real 109 m truss. */
 export const ISS_MODEL_SCALE = ISS_SPAN_M / ISS_MODEL_NATIVE_SPAN;
-
-// The station-independent rules live in stationModel.js; these names are
-// kept for the code and tests written against the ISS-only model.
-export { temeToEcefAxes };
-export const issFlightAxes = stationFlightAxes;
-
-/**
- * Whether the ISS model may be drawn (stationModelShouldShow with the ISS's
- * `hasIss` wording).
- * @param {{enabled: boolean, showPoints: boolean, hasIss: boolean,
- *   classVisible: boolean, tracked: boolean, cockpitHidden: boolean}} input
- * @returns {boolean}
- */
-export function issModelShouldShow({ hasIss, ...rest }) {
-  return stationModelShouldShow({ hasStation: hasIss, ...rest });
-}
 
 /**
  * Whether a catalog entry at the ISS is one of the station's own modules
@@ -124,21 +103,9 @@ export function issModelSpec({ parts }) {
 }
 
 /**
- * The ISS as a 3D model when the camera is close (stationModel.js), with the
- * part's methods also under their former ISS-only names.
+ * The ISS as a 3D model when the camera is close (stationModel.js).
  * @param {{state: object, parts: object, resolveAsset?: (url: string) => string}} context
  */
 export function createIssModel(context) {
-  const model = createStationModel(issModelSpec(context), context);
-  return {
-    ...model,
-    _updateIssModel: model._updateStationModel,
-    _destroyIssModel: model._destroyStationModel,
-    _issVisualPosition: model._visualPosition,
-    _issCardClearPx: model._cardClearPx,
-    _issStandsInFor: model._standsInFor,
-    _issCockpitMount: model._cockpitMount,
-    _issTelemetryStatus: model._telemetryStatus,
-    _issArticulation: model._articulation,
-  };
+  return createStationModel(issModelSpec(context), context);
 }

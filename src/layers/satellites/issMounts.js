@@ -227,7 +227,7 @@ const point = (v) => ({ x: v[0], y: v[1], z: v[2] });
  * A mount in the world: the eye point and the view's frame, Earth-fixed.
  * The model is placed with its forward axis along the flight direction, its
  * port axis along the orbit normal and its zenith axis away from the Earth
- * (issFlightAxes), so a model vector [port, zenith, forward] is
+ * (stationFlightAxes), so a model vector [port, zenith, forward] is
  * port × axes.y + zenith × axes.z + forward × axes.x.
  * @param {{eye: number[], forward: number[], up: number[]}} mount
  * @param {{x: number, y: number, z: number}} centre The model's origin.
