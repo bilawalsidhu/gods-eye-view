@@ -25,7 +25,6 @@ function render(audioError) {
     store: { publish: (view) => (shown = view), publishTuner() {} },
     actions: {
       getLifecycle: () => null,
-      preservePanelStateDuringClear: () => false,
       setPanelCollapsed() {},
       scheduleLayout() {},
     },

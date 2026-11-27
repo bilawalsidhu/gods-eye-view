@@ -112,8 +112,12 @@
 /* The bottom-right readout (GSD / ALT / AIS) has one more line than the
    bottom-left one (MGRS / coordinates); it drops by that line so the two
    corners start level. */
+:root {
+  --tactical-hud-bottom: calc(2vh + 6.5rem - 26px);
+}
+
 #intel-hud[data-variant='tactical'] .hud-bottom-right {
-  bottom: calc(2vh + 6.5rem - 26px);
+  bottom: var(--tactical-hud-bottom);
 }
 
 /* From 1200px the dock sits 74px up (command-dock.css) and clears both
@@ -123,14 +127,14 @@
    World Timeline sits on the dock's floor between the corners (44rem
    narrower than the screen), so the corners stay put while it shows. */
 @media (min-width: 1200px) {
-  #intel-hud[data-variant='tactical'] .hud-bottom-right {
-    bottom: 3.375rem;
+  :root {
+    --tactical-hud-bottom: 3.375rem;
   }
 
   /* Right to left the attribution row takes the bottom right
      (command-dock-trays.css): the readout clears two lines of it. */
-  html[dir='rtl'] #intel-hud[data-variant='tactical'] .hud-bottom-right {
-    bottom: calc(3.375rem + 1.5rem);
+  html[dir='rtl'] {
+    --tactical-hud-bottom: calc(3.375rem + 1.5rem);
   }
 
   #intel-hud:is([data-variant='tactical'], [data-variant='minimal'])

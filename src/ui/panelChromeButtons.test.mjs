@@ -255,7 +255,8 @@ test("Radio's collapse button keeps its own wording", async (t) => {
 
 function panelChrome(store) {
   return new PanelChrome({
-    operations: { _showToast() {}, _syncCctvPanelViewport() {} },
+    elements: {},
+    operations: { _showToast() {} },
     readHud: () => ({ visible: false, getVariant: () => null }),
     readCockpit: () => null,
     readShareLinks: () => null,
@@ -266,7 +267,31 @@ function panelChrome(store) {
   });
 }
 
-test('PanelChrome takes clicks only once initialized and detaches on destroy', () => {
+test('opening a desktop right panel explicitly claims the rail while Context stays collapsed', (t) => {
+  document.body.innerHTML = `
+    <aside id="right-context-rail">
+      <div id="global-context-panel" data-panel-id="global-context-panel" class="collapsed"></div>
+      <div id="cctv-panel" data-panel-id="cctv-panel" class="collapsed"></div>
+    </aside>`;
+  const store = usePanelChromeStore(createPinia());
+  const chrome = panelChrome(store);
+  t.after(() => chrome.destroy());
+  chrome._rightPanelStack = document.getElementById('right-context-rail');
+  for (const id of ['global-context-panel', 'cctv-panel'])
+    followPanelState(store, id, document.getElementById(id));
+  const revision = store.rightRailOpenRevision;
+  chrome.setPanelCollapsed('cctv-panel', false, { restore: true });
+  assert.equal(store.rightRailOpenRevision, revision);
+  chrome.setPanelCollapsed('cctv-panel', false, { explicit: true });
+  assert.equal(store.rightRailOpenRevision, revision + 1);
+  assert.ok(
+    document
+      .getElementById('global-context-panel')
+      .classList.contains('collapsed'),
+  );
+});
+
+test('PanelChrome takes clicks only once initialized, and detaches on destroy', () => {
   document.body.innerHTML = `
     <div id="data-panel" class="collapsed"><button class="panel-collapse-btn" data-collapse-target="data-panel"></button></div>
     <div id="cctv-panel"></div>`;
@@ -368,27 +393,39 @@ test('destroying the chrome inside Cockpit puts back the panels its entry closed
   assert.equal(data.classList.contains('collapsed'), false);
 });
 
-test('Cockpit entry folds the Space Missions panel away and exit brings it back', () => {
-  document.body.innerHTML = `<div id="space-missions-panel"></div>`;
+test('Cockpit entry folds Context, which holds the Space Missions list, away and exit brings it back', () => {
+  document.body.innerHTML = `<div id="global-context-panel"></div>`;
   const store = usePanelChromeStore(createPinia());
   const chrome = panelChrome(store);
-  const missions = document.getElementById('space-missions-panel');
-  followPanelState(store, 'space-missions-panel', missions);
+  const context = document.getElementById('global-context-panel');
+  followPanelState(store, 'global-context-panel', context);
   chrome.enterCockpit();
-  assert.equal(missions.classList.contains('collapsed'), true);
+  assert.equal(context.classList.contains('collapsed'), true);
   chrome.exitCockpit();
-  assert.equal(missions.classList.contains('collapsed'), false);
+  assert.equal(context.classList.contains('collapsed'), false);
   chrome.destroy();
 });
 
-test('a share link records whether the Space Missions panel is open', () => {
-  document.body.innerHTML = `<div id="space-missions-panel"></div>`;
+test('a share link records no state for the retired list panels', () => {
+  // Space Missions, Weather, News and Recent Imagery are lists in Context:
+  // their old panels' codes still decode (viewCodec), but none is written.
+  document.body.innerHTML = [
+    'space-missions-panel',
+    'weather-panel',
+    'news-panel',
+    'recent-imagery-panel',
+    'global-context-panel',
+  ]
+    .map((id) => `<div id="${id}"></div>`)
+    .join('');
   const store = usePanelChromeStore(createPinia());
   const chrome = panelChrome(store);
   const state = chrome._buildSharePanelState();
   assert.deepEqual(
-    state.specs.filter((spec) => spec.id === 'space-missions-panel'),
-    [{ id: 'space-missions-panel', collapsed: false }],
+    state.specs
+      .map((spec) => spec.id)
+      .filter((id) => id !== 'global-context-panel'),
+    [],
   );
   chrome.destroy();
 });
@@ -490,7 +527,7 @@ test('F that folds a focused peer hands the focus to a rail entry', (t) => {
   const store = usePanelChromeStore(createPinia());
   const chrome = new PanelChrome({
     elements: { _leftPanelStack: stack },
-    operations: { _showToast() {}, _syncCctvPanelViewport() {} },
+    operations: { _showToast() {} },
     readHud: () => ({ visible: false, getVariant: () => null }),
     readCockpit: () => null,
     readShareLinks: () => null,
@@ -563,7 +600,7 @@ test('opening Data Layers in Cockpit hands the focus from the folded Contact car
   };
   const chrome = new PanelChrome({
     elements: { _leftPanelStack: document.getElementById('left-panel-stack') },
-    operations: { _showToast() {}, _syncCctvPanelViewport() {} },
+    operations: { _showToast() {} },
     readHud: () => ({ visible: false, getVariant: () => null }),
     readCockpit: () => cockpit,
     readShareLinks: () => null,

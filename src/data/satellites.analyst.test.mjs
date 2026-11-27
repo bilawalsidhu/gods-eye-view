@@ -26,6 +26,21 @@ const FULL_RAW = {
   speedMps: 7660,
 };
 
+test('a near-circular orbit above the geosynchronous band has no medium-orbit label', (t) => {
+  t.after(_clearDenseCatalogStateForTest);
+  const describe = (minutes) => {
+    _setTrackedSatelliteRefreshStateForTest({
+      noradId: 1,
+      name: 'Example orbiter',
+      satrec: { no: (2 * Math.PI) / minutes, ecco: 0.001 },
+    });
+    return satellitesLayer.describeSatellite(1).orbitClass;
+  };
+  assert.equal(describe(720), 'MEO');
+  assert.equal(describe(1436), 'GEO');
+  assert.equal(describe(2880), null);
+});
+
 test('satellite analyst record: full record maps every contract field', () => {
   const r = mapAnalystRecord(FULL_RAW);
   assert.deepEqual(r, {

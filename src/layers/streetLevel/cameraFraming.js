@@ -17,9 +17,11 @@ export function createCameraFraming({ state }) {
   }
 
   /** Ask for the camera as a photo starts opening: a ticket for `frame`, null when refused (cockpit). */
-  function begin() {
+  function begin({ keepSelection = false } = {}) {
     if (!navigation?.begin || !navigation.reassert) return { generation: null };
-    const generation = navigation.begin('photo');
+    const generation = navigation.begin('photo', {
+      cancelPendingSelection: !keepSelection,
+    });
     return generation === false ? null : { generation };
   }
 

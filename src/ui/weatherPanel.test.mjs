@@ -1,13 +1,13 @@
+import { onAqiPeriods } from '../testSupport/airQualityViewer.mjs';
 import '../testSupport/registerDom.mjs';
 import test from 'node:test';
+import { nextTick } from 'vue';
 import assert from 'node:assert/strict';
-import { assertSameNode } from '../testSupport/domAssert.mjs';
 import { setLocale } from '../i18n/index.js';
 import { createWeatherPanel } from './weatherPanel.js';
 import { railDocumentFixture as railFixture } from './railTestFixture.mjs';
 import { createAirQualityLayer } from '../layers/airQuality/index.js';
 import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
-import { onAqiPeriods } from '../testSupport/airQualityViewer.mjs';
 const ticks = ['2026-09-22T01:00:00Z', '2026-09-22T01:05:00Z'];
 const wind = {
   id: 'wind',
@@ -26,23 +26,8 @@ const radar = {
 };
 function fixture() {
   const f = railFixture();
-  const panel = f.document.createElement('div');
-  const count = f.document.createElement('span');
-  let collapsed = true;
-  let clicks = 0;
-  panel.hidden = true;
-  Object.defineProperty(panel, 'classList', {
-    value: { contains: () => collapsed },
-  });
-  const collapse = {
-    click() {
-      collapsed = !collapsed;
-      clicks++;
-    },
-  };
-  panel.querySelector = (selector) =>
-    selector === '#weather-panel-count' ? count : collapse;
-  f.container.closest = () => panel;
+  // Weather's list in Context reports whether its tab shows, and its count.
+  const reports = [];
   const listeners = new Set();
   const calls = [];
   let state = {
@@ -59,10 +44,9 @@ function fixture() {
   };
   return {
     ...f,
-    panel,
-    count,
-    collapse,
-    clicks: () => clicks,
+    onPresence: (presence) => reports.push(presence),
+    presence: () => reports.at(-1),
+    reports,
     calls,
     listeners,
     clock,
@@ -72,8 +56,33 @@ function fixture() {
     },
   };
 }
-const frameTime = (f) => f.find((n) => n.className === 'weather-frame-time');
-const card = (f, id) => f.find((n) => n.dataset.cardId === id);
+// Back to the list from any product's details.
+const list = (f) =>
+  f.container
+    .querySelector('.context-list-card__detail [data-list-back]')
+    ?.click();
+const frameTime = (f) => {
+  list(f);
+  return f.find((n) => n.className === 'weather-frame-time');
+};
+const detail = (f) => f.container.querySelector('.context-list-card__detail');
+const row = (f, id) => {
+  list(f);
+  return f.container.querySelector(`.nearby-lists__name[data-card-id="${id}"]`)
+    ?.parentElement;
+};
+const rowIds = (f) =>
+  [...f.container.querySelectorAll('.nearby-lists__name')].map(
+    (n) => n.dataset.cardId,
+  );
+// A product's details, opened from its row (after Back from another's).
+const card = (f, id) => {
+  const shown = detail(f);
+  if (shown?.querySelector(`h3[data-card-id="${id}"]`)) return shown;
+  shown?.querySelector('[data-list-back]').click();
+  row(f, id).click();
+  return detail(f);
+};
 const line = (f, id, name) =>
   f.find((n) => n.dataset.lineId === name, card(f, id));
 test('the frame time shows with any observed product; the panel has no time controls of its own', (t) => {
@@ -128,9 +137,7 @@ test('ordered articles omit Controls and retain history labels, forecast dates a
   const f = fixture();
   const view = createWeatherPanel(f);
   view.update([radar, wind]);
-  const windCard = card(f, 'wind');
-  assert.equal(windCard.tagName, 'ARTICLE');
-  assertSameNode(windCard.parentElement.children[0], windCard);
+  assert.deepEqual(rowIds(f), ['wind', 'weather-radar']);
   assert.equal(
     f.find((n) => n.dataset.weatherOpen),
     null,
@@ -246,57 +253,22 @@ test('identical updates write nothing and status keeps its line through loading 
   assert.equal(f.container.children.length, 0);
   assert.equal(createWeatherPanel(), null);
 });
-test('count, hidden-empty and first-appearance expansion survive remount and owner collapse', () => {
+test('the list reports its tab only while a weather product shows, with their count', () => {
   const f = fixture();
   let view = createWeatherPanel(f);
   view.update([]);
-  assert.equal(f.panel.hidden, true);
-  assert.equal(f.clicks(), 0);
+  assert.equal(f.presence(), null);
   view.update([wind, radar, { id: 'missing' }]);
-  assert.equal(f.count.textContent, '2');
-  assert.equal(f.panel.hidden, false);
-  assert.equal(f.clicks(), 1);
-  f.collapse.click();
+  assert.deepEqual(f.presence(), { count: 2 });
   view.update([]);
+  assert.equal(f.presence(), null);
   view.update([wind]);
-  assert.equal(f.panel.classList.contains('collapsed'), true);
-  assert.equal(f.clicks(), 2);
-  assert.equal(f.count.textContent, '1');
+  assert.deepEqual(f.presence(), { count: 1 });
   view.destroy();
-  assert.equal(f.count.textContent, '0');
-  assert.equal(f.panel.hidden, true);
+  assert.equal(f.presence(), null, 'its tab goes with it');
   view = createWeatherPanel(f);
   view.update([radar]);
-  assert.equal(f.panel.hidden, false);
-  assert.equal(f.clicks(), 2);
-  view.destroy();
-  const expanded = fixture();
-  expanded.collapse.click();
-  const other = createWeatherPanel(expanded);
-  other.update([wind]);
-  assert.equal(expanded.clicks(), 1);
-  other.destroy();
-});
-
-test('a stored or shared collapse choice is not overridden on first appearance', () => {
-  for (const preference of ['stored', 'share']) {
-    const f = fixture();
-    f.panel.dataset.collapsedPreference = preference;
-    const view = createWeatherPanel(f);
-    view.update([radar]);
-    assert.equal(f.panel.hidden, false);
-    assert.equal(
-      f.clicks(),
-      0,
-      `${preference} preference keeps the panel collapsed`,
-    );
-    view.destroy();
-  }
-  const f = fixture();
-  f.panel.dataset.collapsedPreference = 'default';
-  const view = createWeatherPanel(f);
-  view.update([radar]);
-  assert.equal(f.clicks(), 1, 'a default state still expands once');
+  assert.deepEqual(f.presence(), { count: 1 });
   view.destroy();
 });
 
@@ -336,6 +308,7 @@ test('settings, reading and footer actions pass the layer id, params and user or
     actions: [{ ...action, disabled: false }],
   };
   view.update([{ ...wind, summary }]);
+  card(f, 'wind');
   f.find((n) => n.dataset.actionId === 'read-wind').click();
   f.find((n) => n.dataset.chipId === 'units-mph').click();
   f.find((n) => n.dataset.actionId === 'clear').click();
@@ -371,9 +344,10 @@ test('settings, reading and footer actions pass the layer id, params and user or
     true,
   );
   layer.destroy();
-  const body = card(f, 'wind').children[1];
   assert.deepEqual(
-    [...body.children].map((n) => n.dataset.blockId),
+    [
+      ...card(f, 'wind').querySelectorAll('.weather-card > [data-block-id]'),
+    ].map((n) => n.dataset.blockId),
     ['details', 'settings', 'actions', 'reading'],
   );
   view.destroy();
@@ -408,105 +382,68 @@ const lightning = {
   icon: 'ϟ',
   summary: { label: 'Lightning density' },
 };
-const opened = (f) =>
-  [cyclone, wind, radar, satellite, lightning]
-    .filter(({ id }) => card(f, id)?.dataset.open === 'true')
-    .map(({ id }) => id);
-const clickHeader = (f, id) => card(f, id).children[0].click();
 
-test('cyclones lead, and observed history owns one bordered group with only active products in scope', () => {
-  const f = fixture();
-  const view = createWeatherPanel(f);
-  view.update([lightning, radar, wind, cyclone, satellite]);
-  const root = f.container.children[0];
-  assert.deepEqual(
-    [...root.children[0].children].map((n) => n.dataset.cardId),
-    ['weather-cyclones', 'wind'],
-  );
-  const group = f.find((n) => n.className === 'weather-observed-group');
-  assertSameNode(root.children[1], group);
-  assert.equal(group.children[0].textContent, 'Observed history');
-  assert.equal(
-    group.children[1].textContent,
-    'Rain radar · Satellite clouds · Lightning density',
-  );
-  assertSameNode(group.children[2], frameTime(f));
-  assert.deepEqual(
-    [...group.children[3].children].map((n) => n.dataset.cardId),
-    ['weather-radar', 'weather-satellite', 'weather-lightning'],
-  );
-  assert.deepEqual(opened(f), ['weather-cyclones']);
-  assert.equal(
-    card(f, cyclone.id).children[1].children[0].dataset.blockId,
-    'list',
-  );
-  view.update([wind, satellite]);
-  assert.equal(group.children[1].textContent, 'Satellite clouds');
-  view.update([wind]);
-  assert.equal(group.hidden, true);
-  view.destroy();
-});
-
-test('accordion changes only on headers, newly enabled layers and loss of the open layer', () => {
+test('the briefing leads, then the active products as rows in order', () => {
   const f = fixture();
   const calls = [];
-  let view = createWeatherPanel({
+  const view = createWeatherPanel({
     ...f,
     setLayerParams: (...args) => calls.push(args),
   });
-  view.update([wind, cyclone, radar]);
-  assert.deepEqual(opened(f), [cyclone.id]);
-  clickHeader(f, wind.id);
-  clickHeader(f, wind.id);
-  assert.deepEqual(opened(f), [wind.id]);
-  assert.equal(
-    card(f, wind.id).children[0].getAttribute('aria-expanded'),
-    'true',
-  );
-  assert.equal(
-    card(f, cyclone.id).children[0].getAttribute('aria-expanded'),
-    'false',
-  );
-  assert.equal(card(f, cyclone.id).children[1].hidden, true);
-  assert.deepEqual(calls, [], 'opening/collapsing never selects a storm');
-  f.state({ mode: 'history', target: ticks[0] });
-  view.update([
-    wind,
-    { ...cyclone, summary: { ...cyclone.summary, status: 'Updated' } },
-    radar,
+  view.update([lightning, radar, wind, cyclone, satellite]);
+  const filter = f.container.querySelector('.weather-briefing');
+  assert.ok(filter);
+  assert.deepEqual(rowIds(f), [
+    'weather-cyclones',
+    'wind',
+    'weather-radar',
+    'weather-satellite',
+    'weather-lightning',
   ]);
-  assert.deepEqual(opened(f), [wind.id]);
-  view.update([wind, cyclone, radar, lightning, satellite]);
-  assert.deepEqual(opened(f), [satellite.id], 'last newly enabled entry wins');
-  view.update([wind, cyclone, radar, lightning]);
-  assert.deepEqual(
-    opened(f),
-    [cyclone.id],
-    'disabled open layer falls back to first in card order',
-  );
-  clickHeader(f, radar.id);
-  view.destroy();
-  view = createWeatherPanel(f);
+  assert.equal(detail(f), null, 'the list shows until a row is chosen');
+  const opened = card(f, wind.id);
+  assert.match(opened.querySelector('h3').textContent, /Wind motion/);
+  opened.querySelector('[data-list-back]').click();
+  assert.equal(detail(f), null);
+  card(f, satellite.id);
+  view.update([wind, cyclone]);
+  assert.equal(detail(f), null, 'a product that goes off leaves the list');
+  assert.deepEqual(calls, [], 'opening a product never selects a storm');
   view.update([]);
-  view.update([wind, cyclone, radar]);
-  assert.deepEqual(opened(f), [radar.id], 'explicit choice survives remount');
-  view.update([]);
-  view.update([wind]);
-  assert.deepEqual(opened(f), [wind.id]);
+  assert.equal(f.container.querySelector('.weather-readout'), null);
   view.destroy();
 });
 
-test('first appearance without storms chooses the first card and late storm arrival never steals it', () => {
+test('from a scrolled list, a row opened by keyboard and Back keep focus on a control in view', async () => {
   const f = fixture();
-  const view = createWeatherPanel(f);
-  view.update([satellite, wind]);
-  assert.deepEqual(opened(f), [wind.id]);
-  view.update([satellite, wind, { ...cyclone, list: { items: [] } }]);
-  assert.deepEqual(opened(f), [cyclone.id]);
-  clickHeader(f, wind.id);
-  view.update([satellite, wind, cyclone]);
-  assert.deepEqual(opened(f), [wind.id]);
-  view.destroy();
+  const view = createWeatherPanel({ ...f });
+  view.update([lightning, radar, wind, cyclone, satellite]);
+  f.container.scrollTop = 120;
+  const shown = [];
+  const scroll = HTMLElement.prototype.scrollIntoView;
+  HTMLElement.prototype.scrollIntoView = function () {
+    shown.push(this);
+  };
+  try {
+    const opener = row(f, satellite.id);
+    opener.focus();
+    opener.click();
+    await nextTick();
+    await nextTick();
+    const back = f.container.querySelector('[data-list-back]');
+    assert.equal(document.activeElement, back, 'focus on Back');
+    assert.ok(shown.includes(back), 'Back brought into view');
+    back.click();
+    await nextTick();
+    await nextTick();
+    const focused = document.activeElement;
+    assert.equal(focused?.dataset.listKey, satellite.id, 'back on its row');
+    assert.ok(focused.isConnected && !focused.closest('[hidden]'));
+    assert.ok(shown.includes(focused), 'the row brought into view');
+  } finally {
+    HTMLElement.prototype.scrollIntoView = scroll;
+    view.destroy();
+  }
 });
 
 test('compact lines show observation age, forecast validity, storm selection or accented status', (t) => {
@@ -517,8 +454,7 @@ test('compact lines show observation age, forecast validity, storm selection or 
   const f = fixture();
   const view = createWeatherPanel(f);
   view.update([cyclone, wind, radar]);
-  const compact = (id) =>
-    f.find((n) => n.className.startsWith('rail-card-compact'), card(f, id));
+  const compact = (id) => row(f, id).querySelector('.weather-compact');
   assert.equal(compact(radar.id).textContent, '09-22 01:05 UTC · 8m ago');
   assert.equal(
     compact(wind.id).textContent,
@@ -545,7 +481,6 @@ test('compact lines show observation age, forecast validity, storm selection or 
     compact(radar.id).textContent,
     '09-22 01:00 UTC · 5m ago · nearest',
   );
-  clickHeader(f, wind.id);
   assert.equal(
     compact(cyclone.id).textContent,
     '3 active storms · Fay selected',
@@ -559,131 +494,24 @@ test('compact lines show observation age, forecast validity, storm selection or 
     },
   ]);
   assert.equal(compact(radar.id).textContent, 'Map center outside coverage');
-  assert.match(compact(radar.id).className, /status/);
+  assert.ok(compact(radar.id).classList.contains('status'));
   view.destroy();
 });
 
-test('all five headers retain descriptor icons and disclosure state when opened or compact', () => {
+test('each row shows its descriptor icon and label; details show the coverage', () => {
   const f = fixture();
   const view = createWeatherPanel(f);
   const entries = [cyclone, wind, radar, satellite, lightning];
   view.update(entries);
-  for (const active of entries) {
-    clickHeader(f, active.id);
-    for (const entry of entries) {
-      const article = card(f, entry.id);
-      const open = entry === active;
-      assert.equal(article.dataset.open, String(open));
-      assert.equal(article.classList.contains('is-open'), open);
-      const header = article.children[0];
-      const labels = header.children[0];
-      const heading = labels.children[0];
-      assert.equal(
-        labels.children[1].textContent,
-        entry.summary.coverage || '',
-      );
-      assert.equal(
-        labels.children[1].classList.contains('rail-card-badge'),
-        true,
-      );
-      assert.equal(header.children[1].className, 'rail-card-disclosure');
-      assert.equal(heading.children[0].className, 'data-icon');
-      assert.equal(heading.children[0].textContent, entry.icon);
-      assert.equal(heading.children[0].hidden, false);
-      assert.equal(heading.children[1].textContent, entry.summary.label);
-      assert.equal(
-        heading.children[1].getAttribute('title'),
-        entry.summary.label,
-      );
-      assert.equal(
-        heading.children[1].classList.contains('rail-card-nowrap'),
-        true,
-      );
-      assert.equal(header.children[1].textContent, open ? '▾' : '▸');
-    }
+  for (const entry of entries) {
+    const button = row(f, entry.id);
+    assert.equal(button.children[0].textContent, entry.icon);
+    assert.equal(button.children[1].textContent, entry.summary.label);
+    assert.equal(
+      card(f, entry.id).querySelector('.weather-coverage').textContent,
+      entry.summary.coverage || '',
+    );
   }
-  view.destroy();
-});
-
-test('a change of open card scrolls its header into view once; refreshes never move the body', (t) => {
-  const f = fixture();
-  const body = f.container;
-  const writes = [];
-  const intoView = [];
-  const rects = new Map();
-  let scrollTop = 240;
-  Object.defineProperty(body, 'scrollTop', {
-    configurable: true,
-    get: () => scrollTop,
-    set: (value) => {
-      writes.push(value);
-      scrollTop = value;
-    },
-  });
-  Object.defineProperty(body, 'clientHeight', { value: 200 });
-  body.getBoundingClientRect = () => ({ top: 100, height: 200 });
-  const create = f.document.createElement;
-  t.after(() => {
-    f.document.createElement = create;
-  });
-  f.document.createElement = (tag) => {
-    const node = create.call(f.document, tag);
-    node.getBoundingClientRect = function () {
-      return rects.get(this.dataset.cardId) || { top: 0, height: 0 };
-    };
-    node.scrollIntoView = function () {
-      intoView.push(this.dataset.cardId);
-    };
-    return node;
-  };
-  // Rectangles are viewport coordinates; the body's visible top is at 100.
-  const place = (id, top, height) => rects.set(id, { top: 100 + top, height });
-  const view = createWeatherPanel(f);
-  view.update([cyclone, wind, radar]);
-  assert.deepEqual(opened(f), [cyclone.id]);
-
-  // Plain refreshes: clock, identical and changed descriptors, the open header.
-  f.state({ mode: 'history', target: ticks[0] });
-  view.update([cyclone, wind, radar]);
-  view.update([
-    { ...cyclone, summary: { ...cyclone.summary, status: 'Updated' } },
-    wind,
-    radar,
-  ]);
-  clickHeader(f, cyclone.id);
-  assert.deepEqual(writes, [], 'no scroll writes without a change of card');
-
-  // Opened below the fold: the smallest move that shows the whole card.
-  place(radar.id, 150, 120);
-  clickHeader(f, radar.id);
-  assert.deepEqual(opened(f), [radar.id]);
-  assert.deepEqual(writes, [240 + 70], 'one write, placed by the opened card');
-
-  // Taller than the body: the header goes to the top.
-  place(wind.id, 40, 480);
-  clickHeader(f, wind.id);
-  assert.deepEqual(writes.slice(1), [310 + 40]);
-
-  // Header left above the view by the collapse: back to the top edge.
-  place(cyclone.id, -60, 120);
-  clickHeader(f, cyclone.id);
-  assert.deepEqual(writes.slice(2), [350 - 60]);
-
-  // Already fully visible: nothing to do.
-  place(radar.id, 20, 100);
-  clickHeader(f, radar.id);
-  assert.equal(writes.length, 3);
-
-  // A newly enabled layer opens and is revealed the same way.
-  place(lightning.id, 190, 60);
-  view.update([cyclone, wind, radar, lightning]);
-  assert.deepEqual(opened(f), [lightning.id]);
-  assert.deepEqual(writes.slice(3), [290 + 50]);
-
-  f.state({ mode: 'latest' });
-  view.update([cyclone, wind, radar, lightning]);
-  assert.equal(writes.length, 4, 'refresh after a reveal leaves it alone');
-  assert.deepEqual(intoView, [], 'ancestor scrollers are never moved');
   view.destroy();
 });
 test('history time keeps the hour whatever the length of the localized date', () => {
@@ -764,11 +592,7 @@ test('air-quality readout renders the US AQI ramp, its coverage, one index tile 
   view.update([{ id: layer.id, icon: layer.icon, ...layer.getRowControls() }]);
   const aq = card(f, 'air-quality');
   assert.ok(aq, 'the air-quality card is shown');
-  assert.equal(aq.dataset.open, 'true');
-  assert.match(
-    f.find((n) => n.classList?.contains?.('rail-card-badge'), aq).textContent,
-    /^Ontario$/,
-  );
+  assert.match(aq.querySelector('.weather-coverage').textContent, /^Ontario$/);
   assert.match(line(f, 'air-quality', 'status').textContent, /2 stations/);
   // The US AQI as a ramp, never a band list.
   assert.equal(
@@ -804,50 +628,6 @@ test('air-quality readout renders the US AQI ramp, its coverage, one index tile 
   );
   view.destroy();
   layer.destroy();
-});
-
-test('a scale without units shows its ramp and range as given', () => {
-  const f = fixture();
-  const view = createWeatherPanel(f);
-  view.update([
-    {
-      id: 'air-quality',
-      icon: '◍',
-      summary: {
-        label: 'Air quality',
-        coverage: 'Global',
-        status: '3 stations',
-        units: '',
-        unitsVerbatim: true,
-      },
-      legend: ['0', '50', '100', '150', '200', '300+'].map((label, i) => ({
-        label,
-        color: [
-          '#00e400',
-          '#ffff00',
-          '#ff7e00',
-          '#ff0000',
-          '#8f3f97',
-          '#7e0023',
-        ][i],
-      })),
-      legendCategorical: false,
-    },
-  ]);
-  const aq = card(f, 'air-quality');
-  assert.equal(
-    f.find((n) => n.className === 'rail-card-ramp', aq).hidden,
-    false,
-  );
-  assert.equal(
-    f.find((n) => n.className === 'rail-card-scale', aq).textContent,
-    '0 — 300+',
-  );
-  assert.equal(
-    f.find((n) => n.className === 'rail-card-legend-entries', aq).hidden,
-    true,
-  );
-  view.destroy();
 });
 test('source-supplied legend units are shown as given; catalog units are translated', () => {
   setLocale('ru');
@@ -914,24 +694,202 @@ test('the wind card notes it stays live only while its source does not follow th
   view.destroy();
 });
 
-test('selecting a station opens its card and refreshing that selection keeps the open card', () => {
+const section = (f, id) => f.find((n) => n.dataset?.sectionId === id);
+const sectionIds = (f) =>
+  [...f.find((n) => n.className === 'weather-briefing').children].map(
+    (n) => n.dataset.sectionId,
+  );
+const sectionLines = (f, id) =>
+  [...section(f, id).querySelectorAll('.rail-card-line')].map(
+    (n) => n.textContent,
+  );
+const readWind = {
+  id: 'read-wind',
+  label: 'Read wind at map center',
+  params: { inspect: true },
+};
+const radarWithLegend = {
+  ...radar,
+  legend: [
+    { label: '5', color: '#04e9e7' },
+    { label: '60', color: '#fdf8fd' },
+  ],
+  summary: {
+    ...radar.summary,
+    units: 'dBZ',
+    status: 'Map center outside coverage',
+  },
+};
+const readWindEntry = {
+  ...wind,
+  summary: {
+    ...wind.summary,
+    actions: [readWind],
+    result: {
+      id: 'reading',
+      label: 'WIND AT 29.93°N 97.74°W',
+      lines: [
+        { id: 'wind', text: '12.0 km/h from NW' },
+        { id: 'meta', text: 'GFS · valid 09-22 01:00 UTC' },
+        { id: 'scalar', text: 'Air temperature · 2 m · 21.5 °C' },
+        { id: 'explanation', text: 'Model forecast' },
+      ],
+    },
+  },
+};
+const calmSeas = {
+  id: 'weather-cyclones',
+  icon: '◉',
+  summary: { label: 'Cyclones', detail: 'No active NHC/CPHC systems' },
+  list: { items: [] },
+};
+
+test('the briefing reads conditions, observed frames with the radar legend, wind, then alerts, in plain statuses', (t) => {
+  t.mock.timers.enable({
+    apis: ['Date'],
+    now: Date.parse('2026-09-22T01:09:00Z'),
+  });
+  const f = fixture();
+  const view = createWeatherPanel(f);
+  view.update([calmSeas, lightning, radarWithLegend, readWindEntry]);
+  assert.deepEqual(sectionIds(f), ['here', 'observed', 'wind', 'alerts']);
+  assert.deepEqual(
+    [...f.container.querySelectorAll('.weather-briefing-section > h3')].map(
+      (n) => n.textContent,
+    ),
+    ['WIND AT 29.93°N 97.74°W', 'Observed', 'Wind', 'Alerts'],
+  );
+  // Temperature before wind; the model and explanation stay in the card.
+  assert.deepEqual(sectionLines(f, 'here'), [
+    'Air temperature · 2 m · 21.5 °C',
+    '12.0 km/h from NW',
+  ]);
+  assert.deepEqual(sectionLines(f, 'observed'), [
+    'Rain radar · 4 min ago',
+    'Map center outside coverage',
+    'Lightning density · Waiting for observation',
+  ]);
+  const legend = section(f, 'observed').querySelector('.rail-card-legend');
+  assert.equal(legend.hidden, false);
+  assert.equal(
+    [...section(f, 'observed').children].indexOf(legend),
+    2,
+    'the radar legend follows the radar line',
+  );
+  assert.equal(sectionLines(f, 'wind').length, 1);
+  assert.match(sectionLines(f, 'wind')[0], /^Forecast · valid .*01:00 UTC$/);
+  assert.deepEqual(sectionLines(f, 'alerts'), ['No active NHC/CPHC systems']);
+  // Plain statuses: no section says a value is missing.
+  for (const id of sectionIds(f))
+    for (const text of sectionLines(f, id))
+      assert.doesNotMatch(text, /unavailable|no value|—/i, text);
+  // The newer selected frame fails to load. The radar still shows the older one.
+  t.mock.timers.setTime(Date.parse('2026-09-22T02:15:00Z'));
+  f.state({
+    products: [{ id: radar.id, shown: ticks[0], selected: ticks[1] }],
+  });
+  assert.equal(sectionLines(f, 'observed')[0], 'Rain radar · 1h 15m ago');
+  f.state({
+    products: [{ id: radar.id, shown: ticks[1], selected: ticks[1] }],
+  });
+  assert.equal(sectionLines(f, 'observed')[0], 'Rain radar · 1h 10m ago');
+  // At a past time: the frame's clock time, or a plain status without one.
+  f.state({ mode: 'history', target: ticks[1] });
+  assert.equal(sectionLines(f, 'observed')[0], 'Rain radar · 01:05 UTC');
+  f.state({
+    products: [{ id: radar.id, shown: null, selected: null }],
+  });
+  assert.equal(
+    sectionLines(f, 'observed')[0],
+    'Rain radar · No frame at this time',
+  );
+  assert.ok(
+    sectionLines(f, 'wind').includes('Forecast · does not follow history'),
+  );
+  view.destroy();
+});
+
+test('the briefing offers the wind reading at the map center, and its rows act on their own layer', () => {
+  const f = fixture();
+  const calls = [];
+  const view = createWeatherPanel({
+    ...f,
+    setLayerParams: (...args) => calls.push(args),
+  });
+  view.update([
+    cyclone,
+    { ...wind, summary: { ...wind.summary, actions: [readWind] } },
+  ]);
+  assert.deepEqual(sectionIds(f), ['here', 'wind', 'alerts']);
+  assert.equal(
+    section(f, 'here').querySelector('h3').textContent,
+    'At map center',
+  );
+  const read = section(f, 'here').querySelector('[data-action-id="read-wind"]');
+  assert.equal(read.textContent, 'Read wind at map center');
+  read.click();
+  section(f, 'alerts')
+    .querySelector('[data-list-item-id="fay"] button')
+    .click();
+  assert.deepEqual(calls, [
+    ['wind', { inspect: true }, { origin: 'user' }],
+    ['weather-cyclones', { stormId: 'fay', focus: true }, { origin: 'user' }],
+  ]);
+  // A wind field still loading says so rather than showing an empty time.
+  view.update([
+    { ...wind, summary: { label: 'Wind motion', status: 'Loading forecast' } },
+  ]);
+  assert.deepEqual(sectionLines(f, 'wind'), ['Loading forecast']);
+  // With no layer behind any section the briefing is hidden.
+  view.update([{ id: 'air-quality', icon: '◌', summary: { label: 'AQ' } }]);
+  assert.equal(f.find((n) => n.className === 'weather-briefing').hidden, true);
+  view.destroy();
+});
+
+test('the briefing keeps keyboard focus on Read wind when its reading arrives', () => {
+  const f = fixture();
+  const requests = [];
+  const view = createWeatherPanel({
+    ...f,
+    setLayerParams: (...args) => requests.push(args),
+  });
+  view.update([{ ...wind, summary: { ...wind.summary, actions: [readWind] } }]);
+  const here = section(f, 'here');
+  const read = here.querySelector('[data-action-id="read-wind"]');
+  read.focus();
+  assert.ok(f.document.activeElement === read);
+  read.click();
+  view.update([readWindEntry]);
+  assert.ok(here.querySelector('[data-action-id="read-wind"]') === read);
+  assert.ok(f.document.activeElement === read);
+  assert.equal(here.getAttribute('aria-live'), 'polite');
+  assert.ok(sectionLines(f, 'here').includes('12.0 km/h from NW'));
+  read.click();
+  assert.deepEqual(requests, [
+    ['wind', { inspect: true }, { origin: 'user' }],
+    ['wind', { inspect: true }, { origin: 'user' }],
+  ]);
+  view.destroy();
+});
+
+test('only a newly selected station opens the Air Quality detail in Context', () => {
   const f = fixture(),
     panel = createWeatherPanel(f);
   const station = (key) => ({
-    ...cyclone,
     id: 'air-quality',
     summary: {
-      ...cyclone.summary,
+      label: 'Air Quality',
       result: key ? { id: 'station', lead: true, key, label: 'Station' } : null,
     },
   });
   panel.update([station(null), wind]);
-  clickHeader(f, wind.id);
+  card(f, wind.id);
   panel.update([station('a'), wind]);
-  assert.equal(card(f, 'air-quality').dataset.open, 'true');
-  clickHeader(f, wind.id);
+  assert.ok(detail(f).querySelector('[data-card-id="air-quality"]'));
+  card(f, wind.id);
   panel.update([station('a'), wind]);
-  assert.deepEqual(opened(f), [wind.id]);
+  assert.ok(detail(f).querySelector('[data-card-id="wind"]'));
   panel.update([station('b'), wind]);
-  assert.equal(card(f, 'air-quality').dataset.open, 'true');
+  assert.ok(detail(f).querySelector('[data-card-id="air-quality"]'));
+  panel.destroy();
 });

@@ -131,6 +131,8 @@ const ENTITY_BY_CODE = new Map(SHARE_VIEW_ENTITY_KINDS.map((e) => [e.code, e]));
  * frozen meaning of an omitted entry (the layout a fresh session shows today),
  * not a live default: if the app's default moves, this table does not.
  * `token` is the panel's letter in the long form's `ui` parameter.
+ * The retired CCTV, Recent Imagery, Street Level, Radio and Space Missions
+ * codes remain reserved. Older links decode and restoration skips their state.
  * Numbers 0 and 1 (`c`, `l`) named the command dock's Visual Presets and
  * Location trays, which no layout shows any more: links that carry them still
  * decode, and the app has no panel to apply them to.
@@ -321,7 +323,7 @@ export const SHARE_VIEW_LAYER_OPTION_ABSENT = Object.freeze({
     pano: 'all',
     sinceDays: 0,
   }),
-  radio: Object.freeze({ filter: 'all', volume: 0.8 }),
+  radio: Object.freeze({ filter: 'all', volume: 0.8, source: 'internet' }),
   rail: Object.freeze({
     transit: true,
     local: true,

@@ -143,6 +143,20 @@ function fakeAdapter({ failMounts = 0, gate = null, openGate = null } = {}) {
   };
 }
 
+test('a billed provider needs a visibility surface even with an attached host', async () => {
+  const adapter = fakeAdapter();
+  const { state, host } = harness(adapter);
+  state.providers.get('mapillary').def.billedPerImage = true;
+  host.attach({});
+  assert.equal(await host.open('mapillary', 'a'), false);
+  assert.equal(state.street.error, 'Open Context to view street-level imagery');
+  assert.equal(adapter.calls.mount, 0);
+  assert.deepEqual(adapter.calls.open, []);
+  host.attach({}, { prepare: () => true, isVisible: () => true });
+  assert.equal(await host.open('mapillary', 'a'), true);
+  assert.deepEqual(adapter.calls.open, ['a']);
+});
+
 test('a failed mount is retried on the next open instead of being cached', async () => {
   const adapter = fakeAdapter({ failMounts: 1 });
   const { state, host } = harness(adapter);
@@ -228,7 +242,11 @@ test('a pose on another sequence selects it, but not while the image still loads
   const opening = host.open('mapillary', 'a');
   await settle();
   assert.equal(state.street.loading, true, 'the image is downloading');
-  assert.equal(state.street.sequenceId, 'seq-a', 'its pose is in');
+  assert.equal(
+    state.street.sequenceId,
+    undefined,
+    'its pose waits for acceptance',
+  );
   assert.deepEqual(selected, [], 'no sequence lookup competes with it');
   openGate.resolve();
   assert.equal(await opening, true);
@@ -295,8 +313,8 @@ test('an image still opening when the photo is closed is neither framed nor sele
 
 /**
  * MapillaryJS, counting live viewers (each holds a WebGL context). A test can
- * hold `moveTo(id)` on `viewers.moveGates.get(id)` and every position read on
- * `viewers.positionGate`, and fire a viewer's events through `handlers`.
+ * Hold the move response or the current image separately, as MapillaryJS
+ * reports those on separate paths. The POV read can also be delayed.
  */
 function fakeLibrary() {
   const gate = deferred();
@@ -306,7 +324,8 @@ function fakeLibrary() {
     instances: [],
     moveGates: new Map(),
     moves: [],
-    positionGate: null,
+    paintGates: new Map(),
+    poseGate: null,
   };
   class Viewer {
     constructor(options) {
@@ -317,6 +336,7 @@ function fakeLibrary() {
       this.removed = false;
       this.playback = { stops: 0 };
       this.handlers = {};
+      this.image = null;
     }
     /** The sequence component's play/stop API, as MapillaryJS 4 exposes it. */
     getComponent(name) {
@@ -326,17 +346,34 @@ function fakeLibrary() {
     on(type, handler) {
       this.handlers[type] = handler;
     }
+    async getImage() {
+      return this.image;
+    }
     async getPosition() {
-      await viewers.positionGate?.promise;
+      await viewers.poseGate?.promise;
       return { lng: 1, lat: 2 };
     }
     async getPointOfView() {
+      await viewers.poseGate?.promise;
       return { bearing: 10, tilt: 0 };
+    }
+    showImage(image) {
+      this.image = image;
+      this.handlers.image?.({ image });
     }
     async moveTo(id) {
       viewers.moves.push(id);
       await viewers.moveGates.get(id)?.promise;
-      return { id, cameraType: 'perspective', sequenceId: `seq-${id}` };
+      const image = {
+        id,
+        cameraType: 'perspective',
+        sequenceId: `seq-${id}`,
+        lngLat: { lng: 3, lat: 4 },
+      };
+      const gate = viewers.paintGates.get(id);
+      if (gate) void gate.promise.then(() => this.showImage(image));
+      else this.showImage(image);
+      return image;
     }
     remove() {
       if (this.removed) return;
@@ -432,14 +469,18 @@ test('a Mapillary pose still being read when the photo closes is never emitted (
     poses.map((pose) => pose.imageId),
     ['a'],
   );
-  // The library steps to the next image; its position is still being read.
+  // The library steps to the next image; its POV is still being read.
   const [viewer] = viewers.instances;
-  viewers.positionGate = deferred();
-  viewer.handlers.image({
-    image: { id: 'b', cameraType: 'perspective', sequenceId: 'seq-b' },
+  viewers.poseGate = deferred();
+  viewer.showImage({
+    id: 'b',
+    cameraType: 'perspective',
+    sequenceId: 'seq-b',
+    lngLat: { lng: 5, lat: 6 },
   });
+  await Promise.resolve();
   adapter.close();
-  viewers.positionGate.resolve();
+  viewers.poseGate.resolve();
   await settle();
   assert.deepEqual(
     poses.map((pose) => pose.imageId),
@@ -476,6 +517,108 @@ test('back-to-back Mapillary opens download only the newer image', async () => {
     poses.map((pose) => pose.imageId),
     ['b'],
   );
+});
+
+test('Mapillary waits for the current image and uses its coordinates, not the render camera', async () => {
+  const { viewers, adapter, poses } = await mountedMapillary();
+  const paint = deferred();
+  viewers.paintGates.set('a', paint);
+  let resolved = false;
+  const opening = adapter.open('a').then((id) => {
+    resolved = true;
+    return id;
+  });
+  await settle();
+  const beforePaint = { resolved, poses: poses.slice() };
+  paint.resolve();
+  const displayed = await opening;
+  assert.deepEqual(beforePaint, { resolved: false, poses: [] });
+  assert.equal(displayed, 'a');
+  assert.deepEqual(poses.at(-1).position, { lat: 4, lon: 3 });
+});
+
+test('a Mapillary step ignores a stale image event and a stale POV sample', async () => {
+  const { viewers, adapter, poses } = await mountedMapillary();
+  await adapter.open('a');
+  const [viewer] = viewers.instances;
+  const stalePov = deferred();
+  const readPov = viewer.getPointOfView.bind(viewer);
+  const imageB = { id: 'b', lngLat: { lng: 5, lat: 6 } };
+  const imageC = { id: 'c', lngLat: { lng: 7, lat: 8 } };
+  viewer.getPointOfView = () => {
+    viewer.getPointOfView = readPov;
+    return stalePov.promise;
+  };
+  viewer.showImage(imageB);
+  await settle();
+  viewer.showImage(imageC);
+  await settle();
+  viewer.handlers.image({ image: imageB });
+  stalePov.resolve({ bearing: 40 });
+  await settle();
+  assert.equal(poses.at(-1).imageId, 'c');
+  assert.deepEqual(poses.at(-1).position, { lat: 8, lon: 7 });
+});
+
+test('a failed Mapillary replacement retains only a confirmed prior image', async () => {
+  const { viewers, adapter, poses } = await mountedMapillary();
+  await adapter.open('a');
+  const [viewer] = viewers.instances;
+  viewer.moveTo = async () => {
+    throw new Error('offline');
+  };
+  await assert.rejects(adapter.open('b'), /offline/);
+  assert.deepEqual(
+    poses.map((pose) => pose?.imageId),
+    ['a'],
+  );
+
+  viewer.moveTo = async () => {
+    viewer.image = null;
+    throw new Error('viewer lost its image');
+  };
+  await assert.rejects(adapter.open('b'), /viewer lost its image/);
+  assert.equal(poses.at(-1), null);
+  viewer.showImage({ id: 'b', lngLat: { lng: 5, lat: 6 } });
+  await settle();
+  assert.deepEqual(
+    poses.map((pose) => pose?.imageId),
+    ['a', undefined],
+  );
+});
+
+test('a timed-out Mapillary replacement cannot publish its late paint', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { viewers, adapter, poses } = await mountedMapillary();
+  await adapter.open('a');
+  const paint = deferred();
+  viewers.paintGates.set('b', paint);
+  const rejected = assert.rejects(
+    adapter.open('b'),
+    /Image could not be opened/,
+  );
+  for (let i = 0; i < 10; i++) await Promise.resolve();
+  t.mock.timers.tick(12_000);
+  await rejected;
+  paint.resolve();
+  for (let i = 0; i < 20; i++) await Promise.resolve();
+  assert.ok(poses.every((pose) => pose?.imageId === 'a'));
+  assert.equal(viewers.instances[0].image.id, 'a');
+});
+
+test('a Mapillary move with no matching current image times out', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { viewers, adapter, poses } = await mountedMapillary();
+  const paint = deferred();
+  viewers.paintGates.set('a', paint);
+  const opening = adapter.open('a');
+  const rejected = assert.rejects(opening, /Image could not be opened/);
+  for (let i = 0; i < 10; i++) await Promise.resolve();
+  t.mock.timers.tick(12_000);
+  await rejected;
+  paint.resolve();
+  for (let i = 0; i < 10; i++) await Promise.resolve();
+  assert.deepEqual(poses, []);
 });
 
 test('a photo asks for the camera when it starts opening and frames with that ticket once loaded', async () => {

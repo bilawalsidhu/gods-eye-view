@@ -77,30 +77,24 @@ test('CCTV translates the healthy status and preserves unknown provider codes', 
   }
 });
 
-test('radio option text and accessible name use the same localized parentheses', () => {
+test('the Cockpit Radio enable control publishes a localized visible label and accessible name', () => {
   const originalDocument = globalThis.document;
-  const element = () => ({
-    style: {}, dataset: {}, attributes: {},
-    classList: { contains: () => true, toggle() {} },
-    setAttribute(name, value) { this.attributes[name] = value; },
-    replaceChildren(...children) { this.children = children; },
-  });
-  globalThis.document = { createElement: element, getElementById: () => null };
+  globalThis.document = { getElementById: () => null };
   try {
-    for (const [locale, label, expected] of [['zh-CN', '全部', '全部（750）'], ['en', 'All', 'All (750)']]) {
+    for (const [locale, text, label] of [['zh-CN', '启用', '启用电台'], ['en', 'ENABLE', 'Enable Radio']]) {
       setLocale(locale);
       let shown = null;
       const host = {
-        _radioPanel: element(),
+        _radioPanel: {},
         store: { publish: (view) => (shown = view), publishTuner() {} },
         actions: { getLifecycle: () => null, scheduleLayout() {} },
       };
       renderRadioState.call(host, {
-        enabled: true, categories: [{ id: 'all', label, count: 750, color: '' }],
-        filter: 'all', filteredCount: 750, stationCount: 750, volume: 1,
+        enabled: false, categories: [], filter: 'all', filteredCount: 0,
+        audioState: 'stopped', volume: 1,
       });
-      // The Radio panel shows it as `● label` and names the option `label`.
-      assert.equal(shown.filter.options[0].label, expected);
+      assert.equal(shown.cockpit.enable.text, text);
+      assert.equal(shown.cockpit.enable.label, label);
     }
   } finally {
     globalThis.document = originalDocument;

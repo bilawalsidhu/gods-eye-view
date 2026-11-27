@@ -45,12 +45,20 @@ export function createState({ services }) {
   // the view, so a share flight that lands after enable still opens nearby.
 
   layerState._openingCameraProvisional = false;
+  // True during notification of a layer-owned activation such as a timed
+  // Auto-hop step, a settled-view re-pick or a restored opening camera.
+  layerState._quietActivation = false;
 
   // An explicit empty-space deselect keeps AUTO HOP configured but prevents its
   // timer from silently choosing a replacement. A later explicit activation or
   // AUTO HOP toggle-on releases the hold.
 
   layerState._autoHopSuspended = false;
+
+  // Prev/Next walk order and the camera it last reached.
+  layerState._cameraWalk = null;
+  // Context's Cameras list area, `{lat, lon, radiusKm, order}`, or null.
+  layerState._nearbyArea = null;
 
   layerState._autoHopSec = 18;
 
@@ -96,8 +104,6 @@ export function createState({ services }) {
   // work over these, not the whole catalog.
 
   layerState._viewRecords = [];
-  // The view records plus the best-ranked camera of each visible cell.
-  layerState._pickerRecords = [];
 
   // The active camera's coverage neighbours, including grouped ones. A
   // grouping change in this cohort requires a coverage refresh.
@@ -141,11 +147,6 @@ export function createState({ services }) {
   // summary reads on every notification.
 
   layerState._neighborCountCache = null;
-
-  // { view, active, list } — the camera picker's index uiState publishes,
-  // rebuilt only when the view pass or the active camera changes.
-
-  layerState._cameraIndexCache = null;
 
   // Staggered geometry-load queue state (see startGeometryLoadQueue).
 

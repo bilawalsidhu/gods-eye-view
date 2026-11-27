@@ -167,6 +167,8 @@ test('timestamps parse as UTC; years before 1990 and garbage are unknown', () =>
   assert.equal(kartaViewTimeMs(null), null);
   const fallback = normalizePhoto(record({ shotDate: null }));
   assert.equal(fallback.capturedAt, Date.UTC(2016, 7, 24, 4, 1, 7));
+  assert.equal(fallback.capturedAtSource, 'added');
+  assert.equal(normalizePhoto(record()).capturedAtSource, null);
 });
 
 test('resized images go through the proxy with a base64url address', () => {

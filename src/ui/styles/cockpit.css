@@ -1,76 +1,8 @@
 /* ── Aircraft Cockpit View ─────────────────── */
-#cockpit-entry {
-  position: fixed;
-  left: calc(50% + 270px);
-  bottom: 34px;
-  z-index: 151;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 38px;
-  padding: 0 12px;
-  border: 1px solid rgba(0, 220, 255, 0.5);
-  border-radius: 8px;
-  background: rgba(2, 12, 18, 0.9);
-  color: #dceeff;
-  font: 600 10px/1 var(--font-mono);
-  letter-spacing: 0.14em;
-  box-shadow: 0 0 18px rgba(0, 220, 255, 0.14);
-  cursor: pointer;
-}
 
-#cockpit-entry[hidden],
 #cockpit-hud[hidden] {
   display: none;
 }
-#cockpit-entry:hover,
-#cockpit-entry:focus-visible {
-  border-color: #00dcff;
-  color: #fff;
-  outline: none;
-}
-#cockpit-entry .material-symbols-outlined {
-  color: #00dcff;
-  font-size: 18px;
-}
-/* The same entry under the selected vehicle's Intel HUD readout. The HUD
-   lets clicks through, so the button takes them back. */
-#intel-hud #cockpit-entry-readout {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 6px;
-  min-height: 30px;
-  padding: 0 10px;
-  border: 1px solid var(--hud-border);
-  border-radius: 6px;
-  background: rgba(2, 12, 18, 0.72);
-  font-size: 10px;
-  letter-spacing: 0.14em;
-  pointer-events: auto;
-  cursor: pointer;
-}
-#intel-hud #cockpit-entry-readout[hidden] {
-  display: none;
-}
-#intel-hud #cockpit-entry-readout:hover,
-#intel-hud #cockpit-entry-readout:focus-visible {
-  border-color: var(--hud-color);
-  outline: none;
-}
-#intel-hud #cockpit-entry-readout .material-symbols-outlined {
-  font-family: 'Material Symbols Outlined';
-  font-size: 16px;
-  text-transform: none;
-}
-#cockpit-entry kbd {
-  padding: 3px 5px;
-  border: 1px solid rgba(220, 238, 255, 0.25);
-  border-radius: 4px;
-  color: rgba(220, 238, 255, 0.6);
-  font: inherit;
-}
-
 #cockpit-hud {
   --cockpit-accent: #00dcff;
   /* Matches EMERGENCY_TINT_CSS in src/data/aircraftEmergency.js. */
@@ -2064,6 +1996,15 @@ html:not([lang='en']) .cockpit-brief-tabs button {
 .cockpit-help span {
   color: var(--cockpit-accent);
 }
+/* From 1200px the map credits sit on the bottom edge, 1rem up and about
+   28px tall (command-dock-trays.css): at the left, or at the right in a
+   right-to-left page. The keyboard hint and the position readout sit above
+   that row. Below 1200px the credits sit higher, above both. */
+@media (min-width: 1200px) {
+  body.cockpit-mode :is(.cockpit-help, .cockpit-position-readout) {
+    bottom: 3.5rem;
+  }
+}
 body.cockpit-mode
   :is(
     #title-bar,
@@ -2072,9 +2013,7 @@ body.cockpit-mode
     #traffic-sync-chip,
     #cctv-sync-chip,
     #command-dock,
-    #military-awareness-panel,
-    #military-awareness-direction-overlay,
-    #cockpit-entry
+    #military-awareness-direction-overlay
   ) {
   display: none !important;
 }
@@ -2170,11 +2109,6 @@ body.cockpit-mode #intel-hud .hud-right-edge {
   body.cockpit-mode #view-switcher button {
     padding-inline: 9px;
     font-size: 7px;
-  }
-  #cockpit-entry {
-    left: auto;
-    right: 16px;
-    bottom: 88px;
   }
   body.cockpit-mode #left-panel-stack,
   body.cockpit-mode #intel-hud,

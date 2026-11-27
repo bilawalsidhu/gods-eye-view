@@ -40,3 +40,21 @@ test('spherical clipping uses the valid segment of a path with an out-of-range l
   assert.equal(point.lat, 0);
   assert.ok(Math.abs(point.lon) < 0.001);
 });
+
+test('a line point in the rectangle is the nearest one the visibility test accepts', () => {
+  const paths = [
+    contextLine([
+      { lat: 0, lon: -1 },
+      { lat: 0, lon: 1 },
+    ]),
+  ];
+  const rect = { west: -1, east: 1, south: -1, north: 1 };
+  const nearest = (visible) =>
+    linePointInRect(paths, rect, { lat: 0.5, lon: 0 }, false, visible);
+  const point = nearest((at) => at.lon > 0.4);
+  assert.ok(point.lon > 0.4 && point.lon < 0.41);
+  assert.equal(
+    nearest(() => false),
+    null,
+  );
+});

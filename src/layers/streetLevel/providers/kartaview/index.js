@@ -385,7 +385,10 @@ export function createKartaViewProvider({
 
       /** ‹ › open through the core (loading, errors, cones), camera still. */
       function openStepped(photoId) {
-        context.actions.openImage(photoId, { frame: false });
+        return context.actions.openImage(photoId, {
+          frame: false,
+          request: false,
+        });
       }
 
       /**
@@ -409,8 +412,8 @@ export function createKartaViewProvider({
       }
 
       const viewer = createKartaViewViewer({
-        getPhoto: async (photoId) => {
-          const photo = await getPhoto(photoId);
+        getPhoto: async (photoId, options) => {
+          const photo = await getPhoto(photoId, options);
           if (photo.sequenceId) anchors.set(photo.sequenceId, photo);
           return photo;
         },
@@ -427,6 +430,7 @@ export function createKartaViewProvider({
               context.actions.reportError(
                 error?.message ||
                   msg('The KartaView photo could not be loaded'),
+                photoId,
               ),
             ),
         // Esc in the viewer clears the selected drive, as the panel says.
@@ -490,6 +494,9 @@ export function createKartaViewProvider({
           }
           cones.rerender();
         },
+
+        coverageNear: (point, radiusKm, rect, clip) =>
+          coverage.linesNear(point, radiusKm, rect, clip),
 
         /** Keyless; an empty view that has loaded says there is nothing here. */
         coverageStats() {

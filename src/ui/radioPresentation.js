@@ -33,15 +33,6 @@ export function renderRadioState(state) {
     ?.classList.toggle('radio-broadcasting', state.audioState === 'playing');
   const lifecycleLabel =
     lifecycleState === 'enabling' ? t('ENABLING') : t('DISABLING');
-  const layerStateText = transitioning
-    ? lifecycleLabel
-    : uncertain
-      ? t('UNCERTAIN')
-      : state.loading
-        ? t('SYNC')
-        : enabled
-          ? `${state.filteredCount}/${state.stationCount}`
-          : t('OFF');
   const enableLabel = uncertain
     ? t('RECONCILE')
     : enabled
@@ -53,30 +44,7 @@ export function renderRadioState(state) {
       ? t('Disable Radio')
       : t('Enable Radio');
 
-  const filter = state.filter || 'all';
   const categories = state.categories || [];
-  // The options change only with the categories; until they first do, the
-  // markup's own option stands.
-  const categorySignature = categories
-    .map(
-      (category) =>
-        `${category.id}:${category.label}:${category.count}:${category.color}`,
-    )
-    .join('|');
-  if (categorySignature !== (this._radioCategorySignature ?? '')) {
-    this._radioCategorySignature = categorySignature;
-    this._radioFilterOptions = categories.map((category) => ({
-      id: category.id,
-      color: category.color,
-      label: t('{category} ({count})', {
-        category: category.label,
-        count: category.count,
-      }),
-    }));
-  }
-  const filterColor =
-    categories.find((category) => category.id === filter)?.color || '';
-
   const tunerAvailable = interactive && state.filteredCount > 0;
   const activeCategory = categories.find(
     (category) => category.id === state.filter,
@@ -106,22 +74,6 @@ export function renderRadioState(state) {
     this._radioTunerBandSignature = '';
     this._radioTunerSelectedId = null;
   }
-
-  const place = selected
-    ? [selected.state, selected.countryCode].filter(Boolean).join(' · ')
-    : '';
-  const signal = selected
-    ? [selected.codec, selected.bitrate ? `${selected.bitrate} kbps` : '']
-        .filter(Boolean)
-        .join(' · ')
-    : '';
-  const stationMeta = selected
-    ? [place, signal].filter(Boolean).join('  /  ') ||
-      t('Directory metadata only')
-    : state.loading
-      ? t('Loading station directory…')
-      : t('Choose a globe marker or use next.');
-  const tags = Array.isArray(selected?.tags) ? selected.tags.slice(0, 8) : [];
 
   const playbackAction = activePlayback
     ? t('Pause')
@@ -212,20 +164,7 @@ export function renderRadioState(state) {
   this._radioView = {
     enabled,
     uncertain,
-    layerState: { active: enabled, text: layerStateText },
-    enable,
-    filter: {
-      options: this._radioFilterOptions ?? null,
-      value: filter,
-      color: filterColor,
-      disabled: !interactive || !state.stationCount,
-    },
-    station: {
-      name: selected?.name || t('NO STATION SELECTED'),
-      meta: stationMeta,
-      tags: tags.length ? t('TAGS · {tags}', { tags: tags.join(' · ') }) : '',
-      homepage: selected?.homepage || '',
-    },
+    station: { homepage: selected?.homepage || '' },
     transport: {
       stepDisabled: !interactive || !hasStations,
       play: {
@@ -244,7 +183,7 @@ export function renderRadioState(state) {
       station: uncertain
         ? t('UNCERTAIN')
         : selected?.name || (state.loading ? t('SYNCING') : t('READY')),
-      enable: { ...enable },
+      enable,
       // The rest of the transport is the panel's; the glyphs are the Cockpit's.
       play: { glyph: activePlayback ? 'Ⅱ' : '▶', title: playbackAction },
       volume: {
@@ -254,14 +193,6 @@ export function renderRadioState(state) {
     },
   };
   this.store?.publish(this._radioView);
-  if (
-    !enabled &&
-    !transitioning &&
-    !this.actions.preservePanelStateDuringClear() &&
-    !this._radioPanel.classList.contains('collapsed')
-  ) {
-    this.actions.setPanelCollapsed('radio-panel', true);
-  }
   this.actions.scheduleLayout();
 }
 
@@ -316,22 +247,18 @@ export function showRadioTuner(changes) {
  * Mark an Enable button busy while its own toggle runs, as a render would
  * until the next one reports the lifecycle.
  * @param {boolean} busy
- * @param {'panel'|'cockpit'} [where] The panel's button or the Cockpit's.
  * @returns {boolean} False before the first render, when nothing is shown yet.
  */
-export function showRadioEnableBusy(busy, where = 'panel') {
+export function showRadioEnableBusy(busy) {
   if (!this._radioView) return false;
   const view = this._radioView;
-  this._radioView =
-    where === 'cockpit'
-      ? {
-          ...view,
-          cockpit: {
-            ...view.cockpit,
-            enable: { ...view.cockpit.enable, busy },
-          },
-        }
-      : { ...view, enable: { ...view.enable, busy } };
+  this._radioView = {
+    ...view,
+    cockpit: {
+      ...view.cockpit,
+      enable: { ...view.cockpit.enable, busy },
+    },
+  };
   this.store?.publish(this._radioView);
   return true;
 }

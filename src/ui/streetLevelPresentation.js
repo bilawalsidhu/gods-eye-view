@@ -1,3 +1,4 @@
+import { streetPhotoAttribution } from './streetPhotoCredit.js';
 import {
   formatNumber,
   isolate,
@@ -8,8 +9,6 @@ import {
 } from '../i18n/index.js';
 import { keyGuidanceText, keyRequirementText } from './keyGuidance.js';
 import { roundHeadingDegrees } from '../data/headingDegrees.js';
-
-// Street Level UI state to panel strings and flags. Pure, so it is testable.
 
 const DAY_MS = 86_400_000;
 
@@ -84,27 +83,6 @@ function keyGuidance(state) {
   );
 }
 
-function presentStatus(state) {
-  const pressed = state.enabled === true;
-  const title = pressed
-    ? t('Turn Street Level off')
-    : t('Turn Street Level on');
-  if (state.keyRejected)
-    return { text: t('KEY REJECTED'), tone: 'warn', pressed, title };
-  if (state.keyRequired)
-    return {
-      text: t('KEY REQUIRED'),
-      tone: 'warn',
-      pressed,
-      title: keyGuidance(state) || title,
-    };
-  if (state.coverage.loading)
-    return { text: t('LOADING'), tone: 'busy', pressed, title };
-  return pressed
-    ? { text: t('ON'), tone: 'on', pressed, title }
-    : { text: t('OFF'), tone: '', pressed, title };
-}
-
 // Provider refusals with a number stay English data (kartaview and panoramax
 // source.js); they go back onto a placeholder here.
 const ERROR_PATTERNS = [
@@ -159,6 +137,7 @@ function presentProviders(state) {
       color: provider.color || null,
       title,
       active: on,
+      ...(provider.billed === true && { billed: true }),
       disabled: false,
       state: keyRequired
         ? 'error'
@@ -178,23 +157,27 @@ function presentViewer(state) {
   if (street.isPano) right.push('360°');
   if (Number.isFinite(street.bearing))
     right.push(`${roundHeadingDegrees(street.bearing)}°`);
-  if (street.capturedAt)
-    right.push(formatDate(street.capturedAt, street.capturedAtPrecision));
+  // The photo card has its own date. Expanded and embedded viewers use this one.
+  const date = street.capturedAt
+    ? formatDate(street.capturedAt, street.capturedAtPrecision)
+    : '';
   const left = [];
   // A provider address mixes Latin and the page language ("602 Congress Ave,
   // أوستن"); each part is isolated so a house number stays with its street
   // in right-to-left text. A no-op in left-to-right languages.
   if (street.title) left.push(street.title.split(', ').map(isolate).join(', '));
-  if (street.creator)
-    left.push(t('Image by {creator}', { creator: street.creator }));
-  if (street.license) left.push(street.license);
+  left.push(...streetPhotoAttribution(street));
+  const photo = state.acceptedPhoto ?? null;
   return {
     open: street.open === true,
-    loading: street.loading === true && !street.imageId,
+    photo,
+    loading: street.loading === true && !photo,
+    openingPaidPhoto: street.opening === true && state.billedPhoto === true,
     renderMode: street.renderMode === 'fill' ? 'fill' : 'letterbox',
     renderModes: street.renderModes !== false,
     captionLeft: left.join(' · '),
     captionRight: right.join(' · '),
+    captionDate: date,
     link: street.externalUrl || null,
     linkLabel: street.providerLabel
       ? `${translateKnown(street.providerLabel)} ↗`
@@ -311,32 +294,37 @@ function coverageCountLine(coverage) {
 }
 
 /** @param {{now?: number}} [options] Clock for the SINCE readout. */
-export function presentStreetLevelPanel(state, { now = Date.now() } = {}) {
+export function presentStreetLevel(state, { now = Date.now() } = {}) {
   const keyRequired = state.keyRequired === true;
   const filter = state.filter || { pano: 'all', sinceDays: 0 };
   // A missing key says how to add it; a rejected key's own error names the fix.
   const keyMissing = keyRequired && state.keyRejected !== true;
+  const error =
+    state.street.error || state.sequence.error || state.coverage.error || '';
+  const refusal = state.street.nearestRefusal;
   return {
     enabled: state.enabled === true,
-    keyRequired,
-    status: presentStatus(state),
     controlsDisabled: keyRequired || (state.providers || []).length === 0,
     providers: presentProviders(state),
-    error: keyMissing
-      ? keyGuidance(state) || null
-      : translateStreetLevelError(
-          state.street.error ||
-            state.sequence.error ||
-            state.coverage.error ||
-            '',
-        ) || null,
-    filter: { pano: filter.pano, sinceDays: Number(filter.sinceDays) || 0 },
+    // A photo card can keep this snapshot while the language changes.
+    get error() {
+      if (keyMissing) return keyGuidance(state) || null;
+      if (refusal && refusal.text === state.street.error)
+        return t(refusal.key, { radius: refusal.radius });
+      return translateStreetLevelError(error) || null;
+    },
+    filter: { pano: filter.pano },
     filterControls: {
       pano: state.filterControls?.pano !== false,
       since: state.filterControls?.since !== false,
     },
     since: presentSince(filter.sinceDays, now),
     sinceNote: state.sinceNote || null,
+    dockPhotoLoading: state.dockPhotoLoading === true,
+    dockPhotoUnavailable: state.dockPhotoUnavailable === true,
+    dockPhotoRestoring: state.dockPhotoRestoring === true,
+    // 'failed' or 'restoring': a replacement the dock could not show.
+    dockPhotoNotice: state.dockPhotoNotice || null,
     viewer: presentViewer(state),
     meta: presentMeta(state),
     nearest: presentNearest(state),

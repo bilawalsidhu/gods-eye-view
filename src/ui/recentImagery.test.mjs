@@ -1,15 +1,18 @@
 import * as Cesium from 'cesium';
 import '../testSupport/registerDom.mjs';
 import test from 'node:test';
+import { nextTick } from 'vue';
 import assert from 'node:assert/strict';
 import { assertSameNode } from '../testSupport/domAssert.mjs';
 import { readFileSync } from 'node:fs';
 import { createRecentImageryPanel } from './recentImagery.js';
 import { nonCrossingBoxes } from '../layers/recentImagery/model.js';
+import { resetListCardMemory } from './kit/ContextListCard.vue';
 import { createRecentImageryLayer } from '../layers/recentImagery/index.js';
 import {
   BOX,
   FIJI_BOX,
+  candidate,
   fakeCatalog,
   fakeController,
   fakeRenderer,
@@ -85,35 +88,27 @@ Object.assign(globalThis.Element.prototype, {
   },
 });
 
-/** The static rail panel skeleton from views/ContextView.vue. */
+/** The list's skeleton from views/ContextView.vue: a body in Context's list. */
 function fakeDocument() {
   document.body.textContent = '';
   Object.defineProperty(document.documentElement, 'clientWidth', {
     configurable: true,
     value: 1200,
   });
-  const panel = document.createElement('div');
-  panel.id = 'recent-imagery-panel';
-  panel.className = 'panel-collapsible collapsed';
-  panel.hidden = true;
-  const count = document.createElement('span');
-  count.id = 'recent-imagery-panel-count';
-  const collapse = document.createElement('button');
-  collapse.dataset.collapseTarget = 'recent-imagery-panel';
-  collapse.clicked = 0;
-  collapse.click = () => {
-    collapse.clicked += 1;
-    panel.classList.toggle('collapsed');
-  };
+  const list = document.createElement('div');
+  list.id = 'context-list-recent-imagery';
   const body = document.createElement('div');
   body.id = 'recent-imagery-panel-body';
-  panel.append(count, collapse, body);
-  document.body.appendChild(panel);
-  return { document, panel, count, collapse, body };
+  list.append(body);
+  document.body.appendChild(list);
+  // Whether the list's tab shows, and its count, as the readout reports it.
+  const reports = [];
+  const presence = () => reports.at(-1);
+  return { document, list, body, reports, presence };
 }
 
 // ---- the real layer, with fakes for everything it injects ------------------
-function fixture({ fetchImpl, controller = fakeController() } = {}) {
+function fixture(t, { fetchImpl, controller = fakeController() } = {}) {
   const dom = fakeDocument();
   const renderer = fakeRenderer();
   const thumbnails = fakeThumbnails();
@@ -157,6 +152,7 @@ function fixture({ fetchImpl, controller = fakeController() } = {}) {
   const urls = { created: [], revoked: [] };
   const readout = createRecentImageryPanel({
     container: dom.body,
+    onPresence: (state) => dom.reports.push(state),
     layer,
     viewer,
     tool,
@@ -189,19 +185,33 @@ function fixture({ fetchImpl, controller = fakeController() } = {}) {
     },
     revokeObjectUrl: (url) => urls.revoked.push(url),
   });
+  t.after(() => {
+    readout.destroy();
+    layer.destroy();
+    dom.list.remove();
+    resetListCardMemory();
+  });
   const root = readout.root;
   const byId = (id) => root.find((node) => node.id === id);
   const byAction = (id) => root.find((node) => node.dataset.actionId === id);
   const cards = () =>
     root.findAll((node) => node.classList.contains('ri-card'));
   const card = (key) => cards().find((node) => node.dataset.key === key);
+  /** Click a day's row: it previews that day. */
+  const open = (key) =>
+    card(key)
+      .find((node) => node.classList.contains('ri-card-open'))
+      .click();
   const chip = (key, slot) =>
     card(key).find((node) => node.dataset.slot === slot);
   const part = (node, name) =>
     node.find((child) => child.classList.contains(name));
-  const strip = byId('ri-strip');
+  const strip = root.find((node) => node.classList.contains('ri-strip'));
+  // Keys go where the keyboard is: the focused day's row.
   const key = (name, extra = {}) =>
-    strip.dispatch('keydown', { key: name, ...extra });
+    card(layer.getSnapshot().focus?.key)
+      .find((node) => node.classList.contains('ri-card-open'))
+      .dispatch('keydown', { key: name, ...extra });
   /** Enable, select BOX and land the catalog. */
   const ready = async () => {
     layer.enable();
@@ -234,6 +244,7 @@ function fixture({ fetchImpl, controller = fakeController() } = {}) {
     cards,
     card,
     chip,
+    open,
     part,
     strip,
     key,
@@ -253,37 +264,24 @@ function part(f, id, name) {
 }
 
 // ---- tests ---------------------------------------------------------------------
-test('the readout mounts in the rail body, hides while the layer is off and opens the panel once on first appearance', async () => {
-  const f = fixture();
+test('the readout mounts in its list body, and reports its tab only while the layer is on', async (t) => {
+  const f = fixture(t);
   assertSameNode(f.root.parentNode, f.body);
-  assert.equal(f.panel.hidden, true);
-  assert.equal(f.count.textContent, '');
+  assert.equal(f.presence(), null);
   await f.ready();
-  const panel = f.document.getElementById('recent-imagery-panel');
-  assert.equal(panel.hidden, false);
-  assert.equal(f.collapse.clicked, 1, 'first appearance expands');
-  assert.equal(panel.classList.contains('collapsed'), false);
-  assert.equal(f.count.textContent, '4 DAYS');
-  f.collapse.click();
+  assert.deepEqual(f.presence(), { count: 4 }, 'the days found in the box');
   f.layer.disable();
+  assert.equal(f.presence(), null);
   f.layer.enable();
-  assert.equal(f.collapse.clicked, 2, 'never again: the user collapsed it');
-  f.layer.disable();
-  assert.equal(panel.hidden, true);
-  assert.equal(f.count.textContent, '');
-  // A stored or shared collapse choice wins over the first appearance.
-  const g = fixture();
-  g.document.getElementById(
-    'recent-imagery-panel',
-  ).dataset.collapsedPreference = 'stored';
-  g.layer.enable();
-  assert.equal(g.collapse.clicked, 0);
+  assert.notEqual(f.presence(), null);
 });
 
-test('the body is a fixed stack of seven blocks in a fixed order, each with a fixed height in the stylesheet', () => {
-  const f = fixture();
+test('the body is a fixed stack of seven blocks in a fixed order, each with a fixed height in the stylesheet', (t) => {
+  const f = fixture(t);
   assert.deepEqual(
-    [...f.root.children].map((node) => node.id || node.className),
+    [...f.root.children].map((node) =>
+      node === f.strip ? 'ri-strip' : node.id || node.className,
+    ),
     [
       'ri-actions',
       'ri-notice',
@@ -305,8 +303,6 @@ test('the body is a fixed stack of seven blocks in a fixed order, each with a fi
   };
   assert.match(rule('.recent-imagery-readout .ri-actions-row'), /height: 22px/);
   assert.match(rule('.recent-imagery-readout .ri-line'), /height: 14px/);
-  assert.match(rule('.recent-imagery-readout .ri-strip'), /height: 120px/);
-  assert.match(rule('.recent-imagery-readout .ri-card'), /height: 112px/);
   assert.match(
     rule('.recent-imagery-readout .ri-selection'),
     /grid-template-rows: 26px 20px 20px/,
@@ -326,8 +322,8 @@ test('the body is a fixed stack of seven blocks in a fixed order, each with a fi
  * height keeps the class the stylesheet fixes it by). The live gate
  * `scripts/qa-recent-imagery.mjs` measures the real rectangles.
  */
-test('no control changes place in the tree, no block is hidden and every fixed-height block keeps its height class across every state (DOM-structure guard)', async () => {
-  const f = fixture();
+test('no control changes place in the tree, no block is hidden and every fixed-height block keeps its height class across every state (DOM-structure guard)', async (t) => {
+  const f = fixture(t);
   const cssRule = (file, selector) => {
     const css = readFileSync(new URL(file, import.meta.url), 'utf8');
     const start = css.indexOf(`${selector} {`);
@@ -371,12 +367,6 @@ test('no control changes place in the tree, no block is hidden and every fixed-h
         'ri-zoom-in',
         readout('.ri-zoom-in'),
         /height: 14px/,
-      ],
-      'ri-strip': [
-        f.byId('ri-strip'),
-        'ri-strip',
-        readout('.ri-strip'),
-        /height: 120px/,
       ],
       'ri-hint': [
         f.byId('ri-hint'),
@@ -535,8 +525,8 @@ test('no control changes place in the tree, no block is hidden and every fixed-h
   assert.equal(states.length, 12);
 });
 
-test('cards carry thumbnail, date, sensor, cloud, START HERE and PREVIEW; the chips follow the mode without moving', async () => {
-  const f = fixture();
+test('cards carry thumbnail, date, sensor, cloud, START HERE and PREVIEW; the chips follow the mode without moving', async (t) => {
+  const f = fixture(t);
   await f.ready();
   f.thumbnails.setStatus(S18, 'present');
   f.layer.setVisibleRange(0, 3);
@@ -584,7 +574,10 @@ test('cards carry thumbnail, date, sensor, cloud, START HERE and PREVIEW; the ch
     true,
     'pinned, not previewed',
   );
-  assert.match(s18.getAttribute('aria-label'), /· shown$/);
+  assert.match(
+    f.part(s18, 'ri-card-open').getAttribute('aria-label'),
+    /· shown$/,
+  );
   // A / B: the same chip slots, relabelled.
   f.root
     .find(
@@ -616,8 +609,8 @@ test('cards carry thumbnail, date, sensor, cloud, START HERE and PREVIEW; the ch
   assert.equal(f.part(f.card(V21), 'ri-card-cloud').textContent, 'no imagery');
 });
 
-test('the selection bar reads the mode, both rows and a preview, with × reserved when empty', async () => {
-  const f = fixture();
+test('the selection bar reads the mode, both rows and a preview, with × reserved when empty', async (t) => {
+  const f = fixture(t);
   await f.ready();
   const modes = f.root.findAll((node) =>
     node.classList.contains('ri-mode-btn'),
@@ -676,11 +669,14 @@ test('the selection bar reads the mode, both rows and a preview, with × reserve
   assert.equal(f.snap().mode, 'image');
 });
 
-test('strip keys: arrows preview after the debounce, S / A / B pin, Enter previews, repeats are ignored', async () => {
-  const f = fixture();
+test('row keys: arrows preview after the debounce and move focus to that row, S / A / B pin, repeats are ignored', async (t) => {
+  const f = fixture(t);
   await f.ready();
-  f.key('ArrowRight');
+  assert.equal(f.strip.getAttribute('aria-keyshortcuts'), 'A S');
+  f.key('ArrowDown');
   assert.equal(f.snap().focus.key, L16);
+  await nextTick();
+  assertSameNode(document.activeElement, f.part(f.card(L16), 'ri-card-open'));
   f.timers.flush();
   assert.equal(f.snap().preview.key, L16);
   f.key('Home');
@@ -698,25 +694,46 @@ test('strip keys: arrows preview after the debounce, S / A / B pin, Enter previe
   f.key('a');
   assert.equal(f.snap().pins.a.key, null, 'A again unpins');
   f.layer.setMode('ab');
+  assert.equal(f.strip.getAttribute('aria-keyshortcuts'), 'A B');
   f.key('a');
   f.key('ArrowLeft');
   f.key('b');
   assert.deepEqual([f.snap().pins.a.key, f.snap().pins.b.key], [L16, S18]);
   f.key('a', { metaKey: true });
   assert.equal(f.snap().pins.a.key, L16, 'modified keys are not ours');
-  f.layer.setAssignment('a', null);
-  f.layer.setAssignment('b', null);
-  f.key('Enter');
-  assert.equal(f.snap().preview.key, S18, 'Enter previews the focused day');
 });
 
-test('clicks: a card previews and focuses the strip, a chip pins, SELECT BOX toggles the tool, USE VIEW and CLEAR drive the layer', async () => {
-  const f = fixture();
+test('a focused day found empty hands focus to the row in its place, and day keys still work there', async (t) => {
+  const f = fixture(t);
   await f.ready();
-  f.card(L16).click();
+  f.part(f.card(V21), 'ri-card-open').focus();
+  f.thumbnails.probe(V21, 'empty');
+  await nextTick();
+  await nextTick();
+  const open = document.activeElement;
+  assertSameNode(open, f.part(f.card(S18), 'ri-card-open'));
+  assert.equal(open.tagName, 'BUTTON');
+  f.layer.clearPreview();
+  assert.equal(f.snap().preview.key, null);
+  assert.equal(
+    open.dispatch('keydown', { key: 'Enter' }).defaultPrevented,
+    false,
+  );
+  // happy-dom leaves native Enter activation to the browser.
+  open.click();
+  assert.equal(f.snap().preview.key, S18);
+  const before = f.snap().focus.key;
+  open.dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }),
+  );
+  assert.notEqual(f.snap().focus.key, before, 'ArrowDown moves on from it');
+});
+
+test('clicks: a row previews its day, a chip pins, SELECT BOX toggles the tool, USE VIEW and CLEAR drive the layer', async (t) => {
+  const f = fixture(t);
+  await f.ready();
+  f.open(L16);
   assert.equal(f.snap().preview.key, L16);
-  assert.equal(f.strip.focused, 1);
-  assert.deepEqual(f.strip.focusOptions, { preventScroll: true });
   f.chip(S18, 'a').click();
   assert.equal(f.snap().pins.a.key, S18);
   const selectBox = f.byAction('select-box');
@@ -737,8 +754,62 @@ test('clicks: a card previews and focuses the strip, a chip pins, SELECT BOX tog
   assert.equal(f.byAction('clear').disabled, true);
 });
 
-test('Escape clears the preview first, then cancels the box tool, then blurs the strip', async () => {
-  const f = fixture();
+test('with no box the list offers to draw one: the action starts the box tool, and the passes then list newest first with the count', async (t) => {
+  const f = fixture(t);
+  f.layer.enable();
+  const draw = () => f.byId('ri-draw-area');
+  assert.equal(draw().textContent, 'Draw an area to see recent passes ›');
+  assertSameNode(draw().closest('.ri-strip'), f.strip, 'the empty list');
+  assert.equal(f.strip.hasAttribute('aria-keyshortcuts'), false);
+  assert.deepEqual(
+    f.presence(),
+    { count: null, reason: 'no area' },
+    'no passes before a box, and the tab says why',
+  );
+  // Enter on the action is the button's own; the readout leaves it alone.
+  assert.equal(
+    draw().dispatch('keydown', { key: 'Enter' }).defaultPrevented,
+    false,
+  );
+  draw().click();
+  assert.deepEqual(f.tool.calls, ['start']);
+  assert.equal(draw(), null);
+  assert.equal(
+    f.strip.find((node) => node.classList.contains('context-list-card__state'))
+      .textContent,
+    'Drag a box on the map (Esc cancels)',
+  );
+  f.tool.cancel('escape');
+  assert.notEqual(draw(), null, 'a cancelled draw offers the action again');
+  await f.ready();
+  assert.equal(draw(), null);
+  const cards = f.cards();
+  const days = f.snap().candidates.map((candidate) => candidate.day);
+  assert.deepEqual(
+    days,
+    [...days].sort((a, b) => b.localeCompare(a)),
+    'newest first',
+  );
+  assert.deepEqual(
+    cards.map((node) => node.dataset.key),
+    f.snap().candidates.map((candidate) => candidate.key),
+  );
+  for (const node of cards) {
+    assert.ok(f.part(node, 'ri-card-date').textContent);
+    assert.match(f.part(node, 'ri-card-cloud').textContent, /cloud/);
+  }
+  assert.deepEqual(f.presence(), { count: cards.length }, 'one per pass');
+  // A pass row shows that pass.
+  f.open(L16);
+  assert.equal(f.snap().preview.key, L16);
+  // Clearing the box brings the action back.
+  f.byAction('clear').click();
+  assert.notEqual(draw(), null);
+  assert.deepEqual(f.presence(), { count: null, reason: 'no area' });
+});
+
+test("Escape clears the preview first, then cancels the box tool, then is not the readout's", async (t) => {
+  const f = fixture(t);
   await f.ready();
   f.tool.start();
   f.key('Escape');
@@ -746,10 +817,9 @@ test('Escape clears the preview first, then cancels the box tool, then blurs the
   assert.equal(f.tool.isActive(), true);
   f.key('Escape');
   assert.equal(f.tool.isActive(), false);
-  f.key('Escape');
-  assert.equal(f.strip.blurred, 1);
+  assert.equal(f.key('Escape').defaultPrevented, false);
   // From elsewhere in the panel Escape only acts when there is something to undo.
-  f.card(L16).click();
+  f.open(L16);
   const escape = f.byId('ri-opacity').dispatch('keydown', { key: 'Escape' });
   assert.equal(escape.defaultPrevented, true);
   assert.equal(f.snap().preview.key, null);
@@ -757,11 +827,32 @@ test('Escape clears the preview first, then cancels the box tool, then blurs the
   assert.equal(idle.defaultPrevented, false);
 });
 
-test('the notice line shows the refusal, then errors, then CLEAR, then the Esri note; the hint names the next step and that SWAP trades the sides', async () => {
+test('the readout owns Escape only while it has a preview or the box tool to undo, and leaves one an outer handler took', async (t) => {
+  const f = fixture(t);
+  await f.ready();
+  const owns = () => f.root.hasAttribute('data-owns-escape');
+  f.key('Escape');
+  assert.equal(owns(), false, 'idle');
+  f.tool.start();
+  assert.equal(owns(), true, 'drawing a box');
+  // Taken on the way down (Context's capture handler): the readout does nothing.
+  const taken = new Event('keydown', { bubbles: true, cancelable: true });
+  Object.defineProperty(taken, 'key', { value: 'Escape' });
+  taken.preventDefault();
+  f.strip.dispatchEvent(taken);
+  assert.equal(f.tool.isActive(), true, 'the tool stays');
+  f.key('Escape');
+  assert.equal(f.tool.isActive(), false);
+  assert.equal(owns(), false);
+  f.open(L16);
+  assert.equal(owns(), true, 'previewing a day');
+});
+
+test('the notice line shows the refusal, then errors, then CLEAR, then the Esri note; the hint names the next step and that SWAP trades the sides', async (t) => {
   const controller = fakeController();
   let active = 'photoreal';
   controller.getActiveId = () => active;
-  const f = fixture({ controller });
+  const f = fixture(t, { controller });
   const notice = f.byId('ri-notice');
   const noticeText = f.byId('ri-notice-text');
   const hint = f.byId('ri-hint');
@@ -805,8 +896,8 @@ test('the notice line shows the refusal, then errors, then CLEAR, then the Esri 
   assert.equal(notice.classList.contains('info'), true);
 });
 
-test('an oversized box offers ZOOM IN in a fixed slot at the end of the notice line; it asks the layer to fit', async () => {
-  const f = fixture();
+test('an oversized box offers ZOOM IN in a fixed slot at the end of the notice line; it asks the layer to fit', async (t) => {
+  const f = fixture(t);
   const flights = [];
   f.viewer.scene.canvas.clientHeight = 500;
   f.viewer.scene.ellipsoid = Cesium.Ellipsoid.WGS84;
@@ -854,8 +945,8 @@ test('an oversized box offers ZOOM IN in a fixed slot at the end of the notice l
   assert.deepEqual(reserved(), [true, true, 'true', false]);
 });
 
-test('the divider exists only while a swipe is live, labelled A / B or IMAGE / BASEMAP; SWAP trades its sides and Space does nothing', async () => {
-  const f = fixture();
+test('the divider exists only while a swipe is live, labelled A / B or IMAGE / BASEMAP; SWAP trades its sides and Space does nothing', async (t) => {
+  const f = fixture(t);
   const swap = f.byId('ri-swap');
   const swapState = () => [
     swap.disabled,
@@ -944,8 +1035,8 @@ test('the divider exists only while a swipe is live, labelled A / B or IMAGE / B
   assert.deepEqual(swapState(), [true, true, 'true', 'false']);
 });
 
-test('opacity drives both images; EXPORT downloads the pin or the preview and EXPORT B only exists in A / B', async () => {
-  const f = fixture();
+test('opacity drives both images; EXPORT downloads the pin or the preview and EXPORT B only exists in A / B', async (t) => {
+  const f = fixture(t);
   await f.ready();
   const exportA = f.byAction('export-a');
   const exportB = f.byAction('export-b');
@@ -1011,7 +1102,17 @@ test('opacity drives both images; EXPORT downloads the pin or the preview and EX
     ],
     ['EXPORT A', 'EXPORT B', false],
   );
-  const failing = fixture({
+  // A retained export after teardown neither fetches nor mounts again.
+  const fetched = f.fetches.length;
+  const container = f.strip.closest('.recent-imagery-readout').parentElement;
+  f.readout.destroy();
+  assert.equal(await f.readout.exportImage('a'), false);
+  assert.equal(f.fetches.length, fetched);
+  assertSameNode(container.querySelector('.recent-imagery-readout'), null);
+});
+
+test('the export notice reports a failed imagery download', async (t) => {
+  const failing = fixture(t, {
     fetchImpl: async () => response({ ok: false, status: 503 }),
   });
   await failing.ready();
@@ -1020,19 +1121,10 @@ test('opacity drives both images; EXPORT downloads the pin or the preview and EX
     failing.byId('ri-notice-text').textContent,
     'Export failed · HTTP 503',
   );
-  // A retained export after teardown neither fetches nor mounts again.
-  const fetched = f.fetches.length;
-  const container = f
-    .byId('ri-strip')
-    .closest('.recent-imagery-readout').parentElement;
-  f.readout.destroy();
-  assert.equal(await f.readout.exportImage('a'), false);
-  assert.equal(f.fetches.length, fetched);
-  assertSameNode(container.querySelector('.recent-imagery-readout'), null);
 });
 
-test('DETAILS is a collapsed rail card holding every note, and the empty-days toggle', async () => {
-  const f = fixture();
+test('DETAILS is a collapsed rail card holding every note, and the empty-days toggle', async (t) => {
+  const f = fixture(t);
   await f.ready();
   const header = f
     .byId('ri-details')
@@ -1065,8 +1157,8 @@ test('DETAILS is a collapsed rail card holding every note, and the empty-days to
   assert.equal(article.dataset.open, 'false');
 });
 
-test('DETAILS shows partial coverage for a dateline day with one side empty, unknown when a side did not answer', async () => {
-  const f = fixture();
+test('DETAILS shows partial coverage for a dateline day with one side empty, unknown when a side did not answer', async (t) => {
+  const f = fixture(t);
   f.layer.enable();
   f.layer.setBox(FIJI_BOX);
   f.catalog.resolveLast();
@@ -1090,12 +1182,13 @@ test('DETAILS shows partial coverage for a dateline day with one side empty, unk
   assert.match(f.byId('ri-details').textContent, /Coverage unknown/);
 });
 
-test('the body scroll position survives renders even when DOM mutations reset it', async () => {
-  const f = fixture();
+test('the body scroll position survives renders even when DOM mutations reset it', async (t) => {
+  const f = fixture(t);
   await f.ready();
   f.body.scrollTop = 120;
-  const insert = f.strip.insertBefore.bind(f.strip);
-  f.strip.insertBefore = (...args) => {
+  const list = f.strip.querySelector('ul');
+  const insert = list.insertBefore.bind(list);
+  list.insertBefore = (...args) => {
     f.body.scrollTop = 0;
     return insert(...args);
   };
@@ -1104,8 +1197,8 @@ test('the body scroll position survives renders even when DOM mutations reset it
   assert.equal(f.body.scrollTop, 120);
 });
 
-test('opening DETAILS scrolls its card into view, and closing it does not scroll', async () => {
-  const f = fixture();
+test('opening DETAILS scrolls its card into view, and closing it does not scroll', async (t) => {
+  const f = fixture(t);
   await f.ready();
   // The body is 100 px high and scrolled 40 px; the card opens 150 px down.
   f.body.scrollTop = 40;
@@ -1127,8 +1220,8 @@ test('opening DETAILS scrolls its card into view, and closing it does not scroll
   assert.equal(f.body.scrollTop, 150);
 });
 
-test('destroy returns every listener, the divider and the panel state', async () => {
-  const f = fixture();
+test('destroy returns every listener, the divider and the list tab', async (t) => {
+  const f = fixture(t);
   await f.ready();
   await f.settleLease();
   f.layer.setMode('basemap');
@@ -1138,8 +1231,76 @@ test('destroy returns every listener, the divider and the panel state', async ()
   assert.equal(f.root.listenerCount(), 0);
   assert.equal(f.strip.listenerCount(), 0);
   assertSameNode(f.root.parentNode, null);
-  assert.equal(f.document.getElementById('recent-imagery-panel').hidden, true);
+  assert.equal(f.presence(), null, 'its tab goes with it');
   f.layer.setMode('ab');
   assert.equal(f.splits.length, 1, 'no renders after destroy');
   f.readout.destroy();
+});
+
+test('the Imagery list distinguishes both HLS catalogs failing from an empty search', async (t) => {
+  const f = fixture(t);
+  f.layer.setSources({ hls: true, viirs: false });
+  f.layer.enable();
+  f.layer.setBox(BOX);
+  f.catalog.searches.at(-1).resolve({
+    candidates: [],
+    errors: [
+      { product: 'S30', message: 'offline' },
+      { product: 'L30', message: 'offline' },
+    ],
+  });
+  await settle();
+  assert.equal(f.presence().count, null);
+  assert.match(f.presence().reason, /Unavailable/i);
+  assert.match(f.strip.textContent, /Unavailable/i);
+  assert.match(f.byId('ri-notice-text').textContent, /catalog unavailable/i);
+  assert.doesNotMatch(f.strip.textContent, /No imagery/);
+  f.layer.setBox({ ...BOX, east: BOX.east + 0.1 });
+  f.catalog.searches.at(-1).resolve({
+    candidates: [],
+    errors: [{ product: 'S30', message: 'offline' }],
+  });
+  await settle();
+  assert.deepEqual(f.presence(), { count: 0 });
+  assert.match(f.strip.textContent, /No imagery/);
+});
+
+test('keyboard navigation reveals the focused Imagery day', async (t) => {
+  const f = fixture(t);
+  await f.ready();
+  const source = f.part(f.cards()[0], 'ri-card-open');
+  const next = f.part(f.cards()[1], 'ri-card-open');
+  let scrolled;
+  next.scrollIntoView = (options) => {
+    scrolled = options;
+  };
+  source.focus();
+  source.dispatch('keydown', { key: 'ArrowDown' });
+  await settle();
+  assertSameNode(document.activeElement, next);
+  assert.deepEqual(scrolled, { block: 'nearest', inline: 'nearest' });
+});
+
+test('a new Imagery box resets the page but refreshes for its current box keep it', async (t) => {
+  const f = fixture(t);
+  const days = Array.from({ length: 6 }, (_, i) =>
+    candidate('S30', `2026-09-${21 - i}`),
+  );
+  const range = () =>
+    f.strip.querySelector('[data-list-range]').textContent.trim();
+  f.layer.enable();
+  f.layer.setBox(BOX);
+  f.catalog.resolveLast(days);
+  await settle();
+  f.strip.querySelector('[data-list-next]').click();
+  await settle();
+  assert.equal(range(), '6–6 of 6');
+  f.layer.setAlpha(0.9);
+  await settle();
+  assert.equal(range(), '6–6 of 6');
+  f.layer.setBox({ ...BOX, east: BOX.east + 0.1 });
+  f.catalog.resolveLast(days);
+  await settle();
+  assert.equal(range(), '1–5 of 6');
+  assert.equal(f.cards()[0].dataset.key, days[0].key);
 });

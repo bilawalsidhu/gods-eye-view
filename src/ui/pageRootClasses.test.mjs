@@ -14,6 +14,7 @@ import { holdRootClass, vRootClass } from './rail/rootClass.js';
 import { assertSameNode } from '../testSupport/domAssert.mjs';
 import { createTestVoiceUi } from '../testSupport/voiceUi.mjs';
 import { worldClock } from '../time/worldClock.js';
+import { useEntityCardStore } from './stores/entityCard.js';
 import { useFirstRunStore } from './stores/firstRun.js';
 import { useHudStore } from './stores/hud.js';
 import { useWorldTimeStore } from './stores/worldTime.js';
@@ -126,6 +127,30 @@ test('the Omnibar holds has-omnibar, its results and focus inside it', async (t)
   assert.ok(!on('has-omnibar') && !on('omnibar-has-results'));
 });
 
+test('closing a street-level photo from the Omnibar dismisses its card', async (t) => {
+  const { pinia } = mount(t, Omnibar);
+  const cards = useEntityCardStore(pinia);
+  t.after(() => cards.clear());
+  assert.ok(
+    cards.select({
+      layerId: 'street-level',
+      id: 'mapillary:a',
+      label: 'Test road',
+      lat: 48,
+      lon: 2,
+    }),
+  );
+  const key = cards.card.key;
+  document.getElementById('gev-omnibar-input').focus();
+  await settle();
+  const close = document.querySelector('.omnibar-item--sel-close');
+  assert.ok(close);
+  close.click();
+  await settle();
+  assert.equal(cards.card, null);
+  assert.equal(cards.wasDismissed(key), true);
+});
+
 test('the dock holds dock-has-voice and assistant-voice-mode with its voice control', async (t) => {
   const { pinia, unmount } = mount(t, CommandDockView);
   await settle();
@@ -155,28 +180,34 @@ test('the dock holds dock-has-voice and assistant-voice-mode with its voice cont
   assert.ok(!on('dock-has-voice') && !on('assistant-voice-mode'));
 });
 
-test('the HUD holds hud-minimal-active only while the Minimal HUD is active', async (t) => {
+test('the HUD holds only the root class for its active layout', async (t) => {
   const { pinia, unmount } = mount(t, IntelHudView);
   const store = useHudStore(pinia);
   const cases = [
-    [{ active: false, variant: 'minimal' }, false],
-    [{ active: true, variant: 'tactical' }, false],
-    [{ active: true, variant: 'minimal' }, true],
-    [{ active: false, variant: 'minimal' }, false],
-    [{ active: true, variant: 'minimal' }, true],
+    { active: false, variant: 'minimal' },
+    { active: true, variant: 'tactical' },
+    { active: true, variant: 'minimal' },
+    { active: false, variant: 'minimal' },
+    { active: true, variant: 'cyber' },
+    { active: true, variant: 'tactical' },
+    { active: false, variant: 'tactical' },
+    { active: true, variant: 'tactical' },
   ];
-  for (const [hud, expected] of cases) {
+  for (const hud of cases) {
     store.publish({ vessel: {}, sensor: [], recShown: null, ...hud });
     await settle();
     const el = document.getElementById('intel-hud');
-    assert.equal(
-      el.classList.contains('active') && el.dataset.variant === 'minimal',
-      expected,
-    );
-    assert.equal(on('hud-minimal-active'), expected, JSON.stringify(hud));
+    for (const variant of ['minimal', 'tactical']) {
+      const expected = hud.active && hud.variant === variant;
+      assert.equal(
+        el.classList.contains('active') && el.dataset.variant === variant,
+        expected,
+      );
+      assert.equal(on(`hud-${variant}-active`), expected, JSON.stringify(hud));
+    }
   }
   unmount();
-  assert.ok(!on('hud-minimal-active'));
+  assert.ok(!on('hud-minimal-active') && !on('hud-tactical-active'));
 });
 
 test('launcher-shown is on while the first-run launcher is on the page', async (t) => {
@@ -421,8 +452,9 @@ const ROOT_CLASSES = Object.freeze({
   'loading-screen-shown': '#loading-screen:not(.hidden)',
   'has-world-timeline': '#world-timeline',
 });
-// has-omnibar and dock-has-voice are selected only together, inside a
-// :where() that adds no weight (omnibar-dock.css).
+// has-omnibar and dock-has-voice are selected together in a weightless
+// :where() (omnibar-dock.css). The Tactical layout flag also uses :where()
+// because the Context floor has no competing selector (context-dock.css).
 
 /** The compound selectors of `selector`, split at combinators and commas outside parentheses. */
 function compounds(selector) {

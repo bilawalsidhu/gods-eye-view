@@ -1247,7 +1247,7 @@ test('Bhote Koshi disable stops active playback and releases its global render h
   }
 });
 
-test('Bhote Koshi passive restores do not start off-screen playback', async () => {
+test('Bhote Koshi passive restores leave playback stopped and let the view reopen', async () => {
   const event = JSON.parse(await readFile(eventUrl, 'utf8'));
   const originalDocument = globalThis.document;
   const originalWindow = globalThis.window;
@@ -1261,8 +1261,12 @@ test('Bhote Koshi passive restores do not start off-screen playback', async () =
     clearTimeout() {},
   };
   const viewer = eventViewer();
+  let eventLoads = 0;
   const layer = createBhoteKoshiEventLayer({
-    eventLoader: async () => event,
+    eventLoader: async () => {
+      eventLoads += 1;
+      return event;
+    },
     imagerySpecFactory: async (url) => ({ url }),
     embeddedMediaFactory: () => ({ show() {}, hide() {}, pause() {}, destroy() {} }),
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
@@ -1281,6 +1285,50 @@ test('Bhote Koshi passive restores do not start off-screen playback', async () =
     assert.deepEqual(timers, []);
     assert.deepEqual(viewer._test.cameraLooks, []);
     assert.equal(layer.getPlaybackState().playing, false);
+
+    const panelStore = useBhoteKoshiPanelStore(applicationPinia());
+    assert.equal(typeof panelStore.controls.leaveView, 'function');
+    assert.ok(panelStore.visiblePanel);
+    const evidence = layer.getAnalystRecords();
+    assert.ok(evidence.length > 0);
+
+    const sceneOwner = {
+      sceneId: 'nepal',
+      shotId: 'first',
+      token: { cancelled: false },
+    };
+    layer.setSceneMediaPlayback(sceneOwner);
+    assert.equal(panelStore.controls.leaveView(), true);
+    assert.equal(panelStore.visiblePanel, null);
+    assert.equal(layer.getPlaybackState().enabled, true);
+    assert.deepEqual(layer.getAnalystRecords(), evidence);
+
+    // The director clears and renews media ownership as the same run advances.
+    layer.setSceneMediaPlayback();
+    layer.setSceneMediaPlayback({ ...sceneOwner, shotId: 'second' });
+    assert.equal(panelStore.visiblePanel, null);
+
+    layer.setSceneMediaPlayback();
+    layer.setSceneMediaPlayback({
+      ...sceneOwner,
+      token: { cancelled: false, signal: AbortSignal.abort() },
+    });
+    assert.equal(panelStore.visiblePanel, null);
+
+    layer.setSceneMediaPlayback({ ...sceneOwner, token: { cancelled: false } });
+    assert.ok(panelStore.visiblePanel);
+    assert.equal(eventLoads, 1);
+    assert.equal(layer.getPlaybackState().playing, false);
+
+    assert.equal(
+      await manager.setEnabled(layer.id, false, { origin: 'user' }),
+      true,
+    );
+    assert.equal(
+      await manager.setEnabled(layer.id, true, { origin: 'local-restore' }),
+      true,
+    );
+    assert.ok(panelStore.visiblePanel);
   } finally {
     await manager.destroyLayer(layer.id);
     globalThis.document = originalDocument;
@@ -2642,6 +2690,21 @@ test('Bhote Koshi cinematic camera stays synchronized through pause and determin
     viewer._test.canvas.dispatch('pointerdown');
     assert.equal(layer.getCinematicState().active, false);
     assert.equal(viewer._test.cameraTransforms.length, 1);
+
+    const panelStore = useBhoteKoshiPanelStore(applicationPinia());
+    const evidence = layer.getAnalystRecords();
+    assert.ok(evidence.length);
+    panel.querySelector('[data-action="cinematic"]').dispatch('click');
+    assert.equal(layer.getPlaybackState().playing, true);
+    assert.equal(layer.getCinematicState().active, true);
+    assert.equal(panelStore.controls.leaveView(), true);
+    assert.equal(panelStore.visiblePanel, null);
+    assert.equal(layer.getPlaybackState().playing, false);
+    assert.equal(layer.getCinematicState().active, false);
+    assert.equal(viewer._test.cameraTransforms.length, 2);
+    assert.equal(layer.getPlaybackState().enabled, true);
+    assert.deepEqual(layer.getAnalystRecords(), evidence);
+
     await layer.disable();
     assert.equal(viewer._test.canvas._listeners.size, 0);
   } finally {

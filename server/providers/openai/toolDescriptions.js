@@ -134,7 +134,7 @@ export const ACTION_DESCRIPTIONS = {
   },
   set_panel_open: {
     description:
-      'Visual/Visual Presets/styles/filters/map sources=pp-toggles; Scenes/saved scenes=scene-panel; Voice Settings=voice-settings; voice control/Preview=voice-preview; Provider Settings/API keys=provider-settings. Voice panels exit Cockpit directly.',
+      'Camera settings/tools=camera-settings (requires an open camera card). Street Level=street-level-panel. Open Context preserves the selected card. Contacts/show nearby requires set_context_mode nearby. Visual/Visual Presets/styles/filters/map sources=pp-toggles; Scenes/saved scenes=scene-panel; Voice Settings=voice-settings; voice control/Preview=voice-preview; Provider Settings/API keys=provider-settings. Voice panels exit Cockpit directly. radio/cctv/weather/recent-imagery open Context; space-missions-panel turns on the Space Missions layer and opens its list in Context when available.',
     $position: 1,
   },
   set_voice_inactivity_timeout: {
@@ -144,16 +144,8 @@ export const ACTION_DESCRIPTIONS = {
   },
   set_context_mode: {
     description:
-      'Enter/exit Contacts or Space Missions only when explicitly requested; opening Context alone uses set_panel_open.',
+      'Contacts/show nearby: mode=nearby clears the selected card and shows Nearby, keeping layers. Explicit Space Missions turns its layer on and shows its list; off turns it off.',
     $position: 1,
-    parameters: {
-      properties: {
-        mode: {
-          description: 'Use off to exit context mode.',
-          $position: 2,
-        },
-      },
-    },
   },
   control_cockpit: {
     description:
@@ -329,7 +321,7 @@ export const ACTION_DESCRIPTIONS = {
   },
   control_cctv: {
     description:
-      'CCTV camera operations: enable/disable the layer, select a camera by name, next/prev/nearest/focus, toggle coverage wedges / projection overlay / auto-hop, "viewshed" for color-coded per-camera coverage volumes, and "adjust" for the on-camera calibration gizmo.',
+      'CCTV camera operations: select by name; next/prev walk Context\'s Cameras list by view centre; nearest; focus flies to the open camera; toggle coverage wedges / projection overlay / auto-hop, "viewshed" for color-coded per-camera coverage volumes, and "adjust" for the on-camera calibration gizmo.',
     $position: 1,
     parameters: {
       properties: {

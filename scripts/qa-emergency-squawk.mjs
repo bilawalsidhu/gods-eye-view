@@ -27,6 +27,7 @@
  */
 
 import puppeteer from 'puppeteer';
+import { selectQaContextCard } from './qa-chrome.mjs';
 import { stubPlanespotters } from './qa-photo-stub.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -414,24 +415,22 @@ async function main() {
       tracked,
       `tracked=${tracked}`,
     );
-    // Cockpit entry is gated on the Contacts (flights) context mode.
-    await page.evaluate(() =>
-      window.__godsEyeView.styleManager._contextControls._selectContextMode(
-        'flights',
-      ),
+    // Cockpit is entered from the tracked aircraft's Context card.
+    await selectQaContextCard(page, { layerId: 'military', id: 'ae7700' });
+    const cockpitEntry =
+      '#entity-card[data-layer="military"] [data-entity-cockpit-entry]';
+    const entryShown = await page
+      .waitForSelector(cockpitEntry, { visible: true, timeout: 20000 })
+      .then(
+        () => true,
+        () => false,
+      );
+    record(
+      'HUD: the Context card offers Enter Cockpit',
+      entryShown,
+      `entry=${entryShown}`,
     );
-    await page
-      .waitForFunction(
-        () => {
-          const entry = document.getElementById('cockpit-entry');
-          return entry && !entry.hidden && !entry.disabled;
-        },
-        { timeout: 20000 },
-      )
-      .catch(() => {});
-    await page
-      .$eval('#cockpit-entry', (entry) => entry.click())
-      .catch(() => {});
+    if (entryShown) await page.click(cockpitEntry);
     const hudReady = await page
       .waitForFunction(
         () =>

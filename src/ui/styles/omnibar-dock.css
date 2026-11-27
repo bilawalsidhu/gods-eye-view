@@ -10,9 +10,11 @@ body:not(.cockpit-mode):not(.scene-playback-mode):not(.ui-clean-view):not(
   /* Clear of the attribution line under it, however many lines it wraps
      onto (--credit-line-height, src/ui/creditLineHeight.js). */
   --omnibar-credits-clear: calc(1rem + var(--credit-line-height, 28px) + 6px);
-  /* The World Timeline, and the dock and narrow corners placed from it,
-     rise over a line wrapped taller than its usual one or two lines. */
-  --omnibar-dock-bottom: max(74px, calc(var(--omnibar-credits-clear) + 2px));
+  /* The World Timeline, or the dock when it is alone, sits just above the
+     attribution line, as the docked view sits above the corner buttons; they
+     and the narrow corners placed from it rise over a line wrapped taller
+     than usual. */
+  --omnibar-dock-bottom: calc(var(--omnibar-credits-clear) + 4px);
   /* The dock sits above the World Timeline, rising by its height
      (--world-timeline-lift, world-timeline.css) as the plain dock does. */
   --omnibar-dock-raised: calc(
@@ -305,6 +307,7 @@ body:not(.mobile-shell):not(.cockpit-mode):not(.scene-playback-mode):not(
     .ui-clean-view
   ):not(.recording-mode):where(.has-omnibar.dock-has-voice *) {
   --omnibar-coordinates-bottom: max(4.25rem, var(--omnibar-credits-clear));
+  --tactical-hud-bottom: 3.375rem;
 
   #intel-hud:is([data-variant='tactical'], [data-variant='minimal'])
     :is(.hud-top-left, .hud-top-right) {
@@ -364,17 +367,29 @@ body:not(.mobile-shell):not(.cockpit-mode):not(.scene-playback-mode):not(
       text-align: right;
     }
   }
-  /* 8px above the bottom-right corner row (Power Up and the language picker:
-     32px tall, 14px up), as outside the Omnibar layout. */
-  #intel-hud[data-variant='tactical'] .hud-bottom-right {
-    bottom: 3.375rem;
+  /* Share the top edge even when the AIS readout spans several lines.
+     The row keeps 8px above Power Up and the language picker. */
+  #intel-hud[data-variant='tactical'] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-content: end;
+    align-items: start;
+    padding-block-end: var(--tactical-hud-bottom);
   }
-  /* Right to left the attribution line is under the readout, which clears
-     it however many lines it wraps onto. */
-  &:where(html[dir='rtl'] *):not(.context-docked)
-    #intel-hud[data-variant='tactical']
-    .hud-bottom-right {
-    bottom: max(3.375rem, var(--omnibar-credits-clear));
+  #intel-hud[data-variant='tactical'] :is(.hud-bottom-left, .hud-bottom-right) {
+    position: relative;
+    bottom: auto;
+    grid-area: 1 / 1;
+  }
+  #intel-hud[data-variant='tactical'] .hud-bottom-left {
+    justify-self: left;
+  }
+  #intel-hud[data-variant='tactical'] .hud-bottom-right {
+    justify-self: right;
+  }
+  /* In RTL the credit line sits under the right readout. */
+  &:where(html[dir='rtl'] *):not(.context-docked) {
+    --tactical-hud-bottom: max(3.375rem, var(--omnibar-credits-clear));
   }
   /* Narrower than the two corners and the dock between them, the corners
      rise above the dock. */
@@ -383,15 +398,16 @@ body:not(.mobile-shell):not(.cockpit-mode):not(.scene-playback-mode):not(
       calc(var(--omnibar-dock-raised) + 56px + 10px),
       var(--omnibar-credits-clear)
     );
-    #intel-hud[data-variant='tactical'] .hud-bottom-right,
-    &:where(html[dir='rtl'] *):not(.context-docked)
-      #intel-hud[data-variant='tactical']
-      .hud-bottom-right {
-      bottom: var(--omnibar-coordinates-bottom);
+    &,
+    &:where(html[dir='rtl'] *):not(.context-docked) {
+      --tactical-hud-bottom: calc(var(--omnibar-dock-raised) + 56px + 4px);
+    }
+    #intel-hud[data-variant='tactical']
+      :is(.hud-bottom-left, .hud-bottom-right) {
+      padding-block-end: 0;
     }
   }
-  #intel-hud:is([data-variant='tactical'], [data-variant='minimal'])
-    .hud-bottom-left {
+  #intel-hud[data-variant='minimal'] .hud-bottom-left {
     bottom: var(--omnibar-coordinates-bottom);
   }
   &:not(.context-docked):is(

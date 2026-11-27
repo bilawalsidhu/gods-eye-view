@@ -5,6 +5,7 @@ import { applicationServices } from './services/application.js';
 import { greatCircleKm } from './geoDistance.js';
 import {
   viewportBias,
+  recoveryCenter,
   placesNearViewRecovery,
 } from './annotations/annotationResolver.js';
 import { unavailablePlaceSearch } from './search/placeSearch.js';
@@ -310,6 +311,7 @@ export const CANCELLED_SEARCH = Object.freeze({ cancelled: true });
  * Geocode a place name through the supplied service, then fly there at a scale
  * appropriate to the request. Countries and cities use their viewport by
  * default; precise landmarks/buildings use close landmark framing.
+ * With resolveOnly, return {label, latitude, longitude} without flying.
  */
 export async function searchAndFlyTo(viewer, query, options = {}) {
   const { placeSearch = unavailablePlaceSearch, signal } = options;
@@ -318,11 +320,13 @@ export async function searchAndFlyTo(viewer, query, options = {}) {
     typeof options.beforeFly === 'function' ? options.beforeFly : null;
   const mayFly = () =>
     !signal?.aborted && (beforeFly === null || beforeFly() !== false);
+  const center = options.beforeRecover ? recoveryCenter(viewer) : undefined;
   const outcome = await placeSearch.geocode(query, {
     bias: viewportBias(viewer),
     signal,
   });
   signal?.throwIfAborted();
+  if (options.beforeRecover?.() === false) return CANCELLED_SEARCH;
   const result = outcome.place;
   let lat = result?.lat;
   let lng = result?.lng;
@@ -343,6 +347,7 @@ export async function searchAndFlyTo(viewer, query, options = {}) {
         result && !outcome.fallbackUsed ? { lat, lon: lng } : null,
         signal,
         placeSearch,
+        center,
       );
   signal?.throwIfAborted();
   if (recovered) {
@@ -352,6 +357,7 @@ export async function searchAndFlyTo(viewer, query, options = {}) {
     types = recovered.types || [];
     viewport = placesViewportToBounds(recovered.viewport) || viewport;
   } else if (!result) return null;
+  if (options.resolveOnly) return { label, latitude: lat, longitude: lng };
 
   const requestedRange = finitePositive(options.range);
   const duration = finitePositive(options.duration) || 3.0;

@@ -9,6 +9,7 @@ import { createPinia } from 'pinia';
 import { createPhotoViewer } from '../../../layers/streetLevel/photoViewer.js';
 import { subscribePhotoViewers } from '../../../layers/streetLevel/photoViewers.js';
 import { useStreetLevelPhotoStore } from '../../stores/streetLevelPhoto.js';
+import ContextView from '../ContextView.vue';
 import StreetLevelPhotoViewer from './StreetLevelPhotoViewer.vue';
 
 const PHOTOS = {
@@ -29,14 +30,14 @@ const SOURCES = {
  * The view in an app, a viewer per provider published to its store as the
  * street-level layer does, and a panel host.
  */
-function mount(t, options = {}, providerIds = ['panoramax']) {
+function mount(t, options = {}, providerIds = ['panoramax'], component = StreetLevelPhotoViewer) {
   document.body.replaceChildren();
   const wrap = document.body.appendChild(document.createElement('div'));
   wrap.className = 'sl-viewer-wrap';
   const host = wrap.appendChild(document.createElement('div'));
   host.id = 'sl-viewer';
   const pinia = createPinia();
-  const app = createApp(StreetLevelPhotoViewer).use(pinia);
+  const app = createApp(component).use(pinia);
   app.mount(document.body.appendChild(document.createElement('div')));
   const store = useStreetLevelPhotoStore(pinia);
   const renderers = [];
@@ -83,7 +84,7 @@ function mount(t, options = {}, providerIds = ['panoramax']) {
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 test('the viewer draws in its host with the markup its stylesheet reads', async (t) => {
-  const { viewer, host } = mount(t);
+  const { viewer, host } = mount(t, {}, ['panoramax'], ContextView);
   await viewer.mount(host);
   const root = host.querySelector(':scope > .sl-photo-viewer');
   assert.ok(root, 'drawn in the host');

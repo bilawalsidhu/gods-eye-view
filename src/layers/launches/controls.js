@@ -1,11 +1,20 @@
+import { missionsByTime } from '../../data/missionsByTime.js';
 import { formatNumber, t } from '../../i18n/index.js';
 
 export function createControls({ state: layerState, services, parts, source }) {
   let unsubscribeRowControls = null;
 
+  function orderedMissions() {
+    if (!layerState._enabled) return [];
+    return missionsByTime(
+      layerState._missionRosterView?.entries,
+      Date.now(),
+    ).map(({ entry }) => entry);
+  }
+
   function cycleMission(step) {
-    const entries = layerState._missionRosterView?.entries;
-    if (!layerState._enabled || !entries?.length) return;
+    const entries = orderedMissions();
+    if (!entries.length) return;
     const index = entries.findIndex(
       ({ id }) => id === layerState._selectedLaunchId,
     );
@@ -42,8 +51,8 @@ export function createControls({ state: layerState, services, parts, source }) {
     updateInterval: 300000,
 
     getRowControls() {
-      const entries = layerState._missionRosterView?.entries;
-      if (!layerState._enabled || !entries?.length) return null;
+      const entries = orderedMissions();
+      if (!entries.length) return null;
       const index = entries.findIndex(
         ({ id }) => id === layerState._selectedLaunchId,
       );
@@ -106,6 +115,7 @@ export function createControls({ state: layerState, services, parts, source }) {
     releaseCameraOwnership() {
       // Navigation takes the camera; a failed entry must not restore the old view.
       layerState._entryCameraView = null;
+      layerState._focusAfterActiveLookup = false;
       layerState._cameraReleased = true;
       parts.panel.clearMissionRosterHover();
       parts.replay.stopMissionReplay();

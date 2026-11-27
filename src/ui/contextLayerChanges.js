@@ -165,11 +165,14 @@ export function _handleContextLayerChange(change) {
     !this.cockpitView?.active &&
     change.layerId === 'radio'
   ) {
-    globalThis.dispatchEvent?.(new Event('gev:context-show-view'));
+    // Radio's stations show in Context.
     this.actions.setPanelCollapsed('global-context-panel', false, {
       explicit: true,
     });
-    this.actions.setPanelCollapsed('radio-panel', false, { explicit: true });
+    this.actions.revealPanel?.('global-context-panel');
+    globalThis.document?.dispatchEvent(
+      new CustomEvent('gev:radio-show-stations'),
+    );
   }
   finishContextLayerChange(this);
 }

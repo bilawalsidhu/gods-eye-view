@@ -1,15 +1,17 @@
 import { defineStore } from 'pinia';
 import { markRaw, shallowRef } from 'vue';
+import { createOwners } from './owners.js';
 
 /**
  * Cockpit content as its views render it. The Cockpit controller presents
  * which Cockpit surfaces are shown, the briefing card's pages, cycle toggle, regional news and local
  * conditions, the Contact card's readouts and weather toggle, the
  * instruments, the flight plan, the vision selector and the signal rows,
- * and publishes them
- * here; it keeps the controls' listeners.
+ * and publishes them here. Card actions return through the app's connected
+ * Cockpit owner.
  */
 export const useCockpitStore = defineStore('gev-cockpit', () => {
+  const { connect, act, detach } = createOwners();
   /** Which Cockpit surfaces are shown; null until the controller first syncs. */
   const presence = shallowRef(null);
 
@@ -153,6 +155,9 @@ export const useCockpitStore = defineStore('gev-cockpit', () => {
   }
 
   return {
+    connect,
+    act,
+    detach,
     presence,
     publishPresence,
     brief,

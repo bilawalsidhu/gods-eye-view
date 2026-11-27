@@ -53,7 +53,6 @@ function fixture(t) {
     signalUserCollapsed: () => false,
     scheduleLayout() {},
     getLifecycle: () => null,
-    preservePanelStateDuringClear: () => true,
   };
   const controls = new RadioControls({
     elements: {

@@ -380,6 +380,7 @@ export class LocationNavigation {
       this._publishGlobeResetting?.(false);
       this._globeResetPromise = null;
       this._cancelGlobeReset = null;
+      if (result.ok) this._noteViewCommand?.();
       resolveReset(result);
     };
     this._cancelGlobeReset = () => finish(true);

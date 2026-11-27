@@ -198,7 +198,9 @@ body:is(.loading-screen-shown *, #loading-screen:not(.hidden))
 body.recording-mode #gev-stories .gs-entry,
 body.recording-mode #gev-stories .gs-pop,
 body.ui-clean-view #gev-stories .gs-entry,
-body.ui-clean-view #gev-stories .gs-pop {
+body.ui-clean-view #gev-stories .gs-pop,
+body.cockpit-mode #gev-stories .gs-entry,
+body.cockpit-mode #gev-stories .gs-pop {
   display: none;
 }
 #gev-stories .gs-pop {

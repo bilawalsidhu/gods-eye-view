@@ -369,6 +369,8 @@ export function createLifecycle({ state, services, parts }) {
           state.rows.set(row.stableId, row);
           state.heldRows.delete(row);
           if (row.stableId === state.selectedId) state.selectedRow = row;
+          if (row.stableId === state.contextRecord?.row.stableId)
+            state.contextRecord.row = row;
         }
         // Selection owns a real observation until explicit deselection. It is
         // independent of sample/window/filter and ambient-card eligibility.
@@ -379,6 +381,9 @@ export function createLifecycle({ state, services, parts }) {
         }
         // Random samples may omit a photograph already displayed. Its bounded
         // incumbent row stays selectable until the card leaves the view/window.
+        const cardRow = state.contextRecord?.row;
+        if (cardRow && !state.rows.has(cardRow.stableId))
+          state.heldRows.add(cardRow);
         for (const row of retainedRows) {
           if (!state.rows.has(row.stableId)) state.rows.set(row.stableId, row);
         }
@@ -510,6 +515,7 @@ export function createLifecycle({ state, services, parts }) {
     initialSettle?.finish();
     initialCameraDeadline = 0;
     state.enabled = false;
+    state.contextRecord = null;
     services.clearTimer(state.cameraTimer);
     state.cameraTimer = null;
     state.request?.abort();

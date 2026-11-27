@@ -317,10 +317,22 @@ test('restores the complete standalone Satellite style after mission mode', () =
   };
   assert.deepEqual(satelliteParamsForSpaceMissions(standalone), {
     ...standalone,
-    catalog: 'dense',
     showPoints: false,
     showOrbits: false,
   });
+  assert.deepEqual(
+    satelliteParamsForSpaceMissions(standalone, { shown: true }),
+    standalone,
+    'Satellites already on keeps its dots and orbits',
+  );
+  assert.deepEqual(
+    satelliteParamsForSpaceMissions(
+      { ...standalone, showOrbits: false },
+      { shown: true },
+    ),
+    { ...standalone, showOrbits: false },
+    'and keeps orbits the person had turned off',
+  );
   assert.deepEqual(satelliteParamsAfterSpaceMissions(standalone), standalone);
   assert.deepEqual(satelliteParamsAfterSpaceMissions(null), {
     catalog: 'core',

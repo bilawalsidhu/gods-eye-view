@@ -59,13 +59,9 @@ html:lang(he) {
    own font stack. */
 html:is(:lang(ar), :lang(he))
   :is(
-    #military-awareness-panel,
-    .military-awareness-controls button,
-    .military-awareness-standby button,
     .military-awareness-compass-label,
     .military-awareness-compass-heading,
-    .military-awareness-direction-label,
-    .tr3b-toggle
+    .military-awareness-direction-label
   ) {
   font-family: var(--font-mono);
 }
@@ -127,8 +123,8 @@ html[dir='rtl']
 html[dir='rtl']
   :is(
     .cockpit-news-list li *,
-    #radio-station-name,
-    #radio-station-tags,
+    .radio-stations__now-head strong,
+    .radio-stations__name,
     .cockpit-radio-station
   ) {
   unicode-bidi: plaintext;
@@ -140,11 +136,32 @@ html[dir='rtl'] #bhote-koshi-event-panel [data-role='time'] {
   unicode-bidi: isolate;
 }
 
-/* Physical controls keep their left-to-right sense: FM seek down/up and the
-   radio dial. The worded PREV / PLAY / NEXT row follows the reading
-   direction like any other button row. */
-html[dir='rtl'] :is(.sdr-seek-row, .radio-tuner) {
+/* Physical controls keep their left-to-right sense: FM seek down/up (on the
+   SDR card and in Context's local receiver) and the radio dial. The worded
+   PREV / PLAY / NEXT row follows the reading direction like any other button
+   row. */
+html[dir='rtl'] :is(.sdr-seek-row, .radio-stations__seek, .radio-tuner) {
   direction: ltr;
+}
+
+/* A layer row's Previous and Next chips follow the reading direction, so
+   their chevrons point the other way. */
+html[dir='rtl']
+  .data-toggle-chip:is(
+    [data-chip-icon='chevron_left'],
+    [data-chip-icon='chevron_right']
+  )
+  .ui-icon {
+  transform: scaleX(-1);
+}
+
+/* The radio player's Previous and Next follow the reading direction too, so
+   their skip glyphs point the other way. */
+html[dir='rtl']
+  .radio-mini__controls
+  :is([data-chip-icon='skip_previous'], [data-chip-icon='skip_next'])
+  .ui-icon {
+  transform: scaleX(-1);
 }
 
 /* Canvas labels (installations, map cards, detections) are measured and drawn
@@ -172,8 +189,7 @@ html[dir='rtl'] .gev-anno-text {
 html[dir='rtl']
   :is(
     #bhote-koshi-event-panel [data-role='beat-index'],
-    #cockpit-brief-position,
-    [data-mission-index]
+    #cockpit-brief-position
   ) {
   direction: ltr;
   unicode-bidi: isolate;

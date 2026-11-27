@@ -15,91 +15,62 @@ const panelCss = read('src/ui/styles/street-level.css');
 const panelChrome = read('src/ui/panelChrome.js');
 const layoutController = read('src/ui/panelLayoutController.js');
 
-test('Street Level is a collapsible right-rail panel that starts collapsed', () => {
-  assert.match(
-    html,
-    /<div id="street-level-panel" class="ui-panel panel-collapsible collapsed" data-panel-id="street-level-panel">/,
-  );
-  assert.match(
-    html,
-    /<button type="button" class="[^"]*\bpanel-collapse-btn\b[^"]*"[^>]*data-collapse-target="street-level-panel"/,
-  );
-  assert.match(
-    html,
-    /<span class="ui-panel__title panel-title">STREET LEVEL<\/span>/,
-  );
-  // Provider-neutral header: no vendor mark; the inner restores its scroll.
-  assert.doesNotMatch(html, /sl-mark|mly-mark/);
-  assert.match(
-    html,
-    /<div class="street-level-panel-inner ui-scroll" data-rail-scroller>/,
-  );
-  assert.doesNotMatch(
-    html,
-    /mapillary-dock|sl-minimized|sl-3d-btn|sl-photoreal-btn/,
-  );
-});
-
-test('the panel is registered with panel chrome, cockpit entry and the right rail', () => {
-  assert.match(panelChrome, /\{ id: 'street-level-panel' \}/);
-  assert.match(
-    panelChrome,
-    /COCKPIT_ENTRY_COLLAPSE_PANEL_IDS = Object\.freeze\(\[[\s\S]*'street-level-panel'/,
-  );
-  // A right-rail panel's collapse button opens sideways (◀ / ▶).
-  assert.match(
-    read('src/ui/views/panels/StreetLevelPanel.vue'),
-    /<RailPanel id="street-level-panel"[^>]*\bsideways\b/,
-  );
-  assert.match(
-    layoutController,
-    /for \(const panel of \[[\s\S]*?this\._streetLevelPanel,[\s\S]*?\]\) \{[\s\S]*?stack\.insertBefore\(panel, globalContextPanel\)/,
-  );
-  assert.ok(css.includes('#right-context-rail > #street-level-panel'));
-});
-
-test('the key gate holds every filter, with the error line outside it', () => {
-  const start = html.indexOf('<fieldset id="sl-controls"');
-  assert.ok(start > 0);
-  const gate = html.slice(start, html.indexOf('</fieldset>', start));
-  assert.match(gate, /data-sl-pano="all"/);
-  assert.match(gate, /id="sl-since"/);
-  assert.ok(html.indexOf('id="sl-error"') < start);
-  // The chips stay outside the gate, so their key tooltip is reachable.
-  assert.match(html, /<div id="sl-provider-chips" class="sl-chips"><\/div>/);
-  assert.doesNotMatch(gate, /sl-provider-chips/);
-  assert.match(html, /id="sl-error"[^>]*role="alert"/);
-});
-
-test('each radiogroup is one tab stop, on its checked button', () => {
-  for (const [group, checked] of [
-    ['data-sl-render', 'letterbox'],
-    ['data-sl-pano', 'all'],
-  ]) {
-    const radios = [
-      ...html.matchAll(
-        new RegExp(`<button [^>]*${group}="([a-z]+)"[^>]*>`, 'g'),
-      ),
-    ];
-    assert.ok(radios.length >= 2, group);
-    for (const [tag, value] of radios)
-      assert.equal(
-        /tabindex="-1"/.test(tag),
-        value !== checked,
-        `${group}="${value}" roving tab stop`,
-      );
-  }
-});
-
-test('OPEN STREET VIEW keeps its width beside a long coverage line', () => {
-  // .scene-btn grows and shrinks (flex: 1) and loads after this stylesheet:
-  // only a more specific rule keeps the button from being squeezed.
-  assert.match(css, /\.scene-btn \{[^}]*flex: 1;/);
+test('Street Level has no panel: its photo waits in Context, its filters are its layer row', () => {
+  assert.doesNotMatch(html, /id="street-level-panel"/);
+  assert.doesNotMatch(html, /data-collapse-target="street-level-panel"/);
+  // The viewer is always in the page (a provider mounts into it), hidden in
+  // Context (out of view) until a photo's card takes it.
+  const home = html.indexOf('class="sl-viewer-home"');
+  assert.ok(home > 0, 'its hidden home');
+  assert.match(html.slice(home, home + 120), /aria-hidden="true"/);
+  assert.match(html.slice(home, home + 120), /\binert\b/);
+  // Out of view but sized, so a viewer built there has a size.
   assert.match(
     panelCss,
-    /\.sl-meta-row \.sl-nearest-btn \{\s*flex: 0 0 auto;\s*\}/,
+    /\.sl-viewer-home \{[^}]*left: -10000px;[^}]*width: 400px;/,
   );
-  assert.match(panelCss, /\.sl-meta-row \.sl-meta \{[^}]*min-width: 0;/);
+  assert.ok(html.indexOf('id="sl-viewer-root"') > home);
+  assert.ok(html.indexOf('id="sl-viewer-wrap"') > home);
+});
+
+test('no panel chrome, cockpit entry, rail icon or rail layout names the retired panel', () => {
+  assert.doesNotMatch(panelChrome, /street-level-panel/);
+  assert.doesNotMatch(read('src/ui/panelRailCatalog.js'), /street-level-panel/);
+  assert.doesNotMatch(layoutController, /_streetLevelPanel|street-level-panel/);
+  assert.ok(!css.includes('#street-level-panel'));
+  assert.ok(!css.includes('.street-level-panel-inner'));
+});
+
+test('the photo carries its source colours wherever it moves', () => {
+  assert.match(
+    panelCss,
+    /\.sl-viewer-root,\s*\.sl-viewer-wrap \{[^}]*--sl-green:/,
+  );
+});
+
+test("the row's provider chips keep their source colours", () => {
+  assert.match(
+    panelCss,
+    /\[data-layer-id='street-level'\] \.data-toggle-chip\[data-chip-color\]\.active \{[^}]*var\(--chip-color/,
+  );
+  // KartaView's purple is too dark as text on its own tint.
+  assert.match(
+    panelCss,
+    /\[data-chip-id='sl-provider-kartaview'\] \{\s*color: #8f8aff;/,
+  );
+});
+
+test('FIT / FILL is one tab stop, on its checked button', () => {
+  const radios = [
+    ...html.matchAll(/<button [^>]*data-sl-render="([a-z]+)"[^>]*>/g),
+  ];
+  assert.equal(radios.length, 2);
+  for (const [tag, value] of radios)
+    assert.equal(
+      /tabindex="-1"/.test(tag),
+      value !== 'letterbox',
+      `data-sl-render="${value}" roving tab stop`,
+    );
 });
 
 test('embed mode shows an open photo over the globe, filling the overlay', () => {

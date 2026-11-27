@@ -169,6 +169,14 @@ test('frames are read through the registered frame endpoint', async () => {
     '/api/cctv/frame/pack%2Fcamera%20%3Fx',
   );
   assert.equal(requested[0].cache, 'no-store');
+  assert.doesNotMatch(requested[0].url, /liveOnly=/);
+  await source.getFrame(camera, { liveOnly: true });
+  assert.equal(
+    new URL(requested[1].url, 'https://test.invalid').searchParams.get(
+      'liveOnly',
+    ),
+    '1',
+  );
   const failing = createCctvSource({
     fetchImpl: async () => new Response(null, { status: 502 }),
   });

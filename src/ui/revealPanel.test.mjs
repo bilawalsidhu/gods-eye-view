@@ -9,7 +9,7 @@ function reveal({ phone }) {
   const saved = globalThis.document;
   const savedMatchMedia = globalThis.matchMedia;
   globalThis.document = {
-    getElementById: (id) => (id === 'street-level-panel' ? panel : null),
+    getElementById: (id) => (id === 'global-context-panel' ? panel : null),
   };
   globalThis.matchMedia = (query) => ({
     matches: phone && query === '(max-width: 720px)',
@@ -17,7 +17,7 @@ function reveal({ phone }) {
   try {
     StyleManager.prototype.revealPanel.call(
       { _mobileShell: { setSheet: (sheet) => sheets.push(sheet) } },
-      'street-level-panel',
+      'global-context-panel',
     );
   } finally {
     globalThis.document = saved;
@@ -28,8 +28,7 @@ function reveal({ phone }) {
 
 test('revealing a panel opens its phone sheet and scrolls the panel into view', () => {
   const { sheets, scrolls } = reveal({ phone: true });
-  assert.deepEqual(sheets, ['cameras']);
-  // The panel sits below the sheet's first screen at 375×812.
+  assert.deepEqual(sheets, ['context']);
   assert.deepEqual(scrolls, [{ block: 'nearest' }]);
 });
 

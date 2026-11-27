@@ -1,3 +1,4 @@
+import { countryName } from '../data/wikidataCities.js';
 // What the Omnibar offers for a typed line, and which row Enter runs. The
 // one pipeline from text to rows: the line is normalised once
 // (normalizeLine), read once (parseOmnibar), turned into rows here, and the
@@ -8,7 +9,8 @@
 // Pure: no DOM, no stores. Tested by an input-to-outcome table in
 // src/ui/omnibarRows.test.mjs.
 
-import { msg, t, tn } from '../i18n/index.js';
+import { isAirportCountryCode } from '../data/airports.js';
+import { getLocale, msg, t, tn } from '../i18n/index.js';
 import { parseCoordinateQuery } from '../search/coordinateParser.js';
 import {
   mayBePrivate,
@@ -854,6 +856,51 @@ const placeRow = (place, shown = place) => ({
   label: t('Go to {place}', { place: titleCase(shown) }),
   hint: t('Place or coordinates'),
 });
+
+/**
+ * The airport a line is exactly the code of (IATA or ICAO), as its own row:
+ * its name, code and where it is, flying to the airport and opening its
+ * card. The code goes with the pick, so the card is that airport's.
+ * @param {{ident: string, iata: string, name: string, lat: number, lon: number, city?: string, country?: string}} airport
+ */
+function airportRow(airport) {
+  const code = airport.iata || airport.ident;
+  const where = [airport.city, countryName(airport.country, getLocale())]
+    .filter(Boolean)
+    .join(', ');
+  const named = `${airport.name} (${code})`;
+  return {
+    key: `airport:${airport.ident}`,
+    kind: 'place',
+    icon: 'local_airport',
+    place: airport.name,
+    airport: code,
+    coords: { latitude: airport.lat, longitude: airport.lon },
+    source: 'ourairports',
+    label: where ? `${named} · ${where}` : named,
+    hint: t('Airport'),
+  };
+}
+
+/**
+ * Whether an airport's own row takes Enter for the line: only a large
+ * airport whose code is typed in capitals and is not a country's code. A
+ * smaller airport ("USA" is a regional airport's code), a country code or
+ * a word typed in lower case ("sea", "man") keeps the place service's row
+ * as the default, with the airport listed after it.
+ */
+export const airportCanLead = (line) =>
+  line === line.toUpperCase() && !isAirportCountryCode(line);
+
+/** The airport the line is exactly the code of, or null. */
+const codeAirport = (line, airport) =>
+  airport &&
+  [airport.iata, airport.ident, airport.icao].some(
+    (code) => code && code.toUpperCase() === line.toUpperCase(),
+  )
+    ? airport
+    : null;
+
 /**
  * The line searched as a place only when picked: offered for a long name
  * read as a sentence, and for text that may be private ("Tverskaya 13
@@ -917,7 +964,11 @@ const guideRow = (key, guide, label, icon = 'east', flags = {}) => ({
  * it offers, and what may go to the place service.
  * @param {{layers?: Array<object>, isEntity?: (text: string) => boolean}} options
  */
-export function createOmnibar({ layers = [], isEntity = () => false } = {}) {
+export function createOmnibar({
+  layers = [],
+  isEntity = () => false,
+  entityTitle = (item) => item.title,
+} = {}) {
   const { matchLayers, matchLayersLoosely, all } = createLayerIndex(layers);
   const cache = new Map();
 
@@ -1090,15 +1141,18 @@ export function createOmnibar({ layers = [], isEntity = () => false } = {}) {
     const callsign = CALLSIGN.test(line.replace(/\s+/g, ''));
     const rows = entities(line.replace(/\s+/g, callsign ? '' : ' '), {
       limit: callsign ? 5 : 3,
-    }).map((found) => ({
-      key: `entity:${found.key}`,
-      kind: 'entity',
-      icon: found.icon,
-      identity: found.identity,
-      exact: found.title.toLowerCase() === line.toLowerCase(),
-      label: found.title,
-      hint: found.layerName,
-    }));
+    }).map((found) => {
+      const label = entityTitle(found);
+      return {
+        key: `entity:${found.key}`,
+        kind: 'entity',
+        icon: found.icon,
+        identity: found.identity,
+        exact: label.toLowerCase() === line.toLowerCase(),
+        label,
+        hint: found.layerName,
+      };
+    });
     if (!rows.length) return list;
     const place = list.findIndex((item) => item.kind === 'place');
     const exact = rows.filter((row) => row.exact);
@@ -1495,7 +1549,10 @@ export function createOmnibar({ layers = [], isEntity = () => false } = {}) {
    *   selection?: ?{title: string, layerName: string, canFollow: boolean, canCockpit: boolean},
    *   viewPlace?: ?{name: string, state?: string, country?: string},
    *   counted?: ?{count: number, what: string, placeName: string, place: object, layer: object},
+   *   airport?: ?object,
    * }} context
+   *   `airport`: the airport the line is the code of (airports.js
+   *   `findAirportByCode`). See `airportLeads` for Enter priority.
    * @returns {{rows: Array<object>, defaultIndex: number}}
    */
   function rows(typed, context = {}) {
@@ -1579,6 +1636,17 @@ export function createOmnibar({ layers = [], isEntity = () => false } = {}) {
       ]);
     }
     const list = lineRows(text, line, context);
+    const airport = codeAirport(line, context.airport);
+    if (airport) {
+      const place = list.findIndex((item) => item.kind === 'place');
+      const at =
+        airport.size === 'large' && airportCanLead(line)
+          ? 0
+          : place === -1
+            ? list.length
+            : place + 1;
+      list.splice(at, 0, airportRow(airport));
+    }
     if (!drawAsked(line)) return finish(list);
     return finish(
       [

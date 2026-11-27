@@ -25,7 +25,17 @@ export function matchesContextSearch(...parts) {
   );
 }
 
+/** Match the compact roster label, full launch and mission names, or operator. */
+export function matchesMissionSearch(entry) {
+  return matchesContextSearch(
+    entry.label,
+    entry.name,
+    entry.missionName,
+    entry.provider,
+  );
+}
+
+/** Close the field. The text is kept for the next time it opens. */
 export function closeContextSearch() {
   contextSearchOpen.value = false;
-  contextSearchText.value = '';
 }

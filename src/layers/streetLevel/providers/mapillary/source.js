@@ -9,7 +9,7 @@ import {
   SEQUENCE_IMAGES_LIMIT,
 } from './policy.js';
 
-/** English data: the Street Level panel translates it. */
+/** English data: Street Level's UI translates it. */
 const NO_ANSWER = msg('Mapillary did not answer in time — try again');
 
 /** HTTP error flagged `keyRequired`, `keyRejected` or `retryAfterSec` (429). */

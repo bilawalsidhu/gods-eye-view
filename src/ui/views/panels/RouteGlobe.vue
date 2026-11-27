@@ -16,10 +16,11 @@ const props = defineProps({
   to: { type: Object, required: true },
   /** The craft's position now. */
   at: { type: Object, default: null },
-  /** Whether the tile is the one showing; a hidden one stops drawing. */
+  shown: { type: Boolean, default: true },
+  /** Whether the visible tile is playing. */
   active: { type: Boolean, default: true },
 });
-const emit = defineEmits(['failed']);
+const emit = defineEmits(['failed', 'ready']);
 const store = useEntityCardStore();
 
 const host = ref(null);
@@ -57,9 +58,11 @@ onMounted(() => {
     failed.value = true;
     return;
   }
-  preview = previews.route(host.value, route(), { onFailed: () => (failed.value = true) });
+  preview = previews.route(host.value, route(), { onReady: () => emit('ready'), onFailed: () => (failed.value = true) });
   preview.setActive(props.active);
+  preview.setShown?.(props.shown);
 });
+watch(() => props.shown, (shown) => preview?.setShown?.(shown));
 // Watched as strings: a fresh object each card refresh would count as a
 // change every two seconds.
 watch(

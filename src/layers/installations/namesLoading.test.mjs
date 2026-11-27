@@ -67,7 +67,6 @@ for (const stale of [false, true])
       enabled: true,
       viewer: {},
       records: [],
-      googleSearchRequested: false,
     };
     const ingestion = createIngestion({
       state,

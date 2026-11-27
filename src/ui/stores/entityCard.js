@@ -1,5 +1,20 @@
 import { defineStore } from 'pinia';
 import { computed, markRaw, ref, shallowRef, triggerRef } from 'vue';
+import { layerFeedState } from '../../data/feedState.js';
+import { greatCircleKm } from '../../geoDistance.js';
+import { isAircraftLayer } from '../../data/aircraftLayerIds.js';
+import {
+  aboveInspectorHorizon,
+  createInspectorIndexCache,
+  expandInspectorBounds,
+  inspectorFootprintSpan,
+  inspectorGroundDistance,
+  inspectorPointBounds,
+  inspectorPointRecord,
+  inspectorViewScale,
+  inspectorViewTier,
+} from '../inspectorSpatialIndex.js';
+import { STREET_LEVEL_LAYER } from '../streetLevelEvents.js';
 import { shownLayerName, layerSourceText } from '../layerNames.js';
 import {
   alertsNear,
@@ -7,14 +22,40 @@ import {
   entityKind,
   formatFact,
   layerBreakdown,
-  nearbyByKind,
   nearbyForLayer,
+  layerRecordsNear,
   nearbyEntities,
+  readInspectorSnapshot,
   layerMatches,
   searchEntities,
   viewSummaryForLayer,
 } from '../../data/entityContext.js';
 import { formatDate, formatNumber, getLocale, t } from '../../i18n/index.js';
+import {
+  BASES_LAYER,
+  describePlace,
+  PLACE_LAYER,
+  placeIdentity,
+  placeKey,
+} from '../placeCard.js';
+
+const LOCAL_SCOPE_LAYERS = new Set([
+  'earthquakes',
+  'weather-cyclones',
+  'local-firms',
+  'fire-perimeters',
+  'air-quality',
+  'bikeshare',
+  'transit',
+  'rail',
+  'traffic',
+  'wildlife-sightings',
+  'shipwrecks',
+  'bhote-koshi-2026',
+  'bhote-koshi-locator',
+  'osm-places',
+]);
+export const supportsLocalScopes = (id) => LOCAL_SCOPE_LAYERS.has(id);
 
 const FACT_DATE = Object.freeze({
   day: 'numeric',
@@ -119,13 +160,29 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
   const card = shallowRef(null);
   /** True once a moving item has dropped out of its feed. */
   const lost = ref(false);
-  /** Withhold a sighting's position if the feed lost it or no longer confirms it. */
+  // Saved receiver coordinates may drive external reads only while the source is enabled.
+  function privatePositionWithheld(layerId) {
+    if (layerId !== 'local-adsb') return false;
+    void managerVersion.value;
+    void layerRevision.value;
+    const manager = dataManager();
+    return (
+      !manager?.layers?.has(layerId) || manager.isEnabled?.(layerId) !== true
+    );
+  }
+
+  /** Whether this card's position is safe to use for location-based reads. */
   const locationWithheld = computed(
     () =>
       Boolean(card.value) &&
-      ((lost.value && card.value.layerId === 'wildlife-sightings') ||
+      ((card.value.layerId === 'wildlife-sightings' &&
+        (lost.value || layerOff('wildlife-sightings'))) ||
+        privatePositionWithheld(card.value.layerId) ||
         card.value.positionUnconfirmed === true),
   );
+
+  /** Whether the card was opened from the Pinned tab (it outlives its layer). */
+  const fromPin = ref(false);
   /** Bumped on each refresh, so ages shown on the card tick. */
   const tick = ref(0);
   /**
@@ -150,27 +207,128 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
   let followWhenBack = false;
   /**
    * What the camera shows, for the panel to describe when nothing is picked:
-   * `{center: {lat, lon}, rect: {west, south, east, north}, heightM}`.
+   * `{center: {lat, lon}, rect: {west, south, east, north}, heightM,
+   * eye: {lat, lon}, corners: [{lat, lon, edge?: true}] | null, groundM, groundFootprint, pose}`.
+   * The pose also records camera orientation.
    */
   const view = shallowRef(null);
+  /** Explicit view changes that do not begin as a globe gesture. */
+  const viewCommandRevision = ref(0);
+  function noteViewCommand() {
+    viewCommandRevision.value++;
+  }
   /** Whether the last view came from a camera still moving (see setView). */
   const viewMoving = ref(false);
+  const scopeTier = shallowRef(null);
+  const indexedRevision = ref(0);
+  const selectedScopeOwner = shallowRef(null);
+  const selectedRowLayers = shallowRef(new Set());
+  const alternateScopes = ref(new Set());
+  let settledScopeKey = '';
+  function setSelectedScopeOwner(owner) {
+    selectedScopeOwner.value = owner;
+    alternateScopes.value.clear();
+    return () => {
+      if (selectedScopeOwner.value !== owner) return;
+      selectedScopeOwner.value = null;
+      selectedRowLayers.value = new Set();
+      alternateScopes.value.clear();
+      if (!readViewContextShown()) scopeIndex.suspend();
+    };
+  }
+  function scopeIsShown() {
+    return readViewContextShown() || selectedScopeOwner.value?.() === true;
+  }
+  function toggleGroupScope(id) {
+    if (alternateScopes.value.has(id)) alternateScopes.value.delete(id);
+    else alternateScopes.value.add(id);
+  }
+  function displayedScope(group) {
+    if (!group?.alternate) {
+      if (group && !group.loading) alternateScopes.value.delete(group.layerId);
+      return group;
+    }
+    return alternateScopes.value.has(group.layerId)
+      ? { ...group.alternate, alternate: group }
+      : group;
+  }
+  const scopeIndex = createInspectorIndexCache({
+    shown: () =>
+      scopeIsShown() && globalThis.document?.visibilityState !== 'hidden',
+    changed: () => indexedRevision.value++,
+  });
+  const scopedAnswers = new Map();
   const inspector = shallowRef({ shown: false, mountId: null });
+  let readInspectorVisibility;
   const inspectorRows = shallowRef([]);
+  const inspectorLastLoaded = shallowRef(new Map());
   const inspectorPulse = ref(0);
   const viewWeather = shallowRef(null);
+  /**
+   * The card an airport was opened from, for the airport card's Back: `{key,
+   * identity, title, titleWords, fromNear, viaKey, fromPin}`, where `key` is the airport card's
+   * own. One card only; it holds while that airport's card is the one shown.
+   */
+  const backTo = shallowRef(null);
   let timer = null;
 
-  function setViewContextShown(shown, mountId) {
+  function setViewContextShown(shown, mountId, readVisibility) {
+    readInspectorVisibility = mountId === null ? undefined : readVisibility;
     if (inspector.value.shown === shown && inspector.value.mountId === mountId)
       return;
     inspector.value = { shown, mountId };
+    if (!scopeIsShown()) scopeIndex.suspend();
+  }
+
+  function readViewContextShown() {
+    return inspector.value.shown && (readInspectorVisibility?.() ?? true);
   }
 
   function publishInspectorRows(rows) {
-    // A manager can reuse its array while updating the rows it contains.
     if (inspectorRows.value === rows) triggerRef(inspectorRows);
     else inspectorRows.value = rows;
+
+    // Disabled layers can clear their renderer counts. Use the last settled
+    // layer row, without asking a provider or treating it as worldwide.
+    let loaded = inspectorLastLoaded.value;
+    for (const { id, name, enabled, stats } of rows) {
+      if (
+        !enabled ||
+        stats?.loading ||
+        stats?.sourceUnavailable ||
+        stats?.status === 'unavailable'
+      )
+        continue;
+      const { count, lastUpdate: at } = stats ?? {};
+      if (
+        !Number.isFinite(count) ||
+        count < 0 ||
+        !Number.isFinite(at) ||
+        at <= 0
+      )
+        continue;
+      if (
+        count === 0 &&
+        (stats.error || stats.lastError || stats.managerRefreshError)
+      )
+        continue;
+      const known = loaded.get(id);
+      if (
+        known &&
+        (at < known.at || (at === known.at && count === known.count))
+      )
+        continue;
+      const module = layerModule(id);
+      if (
+        typeof module?.getAnalystRecords !== 'function' ||
+        module.supportsAnalystRecords === false
+      )
+        continue;
+      if (loaded === inspectorLastLoaded.value) loaded = new Map(loaded);
+      loaded.set(id, { id, name, at, count });
+    }
+    if (loaded !== inspectorLastLoaded.value)
+      inspectorLastLoaded.value = loaded;
   }
 
   function pulseInspector() {
@@ -185,20 +343,56 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
   const managerVersion = ref(0);
   /** Notifications from the current manager. */
   const layerRevision = ref(0);
+  const baseCatalogRevision = ref(0);
   let subscription = { manager: null };
+  let releaseContextRecord;
+
+  function replaceContextRecordRelease(release) {
+    releaseContextRecord?.();
+    releaseContextRecord = release;
+  }
+
+  /**
+   * The last layer a person turned on directly (Data Layers, voice, search),
+   * `{layerId, at}`: a list layer's tab shows only for that, never for a
+   * restore or a link.
+   */
+  const lastDirectOn = shallowRef(null);
 
   function onLayerChange(change) {
     if (
       change?.type === 'params' ||
+      change?.type === 'registrations' ||
       (change?.type === 'refresh' && !entityKind(change.layerId).moving) ||
       (change?.type === 'visibility' && change.enabled === false)
     ) {
       inViewLayers.delete(change.layerId);
       viewportLayers.delete(change.layerId);
+      inspectorLayers.delete(change.layerId);
+      scopeIndex.invalidate(change.layerId);
+      const previous = scopedAnswers.get(change.layerId);
+      if (change.type === 'refresh' && previous) {
+        previous.key = null;
+      } else {
+        scopedAnswers.delete(change.layerId);
+      }
       inViewSearchLayers.delete(change.layerId);
-      nearbyMemo.delete(change.layerId);
+      for (const scope of nearbyScopes) scope.cache.delete(change.layerId);
     }
+    if (!change?.layerId || change.layerId === BASES_LAYER)
+      baseCatalogRevision.value++;
     layerRevision.value++;
+    if (
+      change?.type === 'visibility' &&
+      change.enabled &&
+      (change.origin === 'user' || change.origin === 'voice')
+    )
+      lastDirectOn.value = { layerId: change.layerId, at: Date.now() };
+    else if (
+      change?.type === 'visibility' &&
+      lastDirectOn.value?.layerId === change.layerId
+    )
+      lastDirectOn.value = null;
   }
 
   function listen(manager) {
@@ -207,22 +401,56 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     const next = { manager };
     subscription = next;
     previous.off?.();
+    previous.offActivity?.();
+    lastDirectOn.value = null;
+    inspectorLastLoaded.value = new Map();
+    const selected = card.value;
+    replaceContextRecordRelease(
+      selected &&
+        manager?.layers
+          ?.get(selected.layerId)
+          ?.module?.retainContextRecord?.(selected.identity.id),
+    );
     inViewLayers.clear();
     viewportLayers.clear();
+    inspectorLayers.clear();
+    scopeIndex.retain(new Set());
+    scopedAnswers.clear();
     inViewSearchLayers.clear();
-    nearbyMemo.clear();
+    for (const scope of nearbyScopes) {
+      scope.cache.clear();
+      scope.last = null;
+    }
     inViewMemo.clear();
-    nearbyLast = null;
     try {
       next.off = manager?.subscribe?.((change) => {
         if (subscription === next) onLayerChange(change);
+      });
+      next.offActivity = manager?.subscribeActivity?.(({ type, layerId }) => {
+        if (
+          subscription !== next ||
+          type !== 'registrations' ||
+          manager.layers.has(layerId)
+        )
+          return;
+        // Removal retires all answers for this registration, even while
+        // Inspector is closed and before the id can be added again.
+        onLayerChange({ type, layerId });
+        // A disabled layer keeps its last loaded count until it is removed.
+        if (!inspectorLastLoaded.value.has(layerId)) return;
+        const loaded = new Map(inspectorLastLoaded.value);
+        loaded.delete(layerId);
+        inspectorLastLoaded.value = loaded;
       });
     } catch {
       // Read the manager even if it cannot send notifications.
     }
     // The manager can first appear during a computed read.
     queueMicrotask(() => {
-      if (subscription === next) managerVersion.value++;
+      if (subscription === next) {
+        managerVersion.value++;
+        baseCatalogRevision.value++;
+      }
     });
   }
 
@@ -243,8 +471,26 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     dataManager();
   }
 
+  /**
+   * An item's card model: a place's from the place card (it is no layer's
+   * record), anything else's from its layer.
+   */
+  const describeAny = (identity) =>
+    identity?.layerId === PLACE_LAYER
+      ? describePlace(identity)
+      : describeEntity(dataManager(), identity);
+
+  /** A fresh description of an item, without making it the card (the dock). */
+  function describe(identity) {
+    try {
+      return describeAny(identity) || null;
+    } catch {
+      return null;
+    }
+  }
+
   function read(identity) {
-    const next = describeEntity(dataManager(), identity);
+    const next = describeAny(identity);
     if (!next) return false;
     card.value = markRaw(next);
     lost.value = false;
@@ -281,7 +527,23 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
    *   readLayers) rather than being read again for each step.
    */
   function setView(next, { settled = true } = {}) {
+    if (settled) {
+      const key = next?.center
+        ? viewKey(next, next.corners) + ':' + next.groundFootprint
+        : '';
+      if (key !== settledScopeKey) alternateScopes.value.clear();
+      settledScopeKey = key;
+    }
     viewMoving.value = Boolean(next) && !settled;
+    if (!next?.center) scopeTier.value = null;
+    else if (settled || !scopeTier.value) {
+      const tier = inspectorViewTier(next, scopeTier.value);
+      if (
+        scopeTier.value?.globe !== tier.globe ||
+        scopeTier.value?.city !== tier.city
+      )
+        scopeTier.value = tier;
+    }
     view.value = next ? markRaw(next) : null;
   }
   /** Ask a flight's layer for its route, so the card can draw it. */
@@ -303,7 +565,7 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
   }
 
   const exactNumber = (n) => (Number.isFinite(n) ? n : 'x');
-  function viewKey(where) {
+  function viewKey(where, corners) {
     const rect = where.rect
       ? [where.rect.west, where.rect.south, where.rect.east, where.rect.north]
           .map(exactNumber)
@@ -312,7 +574,14 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     const eye = where.eye
       ? `${exactNumber(where.eye.lat)},${exactNumber(where.eye.lon)}`
       : '';
-    return `${exactNumber(where.center.lat)},${exactNumber(where.center.lon)},${exactNumber(where.heightM)}|${rect}|${eye}`;
+    const footprint =
+      corners
+        ?.map(
+          ({ lat, lon, edge }) =>
+            `${exactNumber(lat)},${exactNumber(lon)}${edge ? 'e' : ''}`,
+        )
+        .join('|') ?? '';
+    return `${exactNumber(where.center.lat)},${exactNumber(where.center.lon)},${exactNumber(where.heightM)}|${rect}|${eye}|${footprint}`;
   }
   /** How long a moving layer's rows are kept, from what its last read cost. */
   const movingWait = (costMs) =>
@@ -324,9 +593,9 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
   /**
    * Reads each layer that is on on its own, keeping each one's answer in
    * `cache` (per layer: `{place, options, revision, value, at, costMs}`)
-   * while its key holds: the exact place, the options and the layer's
-   * update time, count and optional records revision. A refresh from another
-   * layer never rereads it. Moving items (satellites, aircraft)
+   * while its key holds: the exact place, the options
+   * and the layer's update time, count and optional records revision. A refresh
+   * from another layer never rereads it. Moving items (satellites, aircraft)
    * are also read again once their answer expires, since satellites stamp a
    * revision only when new orbits arrive. Wildlife also ages out without a
    * feed revision. Nearby limits the adaptive wait for both cases.
@@ -365,7 +634,7 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
           );
       const same =
         kept && kept.options === options && kept.revision === revision;
-      const samePlace = kept && kept.place === place;
+      const samePlace = kept?.place === place;
       if (same && (kept.failed || kept.usedFallback)) {
         if (samePlace && now - kept.at < INSPECTOR_PULSE_MS) continue;
       } else if (same) {
@@ -405,8 +674,340 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
   /** Per layer, as readLayers keeps it. */
   const inViewLayers = new Map();
   const viewportLayers = new Map();
+  const inspectorLayers = new Map();
   const inViewSearchLayers = new Map();
   const inViewMemo = new Map();
+  function inspectorScope(where) {
+    const rect = where.rect;
+    // Whole-world bounds stand in when too few viewport corners hit Earth.
+    const wholeGround =
+      rect?.west === -180 &&
+      rect.east === 180 &&
+      rect.south === -90 &&
+      rect.north === 90;
+    return {
+      noGround: where.groundFootprint === false,
+      hemisphere: isGlobeView(where) || wholeGround,
+    };
+  }
+
+  // These sources fetch a view-sized window, so points outside the view
+  // cannot be interpreted as the nearest available results farther away.
+  const viewLoaded = new Set([
+    'ais-live-vessels',
+    'transit',
+    'rail',
+    'bikeshare',
+    'military-installations',
+    'osm-places',
+    'air-quality',
+    'gnss-integrity',
+    'traffic',
+  ]);
+  const worldBounds = { west: -180, east: 180, south: -90, north: 90 };
+
+  function inspectorGroup(id, radius, options = {}) {
+    void indexedRevision.value;
+    void layerRevision.value;
+    const version = managerVersion.value;
+    if (
+      !(options.anchor
+        ? selectedScopeOwner.value?.()
+        : readViewContextShown()) ||
+      globalThis.document?.visibilityState === 'hidden'
+    )
+      return null;
+    const where = options.where ?? view.value;
+    const tier = options.tier ?? scopeTier.value;
+    const row =
+      options.row ??
+      allLayers().find((layer) => layer.id === id && layer.enabled);
+    if (!where?.center || !tier || !row) return null;
+    const module = layerOf(id);
+    const selected = options.anchor != null;
+    const globe = !selected && tier.globe;
+    const dual =
+      !globe && supportsLocalScopes(id) && !options.query && !options.page;
+    if (dual && !row.stats?.count) {
+      const tone = layerFeedState(row.stats);
+      if (tone === 'unavailable' || row.stats?.sourceUnavailable)
+        return { layerId: id, readFailed: true, count: null, items: [] };
+      if (tone === 'loading')
+        return { layerId: id, loading: true, count: null, items: [] };
+    }
+    const project = (group) => (dual ? displayedScope(group) : group);
+    const anchor = options.anchor ?? where.center;
+    const sky = !globe && where.groundFootprint === false;
+    const overheadRange = !globe && options.overheadRange === true;
+    const nearbyFirst =
+      !dual && (overheadRange || (!globe && !sky && tier.city));
+    const center = sky ? (where.eye ?? where.center) : where.center;
+    const scale = inspectorViewScale(where);
+    const rect = where.rect ?? worldBounds;
+    const aircraft = isAircraftLayer(id);
+    const closestLimit = Math.min(20_000, Math.max(radius, scale * 3));
+    const closest =
+      !globe &&
+      (!sky || selected) &&
+      !viewLoaded.has(id) &&
+      typeof module?.getViewRecords !== 'function' &&
+      where.rect != null &&
+      inspectorFootprintSpan(rect) > 0;
+    const nearestOnly =
+      !sky && !globe && tier.city && inspectorFootprintSpan(rect) > 4 * scale;
+    const revision = JSON.stringify([
+      version,
+      row.stats?.recordsRevision,
+      row.stats?.lastUpdate,
+      row.stats?.count,
+      options.revision,
+    ]);
+    const optionsKey = JSON.stringify([
+      radius,
+      overheadRange,
+      globe,
+      sky,
+      nearbyFirst,
+      nearestOnly,
+      options.anchor,
+      options.excludeKey,
+      options.limit,
+      options.query,
+      options.page,
+      getLocale(),
+    ]);
+    const scopeKey = `${optionsKey}:${viewKey(where, where.corners)}`;
+    const key = `${revision}:${scopeKey}`;
+    const previous = scopedAnswers.get(id);
+    if (previous?.key === key) return project(previous.value);
+    const now = Date.now();
+    if (
+      viewMoving.value &&
+      previous?.key &&
+      previous.revision === revision &&
+      previous.optionsKey === optionsKey &&
+      now - previous.at <
+        (previous.costMs > COSTLY_READ_MS ? movingWait(previous.costMs) : 1000)
+    )
+      return project(previous.value);
+    const started = globalThis.performance?.now?.() ?? now;
+
+    let value;
+    const summarizePopulation =
+      typeof module?.getContextPopulation === 'function';
+    const read =
+      options.read ||
+      (() =>
+        summarizePopulation && !module.getInspectorContextPoints
+          ? { points: module.getContextPopulation() }
+          : readInspectorSnapshot(dataManager(), id));
+    const hasAreaReader =
+      typeof module?.getViewRecords === 'function' &&
+      typeof module?.getNearbyContextPoints !== 'function' &&
+      !options.read &&
+      !(globe && id === STREET_LEVEL_LAYER);
+    const source = hasAreaReader
+      ? null
+      : scopeIndex.indexFor(id, revision, read);
+    if (source?.failed) {
+      scopedAnswers.delete(id);
+      return { layerId: id, readFailed: true, count: null, items: [] };
+    }
+    if (source && !source.ready) {
+      // A replacement index builds in slices. Preserve the last settled view
+      // until it can publish rows for the same camera, range and query.
+      if (
+        previous?.scopeKey === scopeKey &&
+        previous.value &&
+        !previous.value.readFailed
+      )
+        return project(previous.value);
+      return { layerId: id, loading: true, count: null, items: [] };
+    }
+
+    try {
+      const bounds = sky || (overheadRange && !aircraft) ? [] : [rect];
+      if (dual && (!sky || selected))
+        bounds.push(inspectorPointBounds(anchor, radius));
+      if (!dual && (sky || nearbyFirst)) {
+        const origin =
+          aircraft && overheadRange ? (where.eye ?? center) : center;
+        bounds.push(inspectorPointBounds(origin, radius));
+      }
+      if (
+        aircraft &&
+        !overheadRange &&
+        !sky &&
+        !globe &&
+        (!nearbyFirst ||
+          (where.eye &&
+            (where.eye.lat !== center.lat || where.eye.lon !== center.lon)))
+      )
+        bounds.push(inspectorPointBounds(where.eye ?? center, radius));
+      const closestKm = overheadRange
+        ? (at) => greatCircleKm(center, at)
+        : closest
+          ? selected
+            ? (at) => greatCircleKm(anchor, at)
+            : inspectorGroundDistance(
+                where,
+                rect,
+                inspectorScope(where).hemisphere,
+              )
+          : null;
+      const scope = {
+        radius,
+        bounds,
+        page: options.page,
+        index: source?.index,
+        nearby: !dual && sky && !overheadRange,
+        localScopes:
+          dual && (!sky || selected)
+            ? {
+                anchor,
+                selected,
+                excludeKey: options.excludeKey,
+                noGround: sky,
+              }
+            : null,
+        overheadRange,
+        nearbyFirst,
+        collectPopulation: summarizePopulation && !globe,
+        nearestOnly,
+        isPoint: inspectorPointRecord,
+        overhead: !globe ? aboveInspectorHorizon : () => false,
+        closestLimit: overheadRange ? Infinity : closestLimit,
+        closest: closestKm,
+        closestCells:
+          closestKm && source
+            ? source.index.cellsByDistance(
+                overheadRange
+                  ? [worldBounds]
+                  : [
+                      selected
+                        ? inspectorPointBounds(anchor, closestLimit)
+                        : expandInspectorBounds(rect, closestLimit),
+                    ],
+                closestKm,
+              )
+            : null,
+        ...(source && {
+          snapshot: {
+            source: source.source,
+            points: source.index.points(bounds),
+          },
+        }),
+      };
+      const summarize = (optionsForScope) =>
+        viewSummaryForLayer(dataManager(), row, rect, center, {
+          perLayer: globe ? 3 : (options.limit ?? 3),
+          query: options.query,
+          shownLayerName,
+          breakdown: !globe,
+          includeEmpty: true,
+          includeDrawnCoverage: true,
+          hemisphere: globe || inspectorScope(where).hemisphere,
+          clipViewport: !globe,
+          heightM: where.heightM,
+          eye: where.eye,
+          corners: where.corners,
+          throwOnReadError: true,
+          inspector: optionsForScope,
+        });
+      if (globe && source && !options.query && source.index.pointOnly) {
+        for (const span of [10, 30, 100, 350, 1200]) {
+          value = summarize({
+            ...scope,
+            page: null,
+            sampleRadiusKm: span,
+            snapshot: {
+              source: source.source,
+              points: source.index.points([inspectorPointBounds(center, span)]),
+            },
+          });
+          if (
+            value.items.length >= 3 ||
+            value.items.length === source.index.count
+          )
+            break;
+        }
+        if (value.items.length < Math.min(3, source.index.count))
+          value = summarize({ ...scope, page: null });
+      } else {
+        value = summarize(scope);
+      }
+      if (globe && value) {
+        value = {
+          ...value,
+          count: source?.index.count ?? row.stats?.count ?? value.count,
+          scope: 'loaded',
+          breakdown:
+            previous?.revision === revision && previous.globe
+              ? previous.value?.breakdown
+              : layerBreakdown(dataManager(), id, {
+                  readRecords: source
+                    ? () =>
+                        Array.from(
+                          source.index.points([worldBounds]),
+                          (point) =>
+                            source.source?.recordForPoint?.(point, false) ??
+                            point,
+                        )
+                    : undefined,
+                }),
+        };
+      }
+      if (summarizePopulation && value) {
+        const withSummary = (result) => {
+          const { population, ...group } = result;
+          return {
+            ...group,
+            summary: module.getContextSummary?.({
+              population: globe ? module.getContextPopulation() : population,
+            }),
+          };
+        };
+        value = withSummary(value);
+        if (value.alternate) value.alternate = withSummary(value.alternate);
+      }
+    } catch {
+      value = { layerId: id, readFailed: true, count: null, items: [] };
+    }
+    scopedAnswers.set(id, {
+      key,
+      scopeKey,
+      optionsKey,
+      value,
+      at: now,
+      revision,
+      globe,
+      costMs: (globalThis.performance?.now?.() ?? now) - started,
+    });
+    return project(value);
+  }
+
+  function inspectorGroups(
+    ids,
+    radius,
+    { overheadIds = [], overheadRadius } = {},
+  ) {
+    const enabled = new Map(liveLayers().map((row) => [row.id, row]));
+    scopeIndex.retain(enabled);
+    for (const id of scopedAnswers.keys())
+      if (!enabled.has(id)) scopedAnswers.delete(id);
+    return ids.flatMap((id) => {
+      const row = enabled.get(id);
+      const overheadRange = overheadIds.includes(id);
+      const group =
+        row &&
+        inspectorGroup(id, overheadRange ? overheadRadius : radius, {
+          row,
+          overheadRange,
+        });
+      return group ? [group] : [];
+    });
+  }
+
   /**
    * What the loaded layers have in the current view, by layer, nearest the
    * centre first (`viewSummaryForLayer`). At globe height Context uses the visible
@@ -422,30 +1023,63 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     const dm = dataManager();
     const where = view.value;
     if (!dm || !where?.center) return [];
+    const inspectorViewport = options.viewport && options.breakdown;
+    const scope = inspectorViewport ? inspectorScope(where) : null;
+    const rows = liveLayers(dm).filter(
+      (row) => !options.excludeLayers?.has(row.id),
+    );
+    if (scope?.noGround) {
+      if (options.query) return [];
+      return rows.map(({ id }) => ({
+        layerId: id,
+        count: null,
+        items: [],
+        readFailed: true,
+      }));
+    }
     const globe = isGlobeView(where);
-    const hemisphere = globe && !options.viewport;
+    const hemisphere = inspectorViewport
+      ? scope.hemisphere
+      : globe && !options.viewport;
     const query = options.query || '';
     const limit = query
       ? (options.perLayer ?? IN_VIEW_PER_LAYER)
       : IN_VIEW_PER_LAYER;
     const visibleLayers =
       globe && options.viewport ? viewportLayers : inViewLayers;
-    const cache = query ? inViewSearchLayers : visibleLayers;
-    const rows = liveLayers(dm);
+    const cache = query
+      ? inViewSearchLayers
+      : options.breakdown
+        ? inspectorLayers
+        : visibleLayers;
     const layers = rows.map((row) => row.id).join('|');
+    const corners = inspectorViewport ? where.corners : null;
     const changed = readLayers(
       cache,
       rows,
-      viewKey(where),
-      JSON.stringify([hemisphere, query, limit, getLocale()]),
+      viewKey(where, corners),
+      JSON.stringify([
+        hemisphere,
+        query,
+        limit,
+        !!options.breakdown,
+        !!options.includeEmpty,
+        !!options.includeDrawnCoverage,
+        getLocale(),
+      ]),
       (row, onSnapshotFallback) =>
         viewSummaryForLayer(dm, row, where.rect, where.center, {
           perLayer: limit,
+          breakdown: options.breakdown,
+          includeEmpty: options.includeEmpty,
+          includeDrawnCoverage: options.includeDrawnCoverage,
           query,
           shownLayerName,
           hemisphere,
+          clipViewport: !!options.viewport,
           heightM: where.heightM,
           eye: where.eye,
+          corners,
           throwOnReadError: true,
           onSnapshotFallback,
         }),
@@ -455,7 +1089,8 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
       rows
         .map(({ id }) => {
           const cached = cache.get(id);
-          return query && hemisphere && cached?.failed
+          return (options.includeEmpty || (query && hemisphere)) &&
+            cached?.failed
             ? { layerId: id, count: null, items: [], readFailed: true }
             : cached?.value;
         })
@@ -522,21 +1157,6 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
   }
 
   /**
-   * What the loaded layers have within a radius of a point, grouped the way
-   * every card lists it: `{flights, vessels, other}` (see nearbyByKind).
-   */
-  function nearbyGroups(lat, lon, options) {
-    return nearbyByKind(
-      shell.value?.dataManager?.(),
-      { lat, lon },
-      {
-        ...options,
-        shownLayerName,
-      },
-    );
-  }
-
-  /**
    * A field layer's value at a point (wind, GNSS integrity, imagery, air
    * quality): `{value, detail?, at?}`, `{value: null, readFailed: true}` if
    * the read throws, null where it has none, or undefined for a non-field.
@@ -563,9 +1183,35 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     }
   }
 
-  /** Per layer, as readLayers keeps it. */
-  const nearbyMemo = new Map();
-  let nearbyLast = null;
+  function readLayerItem(layerId, method, id) {
+    try {
+      return layerModule(layerId)?.[method]?.(id) ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  const cameraFrame = (id) => readLayerItem('cctv', 'frameUrlForCamera', id);
+  const cameraDetails = (id) => readLayerItem('cctv', 'cameraDetails', id);
+  const satellite = (id) =>
+    readLayerItem('satellites', 'describeSatellite', id);
+
+  /** A layer's items within a radius of a point (see layerRecordsNear). */
+  function recordsNear(layerId, lat, lon, radiusKm, options) {
+    return layerRecordsNear(
+      dataManager(),
+      layerId,
+      { lat, lon },
+      radiusKm,
+      options,
+    );
+  }
+
+  // The Inspector reads satellites while an inline camera reads all nearby layers.
+  // Each keeps one latest projection per layer, independent of the other reader.
+  const nearbyCard = { cache: new Map(), last: null };
+  const nearbyFiltered = { cache: new Map(), last: null };
+  const nearbyScopes = [nearbyCard, nearbyFiltered];
   /**
    * What each layer that is on has within a radius (see nearbyForLayer),
    * remembered per layer as the in-view answer is (readLayers): the centre,
@@ -573,20 +1219,23 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
    * revision. A failed radius read has no count and no selectable items.
    * @param {number} lat
    * @param {number} lon
-   * @param {{radiusKm?: number, limit?: number, query?: string, excludeKey?: string, excludeLayers?: string[]}} [options]
+   * @param {{radiusKm?: number, limit?: number, query?: string, excludeKey?: string, excludeLayers?: string[], onlyLayers?: string[], breakdown?: boolean, overheadRange?: boolean}} [options]
    */
   function nearbyLayers(lat, lon, options = {}) {
     void managerVersion.value;
     const dm = dataManager();
     if (!dm || !Number.isFinite(lat) || !Number.isFinite(lon)) return [];
-    const { excludeLayers = [], ...asked } = options;
+    const { onlyLayers = null, excludeLayers = [], ...asked } = options;
+    const scope = onlyLayers ? nearbyFiltered : nearbyCard;
     const rows = liveLayers(dm).filter(
-      (row) => !excludeLayers.includes(row.id),
+      (row) =>
+        (!onlyLayers || onlyLayers.includes(row.id)) &&
+        !excludeLayers.includes(row.id),
     );
     const layers = rows.map((row) => row.id).join('|');
     const place = `${lat},${lon}`;
     const changed = readLayers(
-      nearbyMemo,
+      scope.cache,
       rows,
       place,
       JSON.stringify([
@@ -594,6 +1243,8 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
         asked.limit,
         asked.query || '',
         asked.excludeKey || '',
+        asked.breakdown === true,
+        asked.overheadRange === true,
         getLocale(),
       ]),
       (row, onSnapshotFallback) =>
@@ -610,19 +1261,19 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
         ),
       NEARBY_MOVING_MAX_MS,
     );
-    if (changed || nearbyLast?.layers !== layers)
-      nearbyLast = {
+    if (changed || scope.last?.layers !== layers)
+      scope.last = {
         layers,
         lists: rows
           .map(({ id }) => {
-            const cached = nearbyMemo.get(id);
+            const cached = scope.cache.get(id);
             return cached?.failed
               ? { layerId: id, count: null, items: [], readFailed: true }
               : cached?.value;
           })
           .filter(Boolean),
       };
-    return nearbyLast.lists;
+    return scope.last.lists;
   }
 
   function nearbySelected() {
@@ -631,18 +1282,43 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
 
   /** Whether a card's layer is known to the layer manager and switched off. */
   function layerOff(layerId) {
+    // Read in views: depend on the layers changing, not only on the pick.
+    void managerVersion.value;
+    void layerRevision.value;
     const dm = dataManager();
     const id = layerId;
     if (!dm?.isEnabled || !dm.layers?.has?.(id)) return false;
     return dm.isEnabled(id) === false;
   }
 
+  let openedWhileOff = false;
+
   function refresh({ forAction = false } = {}) {
     const current = card.value;
     if (!current) return;
-    // A card does not outlive its layer: turning the layer off (or clearing
-    // all layers) closes it and lets go of the camera.
-    if (layerOff(current.layerId)) return clear();
+    // Ordinary selections end when their layer is switched off. A pin or
+    // an explicitly reopened saved location keeps its last reading.
+    if (layerOff(current.layerId)) {
+      if (!openedWhileOff && !fromPin.value) return clear();
+      if (following.value === current.key) {
+        shell.value?.letGo?.(current);
+        following.value = null;
+        asked = null;
+      }
+      tick.value++;
+      return;
+    }
+    openedWhileOff = false;
+    // Places and selected coverage points keep their selected coordinates.
+    // A drawn street line is not a photo-history entry to poll for loss.
+    if (
+      current.layerId === PLACE_LAYER ||
+      (current.layerId === STREET_LEVEL_LAYER &&
+        current.identity.id.startsWith('near:'))
+    ) {
+      tick.value++;
+      return;
+    }
     // Stop polling a closed panel. Omnibar actions still need its current position.
     if (!forAction && shell.value?.isOpen && !shell.value.isOpen()) return;
     const next = describeEntity(dataManager(), current.identity);
@@ -660,7 +1336,7 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     // reading; one being followed is always in view.
     away.value = !isFollowing() && !shown(next);
     tick.value++;
-    if (wasLost) back(next);
+    if (wasLost) backInFeed(next);
   }
 
   /** Whether the camera shows the item; true when the shell cannot tell. */
@@ -673,7 +1349,7 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
    * The item is back in its feed: its layer selects it again, as the click
    * that picked it did, and an aircraft just found is followed.
    */
-  function back(current) {
+  function backInFeed(current) {
     const follows = followWhenBack;
     // A lookup still running is no longer needed: the feed has it.
     stopLocating();
@@ -707,6 +1383,8 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
       flyTo();
       return;
     }
+    // A Find it request supersedes a place pick still resolving.
+    generation.value++;
     locating?.abort();
     const controller = new AbortController();
     locating = controller;
@@ -739,7 +1417,8 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
         : now.altitudeM,
     });
     followWhenBack = canFollow();
-    shell.value?.flyTo?.(card.value);
+    // A person's Locate, as Fly to: older pending navigation is retired.
+    shell.value?.flyTo?.(card.value, { explicit: true });
   }
 
   function stopLocating() {
@@ -761,24 +1440,55 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
    * Counts card selections and clears, so a selection that was asked for
    * before a newer one can tell it came too late.
    */
-  let generation = 0;
-  const selectionGeneration = () => generation;
+  const AUTO_FOLLOW = new Set(['flights', 'military', 'satellites']);
+  const generation = ref(0);
+  const selectionGeneration = () => generation.value;
+
+  // Starting a lookup takes priority without replacing the displayed card.
+  let deferredPick = 0;
+  function claimDeferredPick() {
+    const mine = ++deferredPick;
+    return () => mine === deferredPick;
+  }
 
   /**
    * The key of the item the camera follows, if any. The shell sets it from
    * the camera's own follow, so it is never claimed before the camera does.
    */
   const following = ref(null);
+  let asked = null;
 
   /**
    * Picking an item never follows it, whatever it is: the card's Follow
    * does (src/data/clickSelect.js).
    * @param {object} identity
-   * @param {{fly?: boolean}} [options]
+   * @param {{fly?: boolean, follow?: boolean, explicit?: boolean, reveal?: boolean, fromPin?: boolean}} [options]
+   *   `follow: false` keeps the camera where it is even for an aircraft.
+   *   `explicit`: a person's click, so the flight retires older navigation
+   *   (a late search cannot take the camera back), as Fly to does.
+   *   `reveal: false` leaves Context as it is (open or collapsed).
+   *   `fromPin`: opened from the Pinned tab, so the card stays even while
+   *   its layer is off.
    */
-  function select(identity, { fly = false } = {}) {
+  function select(
+    identity,
+    {
+      fly = false,
+      follow: autoFollow = false,
+      explicit = false,
+      reveal = true,
+      fromPin: pinned = false,
+    } = {},
+  ) {
+    const previous = card.value;
     if (!read(identity)) return false;
-    generation++;
+    openedWhileOff = layerOff(identity.layerId);
+    dismissedKey = null;
+    generation.value++;
+    // Back belongs to the airport card it was made for.
+    if (backTo.value && backTo.value.key !== card.value?.key)
+      backTo.value = null;
+    fromPin.value = Boolean(pinned);
     stopLocating();
     away.value = false;
     reference =
@@ -786,22 +1496,175 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
       null;
     clearInterval(timer);
     timer = setInterval(refresh, REFRESH_MS);
-    shell.value?.openPanel?.();
+    replaceContextRecordRelease(
+      layerOf(identity.layerId)?.retainContextRecord?.(card.value.identity.id),
+    );
+    shell.value?.openPanel?.({ reveal });
+    if (identity.layerId === STREET_LEVEL_LAYER && (fly || explicit)) {
+      const street = layerOf(STREET_LEVEL_LAYER);
+      if (street?.settledPhotoId?.() === identity.id)
+        void street.openPhoto(identity.id);
+    }
     const current = card.value;
-    // An explicit pick (a row, a search) is a click on the item: its layer
-    // selects and centres it when it can, else the camera flies to it.
-    if (fly && !shell.value?.pick?.(current))
-      shell.value?.flyTo?.(current, { fromSelection: true });
+    // With its layer off (a pin), nothing moves to follow: fly to where the
+    // item was last seen instead.
+    const picked = fly && shell.value?.pick?.(current);
+    const followNow =
+      !picked &&
+      autoFollow &&
+      AUTO_FOLLOW.has(current?.layerId) &&
+      !layerOff(current.layerId) &&
+      shell.value?.canFollow?.(current, { auto: true });
+    if (followNow) {
+      // Tracking can announce the craft again; following what is already
+      // followed would loop, so it only starts once per item.
+      if (following.value !== current.key && asked !== current.key) {
+        asked = current.key;
+        shell.value?.follow?.(current);
+      }
+    } else {
+      asked = null;
+      // Flying to something that is not followed (an airport opened from a
+      // flight's card, say) lets go of what the camera followed first;
+      // kept, the follow would pull the camera back on to the old craft, or
+      // the one nearest where the flight lands.
+      if (fly && following.value && following.value !== current?.key) {
+        shell.value?.letGo?.(previous);
+        following.value = null;
+      }
+      if (fly && !picked)
+        shell.value?.flyTo?.(current, { explicit, fromSelection: true });
+    }
     requestRoute(current?.identity);
     return true;
   }
 
-  function clear() {
-    generation++;
-    // Closing the card deselects its item in its layer (the shell checks
-    // the item is still the one selected or followed).
+  /**
+   * Move a card on to the next item of the same layer (a street-level
+   * photo's next image) without counting a new pick: the selection
+   * generation, the refresh timer and Context stay as they are.
+   * @param {object} identity
+   * @returns {boolean} Whether the card moved.
+   */
+  function advance(identity) {
+    if (!card.value || card.value.layerId !== identity?.layerId) return false;
+    if (!read(identity)) return false;
+    away.value = false;
+    reference =
+      layerOf(identity.layerId)?.referenceOf?.(card.value?.identity?.id) ??
+      null;
+    return true;
+  }
+
+  /**
+   * Open an item from a list (nearby, pinned): its card, followed where it
+   * can be, flown to otherwise. A camera is also made the active one, so its
+   * feed shows on the card.
+   * @param {object} identity
+   * @param {{fromPin?: boolean, follow?: boolean}} [options] `fromPin`:
+   *   opened from the Pinned tab, so the card stays even while its layer is
+   *   off. `follow: false` keeps the camera where it is even for an aircraft.
+   */
+  function open(identity, { fromPin: pinned = false, follow = true } = {}) {
+    if (identity?.layerId === STREET_LEVEL_LAYER) {
+      const replacement = shell.value?.replaceDockedPhoto?.(identity, {
+        fromPin: pinned,
+      });
+      // A dock can handle the request or decline it. Only an inapplicable
+      // dock leaves the pick to the ordinary card route.
+      if (replacement !== undefined) return replacement;
+    }
+    if (identity?.layerId === 'cctv' && identity.id) {
+      // The card first, so the layer's notice of the pick finds it already
+      // showing. The bridge then only brings Context forward. A
+      // camera whose layer is off is not made active: that would wake the
+      // layer's projection while it is off.
+      const previous = card.value;
+      if (!select(identity, { fromPin: pinned })) return false;
+      const live = !layerOff('cctv');
+      if (live && previous?.key && following.value === previous.key) {
+        shell.value?.letGo?.(previous);
+        following.value = null;
+      }
+      if (live)
+        try {
+          dataManager()
+            ?.layers?.get?.('cctv')
+            ?.module?.selectCamera?.(identity.id);
+        } catch {
+          // The card still opens; the feed shows once the camera is picked.
+        }
+      // An off-layer pin keeps its saved framing and never wakes the camera.
+      if (live || pinned) shell.value?.flyTo?.(card.value, { explicit: true });
+      return true;
+    }
+    return select(identity, {
+      fly: true,
+      follow,
+      explicit: true,
+      fromPin: pinned,
+    });
+  }
+
+  /**
+   * Open an airport's card (the bundled pack's airport), as a search for its
+   * code does, flying there. The card it was opened from is kept for Back.
+   * @param {object} airport
+   * @returns {boolean} Whether the card opened.
+   */
+  function openAirport(airport, { fromNear = false, viaKey = null } = {}) {
+    if (!airport) return false;
+    const identity = placeIdentity({ airport });
+    const key = placeKey(identity);
+    const from = card.value;
+    const wasFromPin = fromPin.value;
+    if (!open(identity)) return false;
+    // Its data is OurAirports': credited wherever its card opens from.
+    shell.value?.creditAirports?.();
+    // The same airport again keeps its Back.
+    if (from?.key === key) return true;
+    backTo.value = from
+      ? markRaw({
+          key,
+          identity: from.identity,
+          fromNear,
+          viaKey,
+          title: from.title || '',
+          titleWords: from.titleWords || null,
+          fromPin: wasFromPin,
+        })
+      : null;
+    return true;
+  }
+
+  /** Reopen the card an airport was opened from (see openAirport). */
+  function back() {
+    const to = backTo.value;
+    backTo.value = null;
+    if (!to || card.value?.key !== to.key) return false;
+    // Back shows the card again and flies to it; following an aircraft
+    // again is the reader's Follow, not Back's.
+    return open(to.identity, { fromPin: to.fromPin, follow: false });
+  }
+
+  /** The key of the card last closed with its × button, until a pick. */
+  let dismissedKey = null;
+  /** Whether `key` was the card last closed with its × button. */
+  const wasDismissed = (key) => Boolean(key) && key === dismissedKey;
+
+  /**
+   * @param {{dismiss?: boolean}} [options] `dismiss`: the card's × button
+   *   was activated.
+   */
+  function clear({ dismiss = false } = {}) {
+    dismissedKey = dismiss ? (card.value?.key ?? null) : null;
+    replaceContextRecordRelease();
+    generation.value++;
+    backTo.value = null;
+    fromPin.value = false;
     if (card.value) shell.value?.letGo?.(card.value);
     following.value = null;
+    asked = null;
     clearInterval(timer);
     timer = null;
     card.value = null;
@@ -816,22 +1679,35 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     if (card.value?.layerId === 'cctv') refresh({ forAction: true });
     return card.value;
   }
-  const flyTo = () => currentActionCard() && shell.value?.flyTo?.(card.value);
+  function flyTo() {
+    const current = card.value;
+    const target =
+      current?.layerId === 'cctv' && layerOff(current.layerId)
+        ? current
+        : currentActionCard();
+    if (!target || !shell.value?.flyTo) return;
+    noteViewCommand();
+    return shell.value.flyTo(target, { explicit: true });
+  }
+  /** Fly back to a pinned view: the camera as it was (see setView's pose). */
+  const flyToPose = (pose) => shell.value?.flyToPose?.(pose);
   const follow = () => {
     if (!card.value) return;
     shell.value?.follow?.(card.value);
   };
   const isFollowing = () =>
     Boolean(card.value && following.value === card.value.key);
-  const ask = () => currentActionCard() && shell.value?.ask?.(card.value);
-  /** Reads the shell's regional brief for the selected card's weather. */
+  const ask = (title) =>
+    currentActionCard() &&
+    shell.value?.ask?.(card.value, title || card.value.title);
+  /** The regional brief (weather, local news) for a spot, from the shell. */
   const readBrief = (lat, lon, options) =>
     shell.value?.regionalBrief
       ? shell.value.regionalBrief(lat, lon, options)
       : Promise.resolve(null);
   /**
-   * The spot-weather payload ({status, retrievedAt, coordinates, weather}).
-   * The regional brief stands in when the shell has no weather service.
+   * A spot's weather alone, `{weather}`, without the brief's place lookup
+   * and news search; the brief stands in where the shell has no weather.
    */
   const readWeather = (lat, lon, options) =>
     shell.value?.spotWeather
@@ -853,51 +1729,81 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     card,
     lost,
     locationWithheld,
+    privatePositionWithheld,
     tick,
     away,
     finding,
     located,
     locate,
+    cancelPendingLocate() {
+      if (locating) stopLocating();
+    },
     connect,
     syncDataManager,
     select,
+    advance,
+    wasDismissed,
     selectionGeneration,
+    claimDeferredPick,
+    open,
+    openAirport,
+    backTo,
+    back,
     clear,
     refresh,
     flyTo,
     follow,
     ask,
     readBrief,
+    readWeather,
     previews,
     canFollow,
     isFollowing,
     following,
     search,
-    nearbyGroups,
+    nearbyLayers,
+    recordsNear,
+    satellite,
+    cameraFrame,
+    cameraDetails,
+    layerModule,
     nearbySelected,
     alertsAt,
     liveLayers,
     allLayers,
     managerVersion,
     layerRevision,
-    layerModule,
+    baseCatalogRevision,
+    lastDirectOn,
     valueAt,
-    nearbyLayers,
-    readWeather,
     breakdown,
     view,
     viewMoving,
+    scopeTier,
+    inspectorGroup,
+    inspectorGroups,
+    viewCommandRevision,
+    noteViewCommand,
     setView,
     inspector,
     inspectorRows,
+    inspectorLastLoaded,
     inspectorPulse,
     viewWeather,
     setViewContextShown,
-    publishInspectorRows,
+    readViewContextShown,
+    setSelectedScopeOwner,
+    selectedRowLayers,
+    toggleGroupScope,
     pulseInspector,
+    publishInspectorRows,
     publishViewWeather,
+    flyToPose,
     matchesIn,
     sourceOf,
+    describe,
+    layerOff,
+    fromPin,
     canCockpit,
     cockpit,
     inView,

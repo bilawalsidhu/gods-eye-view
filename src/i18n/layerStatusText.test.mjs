@@ -11,7 +11,7 @@ const SITES = [
   ['../layers/bikeshare/controls.js', 'GBFS fetch error'],
   [
     '../layers/streetLevel/viewerHost.js',
-    'Open the Street Level panel to view imagery',
+    'Open Context to view street-level imagery',
   ],
   ['../layers/streetLevel/viewerHost.js', 'Image could not be opened'],
   ['../layers/satellites/ingestion.js', 'CelesTrak unreachable'],

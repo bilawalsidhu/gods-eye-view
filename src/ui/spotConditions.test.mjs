@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { hazardsNear, weatherLook } from './spotConditions.js';
+import { hazardReadNear, weatherLook } from './spotConditions.js';
 
 test('an omitted weather code stays unknown while WMO zero means clear', () => {
   assert.equal(weatherLook(null).label, 'Conditions unknown');
@@ -34,8 +34,8 @@ test('a wildfire is placed at its card anchor, not its first ring', async (t) =>
         })
       : new Response('down', { status: 503 }),
   );
-  const near = await hazardsNear(35.1, -107.9, 30, { force: true });
-  const fires = near.filter(({ kind }) => kind === 'wildfire');
+  const { rows } = await hazardReadNear(35.1, -107.9, 30, { force: true });
+  const fires = rows.filter(({ kind }) => kind === 'wildfire');
   assert.equal(fires.length, 1);
   assert.equal(fires[0].title, 'Fixture Fire');
   assert.ok(fires[0].distanceKm < 5, `${fires[0].distanceKm} km`);

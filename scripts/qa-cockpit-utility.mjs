@@ -1,5 +1,11 @@
 #!/usr/bin/env node
 /** Focused rendered proof for adaptive Cockpit Display/Radio layout. */
+import { trafficFixtureResponse } from './traffic-fixtures.mjs';
+import {
+  COCKPIT_UTILITY_MIN_TOP_PX,
+  COCKPIT_UTILITY_MIN_TOP_RATIO,
+  COCKPIT_UTILITY_SIGNAL_GAP_PX,
+} from '../src/ui/cockpitPresentation.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -7,7 +13,7 @@ import puppeteer from 'puppeteer';
 import { stubPlanespotters } from './qa-photo-stub.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const shotsDir = path.join(repoRoot, 'qa-shots', 'cockpit-utility');
+const shotsDir = process.env.QA_ARTIFACTS_DIR || path.join(repoRoot, 'qa-shots', 'cockpit-utility');
 const appUrl = process.env.QA_BASE_URL || 'http://localhost:4173';
 const headful = process.argv.includes('--headful');
 fs.mkdirSync(shotsDir, { recursive: true });
@@ -26,7 +32,7 @@ const browser = await puppeteer.launch({
     ...(process.platform === 'darwin'
       ? ['--use-angle=metal', '--enable-gpu']
       : ['--use-gl=angle', '--use-angle=swiftshader']),
-    '--no-sandbox',
+    ...(process.platform === 'darwin' ? [] : ['--no-sandbox']),
   ],
 });
 const page = await browser.newPage();
@@ -58,6 +64,27 @@ const check = (name, passed, detail) => {
   console.log(`  [${passed ? 'PASS' : 'FAIL'}] ${name}${detail ? ` — ${detail}` : ''}`);
   if (!passed) failures.push(name);
 };
+
+// Open Cockpit from the tracked aircraft's Context card.
+async function openTrackedCard(target) {
+  await target.evaluate(async () => {
+    const { dataManager, styleManager } = window.__godsEyeView;
+    const info = dataManager.layers.get('flights').module.getTrackedInfo();
+    if (!info?.icao24) throw new Error('No tracked aircraft for the Context entry');
+    const [{ applicationPinia }, { useEntityCardStore }] = await Promise.all([
+      import('/src/ui/vueRuntime.js'), import('/src/ui/stores/entityCard.js'),
+    ]);
+    const cards = useEntityCardStore(applicationPinia());
+    cards.select({ layerId: 'flights', id: info.icao24 }, { follow: false });
+    styleManager.setPanelCollapsed('global-context-panel', false, { persist: false, syncShare: false });
+  });
+  await target.waitForSelector('#entity-card[data-layer="flights"] [data-entity-cockpit-entry]', { visible: true, timeout: 10_000 });
+}
+
+async function enterFromCard(target) {
+  await openTrackedCard(target);
+  await target.click('#entity-card[data-layer="flights"] [data-entity-cockpit-entry]');
+}
 
 try {
   await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
@@ -93,6 +120,12 @@ try {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({ results: [] }),
+      });
+      return;
+    }
+    if (url.hostname === 'terrain.reearth.land') {
+      request.respond(trafficFixtureResponse(request)).catch((error) => {
+        consoleErrors.push(`Terrain fixture: ${error.message}`);
       });
       return;
     }
@@ -173,6 +206,13 @@ try {
     () => document.getElementById('loading-screen')?.classList.contains('hidden'),
     { timeout: 60_000 },
   );
+  const renderer = await page.evaluate(() => {
+    const gl = window.__godsEyeView.viewer.scene.context._gl;
+    const debug = gl.getExtension('WEBGL_debug_renderer_info');
+    return { name: gl.getParameter(debug ? debug.UNMASKED_RENDERER_WEBGL : gl.RENDERER), lost: gl.isContextLost() };
+  });
+  check('native GPU is live for the rendered Cockpit checks',
+    !renderer.lost && (process.platform !== 'darwin' || !/swiftshader|llvmpipe|software/i.test(renderer.name)), JSON.stringify(renderer));
   await page.waitForFunction(() => (
     typeof window.__gevQaRegisterLayer === 'function'
     && typeof window.__gevQaUnregisterLayer === 'function'
@@ -194,7 +234,7 @@ try {
   const contactMissionHandoff = await page.evaluate(async () => {
     const { styleManager, dataManager } = window.__godsEyeView;
     // Launch Library is not contacted: the layer's own work is stubbed so the
-    // check covers only how Space Missions sits beside Context.
+    // check covers how layer toggles interact with Context.
     const stubMissions = (rocketEntry) => {
       const original = {
         initialized: rocketEntry.initialized,
@@ -224,24 +264,28 @@ try {
     const restoreMissions = stubMissions(dataManager.layers.get('rocket-launches'));
     try {
       if (styleManager._contextControls._contextMode) await styleManager._contextControls._selectContextMode(null);
-      const contactsResult = await styleManager._contextControls._selectContextMode('flights');
+      const flightsResult = await dataManager.setEnabled('flights', true, { origin: 'user' });
       const missionResult = await dataManager.setEnabled('rocket-launches', true, { origin: 'user' });
       await styleManager._waitForContextLayerSettlement();
       const together = {
-        contactsResult,
+        flightsResult,
         missionResult,
         mode: styleManager._contextControls._contextMode,
         missionsEnabled: dataManager.isEnabled('rocket-launches'),
+        flightsOn: dataManager.isEffectivelyEnabled('flights'),
+        snapshot: Boolean(styleManager._contextControls._contextSessionSnapshot),
         toasts: [...toasts],
       };
       const missionOff = await dataManager.setEnabled('rocket-launches', false, { origin: 'user' });
       await styleManager._waitForContextLayerSettlement();
       const modeAfterMissions = styleManager._contextControls._contextMode;
-      const exitResult = await styleManager._contextControls._selectContextMode(null);
+      const flightsOnAfter = dataManager.isEffectivelyEnabled('flights');
+      const exitResult = await dataManager.setEnabled('flights', false, { origin: 'user' });
       return {
         ...together,
         missionOff,
         modeAfterMissions,
+        flightsOnAfter,
         exitResult,
         modeAfterExit: styleManager._contextControls._contextMode,
       };
@@ -251,14 +295,17 @@ try {
     }
   });
   check(
-    'Space Missions runs beside Contacts, and switching it off leaves Contacts on',
-    contactMissionHandoff.contactsResult === true
+    'Space Missions keeps Flights on without opening a Contacts session',
+    contactMissionHandoff.flightsResult === true
       && contactMissionHandoff.missionResult === true
-      && contactMissionHandoff.mode === 'flights'
+      && contactMissionHandoff.mode === null
+      && !contactMissionHandoff.snapshot
+      && contactMissionHandoff.flightsOn
       && contactMissionHandoff.missionsEnabled
       && contactMissionHandoff.toasts?.length === 0
       && contactMissionHandoff.missionOff === true
-      && contactMissionHandoff.modeAfterMissions === 'flights'
+      && contactMissionHandoff.modeAfterMissions === null
+      && contactMissionHandoff.flightsOnAfter
       && contactMissionHandoff.exitResult === true
       && contactMissionHandoff.modeAfterExit === null,
     JSON.stringify(contactMissionHandoff),
@@ -385,7 +432,7 @@ try {
       return { exercised: false, reason: 'Space Missions was not in a clean OFF state' };
     }
     // Launch Library is not contacted: the layer's own work is stubbed so the
-    // check covers only how Space Missions sits beside Context.
+    // check covers how layer toggles interact with Context.
     const stubMissions = (rocketEntry) => {
       const original = {
         initialized: rocketEntry.initialized,
@@ -453,7 +500,7 @@ try {
     }
   });
   check(
-    'Space Missions is an ordinary layer: no Context session, no isolation, from any origin',
+    'Space Missions preserves sibling layers for user, voice and programmatic toggles',
     ordinaryMissionLayer.exercised
       && Object.values(ordinaryMissionLayer.results || {}).length === 3
       && Object.values(ordinaryMissionLayer.results).every((entry) =>
@@ -488,15 +535,19 @@ try {
   });
   check('real airborne flight is tracked before Contacts activation', tracked.tracked, JSON.stringify(tracked));
   await page.waitForFunction(
-    () => Boolean(window.__godsEyeView.viewer.trackedEntity?.position),
+    async () => {
+      const { followedOf } = await import('/src/data/followed.js');
+      return Boolean(followedOf(window.__godsEyeView.viewer)?.entity?.position);
+    },
     { timeout: 10_000 },
   );
   const preselectedContactAdoption = await page.evaluate(async () => {
+    const { followedOf } = await import('/src/data/followed.js');
     const { styleManager, dataManager, viewer } = window.__godsEyeView;
     const flights = dataManager.layers.get('flights')?.module;
     await dataManager.setEnabled('military', true, { origin: 'programmatic' });
     const before = flights?.getTrackedInfo?.() || null;
-    const trackedEntityBefore = viewer.trackedEntity;
+    const followedBefore = followedOf(viewer);
     const blockerId = '__qa_slow_contacts_sibling__';
     const gateTimeoutMs = 5_000;
     // The transition settles behind real dependency enables (network-bound), so its
@@ -554,12 +605,11 @@ try {
         };
       }
       styleManager.cockpitView.syncEntry();
-      const entry = document.getElementById('cockpit-entry');
       const pending = {
         changing: styleManager._contextControls._contextModeChanging,
-        entryHidden: Boolean(entry?.hidden),
+        entryUnavailable: styleManager.cockpitView.presence.entryAvailable === false,
         enterResult: styleManager.cockpitView.enter(),
-        trackerPreserved: viewer.trackedEntity === trackedEntityBefore,
+        trackerPreserved: Boolean(followedBefore) && followedOf(viewer) === followedBefore,
       };
       releaseDisable();
       const settleStartedAt = performance.now();
@@ -583,9 +633,10 @@ try {
         } : null,
         navigation: snapshot?.navigation || null,
         afterId: trackedInfo?.icao24 || null,
-        viewerTrackedId: window.__godsEyeView.entityRecords.read(viewer.trackedEntity)?.trackedId || null,
-        contextVisible: !document.getElementById('military-awareness-panel')?.hidden,
-        entryAvailableAfterSettlement: Boolean(entry && !entry.hidden),
+        viewerTrackedId: followedOf(viewer)?.key || null,
+        awarenessEnabled: dataManager.isEffectivelyEnabled('military-awareness'),
+        retiredPanelAbsent: document.getElementById('military-awareness-panel') === null,
+        entryAvailableAfterSettlement: styleManager.cockpitView.presence.entryAvailable === true,
         blockerStillRegistered: dataManager.layers.has(blockerId),
         blockerEffectivelyOff: !dataManager.isEffectivelyEnabled(blockerId),
       };
@@ -606,7 +657,7 @@ try {
       && preselectedContactAdoption.transitionSettled
       && preselectedContactAdoption.beforeId
       && preselectedContactAdoption.pending?.changing
-      && preselectedContactAdoption.pending.entryHidden
+      && preselectedContactAdoption.pending.entryUnavailable
       && preselectedContactAdoption.pending.enterResult === false
       && preselectedContactAdoption.pending.trackerPreserved
       && preselectedContactAdoption.transitionResult === true
@@ -619,31 +670,16 @@ try {
         === `flights:${String(preselectedContactAdoption.beforeId).toLowerCase()}`
       && preselectedContactAdoption.navigation?.canPrevious === false
       && typeof preselectedContactAdoption.navigation?.canNext === 'boolean'
-      && preselectedContactAdoption.contextVisible
+      && preselectedContactAdoption.awarenessEnabled
+      && preselectedContactAdoption.retiredPanelAbsent
       && preselectedContactAdoption.entryAvailableAfterSettlement
       && preselectedContactAdoption.blockerStillRegistered
       && preselectedContactAdoption.blockerEffectivelyOff,
     JSON.stringify(preselectedContactAdoption),
   );
-  // The slow thing in the field is the FETCH, so that is what this holds — the
-  // REAL militaryInstallations module runs throughout and reports its own
-  // getStats(). An earlier cut stubbed `enable` and `getStats` instead. Both
-  // were wrong, and provably so:
-  //   * `enable()` is SYNCHRONOUS in production (the module's own comment says
-  //     "DataLayerManager invokes update() immediately after enable(), which
-  //     owns the first fetch"), so gating it blocked the Contacts activation
-  //     that brings the PANEL up. The scenario then sampled markup an earlier
-  //     scenario had left behind, which is why it read a stale `0`.
-  //   * The panel does not observe a `getStats` stub in this scenario at all —
-  //     verified by making the stub report an ANSWERED source mid-window and
-  //     watching every assertion stay green. A check written against a stub the
-  //     panel cannot see has no teeth, which is the same defect this scenario
-  //     was created to fix.
-  // Holding the network reproduces the field exactly and the panel tracks it,
-  // which is what gives these assertions teeth.
-  // Earlier scenarios have already loaded installations. Use a fresh page so
-  // a legitimate retained snapshot cannot satisfy or invalidate a FIRST-fetch
-  // assertion when camera motion supersedes the manager's initial update.
+  // Hold the real installations fetch on a fresh page. Read its authoritative
+  // awareness snapshot while entry is pending, then check the rendered Cockpit
+  // cohort once activation settles.
   const readinessPage = await browser.newPage();
   await stubPlanespotters(readinessPage);
   let deferredInstallationReadiness;
@@ -692,12 +728,11 @@ try {
         ),
         new Promise((resolve) => { setTimeout(() => resolve({ settled: false, value: null }), ms); }),
       ]);
-      const row = () => [...document.querySelectorAll('#military-awareness-panel .military-awareness-row')]
-        .find((candidate) => candidate.querySelector('strong')?.textContent?.trim() === 'Mapped installations');
-      const installationCount = () => row()?.querySelector('b')?.textContent?.trim() || null;
-      /** The REASON text, which is what tracks availability: the cohort engine
-       *  answers 'feed unavailable' / 'feed stale' when it refuses to count. */
-      const installationReason = () => row()?.querySelector('small')?.textContent?.trim() || null;
+      // Read the pending feed from the awareness snapshot before Cockpit entry.
+      const row = () => dataManager.layers.get('military-awareness').module
+        .getContextSnapshot()?.cohorts?.find((cohort) => cohort.id === 'military-installations');
+      const installationCount = () => row() ? String(row().count ?? '?') : null;
+      const installationReason = () => row()?.reason || '';
 
       const realFetch = window.fetch;
       let released = false;
@@ -746,10 +781,8 @@ try {
         };
 
         transition = styleManager._contextControls._selectContextMode('flights');
-        // The activation promise stays PENDING while the first fetch is out, and
-        // the Contacts panel comes up behind it — that is what a deferred
-        // dependency is for. Verified live on :4272: the panel renders and reads
-        // a non-numeric count for the whole of a 17 s first fetch.
+        // The activation promise stays pending while the first fetch is out.
+        // Its snapshot must identify that missing answer without inventing 0.
         const started = await settleWithin((async () => {
           for (let i = 0; i < 100 && !(requestSeen && row()); i++) {
             await new Promise((resolve) => setTimeout(resolve, 100));
@@ -761,7 +794,7 @@ try {
         const pendingCount = installationCount();
         const pendingReason = installationReason();
 
-        // THE WINDOW: first request outstanding, panel live. Sampled more than
+        // THE WINDOW: first request outstanding, snapshot live. Sampled more than
         // once — the field report was a panel sitting on a fabricated 0 for ~13 s,
         // so a single lucky read is not evidence.
         const fetchingCounts = [];
@@ -777,11 +810,11 @@ try {
         styleManager.cockpitView.syncEntry();
         // Measured AFTER activation settles, not during it. The sibling pin above
         // ("Contacts blocks early Cockpit entry, then adopts the already tracked
-        // flight after settlement") establishes that Contacts HIDES the entry
+        // flight after settlement") establishes that Contacts blocks entry
         // while the transition is changing — that is the designed contract, and
         // asserting the opposite (as this scenario used to) could never pass.
         // What matters is that a slow dependency does not lock it away for good.
-        const cockpitAvailableAfterActivation = !document.getElementById('cockpit-entry')?.hidden;
+        const cockpitAvailableAfterActivation = styleManager.cockpitView.presence.entryAvailable === true;
         const installed = await settleWithin((async () => {
           while (dataManager.getLayerLifecycleState('military-installations')?.lifecycleState !== 'enabled') {
             await new Promise((resolve) => setTimeout(resolve, 50));
@@ -821,16 +854,17 @@ try {
         }
       }
     });
+    await enterFromCard(readinessPage);
+    await readinessPage.waitForSelector('#cockpit-context:not([hidden]) [data-context-cohort="military-installations"]', { visible: true, timeout: 10_000 });
+    deferredInstallationReadiness.renderedCount = await readinessPage.$eval(
+      '[data-context-cohort="military-installations"] strong', (node) => node.textContent.trim(),
+    );
   } finally {
     await readinessPage.close();
     await page.bringToFront();
   }
-  // The panel has two truthful ways to say "nothing has answered yet" — the
-  // cohort count renders `?`, and an UNKNOWN relationship renders as that word.
-  // Which one is on screen depends on which panel surface is mounted, and the
-  // property under test is not the token: it is that the operator is NEVER
-  // shown a fabricated NUMBER for a source that has not answered. So these
-  // assert numeric-vs-not, which is exactly the field report.
+  // Missing counts remain unknown until a provider answers. The rendered
+  // Cockpit consumer must agree with the settled snapshot.
   const readsUnknown = (value) => typeof value === 'string' && value.length > 0 && !/^\d/.test(value);
   const readsNumber = (value) => typeof value === 'string' && /^\d+$/.test(value);
   // Loading has explicit copy since the installations reliability update.
@@ -839,7 +873,7 @@ try {
     /unavailable|stale|Mapped sites not loaded|Fetching mapped sites…/i.test(String(value))
   );
   check(
-    'mapped installations load behind Contacts without a false all-clear or a locked Cockpit',
+    'mapped installations load during Contacts activation without a false all-clear or a locked Cockpit',
     deferredInstallationReadiness.exercised
       && deferredInstallationReadiness.started?.settled
       && deferredInstallationReadiness.contacts?.settled
@@ -852,7 +886,7 @@ try {
     JSON.stringify(deferredInstallationReadiness),
   );
   check(
-    'installations still fetching behind a live Contacts panel never reads a number',
+    'the awareness snapshot never reports a numeric count while installations are still fetching',
     deferredInstallationReadiness.exercised
       && deferredInstallationReadiness.pendingLifecycle?.lifecycleState === 'enabling'
       && Array.isArray(deferredInstallationReadiness.fetchingCounts)
@@ -871,6 +905,7 @@ try {
     deferredInstallationReadiness.exercised
       && deferredInstallationReadiness.answered?.settled
       && readsNumber(deferredInstallationReadiness.settledCount)
+      && deferredInstallationReadiness.renderedCount === deferredInstallationReadiness.settledCount
       && !readsPendingReason(deferredInstallationReadiness.settledReason),
     JSON.stringify({
       answered: deferredInstallationReadiness.answered,
@@ -878,13 +913,14 @@ try {
     }),
   );
   const locationContactHandoff = await page.evaluate(async () => {
+    const { followedOf } = await import('/src/data/followed.js');
     const { styleManager, dataManager, viewer } = window.__godsEyeView;
     const awareness = dataManager.layers.get('military-awareness')?.module;
     const before = awareness?.getContextSnapshot?.()?.subject || null;
     styleManager._locationControls.chooseCity('nyc');
     await new Promise((resolve) => setTimeout(resolve, 3600));
     const after = awareness?.getContextSnapshot?.()?.subject || null;
-    const released = !viewer.trackedEntity;
+    const released = !followedOf(viewer);
     const refocused = awareness?.focusCurrent?.() === true;
     await new Promise((resolve) => setTimeout(resolve, 120));
     const owningLayer = after?.layerId === 'militaryFlights' ? 'military-flights' : after?.layerId;
@@ -911,10 +947,11 @@ try {
     JSON.stringify(locationContactHandoff),
   );
   const zoomedOutContactRefocus = await page.evaluate(async () => {
+    const { followedOf } = await import('/src/data/followed.js');
     const { dataManager, viewer } = window.__godsEyeView;
     const awareness = dataManager.layers.get('military-awareness')?.module;
     const before = awareness?.getContextSnapshot?.()?.subject || null;
-    const entityBefore = viewer.trackedEntity;
+    const followedBefore = followedOf(viewer);
     viewer.camera.zoomOut(1_500_000);
     const cameraRange = () => Math.hypot(
       viewer.camera.position.x,
@@ -934,7 +971,7 @@ try {
     return {
       before: before ? { layerId: before.layerId, id: before.id } : null,
       after: after ? { layerId: after.layerId, id: after.id } : null,
-      sameEntity: viewer.trackedEntity === entityBefore,
+      sameTarget: Boolean(followedBefore) && followedOf(viewer) === followedBefore,
       refocused,
       zoomedRange: Math.round(zoomedRange),
       focusedRange: Math.round(focusedRange),
@@ -945,17 +982,13 @@ try {
     zoomedOutContactRefocus.before?.id
       && zoomedOutContactRefocus.after?.id === zoomedOutContactRefocus.before.id
       && zoomedOutContactRefocus.after?.layerId === zoomedOutContactRefocus.before.layerId
-      && zoomedOutContactRefocus.sameEntity
+      && zoomedOutContactRefocus.sameTarget
       && zoomedOutContactRefocus.refocused
       && zoomedOutContactRefocus.zoomedRange > 1_000_000
       && zoomedOutContactRefocus.focusedRange < 50_000,
     JSON.stringify(zoomedOutContactRefocus),
   );
-  await page.waitForFunction(() => {
-    const entry = document.getElementById('cockpit-entry');
-    return entry && !entry.hidden && !entry.disabled;
-  }, { timeout: 10_000 });
-  await page.$eval('#cockpit-entry', (entry) => entry.click());
+  await enterFromCard(page);
   await page.waitForFunction(
     () => document.body.classList.contains('cockpit-mode')
       && window.__godsEyeView.styleManager.cockpitView.active
@@ -1169,13 +1202,14 @@ try {
     JSON.stringify(contactsDetection),
   );
   const densityNavigation = await page.evaluate(async () => {
+    const { followedOf } = await import('/src/data/followed.js');
     const { styleManager, dataManager, viewer } = window.__godsEyeView;
     const cockpit = styleManager.cockpitView;
     const awareness = dataManager.layers.get('military-awareness')?.module;
     const settle = (ms = 260) => new Promise((resolve) => setTimeout(resolve, ms));
     const snapshot = (step) => {
       const context = awareness?.getContextSnapshot?.() || null;
-      const tracker = viewer.trackedEntity || cockpit.trackedEntity;
+      const tracker = followedOf(viewer) || cockpit.trackedFollow;
       return {
         step,
         cockpitActive: cockpit.active,
@@ -1183,7 +1217,7 @@ try {
         contextMode: styleManager._contextControls._contextMode,
         contextChanging: styleManager._contextControls._contextModeChanging,
         subject: context?.subject ? `${context.subject.layerId}:${context.subject.id}` : null,
-        tracked: window.__godsEyeView.entityRecords.read(tracker)?.trackedId || null,
+        tracked: tracker?.key || null,
         density: styleManager.getDetectionState().densityPct,
         detectionMode: styleManager.getDetectionState().detectionMode,
         installations: dataManager.getLayerLifecycleState('military-installations'),
@@ -1264,9 +1298,10 @@ try {
     JSON.stringify(densityNavigation),
   );
   const cockpitExitOwnership = await page.evaluate(async () => {
+    const { followedOf } = await import('/src/data/followed.js');
     const { styleManager, dataManager, viewer } = window.__godsEyeView;
     const awareness = dataManager.layers.get('military-awareness')?.module;
-    const entity = viewer.trackedEntity || styleManager.cockpitView.trackedEntity;
+    const followed = followedOf(viewer) || styleManager.cockpitView.trackedFollow;
     const nextFrame = () => new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         remove();
@@ -1289,7 +1324,7 @@ try {
     return {
       exited,
       refocused,
-      sameEntity: viewer.trackedEntity === entity,
+      sameTarget: Boolean(followed) && followedOf(viewer) === followed,
       listenersBeforeExit,
       listenersAfterExit,
       listenersAfterFocus: viewer.scene.preUpdate.numberOfListeners,
@@ -1299,20 +1334,19 @@ try {
     'Cockpit exit and later Contact Focus retain one source-owned camera-frame listener',
     cockpitExitOwnership.exited
       && cockpitExitOwnership.refocused
-      && cockpitExitOwnership.sameEntity
+      && cockpitExitOwnership.sameTarget
       && cockpitExitOwnership.listenersAfterExit === cockpitExitOwnership.listenersBeforeExit + 1
       && cockpitExitOwnership.listenersAfterFocus === cockpitExitOwnership.listenersAfterExit,
     JSON.stringify(cockpitExitOwnership),
   );
+  await openTrackedCard(page);
   const cockpitPanelRoundTrip = await page.evaluate(async () => {
     const manager = window.__godsEyeView.styleManager;
     const panelIds = [
       'data-panel',
-      'cctv-panel',
       'scene-panel',
       'pp-toggles',
       'global-context-panel',
-      'radio-panel',
     ];
     const read = () => Object.fromEntries(panelIds.map((panelId) => [
       panelId,
@@ -1320,18 +1354,21 @@ try {
     ]));
     const desired = new Map([
       ['data-panel', false],
-      ['cctv-panel', true],
       ['scene-panel', true],
       ['pp-toggles', true],
       ['global-context-panel', false],
-      ['radio-panel', true],
     ]);
     for (const [panelId, collapsed] of desired) {
       manager.setPanelCollapsed(panelId, collapsed, { persist: false, syncShare: false });
     }
     const before = read();
-    document.getElementById('cockpit-entry')?.click();
-    await new Promise((resolve) => setTimeout(resolve, 120));
+    const entry = document.querySelector('[data-entity-cockpit-entry]');
+    if (!entry) throw new Error('The displayed aircraft has no Cockpit action');
+    entry.click();
+    for (let i = 0; i < 100 && !manager.cockpitView.active; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    if (!manager.cockpitView.active) throw new Error('Context Cockpit action did not enter');
     const during = read();
     manager.setPanelCollapsed('data-panel', false, { persist: false, syncShare: false });
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
@@ -1372,11 +1409,7 @@ try {
       && cockpitPanelRoundTrip.manualContactCollapseRetained,
     JSON.stringify(cockpitPanelRoundTrip),
   );
-  await page.waitForFunction(() => {
-    const entry = document.getElementById('cockpit-entry');
-    return entry && !entry.hidden && !entry.disabled;
-  }, { timeout: 10_000 });
-  await page.$eval('#cockpit-entry', (entry) => entry.click());
+  await enterFromCard(page);
   await page.waitForFunction(
     () => document.body.classList.contains('cockpit-mode')
       && window.__godsEyeView.styleManager.cockpitView.active,
@@ -1422,10 +1455,12 @@ try {
     manager._setCockpitDisclosure('display', false);
     manager._setCockpitDisclosure('radio', false);
     cockpit.setVisionMode('optical');
+    await Promise.resolve();
     current.focus({ preventScroll: true });
     const states = [read()];
     for (let index = 0; index < 6; index += 1) {
       current.click();
+      await Promise.resolve();
       states.push(read());
     }
     const originalStyle = manager.activeStyle;
@@ -1437,8 +1472,10 @@ try {
     const enteredOnNoir = await reenter();
     const entryNoir = read();
     cockpit.setVisionMode('optical');
+    await Promise.resolve();
     const normalInsideNoir = read();
     cockpit.setVisionMode('crt');
+    await Promise.resolve();
     const cockpitOnlyCrt = read();
     const exitedNoir = cockpit.exit({ restoreTracking: true }) === true;
     await settle();
@@ -1447,6 +1484,7 @@ try {
     await settle();
     const reentered = await reenter();
     cockpit.setVisionMode('optical');
+    await Promise.resolve();
     return {
       states,
       enteredOnNoir,
@@ -1513,6 +1551,8 @@ try {
   await page.screenshot({ path: path.join(shotsDir, 'vision-noir.png') });
   await page.evaluate(() => window.__godsEyeView.styleManager.cockpitView.setVisionMode('optical'));
 
+  const originalViewport = page.viewport();
+  await page.setViewport({ ...originalViewport, height: 1100 });
   const desktopState = async (variant, openKind) => page.evaluate(async ({ variantName, kind }) => {
     const manager = window.__godsEyeView.styleManager;
     const hud = document.getElementById('cockpit-hud');
@@ -1548,12 +1588,16 @@ try {
     // confirm a second changes nothing, so a convergence regression cannot hide
     // behind a repeated call.
     manager.cockpitView.syncSignalLayout();
+    await Promise.resolve();
     const firstPassTop = hud.style.getPropertyValue('--cockpit-utility-top');
     const firstPassPrimaryOnly = utility.classList.contains('layout-primary-only');
     manager.cockpitView.syncSignalLayout();
+    await Promise.resolve();
     const signalTop = signal.getBoundingClientRect().top;
     const expanded = kind === 'display' ? displayControl : radioControl;
-    const sibling = kind === 'display' ? radioControl : displayControl;
+    const sibling = document.querySelector(`[data-cockpit-rail-item="${kind === 'display' ? 'radio' : 'display'}"]`);
+    const siblingBox = sibling.getBoundingClientRect();
+    const siblingHit = document.elementFromPoint(siblingBox.left + siblingBox.width / 2, siblingBox.top + siblingBox.height / 2);
     const state = {
       variant: variantName,
       kind,
@@ -1566,12 +1610,21 @@ try {
       expandedRect: expanded.getBoundingClientRect().toJSON(),
       siblingRect: sibling.getBoundingClientRect().toJSON(),
       siblingDisplay: getComputedStyle(sibling).display,
-      siblingAriaHidden: sibling.getAttribute('aria-hidden'),
-      siblingExpanded: sibling.querySelector('[aria-expanded]')?.getAttribute('aria-expanded'),
+      siblingAccessible: !sibling.closest('[aria-hidden="true"]'),
+      siblingExpanded: sibling.getAttribute('aria-expanded'),
+      siblingHit: Boolean(siblingHit && sibling.contains(siblingHit)),
       contained: expanded.getBoundingClientRect().bottom <= signalTop - 7,
     };
+    sibling.focus({ preventScroll: true });
+    sibling.click();
+    await Promise.resolve();
+    state.railSwitchWorks = sibling.getAttribute('aria-expanded') === 'true'
+      && !expanded.classList.contains('is-expanded')
+      && (kind === 'display' ? radioControl : displayControl).getBoundingClientRect().width > 0
+      && document.activeElement === sibling;
     signal.style.maxHeight = priorSignalMaxHeight;
     manager.cockpitView.syncSignalLayout();
+    await Promise.resolve();
     return state;
   }, { variantName: variant, kind: openKind });
 
@@ -1579,14 +1632,16 @@ try {
     for (const kind of ['display', 'radio']) {
       const state = await desktopState(variant, kind);
       check(
-        `${variant} ${kind} keeps its collapsed sibling visible in a roomy corridor`,
+        `${variant} ${kind} keeps the other utility reachable through its rail in a roomy corridor`,
         !state.primaryOnly
           && state.expandedRect.width > 0
           && state.siblingRect.width > 0
           && state.siblingRect.height > 0
           && state.siblingDisplay !== 'none'
-          && state.siblingAriaHidden === 'false'
+          && state.siblingAccessible
+          && state.siblingHit
           && state.siblingExpanded === 'false'
+          && state.railSwitchWorks
           && state.contained,
         JSON.stringify(state),
       );
@@ -1675,7 +1730,7 @@ try {
     JSON.stringify(portalScroll),
   );
 
-  const boundary = await page.evaluate(async () => {
+  const boundary = await page.evaluate(async ({ floor, ratio, gap }) => {
     const manager = window.__godsEyeView.styleManager;
     const hud = document.getElementById('cockpit-hud');
     const signal = document.getElementById('cockpit-signal-stream');
@@ -1684,6 +1739,16 @@ try {
     const radio = document.getElementById('cockpit-radio-toggle-btn');
     const displayControl = display.closest('.cockpit-utility-control');
     const radioControl = radio.closest('.cockpit-utility-control');
+    const radioRail = document.querySelector('[data-cockpit-rail-item="radio"]');
+    const railState = () => {
+      const box = radioRail.getBoundingClientRect();
+      const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+      return {
+        railVisible: box.width > 0 && box.height > 0,
+        railAccessible: !radioRail.closest('[aria-hidden="true"]'),
+        railHit: Boolean(hit && radioRail.contains(hit)),
+      };
+    };
     document.body.classList.add('cockpit-mode');
     manager.cockpitView.active = true;
     hud.hidden = false;
@@ -1691,14 +1756,18 @@ try {
     manager._setCockpitDisclosure('radio', false);
     manager._setCockpitDisclosure('display', true);
     await new Promise(requestAnimationFrame);
+    // Isolate the briefing-card boundary from the independent REC anchor.
+    const rec = document.querySelector('#intel-hud .hud-top-right');
+    const priorRecDisplay = rec.style.display;
+    rec.style.display = 'none';
     const priorSignalMaxHeight = signal.style.maxHeight;
     const priorSignalHeight = signal.style.height;
     // The strip is pinned to the viewport ceiling once the briefing card grows
     // into its lane, so the corridor is sized by moving that card's top edge —
     // the wall Cockpit actually solves against — not by injecting an anchor.
     // The card is bottom-anchored, so an explicit height moves its top edge.
-    const minTop = Math.max(96, window.innerHeight * 0.12);
-    const moveSignalTopTo = (wantTop) => {
+    const minTop = Math.max(floor, window.innerHeight * ratio);
+    const moveSignalTopTo = async (wantTop) => {
       for (let pass = 0; pass < 8; pass += 1) {
         const rect = signal.getBoundingClientRect();
         const delta = wantTop - rect.top;
@@ -1711,9 +1780,11 @@ try {
       // the now-shorter strip, so idempotence is asserted where the strip's
       // composition is unchanged.)
       manager.cockpitView.syncSignalLayout();
+      await Promise.resolve();
       const firstPassTop = hud.style.getPropertyValue('--cockpit-utility-top');
       const firstPassPrimaryOnly = utility.classList.contains('layout-primary-only');
       manager.cockpitView.syncSignalLayout();
+      await Promise.resolve();
       return {
         firstPassTop,
         firstPassPrimaryOnly,
@@ -1724,8 +1795,12 @@ try {
     signal.style.maxHeight = 'none';
     signal.style.height = '150px';
     manager.cockpitView.syncSignalLayout();
+    await Promise.resolve();
+    const priorDisplayMaxHeight = displayControl.style.maxHeight;
+    displayControl.style.maxHeight = 'none';
     const expandedHeight = Math.max(displayControl.scrollHeight, displayControl.getBoundingClientRect().height);
-    const collapsedHeight = Math.max(50, radioControl.scrollHeight);
+    displayControl.style.maxHeight = priorDisplayMaxHeight;
+    const collapsedHeight = Math.max(50, radio.scrollHeight);
     const stripHeight = expandedHeight + collapsedHeight + 7;
     // Straddle the fit by a pixel instead of aiming AT it. `moveSignalTopTo` only
     // converges to within 0.2 px and the production decision is a strict `>`
@@ -1735,69 +1810,74 @@ try {
     // now ships open), which is what surfaced it. One pixel inside the fit and one
     // pixel outside proves the same transition, deterministically.
     const BOUNDARY_EPSILON_PX = 1;
-    const exactSignalTop = minTop + 8 + stripHeight + BOUNDARY_EPSILON_PX;
-    // The boundary is only meaningful when approached from the TWO-control
-    // composition. The anchor is solved against the strip's currently RENDERED
-    // height, so arriving here already collapsed to primary-only makes the strip
-    // short, pushes the resolved top above minTop, and the "exact" corridor is
-    // then never evaluated at the boundary at all — the check would fail while
-    // production is behaving correctly.
-    //
-    // The fixed `height: 150px` card seed above used to guarantee that; it stopped
-    // once Display grew (the 3D Proximity/All row ships open from 2026-08-22, +36 px),
-    // because 150 px of card leaves a corridor sized for the OLD strip. Seed from
-    // the measured requirement instead, which holds for any future panel height,
-    // and assert the precondition rather than assuming it.
-    const roomySeed = moveSignalTopTo(exactSignalTop + 80);
+    const exactSignalTop = minTop + gap + stripHeight + BOUNDARY_EPSILON_PX;
+    // Start on the roomy side of the measured layout budget, then cross it
+    // by one pixel. The desktop rail stays accessible on either side; the
+    // expanded popover still obeys the measured height and first-pass layout.
+    const roomySeed = await moveSignalTopTo(exactSignalTop + 80);
     const roomySeedExpanded = !utility.classList.contains('layout-primary-only')
       && roomySeed.firstPassPrimaryOnly === false;
     const exact = {
-      ...moveSignalTopTo(exactSignalTop),
+      ...await moveSignalTopTo(exactSignalTop),
       utilityTop: hud.style.getPropertyValue('--cockpit-utility-top'),
       primaryOnly: utility.classList.contains('layout-primary-only'),
-      siblingVisible: getComputedStyle(radioControl).display !== 'none',
+      ...railState(),
       siblingAriaHidden: radioControl.getAttribute('aria-hidden'),
     };
-    radio.focus({ preventScroll: true });
+    radioRail.focus({ preventScroll: true });
     const constrained = {
       // One pixel on the far side of the same fit (`exactSignalTop` already sits
       // one pixel inside it), so this is still the one-pixel constraint it claims.
-      ...moveSignalTopTo(exactSignalTop - 2 * BOUNDARY_EPSILON_PX),
+      ...await moveSignalTopTo(exactSignalTop - 2 * BOUNDARY_EPSILON_PX),
       utilityTop: hud.style.getPropertyValue('--cockpit-utility-top'),
       primaryOnly: utility.classList.contains('layout-primary-only'),
       siblingDisplay: getComputedStyle(radioControl).display,
       siblingRect: radioControl.getBoundingClientRect().toJSON(),
       siblingAriaHidden: radioControl.getAttribute('aria-hidden'),
-      focusReturned: document.activeElement === display,
+      ...railState(),
+      focusRetained: document.activeElement === radioRail,
       contained: displayControl.getBoundingClientRect().bottom
         <= signal.getBoundingClientRect().top - 7,
     };
     const restored = {
-      ...moveSignalTopTo(exactSignalTop + 80),
+      ...await moveSignalTopTo(exactSignalTop + 80),
       utilityTop: hud.style.getPropertyValue('--cockpit-utility-top'),
       primaryOnly: utility.classList.contains('layout-primary-only'),
-      siblingVisible: getComputedStyle(radioControl).display !== 'none',
+      ...railState(),
       siblingAriaHidden: radioControl.getAttribute('aria-hidden'),
     };
     signal.style.maxHeight = priorSignalMaxHeight;
     signal.style.height = priorSignalHeight;
+    rec.style.display = priorRecDisplay;
     manager.cockpitView.syncSignalLayout();
+    await Promise.resolve();
     return { minTop, stripHeight, exactSignalTop, roomySeedExpanded, exact, constrained, restored };
+  }, {
+    floor: COCKPIT_UTILITY_MIN_TOP_PX,
+    ratio: COCKPIT_UTILITY_MIN_TOP_RATIO,
+    gap: COCKPIT_UTILITY_SIGNAL_GAP_PX,
   });
   check(
-    'exact fit keeps the sibling; one-pixel constraint hides it, transfers focus, and restores it',
+    'one-pixel corridor constraint contains the popover and preserves the other utility rail, focus and restoration',
     boundary.roomySeedExpanded
       && !boundary.exact.primaryOnly
-      && boundary.exact.siblingVisible
+      && boundary.exact.railVisible
+      && boundary.exact.railAccessible
+      && boundary.exact.railHit
       && boundary.exact.siblingAriaHidden === 'false'
       && boundary.constrained.primaryOnly
       && boundary.constrained.siblingDisplay === 'none'
       && boundary.constrained.siblingRect.width === 0
       && boundary.constrained.siblingAriaHidden === 'true'
-      && boundary.constrained.focusReturned
+      && boundary.constrained.railVisible
+      && boundary.constrained.railAccessible
+      && boundary.constrained.railHit
+      && boundary.constrained.focusRetained
       && boundary.constrained.contained
       && !boundary.restored.primaryOnly
-      && boundary.restored.siblingVisible
+      && boundary.restored.railVisible
+      && boundary.restored.railAccessible
+      && boundary.restored.railHit
       && boundary.restored.siblingAriaHidden === 'false',
     JSON.stringify(boundary),
   );
@@ -1816,6 +1896,7 @@ try {
     }),
   );
 
+  await page.setViewport(originalViewport);
   const signalTransition = await page.evaluate(async () => {
     const manager = window.__godsEyeView.styleManager;
     const cockpit = manager.cockpitView;
@@ -1918,6 +1999,10 @@ try {
     cockpit.setSignalCollapsed(false);
     const item = (id) => ({ key: `qa-${id}`, tone: 'info', timestamp: Date.now(),
       title: `QA ${id}`, detail: 'Keyboard refresh fixture', target: { layerId: 'flights', id } });
+    const liveUpdate = Object.getOwnPropertyDescriptor(cockpit, 'updateCockpitSignals');
+    // The live HUD tick can replace the fixture rows between animation frames.
+    // Leave rendering and focus handling live, but let the fixture own its rows.
+    cockpit.updateCockpitSignals = () => {};
     try {
       await show([item('focus-a'), item('focus-b')]);
       const button = cockpit.signalList.querySelector('[data-signal-id="focus-a"]');
@@ -1934,6 +2019,8 @@ try {
     } finally {
       await show(originalItems);
       cockpit.setSignalCollapsed(wasCollapsed);
+      if (liveUpdate) Object.defineProperty(cockpit, 'updateCockpitSignals', liveUpdate);
+      else delete cockpit.updateCockpitSignals;
     }
   });
   check('Cockpit live reorder retains the same connected focus owner',
@@ -2229,7 +2316,8 @@ try {
     const height = viewer.camera.positionCartographic?.height;
     return Math.abs(height - 18_000_000) < 150_000;
   }, { timeout: 6_000 });
-  const resetState = await page.evaluate(() => {
+  const resetState = await page.evaluate(async () => {
+    const { followedOf } = await import('/src/data/followed.js');
     const gev = window.__godsEyeView;
     const qa = window.__qaCockpitReset;
     const awareness = gev.dataManager.layers.get('military-awareness')?.module;
@@ -2240,7 +2328,7 @@ try {
     return {
       calls: qa.calls,
       cockpitActive: gev.styleManager.cockpitView.active,
-      trackedEntity: Boolean(gev.viewer.trackedEntity),
+      following: Boolean(followedOf(gev.viewer)),
       resetHidden: document.getElementById('cockpit-reset-globe')?.hidden,
       height,
       subjectPreserved: Boolean(qa.subjectId && subjectId === qa.subjectId),
@@ -2257,7 +2345,7 @@ try {
     'keyboard Cockpit Reset uses one canonical route, preserves Contact selection and restores the map style',
     resetState.calls === 1
       && !resetState.cockpitActive
-      && !resetState.trackedEntity
+      && !resetState.following
       && resetState.resetHidden
       && Math.abs(resetState.height - 18_000_000) < 150_000
       && resetState.subjectPreserved

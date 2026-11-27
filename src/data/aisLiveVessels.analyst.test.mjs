@@ -14,6 +14,8 @@ const FULL_RECORD = {
   speed: 12.3,
   course: 214.0,
   type: 'Cargo',
+  length: 110,
+  beam: 11,
   destination: 'OAKLAND',
 };
 
@@ -29,6 +31,9 @@ test('ais analyst record: full record maps every contract field', () => {
     speedKts: 12.3,
     courseDeg: 214.0,
     shipType: 'Cargo',
+    virtual: false,
+    length: 110,
+    beam: 11,
     destination: 'OAKLAND',
     navStatus: null, // /api/vessels does not surface NavigationalStatus
   });
@@ -51,9 +56,19 @@ test('ais analyst record: the key is the source id; the MMSI rides along when kn
 });
 
 test('ais analyst record: empty strings and NaN become null, never undefined', () => {
-  const r = mapAnalystRecord({ mmsi: '', name: 'TUG', speed: NaN, type: '', destination: '' });
+  const r = mapAnalystRecord({
+    mmsi: '',
+    name: 'VIRTUAL AID',
+    speed: NaN,
+    type: '',
+    destination: '',
+    virtual: true,
+  });
   assert.equal(r.mmsi, null);
   assert.equal(r.speedKts, null);
+  assert.equal(r.virtual, true);
+  assert.equal(r.length, null);
+  assert.equal(r.beam, null);
   assert.equal(r.shipType, null);
   assert.equal(r.destination, null);
   for (const [key, value] of Object.entries(r)) {

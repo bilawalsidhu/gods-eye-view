@@ -1,3 +1,4 @@
+import { isFollowing, stopFollowing } from '../../data/followed.js';
 import { WGS84, fromDegrees } from '../../geo/ellipsoid.js';
 import {
   PI_OVER_TWO,
@@ -69,10 +70,15 @@ export function createSelection({
     return true;
   }
 
-  function setSelectedMission(launchId, isolate = true) {
+  function setSelectedMission(
+    launchId,
+    isolate = true,
+    { refresh = false } = {},
+  ) {
     // Once the layer is going off (its Satellites restore may still be
     // running) a roster click selects nothing and moves no camera.
     if (launchId && !layerState._enabled) return;
+    if (!refresh) layerState._focusAfterActiveLookup = false;
     if (launchId) parts.panel.clearMissionRosterHover();
     if (
       layerState._replayCameraLaunchId &&
@@ -103,7 +109,7 @@ export function createSelection({
       layerState._missionZoomAnchorRemover();
     layerState._missionZoomAnchorRemover = null;
     layerState._missionZoomAnchorId = null;
-    if (!layerState._replayCameraLaunchId)
+    if (!layerState._replayCameraLaunchId && !isFollowing(layerState._viewer))
       findCamera(layerState._viewer)?.release();
   }
 
@@ -124,11 +130,22 @@ export function createSelection({
     });
   }
 
+  // An explicit flight takes the camera, so an active follow ends first.
+  function endFollowForFlight() {
+    if (!isFollowing(layerState._viewer)) return;
+    const manager = layerState._dataManager;
+    parts.policyHelpers?.releaseAircraftTracking(manager);
+    const satellites = manager?.layers?.get('satellites')?.module;
+    satellites?.stopTracking?.({ origin: 'tool' });
+    stopFollowing(layerState._viewer);
+  }
+
   function focusMission(launch) {
     if (!layerState._viewer || !launch || !layerState._enabled) return;
     // The cockpit holds the camera: a mission chosen there, by its label,
     // its dot or the layer row's arrows, is selected without flying to it.
     if (cockpitActive()) return;
+    endFollowForFlight();
     stopMissionZoomAnchor();
     parts.rendering.selectLaunchEntity(launch.id);
     const camera = cameraOf(layerState._viewer);
@@ -162,6 +179,8 @@ export function createSelection({
     right = normalize(right);
     const up = normalize(cross(right, direction));
     layerState._cameraReleased = false;
+    // Only a requested overview flight can adopt the orbit when it arrives.
+    layerState._focusAfterActiveLookup = !layerState._renderedTleText;
     camera.flyTo(destination, {
       orientation: { direction, up },
       durationS: 1.1,
@@ -174,7 +193,9 @@ export function createSelection({
 
   function focusLaunchSite(launch) {
     if (!layerState._viewer || !launch || !layerState._enabled) return;
+    layerState._focusAfterActiveLookup = false;
     parts.replay.stopMissionReplay();
+    endFollowForFlight();
     stopMissionZoomAnchor();
     parts.rendering.selectLaunchEntity(launch.id);
     layerState._cameraReleased = false;

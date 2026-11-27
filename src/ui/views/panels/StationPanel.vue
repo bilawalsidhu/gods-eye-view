@@ -8,6 +8,8 @@ import { vClassToggle } from '../../rail/classToggle.js';
 import UiSlider from '../../kit/UiSlider.js';
 import { useStationStore } from '../../stores/station.js';
 
+const props = defineProps({ shown: { type: Boolean, default: true } });
+
 // The STATION section inside Context: the selected space station's moving
 // parts. Automatic leaves them to their rules (NASA's telemetry where the
 // server relays it, computed from the Sun otherwise); Manual hands them to
@@ -84,7 +86,7 @@ const stationWords = computed(() => ({
 </script>
 
 <template>
-<RailPanel id="station-panel" tag="section" start-collapsed :hidden="!view" v-class-toggle="{ 'station-manual': manual }" :aria-label="t('Controls for the selected space station')" :title="t('STATION')" :toggle-words="stationWords" :glow="false" scroll>
+<RailPanel id="station-panel" tag="section" start-collapsed :hidden="!view || !props.shown" v-class-toggle="{ 'station-manual': manual }" :aria-label="t('Controls for the selected space station')" :title="t('STATION')" :toggle-words="stationWords" :glow="false" scroll>
   <template #badge><span id="station-badge" class="station-badge">{{ view ? view.title : '' }}</span></template>
   <template v-if="view">
     <div class="station-subject">{{ view.subject }}</div>

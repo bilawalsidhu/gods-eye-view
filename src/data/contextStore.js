@@ -43,7 +43,7 @@ export function registerEntityContext(entity, metadata) {
   return record;
 }
 
-export function selectEntityContext(entity) {
+export function selectEntityContext(entity, { fromNewsList = false } = {}) {
   const store = getContextStore();
   const contextId = readEntityRecord(entity)?.contextId;
   if (!contextId || !store.entities.has(contextId)) return null;
@@ -51,7 +51,9 @@ export function selectEntityContext(entity) {
   store.selectedAt = Date.now();
   const record = store.entities.get(contextId);
   window.dispatchEvent(
-    new CustomEvent('gev:entity-selected', { detail: record }),
+    new CustomEvent('gev:entity-selected', {
+      detail: fromNewsList ? { ...record, fromNewsList: true } : record,
+    }),
   );
   return record;
 }

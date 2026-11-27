@@ -204,11 +204,13 @@ const schemas = [
           enum: [
             'data-panel',
             'cctv-panel',
+            'camera-settings',
             'radio-panel',
             'scene-panel',
             'utilities-panel',
             'pp-toggles',
             'global-context-panel',
+            'street-level-panel',
             'space-missions-panel',
             'weather-panel',
             'recent-imagery-panel',
@@ -241,7 +243,7 @@ const schemas = [
       properties: {
         mode: {
           type: 'string',
-          enum: ['off', 'contacts', 'flights', 'space-missions', 'missions'],
+          enum: ['off', 'nearby', 'space-missions', 'missions'],
         },
       },
       required: ['mode'],

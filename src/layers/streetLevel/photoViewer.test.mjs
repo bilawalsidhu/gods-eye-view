@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createPhotoViewer } from './photoViewer.js';
+import { createPhotoHistory } from './photos.js';
+import { createState } from './state.js';
+import { createViewerHost, KEEP_OPEN_PHOTO } from './viewerHost.js';
 import {
   fakeHost,
   until,
@@ -28,7 +31,7 @@ const SOURCES = {
 };
 
 /** A viewer whose loads wait until `release(url)` (or fail with `fail(url)`). */
-function setup() {
+function setup({ step = async () => null, onStep = () => {} } = {}) {
   const pending = new Map();
   const loads = [];
   const images = [];
@@ -37,8 +40,8 @@ function setup() {
     name: 'Test',
     sources: SOURCES,
     getPhoto: async (id) => PHOTOS[id],
-    step: async () => null,
-    onStep() {},
+    step,
+    onStep,
     load: (url) =>
       new Promise((resolve, reject) => {
         loads.push(url);
@@ -85,6 +88,106 @@ test('a panorama that arrives after another photo opened is released, not shown'
   env.release('b-first');
   await second;
   assert.deepEqual(env.images, ['b-first']);
+});
+
+test('withdrawing a pending card photo keeps the previous drawn frame', async () => {
+  const env = setup();
+  const state = createState({ services: {} });
+  state.enabled = true;
+  state.street.host = env.host;
+  state.providers.set('test', {
+    def: { id: 'test', name: 'Test', label: 'Test' },
+    instance: { viewer: env.viewer },
+  });
+  const photos = createPhotoHistory();
+  const host = createViewerHost({
+    state,
+    parts: {
+      photos,
+      marker: { set() {}, clear() {} },
+      framing: { cancel() {} },
+    },
+  });
+  const first = host.open('test', 'f', { frame: false });
+  assert.ok(await until(() => env.loads.includes('f-first')));
+  env.release('f-first');
+  assert.equal(await first, true);
+
+  const request = new AbortController();
+  const replacement = host.open('test', 'g', {
+    frame: false,
+    signal: request.signal,
+  });
+  assert.ok(await until(() => env.loads.includes('g-first')));
+  assert.equal(parts(env.host).picture.src, 'f-first');
+  request.abort(KEEP_OPEN_PHOTO);
+  env.release('g-first');
+
+  assert.equal(await replacement, false);
+  assert.equal(host.acceptedPhoto()?.id, 'test:f');
+  assert.equal(parts(env.host).picture.src, 'f-first');
+  assert.equal(state.street.loading, false);
+  assert.equal(state.street.opening, false);
+  assert.equal(photos.get('test:g'), null);
+});
+
+test('steps queued for the previous photo cannot move an explicit open', async () => {
+  let release;
+  let lookedFromFirst = 0;
+  const held = new Promise((resolve) => {
+    release = resolve;
+  });
+  const stepped = [];
+  const env = setup({
+    step: async (photo) => {
+      if (photo.id !== 'f') return 'a';
+      lookedFromFirst++;
+      return held;
+    },
+    onStep: (id) => stepped.push(id),
+  });
+  await env.viewer.mount(env.host);
+  const first = env.viewer.open('f');
+  assert.ok(await until(() => env.loads.includes('f-first')));
+  env.release('f-first');
+  await first;
+  const next = env.host.children[0].children[3];
+  next.fire('click');
+  next.fire('click');
+  // Beyond the two warm-up lookups, the first press is waiting on the same
+  // neighbour. The second press is still queued.
+  assert.ok(await until(() => lookedFromFirst === 3));
+
+  const replacement = env.viewer.open('g', { explicit: true });
+  assert.ok(await until(() => env.loads.includes('g-first')));
+  env.release('g-first');
+  await replacement;
+  release('a');
+  await tick();
+  assert.deepEqual(stepped, []);
+  assert.equal(parts(env.host).picture.src, 'g-first');
+});
+
+test('Next retries the same photo after the layer declines a step', async () => {
+  const requested = [];
+  const env = setup({
+    step: async (photo) => (photo.id === 'f' ? 'g' : 'a'),
+    onStep: async (id) => {
+      requested.push(id);
+      return requested.length > 1;
+    },
+  });
+  await env.viewer.mount(env.host);
+  const first = env.viewer.open('f');
+  assert.ok(await until(() => env.loads.includes('f-first')));
+  env.release('f-first');
+  await first;
+  const next = env.host.children[0].children[3];
+  next.fire('click');
+  next.fire('click');
+
+  assert.ok(await until(() => requested.length === 2));
+  assert.deepEqual(requested, ['g', 'g']);
 });
 
 test('one sharp panorama download per open, even across a quick switch and a burst of resizes', async (t) => {
@@ -627,11 +730,14 @@ test('a panorama reopened after a lost context waits for the view’s fresh canv
       if (canvas) view.actions.attach('canvas', canvas);
     });
   });
+  const poses = [];
+  viewer.onPose((pose) => poses.push(pose?.imageId ?? null));
   await viewer.mount({});
   await viewer.open('a');
   assert.equal(shown.kind, 'pano');
   shown.actions.contextLost({ preventDefault() {} });
   assert.deepEqual(reopened, ['a']);
+  assert.deepEqual(poses, ['a', null]);
   const opening = viewer.open('a');
   await tick();
   assert.equal(canvases.length, 1, 'no renderer without a canvas');
@@ -642,6 +748,7 @@ test('a panorama reopened after a lost context waits for the view’s fresh canv
     ['canvas', 'canvas again'],
   );
   assert.equal(shown.kind, 'pano', 'not the front view');
+  assert.deepEqual(poses, ['a', null, 'a']);
 });
 
 /**
@@ -995,4 +1102,19 @@ test('a mount its view unmounts inside the first draw fails as closed', async ()
   });
   await assert.rejects(viewer.mount({}), /Street-level viewer was closed/);
   unsubscribe();
+});
+
+test('stepping between panoramas on the same canvas keeps a confirmed frame throughout the draw', async () => {
+  const env = setup();
+  const poses = [];
+  env.viewer.onPose((pose) => poses.push(pose?.imageId ?? null));
+  await env.viewer.mount(env.host);
+  for (const id of ['a', 'b']) {
+    const opening = env.viewer.open(id);
+    assert.ok(await until(() => env.loads.includes(id + '-first')));
+    env.release(id + '-first');
+    await opening;
+  }
+  assert.deepEqual(poses, ['a', 'b']);
+  env.viewer.unmount();
 });

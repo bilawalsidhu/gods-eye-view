@@ -6,7 +6,6 @@ import { vPanelState } from '../../rail/panelState.js';
 import { vClassToggle } from '../../rail/classToggle.js';
 import PanelCollapseButton from '../../rail/PanelCollapseButton.vue';
 import UiPanelEdge from '../../kit/UiPanelEdge.vue';
-import { availableTabs, tabTarget } from '../../contextLayerTabs.js';
 import UiSegmented from '../../kit/UiSegmented.vue';
 import UiSlider from '../../kit/UiSlider.js';
 import { useDisplayStore } from '../../stores/display.js';
@@ -23,11 +22,9 @@ import VisualPresets from './VisualPresets.vue';
 // Draw and Import live in UTILITIES (LayerPanelsView).
 const display = useDisplayStore();
 const { view, models3d, parameters, cockpitPortal, groups, sky, frameRate } = storeToRefs(display);
-// Cockpit takes these controls first; otherwise, while a layer they act on is
-// on, they move into that layer's tab in Context.
-const inContext = (id) => availableTabs.value.some((tab) => tab.id === id);
-const detectionTarget = computed(() => cockpitPortal.value?.detection ?? (inContext('labels') ? tabTarget('labels') : null));
-const modelsTarget = computed(() => cockpitPortal.value?.models3d ?? (inContext('aircraft') ? tabTarget('aircraft') : null));
+// Cockpit borrows these controls while it is open; otherwise they stay here.
+const detectionTarget = computed(() => cockpitPortal.value?.detection ?? null);
+const modelsTarget = computed(() => cockpitPortal.value?.models3d ?? null);
 // A control's change goes to its owner (DisplayBindings).
 const act = (name, ...args) => display.act(name, ...args);
 const pct = (value) => `${value}%`;

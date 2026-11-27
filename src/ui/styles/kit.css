@@ -132,6 +132,13 @@
 /* A collapsible rail shows each item as an icon and its label while no panel
    is open, and folds the labels away once one is. The collapsed item keeps
    the plain rail's 32px square. */
+/* One entry, its panel open: the rail has nothing to offer and hides
+   (PanelRailView.vue). */
+.ui-rail--sole-open {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .ui-rail--collapsible {
   transition: border-radius var(--transition-fast);
 }

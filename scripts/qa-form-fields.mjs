@@ -19,6 +19,44 @@ const check = (name, passed, detail) => {
     console.log(JSON.stringify(detail));
   }
 };
+const openPanel = (id) =>
+  page.evaluate((panel) => {
+    window.__godsEyeView.styleManager.setPanelCollapsed(panel, false, {
+      persist: false,
+      syncShare: false,
+    });
+  }, id);
+const showHudLayout = async () => {
+  await openPanel('pp-toggles');
+  await page.waitForSelector('#hud-toggle', { visible: true });
+  const hudOn = await page.$eval(
+    '#hud-toggle',
+    (node) => node.getAttribute('aria-pressed') === 'true',
+  );
+  if (!hudOn) await page.click('#hud-toggle');
+  await page.waitForSelector('#hud-layout-select', { visible: true });
+};
+const panelFields = [
+  ['scene-panel', 'scene-select'],
+  ['pp-toggles', 'hud-layout-select'],
+];
+async function measurePanelFields() {
+  const layout = [];
+  for (const [panel, id] of panelFields) {
+    if (panel === 'pp-toggles') await showHudLayout();
+    else await openPanel(panel);
+    layout.push(
+      await page.$eval(`#${id}`, (node) => {
+        const width = node.getBoundingClientRect().width;
+        const panelWidth = node
+          .closest('.panel-collapsible')
+          .getBoundingClientRect().width;
+        return { id: node.id, width, fits: width > 0 && width <= panelWidth };
+      }),
+    );
+  }
+  return layout;
+}
 fs.mkdirSync('qa-shots/form-fields', { recursive: true });
 try {
   await page.setViewport({ width: 1440, height: 900 });
@@ -37,15 +75,14 @@ try {
   const inventory = await page.evaluate(() => {
     const selects = [
       'scene-select',
-      'cctv-camera-select',
+      'cctv-auto-hop-sec',
       'hud-layout-select',
-      'radio-filter',
       'sdr-gain-select',
     ].map((id) => document.getElementById(id));
     return {
       ids: selects.map((node) => node.id),
       shared:
-        selects.length === 5 &&
+        selects.length === 4 &&
         selects.every((node) => node.classList.contains('gev-field')),
       native: selects.every(
         (node) =>
@@ -57,25 +94,12 @@ try {
     };
   });
   check(
-    'all five panel dropdowns retain native select semantics and shared surface',
+    'all four panel dropdowns retain native select semantics and shared surface',
     inventory.shared && inventory.native,
     inventory,
   );
   check('native option menus keep the dark scheme', inventory.dark);
   await page.evaluate(() => {
-    const manager = window.__godsEyeView.styleManager;
-    manager.setPanelCollapsed('pp-toggles', false, {
-      persist: false,
-      syncShare: false,
-    });
-    manager.setPanelCollapsed('scene-panel', false, {
-      persist: false,
-      syncShare: false,
-    });
-    manager.setPanelCollapsed('cctv-panel', false, {
-      persist: false,
-      syncShare: false,
-    });
     window.__qaFormChanges = [];
     document
       .getElementById('scene-select')
@@ -93,14 +117,9 @@ try {
       isEnabled: () => true,
       toggleEnabled: async () => true,
       setParams: (...args) => window.__qaFormCalls.push(args),
-      runExplicitFocus: (select, focus) => focus(select()),
       showToast: () => {},
     };
-    owner.cctv = {
-      setParams() {},
-      focusCamera: (id) => window.__qaFormCalls.push(['focus', id]),
-      selectCamera: (id) => id,
-    };
+    owner.cctv = { setParams() {} };
     owner._cctvState = {
       enabled: true,
       activeCameraId: 'a',
@@ -161,31 +180,37 @@ try {
     'native numeric validity preserves underflow, overflow, steps and empty drafts',
     validity,
   );
-  await page.select('#cctv-camera-select', 'b');
-  await page.waitForFunction(() => window.__qaFormCalls.length === 2);
-  const cameraSelection = await page.evaluate(() => window.__qaFormCalls);
+  await showHudLayout();
+  await page.focus('#hud-layout-select');
+  const focused = () => page.evaluate(() => document.activeElement.id);
   check(
-    'camera dropdown retains selection, focus and user-origin dispatch',
-    cameraSelection[0][0] === 'focus' &&
-      cameraSelection[0][1] === 'b' &&
-      cameraSelection[1][0].selectedCameraId === 'b' &&
-      cameraSelection[1][1].origin === 'user',
-    cameraSelection,
+    'enabled HUD layout select receives focus',
+    (await focused()) === 'hud-layout-select',
   );
-  await page.evaluate(() => {
-    window.__qaFormCalls = [];
-    document.getElementById('cctv-camera-select').disabled = true;
+  await page.focus('#hud-toggle');
+  check(
+    'the visible HUD toggle receives focus',
+    (await focused()) === 'hud-toggle',
+  );
+  await page.$eval('#hud-layout-select', (node) => {
+    node.disabled = true;
   });
-  await page.focus('#scene-select');
-  await page.focus('#cctv-camera-select');
-  check(
-    'disabled native selects cannot receive keyboard focus',
-    await page.evaluate(
-      () => document.activeElement.id !== 'cctv-camera-select',
-    ),
-  );
+  try {
+    await page.focus('#hud-layout-select');
+    check(
+      'disabled native selects leave focus on the HUD toggle',
+      (await focused()) === 'hud-toggle',
+    );
+  } finally {
+    await page.$eval('#hud-layout-select', (node) => {
+      node.disabled = false;
+    });
+  }
+  // The camera tools wait in a hidden home until a camera card's Camera
+  // settings tab shows them. With fixture ports there is no camera card, so
+  // the editor checks show the home itself.
   await page.evaluate(() => {
-    document.getElementById('cctv-camera-select').disabled = false;
+    document.querySelector('.cctv-tools-home').hidden = false;
   });
   const begin = async (field) => {
     await page.evaluate((field) => {
@@ -274,43 +299,16 @@ try {
     await page.evaluate(() => window.__qaFormCalls.length === 2),
   );
 
-  await page.evaluate(() => {
-    for (const panel of ['pp-toggles', 'scene-panel', 'cctv-panel'])
-      window.__godsEyeView.styleManager.setPanelCollapsed(panel, false, {
-        persist: false,
-        syncShare: false,
-      });
-  });
-  for (const lang of ['en']) {
-    await page.evaluate((lang) => {
-      document.documentElement.lang = lang;
-    }, lang);
-    for (const width of [1440, 620, 390]) {
-      await page.setViewport({ width, height: 900 });
-      const layout = await page.evaluate(() => {
-        const ids = ['scene-select', 'cctv-camera-select', 'hud-layout-select'];
-        return ids.map((id) => {
-          const node = document.getElementById(id),
-            rect = node.getBoundingClientRect(),
-            panel = node.closest('.panel-collapsible')?.getBoundingClientRect();
-          return {
-            id,
-            width: rect.width,
-            fits: rect.width > 0 && rect.width <= (panel?.width || innerWidth),
-            radius: getComputedStyle(node).borderRadius,
-          };
-        });
-      });
-      check(
-        `${lang} fields fit their panels at ${width}px`,
-        layout.every((item) => item.fits),
-        layout,
-      );
-      if (width === 390)
-        await page.screenshot({
-          path: `qa-shots/form-fields/${lang}-${width}.png`,
-        });
-    }
+  for (const width of [1440, 620, 390]) {
+    await page.setViewport({ width, height: 900 });
+    const layout = await measurePanelFields();
+    check(
+      `en fields fit their panels at ${width}px`,
+      layout.every((item) => item.fits),
+      layout,
+    );
+    if (width === 390)
+      await page.screenshot({ path: 'qa-shots/form-fields/en-390.png' });
   }
   await page.evaluate(() => {
     document.documentElement.lang = 'en';
@@ -332,6 +330,7 @@ try {
   );
   // Scene selection can restore application settings. Exercise it after the
   // fixture-owned CCTV phase so those asynchronous effects cannot replace ports.
+  await openPanel('scene-panel');
   page.once('dialog', (dialog) => dialog.accept('Baseline selection fixture'));
   await page.click('#scene-new-btn');
   await page.waitForFunction(() =>
@@ -395,37 +394,13 @@ try {
       document.getElementById('loading-screen')?.classList.contains('hidden'),
     { timeout: 60000 },
   );
-  await page.evaluate(() => {
-    for (const panel of ['pp-toggles', 'scene-panel', 'cctv-panel'])
-      window.__godsEyeView.styleManager.setPanelCollapsed(panel, false, {
-        persist: false,
-        syncShare: false,
-      });
-  });
-  await page.evaluate(() => {
-    for (const panel of ['pp-toggles', 'scene-panel', 'cctv-panel'])
-      window.__godsEyeView.styleManager.setPanelCollapsed(panel, false, {
-        persist: false,
-        syncShare: false,
-      });
-  });
-  const translated = await page.evaluate(() => {
-    const nodes = [
-      'scene-select',
-      'cctv-camera-select',
-      'hud-layout-select',
-    ].map((id) => document.getElementById(id));
-    return (
-      document.documentElement.lang === 'ru' &&
-      nodes.every(
-        (node) =>
-          node.clientWidth > 0 &&
-          node.getBoundingClientRect().width <=
-            node.closest('.panel-collapsible').getBoundingClientRect().width,
-      )
-    );
-  });
-  check('real Russian labels and fields fit at 390px', translated);
+  const translated = await measurePanelFields();
+  check(
+    'real Russian labels and fields fit at 390px',
+    (await page.evaluate(() => document.documentElement.lang)) === 'ru' &&
+      translated.every((item) => item.fits),
+    translated,
+  );
   await page.screenshot({ path: 'qa-shots/form-fields/ru-390.png' });
   check('no uncaught browser errors', errors.length === 0, errors);
 } finally {

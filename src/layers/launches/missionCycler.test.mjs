@@ -138,13 +138,11 @@ function satelliteRig({ enabledBefore }) {
     _dataManager: manager,
     _satelliteStateBeforeMission: {
       enabled: enabledBefore,
-      params: { mode: 'before' },
+      display: { showPoints: true, showOrbits: false },
     },
     _satelliteActivationPromise: null,
   };
-  const parts = {
-    policyHelpers: { satelliteParamsAfterSpaceMissions: (params) => params },
-  };
+  const parts = {};
   const ingestion = createIngestion({ state, services: {}, parts, source: {} });
   parts.satelliteIntents = createSatelliteIntents({ state });
   const { methods } = createControls({ state, services: {}, parts });
@@ -160,11 +158,14 @@ test('an accepted Satellites action keeps its visibility through mission exit', 
     enabled: true,
     origin: 'user',
   });
+  assert.deepEqual(r.calls, [
+    ['params', 'satellites', { showPoints: true, showOrbits: false }],
+  ]);
   await r.ingestion.restoreSatelliteDependency();
   assert.deepEqual(
     r.calls,
-    [['params', 'satellites', { mode: 'before' }]],
-    'the parameters come back, the visibility is left alone',
+    [['params', 'satellites', { showPoints: true, showOrbits: false }]],
+    'the display was handed back at ON, so teardown does not touch it',
   );
   assert.equal(r.state._satelliteStateBeforeMission, null);
 });
@@ -173,7 +174,7 @@ test('without a Satellites action the exit restores the pre-mission visibility',
   const r = satelliteRig({ enabledBefore: false });
   await r.ingestion.restoreSatelliteDependency();
   assert.deepEqual(r.calls, [
-    ['params', 'satellites', { mode: 'before' }],
+    ['params', 'satellites', { showPoints: true, showOrbits: false }],
     ['enabled', 'satellites', false],
   ]);
 });
@@ -189,14 +190,14 @@ test('a Satellites layer that does not settle keeps the saved state for the next
   assert.deepEqual(r.calls, [], 'nothing changes while Satellites is busy');
   assert.deepEqual(r.state._satelliteStateBeforeMission, {
     enabled: false,
-    params: { mode: 'before' },
+    display: { showPoints: true, showOrbits: false },
   });
 
   // Turning Space Missions off again once Satellites settles finishes it.
   idle = true;
   await r.ingestion.restoreSatelliteDependency();
   assert.deepEqual(r.calls, [
-    ['params', 'satellites', { mode: 'before' }],
+    ['params', 'satellites', { showPoints: true, showOrbits: false }],
     ['enabled', 'satellites', false],
   ]);
   assert.equal(r.state._satelliteStateBeforeMission, null);
@@ -207,6 +208,8 @@ test('a Satellites action the person took still gets its parameters back when Sa
   r.state._dataManager.waitForLayerIdle = async () => false;
   r.state._satelliteStateBeforeMission.restoreVisibility = false;
   await r.ingestion.restoreSatelliteDependency();
-  assert.deepEqual(r.calls, [['params', 'satellites', { mode: 'before' }]]);
+  assert.deepEqual(r.calls, [
+    ['params', 'satellites', { showPoints: true, showOrbits: false }],
+  ]);
   assert.equal(r.state._satelliteStateBeforeMission, null);
 });

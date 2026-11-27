@@ -263,10 +263,24 @@ test('a World frame is fetched once per refresh floor and the cooldown never spe
   assert.equal(second.headers['X-CCTV-Source'], 'upstream-image');
   assert.equal(upstreamHits(), 1, 'the second view reuses the cached frame');
 
+  // A later failed refresh also returns HTTP 200 with the original pixels.
+  answer = () => new Response('down', { status: 503 });
+  const afterFloor = Date.now() + 11 * 60 * 1000;
+  t.mock.method(Date, 'now', () => afterFloor);
+  const stale = await app.call(frame);
+  assert.equal(stale.status, 200);
+  assert.equal(stale.headers['X-CCTV-Source'], 'upstream-image');
+  assert.deepEqual(stale.body, first.body);
+  const dock = await app.call(frame + '?liveOnly=1');
+  assert.equal(dock.status, 503, 'the dock cannot decode the stale camera image as live');
+  assert.equal(dock.body, undefined);
+  assert.equal(upstreamHits(), 2);
+  const health = JSON.parse((await app.call('/health')).body);
+  assert.equal(health.cameras.find((c) => c.id === 'world-or-764').status, 'degraded');
+
   // A camera whose first fetch fails is inside its failure backoff: it gets
   // the placeholder, not Google Street View, and no second upstream request.
   const failRoot = sourceRoot(t, { world: [oregonRow()] });
-  answer = () => new Response('down', { status: 503 });
   const failing = mount(t, failRoot, (url) =>
     url === oregonRow().url ? answer() : null,
   );

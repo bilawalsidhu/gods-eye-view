@@ -34,8 +34,14 @@ export function createPresentation({
       buildCategories();
     const visible = parts.queries.visibleStations();
     const selected = parts.queries.selectedStation();
+    const local = layerState._source === 'local';
     return Object.freeze({
-      enabled: layerState._enabled,
+      // Internet stations: on only while the layer is on for them. With a
+      // local receiver chosen there are no stations to show.
+      enabled: layerState._enabled && !local,
+      source: layerState._source,
+      /** The layer is on with the local receiver chosen. */
+      localReceiver: layerState._enabled && local,
       loading: layerState._loading,
       stale: layerState._stale,
       degraded: layerState._degraded,
@@ -55,6 +61,10 @@ export function createPresentation({
       audioState: layerState._audioState,
       audioError: layerState._audioError,
       playingStationId: layerState._audioStationId,
+      // The station heard (or paused), which need not be the one selected.
+      playingStation: layerState._audioStationId
+        ? layerState._stationById.get(layerState._audioStationId) || null
+        : null,
       volume: layerState._userVolume,
       effectiveVolume:
         layerState._audio?.volume ??
@@ -72,11 +82,12 @@ export function createPresentation({
     });
   }
 
-  function emitState() {
+  // Only a source parameter publication carries its origin.
+  function emitState(sourceOrigin) {
     const snapshot = getRadioUIState();
     for (const listener of layerState._listeners) {
       try {
-        listener(snapshot);
+        listener(snapshot, sourceOrigin);
       } catch {
         // A broken consumer must not break playback or rendering.
       }

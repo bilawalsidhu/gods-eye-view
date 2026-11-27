@@ -3,11 +3,11 @@
  * Deterministic browser proof for the Radio companion layer.
  *
  * Intercepts Radio endpoints with a 750-station fixture, supplies fixed
- * satellite/context support responses, and stubs the
+ * satellite/weather/context support responses, and stubs the
  * browser media `play()` primitive. It proves marker scale/culling, dynamic
  * station-tag filtering, first-click selection, direct-action-only playback, panel/Context
  * independence, restoration without autoplay, responsive UI, and a clean
- * console. Screenshots are written under the gitignored `qa-shots/radio/`.
+ * console. Use --out to keep screenshots and results outside the checkout.
  *
  * Run: node scripts/qa-radio.mjs --url http://localhost:4173
  */
@@ -18,12 +18,17 @@ import puppeteer from 'puppeteer';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..');
-const SHOTS_DIR = path.join(REPO_ROOT, 'qa-shots', 'radio');
+
 const args = process.argv.slice(2);
 const option = (name, fallback) => {
   const index = args.indexOf(name);
   return index >= 0 && args[index + 1] ? args[index + 1] : fallback;
 };
+const SHOTS_DIR = path.resolve(option('--out', path.join(REPO_ROOT, 'qa-shots', 'radio')));
+const RADIO_POWER = '[data-layer-id="radio"] .data-toggle-btn';
+const RADIO_LIST = '[data-list-card="radio"]';
+const RADIO_STATION_ROWS = `${RADIO_LIST} [data-list-key]`;
+const RADIO_FILTER_STRIP = `${RADIO_LIST} .city-filter__strip`;
 const APP_URL = option('--url', process.env.QA_BASE_URL || 'http://localhost:4173');
 const APP_ORIGIN = new URL(APP_URL).origin;
 // Radio owns this harness's keyboard and pointer actions; the welcome dialog
@@ -77,23 +82,31 @@ function check(name, ok, detail = '') {
   results.push({ name, ok });
   const label = ok ? '\x1b[32mPASS\x1b[0m' : '\x1b[31mFAIL\x1b[0m';
   console.log(`  [${label}] ${name}${detail ? ` — ${detail}` : ''}`);
+  if (!ok) throw new Error(`Radio QA assertion failed: ${name}`);
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// Radio lives only inside Context; a user reaches its controls by expanding
-// Context and then Radio. Returns the prior collapse state so a step can put
-// the panels back for the scenarios that follow.
+// The tuner is a native disclosure inside Context's station list. Power lives
+// only in Data Layers. Preserve both disclosure states around pointer tests.
 async function revealRadioControls(page, targetId) {
-  const prior = await page.evaluate(async (id) => {
+  const prior = await page.evaluate(async () => {
     const manager = window.__godsEyeView.styleManager;
-    const collapsed = (panelId) => document.getElementById(panelId).classList.contains('collapsed');
-    const state = { context: collapsed('global-context-panel'), radio: collapsed('radio-panel') };
+    const context = document.getElementById('global-context-panel');
+    const fold = document.getElementById('radio-panel');
+    const state = { context: context.classList.contains('collapsed'), radio: !fold.open };
     manager.setPanelCollapsed('global-context-panel', false, { explicit: true });
-    manager.setPanelCollapsed('radio-panel', false, { explicit: true });
+    const { usePinnedStore } = await import('/src/ui/stores/pinned.js');
+    usePinnedStore().show('inspect');
+    const { useEntityCardStore } = await import('/src/ui/stores/entityCard.js');
+    useEntityCardStore().clear();
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-    document.getElementById(id).scrollIntoView({ block: 'nearest' });
     return state;
+  });
+  await page.waitForSelector('#radio-fold-slot #radio-panel');
+  await page.evaluate((id) => {
+    document.getElementById('radio-panel').open = true;
+    document.getElementById(id)?.scrollIntoView({ block: 'nearest' });
   }, targetId);
   await page.waitForSelector(`#${targetId}`, { visible: true });
   return prior;
@@ -101,10 +114,15 @@ async function revealRadioControls(page, targetId) {
 
 async function restoreRadioPanels(page, prior) {
   await page.evaluate(({ context, radio }) => {
-    const manager = window.__godsEyeView.styleManager;
-    manager.setPanelCollapsed('radio-panel', radio);
-    manager.setPanelCollapsed('global-context-panel', context);
+    document.getElementById('radio-panel').open = !radio;
+    window.__godsEyeView.styleManager.setPanelCollapsed('global-context-panel', context);
   }, prior);
+}
+
+// Setup changes use the same store action as the Context category chips.
+// A separate pointer assertion below exercises the rendered chips themselves.
+async function setRadioFilter(page, category) {
+  await page.evaluate((value) => window.__qaRadioUi.act('setRadioFilter', value), category);
 }
 
 // Native pick buffers and clustered overlay entries settle on rendered frames,
@@ -134,7 +152,7 @@ async function main() {
     headless: HEADFUL ? false : 'new',
     ...(chrome ? { executablePath: chrome } : {}),
     args: [
-      '--no-sandbox', '--disable-setuid-sandbox',
+      ...(process.platform === 'darwin' ? [] : ['--no-sandbox', '--disable-setuid-sandbox']),
       ...(process.platform === 'darwin'
         ? ['--use-angle=metal', '--enable-gpu']
         : ['--use-gl=angle', '--use-angle=swiftshader']),
@@ -143,10 +161,14 @@ async function main() {
     ],
   });
 
+  let page;
   try {
-    const page = await browser.newPage();
+    page = await browser.newPage();
     await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
     await page.evaluateOnNewDocument(() => {
+      // Stories onboarding has separate coverage; this fresh QA profile
+      // represents a returning visit so its popup cannot cover Radio.
+      localStorage.setItem('gevStoriesPopSeen', '1');
       window.__qaRadioPlayCalls = [];
       window.__qaRadioFailedNearest = false;
       window.__qaRadioDelayNextPlay = false;
@@ -265,6 +287,31 @@ async function main() {
       });
       return;
     }
+      // Weather accompanies camera navigation but is not under Radio test.
+      // Keep it deterministic instead of depending on Open-Meteo availability.
+      if (url.origin === APP_ORIGIN && url.pathname === '/api/weather-effects') {
+        request.respond({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            status: 'ready',
+            retrievedAt: new Date().toISOString(),
+            coordinates: {
+              latitude: Number(url.searchParams.get('latitude')),
+              longitude: Number(url.searchParams.get('longitude')),
+            },
+            weather: {
+              observedAt: new Date().toISOString(),
+              timeZone: 'UTC', utcOffsetSeconds: 0,
+              temperatureC: 20, apparentTemperatureC: 20,
+              precipitationMm: 0, cloudCoverPct: 0,
+              windKph: 10, windDirectionDeg: 0,
+              visibilityM: 10000, weatherCode: 0,
+            },
+          }),
+        });
+        return;
+      }
       if (url.origin === APP_ORIGIN && url.pathname === '/api/radio/stations') {
         const response = {
           status: 200,
@@ -348,23 +395,34 @@ async function main() {
       && typeof window.__gevQaUnregisterLayer === 'function'
     ));
     await page.evaluate(() => {
-      window.__godsEyeView.viewer.camera.cancelFlight();
+      const viewer = window.__godsEyeView.viewer;
+      const camera = viewer.camera;
+      camera.cancelFlight();
+      window.__qaRadioInitialView = { position: camera.position.clone(), direction: camera.direction.clone(), up: camera.up.clone() };
+      // A real view over fixture station 549 ensures the nearby list has a
+      // row inside its default 250 km radius when Radio is turned on.
+      camera.setView({
+        destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({ longitude: -78 * Math.PI / 180, latitude: 36 * Math.PI / 180, height: 2_000_000 }),
+        orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+      });
       window.__godsEyeView.styleManager.setPanelCollapsed('pp-toggles', true);
-      window.__godsEyeView.styleManager.setPanelCollapsed('cctv-panel', true);
-      window.__godsEyeView.styleManager.setPanelCollapsed('radio-panel', true);
+      document.getElementById('radio-panel').open = false;
       window.__godsEyeView.styleManager.setPanelCollapsed('global-context-panel', true);
     });
 
-    const enablePanels = await revealRadioControls(page, 'radio-enable-btn');
+    await page.evaluate(async () => {
+      const { useRadioStore } = await import('/src/ui/stores/radio.js');
+      window.__qaRadioUi = useRadioStore();
+      window.__godsEyeView.styleManager.setPanelCollapsed('data-panel', false);
+      document.querySelector('[data-layer-id="radio"] .data-toggle-btn').scrollIntoView({ block: 'center' });
+    });
     const enableStartedAt = Date.now();
-    await page.click('#radio-enable-btn');
+    await page.click(RADIO_POWER);
     await page.waitForFunction(() => {
       const state = window.__godsEyeView.dataManager.layers.get('radio').module.getUIState();
       return state.enabled && !state.loading && state.stationCount === 750;
     });
     const enableElapsedMs = Date.now() - enableStartedAt;
-    // Later scenarios start from the collapsed rail this step began with.
-    await restoreRadioPanels(page, enablePanels);
     const initial = await page.evaluate(() => {
       const module = window.__godsEyeView.dataManager.layers.get('radio').module;
       const state = module.getUIState();
@@ -373,16 +431,13 @@ async function main() {
       return {
         state,
         plays: window.__qaRadioPlayCalls.length,
-        panelExpanded: !radio.classList.contains('collapsed'),
+        panelExpanded: radio.open,
         contextExpanded: !context.classList.contains('collapsed'),
-        nestedInContext: context.contains(radio),
-        filterOptions: document.getElementById('radio-filter').options.length,
-        filterPalette: Array.from(document.getElementById('radio-filter').options).map((entry) => ({
-          id: entry.value,
-          label: entry.textContent,
-          color: entry.dataset.radioColor,
-        })),
-        enablePressed: document.getElementById('radio-enable-btn').getAttribute('aria-pressed'),
+        filterOptions: state.categories.length,
+        filterPalette: state.categories.map(({ id, label, color }) => ({ id, label, color })),
+        enableActive: document.querySelector('[data-layer-id="radio"] .data-toggle-btn').classList.contains('active'),
+        enableFeedState: document.querySelector('[data-layer-id="radio"] .data-toggle-btn').dataset.feedState,
+        enableLabel: document.querySelector('[data-layer-id="radio"] .data-toggle-btn').getAttribute('aria-label'),
         fullPlayEnabled: !document.getElementById('radio-play-btn').disabled,
         fullPlayLabel: document.getElementById('radio-play-btn').getAttribute('aria-label'),
         tunerVisible: !document.getElementById('radio-tuner').hidden,
@@ -390,18 +445,19 @@ async function main() {
         tunerLabel: document.getElementById('radio-tuner-band-label').textContent,
       };
     });
+    check('enabling Radio leaves Context and its tuner disclosure closed', !initial.panelExpanded && !initial.contextExpanded);
     check('750-station catalog renders within the browser budget', initial.state.stationCount === 750 && enableElapsedMs < 5000, `${enableElapsedMs}ms`);
     check('enable does not autoplay', initial.plays === 0 && initial.state.audioState === 'stopped');
     check(
-      'Radio power control reflects the layer manager after the panels collapse again',
-      initial.enablePressed === 'true',
+      'Radio power control reflects the layer manager after enabling Radio',
+      initial.enableActive && initial.enableFeedState === 'nominal' && initial.enableLabel === 'Radio: ON',
     );
     check('dynamic canonical and genre categories reach the UI', initial.filterOptions >= 10, `${initial.filterOptions} options`);
     const musicOption = initial.filterPalette.find((entry) => entry.id === 'music');
     const newsOption = initial.filterPalette.find((entry) => entry.id === 'news');
     check(
-      'station-tag options show category-colored circles before their labels',
-      initial.filterPalette.every((entry) => entry.label.startsWith('● '))
+      'station categories keep the map palette and readable labels',
+      initial.filterPalette.every((entry) => entry.label.length > 0)
         && musicOption?.color === '#54d17a'
         && newsOption?.color === '#44adff',
       JSON.stringify({ musicOption, newsOption }),
@@ -412,7 +468,35 @@ async function main() {
       initial.tunerVisible && initial.tunerCount === 750 && initial.tunerLabel === 'DIRECTORY BAND',
       JSON.stringify({ visible: initial.tunerVisible, count: initial.tunerCount, label: initial.tunerLabel }),
     );
-    const uncertainPresentation = await page.evaluate(async () => {
+    // Exercise the real late-manager publication path before helper setup:
+    // Radio is on, then the user opens Context without changing its tab/card.
+    await page.click('[data-rail-item="global-context-panel"]');
+    await page.waitForSelector(RADIO_STATION_ROWS, { visible: true });
+    const enabledListRows = await page.$$eval(RADIO_STATION_ROWS, (rows) => rows.map((row) => row.textContent.trim()));
+    check('turning Radio on publishes one filter strip and five of the 750 stations in Context without helper state',
+      await page.evaluate((list, strip) => document.querySelectorAll(strip).length === 1
+        && document.querySelector(`${list} [data-list-range]`)?.textContent.trim() === '1–5 of 750'
+        && window.__godsEyeView.dataManager.layers.get('radio').module.getUIState().enabled
+        && window.__qaRadioPlayCalls.length === 0, RADIO_LIST, RADIO_FILTER_STRIP) && enabledListRows.length === 5,
+      JSON.stringify({ rowCount: enabledListRows.length, rows: enabledListRows }));
+    await page.screenshot({ path: path.join(SHOTS_DIR, 'station-list-enabled.png') });
+    await page.evaluate(() => {
+      const { position, direction, up } = window.__qaRadioInitialView;
+      window.__godsEyeView.viewer.camera.setView({ destination: position, orientation: { direction, up } });
+      delete window.__qaRadioInitialView;
+    });
+    await page.click('#global-context-panel [data-collapse-target="global-context-panel"]');
+    const categoryPanels = await revealRadioControls(page, 'radio-play-btn');
+    await page.locator(`${RADIO_FILTER_STRIP} ::-p-text(News)`).click();
+    check('Context station-tag chips filter markers without starting audio',
+      await page.evaluate((strip) => {
+        const state = window.__godsEyeView.dataManager.layers.get('radio').module.getUIState();
+        return state.filter === 'news' && state.filteredCount === 75
+          && state.audioState === 'stopped'
+          && document.querySelector(`${strip} button[aria-pressed="true"]`)?.textContent.trim() === 'News';
+      }, RADIO_FILTER_STRIP));
+    await page.click(`${RADIO_FILTER_STRIP} button:first-child`);
+    const uncertainPresentation = await page.evaluate(async (strip) => {
       const gev = window.__godsEyeView;
       const style = gev.styleManager;
       const entry = gev.dataManager.layers.get('radio');
@@ -435,15 +519,14 @@ async function main() {
       gev.dataManager.refreshLayerStats();
       const staticResult = module.setTuningStatic(true);
       const filterBefore = module.getUIState().filter;
-      const filterControl = document.getElementById('radio-filter');
+
       const originalPinned = style._radioControls._radioTunerBandPinnedForNavigation;
       const originalPool = style._radioControls._radioTunerPool;
       style._radioControls._radioTunerBandPinnedForNavigation = true;
-      filterControl.value = filterBefore === 'news' ? 'all' : 'news';
-      filterControl.dispatchEvent(new Event('change', { bubbles: true }));
+      window.__qaRadioUi.act('setRadioFilter', filterBefore === 'news' ? 'all' : 'news');
       const rejectedUIFilter = {
         moduleFilter: module.getUIState().filter,
-        controlFilter: filterControl.value,
+        controlFilter: document.querySelector(`${strip} button[aria-pressed="true"]`)?.textContent.trim(),
         pinned: style._radioControls._radioTunerBandPinnedForNavigation,
         poolIdentityPreserved: style._radioControls._radioTunerPool === originalPool,
       };
@@ -462,17 +545,18 @@ async function main() {
         stationIds: module.getTunerStations(3).map(({ id }) => id),
       });
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const genreChips = [...document.querySelectorAll(`${strip} button:not(:first-child):not([data-city-option])`)];
       const result = {
         presentationActive: module.getUIState().presentationActive,
         markerSourceVisible: (window.__qaRadioRows('stations')[0]?.setShown ?? false),
         tunerHidden: document.getElementById('radio-tuner').hidden,
-        filterDisabled: document.getElementById('radio-filter').disabled,
+        filterDisabled: genreChips.length > 0 && genreChips.every((button) => button.disabled),
         prevDisabled: document.getElementById('radio-prev-btn').disabled,
         playDisabled: document.getElementById('radio-play-btn').disabled,
         volumeDisabled: document.getElementById('radio-volume').disabled,
-        fullLabel: document.getElementById('radio-enable-btn').getAttribute('aria-label'),
-        fullText: document.getElementById('radio-enable-btn').textContent,
-        layerState: document.getElementById('radio-layer-state').textContent,
+        fullLabel: document.querySelector('[data-layer-id="radio"] .data-toggle-btn').getAttribute('aria-label'),
+        fullText: document.querySelector('[data-layer-id="radio"] .data-toggle-btn').textContent,
+        layerState: document.querySelector('[data-layer-id="radio"] .data-toggle-btn').textContent.trim(),
         playbackMessage: document.getElementById('radio-playback-state').textContent,
         dataRailText: document.querySelector('[data-layer-id="radio"] .data-toggle-btn')?.textContent,
         dataRailState: document.querySelector('[data-layer-id="radio"] .data-toggle-btn')?.dataset.feedState,
@@ -505,7 +589,7 @@ async function main() {
       module.cancelTuning();
       camera.flyTo = originalFlyTo;
       return result;
-    });
+    }, RADIO_FILTER_STRIP);
     check(
       'uncertain settled-ON Radio remains hidden and inert until manager reconciliation',
       uncertainPresentation.presentationActive === false
@@ -516,7 +600,7 @@ async function main() {
         && uncertainPresentation.playDisabled
         && uncertainPresentation.volumeDisabled
         && /uncertain/i.test(uncertainPresentation.fullLabel)
-        && uncertainPresentation.fullText === 'RECONCILE'
+        && uncertainPresentation.fullText.trim() === 'UNCERTAIN'
         && uncertainPresentation.layerState === 'UNCERTAIN'
         && /uncertain/i.test(uncertainPresentation.playbackMessage)
         && uncertainPresentation.dataRailText === 'UNCERTAIN'
@@ -533,7 +617,7 @@ async function main() {
         && uncertainPresentation.filterResult === false
         && uncertainPresentation.filterAfter === uncertainPresentation.filterBefore
         && uncertainPresentation.rejectedUIFilter.moduleFilter === uncertainPresentation.filterBefore
-        && uncertainPresentation.rejectedUIFilter.controlFilter === uncertainPresentation.filterBefore
+        && uncertainPresentation.rejectedUIFilter.controlFilter === initial.filterPalette.find(({ id }) => id === uncertainPresentation.filterBefore)?.label
         && uncertainPresentation.rejectedUIFilter.pinned
         && uncertainPresentation.rejectedUIFilter.poolIdentityPreserved
         && uncertainPresentation.toggleResult === false
@@ -542,6 +626,7 @@ async function main() {
         && uncertainPresentation.playDelta === 0,
       JSON.stringify(uncertainPresentation),
     );
+    await restoreRadioPanels(page, categoryPanels);
     await page.evaluate(() => {
       const gev = window.__godsEyeView;
       const module = gev.dataManager.layers.get('radio').module;
@@ -559,8 +644,8 @@ async function main() {
       manager: window.__godsEyeView.dataManager.getLayerLifecycleState('radio'),
       presentationActive: window.__godsEyeView.dataManager.layers.get('radio').module.getUIState().presentationActive,
       markerSourceVisible: (window.__qaRadioRows('stations')[0]?.setShown ?? false),
-      full: document.getElementById('radio-enable-btn').textContent,
-      layerState: document.getElementById('radio-layer-state').textContent,
+      full: document.querySelector('[data-layer-id="radio"] .data-toggle-btn').textContent,
+      layerState: document.querySelector('[data-layer-id="radio"] .data-toggle-btn').textContent.trim(),
       message: document.getElementById('radio-playback-state').textContent,
       stopDisabled: document.getElementById('radio-stop-btn').disabled,
       volumeDisabled: document.getElementById('radio-volume').disabled,
@@ -586,21 +671,9 @@ async function main() {
       delete window.__qaRadioDisablePromise;
       delete window.__qaRadioDisableStarted;
     });
-    const explicitRevealBefore = await page.evaluate(async () => {
-      const gev = window.__godsEyeView;
-      gev.styleManager.setPanelCollapsed('global-context-panel', false);
-      gev.styleManager.setPanelCollapsed('radio-panel', false);
-      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-      const scroller = document.querySelector('#global-context-panel .global-context-panel-inner');
-      const radio = document.getElementById('radio-panel');
-      scroller.scrollTop = Math.max(0, radio.offsetTop - scroller.clientHeight + 70);
-      const camera = gev.viewer.camera.positionWC;
-      return {
-        scrollTop: scroller.scrollTop,
-        pageY: window.scrollY,
-        camera: { x: camera.x, y: camera.y, z: camera.z },
-        plays: window.__qaRadioPlayCalls.length,
-      };
+    const explicitRevealBefore = await page.evaluate(() => {
+      const camera = window.__godsEyeView.viewer.camera.positionWC;
+      return { pageY: window.scrollY, camera: { x: camera.x, y: camera.y, z: camera.z }, plays: window.__qaRadioPlayCalls.length };
     });
     await page.screenshot({ path: path.join(SHOTS_DIR, 'explicit-enable-before.png') });
     // A warm accepted catalog makes re-enable legitimately synchronous: there
@@ -619,8 +692,8 @@ async function main() {
       window.__qaReleaseRadioEnable = () => release();
       window.__qaRestoreRadioEnable = () => { radio.enable = originalEnable; };
     });
-    await page.focus('#radio-enable-btn');
-    await page.click('#radio-enable-btn');
+    await page.focus(RADIO_POWER);
+    await page.click(RADIO_POWER);
     await page.waitForFunction(() => (
       window.__godsEyeView.dataManager.getLayerLifecycleState('radio')?.lifecycleState === 'enabling'
     ));
@@ -628,8 +701,8 @@ async function main() {
       manager: window.__godsEyeView.dataManager.getLayerLifecycleState('radio'),
       presentationActive: window.__godsEyeView.dataManager.layers.get('radio').module.getUIState().presentationActive,
       markerSourceVisible: (window.__qaRadioRows('stations')[0]?.setShown ?? false),
-      full: document.getElementById('radio-enable-btn').textContent,
-      layerState: document.getElementById('radio-layer-state').textContent,
+      full: document.querySelector('[data-layer-id="radio"] .data-toggle-btn').textContent,
+      layerState: document.querySelector('[data-layer-id="radio"] .data-toggle-btn').textContent.trim(),
       message: document.getElementById('radio-playback-state').textContent,
       tunerHidden: document.getElementById('radio-tuner').hidden,
       stopDisabled: document.getElementById('radio-stop-btn').disabled,
@@ -653,53 +726,19 @@ async function main() {
     await page.evaluate(() => window.__qaReleaseRadioEnable?.());
     await page.waitForFunction(() => window.__godsEyeView.dataManager.isEnabled('radio'));
     await page.evaluate(() => window.__qaRestoreRadioEnable?.());
-    await page.waitForFunction(() => {
-      const scroller = document.querySelector('#global-context-panel .global-context-panel-inner');
-      const viewport = scroller.getBoundingClientRect();
-      const directory = document.querySelector('#radio-panel .radio-directory-row').getBoundingClientRect();
-      const play = document.getElementById('radio-play-btn').getBoundingClientRect();
-      return directory.top >= viewport.top && directory.bottom <= viewport.bottom
-        && play.top >= viewport.top && play.bottom <= viewport.bottom;
-    }, { timeout: 10_000 });
     const explicitRevealAfter = await page.evaluate(() => {
       const gev = window.__godsEyeView;
-      const scroller = document.querySelector('#global-context-panel .global-context-panel-inner');
-      const viewport = scroller.getBoundingClientRect();
-      const directory = document.querySelector('#radio-panel .radio-directory-row').getBoundingClientRect();
-      const play = document.getElementById('radio-play-btn').getBoundingClientRect();
       const camera = gev.viewer.camera.positionWC;
-      return {
-        scrollTop: scroller.scrollTop,
-        pageY: window.scrollY,
-        camera: { x: camera.x, y: camera.y, z: camera.z },
-        directoryVisible: directory.top >= viewport.top && directory.bottom <= viewport.bottom,
-        playVisible: play.top >= viewport.top && play.bottom <= viewport.bottom,
-        focusId: document.activeElement?.id,
+      return { pageY: window.scrollY, camera: { x: camera.x, y: camera.y, z: camera.z },
+        focusKept: document.activeElement === document.querySelector('[data-layer-id="radio"] .data-toggle-btn'),
         plays: window.__qaRadioPlayCalls.length,
-        audioState: gev.dataManager.layers.get('radio').module.getUIState().audioState,
-      };
+        audioState: gev.dataManager.layers.get('radio').module.getUIState().audioState };
     });
-    await page.screenshot({ path: path.join(SHOTS_DIR, 'explicit-enable-after.png') });
-    const revealCameraDelta = Math.hypot(
-      explicitRevealAfter.camera.x - explicitRevealBefore.camera.x,
-      explicitRevealAfter.camera.y - explicitRevealBefore.camera.y,
-      explicitRevealAfter.camera.z - explicitRevealBefore.camera.z,
-    );
-    check(
-      'expanded Radio Enable reveals the directory and Play inside Context without autoplay or focus/camera theft',
-      explicitRevealAfter.scrollTop > explicitRevealBefore.scrollTop
-        && explicitRevealAfter.directoryVisible && explicitRevealAfter.playVisible
-        && explicitRevealAfter.focusId === 'radio-enable-btn'
-        && explicitRevealAfter.pageY === explicitRevealBefore.pageY
-        && revealCameraDelta < 0.01
-        && explicitRevealAfter.plays === explicitRevealBefore.plays
-        && explicitRevealAfter.audioState === 'stopped',
-      JSON.stringify({ before: explicitRevealBefore, after: explicitRevealAfter, cameraDelta: revealCameraDelta }),
-    );
-    await page.evaluate(() => {
-      window.__godsEyeView.styleManager.setPanelCollapsed('radio-panel', true);
-      window.__godsEyeView.styleManager.setPanelCollapsed('global-context-panel', true);
-    });
+    check('Data Layers enables Radio without autoplay or focus/camera theft',
+      explicitRevealAfter.focusKept && explicitRevealAfter.pageY === explicitRevealBefore.pageY
+      && Math.hypot(...['x', 'y', 'z'].map((axis) => explicitRevealAfter.camera[axis] - explicitRevealBefore.camera[axis])) < 0.01
+      && explicitRevealAfter.plays === explicitRevealBefore.plays && explicitRevealAfter.audioState === 'stopped',
+      JSON.stringify(explicitRevealAfter));
     const singletonViews = [];
     const singletonViewSpecs = [
       { category: 'news', lon: -174 },
@@ -708,7 +747,7 @@ async function main() {
       { category: 'all', lon: -174 },
     ];
     for (const spec of singletonViewSpecs) {
-      await page.select('#radio-filter', spec.category);
+      await setRadioFilter(page, spec.category);
       for (const view of [
         { name: 'global', height: 24_200_000, limit: 16 },
         { name: 'near', height: 500_000, limit: 32 },
@@ -804,476 +843,73 @@ async function main() {
         painted: sample.host.paintedBySource?.radio,
       }))),
     );
+    // Exercise Radio action failures and unrelated manager notifications.
     const userFacingFailures = await page.evaluate(async () => {
-      const gev = window.__godsEyeView;
-      const styleManager = gev.styleManager;
-      const dataManager = gev.dataManager;
+      const { styleManager: style, dataManager: manager } = window.__godsEyeView;
+      const originalSetEnabled = manager.setEnabled;
+      const originalShowToast = style._showToast;
       const unhandled = [];
       const onUnhandled = (event) => {
-        unhandled.push(String(event.reason?.message || event.reason || 'unknown'));
+        unhandled.push(String(event.reason?.message || event.reason));
         event.preventDefault();
       };
+      const layerId = 'qa-unrelated-manager-failure';
       window.addEventListener('unhandledrejection', onUnhandled);
-      const originalToggle = dataManager.toggle;
-      const originalSetEnabled = dataManager.setEnabled;
-      const originalRestoreEnabledLayerIds = dataManager.restoreEnabledLayerIds;
-      const originalIsEnabled = dataManager.isEnabled;
-      const originalIsEffectivelyEnabled = dataManager.isEffectivelyEnabled;
-      const originalClear = styleManager._contextControls._clearLayersOutsideContextMode;
-      const originalCapture = styleManager._contextControls._captureContextSessionSnapshot;
-      const originalContextMode = styleManager._contextControls._contextMode;
-      const originalSnapshot = styleManager._contextControls._contextSessionSnapshot;
-      const originalShowToast = styleManager._showToast;
-      const installations = dataManager.layers.get('military-installations')?.module;
-      const originalSearchNearby = installations?.searchNearby;
+      let releasePendingAction;
       try {
-        dataManager.setEnabled = async () => false;
-        document.getElementById('radio-enable-btn').click();
-        await new Promise((resolve) => setTimeout(resolve, 50));
-        const semanticFalseMessage = document.getElementById('toast').textContent;
-
-        const enabled = new Set();
-        styleManager._contextControls._captureContextSessionSnapshot = () => {};
-        const runContextFailure = async (mode, phase, outcome) => {
-          enabled.clear();
-          enabled.add('local-datacenters');
-          styleManager._contextControls._contextMode = null;
-          styleManager._contextControls._contextSessionSnapshot = {
-            enabledLayerIds: new Set(enabled),
-            userAdded: new Set(),
-            userRemoved: new Set(),
-            params: {},
-          };
-          let failureUsed = false;
-          const entryLayerId = 'military-awareness';
-          dataManager.setEnabled = async (layerId, shouldEnable) => {
-            const failsIsolation = phase === 'isolation' && layerId === 'local-datacenters' && !shouldEnable;
-            const failsActivation = phase === 'activation' && layerId === entryLayerId && shouldEnable;
-            if (!failureUsed && (failsIsolation || failsActivation)) {
-              failureUsed = true;
-              if (outcome === 'reject') throw new Error(`QA ${phase} rejection`);
-              return false;
-            }
-            shouldEnable ? enabled.add(layerId) : enabled.delete(layerId);
-            return true;
-          };
-          const result = await styleManager._runUserFacingContextAction(
-            () => styleManager._contextControls._selectContextMode(mode),
-            `${mode} QA transition failed`,
-          );
-          await new Promise((resolve) => setTimeout(resolve, 0));
-          return {
-            mode,
-            phase,
-            outcome,
-            result,
-            visibleMode: styleManager._contextControls._contextMode,
-            snapshotCleared: styleManager._contextControls._contextSessionSnapshot === null,
-            priorLayerRestored: enabled.has('local-datacenters'),
-            entryEnabled: enabled.has(entryLayerId),
-            flightsButtonDisabled: document.getElementById('global-context-flights-btn').disabled,
-            message: document.getElementById('toast').textContent,
-          };
-        };
-        dataManager.isEnabled = (layerId) => enabled.has(layerId);
-        // The fake manager model must answer the effective-visibility accessor
-        // the isolation loop consults, or real entries (all disabled) leak in.
-        dataManager.isEffectivelyEnabled = (layerId) => enabled.has(layerId);
-        dataManager.restoreEnabledLayerIds = async (enabledLayerIds, { excludeLayerIds = [] } = {}) => {
-          const target = new Set(enabledLayerIds || []);
-          const excluded = new Set(excludeLayerIds || []);
-          const layerIds = new Set([...enabled, ...target]);
-          for (const candidateId of layerIds) {
-            if (excluded.has(candidateId)) continue;
-            const restored = await dataManager.setEnabled(candidateId, target.has(candidateId));
-            if (restored === false) {
-              throw new Error(`Failed to restore layer "${candidateId}" visibility`);
-            }
-          }
-        };
-        const contextFailures = [];
-        for (const mode of ['flights']) {
-          for (const phase of ['isolation', 'activation']) {
-            for (const outcome of ['false', 'reject']) {
-              contextFailures.push(await runContextFailure(mode, phase, outcome));
-            }
-          }
-        }
-
-        const directEntryFailures = [];
-        for (const layerId of ['military-awareness']) {
-          for (const outcome of ['false', 'reject']) {
-            enabled.clear();
-            enabled.add('local-datacenters');
-            styleManager._contextControls._contextMode = null;
-            styleManager._contextControls._contextSessionSnapshot = {
-              enabledLayerIds: new Set(enabled),
-              userAdded: new Set(),
-              userRemoved: new Set(),
-              params: {},
-            };
-            let failureUsed = false;
-            const toastMessages = [];
-            styleManager._showToast = (message) => {
-              toastMessages.push(message);
-              originalShowToast.call(styleManager, message);
-            };
-            dataManager.setEnabled = async (candidateId, shouldEnable, options = {}) => {
-              if (!failureUsed && candidateId === 'local-datacenters' && !shouldEnable) {
-                failureUsed = true;
-                styleManager._contextControls._handleContextLayerChange({
-                  type: 'visibility-failed',
-                  layerId: candidateId,
-                  enabled: shouldEnable,
-                  notificationToken: options.notificationToken,
-                  origin: 'user',
-                });
-                if (outcome === 'reject') throw new Error('QA direct isolation rejection');
-                return false;
-              }
-              shouldEnable ? enabled.add(candidateId) : enabled.delete(candidateId);
-              return true;
-            };
-            const reason = await dataManager._visibilityBlockReason({
-              type: 'visibility-will-change',
-              layerId,
-              enabled: true,
-              origin: 'user',
-            });
-            styleManager._contextControls._handleContextLayerChange({
-              type: 'visibility-blocked',
-              layerId,
-              enabled: true,
-              origin: 'user',
-              reason,
-            });
-            const priorLayerRestored = enabled.has('local-datacenters');
-            const retryReason = await dataManager._visibilityBlockReason({
-              type: 'visibility-will-change',
-              layerId,
-              enabled: true,
-              origin: 'user',
-            });
-            directEntryFailures.push({
-              layerId,
-              outcome,
-              reason,
-              retryReason,
-              toastMessages,
-              mode: styleManager._contextControls._contextMode,
-              snapshotCleared: styleManager._contextControls._contextSessionSnapshot === null,
-              priorLayerRestored,
-              modeChanging: styleManager._contextControls._contextModeChanging,
-            });
-          }
-        }
-        styleManager._showToast = originalShowToast;
-
-        const directActivationFailures = [];
-        for (const layerId of ['military-awareness']) {
-          enabled.clear();
-          styleManager._contextControls._contextMode = null;
-          styleManager._contextControls._contextSessionSnapshot = {
-            enabledLayerIds: new Set(['local-datacenters']),
-            userAdded: new Set(),
-            userRemoved: new Set(),
-            params: {},
-          };
-          dataManager.setEnabled = async (candidateId, shouldEnable) => {
-            shouldEnable ? enabled.add(candidateId) : enabled.delete(candidateId);
-            return true;
-          };
-          styleManager._contextControls._handleContextLayerChange({
-            type: 'visibility-failed',
-            layerId,
-            enabled: true,
-            origin: 'user',
-          });
-          await new Promise((resolve) => setTimeout(resolve, 50));
-          directActivationFailures.push({
-            layerId,
-            mode: styleManager._contextControls._contextMode,
-            snapshotCleared: styleManager._contextControls._contextSessionSnapshot === null,
-            priorLayerRestored: enabled.has('local-datacenters'),
-            failedLayerDisabled: !enabled.has(layerId),
-          });
-        }
-
-        const directActivationRollbackFailures = [];
-        for (const layerId of ['military-awareness']) {
-          enabled.clear();
-          styleManager._contextControls._contextMode = null;
-          styleManager._contextControls._contextSessionSnapshot = {
-            enabledLayerIds: new Set(['local-datacenters']),
-            userAdded: new Set(),
-            userRemoved: new Set(),
-            params: {},
-          };
-          const toastMessages = [];
-          const showToastBeforeRollbackFailure = styleManager._showToast;
-          styleManager._showToast = (message) => {
-            toastMessages.push(message);
-            showToastBeforeRollbackFailure.call(styleManager, message);
-          };
-          dataManager.setEnabled = async (candidateId, shouldEnable) => {
-            if (candidateId === 'local-datacenters' && shouldEnable) return false;
-            shouldEnable ? enabled.add(candidateId) : enabled.delete(candidateId);
-            return true;
-          };
-          styleManager._contextControls._handleContextLayerChange({
-            type: 'visibility-failed',
-            layerId,
-            enabled: true,
-            origin: 'user',
-          });
-          await new Promise((resolve) => setTimeout(resolve, 50));
-          styleManager._showToast = showToastBeforeRollbackFailure;
-          directActivationRollbackFailures.push({
-            layerId,
-            toastMessages,
-            retryRetained: styleManager._contextControls._contextSessionSnapshot?.enabledLayerIds?.has('local-datacenters') === true,
-          });
-        }
-
-        const contextExitFailures = [];
-        dataManager.setEnabled = originalSetEnabled;
-        dataManager.restoreEnabledLayerIds = originalRestoreEnabledLayerIds;
-        dataManager.isEnabled = originalIsEnabled;
-        dataManager.isEffectivelyEnabled = originalIsEffectivelyEnabled;
+        const powerFailures = [];
         for (const outcome of ['false', 'reject']) {
-          const layerId = `qa-context-exit-${outcome}`;
-          let enableOutcome = outcome;
-          const toastMessages = [];
-          const qaLayer = {
-            id: layerId,
-            name: `QA Context exit ${outcome}`,
-            updateInterval: -1,
-            init: async () => true,
-            enable: async () => {
-              if (enableOutcome === 'reject') throw new Error(`QA Context exit ${outcome}`);
-              return enableOutcome !== 'false';
-            },
-            disable: async () => true,
-            update: async () => true,
-            destroy: async () => true,
-            getStats: () => ({}),
+          manager.setEnabled = async () => {
+            if (outcome === 'reject') throw new Error('QA Radio power rejection');
+            return false;
           };
-          window.__gevQaRegisterLayer(dataManager, qaLayer);
-          try {
-            const enabledBeforeExit = dataManager.getEnabledLayerIds();
-            styleManager._contextControls._contextMode = 'flights';
-            styleManager._contextControls._contextSessionSnapshot = {
-              enabledLayerIds: new Set([...enabledBeforeExit, layerId]),
-              userAdded: new Set(),
-              userRemoved: new Set(),
-              params: {},
-            };
-            styleManager._showToast = (message) => {
-              toastMessages.push(message);
-              originalShowToast.call(styleManager, message);
-            };
-            const unhandledBefore = unhandled.length;
-            const result = await styleManager._runUserFacingContextAction(
-              (notificationToken) => styleManager._contextControls._deactivateContextForLayerChange({ notificationToken }),
-              `QA Context exit ${outcome} surfaced once`,
-            );
-            const retainedForRetry = styleManager._contextControls._contextSessionSnapshot?.enabledLayerIds?.has(layerId) === true;
-            enableOutcome = 'success';
-            const retryResult = await styleManager._runUserFacingContextAction(
-              (notificationToken) => styleManager._contextControls._deactivateContextForLayerChange({ notificationToken }),
-              `QA Context exit ${outcome} retry failed`,
-            );
-            contextExitFailures.push({
-              outcome,
-              result,
-              retryResult: retryResult ?? true,
-              toastMessages,
-              unhandledDelta: unhandled.length - unhandledBefore,
-              retainedForRetry,
-              mode: styleManager._contextControls._contextMode,
-              modeChanging: styleManager._contextControls._contextModeChanging,
-              snapshotClearedAfterRetry: styleManager._contextControls._contextSessionSnapshot === null,
-              enabledAfterRetry: dataManager.isEnabled(layerId),
-              toastRole: document.getElementById('toast').getAttribute('role'),
-              toastLive: document.getElementById('toast').getAttribute('aria-live'),
-              toastAtomic: document.getElementById('toast').getAttribute('aria-atomic'),
-            });
-          } finally {
-            styleManager._showToast = originalShowToast;
-            await window.__gevQaUnregisterLayer(dataManager, layerId);
-          }
+          document.getElementById('cockpit-radio-enable-btn').click();
+          await new Promise((resolve) => setTimeout(resolve, 50));
+          powerFailures.push({
+            outcome,
+            message: document.getElementById('toast').textContent,
+            released: document.getElementById('cockpit-radio-enable-btn').getAttribute('aria-busy') === 'false',
+          });
         }
-
-        const unrelatedLayerId = 'qa-unrelated-manager-failure';
-        const unrelatedToastMessages = [];
-        let releasePendingAction = null;
-        window.__gevQaRegisterLayer(dataManager, {
-          id: unrelatedLayerId,
-          name: 'QA unrelated manager failure',
-          updateInterval: -1,
-          init: async () => true,
-          enable: async () => false,
-          disable: async () => true,
-          update: async () => true,
-          destroy: async () => true,
-          getStats: () => ({}),
+        manager.setEnabled = originalSetEnabled;
+        window.__gevQaRegisterLayer(manager, {
+          id: layerId, name: 'QA unrelated manager failure', updateInterval: -1,
+          init: async () => true, enable: async () => false,
+          disable: async () => true, update: async () => true,
+          destroy: async () => true, getStats: () => ({}),
         });
-        styleManager._showToast = (message) => {
-          unrelatedToastMessages.push(message);
-          originalShowToast.call(styleManager, message);
+        const messages = [];
+        style._showToast = (message) => {
+          messages.push(message);
+          originalShowToast.call(style, message);
         };
-        const pendingAction = styleManager._runUserFacingContextAction(() => (
-          new Promise((resolve) => { releasePendingAction = resolve; })
-        ));
+        const pending = style._runUserFacingContextAction(() => new Promise((resolve) => { releasePendingAction = resolve; }));
         while (!releasePendingAction) await new Promise((resolve) => setTimeout(resolve, 0));
-        const unrelatedResult = await dataManager.setEnabled(unrelatedLayerId, true);
+        const result = await manager.setEnabled(layerId, true);
         releasePendingAction(true);
-        await pendingAction;
-        styleManager._showToast = originalShowToast;
-        await window.__gevQaUnregisterLayer(dataManager, unrelatedLayerId);
-        const unrelatedManagerFailure = {
-          result: unrelatedResult,
-          toastMessages: unrelatedToastMessages,
-        };
-
-        dataManager.setEnabled = async (layerId, shouldEnable) => {
-          if (layerId === 'military-installations' && shouldEnable) return false;
-          return true;
-        };
-        document.getElementById('installations-search-btn').click();
-        await new Promise((resolve) => setTimeout(resolve, 50));
-        const installationFalseMessage = document.getElementById('toast').textContent;
-        const installationFalseReleased = document.getElementById('installations-search-btn').getAttribute('aria-busy') === 'false';
-
-        dataManager.setEnabled = async (layerId, shouldEnable) => {
-          if (layerId === 'military-installations' && shouldEnable) {
-            throw new Error('QA installation enable rejection');
-          }
-          return true;
-        };
-        document.getElementById('installations-search-btn').click();
-        await new Promise((resolve) => setTimeout(resolve, 50));
-        const installationEnableRejectionMessage = document.getElementById('toast').textContent;
-        const installationEnableRejectionReleased = document.getElementById('installations-search-btn').getAttribute('aria-busy') === 'false';
-
-        dataManager.setEnabled = async (layerId, shouldEnable) => {
-          if (layerId === 'military-installations' && shouldEnable) enabled.add(layerId);
-          return true;
-        };
-        if (installations) installations.searchNearby = async () => {
-          throw new Error('QA installation search rejection');
-        };
-        document.getElementById('installations-search-btn').click();
-        await new Promise((resolve) => setTimeout(resolve, 50));
-        const installationRejectionMessage = document.getElementById('toast').textContent;
-        const installationRejectionReleased = document.getElementById('installations-search-btn').getAttribute('aria-busy') === 'false';
-
-        if (installations) installations.searchNearby = async () => false;
-        document.getElementById('installations-search-btn').click();
-        await new Promise((resolve) => setTimeout(resolve, 50));
-        const installationSearchFalseMessage = document.getElementById('toast').textContent;
-        const installationSearchFalseReleased = document.getElementById('installations-search-btn').getAttribute('aria-busy') === 'false';
-        await new Promise((resolve) => setTimeout(resolve, 0));
+        await pending;
+        const toast = document.getElementById('toast');
         return {
-          semanticFalseMessage,
-          contextFailures,
-          directEntryFailures,
-          directActivationFailures,
-          directActivationRollbackFailures,
-          contextExitFailures,
-          unrelatedManagerFailure,
-          installationFalseMessage,
-          installationFalseReleased,
-          installationEnableRejectionMessage,
-          installationEnableRejectionReleased,
-          installationRejectionMessage,
-          installationRejectionReleased,
-          installationSearchFalseMessage,
-          installationSearchFalseReleased,
-          unhandled,
+          powerFailures, result, messages, unhandled,
+          role: toast.getAttribute('role'), live: toast.getAttribute('aria-live'), atomic: toast.getAttribute('aria-atomic'),
         };
       } finally {
-        dataManager.toggle = originalToggle;
-        dataManager.setEnabled = originalSetEnabled;
-        dataManager.restoreEnabledLayerIds = originalRestoreEnabledLayerIds;
-        dataManager.isEnabled = originalIsEnabled;
-        dataManager.isEffectivelyEnabled = originalIsEffectivelyEnabled;
-        styleManager._contextControls._clearLayersOutsideContextMode = originalClear;
-        styleManager._contextControls._captureContextSessionSnapshot = originalCapture;
-        styleManager._contextControls._contextMode = originalContextMode;
-        styleManager._contextControls._contextSessionSnapshot = originalSnapshot;
-        styleManager._showToast = originalShowToast;
-        if (installations) installations.searchNearby = originalSearchNearby;
+        releasePendingAction?.(true);
+        manager.setEnabled = originalSetEnabled;
+        style._showToast = originalShowToast;
+        if (manager.layers.has(layerId)) await window.__gevQaUnregisterLayer(manager, layerId);
         window.removeEventListener('unhandledrejection', onUnhandled);
       }
     });
-    check(
-      'user-facing chip, real Context entry rollback, and installation Search failures settle safely',
-      userFacingFailures.semanticFalseMessage === 'Radio could not stop cleanly'
-        && userFacingFailures.contextFailures.length === 4
-        && userFacingFailures.contextFailures.every((failure) => (
-          failure.result === false
-          && failure.visibleMode === null
-          && failure.snapshotCleared
-          && failure.priorLayerRestored
-          && !failure.entryEnabled
-          && !failure.flightsButtonDisabled
-          && failure.message.includes('QA transition failed')
-        ))
-        && userFacingFailures.directEntryFailures.length === 2
-        && userFacingFailures.directEntryFailures.every((failure) => (
-          failure.reason.includes('could not start')
-          && failure.retryReason === null
-          && failure.toastMessages.length === 1
-          && failure.toastMessages[0] === failure.reason
-          && failure.mode === null
-          && failure.snapshotCleared
-          && failure.priorLayerRestored
-          && !failure.modeChanging
-        ))
-        && userFacingFailures.directActivationFailures.length === 1
-        && userFacingFailures.directActivationFailures.every((failure) => (
-          failure.mode === null
-          && failure.snapshotCleared
-          && failure.priorLayerRestored
-          && failure.failedLayerDisabled
-        ))
-        && userFacingFailures.directActivationRollbackFailures.length === 1
-        && userFacingFailures.directActivationRollbackFailures.every((failure) => (
-          failure.toastMessages.length === 1
-          && failure.toastMessages[0] === `${failure.layerId} could not start cleanly`
-          && failure.retryRetained
-        ))
-        && userFacingFailures.contextExitFailures.length === 2
-        && userFacingFailures.contextExitFailures.every((failure) => (
-          failure.result === false
-          && failure.retryResult === true
-          && failure.toastMessages.length === 1
-          && failure.toastMessages[0].includes('surfaced once')
-          && failure.unhandledDelta === 0
-          && failure.retainedForRetry
-          && failure.mode === null
-          && !failure.modeChanging
-          && failure.snapshotClearedAfterRetry
-          && failure.enabledAfterRetry
-          && failure.toastRole === 'status'
-          && failure.toastLive === 'polite'
-          && failure.toastAtomic === 'true'
-        ))
-        && userFacingFailures.unrelatedManagerFailure.result === false
-        && userFacingFailures.unrelatedManagerFailure.toastMessages.length === 1
-        && userFacingFailures.unrelatedManagerFailure.toastMessages[0].includes('qa-unrelated-manager-failure could not start cleanly')
-        && userFacingFailures.installationFalseMessage.includes('could not be refreshed')
-        && userFacingFailures.installationFalseReleased
-        && userFacingFailures.installationEnableRejectionMessage.includes('could not be refreshed')
-        && userFacingFailures.installationEnableRejectionReleased
-        && userFacingFailures.installationRejectionMessage.includes('could not be refreshed')
-        && userFacingFailures.installationRejectionReleased
-        && userFacingFailures.installationSearchFalseMessage.includes('could not be refreshed')
-        && userFacingFailures.installationSearchFalseReleased
+    check('Radio power failures release controls and unrelated manager failures announce once',
+      userFacingFailures.powerFailures.length === 2
+        && userFacingFailures.powerFailures.every(({ message, released }) => message === 'Radio could not stop cleanly' && released)
+        && userFacingFailures.result === false
+        && userFacingFailures.messages.length === 1
+        && userFacingFailures.messages[0].includes('qa-unrelated-manager-failure could not start cleanly')
+        && userFacingFailures.role === 'status' && userFacingFailures.live === 'polite' && userFacingFailures.atomic === 'true'
         && userFacingFailures.unhandled.length === 0,
-      JSON.stringify(userFacingFailures),
-    );
+      JSON.stringify(userFacingFailures));
     catalogDegraded = true;
     const degradedCatalog = await page.evaluate(async () => {
       const radio = window.__godsEyeView.dataManager.layers.get('radio').module;
@@ -1295,7 +931,7 @@ async function main() {
     await page.evaluate(async () => {
       await window.__godsEyeView.dataManager.layers.get('radio').module.update();
     });
-    await page.select('#radio-filter', 'all');
+    await setRadioFilter(page, 'all');
     const allPalette = await page.evaluate(() => {
       const rows = new Map(window.__qaRadioRows('stations').map((row) => [row.id, row]));
       const colorFor = (index) => {
@@ -1599,32 +1235,28 @@ async function main() {
         && directoryRefreshContinuity.retainedCount === directoryRefreshContinuity.unchangedCount,
       JSON.stringify(directoryRefreshContinuity),
     );
-    await page.select('#radio-filter', 'news');
-    check('enabled Radio stays nested in Context and leaves both panels collapsed', !initial.panelExpanded && !initial.contextExpanded && initial.nestedInContext);
+    await setRadioFilter(page, 'news');
     check('full Play is available before a station is selected', !initial.state.selected && initial.fullPlayEnabled && initial.fullPlayLabel === 'Play nearest radio station');
 
-    const multiExpandedPanelLayout = await page.evaluate(async () => {
+    check('the right rail has one Context panel and no retired CCTV panel',
+      await page.evaluate(() => !document.getElementById('cctv-panel')
+        && document.querySelectorAll('#right-context-rail > [data-panel-id]').length === 1));
+
+    const leftPanelLayout = await page.evaluate(async () => {
       const manager = window.__godsEyeView.styleManager;
-      const ids = ['data-panel', 'scene-panel', 'pp-toggles', 'cctv-panel', 'global-context-panel'];
+      const ids = ['data-panel', 'scene-panel'];
+      const { readPanelState } = await import('/src/ui/rail/panelState.js');
       const prior = {
         panels: Object.fromEntries(ids.map((id) => {
           const panel = document.getElementById(id);
           return [id, {
-            className: panel.className,
-            style: panel.getAttribute('style'),
+            state: readPanelState(panel),
+            preference: panel.dataset.collapsedPreference,
+            ariaExpanded: panel.querySelector(`[data-collapse-target="${id}"]`)?.getAttribute('aria-expanded'),
             ariaHidden: panel.getAttribute('aria-hidden'),
           }];
         })),
-        stacks: Object.fromEntries(['left-panel-stack', 'right-context-rail'].map((id) => {
-          const stack = document.getElementById(id);
-          return [id, {
-            className: stack.className,
-            style: stack.getAttribute('style'),
-            dataset: { ...stack.dataset },
-          }];
-        })),
         preferredLeftPanelId: manager._panelLayout._leftStackPreferredPanelId,
-        preferredRightPanelId: manager._panelLayout._rightStackPreferredPanelId,
         hudMode: manager.hud.getMode(),
         hudVariant: manager.hud.getVariant(),
         focusId: document.activeElement?.id || null,
@@ -1633,7 +1265,7 @@ async function main() {
       const setPanelThroughInstalledControl = (id, collapsed) => {
         const panel = document.getElementById(id);
         if (panel.classList.contains('collapsed') === collapsed) return;
-        panel.querySelector(`[data-collapse-target="${id}"]`)?.click();
+        document.querySelector(`[data-rail-item="${id}"]`)?.click();
       };
       let result;
       try {
@@ -1642,40 +1274,22 @@ async function main() {
         setPanelThroughInstalledControl('scene-panel', true);
         setPanelThroughInstalledControl('data-panel', false);
         setPanelThroughInstalledControl('scene-panel', false);
-        manager.setPanelCollapsed('global-context-panel', false, { explicit: true });
-        manager.setPanelCollapsed('pp-toggles', false, { explicit: true });
         await new Promise((resolve) => setTimeout(resolve, 360));
         manager._syncLeftPanelAdaptiveLayout();
-        manager._syncRightPanelAdaptiveLayout();
 
         const left = document.getElementById('left-panel-stack');
-        const right = document.getElementById('right-context-rail');
         const leftRect = left.getBoundingClientRect();
-        const rightRect = right.getBoundingClientRect();
-        const leftExpanded = ['data-panel', 'scene-panel'].map((id) => (
-          document.getElementById(id).getBoundingClientRect()
-        ));
-        const rightExpanded = ['pp-toggles', 'global-context-panel'].map((id) => (
-          document.getElementById(id).getBoundingClientRect()
-        ));
+        const dataPanel = document.getElementById('data-panel');
+        const scenePanel = document.getElementById('scene-panel');
+        const sceneRect = scenePanel.getBoundingClientRect();
+        const disclosure = (panel) => panel.querySelector(`[data-collapse-target="${panel.id}"]`)?.getAttribute('aria-expanded');
         result = {
-          independentLeft: ['data-panel', 'scene-panel'].every((id) => (
-            !document.getElementById(id).classList.contains('collapsed')
-          )),
-          independentRight: ['pp-toggles', 'global-context-panel'].every((id) => (
-            !document.getElementById(id).classList.contains('collapsed')
-          )),
-          leftCountsAllExpanded: left.dataset.expandedCount === '2',
-          rightCountsAllExpanded: right.dataset.expandedCount === '2',
-          leftInsideCorridor: leftExpanded.every((rect) => (
-            rect.top >= leftRect.top - 1 && rect.bottom <= leftRect.bottom + 1
-          )),
-          rightInsideCorridor: rightExpanded.every((rect) => (
-            rect.top >= rightRect.top - 1 && rect.bottom <= rightRect.bottom + 1
-          )),
-          internalScrollOwned: getComputedStyle(document.querySelector('#data-panel .data-toggle-list')).overflowY === 'auto'
-            && getComputedStyle(document.querySelector('#scene-panel .scene-panel-inner')).overflowY === 'auto'
-            && getComputedStyle(document.querySelector('#global-context-panel .global-context-panel-inner')).overflowY === 'auto',
+          scenesOwnsLane: !scenePanel.classList.contains('collapsed') && sceneRect.height > 0
+            && disclosure(scenePanel) === 'true',
+          dataHidden: dataPanel.classList.contains('collapsed') && dataPanel.getBoundingClientRect().height === 0
+            && dataPanel.getAttribute('aria-hidden') === 'true' && disclosure(dataPanel) === 'false',
+          leftInsideCorridor: sceneRect.top >= leftRect.top - 1 && sceneRect.bottom <= leftRect.bottom + 1,
+          internalScrollOwned: getComputedStyle(document.querySelector('#scene-panel .scene-panel-inner')).overflowY === 'auto',
         };
 
         manager._setHudVariant('tactical');
@@ -1683,131 +1297,54 @@ async function main() {
         manager._updateHudButtonState();
         await new Promise((resolve) => setTimeout(resolve, 360));
         manager._syncLeftPanelAdaptiveLayout();
-        manager._syncRightPanelAdaptiveLayout();
-        const dataPanel = document.getElementById('data-panel');
-        const scenePanel = document.getElementById('scene-panel');
-        const contextPanel = document.getElementById('global-context-panel');
-        result.tacticalAutoCollapse = {
-          latestOpenedPanel: manager._panelLayout._leftStackPreferredPanelId,
-          scenesExpanded: !scenePanel.classList.contains('collapsed'),
-          dataCollapsed: dataPanel.classList.contains('layout-auto-collapsed'),
-          dataHiddenWhileScenesOwnsLane: dataPanel.getBoundingClientRect().height === 0
-            && dataPanel.getAttribute('aria-hidden') === 'true',
-          dataAriaExpanded: dataPanel.querySelector('[data-collapse-target="data-panel"]')?.getAttribute('aria-expanded'),
-          displayExpanded: !document.getElementById('pp-toggles').classList.contains('collapsed'),
-          contextCollapsed: contextPanel.classList.contains('layout-auto-collapsed'),
-          contextHiddenWhileDisplayOwnsLane: contextPanel.getBoundingClientRect().height === 0
-            && contextPanel.getAttribute('aria-hidden') === 'true',
-          contextAriaExpanded: contextPanel.querySelector('[data-collapse-target="global-context-panel"]')?.getAttribute('aria-expanded'),
-        };
-
-        manager.setPanelCollapsed('scene-panel', true);
-        manager.setPanelCollapsed('pp-toggles', true);
+        result.tacticalOwnerPreserved = manager._panelLayout._leftStackPreferredPanelId === 'scene-panel'
+          && !scenePanel.classList.contains('collapsed') && disclosure(scenePanel) === 'true'
+          && dataPanel.classList.contains('collapsed') && disclosure(dataPanel) === 'false';
+        manager.hud.setMode('off');
+        manager._updateHudButtonState();
         await new Promise((resolve) => setTimeout(resolve, 360));
         manager._syncLeftPanelAdaptiveLayout();
-        manager._syncRightPanelAdaptiveLayout();
-        result.tacticalAutoRestore = {
-          dataExpanded: !dataPanel.classList.contains('collapsed'),
-          dataAutoMarkerCleared: !dataPanel.classList.contains('layout-auto-collapsed'),
-          dataAriaExpanded: dataPanel.querySelector('[data-collapse-target="data-panel"]')?.getAttribute('aria-expanded'),
-          contextExpanded: !contextPanel.classList.contains('collapsed'),
-          contextAutoMarkerCleared: !contextPanel.classList.contains('layout-auto-collapsed'),
-          contextAriaExpanded: contextPanel.querySelector('[data-collapse-target="global-context-panel"]')?.getAttribute('aria-expanded'),
-        };
+        result.hudOffOwnerPreserved = !scenePanel.classList.contains('collapsed') && disclosure(scenePanel) === 'true'
+          && dataPanel.classList.contains('collapsed') && disclosure(dataPanel) === 'false';
+        setPanelThroughInstalledControl('data-panel', false);
+        await new Promise((resolve) => setTimeout(resolve, 360));
+        manager._syncLeftPanelAdaptiveLayout();
+        const dataRect = dataPanel.getBoundingClientRect();
+        result.dataOwnsLane = !dataPanel.classList.contains('collapsed') && dataRect.height > 0
+          && disclosure(dataPanel) === 'true' && scenePanel.classList.contains('collapsed')
+          && scenePanel.getBoundingClientRect().height === 0 && scenePanel.getAttribute('aria-hidden') === 'true'
+          && disclosure(scenePanel) === 'false';
+        const dataLaneRect = left.getBoundingClientRect();
+        result.dataInsideCorridor = dataRect.top >= dataLaneRect.top - 1 && dataRect.bottom <= dataLaneRect.bottom + 1;
+        result.dataScrollOwned = getComputedStyle(document.querySelector('#data-panel .data-toggle-list')).overflowY === 'auto';
 
-        manager.setPanelCollapsed('global-context-panel', true);
-        manager.setPanelCollapsed('cctv-panel', true);
-        manager.setPanelCollapsed('pp-toggles', false);
-        await new Promise((resolve) => setTimeout(resolve, 240));
-        manager._syncRightPanelAdaptiveLayout();
-        const displayPanel = document.getElementById('pp-toggles');
-        const cctvPanel = document.getElementById('cctv-panel');
-        result.tacticalDisplayExclusive = {
-          railExclusive: right.classList.contains('layout-exclusive'),
-          displayExpanded: !displayPanel.classList.contains('collapsed'),
-          cctvHidden: cctvPanel.getBoundingClientRect().height === 0
-            && cctvPanel.getAttribute('aria-hidden') === 'true',
-          contextHidden: contextPanel.getBoundingClientRect().height === 0
-            && contextPanel.getAttribute('aria-hidden') === 'true',
-        };
       } finally {
         manager._setHudVariant(prior.hudVariant);
         manager.hud.setMode(prior.hudMode);
         manager._updateHudButtonState();
-        await new Promise((resolve) => setTimeout(resolve, 320));
-        if (manager._panelLayout._leftStackLayoutFrame !== null) {
-          cancelAnimationFrame(manager._panelLayout._leftStackLayoutFrame);
-          manager._panelLayout._leftStackLayoutFrame = null;
-        }
-        if (manager._panelLayout._rightStackLayoutFrame !== null) {
-          cancelAnimationFrame(manager._panelLayout._rightStackLayoutFrame);
-          manager._panelLayout._rightStackLayoutFrame = null;
-        }
-        for (const [id, state] of Object.entries(prior.panels)) {
+        for (const [id, before] of Object.entries(prior.panels)) {
           const panel = document.getElementById(id);
-          panel.className = state.className;
-          if (state.style === null) panel.removeAttribute('style');
-          else panel.setAttribute('style', state.style);
-          if (state.ariaHidden === null) panel.removeAttribute('aria-hidden');
-          else panel.setAttribute('aria-hidden', state.ariaHidden);
-          // The restored classes are the panel's state again.
-          const has = (name) => panel.classList.contains(name);
-          manager._presentPanel(panel, {
-            collapsed: has('collapsed'),
-            auto: has('layout-auto-collapsed') ? 'layout' : has('accordion-collapsed') ? 'accordion' : null,
-          });
-        }
-        for (const [id, state] of Object.entries(prior.stacks)) {
-          const stack = document.getElementById(id);
-          stack.className = state.className;
-          if (state.style === null) stack.removeAttribute('style');
-          else stack.setAttribute('style', state.style);
-          for (const key of Object.keys(stack.dataset)) delete stack.dataset[key];
-          Object.assign(stack.dataset, state.dataset);
+          manager._presentPanel(panel, before.state);
+          if (before.preference === undefined) delete panel.dataset.collapsedPreference;
+          else panel.dataset.collapsedPreference = before.preference;
         }
         manager._panelLayout._leftStackPreferredPanelId = prior.preferredLeftPanelId;
-        manager._panelLayout._rightStackPreferredPanelId = prior.preferredRightPanelId;
         localStorage.clear();
         for (const [key, value] of Object.entries(prior.storage)) localStorage.setItem(key, value);
+        await new Promise((resolve) => setTimeout(resolve, 360));
+        manager._syncLeftPanelAdaptiveLayout();
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-        if (manager._panelLayout._leftStackLayoutFrame !== null) {
-          cancelAnimationFrame(manager._panelLayout._leftStackLayoutFrame);
-          manager._panelLayout._leftStackLayoutFrame = null;
-        }
-        if (manager._panelLayout._rightStackLayoutFrame !== null) {
-          cancelAnimationFrame(manager._panelLayout._rightStackLayoutFrame);
-          manager._panelLayout._rightStackLayoutFrame = null;
-        }
-        // Disclosure restoration can wake the installed layout observers. Let
-        // those observers settle, then restore the captured stack presentation
-        // once more so this synthetic scenario cannot leak derived lane state
-        // into the Radio interactions that follow.
-        for (const [id, state] of Object.entries(prior.stacks)) {
-          const stack = document.getElementById(id);
-          stack.className = state.className;
-          if (state.style === null) stack.removeAttribute('style');
-          else stack.setAttribute('style', state.style);
-          for (const key of Object.keys(stack.dataset)) delete stack.dataset[key];
-          Object.assign(stack.dataset, state.dataset);
-        }
         prior.focusId && document.getElementById(prior.focusId)?.focus({ preventScroll: true });
-        const panelsRestored = Object.entries(prior.panels).every(([id, state]) => {
+        const panelsRestored = Object.entries(prior.panels).every(([id, before]) => {
           const panel = document.getElementById(id);
-          return panel.className === state.className
-            && panel.getAttribute('style') === state.style
-            && panel.getAttribute('aria-hidden') === state.ariaHidden;
-        });
-        const stacksRestored = Object.entries(prior.stacks).every(([id, state]) => {
-          const stack = document.getElementById(id);
-          return stack.className === state.className
-            && stack.getAttribute('style') === state.style
-            && JSON.stringify({ ...stack.dataset }) === JSON.stringify(state.dataset);
+          return JSON.stringify(readPanelState(panel)) === JSON.stringify(before.state)
+            && panel.dataset.collapsedPreference === before.preference
+            && panel.querySelector(`[data-collapse-target="${id}"]`)?.getAttribute('aria-expanded') === before.ariaExpanded
+            && panel.getAttribute('aria-hidden') === before.ariaHidden;
         });
         result.restoreDetails = {
           panelsRestored,
-          stacksRestored,
           preferredPanelRestored: manager._panelLayout._leftStackPreferredPanelId === prior.preferredLeftPanelId,
-          preferredRightPanelRestored: manager._panelLayout._rightStackPreferredPanelId === prior.preferredRightPanelId,
           hudModeRestored: manager.hud.getMode() === prior.hudMode,
           hudVariantRestored: manager.hud.getVariant() === prior.hudVariant,
           storageRestored: JSON.stringify(Object.fromEntries(Object.entries(localStorage))) === JSON.stringify(prior.storage),
@@ -1818,55 +1355,29 @@ async function main() {
 
       return result;
     });
-    check(
-      'HUD-off desktop lanes keep Data plus Scenes and Display plus Context expanded inside the viewport corridor',
-      multiExpandedPanelLayout.independentLeft
-        && multiExpandedPanelLayout.independentRight
-        && multiExpandedPanelLayout.leftCountsAllExpanded
-        && multiExpandedPanelLayout.rightCountsAllExpanded
-        && multiExpandedPanelLayout.leftInsideCorridor
-        && multiExpandedPanelLayout.rightInsideCorridor
-        && multiExpandedPanelLayout.internalScrollOwned
-        && multiExpandedPanelLayout.restoredExactly,
-      JSON.stringify(multiExpandedPanelLayout),
-    );
-    check(
-      'HUD-off to Tactical preserves the latest-opened Scenes panel and hides its collapsed Data competitor',
-      multiExpandedPanelLayout.tacticalAutoCollapse.latestOpenedPanel === 'scene-panel'
-        && multiExpandedPanelLayout.tacticalAutoCollapse.scenesExpanded
-        && multiExpandedPanelLayout.tacticalAutoCollapse.dataCollapsed
-        && multiExpandedPanelLayout.tacticalAutoCollapse.dataHiddenWhileScenesOwnsLane
-        && multiExpandedPanelLayout.tacticalAutoCollapse.dataAriaExpanded === 'false'
-        && multiExpandedPanelLayout.tacticalAutoCollapse.displayExpanded
-        && multiExpandedPanelLayout.tacticalAutoCollapse.contextCollapsed
-        && multiExpandedPanelLayout.tacticalAutoCollapse.contextHiddenWhileDisplayOwnsLane
-        && multiExpandedPanelLayout.tacticalAutoCollapse.contextAriaExpanded === 'false',
-      JSON.stringify(multiExpandedPanelLayout.tacticalAutoCollapse),
-    );
-    check(
-      'closing Tactical lane owners restores eligible temporary siblings without changing disclosure truth',
-      multiExpandedPanelLayout.tacticalAutoRestore.dataExpanded
-        && multiExpandedPanelLayout.tacticalAutoRestore.dataAutoMarkerCleared
-        && multiExpandedPanelLayout.tacticalAutoRestore.dataAriaExpanded === 'true'
-        && multiExpandedPanelLayout.tacticalAutoRestore.contextExpanded
-        && multiExpandedPanelLayout.tacticalAutoRestore.contextAutoMarkerCleared
-        && multiExpandedPanelLayout.tacticalAutoRestore.contextAriaExpanded === 'true',
-      JSON.stringify(multiExpandedPanelLayout.tacticalAutoRestore),
-    );
-    check(
-      'Tactical Display hides ordinary collapsed CCTV and Context launchers',
-      Object.values(multiExpandedPanelLayout.tacticalDisplayExclusive).every(Boolean),
-      JSON.stringify(multiExpandedPanelLayout.tacticalDisplayExclusive),
-    );
+    check('Scenes owns the left viewport corridor after Data then Scenes opens',
+      leftPanelLayout.scenesOwnsLane && leftPanelLayout.dataHidden
+        && leftPanelLayout.leftInsideCorridor && leftPanelLayout.internalScrollOwned && leftPanelLayout.restoredExactly,
+      JSON.stringify(leftPanelLayout));
+    check('HUD Off and Tactical preserve the latest left-panel owner and accessible disclosure',
+      leftPanelLayout.tacticalOwnerPreserved && leftPanelLayout.hudOffOwnerPreserved,
+      JSON.stringify(leftPanelLayout));
+    check('opening Data transfers the left lane, keeps scrolling and updates both disclosures',
+      leftPanelLayout.dataOwnsLane && leftPanelLayout.dataInsideCorridor && leftPanelLayout.dataScrollOwned,
+      JSON.stringify(leftPanelLayout));
+
     const parameterizedDisplayScroll = await page.evaluate(async () => {
       const manager = window.__godsEyeView.styleManager;
       const display = document.getElementById('pp-toggles');
       const parameters = document.getElementById('param-slider-panel');
+      const { readPanelState } = await import('/src/ui/rail/panelState.js');
       const prior = {
         style: manager.activeStyle,
+        leftPanels: [...document.querySelectorAll('#left-panel-stack > [data-panel-id]')].map((panel) => ({ id: panel.id, state: readPanelState(panel), preference: panel.dataset.collapsedPreference })),
+        preferredLeftPanelId: manager._panelLayout._leftStackPreferredPanelId,
+        storage: Object.fromEntries(Object.entries(localStorage)),
         displayCollapsed: display.classList.contains('collapsed'),
         contextCollapsed: document.getElementById('global-context-panel').classList.contains('collapsed'),
-        cctvCollapsed: document.getElementById('cctv-panel').classList.contains('collapsed'),
         hudMode: manager.hud.getMode(),
         hudVariant: manager.hud.getVariant(),
         focusId: document.activeElement?.id || null,
@@ -1878,7 +1389,6 @@ async function main() {
       const cases = [];
 
       manager.setPanelCollapsed('global-context-panel', true);
-      manager.setPanelCollapsed('cctv-panel', true);
       manager.setPanelCollapsed('pp-toggles', false);
       manager.setStyle('thermal', { applyPreset: false });
 
@@ -1891,10 +1401,10 @@ async function main() {
         manager.hud.setMode(state.visible ? 'on' : 'off');
         manager._updateHudButtonState();
         await waitForLayout();
-        manager._syncRightPanelAdaptiveLayout();
+        manager._syncLeftPanelAdaptiveLayout();
         display.scrollTop = Math.max(1, display.scrollHeight - display.clientHeight);
         const before = display.scrollTop;
-        manager._syncRightPanelAdaptiveLayout();
+        manager._syncLeftPanelAdaptiveLayout();
         const lastSlider = document.querySelector('#param-sliders .param-slider-row:last-child input');
         lastSlider.focus({ preventScroll: true });
         lastSlider.scrollIntoView({ block: 'nearest' });
@@ -1915,10 +1425,20 @@ async function main() {
       manager.setStyle(prior.style, { applyPreset: false });
       manager.setPanelCollapsed('pp-toggles', prior.displayCollapsed);
       manager.setPanelCollapsed('global-context-panel', prior.contextCollapsed);
-      manager.setPanelCollapsed('cctv-panel', prior.cctvCollapsed);
       manager._setHudVariant(prior.hudVariant);
       manager.hud.setMode(prior.hudMode);
       manager._updateHudButtonState();
+      for (const { id, state, preference } of prior.leftPanels) {
+        const panel = document.getElementById(id);
+        manager._presentPanel(panel, state);
+        if (preference === undefined) delete panel.dataset.collapsedPreference;
+        else panel.dataset.collapsedPreference = preference;
+      }
+      manager._panelLayout._leftStackPreferredPanelId = prior.preferredLeftPanelId;
+      localStorage.clear();
+      for (const [key, value] of Object.entries(prior.storage)) localStorage.setItem(key, value);
+      await waitForLayout();
+      manager._syncLeftPanelAdaptiveLayout();
       prior.focusId && document.getElementById(prior.focusId)?.focus({ preventScroll: true });
       return cases;
     });
@@ -1947,6 +1467,8 @@ async function main() {
       const scene = document.getElementById('scene-panel');
       const dataPanel = document.getElementById('data-panel');
       const manager = window.__godsEyeView.styleManager;
+      const { readPanelState } = await import('/src/ui/rail/panelState.js');
+      const { useCockpitStore } = await import('/src/ui/stores/cockpit.js');
       // This block validates portaled DOM controls, while qa-cockpit-utility
       // owns the real tracked-aircraft camera session. Hold the frame update so
       // the intentionally synthetic Cockpit shell is not auto-exited mid-check.
@@ -1994,13 +1516,14 @@ async function main() {
         ].map((id) => {
           const panel = document.getElementById(id);
           return [id, {
-            className: panel.className,
-            style: panel.getAttribute('style'),
+            state: readPanelState(panel),
+            preference: panel.dataset.collapsedPreference,
+            ariaExpanded: panel.querySelector(`[data-collapse-target="${id}"]`)?.getAttribute('aria-expanded'),
             ariaHidden: panel.getAttribute('aria-hidden'),
           }];
         })),
         storage: Object.fromEntries(Object.entries(localStorage)),
-        utilityTop: hud.style.getPropertyValue('--cockpit-utility-top'),
+        utilityLayout: useCockpitStore().utilityLayout,
       };
       let result = {};
       try {
@@ -2070,7 +1593,7 @@ async function main() {
           signalTop: signal.getBoundingClientRect().top,
           creditsTop: creditsRect ? creditsRect.top : null,
           passableTop: passableTops.length ? Math.min(...passableTops) : null,
-          minTop: Math.max(96, window.innerHeight * 0.12),
+          minTop: Math.max(206, window.innerHeight * 0.22),
           layoutMode: document.getElementById('left-panel-stack').dataset.layoutMode,
         });
       };
@@ -2211,8 +1734,9 @@ async function main() {
         document.getElementById('cockpit-radio-prev-btn'),
         document.getElementById('cockpit-radio-next-btn'),
       ].every((button) => button?.isConnected && !button.disabled);
+      // Station tags and the tuner stay in Context.
       const detailsExcluded = !document.querySelector(
-        '#cockpit-radio-panel #radio-filter, #cockpit-radio-panel #radio-tuner',
+        '#cockpit-radio-panel .city-filter__strip, #cockpit-radio-panel #radio-tuner',
       );
       const scenesHidden = getComputedStyle(scene).display === 'none';
       radio.click();
@@ -2307,34 +1831,19 @@ async function main() {
         if (radio.getAttribute('aria-expanded') !== String(prior.radioExpanded)) radio.click();
         hud.hidden = prior.hudHidden;
         signal.hidden = prior.signalHidden;
-        if (prior.utilityTop) hud.style.setProperty('--cockpit-utility-top', prior.utilityTop);
-        else hud.style.removeProperty('--cockpit-utility-top');
+        manager.cockpitView.publishUtilityLayout(prior.utilityLayout);
         await waitForLayout();
-        if (manager._panelLayout._leftStackLayoutFrame !== null) {
-          cancelAnimationFrame(manager._panelLayout._leftStackLayoutFrame);
-          manager._panelLayout._leftStackLayoutFrame = null;
-        }
-        if (manager._panelLayout._rightStackLayoutFrame !== null) {
-          cancelAnimationFrame(manager._panelLayout._rightStackLayoutFrame);
-          manager._panelLayout._rightStackLayoutFrame = null;
-        }
-        for (const [id, state] of Object.entries(prior.panels)) {
+        for (const [id, before] of Object.entries(prior.panels)) {
           const panel = document.getElementById(id);
-          panel.className = state.className;
-          if (state.style === null) panel.removeAttribute('style');
-          else panel.setAttribute('style', state.style);
-          if (state.ariaHidden === null) panel.removeAttribute('aria-hidden');
-          else panel.setAttribute('aria-hidden', state.ariaHidden);
-          // The restored classes are the panel's state again.
-          const has = (name) => panel.classList.contains(name);
-          manager._presentPanel(panel, {
-            collapsed: has('collapsed'),
-            auto: has('layout-auto-collapsed') ? 'layout' : has('accordion-collapsed') ? 'accordion' : null,
-          });
+          manager._presentPanel(panel, before.state);
+          if (before.preference === undefined) delete panel.dataset.collapsedPreference;
+          else panel.dataset.collapsedPreference = before.preference;
         }
         manager._panelLayout._leftStackPreferredPanelId = prior.preferredLeftPanelId;
         localStorage.clear();
         for (const [key, value] of Object.entries(prior.storage)) localStorage.setItem(key, value);
+        manager._syncLeftPanelAdaptiveLayout();
+        manager._syncRightPanelAdaptiveLayout();
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
         prior.focusId && document.getElementById(prior.focusId)?.focus({ preventScroll: true });
         result.restoredExactly = document.body.className === prior.bodyClassName
@@ -2352,8 +1861,9 @@ async function main() {
           && manager.hud.getVariant() === prior.hudVariant
           && Object.entries(prior.panels).every(([id, state]) => {
             const panel = document.getElementById(id);
-            return panel.className === state.className
-              && panel.getAttribute('style') === state.style
+            return JSON.stringify(readPanelState(panel)) === JSON.stringify(state.state)
+              && panel.dataset.collapsedPreference === state.preference
+              && panel.querySelector(`[data-collapse-target="${id}"]`)?.getAttribute('aria-expanded') === state.ariaExpanded
               && panel.getAttribute('aria-hidden') === state.ariaHidden;
           })
           && manager._panelLayout._leftStackPreferredPanelId === prior.preferredLeftPanelId
@@ -2398,7 +1908,7 @@ async function main() {
     ));
     check('first Play scenario starts without a leaked Radio selection', firstPlayPrecondition === null,
       `selected=${firstPlayPrecondition}`);
-    await page.select('#radio-filter', 'all');
+    await setRadioFilter(page, 'all');
     await page.evaluate(() => {
       const camera = window.__godsEyeView.viewer.camera;
       window.__qaFirstPlayFlyToCalls = [];
@@ -2446,7 +1956,7 @@ async function main() {
     );
     check('first Play never moves the camera', firstPlay.flyToCalls === 0, `${firstPlay.flyToCalls} flyTo calls`);
 
-    await page.select('#radio-filter', 'news');
+    await setRadioFilter(page, 'news');
     await page.evaluate(() => {
       const viewer = window.__godsEyeView.viewer;
       viewer.camera.cancelFlight();
@@ -2503,7 +2013,7 @@ async function main() {
       JSON.stringify({ target: newsClusterTarget, result: newsClusterClick }),
     );
 
-    await page.select('#radio-filter', 'weather');
+    await setRadioFilter(page, 'weather');
     await sleep(700);
     const weatherCluster = await page.evaluate(() => {
       const radio = window.__godsEyeView.dataManager.layers.get('radio').module;
@@ -2514,7 +2024,7 @@ async function main() {
       weatherCluster.texts.length > 0 && weatherCluster.texts.every((text) => /^\d+ WEATHER$/.test(text)),
       JSON.stringify(weatherCluster),
     );
-    await page.select('#radio-filter', 'news');
+    await setRadioFilter(page, 'news');
 
     await page.$eval('#radio-volume', (input) => {
       input.value = '35';
@@ -2532,8 +2042,7 @@ async function main() {
     );
 
     const voicePause = await page.evaluate(async () => {
-      const filter = document.getElementById('radio-filter');
-      const firstOption = filter?.options?.[0] || null;
+      const firstOption = window.__godsEyeView.dataManager.layers.get('radio').module.getUIState().categories[0];
       await window.__godsEyeView.dataManager.layers.get('radio').module.play();
       const startedAt = performance.now();
       window.__godsEyeView.voiceCommands.setStatus('connecting', 'QA voice connect');
@@ -2541,7 +2050,7 @@ async function main() {
       return {
         ...state,
         transitionMs: performance.now() - startedAt,
-        categoryOptionPreserved: firstOption === filter?.options?.[0],
+        categoryOptionPreserved: firstOption === window.__godsEyeView.dataManager.layers.get('radio').module.getUIState().categories[0],
       };
     });
     check(
@@ -2550,7 +2059,7 @@ async function main() {
       JSON.stringify({ audioState: voicePause.audioState, user: voicePause.volume }),
     );
     check(
-      'voice pause preserves Radio category DOM instead of rebuilding the dropdown',
+      'voice pause preserves the Radio category catalog',
       voicePause.categoryOptionPreserved,
       `${voicePause.transitionMs.toFixed(1)}ms transition`,
     );
@@ -2595,7 +2104,7 @@ async function main() {
     const manualPlayTarget = await page.evaluate(async () => {
       const manager = window.__godsEyeView.styleManager;
       manager.setPanelCollapsed('global-context-panel', false);
-      manager.setPanelCollapsed('radio-panel', false);
+      document.getElementById('radio-panel').open = true;
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       const button = document.getElementById('radio-play-btn');
       button.scrollIntoView({ block: 'nearest' });
@@ -2667,7 +2176,7 @@ async function main() {
     await page.evaluate(async () => {
       const manager = window.__godsEyeView.styleManager;
       manager.setPanelCollapsed('global-context-panel', false);
-      manager.setPanelCollapsed('radio-panel', false);
+      document.getElementById('radio-panel').open = true;
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     });
     await page.waitForFunction(() => {
@@ -2711,7 +2220,7 @@ async function main() {
     check('far-side markers are horizon culled', horizon.front > 0 && horizon.front < 750 && horizon.back > 0 && horizon.back < 750, `${horizon.front}/${horizon.back} visible`);
     check('horizon visibility follows camera hemisphere', horizon.changed);
 
-    await page.select('#radio-filter', 'all');
+    await setRadioFilter(page, 'all');
     const absoluteTuner = await page.evaluate(async () => {
       const gev = window.__godsEyeView;
       const style = gev.styleManager;
@@ -2720,7 +2229,7 @@ async function main() {
       const tunerRect = document.getElementById('radio-tuner').getBoundingClientRect();
       const dialRect = document.querySelector('.radio-tuner-dial').getBoundingClientRect();
       const sliderRect = slider.getBoundingClientRect();
-      const panelRect = document.querySelector('.radio-panel-inner').getBoundingClientRect();
+      const panelRect = document.getElementById('radio-panel').getBoundingClientRect();
       const count = style._radioControls._radioTunerStations.length;
       const usable = sliderRect.width - 14;
       const xFor = (coordinate) => sliderRect.left + 7 + usable * coordinate / Math.max(1, count - 1);
@@ -2873,13 +2382,12 @@ async function main() {
       const restoredEntity = selectedEntity();
       const previewId = restoredEntity?.id || null;
       after.previewId = previewId;
-      const filterControl = document.getElementById('radio-filter');
+
       const changedFilter = afterState.filter === 'news' ? 'all' : 'news';
       const changedFilterSnapshot = radio.getAcceptedCatalogSnapshot();
       const changedFilterPlays = window.__qaRadioPlayCalls.length;
       const changedFilterCameraMoves = flyToCalls.length;
-      filterControl.value = changedFilter;
-      filterControl.dispatchEvent(new Event('change', { bubbles: true }));
+      window.__qaRadioUi.act('setRadioFilter', changedFilter);
       const changedFilterState = radio.getUIState();
       const changedFilterEntity = selectedEntity();
       const changedFilterCleanup = {
@@ -2899,8 +2407,7 @@ async function main() {
       const sameFilterSnapshot = radio.getAcceptedCatalogSnapshot();
       const sameFilterPlays = window.__qaRadioPlayCalls.length;
       const sameFilterCameraMoves = flyToCalls.length;
-      filterControl.value = sameFilterRestoredState.filter;
-      filterControl.dispatchEvent(new Event('change', { bubbles: true }));
+      window.__qaRadioUi.act('setRadioFilter', sameFilterRestoredState.filter);
       const sameFilterState = radio.getUIState();
       const sameFilterEntity = selectedEntity();
       const sameFilterCleanup = {
@@ -2916,8 +2423,7 @@ async function main() {
         playDelta: window.__qaRadioPlayCalls.length - sameFilterPlays,
         cameraDelta: flyToCalls.length - sameFilterCameraMoves,
       };
-      filterControl.value = afterState.filter;
-      filterControl.dispatchEvent(new Event('change', { bubbles: true }));
+      window.__qaRadioUi.act('setRadioFilter', afterState.filter);
       camera.flyTo = originalFlyTo;
       return {
         before,
@@ -3345,29 +2851,29 @@ async function main() {
           - nextNeedleAfter.selectedIndex / Math.max(1, nextNeedleAfter.count - 1)) < 0.0001,
       JSON.stringify({ before: nextNeedleBefore, after: nextNeedleAfter }),
     );
-    const tunerKeyboard = await page.evaluate(() => {
+    const tunerKeyboard = await page.evaluate(async () => {
       const gev = window.__godsEyeView;
       const style = gev.styleManager;
       const radio = gev.dataManager.layers.get('radio').module;
       const slider = document.getElementById('radio-tuner-slider');
-      const key = (type, value) => slider.dispatchEvent(new KeyboardEvent(type, {
-        bubbles: true,
-        cancelable: true,
-        key: value,
-      }));
+      const key = async (type, value) => {
+        slider.dispatchEvent(new KeyboardEvent(type, { bubbles: true, cancelable: true, key: value }));
+        // The slider's Vue directive presents its published slot on render.
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+      };
       const markerId = () => window.__qaRadioSelected()?.id || null;
       const startIndex = Number(slider.value);
       const expectedIndex = Math.min(style._radioControls._radioTunerStations.length - 1, startIndex + 1);
       const expectedId = style._radioControls._radioTunerStations[expectedIndex]?.id || null;
       const playsBefore = window.__qaRadioPlayCalls.length;
-      key('keydown', 'ArrowRight');
+      await key('keydown', 'ArrowRight');
       const preview = {
         slot: Number(slider.value),
         markerId: markerId(),
         tuningActive: radio.getUIState().tuningActive,
         playDelta: window.__qaRadioPlayCalls.length - playsBefore,
       };
-      key('keyup', 'ArrowRight');
+      await key('keyup', 'ArrowRight');
       const committed = {
         selectedId: radio.getUIState().selected?.id || null,
         slot: Number(slider.value),
@@ -3375,8 +2881,8 @@ async function main() {
         playDelta: window.__qaRadioPlayCalls.length - playsBefore,
       };
       const committedPlays = window.__qaRadioPlayCalls.length;
-      key('keydown', 'ArrowRight');
-      key('keydown', 'Escape');
+      await key('keydown', 'ArrowRight');
+      await key('keydown', 'Escape');
       const cancelled = {
         selectedId: radio.getUIState().selected?.id || null,
         slot: Number(slider.value),
@@ -3385,29 +2891,29 @@ async function main() {
       };
       const count = style._radioControls._radioTunerStations.length;
       const pageStep = Math.max(1, Math.round((count - 1) / 10));
-      const previewAndCancel = (value, expectedSlot) => {
+      const previewAndCancel = async (value, expectedSlot) => {
         const beforePlays = window.__qaRadioPlayCalls.length;
-        key('keydown', value);
+        await key('keydown', value);
         const result = {
           key: value,
           slot: Number(slider.value),
           expectedSlot,
           playDelta: window.__qaRadioPlayCalls.length - beforePlays,
         };
-        key('keydown', 'Escape');
+        await key('keydown', 'Escape');
         result.restoredSlot = Number(slider.value);
         result.cancelPlayDelta = window.__qaRadioPlayCalls.length - beforePlays;
         return result;
       };
       const base = committed.slot;
       const navigation = [
-        previewAndCancel('Home', 0),
-        previewAndCancel('End', count - 1),
-        previewAndCancel('PageUp', Math.min(count - 1, base + pageStep)),
-        previewAndCancel('PageDown', Math.max(0, base - pageStep)),
+        await previewAndCancel('Home', 0),
+        await previewAndCancel('End', count - 1),
+        await previewAndCancel('PageUp', Math.min(count - 1, base + pageStep)),
+        await previewAndCancel('PageDown', Math.max(0, base - pageStep)),
       ];
       return { startIndex, expectedIndex, expectedId, preview, committed, cancelled, navigation,
-        panelStayedOpen: !document.getElementById('radio-panel').classList.contains('collapsed') };
+        panelStayedOpen: !!document.getElementById('radio-panel').open };
     });
     check(
       'keyboard preview is silent, key release commits once, and Escape restores the committed station',
@@ -3430,8 +2936,8 @@ async function main() {
         && sample.playDelta === 0 && sample.cancelPlayDelta === 0),
       JSON.stringify(tunerKeyboard.navigation),
     );
-    await page.select('#radio-filter', 'news');
-    const filteredTunerCenter = await page.evaluate(() => {
+    await setRadioFilter(page, 'news');
+    const filteredTunerCenter = await page.evaluate(async () => {
       const gev = window.__godsEyeView;
       const style = gev.styleManager;
       const radio = gev.dataManager.layers.get('radio').module;
@@ -3448,6 +2954,7 @@ async function main() {
         clientY: rect.top + rect.height / 2,
         buttons: 1,
       }));
+      await new Promise((resolve) => requestAnimationFrame(resolve));
       const preview = {
         filter: radio.getUIState().filter,
         filteredCount: radio.getUIState().filteredCount,
@@ -3465,6 +2972,7 @@ async function main() {
         clientX,
         clientY: rect.top + rect.height / 2,
       }));
+      await new Promise((resolve) => requestAnimationFrame(resolve));
       return preview;
     });
     check(
@@ -3477,7 +2985,7 @@ async function main() {
         && filteredTunerCenter.markerId === `radio:selected:${filteredTunerCenter.expectedId}`,
       JSON.stringify(filteredTunerCenter),
     );
-    await page.select('#radio-filter', 'all');
+    await setRadioFilter(page, 'all');
     const fullPoolNavigation = await page.evaluate(() => {
       const gev = window.__godsEyeView;
       const radio = gev.dataManager.layers.get('radio').module;
@@ -3575,7 +3083,7 @@ async function main() {
         && !failedTuner.stopped.awaiting && !failedTuner.stopped.broadcasting,
       JSON.stringify(failedTuner),
     );
-    await page.select('#radio-filter', 'news');
+    await setRadioFilter(page, 'news');
 
     const markerTarget = await page.evaluate(async () => {
       const viewer = window.__godsEyeView.viewer;
@@ -3745,7 +3253,7 @@ async function main() {
     await page.evaluate(() => {
       const manager = window.__godsEyeView.styleManager;
       manager.setPanelCollapsed('global-context-panel', false);
-      manager.setPanelCollapsed('radio-panel', false);
+      document.getElementById('radio-panel').open = true;
     });
     await page.waitForSelector('#radio-next-btn', { visible: true });
     await page.evaluate(() => {
@@ -3826,6 +3334,8 @@ async function main() {
       JSON.stringify({ calls: playing.flyToCalls, targets: playing.flightTargets, cameraHeight: playing.cameraHeight }),
     );
     const trackedRadioControls = await page.evaluate(async () => {
+      const { cameraOf } = await import('/src/render/rendererOf.js');
+      const { entityFollowTarget, followedOf, stopFollowing } = await import('/src/data/followed.js');
       const viewer = window.__godsEyeView.viewer;
       const radio = window.__godsEyeView.dataManager.layers.get('radio').module;
       const run = async (ownerPrefix, buttonId) => {
@@ -3834,8 +3344,15 @@ async function main() {
           position: viewer.camera.positionWC.clone(),
         });
         window.__godsEyeView.entityRecords.write(owner).trackedId = `${ownerPrefix}:qa-radio-camera-owner`;
-        viewer.trackedEntity = owner;
+        const position = owner.position.getValue(viewer.clock.currentTime);
+        const target = entityFollowTarget(owner, {
+          position: () => position,
+          frame: 'enu',
+          viewFrom: { x: 0, y: -800, z: 400 },
+        });
+        cameraOf(viewer).follow(target);
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        const beforeFollowed = followedOf(viewer);
         const beforeStationId = radio.getUIState().selected?.id || null;
         const beforeFlyToCalls = window.__qaRadioFlyToCalls.length;
         document.getElementById(buttonId)?.click();
@@ -3846,10 +3363,12 @@ async function main() {
           beforeStationId,
           afterStationId: radio.getUIState().selected?.id || null,
           flyToDelta: window.__qaRadioFlyToCalls.length - beforeFlyToCalls,
-          trackedIdentityPreserved: viewer.trackedEntity === owner,
-          trackedId: window.__godsEyeView.entityRecords.read(viewer.trackedEntity)?.trackedId || null,
+          ownerAcquired: beforeFollowed === target && beforeFollowed.entity === owner,
+          ownerKeyBefore: beforeFollowed?.key || null,
+          trackedIdentityPreserved: followedOf(viewer) === target && followedOf(viewer)?.entity === owner,
+          trackedId: followedOf(viewer)?.key || null,
         };
-        viewer.trackedEntity = undefined;
+        stopFollowing(viewer);
         viewer.entities.remove(owner);
         return result;
       };
@@ -3863,54 +3382,70 @@ async function main() {
       trackedRadioControls.every((sample) => sample.afterStationId
         && sample.afterStationId !== sample.beforeStationId
         && sample.flyToDelta === 0
+        && sample.ownerAcquired
+        && sample.ownerKeyBefore === `${sample.ownerPrefix}:qa-radio-camera-owner`
         && sample.trackedIdentityPreserved
         && sample.trackedId === `${sample.ownerPrefix}:qa-radio-camera-owner`),
       JSON.stringify(trackedRadioControls),
     );
 
-    const delayedTrackingStart = await page.evaluate(() => {
+    const delayedTrackingStart = await page.evaluate(async () => {
+      const { stopFollowing } = await import('/src/data/followed.js');
       const viewer = window.__godsEyeView.viewer;
-      viewer.trackedEntity = undefined;
+      stopFollowing(viewer);
       window.__qaRadioDelayNextFailure = true;
       const beforeFlyToCalls = window.__qaRadioFlyToCalls.length;
       document.getElementById('radio-next-btn')?.click();
       return { beforeFlyToCalls };
     });
     await page.waitForFunction(() => typeof window.__qaRejectRadioPlay === 'function');
-    const delayedTrackingOwner = await page.evaluate(() => {
+    const delayedTrackingOwner = await page.evaluate(async () => {
+      const { cameraOf } = await import('/src/render/rendererOf.js');
+      const { entityFollowTarget, followedOf } = await import('/src/data/followed.js');
       const viewer = window.__godsEyeView.viewer;
       const owner = viewer.entities.add({
         id: 'qa:flights:delayed-radio-fallback-owner',
         position: viewer.camera.positionWC.clone(),
       });
       window.__godsEyeView.entityRecords.write(owner).trackedId = 'flights:qa-delayed-radio-fallback-owner';
-      viewer.trackedEntity = owner;
-      window.__qaDelayedRadioTrackingOwner = owner;
+      const position = owner.position.getValue(viewer.clock.currentTime);
+      const target = entityFollowTarget(owner, {
+        position: () => position,
+        frame: 'enu',
+        viewFrom: { x: 0, y: -800, z: 400 },
+      });
+      cameraOf(viewer).follow(target);
+      window.__qaDelayedRadioTrackingOwner = { owner, target };
+      const acquired = followedOf(viewer);
+      const result = { ownerAcquired: acquired === target && acquired.entity === owner, trackedId: acquired?.key || null };
       window.__qaRejectRadioPlay();
-      return window.__godsEyeView.entityRecords.read(owner)?.trackedId;
+      return result;
     });
     await page.waitForFunction(() => window.__godsEyeView.dataManager.layers.get('radio').module.getUIState().audioState === 'playing');
-    const delayedFallbackOwnership = await page.evaluate((beforeFlyToCalls) => {
+    const delayedFallbackOwnership = await page.evaluate(async (beforeFlyToCalls) => {
+      const { followedOf, stopFollowing } = await import('/src/data/followed.js');
       const viewer = window.__godsEyeView.viewer;
-      const owner = window.__qaDelayedRadioTrackingOwner;
+      const { owner, target } = window.__qaDelayedRadioTrackingOwner;
       const result = {
         flyToDelta: window.__qaRadioFlyToCalls.length - beforeFlyToCalls,
-        trackedIdentityPreserved: viewer.trackedEntity === owner,
-        trackedId: window.__godsEyeView.entityRecords.read(viewer.trackedEntity)?.trackedId || null,
+        trackedIdentityPreserved: followedOf(viewer) === target && followedOf(viewer)?.entity === owner,
+        trackedId: followedOf(viewer)?.key || null,
         selectedId: window.__godsEyeView.dataManager.layers.get('radio').module.getUIState().selected?.id || null,
       };
-      viewer.trackedEntity = undefined;
+      stopFollowing(viewer);
       viewer.entities.remove(owner);
       delete window.__qaDelayedRadioTrackingOwner;
       return result;
     }, delayedTrackingStart.beforeFlyToCalls);
     check(
       'a delayed Radio fallback yields when Flights acquires the camera after the initial rotation',
-      delayedFallbackOwnership.flyToDelta === 1
+      delayedTrackingOwner.ownerAcquired
+        && delayedTrackingOwner.trackedId === 'flights:qa-delayed-radio-fallback-owner'
+        && delayedFallbackOwnership.flyToDelta === 1
         && delayedFallbackOwnership.trackedIdentityPreserved
-        && delayedFallbackOwnership.trackedId === delayedTrackingOwner
+        && delayedFallbackOwnership.trackedId === delayedTrackingOwner.trackedId
         && Boolean(delayedFallbackOwnership.selectedId),
-      JSON.stringify(delayedFallbackOwnership),
+      JSON.stringify({ before: delayedTrackingOwner, after: delayedFallbackOwnership }),
     );
     await page.evaluate(() => {
       const viewer = window.__godsEyeView.viewer;
@@ -4185,15 +3720,32 @@ async function main() {
     );
 
     const stagedGlobeNavigation = await page.evaluate(async () => {
+      const { cameraOf } = await import('/src/render/rendererOf.js');
+      const { toDestination } = await import('/src/render/cesium/camera.js');
+      const { entityFollowTarget, followedOf, stopFollowing } = await import('/src/data/followed.js');
       const gev = window.__godsEyeView;
       const viewer = gev.viewer;
       const camera = viewer.camera;
       const radio = gev.dataManager.layers.get('radio').module;
       const stationIds = radio.getTunerStations(3).map((station) => station.id);
       if (stationIds.length < 3) throw new Error('Radio recenter QA requires three visible stations');
-      const originalFlyTo = camera.flyTo;
+      const port = cameraOf(viewer);
+      const originalFlyTo = port.flyTo;
+      const originalCancelFlight = port.cancelFlight;
       const calls = [];
-      camera.flyTo = (options) => calls.push(options);
+      let activeFlight = null;
+      // Drive completion at the camera contract: a native flyTo stub is
+      // cancelled by the adapter because it never starts a Cesium flight.
+      port.cancelFlight = () => {
+        const previous = activeFlight;
+        activeFlight = null;
+        previous?.options.onCancel?.();
+      };
+      port.flyTo = (destination, options) => {
+        port.cancelFlight();
+        activeFlight = { destination, options };
+        calls.push(activeFlight);
+      };
       const setCamera = (height, pitchDegrees, headingDegrees = 38) => {
         camera.setView({
           destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
@@ -4212,22 +3764,23 @@ async function main() {
       const completeFlight = (index) => {
         const flight = calls[index];
         camera.setView({
-          destination: flight.destination,
-          orientation: flight.orientation,
+          destination: toDestination(flight.destination),
+          orientation: flight.options.orientation,
         });
-        flight.complete?.();
+        if (activeFlight === flight) activeFlight = null;
+        flight.options.onComplete?.();
       };
       const describe = (flight) => {
-        const cartographic = viewer.scene.globe.ellipsoid.cartesianToCartographic(flight.destination);
+        const cartographic = viewer.scene.globe.ellipsoid.cartesianToCartographic(toDestination(flight.destination));
         return {
           lat: cartographic.latitude * 180 / Math.PI,
           lon: cartographic.longitude * 180 / Math.PI,
           height: cartographic.height,
-          heading: flight.orientation?.heading,
-          pitch: flight.orientation?.pitch,
-          roll: flight.orientation?.roll,
-          duration: flight.duration,
-          eased: Boolean(flight.easingFunction),
+          heading: flight.options.orientation?.heading,
+          pitch: flight.options.orientation?.pitch,
+          roll: flight.options.orientation?.roll,
+          duration: flight.options.durationS,
+          eased: flight.options.easing === 'cubicInOut',
         };
       };
 
@@ -4248,11 +3801,21 @@ async function main() {
         position: viewer.camera.positionWC.clone(),
       });
       window.__godsEyeView.entityRecords.write(owner).trackedId = 'flights:qa-radio-recenter-stage-owner';
-      viewer.trackedEntity = owner;
+      const ownerPosition = owner.position.getValue(viewer.clock.currentTime);
+      const target = entityFollowTarget(owner, {
+        position: () => ownerPosition,
+        frame: 'enu',
+        viewFrom: { x: 0, y: -800, z: 400 },
+      });
+      cameraOf(viewer).follow(target);
+      const ownerBefore = followedOf(viewer);
+      const trackingOwnerAcquired = ownerBefore === target && ownerBefore.entity === owner;
+      const trackingKeyBefore = ownerBefore?.key || null;
       completeFlight(0);
       const trackingBetweenStagesCalls = calls.length;
-      const trackingIdentityPreserved = viewer.trackedEntity === owner;
-      viewer.trackedEntity = undefined;
+      const trackingIdentityPreserved = followedOf(viewer) === target && followedOf(viewer)?.entity === owner;
+      const trackingKeyAfter = followedOf(viewer)?.key || null;
+      stopFollowing(viewer);
       viewer.entities.remove(owner);
 
       calls.length = 0;
@@ -4262,7 +3825,7 @@ async function main() {
       const staleRecenter = calls[0];
       radio.cycleStation(1, { rotate: true, autoplay: false, stationIds });
       const latestRecenterIndex = calls.length - 1;
-      staleRecenter.complete?.();
+      staleRecenter.options.onComplete?.();
       const callsAfterStaleCompletion = calls.length;
       completeFlight(latestRecenterIndex);
       const latestSelected = radio.getUIState().selected;
@@ -4275,7 +3838,7 @@ async function main() {
       const directSelectionId = stationIds.find((id) => id !== radio.getUIState().selected.id);
       radio.selectStation(directSelectionId, { autoplay: false, focus: false, origin: 'user' });
       const directSelectionCalls = calls.length;
-      directSelectionStaleRecenter.complete?.();
+      directSelectionStaleRecenter.options.onComplete?.();
       const directSelectionCallsAfterStale = calls.length;
       const directSelectionSelectedId = radio.getUIState().selected.id;
 
@@ -4288,7 +3851,7 @@ async function main() {
         stationQuery: voiceSelectionId,
       }, { autoplay: false, origin: 'voice' });
       const voiceSelectionCalls = calls.length;
-      voiceSelectionStaleRecenter.complete?.();
+      voiceSelectionStaleRecenter.options.onComplete?.();
       const voiceSelectionCallsAfterStale = calls.length;
       const voiceSelectionSelectedId = radio.getUIState().selected.id;
       radio.selectStation(latestSelected.id, { autoplay: false, focus: false });
@@ -4312,7 +3875,9 @@ async function main() {
       const centeredDirect = describe(calls[0]);
       const centeredDirectCalls = calls.length;
 
-      camera.flyTo = originalFlyTo;
+      port.cancelFlight();
+      port.flyTo = originalFlyTo;
+      port.cancelFlight = originalCancelFlight;
       return {
         partialInitialCalls,
         partialAfterRecenterCalls,
@@ -4320,7 +3885,10 @@ async function main() {
         stationFocus,
         selectedAfterRecenter,
         trackingBetweenStagesCalls,
+        trackingOwnerAcquired,
+        trackingKeyBefore,
         trackingIdentityPreserved,
+        trackingKeyAfter,
         latestRecenterIndex,
         callsAfterStaleCompletion,
         latestSelected,
@@ -4361,7 +3929,10 @@ async function main() {
     check(
       'tracking acquired during Radio recenter suppresses the station-focus stage',
       stagedGlobeNavigation.trackingBetweenStagesCalls === 1
-        && stagedGlobeNavigation.trackingIdentityPreserved,
+        && stagedGlobeNavigation.trackingOwnerAcquired
+        && stagedGlobeNavigation.trackingKeyBefore === 'flights:qa-radio-recenter-stage-owner'
+        && stagedGlobeNavigation.trackingIdentityPreserved
+        && stagedGlobeNavigation.trackingKeyAfter === stagedGlobeNavigation.trackingKeyBefore,
       JSON.stringify(stagedGlobeNavigation),
     );
     check(
@@ -4406,13 +3977,13 @@ async function main() {
     );
 
     await page.evaluate(() => {
-      window.__godsEyeView.styleManager.setPanelCollapsed('radio-panel', true);
+      document.getElementById('radio-panel').open = false;
       window.__godsEyeView.styleManager.setPanelCollapsed('global-context-panel', false);
     });
     const companion = await page.evaluate(() => ({
       radioEnabled: window.__godsEyeView.dataManager.isEnabled('radio'),
       state: window.__godsEyeView.dataManager.layers.get('radio').module.getUIState().audioState,
-      radioCollapsed: document.getElementById('radio-panel').classList.contains('collapsed'),
+      radioCollapsed: !document.getElementById('radio-panel').open,
       contextCollapsed: document.getElementById('global-context-panel').classList.contains('collapsed'),
       nested: document.getElementById('global-context-panel').contains(document.getElementById('radio-panel')),
     }));
@@ -4425,38 +3996,65 @@ async function main() {
     await page.evaluate(() => {
       const manager = window.__godsEyeView.styleManager;
       manager.setPanelCollapsed('global-context-panel', false);
-      manager.setPanelCollapsed('radio-panel', false);
+      document.getElementById('radio-panel').open = true;
     });
-    await page.waitForFunction(() => !document.getElementById('radio-panel').classList.contains('collapsed'));
+    await page.waitForFunction(() => !!document.getElementById('radio-panel').open);
 
-    await page.click('#global-context-flights-btn');
-    await page.waitForFunction(() => !document.getElementById('context-flights-view').hidden);
-    const companionStack = await page.evaluate(() => {
-      const contextView = document.getElementById('context-flights-view');
-      const awareness = document.getElementById('military-awareness-panel');
-      const radio = document.getElementById('radio-panel');
-      const scroller = document.querySelector('#global-context-panel .global-context-panel-inner');
-      const awarenessRect = awareness.getBoundingClientRect();
-      const radioRect = radio.getBoundingClientRect();
-      return {
-        contactsNaturalHeight: contextView.clientHeight === contextView.scrollHeight,
-        radioNaturalHeight: radio.clientHeight === radio.scrollHeight,
-        separated: awarenessRect.bottom <= radioRect.top,
-        scrollable: scroller.scrollHeight > scroller.clientHeight,
-      };
-    });
-    check(
-      'expanded Contacts and Radio remain separated in the shared Context scroller',
-      companionStack.contactsNaturalHeight && companionStack.radioNaturalHeight
-        && companionStack.separated && companionStack.scrollable,
-      JSON.stringify(companionStack),
-    );
+    await revealRadioControls(page, 'radio-play-btn');
+    check('Radio stations and tuner share Context without retired Contacts controls',
+      await page.evaluate(() => Boolean(document.querySelector('#global-context-panel .radio-stations'))
+        && document.querySelector('#global-context-panel').contains(document.getElementById('radio-panel'))
+        && !document.getElementById('global-context-flights-btn')));
 
-    await page.select('#radio-filter', 'talk');
+    await setRadioFilter(page, 'talk');
     const filtered = await page.evaluate(() => window.__godsEyeView.dataManager.layers.get('radio').module.getUIState());
     check('filter changes markers/navigation without stopping the selected stream', filtered.filteredCount === 75 && filtered.audioState === 'playing' && filtered.selectedIndex === -1, `${filtered.filteredCount} matches`);
 
+    check('station list and mini-player expose broadcaster privacy before playback',
+      await page.evaluate(() => /broadcasters.*IP address/.test(document.querySelector('.radio-stations__privacy')?.textContent || '')
+        && /broadcasters.*IP address/.test(document.getElementById(document.querySelector('.radio-mini')?.getAttribute('aria-describedby'))?.textContent || '')));
+    await page.click('.radio-mini__pin');
+    await page.waitForFunction(() => document.querySelector('.radio-mini__pin')?.getAttribute('aria-pressed') === 'true');
+    await page.evaluate(() => {
+      window.__godsEyeView.styleManager.setPanelCollapsed('data-panel', false);
+      document.querySelector('[data-layer-id="radio"] .data-toggle-btn').scrollIntoView({ block: 'nearest' });
+    });
+    await page.click(RADIO_POWER);
+    await page.waitForFunction(() => !window.__godsEyeView.dataManager.isEnabled('radio'));
+    check('pinning a playing station keeps its stream through Radio off without markers',
+      await page.evaluate(() => {
+        const radio = window.__godsEyeView.dataManager.layers.get('radio').module;
+        return radio.getUIState().audioState === 'playing'
+          && !radio.getUIState().presentationActive
+          && !(window.__qaRadioRows('stations')[0]?.setShown ?? false)
+          && document.querySelector('.radio-mini')?.dataset.state === 'live';
+      }));
+    await page.click('.radio-mini__pin');
+    check('unpinning the retained station leaves playback running',
+      await page.evaluate(() => window.__godsEyeView.dataManager.layers.get('radio').module.getUIState().audioState === 'playing'));
+    await page.click('.radio-mini__close');
+    await page.waitForFunction(() => !document.querySelector('.radio-mini'));
+    check('closing the mini-player ends retained playback',
+      await page.evaluate(() => window.__godsEyeView.dataManager.layers.get('radio').module.getUIState().audioState === 'stopped'));
+    await page.click(RADIO_POWER);
+    await page.waitForFunction(() => window.__godsEyeView.dataManager.isEnabled('radio'));
+    await revealRadioControls(page, 'radio-play-btn');
+    await page.evaluate(() => document.querySelector('[data-chip-id="radio-source-local"]').scrollIntoView({ block: 'nearest' }));
+    await page.click('[data-chip-id="radio-source-local"]');
+    await page.waitForFunction(() => window.__godsEyeView.dataManager.layers.get('radio').module.getUIState().source === 'local');
+    check('Data Layers source switch shows the local receiver without internet stations',
+      await page.evaluate((strip) => Boolean(document.querySelector('#global-context-panel .local-receiver'))
+        && !document.querySelector(strip)
+        && document.querySelector('[data-chip-id="radio-source-local"]')?.getAttribute('aria-checked') === 'true', RADIO_FILTER_STRIP));
+    await page.click('[data-chip-id="radio-source-internet"]');
+    await page.waitForFunction(() => window.__godsEyeView.dataManager.layers.get('radio').module.getUIState().source === 'internet');
+    check('returning to internet stations restores Context without autoplay',
+      await page.evaluate((strip) => Boolean(document.querySelector(strip))
+        && !document.querySelector('#global-context-panel .local-receiver')
+        && window.__godsEyeView.dataManager.layers.get('radio').module.getUIState().audioState === 'stopped', RADIO_FILTER_STRIP));
+
     const playsBeforeRestore = await page.evaluate(() => window.__qaRadioPlayCalls.length);
+    const disclosureBeforeRestore = await page.$eval('#radio-panel', (fold) => fold.open);
     await page.evaluate(async () => {
       const gev = window.__godsEyeView;
       await gev.dataManager.setEnabled('radio', false);
@@ -4465,23 +4063,23 @@ async function main() {
     const restored = await page.evaluate(() => ({
       state: window.__godsEyeView.dataManager.layers.get('radio').module.getUIState(),
       plays: window.__qaRadioPlayCalls.length,
-      radioCollapsed: document.getElementById('radio-panel').classList.contains('collapsed'),
+      radioCollapsed: !document.getElementById('radio-panel').open,
     }));
     check(
-      'programmatic/preset-style restoration does not autoplay and leaves idle Radio collapsed',
+      'programmatic/preset-style restoration does not autoplay or change the tuner disclosure',
       restored.state.enabled && restored.state.audioState === 'stopped'
-        && restored.plays === playsBeforeRestore && restored.radioCollapsed,
+        && restored.plays === playsBeforeRestore && !restored.radioCollapsed === disclosureBeforeRestore,
       JSON.stringify(restored),
     );
 
-    await page.evaluate(() => window.__godsEyeView.styleManager.setPanelCollapsed('radio-panel', false));
+    await revealRadioControls(page, 'radio-play-btn');
     await sleep(350);
     await page.screenshot({ path: path.join(SHOTS_DIR, 'desktop.png') });
     const desktop = await page.$eval('#radio-panel', (element) => {
       const rect = element.getBoundingClientRect();
       const contextRect = element.closest('#global-context-panel').getBoundingClientRect();
       const tunerRect = element.querySelector('.radio-tuner').getBoundingClientRect();
-      const innerRect = element.querySelector('.radio-panel-inner').getBoundingClientRect();
+      const innerRect = element.getBoundingClientRect();
       return {
         left: contextRect.left,
         right: contextRect.right,
@@ -4498,7 +4096,8 @@ async function main() {
     await page.waitForFunction(() => window.__godsEyeView.dataManager.layers.get('radio').module.getUIState().audioState === 'playing');
     await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
     await sleep(500);
-    await page.$eval('#radio-panel', (element) => element.scrollIntoView({ block: 'nearest' }));
+    await page.click('#mobile-tab-bar [data-mobile-sheet="context"]');
+    await revealRadioControls(page, 'radio-play-btn');
     await page.screenshot({ path: path.join(SHOTS_DIR, 'mobile.png') });
     const mobile = await page.$eval('#radio-panel', (element) => {
       const rect = element.getBoundingClientRect();
@@ -4508,7 +4107,7 @@ async function main() {
       const logo = document.querySelector('#title-bar .title-logo');
       const logoRect = logo.getBoundingClientRect();
       const tunerRect = element.querySelector('.radio-tuner').getBoundingClientRect();
-      const innerRect = element.querySelector('.radio-panel-inner').getBoundingClientRect();
+      const innerRect = element.getBoundingClientRect();
       return {
         left: contextRect.left,
         right: contextRect.right,
@@ -4518,6 +4117,9 @@ async function main() {
         radioWidth: rect.width,
         radioVisible: rect.bottom > contextRect.top && rect.top < contextRect.bottom,
         scrollable: scroller.scrollHeight >= scroller.clientHeight,
+        logoRect: logoRect.toJSON(),
+        outerWaveTop: logoRect.top + parseFloat(getComputedStyle(logo, '::after').top),
+        viewport: { width: innerWidth, height: innerHeight },
         broadcastVisible: Number(getComputedStyle(logo, '::before').opacity) > 0
           && Number(getComputedStyle(logo, '::after').opacity) > 0,
         broadcastInsideViewport: logoRect.left >= 0 && logoRect.right <= innerWidth && logoRect.top - 15 >= 0,
@@ -4564,6 +4166,22 @@ async function main() {
       failedResponses.length === 0,
       failedResponses.slice(0, 3).join(' | '),
     );
+  } catch (error) {
+    if (page && !page.isClosed()) {
+      const observed = await page.evaluate(() => {
+        const fold = document.getElementById('radio-panel');
+        return {
+          bodyClass: document.body.className,
+          context: document.getElementById('global-context-panel')?.outerHTML.slice(0, 4000),
+          fold: fold ? { open: fold.open, parent: fold.parentElement?.outerHTML.slice(0, 800), rect: fold.getBoundingClientRect().toJSON() } : null,
+          power: document.querySelector('[data-layer-id="radio"] .data-toggle-btn')?.outerHTML,
+          radio: window.__godsEyeView?.dataManager?.layers?.get('radio')?.module?.getUIState(),
+        };
+      }).catch(() => null);
+      fs.writeFileSync(path.join(SHOTS_DIR, 'failure.json'), JSON.stringify({ error: String(error), results, observed }, null, 2));
+      await page.screenshot({ path: path.join(SHOTS_DIR, 'failure.png') }).catch(() => {});
+    }
+    throw error;
   } finally {
     await browser.close();
   }

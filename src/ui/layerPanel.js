@@ -16,6 +16,7 @@ import {
   layerSourceText,
 } from './layerNames.js';
 export { localizeLayerName } from './layerNames.js';
+import { WEATHER_LIST_LAYERS } from './contextLists.js';
 import { createWeatherPanel } from './weatherPanel.js';
 import { createNewsPanel } from './newsPanel.js';
 import {
@@ -531,8 +532,8 @@ export class LayerPanel {
   }
 
   /**
-   * A layer's row chips, one-of-many switch, slider, start/end pickers, color legend, info line
-   * and ordered list. The block
+   * A layer's row chips, one-of-many switch, slider, start/end pickers, color legend, info line,
+   * ordered list and a lent panel (Radio's local receiver card). The block
    * is hidden while the layer is off (or while a dependency owner has
    * surrendered it), so a quiet row stays quiet. Chips and list items are
    * keyed, so the refresh a chip's own click triggers keeps keyboard focus.
@@ -566,9 +567,12 @@ export class LayerPanel {
           : `${item.label} ${formatCount(item.count)}`,
     }));
     const infoText = controls?.info ? String(controls.info) : '';
+    const alert = controls?.alert;
     const segmented = controls?.segmented || null;
     const slider = controls?.slider || null;
     const range = controls?.range || null;
+    // An element of the page lent to the row while it shows (RowPanel.vue).
+    const panel = typeof controls?.panel === 'string' ? controls.panel : null;
     // The info line, once shown, stays in place and hides when empty.
     if (infoText) row.info = true;
     return {
@@ -576,14 +580,18 @@ export class LayerPanel {
         chips.length === 0 &&
         legend.length === 0 &&
         !infoText &&
+        !alert &&
         !segmented &&
         !slider &&
-        !range,
+        !range &&
+        !panel,
       chips,
+      panel,
       segmented,
       slider,
       range,
       legend,
+      alert,
       info: row.info
         ? { text: infoText, title: controls?.infoTitle || '' }
         : null,
@@ -634,7 +642,7 @@ export class LayerPanel {
   }
 
   // A row slider (e.g. the Active Fires minimum-FRP filter) maps its position
-  // to params through the live descriptor on every tick.
+  // to params through the current descriptor.
   _moveSlider(id, sliderId, value, generation = this._generation) {
     if (this._destroyed || this._generation !== generation) return;
     const slider = this._rowControlsFor(id)?.slider;
@@ -698,16 +706,7 @@ export class LayerPanel {
     this._weatherPanel?.update(
       this.getAll()
         .filter(
-          (layer) =>
-            layer.enabled &&
-            [
-              'wind',
-              'weather-radar',
-              'weather-satellite',
-              'weather-lightning',
-              'weather-cyclones',
-              'air-quality',
-            ].includes(layer.id),
+          (layer) => layer.enabled && WEATHER_LIST_LAYERS.includes(layer.id),
         )
         .map((layer) => ({
           id: layer.id,

@@ -46,7 +46,7 @@ Edit `src/i18n/locales/<code>.json` and run `npm run i18n`. To see your change, 
 
 1. Create `src/i18n/locales/<code>.json`, fill it from `npm run i18n -- --missing <code>` (start from `{}`), and translate every entry.
 2. Import it in `src/i18n/index.js` and add it to `CATALOGS`.
-3. Add the code to `LOCALES` and its own-language name to `LOCALE_NAMES` in `src/i18n/locale.js`. Right-to-left languages also go in `RTL_LOCALES`; the chrome mirrors through logical CSS properties (`inset-inline-*`, `margin-inline-*`), and `src/ui/styles/rtl.css` holds what those cannot express (see the Arabic notes). If the language should keep Western digits, map it in `INTL_TAGS` in `locale.js`.
+3. Add the code to `LOCALES` in `src/i18n/shippedLocales.js` and its own-language name to `LOCALE_NAMES` in `src/i18n/locale.js`. Right-to-left languages also go in `RTL_LOCALES`; the chrome mirrors through logical CSS properties (`inset-inline-*`, `margin-inline-*`), and `src/ui/styles/rtl.css` holds what those cannot express (see the Arabic notes). If the language should keep Western digits, map it in `INTL_TAGS` in `locale.js`.
 4. Add `src/i18n/locales/<code>.json` next to `ru.json` in `scripts/package-boundaries.json` and in `scripts/format-scope.json`.
 5. Write `docs/translations/<code>.md`: glossary, plural forms, units and style (copy the structure of `ru.md`).
 6. If the language is not written in Latin letters, also add it to `NON_LATIN_LOCALES` in `src/hudSummaryResponse.js` — that guard falls back to the translated text when a summary provider answers in English.

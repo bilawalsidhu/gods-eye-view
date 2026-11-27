@@ -183,6 +183,24 @@ export function createEarthquakesLayer({
     return _eventById.get(pickId.slice(PICK_PREFIX.length)) ?? null;
   }
 
+  /** Context rows use the stable event ID; globe picks use the prefixed ID. */
+  function contextEvent(id) {
+    const key = String(id ?? '');
+    return _eventById.get(key) ?? eventOfPickId(key);
+  }
+
+  function contextRecord(event) {
+    return mapAnalystRecord({
+      id: event.stableId,
+      mag: event.mag,
+      place: event.place,
+      time: event.time,
+      depth: event.depthKm,
+      lat: event.lat,
+      lon: event.lon,
+    });
+  }
+
   /** The drawn event a click's draw hit is on: an item of this layer's set. */
   function pickedEvent(hit) {
     if (!hit || hit.surface || !_discs || hit.set !== _discs.id) return null;
@@ -398,12 +416,13 @@ export function createEarthquakesLayer({
     });
   }
 
-  /** Select a drawn quake, show its card, and ask the camera to go there. */
-  function selectAndFocus(stableId) {
+  /** Select a drawn quake and show its card. The caller can own the flight. */
+  function selectAndFocus(stableId, { center = true } = {}) {
     const event = _eventById.get(stableId);
     if (!_enabled || !event) return false;
     _selectedId = stableId;
     publishCard({ user: true });
+    if (!center) return true;
     focus?.requestWorldFocus?.({
       kind: 'earthquake',
       id: `${PICK_PREFIX}${stableId}`,
@@ -600,6 +619,24 @@ export function createEarthquakesLayer({
       _lastError = null;
     },
 
+    /** Select a quake by its Context record ID or its drawn pick ID. */
+    pickById(id, options) {
+      const event = contextEvent(id);
+      return event ? selectAndFocus(event.stableId, options) : false;
+    },
+
+    isSelected(id) {
+      const event = contextEvent(id);
+      return Boolean(event && event.stableId === _selectedId);
+    },
+
+    clearSelection,
+
+    getContextRecord(id) {
+      const event = _enabled ? contextEvent(id) : null;
+      return event ? contextRecord(event) : null;
+    },
+
     /**
      * Snapshot the layer's in-memory earthquake records as plain JSON-safe
      * objects for the analyst query engine. On-demand only (called at most
@@ -613,20 +650,7 @@ export function createEarthquakesLayer({
       const limit = Number.isFinite(maxCount)
         ? Math.max(1, Math.floor(maxCount))
         : 2000;
-      return _events.slice(0, limit).map((event, index) =>
-        mapAnalystRecord(
-          {
-            id: event.usgsId ?? null,
-            mag: event.mag,
-            place: event.place,
-            time: event.time,
-            depth: event.depthKm,
-            lat: event.lat,
-            lon: event.lon,
-          },
-          index,
-        ),
-      );
+      return _events.slice(0, limit).map(contextRecord);
     },
 
     getStats() {

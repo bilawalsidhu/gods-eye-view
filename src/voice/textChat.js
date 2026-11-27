@@ -366,7 +366,12 @@ export function createTextChat({
                 owner.signal.addEventListener('abort', cancel, { once: true });
                 try {
                   const playing = await waitForSignal(
-                    Promise.resolve(radioLayer?.playForVoice?.({ attemptId })),
+                    Promise.resolve(
+                      radioLayer?.playForVoice?.({
+                        attemptId,
+                        resumeStationId: result.resumeStationId,
+                      }),
+                    ),
                     owner.signal,
                   );
                   if (!current()) return;

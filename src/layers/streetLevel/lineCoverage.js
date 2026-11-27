@@ -1,11 +1,41 @@
 import { passesImageryFilter } from './filter.js';
 import { STREET_LEVEL_SET_PREFIX } from './policy.js';
-import { groundUnderCamera, viewFocus, visibleBbox } from './view.js';
-import { tilesForBbox } from './tileMath.js';
+import {
+  groundUnderCamera,
+  metresBetween,
+  viewFocus,
+  visibleBbox,
+} from './view.js';
+import { tilesForBbox, wrapLon } from './tileMath.js';
 import { msg } from '../../i18n/index.js';
 import { fromDegrees } from '../../geo/ellipsoid.js';
+import { nearestOnSegment } from '../../geoDistance.js';
+import { linePointInRect } from '../../data/contextGeometry.js';
 import { cssColor } from '../../render/color.js';
 import { findCamera, findDraw } from '../../render/rendererOf.js';
+
+/** Ground point on the picked line part nearest the pointer. */
+export function nearestOnLinePart(point, coordinates) {
+  if (!point || !coordinates?.length) return point;
+  const xScale = 111320 * Math.cos((point.lat * Math.PI) / 180);
+  let best = point;
+  let distance = Infinity;
+  for (let i = 1; i < coordinates.length; i++) {
+    const candidate = nearestOnSegment(
+      point,
+      coordinates[i - 1],
+      coordinates[i],
+      xScale,
+      110_540,
+    );
+    const metres = metresBetween(point, candidate);
+    if (metres < distance) {
+      best = candidate;
+      distance = metres;
+    }
+  }
+  return best;
+}
 
 /** Line parts per draw set: smaller batches build, and show, sooner. */
 const SEQUENCE_PRIMITIVE_BATCH = 120;
@@ -97,7 +127,7 @@ function lineItems(sequences, color, widthPx, prefix) {
         mode: 'draped',
         clampTo: 'both',
         style,
-        meta: { pick, sequenceId: sequence.id },
+        meta: { pick, sequenceId: sequence.id, coordinates },
       });
     }
   }
@@ -185,6 +215,63 @@ export function createLineCoverage({
   const perTilePointCap = tuning.maxPoints
     ? Math.floor(tuning.maxPoints / tuning.maxTiles)
     : Infinity;
+  /** Bumped whenever the drawn lines change, so a lookup can be reused. */
+  let drawnVersion = 0;
+  // Decoded sequences and their parts are immutable until their tile is
+  // replaced. Bounds keep camera moves from rereading every drawn vertex.
+  const nearbyChunks = new WeakMap();
+  const viewPaths = new WeakMap();
+
+  function chunksOf(sequence) {
+    let chunks = nearbyChunks.get(sequence);
+    if (chunks) return chunks;
+    chunks = [];
+    for (const part of sequence.parts) {
+      for (let start = 0; start < part.length; start += 32) {
+        const end = Math.min(start + 33, part.length);
+        let west = Infinity;
+        let east = -Infinity;
+        let south = Infinity;
+        let north = -Infinity;
+        for (let i = start; i < end; i++) {
+          const [lon, lat] = part[i];
+          if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
+          west = Math.min(west, lon);
+          east = Math.max(east, lon);
+          south = Math.min(south, lat);
+          north = Math.max(north, lat);
+        }
+        chunks.push({ part, start, end, west, east, south, north });
+      }
+    }
+    nearbyChunks.set(sequence, chunks);
+    return chunks;
+  }
+
+  // A conservative lower bound for metresBetween's street-scale metric.
+  // Use the smallest longitude scale anywhere in the chunk; wrapped
+  // endpoint distances also cover lines crossing the antimeridian.
+  function chunkDistanceSquared(point, chunk) {
+    const { west, east, south, north } = chunk;
+    const dy = Math.max(south - point.lat, point.lat - north, 0) * 110_540;
+    const offset = (((point.lon - west) % 360) + 360) % 360;
+    const dlon =
+      offset <= east - west || east - west >= 180
+        ? 0
+        : Math.min(
+            Math.abs(wrapLon(west - point.lon)),
+            Math.abs(wrapLon(east - point.lon)),
+          );
+    const meanLatitude = Math.max(
+      Math.abs((point.lat + south) / 2),
+      Math.abs((point.lat + north) / 2),
+    );
+    const scale =
+      meanLatitude < 90 ? Math.cos((meanLatitude * Math.PI) / 180) : 0;
+    const dx = dlon * 111_320 * scale;
+    // Leave a little rounding slack at the radius/best-distance boundary.
+    return (dx * dx + dy * dy) * (1 - 1e-12);
+  }
 
   function requestRender() {
     render?.governorRequestRender?.(renderKey);
@@ -238,6 +325,28 @@ export function createLineCoverage({
     return drawn;
   }
 
+  // One lookup entry per sequence. Keep disconnected parts when the same
+  // sequence is split across features within a tile.
+  function sequencesById(sequences) {
+    const byId = new Map();
+    const joined = new Map();
+    for (const sequence of sequences) {
+      const previous = byId.get(sequence.id);
+      if (!previous) {
+        byId.set(sequence.id, sequence);
+        continue;
+      }
+      let parts = joined.get(sequence.id);
+      if (!parts) {
+        parts = previous.parts.slice();
+        joined.set(sequence.id, parts);
+      }
+      parts.push(...sequence.parts);
+    }
+    for (const [id, parts] of joined) byId.set(id, { ...byId.get(id), parts });
+    return byId;
+  }
+
   /** The sequence the highlight draws, whose lines the tiles hide; or null. */
   const highlighted = () => state.coverage.highlight?.sequenceId ?? null;
 
@@ -270,6 +379,7 @@ export function createLineCoverage({
   }
 
   function dropHighlight() {
+    if (highlighted() !== null) drawnVersion++;
     hideInTiles(null);
     state.coverage.highlight?.set.dispose();
     state.coverage.highlight = null;
@@ -288,9 +398,17 @@ export function createLineCoverage({
     // tiles were drawn may have been left out by their caps.
     const current = filter();
     const parts = [];
+    const selected = new Map();
     for (const entry of state.coverage.tiles.values()) {
-      const sequence = entry.sequenceList.find(({ id }) => id === sequenceId);
-      if (sequence && passes(sequence, current)) parts.push(...sequence.parts);
+      const sequence = sequencesById(
+        entry.sequenceList.filter(
+          (item) => item.id === sequenceId && passes(item, current),
+        ),
+      ).get(sequenceId);
+      if (sequence) {
+        selected.set(entry, sequence);
+        parts.push(...sequence.parts);
+      }
     }
     const items = lineItems(
       [{ id: sequenceId, parts }],
@@ -304,6 +422,8 @@ export function createLineCoverage({
       if (!set) return;
       state.coverage.highlight = { set, sequenceId: null };
     }
+    state.coverage.highlight.sequences = selected;
+    drawnVersion++;
     state.coverage.highlight.set.set(items);
     hideInTiles(sequenceId);
     requestRender();
@@ -317,7 +437,8 @@ export function createLineCoverage({
   function drawTile(entry) {
     // Lookup, picking and counts follow what is drawn, not the whole tile.
     const sequences = drawnSequences(entry);
-    entry.sequences = new Map(sequences.map((s) => [s.id, s]));
+    drawnVersion++;
+    entry.sequences = sequencesById(sequences);
     const hidden = highlighted();
     const items = lineItems(
       sequences,
@@ -357,6 +478,7 @@ export function createLineCoverage({
     if (!entry) return;
     undrawTile(entry);
     state.coverage.tiles.delete(key);
+    drawnVersion++;
   }
 
   async function loadTile(tile) {
@@ -572,14 +694,124 @@ export function createLineCoverage({
     const ids = new Set();
     for (const entry of state.coverage.tiles.values())
       for (const id of entry.sequences.keys()) ids.add(id);
+    if (highlighted() !== null) ids.add(highlighted());
     return ids.size;
   }
 
-  /** What the panel and the layer list show: count, LOADING, key gate, error. */
+  let near = { asked: '', found: [] };
+
+  /**
+   * The drawn lines within `radiusKm` of a point, one entry per sequence at
+   * its point nearest there, nearest first: what Context counts and lists
+   * beside the Data Layers row count. The same question about the same lines
+   * is answered from the last answer.
+   * @param {{lat: number, lon: number}} point
+   * @param {number} radiusKm
+   * @param {?{west: number, south: number, east: number, north: number}} rect Optional viewport in degrees. Each result uses its nearest point inside these bounds.
+   * @param {?{visible: ?function, crossing?: ?function, key: string}} clip Screen visibility, segment clipping and their cache key.
+   * @returns {Array<{sequenceId: string, lat: number, lon: number, km: number,
+   *   capturedAt: number, isPano: boolean}>}
+   */
+  function linesNear(point, radiusKm, rect = null, clip = null) {
+    if (!Number.isFinite(point?.lat) || !Number.isFinite(point?.lon)) return [];
+    if (!(radiusKm > 0)) return [];
+    const box =
+      rect && [rect.west, rect.south, rect.east, rect.north].join(',');
+    const asked = `${drawnVersion}|${point.lat}|${point.lon}|${radiusKm}|${box || ''}|${clip?.key ?? ''}`;
+    if (near.asked === asked) return near.found;
+    const radiusM = radiusKm * 1000;
+    const xScale = 111320 * Math.cos((point.lat * Math.PI) / 180);
+    const best = new Map();
+    for (const entry of state.coverage.tiles.values()) {
+      const extra = state.coverage.highlight?.sequences.get(entry);
+      const sequences =
+        extra && !entry.sequences.has(extra.id)
+          ? [...entry.sequences.values(), extra]
+          : entry.sequences.values();
+      for (const drawn of sequences) {
+        const sequence = drawn.id === extra?.id ? extra : drawn;
+        let closest = best.get(sequence.id)?.metres ?? Infinity;
+        let at = null;
+        const chunks = chunksOf(sequence);
+        if (rect) {
+          let paths = viewPaths.get(sequence);
+          if (!paths) {
+            paths = chunks.map((chunk) => {
+              const { west, east, south, north, part, start, end } = chunk;
+              const wraps = east - west > 180;
+              let points;
+              return {
+                bounds: {
+                  west: wraps ? -180 : west,
+                  east: wraps ? 180 : east,
+                  south,
+                  north,
+                },
+                points: () =>
+                  (points ??= part
+                    .slice(start, end)
+                    .map(([lon, lat]) => ({ lon, lat }))),
+              };
+            });
+            viewPaths.set(sequence, paths);
+          }
+          const position = linePointInRect(
+            paths,
+            rect,
+            point,
+            false,
+            clip?.visible,
+            clip?.crossing,
+          );
+          if (position) {
+            const metres = metresBetween(point, position);
+            if (metres < closest && metres <= radiusM)
+              best.set(sequence.id, { sequence, metres, ...position });
+          }
+          continue;
+        }
+        for (const chunk of chunks) {
+          const reach = Math.min(closest, radiusM);
+          if (chunkDistanceSquared(point, chunk) > reach * reach) continue;
+          for (let i = chunk.start; i < chunk.end; i++) {
+            const position = nearestOnSegment(
+              point,
+              chunk.part[i],
+              chunk.part[Math.min(i + 1, chunk.end - 1)],
+              xScale,
+              110_540,
+            );
+            const metres = metresBetween(point, position);
+            if (metres < closest) {
+              closest = metres;
+              at = position;
+            }
+          }
+        }
+        if (at && closest <= radiusM)
+          best.set(sequence.id, { sequence, metres: closest, ...at });
+      }
+    }
+    const found = [...best.values()]
+      .sort((a, b) => a.metres - b.metres)
+      .map(({ sequence, metres, lat, lon }) => ({
+        sequenceId: sequence.id,
+        lat,
+        lon,
+        km: metres / 1000,
+        capturedAt: sequence.capturedAt || 0,
+        isPano: sequence.isPano === true,
+      }));
+    near = { asked, found };
+    return found;
+  }
+
+  /** Coverage count and status for the Street Level row in Data Layers. */
   function stats() {
     const { blocked } = state.coverage;
     return {
       count: sequenceCount(),
+      drawnVersion,
       // Waiting for the key status is loading too, not an empty view.
       loading:
         state.coverage.pending.size > 0 ||
@@ -607,6 +839,7 @@ export function createLineCoverage({
     reload,
     highlight,
     sequenceCount,
+    linesNear,
     stats,
   };
 }

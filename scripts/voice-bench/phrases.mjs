@@ -13,7 +13,7 @@
  *   `typedArgs`  benchmark-only matchers for typed arguments (exact enum
  *                values, layer ids, thresholds, sort direction). They feed the
  *                benchmark's full-call accuracy and never change the
- *                qa-voice-routing verdict.
+ *                qa-voice-routing verdict unless `checkTypedArgs` is true.
  *
  * COVERAGE_PROBE is the newer-layers coverage probe: utterances about layers
  * and questions that today's tool surface only partly supports. Each item is
@@ -70,6 +70,24 @@ export const CORE_PHRASES = Object.freeze([
   { phrase: 'Switch to the tactical layout', expect: 'set_hud', typedArgs: [where('set_hud', (a) => a.layout === 'tactical')] },
   { phrase: 'Turn on detection', expect: 'set_detection', typedArgs: [where('set_detection', (a) => a.enabled !== false)] },
   { phrase: 'Set detection density to fifty percent', expect: 'set_detection', typedArgs: [where('set_detection', (a) => a.densityPct === 50 || a.mode === 'balanced')] },
+
+  // — Context: Nearby replaces Contacts; opening Context keeps the pick —
+  { phrase: 'Open Contacts', expect: 'set_context_mode', args: { mode: 'nearby' } },
+  { phrase: 'Show nearby', expect: 'set_context_mode', args: { mode: 'nearby' } },
+  { phrase: 'Open Context', expect: 'set_panel_open', args: { panelId: 'global-context-panel', open: true } },
+  {
+    phrase: 'Open Radio',
+    checkTypedArgs: true,
+    expect: 'set_panel_open',
+    typedArgs: [where('set_panel_open', (a) => a.panelId === 'radio-panel' && a.open === true)],
+  },
+  {
+    phrase: 'Open Space Missions',
+    checkTypedArgs: true,
+    expect: { oneOf: ['set_context_mode', 'set_panel_open', 'set_layer_visibility'] },
+    typedArgs: [(c) => (c.name === 'set_context_mode' && ['space-missions', 'missions'].includes(c.args?.mode)) || (c.name === 'set_panel_open' && c.args?.panelId === 'space-missions-panel' && c.args?.open === true) || (c.name === 'set_layer_visibility' && c.args?.layerId === 'rocket-launches' && c.args?.enabled === true)],
+  },
+  { phrase: 'Focus the selected camera', expect: 'control_cctv', args: { action: 'focus' } },
 
   // — context questions —
   { phrase: 'What am I looking at right now?', expect: 'get_entity_context' },

@@ -98,3 +98,46 @@ body.panels-edge-right:not(.mobile-shell):not(.cockpit-mode)
   transform: translate(var(--panel-rail-clearance, 48px), var(--edge-rail-row));
   max-height: calc(100% - var(--edge-rail-row)) !important;
 }
+
+/* A rail hidden because its one panel is open (PanelRailView.vue) has no row
+   to make room for: the panel keeps its top, level with the other column. */
+body.panels-edge-left:not(.mobile-shell):not(.cockpit-mode)
+  #left-panel-stack:has(.ui-rail--sole-open)
+  > :not(.gev-panel-rail):not(.collapsed) {
+  transform: translateX(calc(-1 * var(--panel-rail-clearance, 48px)));
+  max-height: 100% !important;
+}
+
+body.panels-edge-right:not(.mobile-shell):not(.cockpit-mode)
+  #right-context-rail:has(.ui-rail--sole-open)
+  > :not(.gev-panel-rail):not(.collapsed) {
+  transform: translateX(var(--panel-rail-clearance, 48px));
+  max-height: 100% !important;
+}
+
+/* With the rail hidden beside it, the open panel needs no gutter for it: it
+   moves over to the screen edge as in edge mode, so both modes put it in
+   the same place. Folded, the rail and the panel go back. */
+body:not(.panels-edge-right):not(.mobile-shell):not(.cockpit-mode)
+  #right-context-rail:has(.ui-rail--sole-open)
+  > :not(.gev-panel-rail):not(.collapsed) {
+  z-index: 2;
+  transform: translateX(var(--panel-rail-clearance, 48px));
+}
+
+html[dir='rtl']
+  body:not(.mobile-shell):not(.cockpit-mode)
+  #right-context-rail:has(.ui-rail--sole-open)
+  > :not(.gev-panel-rail):not(.collapsed) {
+  transform: translateX(calc(-1 * var(--panel-rail-clearance, 48px)));
+}
+
+/* Alone in its column, the panel is at the edge already: its edge switch
+   has nothing to do, and goes until the rail is back. It outranks the rule
+   that sizes Context's header buttons (context-dock.css). */
+#right-context-rail:has(.ui-rail--sole-open)
+  > .panel-collapsible:not(.collapsed)
+  .panel-header
+  .ui-panel-edge.panel-edge-btn {
+  display: none;
+}

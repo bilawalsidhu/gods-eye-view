@@ -421,9 +421,10 @@ test('a replayed stale snapshot keeps its observation age and expires on time', 
 
 test('cells expire during prolonged fetch failures', async () => {
   let fail = false;
+  let rows = threeHealthy();
   const { layer, fills, advance } = harness(async () => {
     if (fail) throw new Error('adsb.lol HTTP 502');
-    return { rows: threeHealthy() };
+    return { rows };
   });
   layer.enable();
   await layer.update();
@@ -431,11 +432,34 @@ test('cells expire during prolonged fetch failures', async () => {
   advance(20 * MIN);
   assert.equal(await layer.update(), true);
   assert.equal(layer.getStats().count, 1, 'still inside the window');
+  assert.equal(
+    layer.getContextSummary({ population: layer.getContextPopulation() })
+      .headline,
+    '1 area',
+  );
   advance(11 * MIN);
   assert.equal(await layer.update(), true);
   assert.equal(layer.getStats().count, 0);
   assert.equal(fills().items.size, 0);
   assert.equal(layer.getStats().error, 'adsb.lol HTTP 502');
+  assert.equal(
+    layer.getContextSummary({ population: layer.getContextPopulation() })
+      .headline,
+    undefined,
+    'no current sample to count',
+  );
+
+  fail = false;
+  rows = [];
+  advance(2 * MIN);
+  assert.equal(await layer.update(), true);
+  assert.equal(layer.getStats().error, null);
+  assert.equal(
+    layer.getContextSummary({ population: layer.getContextPopulation() })
+      .headline,
+    '0 areas',
+    'the successful sample is empty',
+  );
 });
 
 test('cells expire while no view anchor is available', async () => {

@@ -19,18 +19,21 @@ before(async () => {
 });
 after(() => uninstall());
 
-test('an item takes its kind from its layer record', () => {
+test('an item takes its kind from its card or its layer record', () => {
   assert.equal(
-    markKind('flights', { aircraftClass: 'helicopter', typeCode: 'B738' }),
+    markKind('flights', { aircraftClass: 'helicopter', modelSubject: {} }),
     'helicopter',
   );
   assert.equal(
-    markKind('flights', { typeCode: 'B738', category: null }),
+    markKind('flights', { modelSubject: { typeCode: 'B738', category: null } }),
     'airliner',
   );
   assert.equal(markKind('local-adsb', { typeCode: 'ZVEH' }), 'vehicle');
   assert.equal(markKind('military', { type: 'EC35' }), 'helicopter');
-  assert.equal(markKind('ais-live-vessels', { type: '84' }), 'tanker');
+  assert.equal(
+    markKind('ais-live-vessels', { modelSubject: { type: '84' } }),
+    'tanker',
+  );
   assert.equal(markKind('ais-live-vessels', { shipType: 'Cargo' }), 'cargo');
   assert.equal(
     markKind('ais-live-vessels', { mmsi: '993456789', type: '' }),

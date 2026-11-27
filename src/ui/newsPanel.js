@@ -1,28 +1,37 @@
 import { h, render as renderVue } from 'vue';
 import NewsFeed from './news/NewsFeed.vue';
+import { setContextListPresence } from './contextLists.js';
 
 const LAYER_ID = 'news';
 const LOAD_MORE_MARGIN_PX = 160;
-// Remounting must not reopen a panel the reader already collapsed.
-const appearedPanels = new WeakSet();
-const set = (node, key, value) => {
-  if (node[key] !== value) node[key] = value;
-};
 
 /**
- * The News rail panel (`#news-panel`): it renders the `feed` view the news
- * layer publishes through its row controls, shows itself only while the
- * layer is on, and acts only through setLayerParams. Near the bottom of its
- * scroller it asks for the next older page, once per page; other filters or a
- * failed read let it ask again.
+ * News's list in Context: it renders the `feed` view the news layer
+ * publishes through its row controls, reports through `onPresence` while the
+ * layer is on (so Context shows the list's tab only then), and acts only
+ * through setLayerParams. Near the bottom of its scroller it asks for the
+ * next older page, once per page; other filters or a failed read let it ask
+ * again.
  */
-export function createNewsPanel({ container, setLayerParams = () => {} } = {}) {
+export function createNewsPanel({
+  container,
+  setLayerParams = () => {},
+  onPresence = (state) => setContextListPresence(LAYER_ID, state),
+} = {}) {
   const document = container?.ownerDocument;
   if (!document?.createElement) return null;
-  const panel = container.closest?.('#news-panel');
-  const count = panel?.querySelector('#news-panel-count');
-  const onParams = (params) =>
-    setLayerParams(LAYER_ID, params, { origin: 'user' });
+  let pendingOrder = null;
+  const onParams = (params) => {
+    if (!params.listOrder)
+      return setLayerParams(LAYER_ID, params, { origin: 'user' });
+    // Reporting order during a Vue patch can synchronously refresh this panel.
+    pendingOrder = params;
+    queueMicrotask(() => {
+      if (pendingOrder !== params) return;
+      pendingOrder = null;
+      setLayerParams(LAYER_ID, params, { origin: 'user' });
+    });
+  };
   let view = null;
   let destroyed = false;
   let requestedAt = -1;
@@ -30,24 +39,18 @@ export function createNewsPanel({ container, setLayerParams = () => {} } = {}) {
 
   function render() {
     if (destroyed) return;
-    renderVue(h(NewsFeed, { view, onParams }), container);
-    const hidden = !view;
-    if (panel) set(panel, 'hidden', hidden);
-    // The count is the shown section's: Local's list, else the feed.
-    const shown =
-      view?.filters?.section === 'local' ? view.inView?.items : view?.items;
-    if (count) set(count, 'textContent', String(shown?.length ?? 0));
-    if (!hidden && panel && !appearedPanels.has(panel)) {
-      appearedPanels.add(panel);
-      // First appearance opens the panel unless a stored or shared collapse
-      // choice exists (marked by the panel chrome when it restored the state).
-      const preference = panel.dataset?.collapsedPreference;
-      if (
-        panel.classList?.contains('collapsed') &&
-        (preference === undefined || preference === 'default')
-      )
-        panel.querySelector('[data-collapse-target="news-panel"]')?.click();
-    }
+    renderVue(
+      h(NewsFeed, {
+        view,
+        onParams,
+        visible: !container.hasAttribute('data-news-hidden'),
+      }),
+      container,
+    );
+    // The count is the reports the map shows (the layer's `mapCount`, which
+    // is its getStats().count), so the tab and Context's News tile agree.
+    // The feed's loaded pages would not: it holds as many as were scrolled.
+    onPresence(view ? { count: view.mapCount ?? null } : null);
   }
 
   const onScroll = () => {
@@ -59,10 +62,15 @@ export function createNewsPanel({ container, setLayerParams = () => {} } = {}) {
     requestedAt = view.items.length;
     onParams({ loadMore: true });
   };
+  const visibility = new document.defaultView.MutationObserver(render);
+  visibility.observe(container, {
+    attributes: true,
+    attributeFilter: ['data-news-hidden'],
+  });
   container.addEventListener?.('scroll', onScroll, { passive: true });
 
   return {
-    /** Show the layer's feed view, or hide the panel with null. */
+    /** Show the layer's feed view, or report the list gone with null. */
     update(next) {
       const filters = JSON.stringify(next?.filters ?? null);
       // A new list (other filters or hotspot), or a read that failed, may stop
@@ -75,15 +83,17 @@ export function createNewsPanel({ container, setLayerParams = () => {} } = {}) {
       )
         requestedAt = -1;
       shownFilters = filters;
+      if (!next) pendingOrder = null;
       view = next || null;
       render();
     },
     destroy() {
+      pendingOrder = null;
       destroyed = true;
+      visibility.disconnect();
       container.removeEventListener?.('scroll', onScroll);
       renderVue(null, container);
-      if (panel) set(panel, 'hidden', true);
-      if (count) set(count, 'textContent', '0');
+      onPresence(null);
     },
   };
 }

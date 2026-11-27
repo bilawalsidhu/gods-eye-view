@@ -210,7 +210,6 @@ export function clearSelectedLayers() {
   this._contextModeEntering = null;
   this._contextSessionSnapshot = null;
   this._contextRestoreState = null;
-  this._preservePanelStateDuringLayerClear = true;
   this._syncContextModeButtons();
   this._userFacingContextNotificationTokens.add(notificationToken);
   this.setClearBusy(true);
@@ -261,7 +260,6 @@ export function clearSelectedLayers() {
         this._syncContextModeButtons();
       }
       this.setClearBusy(false);
-      this._preservePanelStateDuringLayerClear = false;
       this._clearSelectedLayersManagerPromise = null;
       this._clearSelectedLayersPromise = null;
     });

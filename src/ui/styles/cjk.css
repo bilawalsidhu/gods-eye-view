@@ -51,12 +51,8 @@ html:is(:lang(zh), :lang(ja)) [data-layer-id='directions'] .data-toggle-meta {
 }
 
 /* Leave room for the complete sensor name and resolution on two lines. */
-html:is(:lang(zh), :lang(ja)) .recent-imagery-readout .ri-strip {
-  height: 131px;
-}
-html:is(:lang(zh), :lang(ja)) .recent-imagery-readout .ri-card {
-  height: 123px;
-  grid-template-rows: 42px 13px 22px 11px 18px;
+html:is(:lang(zh), :lang(ja)) .recent-imagery-readout .ri-card-open {
+  grid-template-rows: 13px 22px 11px;
 }
 html:is(:lang(zh), :lang(ja)) .recent-imagery-readout .ri-card-sensor {
   white-space: normal;

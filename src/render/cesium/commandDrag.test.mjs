@@ -101,5 +101,5 @@ test('isMacPlatform reads the browser’s platform', () => {
   assert.equal(isMacPlatform({ platform: 'iPad' }), true);
   assert.equal(isMacPlatform({ platform: 'Win32' }), false);
   assert.equal(isMacPlatform({ userAgentData: { platform: 'Linux' } }), false);
-  assert.equal(isMacPlatform(undefined), false);
+  assert.equal(isMacPlatform(null), false);
 });

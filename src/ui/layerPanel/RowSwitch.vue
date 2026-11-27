@@ -31,6 +31,7 @@ const activeId = (segmented) =>
     :data-segmented-id="segmented.id"
     :model-value="activeId(segmented)"
     :options="options(segmented)"
+    :keyboard="segmented.keyboard"
     :label="segmented.ariaLabel || segmented.label || ''"
     item-class="data-toggle-segment"
     @update:model-value="onSelect"

@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as Cesium from 'cesium';
+import { createMapillaryProvider } from './providers/mapillary/index.js';
+import { fakeMapillarySource } from '../../testSupport/streetLevelFakes.mjs';
+import { metresBetween } from './view.js';
+import { NEAREST_RADIUS_M } from './policy.js';
 import { createSelection } from './selection.js';
 import { createPickRouter } from './pickRouter.js';
 import { fakeInput } from '../../input/testDoubles.mjs';
@@ -291,6 +295,70 @@ test('a click on a provider line hands it the ground under the click, measured o
     );
   } finally {
     h.restore();
+  }
+});
+
+test('a Mapillary line hit within the pick window searches the hit part', async (t) => {
+  // A 20 km-wide view on an 800 px canvas: three pixels put the pointer
+  // 75 m from the line, inside the 9 px window but outside the photo lookup.
+  const photo = { lon: 2, lat: 1 };
+  const pointAt = (x) => ({
+    lon: photo.lon + ((x - 40) * 25) / 111300,
+    lat: photo.lat,
+  });
+  const part = [
+    [2, 0.999],
+    [2, 1.001],
+  ];
+  const hit = {
+    set: 'street-level:mapillary-coverage:1',
+    id: 'mly:seq:A#1',
+    meta: { pick: 'mly:seq:A', sequenceId: 'A', coordinates: part },
+  };
+  const queries = [];
+  const source = fakeMapillarySource({
+    nearestImages: async (point) => {
+      queries.push(point);
+      return metresBetween(photo, point) <= NEAREST_RADIUS_M
+        ? [
+            {
+              id: 'own',
+              sequence: 'A',
+              computed_geometry: { coordinates: [2, 1] },
+            },
+          ]
+        : [];
+    },
+  });
+  let result;
+  const instance = createMapillaryProvider({ source }).create({
+    services: {},
+    notify() {},
+    getFilter: () => ({ pano: 'all', sinceMs: null }),
+    actions: {
+      openNearest(point, sequenceId) {
+        result = instance.nearestImage(point, { sequenceId });
+      },
+    },
+  });
+  const h = harness({
+    providers: [
+      ['mapillary', { def: { id: 'mapillary', pickPrefix: 'mly:' }, instance }],
+    ],
+    sceneExtras: {
+      pick: ({ x }, width = 1) =>
+        Math.abs(x - 40) <= width / 2 ? { id: hit } : null,
+      pickPositionSupported: true,
+      pickPosition: ({ x }) =>
+        Cesium.Cartesian3.fromDegrees(pointAt(x).lon, photo.lat),
+    },
+  });
+  t.after(h.restore);
+  assert.ok(metresBetween(pointAt(43), photo) > NEAREST_RADIUS_M);
+  for (const x of [40, 43]) {
+    h.click(x);
+    assert.equal(await result, 'own');
+    assert.ok(metresBetween(queries.at(-1), photo) < 1);
   }
 });
 

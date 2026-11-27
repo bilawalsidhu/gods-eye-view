@@ -3,6 +3,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
+import { nextTick } from 'vue';
+import { presentStreetLevel } from './streetLevelPresentation.js';
+import { streetLevelRowControls } from './streetLevelRowControls.js';
+import { providerSnapshot } from '../testSupport/streetLevelFakes.mjs';
 
 test('panel presentation places Transit and Rail between Street Traffic and Bike Share in Movement', () => {
   const source = readFileSync(
@@ -213,6 +217,116 @@ test('readout rows contain only toggles and metadata; ordinary rows retain contr
   } finally {
     panel.destroy();
     document.body.replaceChildren();
+  }
+});
+
+test('Street Level row keeps keyboard focus and announces errors separately from coverage', async () => {
+  const { LayerPanel } = await import('./layerPanel.js');
+  const host = document.body.appendChild(document.createElement('div'));
+  const layer = {
+    id: 'street-level',
+    name: 'Street Level',
+    enabled: true,
+    showInTogglePanel: true,
+    stats: {},
+  };
+  const state = {
+    enabled: true,
+    providers: [providerSnapshot()],
+    coverage: { count: 0 },
+    sequence: { selectedId: 'sequence', images: 12 },
+    street: {},
+    filter: { pano: 'pano', sinceDays: 0 },
+  };
+  const writes = [];
+  const panel = new LayerPanel({
+    getLayers: () => [layer],
+    isEnabled: () => layer.enabled,
+    hasRowControls: () => true,
+    subscribeRowControls() {},
+    getRowControls: () =>
+      streetLevelRowControls(presentStreetLevel(state), {
+        toggleProvider() {
+          layer.enabled = false;
+          panel._refreshTogglePanel();
+        },
+        openNearest: null,
+      }),
+    setLayerParams: (_id, params) => {
+      writes.push(params);
+      Object.assign(state.filter, params);
+      panel._refreshTogglePanel();
+    },
+  });
+  const row = () => host.querySelector('[data-layer-id="street-level"]');
+  const find = (selector) => row().querySelector(selector);
+  const selectEnd = (key, from) => {
+    const option = find(`[data-chip-id="sl-pano-${from}"]`);
+    option.focus();
+    option.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+  };
+
+  try {
+    panel.mount(host);
+    selectEnd('Home', 'pano');
+    selectEnd('End', 'all');
+    assert.deepEqual(writes.splice(0), [{ pano: 'all' }, { pano: 'flat' }]);
+    assert.equal(document.activeElement, find('[data-chip-id="sl-pano-flat"]'));
+
+    const slider = find('.data-toggle-slider-input');
+    slider.focus();
+    for (const value of ['1', '3', '5']) {
+      slider.value = value;
+      slider.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    await nextTick();
+    assert.equal(slider.getAttribute('aria-valuetext'), 'LAST YEAR');
+    assert.deepEqual(writes, []);
+    slider.dispatchEvent(new Event('change', { bubbles: true }));
+    assert.deepEqual(writes, [{ sinceDays: 365 }]);
+
+    const readout = find('.data-toggle-slider-value');
+    const lastYear = readout.textContent;
+    assert.match(lastYear, /^LAST YEAR · SINCE /);
+    state.filter.sinceDays = 30;
+    panel._refreshTogglePanel();
+    assert.equal(slider.value, '5');
+    assert.equal(readout.textContent, lastYear);
+    assert.equal(slider.getAttribute('aria-valuetext'), lastYear);
+    slider.blur();
+    await nextTick();
+    assert.equal(slider.value, '8');
+    assert.match(readout.textContent, /^LAST MONTH · SINCE /);
+
+    const alert = find('[role="status"]');
+    assert.equal(alert.textContent, '');
+    state.street.error = 'No imagery here';
+    panel._refreshTogglePanel();
+    assert.equal(
+      find('[role="status"]'),
+      alert,
+      'the live region was already mounted',
+    );
+    assert.equal(alert.textContent, 'No imagery here');
+    assert.match(
+      find('.data-toggle-controls-info').textContent,
+      /12 images in this sequence/,
+    );
+
+    const chip = find('[data-chip-id="sl-provider-mapillary"]');
+    slider.focus();
+    state.keyRequired = state.keyRejected = true;
+    panel._refreshTogglePanel();
+    assert.equal(find('.data-toggle-slider-input'), null);
+    assert.equal(document.activeElement === find('.data-toggle-btn'), true);
+
+    chip.focus();
+    chip.click();
+    assert.equal(document.activeElement, find('.data-toggle-btn'));
+    assert.equal(find('[data-chip-id="sl-provider-mapillary"]'), null);
+  } finally {
+    panel.destroy();
+    host.remove();
   }
 });
 

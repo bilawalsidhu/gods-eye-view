@@ -64,9 +64,10 @@ test('the counting contract is stated in the Realtime instructions', () => {
   // One instruction per source line; the string carries escaped quotes, so take
   // the line rather than trying to match a quoted literal.
   const text = voice.slice(start, voice.indexOf('\n', start));
-  assert.match(text, /Contacts is ACTIVE/, 'rule 1: active means the Contacts window');
+  assert.match(text, /While Cockpit Contacts is up/, 'rule 1: only Cockpit still has a Contacts window');
   assert.match(text, /contactsWindow/, 'rule 1 names its mechanism');
-  assert.match(text, /call set_context_mode\{mode:"contacts"\} first/);
+  assert.match(text, /For a count around that subject use analyst_query/, 'rule 1: use the analyst for a count around the subject');
+  assert.doesNotMatch(text, /set_context_mode\{mode:"contacts"\}/);
   assert.match(text, /contactsWindow\.aircraft/);
   assert.match(text, /Contacts OFF, "nearby" means in view/, 'rule 2: off means in view');
   assert.match(text, /EVERY count names its scope in words/, 'rule 3');
@@ -82,13 +83,28 @@ test('the counting contract is stated in the Realtime instructions', () => {
   assert.match(analyst, /"37 loaded flights over Texas"/, 'rule 5: loaded scope stays audible');
 });
 
-test('Context panel opening stays distinct from Contacts activation', () => {
-  const text = realtimeInstructions().split('\n').find(line => line.startsWith('Panels:'));
+test('Context opens the current view while Contacts requests show Nearby', () => {
+  const text = realtimeInstructions()
+    .split('\n')
+    .find((line) => line.includes('"Open Context" calls set_panel_open'));
   assert.ok(text, 'panel-routing instruction is missing');
-  assert.match(text, /"Open Context" is only set_panel_open\{panelId:"global-context-panel",open:true\}/);
-  assert.match(text, /opening Context or selecting\/viewing an aircraft never enters them/);
-  assert.match(text, /"Open Contacts" is set_context_mode contacts/);
-  assert.match(text, /expands Context itself/);
+  assert.match(
+    text,
+    /"Open Context" calls set_panel_open\{panelId:"global-context-panel",open:true\}, preserving the card/,
+  );
+  assert.match(
+    text,
+    /opening Context or selecting\/viewing an aircraft never enters them/,
+  );
+  assert.match(
+    text,
+    /"Open Contacts"\/"show nearby" must call set_context_mode\{mode:"nearby"\}/,
+  );
+  assert.match(text, /clear the selected card and show Nearby/);
+  assert.doesNotMatch(
+    realtimeInstructions(),
+    /set_context_mode\{mode:"contacts"\}|set_context_mode contacts/,
+  );
 });
 
 test('nearest-aircraft selection stays out of Contacts and Cockpit', () => {
@@ -104,12 +120,12 @@ test('nearest-aircraft selection stays out of Contacts and Cockpit', () => {
   assert.match(text, /nearest airborne result/);
   assert.match(text, /healthy fallback feed is valid data/i);
   assert.match(text, /Do not also call fly_to_location, set_layer_visibility, analyst_query, track_entity/);
-  const routing = realtimeInstructions().split('\n').find(line => line.startsWith('Panels:'));
-  assert.match(routing, /Contacts, Space Missions and Cockpit need explicit naming/);
+  const routing = realtimeInstructions().split('\n').find(line => line.includes('"Open Context" calls set_panel_open'));
+  assert.match(routing, /Space Missions and Cockpit need explicit naming/);
   assert.match(text, /set_context_mode, or control_cockpit/);
 
   const byName = new Map(realtimeTools().map((tool) => [tool.name, tool]));
-  assert.match(byName.get('set_context_mode').description, /only when explicitly requested/);
+  assert.match(byName.get('set_context_mode').description, /Explicit Space Missions/);
   assert.match(routing, /selecting\/viewing an aircraft never enters them/);
   assert.match(byName.get('control_cockpit').description, /Explicit Cockpit requests only/);
   assert.equal(
@@ -131,7 +147,7 @@ test('the two Context/Cockpit tools pin their enums and required arguments', () 
   assert.deepEqual(contextMode.parameters.required, ['mode']);
   assert.deepEqual(
     contextMode.parameters.properties.mode.enum,
-    ['off', 'contacts', 'flights', 'space-missions', 'missions'],
+    ['off', 'nearby', 'space-missions', 'missions'],
   );
 
   const cockpit = byName.get('control_cockpit');
@@ -157,7 +173,7 @@ test('the edited existing tools changed exactly as intended', () => {
   const panel = byName.get('set_panel_open');
   assert.deepEqual(
     panel.parameters.properties.panelId.enum,
-    ['data-panel', 'cctv-panel', 'radio-panel', 'scene-panel', 'utilities-panel', 'pp-toggles', 'global-context-panel', 'space-missions-panel', 'weather-panel', 'recent-imagery-panel', 'voice-settings', 'voice-preview', 'provider-settings'],
+    ['data-panel', 'cctv-panel', 'camera-settings', 'radio-panel', 'scene-panel', 'utilities-panel', 'pp-toggles', 'global-context-panel', 'street-level-panel', 'space-missions-panel', 'weather-panel', 'recent-imagery-panel', 'voice-settings', 'voice-preview', 'provider-settings'],
   );
   assert.deepEqual(panel.parameters.required, ['panelId', 'open']);
 
@@ -212,6 +228,9 @@ test('no unchanged Realtime tool definition drifts silently', () => {
     'show_street_level',
     // Stories Explore: a new entry action.
     'open_stories',
+    // The CCTV panel is retired: next/prev walk Context's Nearby cameras
+    // and focus is the card's Fly to.
+    'control_cctv',
   ]);
   const unchanged = realtimeTools()
     .filter((tool) => !TOUCHED.has(tool.name))
@@ -272,13 +291,13 @@ test('no unchanged Realtime tool definition drifts silently', () => {
     'noir',
   ]);
   visualStyle.enum = [...visualStyle.enum, 'snow'];
-  assert.equal(unchanged.length, 14);
+  assert.equal(unchanged.length, 13);
   const digest = createHash('sha256')
     .update(JSON.stringify(unchanged))
     .digest('hex')
     .slice(0, 16);
   // Analyst additions and ISS wording correction are explicitly excluded above; all other tool definitions retain their pin.
-  assert.equal(digest, '25d1b902ecaa22fb', 'an unchanged Realtime tool definition drifted');
+  assert.equal(digest, '7f8ce496e25351ae', 'an unchanged Realtime tool definition drifted');
 });
 
 test('Radio volume and mission speed share the Sharpen slider visual language', () => {
@@ -302,18 +321,14 @@ test('Radio volume and mission speed share the Sharpen slider visual language', 
   assert.doesNotMatch(css, /#space-mission-panel \[data-mission-replay-speed\]::-webkit-slider-thumb/);
 });
 
-test('Radio is nested inside Context with its own disclosure and power controls', () => {
-  const contextStart = html.indexOf('id="global-context-panel"');
-  const radioStart = html.indexOf('id="radio-panel"');
-  // The Context view ends with the right rail, before the scene runtime.
-  const contextEnd = html.indexOf('id="scene-runtime"');
-  assert.ok(contextStart >= 0 && radioStart > contextStart && radioStart < contextEnd);
-  assert.match(html, /id="radio-panel"[^>]*data-panel-id="radio-panel"/);
+test('Radio folds its own controls under Context and keeps Cockpit power controls', () => {
+  // The standalone Radio panel is retired: its tuner, transport, volume
+  // and SDR card fold under Context's station list; Radio turns on in Data
+  // Layers.
+  assert.match(html, /<details id="radio-panel" class="radio-fold/);
+  assert.doesNotMatch(html, /data-panel-id="radio-panel"/);
+  assert.doesNotMatch(html, /id="radio-enable-btn"/);
   assert.match(html, /aria-label="Radio playback"/);
-  // The Context header carries no Radio shortcut; Radio lives in its own
-  // section below the modes, with one power control.
-  assert.doesNotMatch(html, /context-radio-/);
-  assert.match(html, /<button(?=[^>]*\sid="radio-enable-btn")(?=[^>]*\saria-pressed="false")/);
   assert.match(html, /id="cockpit-radio-panel"[^>]*aria-label="Cockpit compact Radio controls"[^>]*hidden/);
   assert.match(html, /<button(?=[^>]*\sid="cockpit-radio-enable-btn")(?=[^>]*\saria-pressed="false")/);
   assert.match(html, /id="cockpit-radio-(?:prev|play|next)-btn"/);
@@ -325,7 +340,15 @@ test('Radio is nested inside Context with its own disclosure and power controls'
   assert.match(html, /SNAPS TO AVAILABLE STATIONS/);
   assert.match(html, /class="radio-tuner-scale" aria-hidden="true"[^>]*><\/div>/);
   assert.match(html, /DIRECTORY: RADIO BROWSER/);
-  assert.match(html, /Audio connects directly to the broadcaster/);
+  // The privacy note shows under the station list, out of the folded tuner:
+  // a row, a globe pick, voice or a pinned tile starts a stream too.
+  const read = (name) =>
+    readFileSync(new URL(`./ui/views/panels/${name}`, import.meta.url), 'utf8');
+  assert.doesNotMatch(read('RadioFold.vue'), /radio-stations__privacy/);
+  assert.match(
+    read('RadioStations.vue'),
+    /<p class="radio-stations__privacy">\{\{ t\('Stations play straight from their broadcasters, who see your IP address\.'\) \}\}<\/p>/,
+  );
   assert.doesNotMatch(html, /radio-(?:favicon|visualizer|spectrum)/i);
   assert.match(css, /#radio-tuner-slider::-(?:webkit-slider-thumb|moz-range-thumb)/);
   assert.match(css, /\.radio-tuner\.is-static/);
@@ -353,11 +376,14 @@ test('Radio is nested inside Context with its own disclosure and power controls'
   assert.match(radioControlsSource, /classList\.remove\('radio-broadcasting'\)/);
   assert.match(radioBindings, /this\.radio\.getTunerStations\(750\)/);
   assert.match(radioBindings, /radioTunerPointerPosition\(/);
-  // Radio stays embedded in Context; no stylesheet promotes it to a peer panel.
-  assert.doesNotMatch(css, /#right-context-rail\s*>\s*#radio-panel/);
-  assert.match(css, /#global-context-panel #radio-panel\.collapsed/);
-  assert.doesNotMatch(css, /\.context-radio-/);
-  assert.match(css, /#right-context-rail #global-context-panel:not\(\.collapsed\) \.context-mode-view,[\s\S]*?#right-context-rail #global-context-panel:not\(\.collapsed\) #radio-panel\s*\{[\s\S]*?flex: 0 0 auto;/);
+  // The standalone Radio panel is retired: its controls fold under Context's station list.
+  assert.doesNotMatch(
+    css,
+    /#radio-panel\s*\{/,
+    'the fold has no rail panel sizing',
+  );
+  assert.match(css, /\.radio-fold\s*\{/);
+  assert.doesNotMatch(css, /#global-context-panel #radio-panel/);
 });
 
 test('panel collapse is presentation-only and Radio exposes explicit voice playback controls', () => {
@@ -375,7 +401,7 @@ test('panel collapse is presentation-only and Radio exposes explicit voice playb
   const enableMethod = radioBindings;
   assert.doesNotMatch(enableMethod, /playSelectedRadio|togglePlayback\(\).*radio-enable/i);
   assert.doesNotMatch(enableMethod, /contextRadio/);
-  assert.match(enableMethod, /toggleRadio: \(where\) =>[\s\S]*?: this\._radioEnableBtn,/);
+  assert.match(enableMethod, /toggleRadio: \(\) => \{\s*if \(this\._cockpitRadioEnableBtn\)\s*void toggleRadio\(this\._cockpitRadioEnableBtn\);/);
   // The collapse buttons render aria-expanded from the state the chrome presents.
   assert.match(ui, /this\._presentPanel\(panelEl, \{ collapsed: nextCollapsed, auto: null \}\)/);
   assert.doesNotMatch(method, /panelId === 'global-context-panel'[\s\S]*?this\._radioState\?\.enabled[\s\S]*?setPanelCollapsed\('radio-panel', false\)/);
@@ -394,7 +420,12 @@ test('successful explicit user playback hands the speaker from voice to Radio', 
   const confirmedPlaying = playMethod.indexOf("_audioState = 'playing'");
   const takeoverSignal = playMethod.indexOf("if (origin === 'user') emitPlaybackControl('play', origin, ownedAttemptId)");
   assert.ok(confirmedPlaying >= 0 && takeoverSignal > confirmedPlaying);
-  assert.match(radio, /startPlayback: \(\) =>\s*playSelectedRadio\(\{\s*origin: 'voice',\s*attemptId: options\.attemptId,?\s*\}\)/);
+  const prepared = radio.slice(
+    radio.indexOf('function playPreparedRadioForVoice'),
+    radio.indexOf('function stopRadioPlayback'),
+  );
+  assert.match(prepared, /const \{ resumeStationId, attemptId \} = options/);
+  assert.match(prepared, /return playSelectedRadio\(\{\s*origin: 'voice',\s*attemptId,\s*whileOff: Boolean\(resumeStationId\),?\s*\}\)/);
   assert.match(radio, /selectRadioStation\(stationId, \{\s*autoplay: true,\s*origin: 'user',?\s*\}\)/);
   assert.match(radioBindings, /togglePlayback\(\{ origin: 'user' \}\)/);
   assert.match(radioBindings, /cycleStation\(direction, \{[\s\S]*?origin: 'user'/);

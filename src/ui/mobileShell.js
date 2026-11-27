@@ -39,13 +39,9 @@ export const MOBILE_SHELL_MEDIA_QUERY = '(max-width: 720px)';
 export const KEYBOARD_OPEN_CLASS = 'mobile-keyboard-open';
 export const MOBILE_TABS = Object.freeze([
   Object.freeze({ sheet: 'layers', label: msg('Layers'), icon: 'layers' }),
-  Object.freeze({ sheet: 'cameras', label: msg('Cameras'), icon: 'videocam' }),
+  // Cameras and street-level photos have no tab of their own: their cards
+  // open in Context, and their filters are on their Data Layers rows.
   Object.freeze({ sheet: 'context', label: msg('Context'), icon: 'radar' }),
-  Object.freeze({
-    sheet: 'missions',
-    label: msg('Space Missions'),
-    icon: 'rocket_launch',
-  }),
   Object.freeze({ sheet: 'more', label: msg('More'), icon: 'more_horiz' }),
 ]);
 
@@ -106,8 +102,7 @@ function currentSheetOf(body) {
  *   Receives the tab bar: whether the shell is on, the open sheet and the
  *   tabs; null once the shell is destroyed.
  * @param {(callback: () => void) => void} [input.afterPublish] Runs a callback
- *   once a publish has rendered, so focus returns to a tab whose state is
- *   already current.
+ *   once the sheet and tab bar have rendered, before choosing a focus target.
  * @param {VisualViewport} [input.visualViewport] What the page shows of the
  *   layout viewport; the part a keyboard covers is the rest.
  * @returns {{ destroy: () => void, setSheet: (sheet: string|null) => void, getSheet: () => string|null, sharedCollapsed: (panelId: string) => boolean|undefined }}
@@ -137,7 +132,6 @@ export function initMobileShell({
   const rails = ['left-panel-stack', 'right-context-rail']
     .map(element)
     .filter(Boolean);
-  const missionsPanel = element('space-missions-panel');
   const shown = (node) =>
     node && globalThis.getComputedStyle?.(node).display !== 'none';
 
@@ -282,9 +276,7 @@ export function initMobileShell({
   const setSheet = (requested) => {
     swipe = null;
     if (!body.classList.contains(MOBILE_SHELL_CLASS)) return;
-    const unavailableMissions =
-      requested === 'missions' && missionsPanel?.hidden;
-    const sheet = sheetBlocked(body) || unavailableMissions ? null : requested;
+    const sheet = sheetBlocked(body) ? null : requested;
     const previous = currentSheetOf(body);
     if (previous === sheet) return;
     if (!previous) {
@@ -323,7 +315,18 @@ export function initMobileShell({
         opened.applied = panelStates();
     });
     measureSheet();
-    sheetFocusTarget(sheet)?.focus?.();
+    // Expanding Context replaces its folded title button. Choose a control
+    // after that render, unless focus or the sheet has already moved on.
+    const openedWith = documentRef.activeElement;
+    afterPublish(() => {
+      if (borrowed !== opened || opened.opening !== opening) return;
+      const active = documentRef.activeElement;
+      if (
+        active === openedWith ||
+        (active === body && !body.contains(openedWith))
+      )
+        sheetFocusTarget(sheet)?.focus?.();
+    });
   };
 
   const tabFor = (sheet) =>
@@ -513,20 +516,9 @@ export function initMobileShell({
   if (typeof MutationObserverImpl === 'function') {
     const observer = new MutationObserverImpl(() => {
       const sheet = currentSheetOf(body);
-      if (!sheet) return;
-      if (sheet === 'missions' && missionsPanel?.hidden) {
-        returnFocus = tabFor('layers') ?? returnFocus;
-        setSheet(null);
-      } else if (sheetBlocked(body)) {
-        setSheet(null);
-      }
+      if (sheet && sheetBlocked(body)) setSheet(null);
     });
     observer.observe(body, { attributes: true, attributeFilter: ['class'] });
-    if (missionsPanel)
-      observer.observe(missionsPanel, {
-        attributes: true,
-        attributeFilter: ['hidden'],
-      });
     removers.push(() => observer.disconnect());
   }
 

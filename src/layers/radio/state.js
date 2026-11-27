@@ -42,6 +42,13 @@ export function createState({ services }) {
 
   layerState._filter = DEFAULT_RADIO_FILTER;
 
+  /**
+   * What Radio plays: 'internet' (the station directory, its markers and
+   * Context's station list) or 'local' (a USB receiver; no stations are
+   * fetched or drawn, and Context shows the receiver instead).
+   */
+  layerState._source = 'internet';
+
   layerState._selectedId = null;
 
   layerState._selectionGeneration = 0;
@@ -149,6 +156,9 @@ export function createState({ services }) {
   };
 
   layerState._listeners = new Set();
+
+  /** `(stationId) => boolean`: a stream that plays on with the layer off. */
+  layerState._keepStreamWhenOff = null;
 
   layerState._playbackControlListeners = new Set();
   return layerState;

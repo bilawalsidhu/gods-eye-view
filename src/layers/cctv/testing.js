@@ -127,8 +127,6 @@ export function createTesting({ state: layerState, services, parts, source }) {
     layerState._showProjection = !!showProjection;
     layerState._healthById = healthById;
     layerState._viewRecords = [];
-    layerState._pickerRecords = [];
-    layerState._cameraIndexCache = null;
     layerState._coverageVisibleIds = new Set();
     layerState._neighborCountCache = null;
     layerState._coverageCohort = null;

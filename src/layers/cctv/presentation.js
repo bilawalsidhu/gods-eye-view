@@ -1,6 +1,7 @@
 import { CCTV_AMBIENT_CARD_MAX } from '../../data/cctvLod.js';
-import { isolate, msg, t } from '../../i18n/index.js';
+import { formatNumber, isolate, msg, t, tn } from '../../i18n/index.js';
 import { ACTIVE_FRAME_REFRESH_MS, IDLE_FRAME_REFRESH_MS } from './policy.js';
+import { CAL_STATUS_WORDS } from '../../data/cctvCalibrationWords.js';
 import { headingHudToken, isHeadingEstimated } from './headingConfidence.js';
 import {
   specSummary,
@@ -37,6 +38,19 @@ export function summaryCalLabel(badge) {
     : key.replace('-', ' ').toUpperCase();
 }
 
+// Source kinds as named in the camera scene summary.
+const SOURCE_KIND_WORDS = Object.freeze({
+  snapshot: msg('Snapshot'),
+  live: msg('Live video'),
+  fallback: msg('Fallback image'),
+  upstream: msg('Upstream image'),
+  synthetic: msg('Synthetic'),
+  configured: msg('Configured'),
+  seed: msg('Seed'),
+  image: msg('Image'),
+  unknown: msg('Unknown'),
+});
+
 /** Source kind ('image', 'snapshot') for the summary; HLS, MJPEG… stay codes. */
 export function summarySourceLabel(kind) {
   const key = String(kind || 'image').toLowerCase();
@@ -61,12 +75,31 @@ export function summaryViewBandLabel(band) {
   }
 }
 
+const coverageAreaText = (area) =>
+  formatNumber(area, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 export function createPresentation({
   state: layerState,
   services,
   parts,
   source,
 }) {
+  function summaryFacts(active) {
+    if (!active) return null;
+    const { camera } = active;
+    return {
+      area: coverageAreaText(
+        parts.model.sectorAreaKm2(camera.rangeM, camera.fovDeg),
+      ),
+      overlap: parts.geometry.coverageNeighborCount(active),
+      badge: parts.calibration.deriveCalBadge(camera),
+      kind:
+        layerState._healthById.get(camera.id)?.sourceKind ||
+        camera.feedType ||
+        'image',
+    };
+  }
+
   /**
    * Builds a single-line summary string for the active camera, including city,
    * heading, FOV, coverage area, overlap count, projection mode, alignment
@@ -74,8 +107,10 @@ export function createPresentation({
    * @returns {string} Summary text separated by mid-dots.
    */
 
-  function buildSummaryText() {
-    const active = parts.selection.getActiveRecord();
+  function buildSummaryText(
+    active = parts.selection.getActiveRecord(),
+    facts = summaryFacts(active),
+  ) {
     if (!active) {
       return layerState._records.length
         ? t(
@@ -87,15 +122,9 @@ export function createPresentation({
         : t('No cameras available in catalog.');
     }
 
-    const area = parts.model.sectorAreaKm2(
-      active.camera.rangeM,
-      active.camera.fovDeg,
-    );
-    const overlapCount = parts.geometry.coverageNeighborCount(active);
+    const { area, overlap, badge, kind } = facts;
     const viewKey = parts.model.currentViewContext();
     const viewBand = viewKey.split(':')[0] || 'global';
-    const health = layerState._healthById.get(active.camera.id) || null;
-    const calBadge = parts.calibration.deriveCalBadge(active.camera);
 
     // Each part is isolated: in right-to-left text a code keeps its own value
     // (FOV 44°) instead of trading it with its neighbour.
@@ -121,17 +150,15 @@ export function createPresentation({
       specFovCapabilityToken(active.camera, (span) =>
         t('SPEC FOV {span}° (CAPABILITY)', { span }),
       ),
-      t('COVERAGE {value}km²', { value: area.toFixed(2) }),
-      overlapCount > 0
-        ? t('OVERLAP {count} cams', { count: overlapCount })
+      t('COVERAGE {value}km²', { value: area }),
+      overlap > 0
+        ? t('OVERLAP {count} cams', { count: overlap })
         : t('ISOLATED VIEW'),
       layerState._showProjection ? t('PROJ MONITOR') : t('PROJ OFF'),
       layerState._coverageMode === 'viewshed' ? t('VIEWSHED') : null,
-      t('CAL {value}', { value: summaryCalLabel(calBadge) }),
+      t('CAL {value}', { value: summaryCalLabel(badge) }),
       t('SRC {value}', {
-        value: summarySourceLabel(
-          health?.sourceKind || active.camera.feedType || 'image',
-        ),
+        value: summarySourceLabel(kind),
       }),
       t('{value} CONTEXT', { value: summaryViewBandLabel(viewBand) }),
       // Identified hardware: append the model's datasheet specs + attribution.
@@ -144,6 +171,42 @@ export function createPresentation({
       .filter(Boolean)
       .map(isolate)
       .join(' · ');
+  }
+
+  /**
+   * The scene summary as labelled lines for the camera tools: what the
+   * active camera covers, how many others overlap it, whether its picture
+   * is projected, its calibration and its source. Empty with no camera.
+   * @returns {Array<{label: string, value: string}>}
+   */
+  function buildSummaryLines(facts) {
+    if (!facts) return [];
+    const { area, overlap, badge, kind } = facts;
+    return [
+      {
+        label: t('Coverage'),
+        value: isolate(t('{value} km²', { value: area })),
+      },
+      {
+        label: t('Overlap'),
+        value:
+          overlap > 0
+            ? tn(overlap, '{count} camera', '{count} cameras')
+            : t('No other camera'),
+      },
+      {
+        label: t('Projection'),
+        value: layerState._showProjection ? t('On') : t('Off'),
+      },
+      {
+        label: t('Calibration'),
+        value: CAL_STATUS_WORDS[badge] ? t(CAL_STATUS_WORDS[badge]) : badge,
+      },
+      {
+        label: t('Source'),
+        value: SOURCE_KIND_WORDS[kind] ? t(SOURCE_KIND_WORDS[kind]) : kind,
+      },
+    ];
   }
 
   /**
@@ -262,6 +325,7 @@ export function createPresentation({
   function uiState() {
     const active = parts.selection.getActiveRecord();
     const activeId = active?.camera.id || null;
+    const facts = summaryFacts(active);
     const payload = {
       enabled: layerState._enabled,
       // Compat boolean + the full tri-state (viewshed design §3b).
@@ -272,6 +336,7 @@ export function createPresentation({
       autoHop: layerState._autoHop,
       autoHopSuspended: layerState._autoHopSuspended,
       autoHopSec: layerState._autoHopSec,
+      summaryLines: buildSummaryLines(facts),
       count: layerState._count,
       lastUpdate: layerState._lastUpdate,
       error: layerState._lastError,
@@ -294,10 +359,15 @@ export function createPresentation({
         hoverId: layerState._hoverCardId,
       },
       activeCameraId: activeId,
+      // Layer-owned opening, restored and timed steps leave Context on its
+      // current card. A manual or voice step is a pick even with Auto-hop on.
+      openingCamera: Boolean(
+        activeId &&
+        (layerState._openingCameraProvisional || layerState._quietActivation),
+      ),
       activeCameraReselection: layerState._activeCameraReselection,
       activeCamera: active ? getPublicCameraState(active, activeId) : null,
-      cameraIndex: cameraIndex(),
-      summary: buildSummaryText(),
+      summary: buildSummaryText(active, facts),
     };
     // The full per-camera state is built only when a subscriber reads it: a
     // catalog of tens of thousands would otherwise be rebuilt on every
@@ -315,32 +385,6 @@ export function createPresentation({
       },
     });
     return payload;
-  }
-
-  /**
-   * `{ id, city, name }` for the active camera, then each camera shown as an
-   * icon and the best-ranked camera of each visible group. A whole catalog
-   * would put tens of thousands of options in the DOM and slow every layout.
-   * Consumers can compare the array by identity until the picker records or
-   * active camera change.
-   * @returns {{id: string, city: string, name: string}[]}
-   */
-
-  function cameraIndex() {
-    const view = layerState._pickerRecords;
-    const active = parts.selection.getActiveRecord();
-    const cached = layerState._cameraIndexCache;
-    if (cached?.view === view && cached.active === active) return cached.list;
-    const records = active
-      ? [active, ...view.filter((record) => record !== active)]
-      : view;
-    const list = records.map(({ camera }) => ({
-      id: camera.id,
-      city: camera.city,
-      name: camera.name,
-    }));
-    layerState._cameraIndexCache = { view, active, list };
-    return list;
   }
 
   /** Dispatches the current UI state to all registered subscriber callbacks. */

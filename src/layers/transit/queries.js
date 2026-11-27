@@ -244,6 +244,7 @@ export function createQueries({ state, parts }) {
           label: record.label || null,
           routeId: record.routeId || null,
           mode: entry.mode || null,
+          routeType: entry.routeType ?? null,
           lat: record.lat,
           lon: record.lon,
           speedMps: num(record.speedMps),

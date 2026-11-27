@@ -1,4 +1,6 @@
+import { stepChips } from '../../data/layerSteps.js';
 import {
+  ACTIVE_FRAME_REFRESH_MS,
   DEFAULT_UPDATE_INTERVAL_MS,
   MIN_AUTO_HOP_SEC,
   MAX_AUTO_HOP_SEC,
@@ -6,10 +8,140 @@ import {
   CALIBRATION_RANGE_FLOOR_M,
 } from './policy.js';
 import { CCTV_HELPER_PICK_ID } from './pickIds.js';
+import { isHeadingEstimated } from './headingConfidence.js';
+import { t } from '../../i18n/index.js';
+import { attachCctvVideo } from './videoPlayback.js';
 
 export function createControls({ state: layerState, services, parts, source }) {
   const { holdContinuousRender, releaseContinuousRender } = services.render;
   const { CCTV_ACTIVATION_RESULT } = services.activation;
+  let rowControlsListener = null;
+  // Prev/Next are offered while a step has somewhere to go.
+  const stepsOffered = () => parts.navigation.canStepNearby();
+
+  function applyParams(params) {
+    if (typeof params.showCoverage === 'boolean') {
+      layerState._coverageMode = parts.model.normalizeCoverageMode(
+        params.showCoverage,
+        layerState._coverageMode,
+      );
+    }
+    if (typeof params.coverageMode === 'string') {
+      layerState._coverageMode = parts.model.normalizeCoverageMode(
+        params.coverageMode,
+        layerState._coverageMode,
+      );
+    }
+    if (typeof params.showProjection === 'boolean') {
+      layerState._showProjection = params.showProjection;
+      if (layerState._showProjection) {
+        const active = parts.selection.getActiveRecord();
+        if (active) parts.projection.ensureProjectionRuntime(active);
+        parts.projection.startProjectionLoop();
+      }
+    }
+    if (typeof params.autoHop === 'boolean') {
+      layerState._autoHop = params.autoHop;
+      if (params.autoHop) layerState._autoHopSuspended = false;
+    }
+    if (
+      typeof params.autoHopSec === 'number' &&
+      Number.isFinite(params.autoHopSec)
+    ) {
+      layerState._autoHopSec = parts.model.clamp(
+        Math.round(params.autoHopSec),
+        MIN_AUTO_HOP_SEC,
+        MAX_AUTO_HOP_SEC,
+      );
+    }
+    if (
+      typeof params.selectedCameraId === 'string' &&
+      layerState._recordById.has(params.selectedCameraId)
+    ) {
+      parts.selection.setActiveCamera(params.selectedCameraId);
+    }
+    if (params.calibration && typeof params.calibration === 'object') {
+      const calibrationCfg = params.calibration;
+      const targetCameraId =
+        typeof calibrationCfg.cameraId === 'string' && calibrationCfg.cameraId
+          ? calibrationCfg.cameraId
+          : layerState._activeCameraId;
+      const targetRecord = targetCameraId
+        ? layerState._recordById.get(targetCameraId)
+        : null;
+      if (targetRecord) {
+        if (calibrationCfg.reset) {
+          // Restore the default pose, delete the saved calibration and clear
+          // the dirty flag.
+          targetRecord.camera.calibration =
+            parts.calibration.normalizeCalibration(DEFAULT_CAMERA_CALIBRATION);
+          targetRecord.camera.calSource = null;
+          targetRecord.calDirty = false;
+          parts.model.ensureCameraPose(targetRecord.camera);
+          layerState._calibrationById.delete(targetCameraId);
+          parts.calibration.saveCalibrationStore();
+          // Reset returns to the base lat/lon, so resolve that anchor once,
+          // and the footprint under the restored pose.
+          parts.ground.resolveCommittedGroundAnchor(targetRecord);
+          void parts.ground.resolveFootprintGround(targetRecord);
+          parts.frames.refreshProjectionImage(targetRecord, true);
+        }
+        if (calibrationCfg.patch && typeof calibrationCfg.patch === 'object') {
+          // A patch edits the live pose. Saving updates the stored calibration
+          // and the badge's calSource.
+          parts.calibration.applyCalibrationPatch(
+            targetRecord,
+            calibrationCfg.patch,
+          );
+        }
+        if (calibrationCfg.save) {
+          // SAVE CAL: persist the current in-memory calibration with manual
+          // provenance. Saving an all-default calibration clears the entry
+          // (a no-op calibration is not a calibration).
+          if (
+            parts.calibration.isDefaultCalibration(
+              targetRecord.camera.calibration,
+            )
+          ) {
+            targetRecord.camera.calSource = null;
+            layerState._calibrationById.delete(targetCameraId);
+          } else {
+            targetRecord.camera.calSource = 'manual';
+            layerState._calibrationById.set(targetCameraId, {
+              values: { ...targetRecord.camera.calibration },
+              source: 'manual',
+              savedAt: Date.now(),
+              // Authored against the current range floor: never migrated.
+              rangeFloorM: CALIBRATION_RANGE_FLOOR_M,
+            });
+          }
+          targetRecord.calDirty = false;
+          parts.calibration.saveCalibrationStore();
+        }
+      }
+    }
+    if (typeof params.calibrationMode === 'boolean') {
+      layerState._calibrationMode = params.calibrationMode;
+      if (layerState._calibrationMode) {
+        parts.calibration.ensureGizmo();
+        layerState._gizmo?.setEnabled(true);
+        // Gizmo drags change geometry through pointer events, which don't
+        // request a frame in requestRenderMode.
+        holdContinuousRender('cctv-adjust');
+      } else {
+        releaseContinuousRender('cctv-adjust');
+        layerState._gizmo?.setEnabled(false);
+      }
+    }
+    if (params.focusSelected && layerState._activeCameraId) {
+      parts.navigation.focusCamera(
+        layerState._activeCameraId,
+        Number(params.focusDurationSec) || 1.8,
+      );
+    }
+    parts.rendering.refreshCoverageStyles();
+    parts.presentation.notifyListeners();
+  }
 
   const methods = {
     id: 'cctv',
@@ -38,136 +170,18 @@ export function createControls({ state: layerState, services, parts, source }) {
      * @param {boolean} [params.calibrationMode] - Toggle the ADJUST gizmo.
      * @param {boolean} [params.focusSelected] - Fly to the active camera.
      * @param {number} [params.focusDurationSec] - Fly-to duration.
+     * @param {{origin?: string}} [options] - Scene, restore and programmatic camera changes are quiet.
      */
-    setParams(params = {}) {
-      if (typeof params.showCoverage === 'boolean') {
-        layerState._coverageMode = parts.model.normalizeCoverageMode(
-          params.showCoverage,
-          layerState._coverageMode,
-        );
-      }
-      if (typeof params.coverageMode === 'string') {
-        layerState._coverageMode = parts.model.normalizeCoverageMode(
-          params.coverageMode,
-          layerState._coverageMode,
-        );
-      }
-      if (typeof params.showProjection === 'boolean') {
-        layerState._showProjection = params.showProjection;
-        if (layerState._showProjection) {
-          const active = parts.selection.getActiveRecord();
-          if (active) parts.projection.ensureProjectionRuntime(active);
-          parts.projection.startProjectionLoop();
-        }
-      }
-      if (typeof params.autoHop === 'boolean') {
-        layerState._autoHop = params.autoHop;
-        if (params.autoHop) layerState._autoHopSuspended = false;
-      }
+    setParams(params = {}, { origin } = {}) {
       if (
-        typeof params.autoHopSec === 'number' &&
-        Number.isFinite(params.autoHopSec)
+        layerState._recordById.has(params.selectedCameraId) &&
+        origin !== undefined &&
+        !['user', 'voice', 'tool'].includes(origin)
       ) {
-        layerState._autoHopSec = parts.model.clamp(
-          Math.round(params.autoHopSec),
-          MIN_AUTO_HOP_SEC,
-          MAX_AUTO_HOP_SEC,
-        );
+        parts.navigation.quietly(() => applyParams(params));
+      } else {
+        applyParams(params);
       }
-      if (
-        typeof params.selectedCameraId === 'string' &&
-        layerState._recordById.has(params.selectedCameraId)
-      ) {
-        parts.selection.setActiveCamera(params.selectedCameraId);
-      }
-      if (params.calibration && typeof params.calibration === 'object') {
-        const calibrationCfg = params.calibration;
-        const targetCameraId =
-          typeof calibrationCfg.cameraId === 'string' && calibrationCfg.cameraId
-            ? calibrationCfg.cameraId
-            : layerState._activeCameraId;
-        const targetRecord = targetCameraId
-          ? layerState._recordById.get(targetCameraId)
-          : null;
-        if (targetRecord) {
-          if (calibrationCfg.reset) {
-            // RESET: back to the base prior, delete the persisted entry, clear
-            // the dirty flag (semantics unchanged from v2).
-            targetRecord.camera.calibration =
-              parts.calibration.normalizeCalibration(
-                DEFAULT_CAMERA_CALIBRATION,
-              );
-            targetRecord.camera.calSource = null;
-            targetRecord.calDirty = false;
-            parts.model.ensureCameraPose(targetRecord.camera);
-            layerState._calibrationById.delete(targetCameraId);
-            parts.calibration.saveCalibrationStore();
-            // Reset returns to the base lat/lon, so resolve that anchor once,
-            // and the footprint under the restored pose.
-            parts.ground.resolveCommittedGroundAnchor(targetRecord);
-            void parts.ground.resolveFootprintGround(targetRecord);
-            parts.frames.refreshProjectionImage(targetRecord, true);
-          }
-          if (
-            calibrationCfg.patch &&
-            typeof calibrationCfg.patch === 'object'
-          ) {
-            // Save-gated persistence (design §3e): a patch edits the LIVE pose
-            // only. The store — and the CALIBRATED badge's `calSource` — move
-            // exclusively on the explicit `save` action below. (§9.1 range-slider
-            // clamp override + B9b re-ground live inside applyCalibrationPatch.)
-            parts.calibration.applyCalibrationPatch(
-              targetRecord,
-              calibrationCfg.patch,
-            );
-          }
-          if (calibrationCfg.save) {
-            // SAVE CAL: persist the current in-memory calibration with manual
-            // provenance. Saving an all-default calibration clears the entry
-            // (a no-op calibration is not a calibration).
-            if (
-              parts.calibration.isDefaultCalibration(
-                targetRecord.camera.calibration,
-              )
-            ) {
-              targetRecord.camera.calSource = null;
-              layerState._calibrationById.delete(targetCameraId);
-            } else {
-              targetRecord.camera.calSource = 'manual';
-              layerState._calibrationById.set(targetCameraId, {
-                values: { ...targetRecord.camera.calibration },
-                source: 'manual',
-                savedAt: Date.now(),
-                // Authored against the current range floor: never migrated.
-                rangeFloorM: CALIBRATION_RANGE_FLOOR_M,
-              });
-            }
-            targetRecord.calDirty = false;
-            parts.calibration.saveCalibrationStore();
-          }
-        }
-      }
-      if (typeof params.calibrationMode === 'boolean') {
-        layerState._calibrationMode = params.calibrationMode;
-        if (layerState._calibrationMode) {
-          parts.calibration.ensureGizmo();
-          layerState._gizmo?.setEnabled(true);
-          // ADJUST mode: gizmo drags mutate entity geometry from pointer events,
-          // which don't trigger renders in requestRenderMode. (perf wave 2)
-          holdContinuousRender('cctv-adjust');
-        } else {
-          releaseContinuousRender('cctv-adjust');
-          layerState._gizmo?.setEnabled(false);
-        }
-      }
-      if (params.focusSelected && layerState._activeCameraId) {
-        parts.navigation.focusCamera(
-          layerState._activeCameraId,
-          Number(params.focusDurationSec) || 1.8,
-        );
-      }
-      parts.rendering.refreshCoverageStyles();
-      parts.presentation.notifyListeners();
     },
 
     /**
@@ -257,6 +271,148 @@ export function createControls({ state: layerState, services, parts, source }) {
       const camera = layerState._recordById.get(id)?.camera;
       if (!camera) return null;
       return { name: camera.name, latitude: camera.lat, longitude: camera.lon };
+    },
+
+    getInspectorContextPoints() {
+      const records = layerState._enabled ? layerState._records : [];
+      return {
+        points: (function* () {
+          for (const { camera } of records) yield camera;
+        })(),
+        recordForPoint(camera) {
+          return camera;
+        },
+      };
+    },
+
+    /**
+     * The cameras the layer has loaded, as plain records (id, name, position)
+     * for Context's counts and nearby lists. Empty while the layer is off.
+     * @param {number} [maxCount]
+     * @returns {{ id: string, name: string, lat: number, lon: number }[]}
+     */
+    getAnalystRecords(maxCount) {
+      if (!layerState._enabled) return [];
+      const limit = Number.isFinite(maxCount)
+        ? Math.max(0, Math.floor(maxCount))
+        : layerState._records.length;
+      const records = [];
+      for (const record of layerState._records) {
+        if (records.length >= limit) break;
+        const camera = record.camera;
+        if (!Number.isFinite(camera?.lat) || !Number.isFinite(camera?.lon))
+          continue;
+        records.push({
+          id: String(camera.id),
+          name: camera.name || '',
+          lat: camera.lat,
+          lon: camera.lon,
+        });
+      }
+      return records;
+    },
+
+    /**
+     * A video camera's own stream, for a view that keeps playing it after the
+     * layer's projection lets it go (a docked camera with Cameras off). Null
+     * for a still camera, a browser-overlay camera or one the layer does not
+     * hold. The records stay while the layer is off.
+     * @param {string} cameraId
+     * @returns {?{url: string, feedType: string}}
+     */
+    streamSourceForCamera(cameraId) {
+      const camera = layerState._recordById.get(String(cameraId))?.camera;
+      if (!camera || parts.model.isBrowserOverlayCamera(camera)) return null;
+      const feedType = parts.model.normalizeFeedType(camera.feedType);
+      if (!parts.model.isVideoFeedType(feedType)) return null;
+      return { url: source.getMediaUrl(camera), feedType };
+    },
+
+    /**
+     * Play a stream from `streamSourceForCamera` into a muted, inline video
+     * element: one connection, released (and its lease returned) by the
+     * handle's `dispose()`; `onFailure` hears a stream that cannot play.
+     * @param {HTMLVideoElement} video
+     * @param {{url: string, feedType: string}} stream
+     * @param {{onFailure?: () => void}} [options]
+     * @returns {{dispose: () => void}}
+     */
+    attachCameraStream(video, stream, { onFailure = () => {} } = {}) {
+      video.muted = true;
+      video.playsInline = true;
+      video.crossOrigin = 'anonymous';
+      video.preload = 'auto';
+      return attachCctvVideo(video, stream.url, stream.feedType, { onFailure });
+    },
+
+    /**
+     * A pinned camera's still with a refresh interval of at least 10 seconds.
+     * Québec overlays and streams without a registered snapshot have no still.
+     * @param {string} cameraId
+     * A source with a frame reader also supplies readImage(signal), which returns
+     * the response's source kind, a temporary display URL and its release function.
+     * @returns {?{url: string, refreshMs: number, readImage?: Function}}
+     */
+    frameUrlForCamera(cameraId) {
+      const camera = layerState._recordById.get(String(cameraId))?.camera;
+      if (!camera || parts.model.isBrowserOverlayCamera(camera)) return null;
+      const snapshotOnly = parts.model.isVideoFeedCamera(camera);
+      if (snapshotOnly && !camera.hasSnapshot) return null;
+      const refreshMs = Math.max(
+        10_000,
+        Number.isFinite(camera.frameRefreshMs) ? camera.frameRefreshMs : 0,
+      );
+      return {
+        url: source.getFrameUrl(camera, refreshMs, { snapshotOnly }),
+        ...(typeof source.getFrame === 'function' && {
+          async readImage(signal, { liveOnly = false } = {}) {
+            const { bytes, contentType, sourceKind } = await source.getFrame(
+              camera,
+              { refreshMs, snapshotOnly, liveOnly, signal },
+            );
+            signal?.throwIfAborted();
+            const url = URL.createObjectURL(
+              new Blob([bytes], { type: contentType }),
+            );
+            return { url, sourceKind, release: () => URL.revokeObjectURL(url) };
+          },
+        }),
+        refreshMs,
+      };
+    },
+
+    /**
+     * What a camera's card shows about it: where it looks, how often its
+     * frame refreshes, and who runs its feed. Null for an unknown camera.
+     * @param {string} cameraId
+     */
+    cameraDetails(cameraId) {
+      const camera = layerState._recordById.get(String(cameraId))?.camera;
+      if (!camera) return null;
+      const finite = (value) => (Number.isFinite(value) ? value : null);
+      const words = (value) =>
+        (typeof value === 'string' && value.trim()) || null;
+      const stills =
+        !parts.model.isVideoFeedCamera(camera) || camera.hasSnapshot === true;
+      return {
+        name: words(camera.name),
+        city: words(camera.city),
+        provider: words(camera.provider),
+        // The owner a partner-supplied feed inside a pack names.
+        credit: words(camera.credit),
+        feedType: words(camera.feedType),
+        browserOnly: parts.model.isBrowserOverlayCamera(camera),
+        headingDeg: finite(camera.headingDeg),
+        headingEstimated: isHeadingEstimated(camera),
+        fovDeg: finite(camera.fovDeg),
+        rangeM: finite(camera.rangeM),
+        refreshMs: stills
+          ? Math.max(
+              ACTIVE_FRAME_REFRESH_MS,
+              finite(camera.frameRefreshMs) ?? 0,
+            )
+          : null,
+      };
     },
 
     /**
@@ -362,6 +518,56 @@ export function createControls({ state: layerState, services, parts, source }) {
         parts.navigation.focusCamera(nextId, options.durationSec || 1.8);
       }
       return nextId;
+    },
+
+    /**
+     * Selects a camera and optionally flies to it (see navigation.stepNearbyCamera).
+     * @param {number} direction Negative for previous, otherwise next.
+     * @param {{focus?: boolean, durationSec?: number}} [options]
+     * @returns {?{cameraId: string, focusResult: ?string}}
+     */
+    stepNearbyCamera(direction, options = {}) {
+      return parts.navigation.stepNearbyCamera(direction, options);
+    },
+
+    /**
+     * Context's Cameras list area, for Prev/Next to walk the same list.
+     * @param {?{lat: number, lon: number, radiusKm: number, order?: string[], restart?: boolean}} area
+     */
+    setNearbyArea(area) {
+      parts.navigation.setNearbyArea(area);
+      rowControlsListener?.();
+    },
+
+    /**
+     * Prev and Next on the Data Layers row use navigation.stepNearbyCamera.
+     */
+    getRowControls() {
+      if (!stepsOffered()) return null;
+      return {
+        chips: stepChips(
+          'camera',
+          t('Previous camera'),
+          t('Next camera'),
+          parts.navigation.stepNearbyCamera,
+        ),
+      };
+    },
+
+    setRowControlsListener(listener) {
+      if (rowControlsListener)
+        layerState._listeners.delete(rowControlsListener);
+      rowControlsListener = null;
+      if (typeof listener !== 'function') return;
+      // Camera updates and list changes redraw the row only when its arrows change.
+      let previous = stepsOffered();
+      rowControlsListener = () => {
+        const offered = stepsOffered();
+        if (offered === previous) return;
+        previous = offered;
+        listener();
+      };
+      layerState._listeners.add(rowControlsListener);
     },
 
     /**

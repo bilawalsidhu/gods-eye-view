@@ -97,6 +97,11 @@
  *   --headful          Show the browser (debugging)
  *   --offline-imagery  Use bundled texture for known Esri/OSM tile images only
  *   --keep-open        Leave the browser open after the run (debugging)
+ *
+ * To run without Google Maps or Cesium ion credentials, start Vite directly:
+ *   GOOGLE_MAPS_API_KEY='' CESIUM_ION_TOKEN='' npm run dev -- --port 4173 --strictPort
+ * dev-fresh can load credentials from dotenv or Keychain when these are empty.
+ * --offline-imagery substitutes only known Esri/OSM tile images.
  */
 
 import fs from 'node:fs';
@@ -233,7 +238,7 @@ async function main() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
   } catch (e) {
     console.error(`\x1b[31mDev server not reachable at ${APP_URL} (${e.message}).\x1b[0m`);
-    console.error(`Start it first:  ./scripts/dev-fresh.sh   (or:  npm run dev)`);
+    console.error("Start a local keyless server: GOOGLE_MAPS_API_KEY='' CESIUM_ION_TOKEN='' npm run dev -- --port 4173 --strictPort");
     process.exit(2);
   }
 
@@ -249,8 +254,7 @@ async function main() {
     protocolTimeout: 300_000,
     ...(chromeExecutable ? { executablePath: chromeExecutable } : {}),
     args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
+      ...(process.platform === 'darwin' ? [] : ['--no-sandbox', '--disable-setuid-sandbox']),
       // SwiftShader only in headless: forcing it in headful defeats the whole
       // point of --headful (real GPU). Diagnosed 2026-08-03: under this
       // machine's Chrome 145 SwiftShader, loading the tracked military GLB
@@ -259,7 +263,7 @@ async function main() {
       // qa-focus-evidence: headful = real GPU.
       ...(HEADFUL ? [] : ['--use-gl=angle', '--use-angle=swiftshader']),
       '--disable-dev-shm-usage',
-      '--disable-web-security',
+      ...(process.platform === 'darwin' ? [] : ['--disable-web-security']),
       '--disable-background-timer-throttling',
       '--disable-renderer-backgrounding',
       // macOS stops frame production for fully-occluded windows, which kills
@@ -606,7 +610,8 @@ async function main() {
       () => window.__godsEyeView && window.__godsEyeView.viewer && window.__godsEyeView.dataManager,
       { timeout: 60000, polling: 200 }
     );
-    console.log('  App globals ready.\n');
+    const bootStack = await page.evaluate(() => window.__godsEyeView.mapStackController.getActiveId());
+    console.log(`  Boot map stack: ${bootStack}\n`);
 
     // Small helper: run an expression in the page after the next render frame,
     // so reads happen on a settled frame.
@@ -645,6 +650,16 @@ async function main() {
     await waitFor(() => sawLog.detection && sawLog.readout, 8000).catch(() => {});
     record('init: [Detection] Initialized logged', sawLog.detection);
     record('init: [TrackedReadout] Initialized logged', sawLog.readout);
+
+    const webglRenderer = await evalPage(() => {
+      const gl = window.__godsEyeView.viewer.scene.context._gl;
+      const debug = gl?.getExtension('WEBGL_debug_renderer_info');
+      return gl ? {
+        vendor: gl.getParameter(debug ? debug.UNMASKED_VENDOR_WEBGL : gl.VENDOR),
+        renderer: gl.getParameter(debug ? debug.UNMASKED_RENDERER_WEBGL : gl.RENDERER),
+      } : null;
+    });
+    console.log(`WebGL backend: ${JSON.stringify(webglRenderer)}`);
 
     record('init: no console errors during boot', consoleErrors.length === 0,
       consoleErrors.length ? `${consoleErrors.length} error(s): ${consoleErrors.slice(0, 3).join(' | ')}` : 'clean');
@@ -1230,85 +1245,89 @@ async function main() {
       );
 
       // ============================================================
-      // PANEL === SPOKEN. Not the shared helper as a stand-in: the REAL
-      // Contacts pipeline (awareness selects a subject, evaluateSubject fills
-      // the snapshot, the panel renders it) against the REAL voice tool. A
-      // divergence introduced at the call site itself — not in the helper —
-      // has to go red here.
+      // PANEL === SPOKEN. Read the rendered Nearby counts and run the real
+      // analyst tool with the same center/radius the panel uses. The Contacts
+      // alias opens Nearby while preserving the current mode and enabled layers.
       // ============================================================
-      console.log('\nPanel === spoken — one number, through both real call sites');
-      const panelVsSpoken = await evalPage(async () => {
-        const manager = window.__godsEyeView.dataManager;
-        if (!manager.isEnabled('flights')) await manager.setEnabled('flights', true);
-        if (!manager.isEnabled('military')) await manager.setEnabled('military', true);
-        // Enter Contacts the way the operator does, then select a contact so
-        // awareness has a real subject.
-        const button = document.getElementById('global-context-flights-btn');
-        if (button && !window.__godsEyeView.styleManager.getContextModeState?.().mode) button.click();
-        for (let i = 0; i < 80; i += 1) {
-          if (window.__godsEyeView.styleManager.getContextModeState?.().mode) break;
-          await new Promise((resolve) => setTimeout(resolve, 100));
+      console.log('\nPanel === spoken — Nearby and voice use the same window');
+      const nearbyOpened = await evalPage(async () => {
+        const app = window.__godsEyeView;
+        const manager = app.dataManager;
+        await window.__gevVoiceCommands.runner('set_context_mode', { mode: 'off' });
+        for (const id of ['flights', 'military']) {
+          if (!manager.isEnabled(id)) await manager.setEnabled(id, true);
+          manager.layers.get(id).module.stopTracking();
         }
-        manager.layers.get('flights').module.trackById('aaa001', { origin: 'user' });
-        // Awareness recomputes on its own cadence; wait for a real snapshot.
-        const awareness = manager.layers.get('military-awareness')?.module;
-        let snapshot = null;
-        for (let i = 0; i < 80; i += 1) {
-          snapshot = awareness?.getContextSnapshot?.() || null;
-          if (snapshot?.cohorts?.length) break;
-          await new Promise((resolve) => setTimeout(resolve, 150));
-        }
-        if (!snapshot?.subject) return { error: 'awareness produced no subject' };
-        const countFor = (id) => {
-          const cohort = snapshot.cohorts.find((entry) => entry?.id === id);
-          return Number.isFinite(cohort?.count) ? cohort.count : null;
+        const Cesium = await import('/node_modules/cesium/Build/Cesium/index.js');
+        app.viewer.camera.cancelFlight();
+        app.viewer.camera.setView({
+          destination: Cesium.Cartesian3.fromDegrees(-97.74, 30.27, 40000),
+          orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+        });
+        const enabledLayers = () => [...manager.layers.keys()]
+          .filter((id) => manager.isEnabled(id)).sort();
+        const before = enabledLayers();
+        const result = await window.__gevVoiceCommands.runner('set_context_mode', { mode: 'contacts' });
+        const state = await window.__gevVoiceCommands.runner('get_current_view_state');
+        return {
+          ok: result?.ok, mode: result?.mode,
+          before, after: enabledLayers(),
+          internalMode: app.styleManager.getContextModeState?.().mode ?? null,
+          stateMode: state?.context?.mode ?? null,
+          active: state?.context?.active ?? null,
         };
-        // What the PANEL shows, read from the snapshot it renders.
-        const panelAircraft = (countFor('flights') ?? 0) + (countFor('military') ?? 0);
-        // What VOICE says, through the real tool runner.
+      });
+      record(
+        'context: contacts opens Nearby without changing layers or activating a mode',
+        nearbyOpened.ok === true && nearbyOpened.mode === 'nearby'
+          && nearbyOpened.internalMode === null && nearbyOpened.stateMode === 'off'
+          && nearbyOpened.active === false
+          && JSON.stringify(nearbyOpened.before) === JSON.stringify(nearbyOpened.after),
+        JSON.stringify(nearbyOpened),
+      );
+      await page.waitForFunction(() => ['flights', 'military'].every((id) =>
+        document.querySelector(`.view-context .nearby-lists__layer[data-layer="${id}"] .nearby-lists__count`),
+      ), { timeout: 15000 });
+      const panelVsSpoken = await evalPage(async () => {
+        const { useEntityCardStore } = await import(`${window.__gevQaSourceBase}/ui/stores/entityCard.js`);
+        const { contextRadiusKm } = await import(`${window.__gevQaSourceBase}/ui/contextRadius.js`);
+        const store = useEntityCardStore();
+        const center = store.view?.center;
+        const km = contextRadiusKm.value;
+        const counts = ['flights', 'military'].map((id) => Number(
+          document.querySelector(`.view-context .nearby-lists__layer[data-layer="${id}"] .nearby-lists__count`)
+            ?.textContent.replace(/[^0-9]/g, ''),
+        ));
         const spoken = await window.__gevVoiceCommands.runner('analyst_query', {
           layers: ['flights', 'military'],
-          scope: { kind: 'radius', km: Math.round((snapshot.radiusM || 250000) / 1000) },
+          scope: { kind: 'radius', center, km },
         });
         return {
-          subject: snapshot.subject.label || snapshot.subject.id || null,
-          panelAircraft,
+          center, km, counts,
+          panelAircraft: counts.reduce((total, count) => total + count, 0),
+          spokenOk: spoken?.ok,
           spokenCount: spoken?.count ?? null,
-          spokenEngine: spoken?.window?.engine ?? null,
-          spokenCenteredOn: spoken?.window?.centeredOn ?? null,
+          selected: store.card?.key ?? null,
         };
       });
       record(
-        'panel===spoken: the Contacts panel and the voice count are one number',
-        !panelVsSpoken.error
-          && panelVsSpoken.spokenEngine === 'contacts-window'
-          && panelVsSpoken.spokenCount === panelVsSpoken.panelAircraft,
+        'panel===spoken: rendered Nearby and voice aircraft counts agree',
+        panelVsSpoken.spokenOk === true
+          && panelVsSpoken.counts.every((count) => Number.isFinite(count) && count > 0)
+          && panelVsSpoken.spokenCount === panelVsSpoken.panelAircraft
+          && panelVsSpoken.selected === null,
         JSON.stringify(panelVsSpoken),
       );
-      record(
-        'panel===spoken: the spoken answer names the subject whose window it read',
-        !panelVsSpoken.error && panelVsSpoken.spokenCenteredOn === panelVsSpoken.subject,
-        JSON.stringify(panelVsSpoken),
-      );
-      // Leave Contacts as the vocabulary group expects to find it.
-      await evalPage(async () => {
-        try { await window.__gevVoiceCommands.runner('set_context_mode', { mode: 'off' }); } catch {}
-      });
 
       // ============================================================
-      // CONTEXT VOCABULARY — state output must speak the words the tools
-      // accept. The Contacts mode's internal id is 'flights' while
-      // `set_context_mode` takes 'contacts', and state surfaces reported the
-      // internal id: the model read `mode:'flights'`, concluded Contacts was
-      // off, and refused to answer from the Contacts window counts carried in
-      // the same payload (owner field session, 2026-08-21).
+      // CONTEXT VOCABULARY — Cockpit's 'flights' mode is reported as
+      // 'contacts', with 'flights' in modeInternal. The runner accepts
+      // 'contacts' as an alias for Nearby.
       // ============================================================
-      console.log('\nContext vocabulary — state output speaks the tools\' own words');
+      console.log('\nContext vocabulary — Cockpit state and the Nearby alias');
       const manualContacts = await evalPage(async () => {
-        const button = document.getElementById('global-context-flights-btn');
-        if (!button) return { error: 'Contacts control not found' };
-        // The MANUAL path is the one that broke silently — voice never set it.
-        button.click();
+        // Activate Contacts through the shell, as Cockpit does.
+        void window.__godsEyeView.styleManager.setContextMode('contacts');
         for (let i = 0; i < 60; i += 1) {
           if (window.__godsEyeView.styleManager.getContextModeState?.().mode) break;
           await new Promise((resolve) => setTimeout(resolve, 100));
@@ -1322,7 +1341,7 @@ async function main() {
         };
       });
       record(
-        'context-vocab: a manually activated Contacts reports as "contacts", not its internal id',
+        'context-vocab: Cockpit reports contacts with flights as its internal mode',
         manualContacts.internalMode === 'flights'
           && manualContacts.reportedMode === 'contacts'
           && manualContacts.reportedInternal === 'flights'
@@ -1330,8 +1349,7 @@ async function main() {
         JSON.stringify(manualContacts),
       );
 
-      // Round-trip: whatever state output reports must be a word the tool
-      // accepts. Feeding the reported mode straight back must not be rejected.
+      // Pass the reported name to the runner while Cockpit Contacts is active.
       const roundTrip = await evalPage(async (reported) => {
         const result = await window.__gevVoiceCommands.runner('set_context_mode', { mode: reported });
         const state = await window.__gevVoiceCommands.runner('get_current_view_state');
@@ -1344,11 +1362,11 @@ async function main() {
         };
       }, manualContacts.reportedMode);
       record(
-        'context-vocab: the reported mode round-trips back through set_context_mode',
+        'context-vocab: the reported legacy mode opens Nearby without changing shell mode',
         roundTrip.ok === true
           && !roundTrip.error
-          && roundTrip.resultMode === 'contacts'
-          && roundTrip.resultInternal === 'flights'
+          && roundTrip.resultMode === 'nearby'
+          && roundTrip.resultInternal === null
           && roundTrip.stateMode === 'contacts',
         JSON.stringify(roundTrip),
       );
@@ -1383,8 +1401,8 @@ async function main() {
       console.log('\nAnalyst handoff — a looked-up contact can actually be tracked');
       const handoff = await evalPage(async () => {
         const manager = window.__godsEyeView.dataManager;
-        // This group owns its precondition: earlier groups toggle Contacts,
-        // which snapshots and restores layer state around itself.
+        // This group owns its precondition: the shell-mode vocabulary group
+        // snapshots and restores layer state around itself.
         if (!manager.isEnabled('military')) await manager.setEnabled('military', true);
         const mil = manager.layers.get('military').module;
         const priorFixture = window.__SYNTH.military.slice();
@@ -2418,7 +2436,8 @@ async function main() {
     let g3dPrimaryFailure = null;
     let g3dCleanupFailure = null;
     try {
-      g3dSetup = await evalPage(() => {
+      g3dSetup = await evalPage(async () => {
+        const { findGlobe } = await import(`${window.__gevQaSourceBase || '/src'}/render/rendererOf.js`);
         const gev = window.__godsEyeView;
         const scene = gev.viewer.scene;
         const dm = gev.dataManager;
@@ -2433,24 +2452,21 @@ async function main() {
         // cross the Puppeteer serialization boundary, so cleanup restores it from
         // this private slot instead of deleting the scene's own property.
         window.__g3dPriorSampleHeight = priorSampleHeight;
-        window.__g3dPriorTilesLoadedDescriptor = gev.tileset
-          ? Object.getOwnPropertyDescriptor(gev.tileset, 'tilesLoaded')
-          : null;
+        window.__g3dPriorTilesLoadedDescriptors = [gev.tileset, scene.globe]
+          .filter(Boolean)
+          .map((target) => ({ target, prior: Object.getOwnPropertyDescriptor(target, 'tilesLoaded') }));
         try {
           // 3D models on (QA param) — the owner decision under test.
           flights.setParams({ models3d: true });
           military.setParams({ models3d: true });
-          // Force the ground snap's tiles-ready gate open (b9b pattern): headless the
-          // Google tileset never finishes streaming, so tilesLoaded stays false.
-          let tilesForced = false;
-          try {
-            if (gev.tileset) {
-              Object.defineProperty(gev.tileset, 'tilesLoaded', { value: true, configurable: true });
-              tilesForced = gev.tileset.tilesLoaded === true;
-            } else {
-              tilesForced = true; // no tileset → groundSnap treats tiles as ready
-            }
-          } catch { tilesForced = false; }
+          // The sampled skin is a fixture. Mark its actual owner ready too:
+          // the globe owns surface readiness on the keyless map, the tileset
+          // on Google 3D. Otherwise streamed imagery can block our fixed sample.
+          for (const { target } of window.__g3dPriorTilesLoadedDescriptors)
+            Object.defineProperty(target, 'tilesLoaded', { value: true, configurable: true });
+          const globe = findGlobe(gev.viewer);
+          const readiness = { tiles: globe?.isSettled('tiles'), surface: globe?.isSettled('surface') };
+          const tilesForced = readiness.tiles === true && readiness.surface === true;
           // Deterministic sampleHeight stub + call counter (headless has no real skin).
           window.__g3dSampleCalls = 0;
           window.__g3dSampleHits = { flights: 0, military: 0 };
@@ -2478,7 +2494,7 @@ async function main() {
             }
             return 187.5;
           };
-          return { tilesForced, priorModels3d };
+          return { tilesForced, readiness, priorModels3d };
         } catch (error) {
           // Setup is transactional: once the first fixture mutation lands, every
           // later setup failure restores each owned seam independently. Return
@@ -2493,12 +2509,11 @@ async function main() {
           attemptRollback('restore sampleHeight seam', () => {
             scene.sampleHeight = priorSampleHeight;
           });
-          attemptRollback('restore tilesLoaded seam', () => {
-            if (!gev.tileset) return;
-            const prior = window.__g3dPriorTilesLoadedDescriptor;
-            if (prior) Object.defineProperty(gev.tileset, 'tilesLoaded', prior);
-            else delete gev.tileset.tilesLoaded;
-          });
+          for (const [index, { target, prior }] of window.__g3dPriorTilesLoadedDescriptors.entries())
+            attemptRollback(`restore tilesLoaded owner ${index}`, () => {
+              if (prior) Object.defineProperty(target, 'tilesLoaded', prior);
+              else delete target.tilesLoaded;
+            });
           attemptRollback('restore flights models3d', () => {
             flights.setParams({ models3d: priorModels3d.flights });
           });
@@ -2507,7 +2522,7 @@ async function main() {
           });
           attemptRollback('delete fixture globals', () => {
             delete window.__g3dPriorSampleHeight;
-            delete window.__g3dPriorTilesLoadedDescriptor;
+            delete window.__g3dPriorTilesLoadedDescriptors;
             delete window.__g3dSampleCalls;
             delete window.__g3dSampleHits;
           });
@@ -2915,12 +2930,11 @@ async function main() {
         await attempt('restore sampleHeight seam', () => {
           v.scene.sampleHeight = window.__g3dPriorSampleHeight;
         });
-        await attempt('restore tilesLoaded seam', () => {
-          if (!gev.tileset) return;
-          const prior = window.__g3dPriorTilesLoadedDescriptor;
-          if (prior) Object.defineProperty(gev.tileset, 'tilesLoaded', prior);
-          else delete gev.tileset.tilesLoaded;
-        });
+        for (const [index, { target, prior }] of window.__g3dPriorTilesLoadedDescriptors.entries())
+          await attempt(`restore tilesLoaded owner ${index}`, () => {
+            if (prior) Object.defineProperty(target, 'tilesLoaded', prior);
+            else delete target.tilesLoaded;
+          });
         await attempt('restore flights models3d', () => {
           fl.setParams({ models3d: priorModels3d.flights });
         });
@@ -2929,7 +2943,7 @@ async function main() {
         });
         await attempt('delete fixture globals', () => {
           delete window.__g3dPriorSampleHeight;
-          delete window.__g3dPriorTilesLoadedDescriptor;
+          delete window.__g3dPriorTilesLoadedDescriptors;
           delete window.__g3dFindModel;
           delete window.__g3dSampleCalls;
           delete window.__g3dSampleHits;
@@ -3148,9 +3162,12 @@ async function main() {
     const DISPLAY_FLOOR_LIFT_M = 1.5; // GROUND_FLOOR_LIFT_M
     const DF_LAT = 30.2600, DF_LON = -97.7500;
     const DF_SEED_M = 400; // identity-probe floor for the fix cell
+    let dfPrimaryFailure = null;
 
+    try {
     const dfSetup = await evalPage(async () => {
       const Cesium = await import('/node_modules/cesium/Build/Cesium/index.js');
+      const { findGlobe } = await import(`${window.__gevQaSourceBase || '/src'}/render/rendererOf.js`);
       const gev = window.__godsEyeView;
       const v = gev.viewer;
       const fl = gev.dataManager.layers.get('flights').module;
@@ -3167,12 +3184,26 @@ async function main() {
       // DETERMINISTIC skin for the scenarios that need a model to draw.
       window.__dfSkinM = null;
       window.__dfSkinSamples = [];
-      window.__dfPriorTilesLoadedDescriptor = gev.tileset
-        ? Object.getOwnPropertyDescriptor(gev.tileset, 'tilesLoaded')
-        : null;
-      if (gev.tileset) {
-        Object.defineProperty(gev.tileset, 'tilesLoaded', { value: true, configurable: true });
-      }
+      window.__dfPriorSampleHeightDescriptor = Object.getOwnPropertyDescriptor(v.scene, 'sampleHeight');
+      window.__dfPriorTilesLoadedDescriptors = [gev.tileset, v.scene.globe]
+        .filter(Boolean)
+        .map((target) => ({ target, prior: Object.getOwnPropertyDescriptor(target, 'tilesLoaded') }));
+      for (const { target } of window.__dfPriorTilesLoadedDescriptors)
+        Object.defineProperty(target, 'tilesLoaded', { value: true, configurable: true });
+      window.__dfGroundDiagnostics = () => {
+        const globe = findGlobe(v);
+        const model = fl.testing?._trackedModelForTest();
+        return {
+          tilesSettled: globe?.isSettled('tiles') ?? null,
+          surfaceSettled: globe?.isSettled('surface') ?? null,
+          globeShown: v.scene.globe?.show ?? null,
+          globeTilesLoaded: v.scene.globe?.tilesLoaded ?? null,
+          cameraHeightM: v.camera.positionCartographic.height,
+          trackedRegime: fl.testing?._trackedModelRegimeActiveForTest() ?? null,
+          model: model ? { id: model.id, ready: model.ready, show: model.show, placed: model.placed, failedAt: model.failedAt ?? null } : null,
+          sampleHits: window.__dfSkinSamples.length,
+        };
+      };
       v.scene.sampleHeight = (cartographic) => {
         if (window.__dfSkinM == null) return undefined;
         const lat = Cesium.Math.toDegrees(Number(cartographic?.latitude));
@@ -3748,6 +3779,7 @@ async function main() {
 
         const coldTracked = readTracked();
         const coldModelH = window.__dfModelHeight('aaa097');
+        const coldReadiness = window.__dfGroundDiagnostics();
 
         // --- Regime IN, WARM ground: the model takes over, ON the floor ------
         // Open a deterministic tile skin AT the planted floor. groundSnap
@@ -3768,6 +3800,7 @@ async function main() {
         try {
         const modelsIn = await window.__dfAwaitTrackedModel('aaa097', 20000);
         const warmModelH = window.__dfModelHeight('aaa097');
+        const warmReadiness = window.__dfGroundDiagnostics();
         // Scene-wide count, used only to tell two very different states apart:
         // NO model rendered at all (this browser has no usable GLB backend — a
         // legitimate skip) versus models rendered but none of them carried
@@ -3824,6 +3857,8 @@ async function main() {
           coldEntityH: coldTracked ? coldTracked.h : null,
           coldFloor: coldTracked ? coldTracked.floor : null,
           warmModelH,
+          coldReadiness,
+          warmReadiness,
           zoomedIn,
           zoomedOut,
         };
@@ -3893,13 +3928,14 @@ async function main() {
       // hard lower bound, and a model placed at the raw feed altitude is ~240 m
       // under it.
       const MAX_BELLY_M = 12;
+      console.log(`  display-floor readiness: ${JSON.stringify({ cold: dfTracked.coldReadiness, warm: dfTracked.warmReadiness })}`);
       const dfWarmOnFloor = Number.isFinite(dfTracked.warmModelH)
         && dfTracked.warmModelH >= dfTracked.seeded
         && dfTracked.warmModelH <= dfTracked.seeded + MAX_BELLY_M;
       record('display-floor/placement: a resolved grounded model stands ON the floor, not under it and not hidden',
         !dfTracked.error && dfTracked.modelsRenderingIn > 0 && dfWarmOnFloor,
         dfTracked.error
-          || `warm skin: ${dfTracked.modelsRenderingIn} aaa097 model(s) rendering at ${Number(dfTracked.warmModelH).toFixed(1)} m on a ${Number(dfTracked.seeded).toFixed(1)} m floor (belly headroom ${MAX_BELLY_M} m; raw feed altitude was ${Number(dfTracked.rawH).toFixed(1)} m)`);
+          || `warm skin: ${dfTracked.modelsRenderingIn} aaa097 model(s) rendering at ${Number.isFinite(dfTracked.warmModelH) ? dfTracked.warmModelH.toFixed(1) + ' m' : 'no placement'} on a ${Number(dfTracked.seeded).toFixed(1)} m floor (belly headroom ${MAX_BELLY_M} m; raw feed altitude was ${Number(dfTracked.rawH).toFixed(1)} m)`);
 
       // Skip only when NO model rendered anywhere — that is a browser without a
       // usable GLB backend. Models rendering while none of them is aaa097's is
@@ -4422,27 +4458,50 @@ async function main() {
 
     }
 
-    // Cleanup: drop the synthetics and the seeded cells so nothing leaks into
-    // the run-wide console/HTTP checks below.
+    } catch (error) {
+      dfPrimaryFailure = error;
+      throw error;
+    } finally {
+    // Restore the sampled surface owners even when a scenario throws. The
+    // browser may intentionally stay open after a failed debugging run.
     await evalPage(async () => {
       const gev = window.__godsEyeView;
       const v = gev.viewer;
       const fl = gev.dataManager.layers.get('flights').module;
-      window.__SYNTH.flights = window.__SYNTH.flights.filter((f) => !/^aaa09/.test(f.icao));
-      fl.stopTracking();
-      window.__dfGf?._clearMeshFloorCellsForTest();
-      delete v.scene.sampleHeight;
-      if (gev.tileset) {
-        const prior = window.__dfPriorTilesLoadedDescriptor;
-        if (prior) Object.defineProperty(gev.tileset, 'tilesLoaded', prior);
-        else delete gev.tileset.tilesLoaded;
-      }
-      delete window.__dfPriorTilesLoadedDescriptor;
+      const failures = [];
+      const attempt = async (label, operation) => {
+        try { await operation(); } catch (error) { failures.push(`${label}: ${error?.message || error}`); }
+      };
+      await attempt('remove synthetics', () => {
+        window.__SYNTH.flights = window.__SYNTH.flights.filter((f) => !/^aaa09/.test(f.icao));
+      });
+      await attempt('stop tracking', () => fl.stopTracking());
+      await attempt('clear floor cells', () => window.__dfGf?._clearMeshFloorCellsForTest());
+      await attempt('restore sampleHeight', () => {
+        if (!Object.hasOwn(window, '__dfPriorSampleHeightDescriptor')) return;
+        const prior = window.__dfPriorSampleHeightDescriptor;
+        if (prior) Object.defineProperty(v.scene, 'sampleHeight', prior);
+        else delete v.scene.sampleHeight;
+      });
+      for (const [index, { target, prior }] of (window.__dfPriorTilesLoadedDescriptors || []).entries())
+        await attempt(`restore tilesLoaded owner ${index}`, () => {
+          if (prior) Object.defineProperty(target, 'tilesLoaded', prior);
+          else delete target.tilesLoaded;
+        });
+      delete window.__dfPriorTilesLoadedDescriptors;
+      delete window.__dfPriorSampleHeightDescriptor;
+      delete window.__dfGroundDiagnostics;
       delete window.__dfSkinSamples;
       delete window.__dfSkinM;
       delete window.__dfObserveTrackedExit;
-      await fl.update(v);
+      await attempt('refresh flights', () => fl.update(v));
+      if (failures.length) throw new Error(`display-floor cleanup failed: ${failures.join(' | ')}`);
+    }).catch((cleanupError) => {
+      if (dfPrimaryFailure)
+        throw new AggregateError([dfPrimaryFailure, cleanupError], 'display-floor scenario and cleanup failed');
+      throw cleanupError;
     });
+    }
 
 
 

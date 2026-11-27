@@ -8,6 +8,8 @@ import {
   ZOOM_IN_HINT,
 } from './lineCoverage.js';
 import { resolveFilter } from './filter.js';
+import { metresBetween } from './view.js';
+import { viewSummaryForLayer } from '../../data/entityContext.js';
 import { encodeCoverageTile } from './providers/mapillary/coverageFixture.mjs';
 import { decodeCoverageTile } from './providers/mapillary/decode.js';
 import {
@@ -251,6 +253,10 @@ test("a sequence's parts are drawn apart, every one picking the sequence", async
       [`${pick}#1`, pick],
     ],
   );
+  assert.ok(
+    items[1].meta.coordinates[0][1] > items[0].meta.coordinates[0][1],
+    'each hit carries only its own decoded part',
+  );
   coverage.clear();
 });
 
@@ -447,6 +453,15 @@ test('the per-tile cap applies after the imagery filter, so a dense tile keeps i
   assert.equal(entry.sequences.size, cap, 'all imagery is capped as before');
   assert.ok(entry.sequences.has('flat-699'), 'the newest flat line is drawn');
   assert.equal(entry.sequences.has('pano-299'), false, 'over the cap');
+  const visible = () =>
+    coverage.linesNear(centre, 1).some((row) => row.sequenceId === 'pano-299');
+  assert.equal(visible(), false);
+  const before = coverage.stats().drawnVersion;
+  coverage.highlight('pano-299');
+  assert.ok(coverage.stats().drawnVersion > before);
+  assert.equal(visible(), true);
+  coverage.highlight(null);
+  assert.equal(visible(), false);
   coverage.clear();
 });
 
@@ -480,6 +495,284 @@ test('a sequence that crosses a tile edge is counted once', async () => {
   await settle();
   assert.equal(coverage.stats().count, 3, 'across, plus one per tile');
   coverage.clear();
+});
+
+test('the lines near a point: each sequence once, at its nearest point, within the radius, nearest first', async () => {
+  const { viewer, source, coverage, centre } = setup();
+  const { east } = tileBounds(centre.tile.x, centre.tile.y, 14);
+  viewer.view.lon = east;
+  coverage.refresh();
+  // One line crosses the edge (in both tiles), one is 0.002° east of it.
+  const across = [
+    [
+      [east - 0.001, centre.lat],
+      [east + 0.001, centre.lat],
+    ],
+  ];
+  const beyond = [
+    [
+      [east + 0.002, centre.lat],
+      [east + 0.003, centre.lat],
+    ],
+  ];
+  for (const call of source.calls) {
+    const [, x, y] = call.key.split('/').map(Number);
+    call.resolve(
+      encodeCoverageTile(
+        { x, y, z: 14 },
+        {
+          sequences: [
+            { id: 'across', parts: across },
+            ...(x === centre.tile.x ? [] : [{ id: 'beyond', parts: beyond }]),
+          ],
+        },
+      ),
+    );
+  }
+  await settle();
+  assert.equal(coverage.stats().count, 2);
+  const here = { lat: centre.lat, lon: east - 0.001 };
+  const near = coverage.linesNear(here, 1);
+  assert.deepEqual(
+    near.map((line) => line.sequenceId),
+    ['across', 'beyond'],
+    'every line the Data Layers row counts, once each, nearest first',
+  );
+  assert.ok(near[0].km < 0.001, 'at the point of the line nearest here');
+  assert.ok(Math.abs(near[1].lon - (east + 0.002)) < 1e-6);
+  assert.equal(
+    coverage.linesNear(here, 1),
+    near,
+    'the same question is not worked out again',
+  );
+  assert.deepEqual(
+    coverage.linesNear(here, 0.1).map((line) => line.sequenceId),
+    ['across'],
+    'a line past the radius is left out',
+  );
+  coverage.clear();
+  assert.deepEqual(
+    coverage.linesNear(here, 1),
+    [],
+    'nothing drawn, nothing near',
+  );
+});
+
+test('the nearest point can lie inside the segment between chunks across the dateline', () => {
+  const { state, coverage } = setup();
+  const sequence = {
+    id: 'cross',
+    parts: [[...Array(32).fill([179.998, 0]), [-179.998, 0]]],
+  };
+  state.coverage.tiles.set('tile', {
+    sequences: new Map([['cross', sequence]]),
+  });
+  const [line] = coverage.linesNear({ lon: 180, lat: 0.0001 }, 0.05);
+  assert.ok(line && Math.abs(line.km - 0.011054) < 0.00001);
+  assert.equal(Math.abs(line.lon), 180);
+  assert.equal(line.lat, 0);
+  const rect = { west: 179.999, east: -179.999, south: -0.001, north: 0.001 };
+  const [visible] = coverage.linesNear(
+    { lon: 179.998, lat: 0 },
+    Infinity,
+    rect,
+  );
+  assert.equal(visible?.sequenceId, 'cross');
+  assert.ok(Math.abs(visible.lon - rect.west) < 1e-8);
+  assert.deepEqual(
+    coverage.linesNear({ lon: 0, lat: 0 }, Infinity, {
+      ...rect,
+      west: -1,
+      east: 1,
+    }),
+    [],
+  );
+});
+
+test('repeated sequence features keep all drawn parts and count once', async () => {
+  const { source, coverage, centre } = setup();
+  coverage.refresh();
+  const part = (offset) => [
+    [centre.lon - 0.001, centre.lat + offset],
+    [centre.lon + 0.001, centre.lat + offset],
+  ];
+  for (const call of source.calls) {
+    const [z, x, y] = call.key.split('/').map(Number);
+    call.resolve(
+      encodeCoverageTile(
+        { z, x, y },
+        {
+          sequences: [
+            { id: 'same', capturedAt: 1700000000000, parts: [part(0)] },
+            { id: 'same', capturedAt: 1700000000000, parts: [part(0.003)] },
+          ],
+        },
+      ),
+    );
+  }
+  await settle();
+  const rect = {
+    west: centre.lon - 0.002,
+    east: centre.lon + 0.002,
+    south: centre.lat - 0.001,
+    north: centre.lat + 0.001,
+  };
+  const visible = () => coverage.linesNear(centre, Infinity, rect);
+  assert.deepEqual(
+    visible().map((row) => row.sequenceId),
+    ['same'],
+  );
+  assert.ok(visible()[0].km < 0.01);
+  coverage.highlight('same');
+  assert.deepEqual(
+    visible().map((row) => row.sequenceId),
+    ['same'],
+  );
+  assert.equal(coverage.stats().count, 1);
+  coverage.clear();
+});
+
+test('counts a drawn sequence clipped to a viewport edge', () => {
+  const { state, coverage } = setup();
+  const id = 'on-edge';
+  const sequence = {
+    id,
+    parts: [
+      [
+        [0.0009737485572230071, 51.476025415544398],
+        [-0.00018275678581558172, 51.477969294237439],
+      ],
+    ],
+  };
+  state.coverage.tiles.set('tile', { sequences: new Map([[id, sequence]]) });
+  const layer = { id: 'street-level', name: 'Street Level', enabled: true };
+  const module = {
+    getViewRecords(_, { center, rect }) {
+      return coverage.linesNear(center, Infinity, rect).map((line) => ({
+        ...line,
+        id: line.sequenceId,
+      }));
+    },
+  };
+  const dm = { layers: new Map([[layer.id, { module }]]) };
+  const rect = { west: 0.0003, east: 0.0023, south: 51.477, north: 51.479 };
+  const center = { lat: 51.478, lon: 0.0013 };
+  const visible = viewSummaryForLayer(dm, layer, rect, center, {
+    includeEmpty: true,
+    includeDrawnCoverage: true,
+  });
+  assert.equal(visible.count, 1);
+  assert.equal(visible.items[0].identity.record.lon, rect.west);
+});
+
+test('drawn-line lookup matches point-only parts and preserves their distance bound for connected lines', () => {
+  const state = { coverage: freshCoverage({ keyless: true }), services: {} };
+  let seed = 1234567;
+  const random = () => (seed = (1664525 * seed + 1013904223) >>> 0) / 2 ** 32;
+  const sequences = Array.from({ length: 30 }, (_, id) => ({
+    id: String(id),
+    capturedAt: id,
+    isPano: id % 2 === 0,
+    parts: Array.from({ length: 2 }, () =>
+      Array.from({ length: 97 }, () => [
+        170 + random() * 30,
+        id < 15 ? 85 + random() * 5 : -90 + random() * 5,
+      ]),
+    ),
+  }));
+  // The closest point can arrive late, after a whole distant chunk.
+  sequences.push({
+    id: 'late',
+    parts: [
+      Array.from({ length: 64 }, (_, i) =>
+        i < 32 ? [170, 85] : [180.5 + (i - 32) * 0.0001, 89.5],
+      ),
+    ],
+  });
+  // A tie spanning chunk boundaries keeps the first point, including -180/180.
+  sequences.push({
+    id: 'tie',
+    parts: [Array.from({ length: 65 }, (_, i) => [i === 0 ? -180 : 180, 89])],
+  });
+  const entries = [sequences.slice(0, 20), sequences.slice(10)];
+  entries.forEach((rows, i) =>
+    state.coverage.tiles.set(String(i), {
+      sequences: new Map(rows.map((sequence) => [sequence.id, sequence])),
+    }),
+  );
+  const coverage = createLineCoverage({
+    state,
+    tuning: { maxTiles: 2, maxSequences: 100 },
+    messages: {},
+    colors: {},
+  });
+  const reference = (point, radiusKm) => {
+    const best = new Map();
+    for (const rows of entries)
+      for (const sequence of rows) {
+        let closest = best.get(sequence.id)?.metres ?? Infinity;
+        let at = null;
+        for (const part of sequence.parts)
+          for (const [lon, lat] of part) {
+            const metres = metresBetween(point, { lat, lon });
+            if (metres < closest) {
+              closest = metres;
+              at = { lat, lon };
+            }
+          }
+        if (at && closest <= radiusKm * 1000)
+          best.set(sequence.id, { sequence, metres: closest, ...at });
+      }
+    return [...best.values()]
+      .sort((a, b) => a.metres - b.metres)
+      .map(({ sequence, metres, lat, lon }) => ({
+        sequenceId: sequence.id,
+        lat,
+        lon,
+        km: metres / 1000,
+        capturedAt: sequence.capturedAt || 0,
+        isPano: sequence.isPano === true,
+      }));
+  };
+  const isolatedState = {
+    ...state,
+    coverage: freshCoverage({ keyless: true }),
+  };
+  for (const [id, entry] of state.coverage.tiles) {
+    isolatedState.coverage.tiles.set(id, {
+      sequences: new Map(
+        [...entry.sequences].map(([key, seq]) => [
+          key,
+          {
+            ...seq,
+            parts: seq.parts.flatMap((part) => part.map((vertex) => [vertex])),
+          },
+        ]),
+      ),
+    });
+  }
+  const isolated = createLineCoverage({
+    state: isolatedState,
+    tuning: { maxTiles: 2, maxSequences: 100 },
+    messages: {},
+    colors: {},
+  });
+  for (const point of [
+    { lat: 89, lon: -180 },
+    { lat: 89.5, lon: -179.5 },
+    { lat: -89.5, lon: 181 },
+    { lat: 90, lon: 0 },
+  ]) {
+    for (const radius of [1, 100, 1000]) {
+      const vertices = reference(point, radius);
+      assert.deepEqual(isolated.linesNear(point, radius), vertices);
+      const lines = new Map(
+        coverage.linesNear(point, radius).map((row) => [row.sequenceId, row]),
+      );
+      for (const vertex of vertices)
+        assert.ok(lines.get(vertex.sequenceId)?.km <= vertex.km + 1e-10);
+    }
+  }
 });
 
 /** A camera over a 100×100 canvas with a 60°×40° view (see rayCamera). */
@@ -866,4 +1159,28 @@ test('a new selection hands the highlight over; a filter that hides it lets the 
   assert.equal(state.coverage.highlight, null);
   assert.equal(shown('a'), true, 'the tile draws a itself again');
   coverage.clear();
+});
+
+test('a coverage line is placed at its nearest visible point', () => {
+  const { state, coverage } = setup();
+  const sequence = {
+    id: 'cross',
+    parts: [
+      [
+        [-1, 0],
+        [1, 0],
+      ],
+    ],
+  };
+  state.coverage.tiles.set('tile', {
+    sequences: new Map([[sequence.id, sequence]]),
+  });
+  const point = { lat: 0.5, lon: 0 };
+  const rect = { west: -1, east: 1, south: -1, north: 1 };
+  assert.equal(coverage.linesNear(point, Infinity, rect)[0].lon, 0);
+  const [line] = coverage.linesNear(point, Infinity, rect, {
+    visible: (at) => at.lon > 0.4,
+    key: 'east',
+  });
+  assert.ok(line.lon > 0.4 && line.lon < 0.41);
 });

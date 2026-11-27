@@ -1,7 +1,8 @@
+import '../testSupport/registerDom.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { setImmediate } from 'node:timers/promises';
-import { createPinia } from 'pinia';
+import { createPinia, setActivePinia } from 'pinia';
 import { nextTick, ref, watch } from 'vue';
 import { OrbitController } from '../orbit.js';
 import { bhoteKoshiPlaceRecords } from '../data/bhoteKoshiLocator.js';
@@ -11,15 +12,32 @@ import { createControls as createWildlifeControls } from '../layers/wildlifeSigh
 import { normalizeInatObservations } from '../layers/wildlifeSightings/records.js';
 import { LocationSearch } from './locationSearch.js';
 import { NavigationController } from './navigationController.js';
+import { controlCctv } from '../voice/gevActions.js';
+import { CCTV_SELECTED_EVENT } from './cctvEvents.js';
 import { installEntityContext } from './entityContextBridge.js';
 import { createLayerCounts } from './layerCounts.js';
+import { announcePlacePick, installPlacePick } from './placePick.js';
+import { holdAirportPack } from '../testSupport/holdAirportPack.mjs';
+import { useContextStore } from './stores/context.js';
+import { useCockpitStore } from './stores/cockpit.js';
 import { useEntityCardStore } from './stores/entityCard.js';
 import { useLayerCountsStore } from './stores/layerCounts.js';
 import { useOmnibarStore } from './stores/omnibar.js';
+import { useDockedStore } from './stores/docked.js';
 import { usePanelChromeStore } from './stores/panelChrome.js';
+import { useSceneStore } from './stores/scenes.js';
 import { useSpaceMissionsStore } from './stores/spaceMissions.js';
-import { bindRenderer, findCamera } from '../render/rendererOf.js';
+import { useVoiceStore } from './stores/voice.js';
+import {
+  STREET_LEVEL_PHOTO_EVENT,
+  STREET_LEVEL_PHOTO_REQUEST_EVENT,
+} from './streetLevelEvents.js';
 import { fakeInput } from '../input/testDoubles.mjs';
+import { fakeCameraPort } from '../testSupport/fakeCameraPort.mjs';
+import { bindRenderer, findCamera } from '../render/rendererOf.js';
+import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
+import * as context from '../data/contextStore.js';
+import { createEarthquakesLayer } from '../layers/earthquakes/index.js';
 import {
   _resetSelectionForTest,
   claimSelection,
@@ -27,10 +45,27 @@ import {
   releaseSelection,
 } from '../data/clickSelect.js';
 import {
+  registerClickClaim,
   registerPickOwner,
   setClickCardHitTest,
+  unregisterClickClaim,
   unregisterPickOwner,
 } from '../data/pickRegistry.js';
+
+const AUSTIN_AIRPORTS = [
+  [
+    'KAUS',
+    'AUS',
+    'Austin–Bergstrom International Airport',
+    30.1945,
+    -97.6699,
+    'large',
+    'Austin',
+    'US',
+    542,
+    2,
+  ],
+];
 
 // The card or label painted on top takes the click: Context names nothing
 // under it, exact or nearby, an acting owner's item or a passive one, and
@@ -69,13 +104,14 @@ test('Context names nothing under a card painted on top, and keeps its card', (t
   };
   const input = fakeInput(viewer);
   const pinia = createPinia();
+  const dataManager = {
+    isEnabled: () => true,
+    layers: new Map(),
+    getAll: () => [],
+  };
   const disconnect = installEntityContext({
     viewer,
-    getDataManager: () => ({
-      isEnabled: () => true,
-      layers: new Map(),
-      getAll: () => [],
-    }),
+    getDataManager: () => dataManager,
     pinia,
   });
   t.after(() => {
@@ -106,36 +142,276 @@ test('Context names nothing under a card painted on top, and keeps its card', (t
   assert.equal(clears, cleared, 'a card over open map is not open map');
 });
 
+// The card offers the orbital view only for a satellite that can be ridden;
+// debris (a rocket body) leads with Follow instead. Aircraft keep the cockpit.
+test('the satellite card offers and enters orbit only for its eligible subject', async (t) => {
+  const viewer = { scene: { pick: () => null, drillPick: () => [] } };
+  const input = fakeInput(viewer);
+  const pinia = createPinia();
+  const rideable = new Set(['25544']);
+  const dataManager = {
+    isEnabled: () => true,
+    layers: new Map([
+      [
+        'satellites',
+        { module: { cockpitEnterable: (id) => rideable.has(String(id)) } },
+      ],
+    ]),
+    getAll: () => [],
+  };
+  const disconnect = installEntityContext({
+    viewer,
+    getDataManager: () => dataManager,
+    pinia,
+  });
+  t.after(() => {
+    disconnect();
+    input.destroy();
+  });
+  const store = useEntityCardStore(pinia);
+  const satellite = (id) => ({
+    key: `satellites:${id}`,
+    layerId: 'satellites',
+    kind: 'satellite',
+    identity: { layerId: 'satellites', id, record: { noradId: id } },
+  });
+  store.card = satellite('25544');
+  assert.equal(store.canCockpit(), false, 'no action runner yet');
+  useOmnibarStore(pinia).connectRunner(async () => ({ ok: true }));
+  assert.equal(store.canCockpit(), true, 'the ISS can be ridden');
+  assert.equal(store.canFollow(), true);
+  store.card = satellite('26070');
+  assert.equal(store.canCockpit(), false, 'debris cannot');
+  assert.equal(store.canFollow(), true, 'debris is still followed');
+  store.card = {
+    key: 'flights:abc123',
+    layerId: 'flights',
+    kind: 'aircraft',
+    identity: { layerId: 'flights', id: 'abc123' },
+  };
+  assert.equal(store.canCockpit(), true, 'an aircraft keeps its cockpit');
+
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const cockpit = useCockpitStore(pinia);
+  const entered = t.mock.fn();
+  cockpit.connect({ enter: entered });
+  const card = satellite('25544');
+  store.card = card;
+  const ready = (id) =>
+    cockpit.publishPresence({
+      entryAvailable: true,
+      entryKind: 'satellite',
+      entryId: id,
+    });
+  const poll = async () => {
+    t.mock.timers.tick(100);
+    await setImmediate();
+  };
+
+  ready('99999');
+  store.cockpit();
+  await setImmediate();
+  await poll();
+  assert.equal(entered.mock.callCount(), 0, 'another satellite is ready');
+  ready('25544');
+  await poll();
+  assert.deepEqual(
+    entered.mock.calls.map((call) => call.arguments),
+    [[card.identity]],
+  );
+
+  ready('99999');
+  store.cockpit();
+  await setImmediate();
+  store.card = satellite('26070');
+  ready('25544');
+  await poll();
+  assert.equal(entered.mock.callCount(), 1, 'a new pick cancels the wait');
+});
+
+// A vessel, a train or a bus offers its own view (Bridge or Cab view) only
+// while the Cockpit says that very item's layer can be entered; static items
+// never do.
+test('a moving item offers its own view only for the exact entry candidate', (t) => {
+  const viewer = { scene: { pick: () => null, drillPick: () => [] } };
+  const input = fakeInput(viewer);
+  const pinia = createPinia();
+  const dataManager = {
+    isEnabled: () => true,
+    layers: new Map(),
+    getAll: () => [],
+  };
+  const disconnect = installEntityContext({
+    viewer,
+    getDataManager: () => dataManager,
+    pinia,
+  });
+  t.after(() => {
+    disconnect();
+    input.destroy();
+  });
+  const store = useEntityCardStore(pinia);
+  const cockpit = useCockpitStore(pinia);
+  const item = (layerId, id) => ({
+    key: `${layerId}:${id}`,
+    layerId,
+    kind: 'item',
+    identity: { layerId, id },
+  });
+  store.card = item('ais-live-vessels', '366999000');
+  cockpit.publishPresence({ entryAvailable: false, entryLayerId: null });
+  assert.equal(
+    store.canCockpit(),
+    false,
+    'not offered until it can be entered',
+  );
+  cockpit.publishPresence({
+    entryAvailable: true,
+    entryLayerId: 'ais-live-vessels',
+    entryId: '366999000',
+  });
+  assert.equal(store.canCockpit(), true, 'the bridge view is offered');
+  const asked = [];
+  const identity = store.card.identity;
+  cockpit.connect({ enter: (subject) => asked.push(subject) });
+  store.cockpit();
+  assert.deepEqual(asked, [identity], 'it asks Cockpit to enter this subject');
+  store.card = item('ais-live-vessels', '366999001');
+  assert.equal(
+    store.canCockpit(),
+    false,
+    'another vessel in the same layer is not this item',
+  );
+  store.cockpit();
+  assert.deepEqual(asked, [identity], 'the other vessel cannot request entry');
+  store.card = item('rail', 'train-9');
+  assert.equal(store.canCockpit(), false, 'another layer: not this item');
+  cockpit.publishPresence({
+    entryAvailable: true,
+    entryLayerId: 'rail',
+    entryId: 'train-9',
+  });
+  assert.equal(store.canCockpit(), true, 'the cab view is offered');
+  store.card = item('fires', 'f1');
+  assert.equal(store.canCockpit(), false, 'a fire never is');
+});
+
+// The card says Following only while the camera follows the card's own item,
+// whoever started or ended the follow: taking hold shows at once, letting go
+// once the follow has stayed off for a moment, and following something else
+// is not following the card.
+test("the card's Following matches what the camera follows", (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const viewer = { scene: { pick: () => null, drillPick: () => [] } };
+  const { port } = fakeCameraPort();
+  const listeners = new Set();
+  let followed = null;
+  const camera = {
+    ...port,
+    get followed() {
+      return followed;
+    },
+    follow(target) {
+      followed = target;
+      for (const cb of [...listeners]) cb();
+    },
+    on(event, cb, options) {
+      if (event !== 'followChanged') return port.on(event, cb, options);
+      listeners.add(cb);
+      return () => listeners.delete(cb);
+    },
+  };
+  const unbind = bindRenderer(viewer, { camera });
+  const input = fakeInput(viewer);
+  const pinia = createPinia();
+  const dataManager = {
+    isEnabled: () => true,
+    layers: new Map(),
+    getAll: () => [],
+  };
+  const disconnect = installEntityContext({
+    viewer,
+    getDataManager: () => dataManager,
+    pinia,
+  });
+  t.after(() => {
+    disconnect();
+    input.destroy();
+    unbind();
+  });
+  const store = useEntityCardStore(pinia);
+  store.card = {
+    key: 'flights:abc123',
+    layerId: 'flights',
+    identity: { id: 'abc123' },
+    title: 'UPS668',
+  };
+  assert.equal(store.isFollowing(), false, 'not before the camera follows');
+
+  camera.follow({ key: 'flights:abc123' });
+  assert.equal(store.isFollowing(), true, 'the camera follows the card');
+
+  camera.follow(null);
+  assert.equal(store.isFollowing(), true, 'a moment to take hold again');
+  t.mock.timers.tick(300);
+  assert.equal(store.isFollowing(), false, 'the camera let go');
+
+  camera.follow({ key: 'flights:abc123' });
+  camera.follow({ key: 'flights:other9' });
+  t.mock.timers.tick(300);
+  assert.equal(store.isFollowing(), false, 'following another plane');
+});
+
 // A vessel's layer announces its selection with the context store's id; the
 // card names it by the vessel's own id, as a click on it does.
-test('a vessel announced by its layer is named by its own id', (t) => {
-  // The page's events, which Node lacks.
-  const events = new EventTarget();
-  for (const name of [
-    'addEventListener',
-    'removeEventListener',
-    'dispatchEvent',
-  ])
-    globalThis[name] = events[name].bind(events);
-  t.after(() => {
-    for (const name of [
-      'addEventListener',
-      'removeEventListener',
-      'dispatchEvent',
-    ])
-      delete globalThis[name];
+test('News list selection keeps article ownership while a globe selection opens its card', (t) => {
+  const viewer = { scene: { pick: () => null, drillPick: () => [] } };
+  const input = fakeInput(viewer);
+  const pinia = createPinia();
+  const disconnect = installEntityContext({
+    viewer,
+    pinia,
+    getDataManager: () => ({ layers: new Map(), getAll: () => [] }),
   });
+  t.after(() => {
+    disconnect();
+    input.destroy();
+  });
+  const select = t.mock.fn();
+  useEntityCardStore(pinia).select = select;
+  const record = {
+    layerId: 'news',
+    id: 'news-report:one',
+    latitude: 1,
+    longitude: 2,
+  };
+  globalThis.dispatchEvent(
+    new CustomEvent('gev:entity-selected', {
+      detail: { ...record, fromNewsList: true },
+    }),
+  );
+  assert.equal(select.mock.callCount(), 0);
+  globalThis.dispatchEvent(
+    new CustomEvent('gev:entity-selected', { detail: record }),
+  );
+  assert.equal(select.mock.callCount(), 1);
+});
+
+test('a vessel announced by its layer is named by its own id', (t) => {
   const pinia = createPinia();
   const viewer = { scene: { pick: () => null, drillPick: () => [] } };
   const input = fakeInput(viewer);
+  const dataManager = {
+    isEnabled: () => true,
+    layers: new Map(),
+    getAll: () => [],
+  };
+  const revealContext = t.mock.fn();
   const disconnect = installEntityContext({
     viewer,
-    getDataManager: () => ({
-      isEnabled: () => true,
-      layers: new Map(),
-      getAll: () => [],
-    }),
+    getDataManager: () => dataManager,
     pinia,
+    revealContext,
   });
   t.after(() => {
     disconnect();
@@ -160,7 +436,24 @@ test('a vessel announced by its layer is named by its own id', (t) => {
       detail: { layerId: 'fires', id: 'fire:1', latitude: 1, longitude: 2 },
     }),
   );
-  assert.deepEqual(named, ['5fdca702', 'fire:1']);
+  const fire = { layerId: 'fires', id: 'fire:1' };
+  store.card = { layerId: 'fires', identity: fire };
+  globalThis.dispatchEvent(
+    new CustomEvent('gev:entity-selected', { detail: fire }),
+  );
+  assert.equal(revealContext.mock.callCount(), 0, 'a feed echo stays quiet');
+  registerClickClaim('fires', () => ({
+    sourceId: fire.layerId,
+    entryId: fire.id,
+  }));
+  t.after(() => unregisterClickClaim('fires'));
+  input.click();
+  assert.equal(
+    revealContext.mock.callCount(),
+    1,
+    'picking the same label reveals its card',
+  );
+  assert.deepEqual(named, ['5fdca702', 'fire:1'], 'Back history is preserved');
 });
 
 test('Context keeps the selected source vessel when a different hull shares its MMSI', async (t) => {
@@ -295,6 +588,705 @@ for (const [id, keyed] of [
     assert.equal(store.card.lon, restoredLon);
   });
 }
+
+test('card Fly to uses the item selection owner and camera ownership policy', (t) => {
+  const events = new EventTarget();
+  for (const name of [
+    'addEventListener',
+    'removeEventListener',
+    'dispatchEvent',
+  ]) {
+    const previous = globalThis[name];
+    globalThis[name] = events[name].bind(events);
+    t.after(() => {
+      if (previous) globalThis[name] = previous;
+      else delete globalThis[name];
+    });
+  }
+  const viewer = { scene: { pick: () => null, drillPick: () => [] } };
+  const input = fakeInput(viewer);
+  const pinia = createPinia();
+  const { port } = fakeCameraPort();
+  let followed = null;
+  let navigationHandoffs = 0;
+  const revealContext = t.mock.fn();
+  const flown = [];
+  const selected = [];
+  const camera = {
+    ...port,
+    get followed() {
+      return followed;
+    },
+    flyToBounds: (...args) => flown.push(args),
+  };
+  const unbind = bindRenderer(viewer, { camera });
+  let enabled = true;
+  const manager = {
+    isEnabled: () => enabled,
+    getAll: () => [],
+    layers: new Map([
+      [
+        'ais-live-vessels',
+        {
+          module: {
+            getAnalystRecords: () => [
+              {
+                id: 'item-B',
+                vesselId: 'item-B',
+                name: 'SHIP B',
+                lat: 52,
+                lon: 1,
+              },
+            ],
+            selectById: (id) => {
+              selected.push(['vessel', id]);
+              globalThis.dispatchEvent(
+                new CustomEvent('gev:entity-selected', {
+                  detail: {
+                    layerId: 'ais-live-vessels',
+                    id: `ais-${id}`,
+                    properties: { vesselId: id },
+                    latitude: 52,
+                    longitude: 1,
+                  },
+                }),
+              );
+            },
+          },
+        },
+      ],
+      ['rail', { module: { focusTrain: (id) => selected.push(['rail', id]) } }],
+      [
+        'transit',
+        { module: { focusVehicle: (id) => selected.push(['transit', id]) } },
+      ],
+      [
+        'cctv',
+        {
+          module: {
+            focusCamera: (id) => {
+              selected.push(['camera', id]);
+              return id === 'missing' ? 'no-active-camera' : 'focused';
+            },
+          },
+        },
+      ],
+    ]),
+  };
+  const disconnect = installEntityContext({
+    viewer,
+    getDataManager: () => manager,
+    pinia,
+    revealContext,
+    supersedeDeferredNavigation: () => {
+      navigationHandoffs++;
+    },
+  });
+  t.after(() => {
+    disconnect();
+    input.destroy();
+    unbind();
+    document.body.classList.remove('cockpit-mode');
+  });
+  const store = useEntityCardStore(pinia);
+  const card = (layerId, id) => ({
+    key: `${layerId}:${id}`,
+    layerId,
+    kind: 'item',
+    identity: { layerId, id },
+    lat: 52,
+    lon: 1,
+  });
+  for (const layer of ['ais-live-vessels', 'rail', 'transit']) {
+    store.card = card(layer, 'item-B');
+    store.flyTo();
+  }
+  assert.equal(
+    revealContext.mock.callCount(),
+    0,
+    'a vessel selection echo does not reveal Context',
+  );
+  assert.deepEqual(
+    selected,
+    [
+      ['vessel', 'item-B'],
+      ['rail', 'item-B'],
+      ['transit', 'item-B'],
+    ],
+    'a Nearby/pinned card selects its own item before a ride is offered',
+  );
+  assert.equal(flown.length, 2, 'rail already focuses through its layer');
+  manager.layers.get('rail').module.focusTrain = () => false;
+  store.card = card('rail', 'missing');
+  assert.equal(store.flyTo(), true);
+  assert.equal(
+    flown.length,
+    3,
+    'a missing train still flies to its saved position',
+  );
+  assert.equal(
+    store.open(
+      { layerId: 'ais-live-vessels', id: 'item-B' },
+      { fromPin: true },
+    ),
+    true,
+  );
+  assert.equal(store.card.identity.id, 'item-B');
+  assert.equal(
+    store.fromPin,
+    true,
+    'the layer announcement preserves the pin ownership',
+  );
+  selected.length = 0;
+  flown.length = 0;
+  store.card = card('cctv', 'camera-B');
+  navigationHandoffs = 0;
+  followed = { key: 'flights:aircraft-A' };
+  assert.equal(store.flyTo(), 'tracking-holds-view');
+  followed = null;
+  document.body.classList.add('cockpit-mode');
+  assert.equal(store.flyTo(), 'cockpit-active');
+  document.body.classList.remove('cockpit-mode');
+  assert.deepEqual(
+    selected,
+    [],
+    'refused focus does not call the camera layer',
+  );
+  assert.deepEqual(flown, [], 'refused focus never reaches the generic flight');
+  assert.equal(
+    navigationHandoffs,
+    0,
+    'a refused camera cannot take over navigation',
+  );
+  assert.equal(store.flyTo(), 'focused');
+  assert.equal(
+    navigationHandoffs,
+    1,
+    'a successful camera flight supersedes older work',
+  );
+  assert.deepEqual(
+    selected,
+    [['camera', 'camera-B']],
+    'the live camera owns free-view focus',
+  );
+  store.card = card('cctv', 'missing');
+  assert.equal(store.flyTo(), true);
+  assert.equal(
+    flown.length,
+    1,
+    'a missing camera still flies to its saved position',
+  );
+  selected.length = 0;
+  flown.length = 0;
+  enabled = false;
+  manager.layers.set('flights', { module: {} });
+  useOmnibarStore(pinia).connectRunner(async () => ({ ok: true }));
+  store.card = card('flights', 'saved-aircraft');
+  assert.equal(store.canFollow(), false, 'a disabled layer cannot follow');
+  assert.equal(
+    store.canCockpit(),
+    false,
+    'a disabled layer cannot enter Cockpit',
+  );
+  assert.equal(store.flyTo(), true, 'its saved position can still be framed');
+  flown.length = 0;
+  store.card = card('cctv', 'missing');
+  store.flyTo();
+  assert.equal(
+    selected.length,
+    0,
+    'a pin with its layer off does not wake the camera',
+  );
+  assert.equal(
+    flown.length,
+    1,
+    'an off-layer pin can still fly to its saved location',
+  );
+  flown.length = 0;
+  navigationHandoffs = 0;
+  manager.layers.get('cctv').module.selectCamera = (id) =>
+    selected.push(['activate', id]);
+  const pinned = {
+    layerId: 'cctv',
+    id: 'saved-camera',
+    label: 'Saved camera',
+    lat: 30.271,
+    lon: -97.743,
+  };
+  assert.ok(store.open(pinned, { fromPin: true }));
+  assert.equal(store.card.identity.id, pinned.id);
+  assert.equal(store.fromPin, true);
+  assert.equal(manager.isEnabled('cctv'), false);
+  assert.deepEqual(
+    selected,
+    [],
+    'reopening does not start a feed or focus a live camera',
+  );
+  assert.equal(flown.length, 1, 'reopening frames the saved position');
+  const { lat, lon } = toLonLatH(flown[0][0].center);
+  assert.ok(Math.abs(lat - pinned.lat) < 1e-6);
+  assert.ok(Math.abs(lon - pinned.lon) < 1e-6);
+  assert.equal(navigationHandoffs, 1);
+});
+
+test('aircraft card entry requires successful tracking and keeps the exact subject', async (t) => {
+  const settle = () => setImmediate();
+  const viewer = { scene: { pick: () => null, drillPick: () => [] } };
+  const input = fakeInput(viewer);
+  const pinia = createPinia();
+  const disconnect = installEntityContext({
+    viewer,
+    pinia,
+    getDataManager: () => null,
+  });
+  const store = useEntityCardStore(pinia);
+  const asked = [];
+  const otherPinia = createPinia();
+  const other = t.mock.fn();
+  useCockpitStore(pinia).connect({ enter: (subject) => asked.push(subject) });
+  useCockpitStore(otherPinia).connect({ enter: other });
+  t.after(() => {
+    disconnect();
+    input.destroy();
+  });
+  const identity = { layerId: 'flights', id: 'aabbcc' };
+  const card = { key: 'flights:aabbcc', layerId: 'flights', identity };
+  store.card = card;
+  const commands = [];
+  let result = { ok: false };
+  useOmnibarStore(pinia).connectRunner(async (name) => {
+    commands.push(name);
+    return result;
+  });
+  store.cockpit();
+  await settle();
+  assert.deepEqual(commands, ['track_entity']);
+  assert.deepEqual(asked, []);
+
+  let finish;
+  result = new Promise((resolve) => {
+    finish = resolve;
+  });
+  store.cockpit();
+  store.card = null;
+  finish({ ok: true });
+  await settle();
+  assert.deepEqual(asked, [], 'closing the card cancels entry');
+
+  store.card = card;
+  const tracked = Promise.withResolvers();
+  result = tracked.promise;
+  store.cockpit();
+  setActivePinia(otherPinia);
+  tracked.resolve({ ok: true });
+  await settle();
+  assert.deepEqual(asked, [identity], 'entry carries the card identity');
+  assert.equal(
+    other.mock.callCount(),
+    0,
+    'entry belongs to the originating app',
+  );
+});
+
+// These races use the same navigation generation for a Context action and
+// an airport pick whose catalog request has started but has not settled.
+function airportNavigationFixture(
+  t,
+  manager,
+  camera = fakeCameraPort().port,
+  navigationOptions = () => ({}),
+) {
+  const viewer = { scene: { pick: () => null, drillPick: () => [] } };
+  const input = fakeInput(viewer);
+  const pinia = createPinia();
+  const flown = [];
+  camera.flyToBounds = (bounds) => flown.push(bounds);
+  const unbind = bindRenderer(viewer, { camera });
+  const navigation = new NavigationController({
+    viewer,
+    tracking: {},
+    clearLocation() {},
+    cancelShareSelection: () => true,
+    isCockpitActive: () => false,
+  });
+  const getDataManager = () => manager;
+  const disconnect = installEntityContext({
+    viewer,
+    pinia,
+    getDataManager,
+    supersedeDeferredNavigation: () => navigation._stampNavigation(),
+    ...navigationOptions(navigation),
+  });
+  const stopPlacePick = installPlacePick({
+    pinia,
+    getDataManager,
+    subscribeCameraHandoff: (listener) =>
+      navigation.subscribeCameraHandoff(listener),
+  });
+  const pack = holdAirportPack(t, AUSTIN_AIRPORTS);
+  t.after(() => {
+    stopPlacePick();
+    disconnect();
+    navigation.stop();
+    input.destroy();
+    unbind();
+  });
+  return { pinia, cards: useEntityCardStore(pinia), flown, ...pack };
+}
+
+test('an explicit Context card flight supersedes an airport pick still resolving', async (t) => {
+  const manager = {
+    isEnabled: () => false,
+    getAll: () => [],
+    layers: new Map(),
+  };
+  const { cards, flown, requested, release } = airportNavigationFixture(
+    t,
+    manager,
+  );
+  const key = 'places:current';
+  cards.card = {
+    key,
+    layerId: 'places',
+    kind: 'place',
+    identity: { id: 'current' },
+    lat: 48,
+    lon: 2,
+  };
+  announcePlacePick({
+    name: 'AUS',
+    airport: 'AUS',
+    latitude: 30.19,
+    longitude: -97.67,
+  });
+  await requested;
+
+  assert.equal(cards.flyTo(), true);
+  release();
+  await setImmediate();
+  assert.equal(cards.card.key, key);
+  assert.equal(flown.length, 1);
+});
+
+test('a pending Locate yields to a newer airport pick', (t) =>
+  checkLocateOrder(t, true));
+test('Locate supersedes an airport pick still resolving', (t) =>
+  checkLocateOrder(t, false));
+
+async function checkLocateOrder(t, locateFirst) {
+  // One vessel that leaves its feed; its layer finds it on its track.
+  let inFeed = true;
+  const vessel = { id: 'v1', name: 'ARCADIA', lat: 1, lon: 10 };
+  let finishLocate;
+  const module = {
+    getAnalystRecords: () => (inFeed ? [{ ...vessel }] : []),
+    referenceOf: () => null,
+    selectById() {},
+    locate: async () => {
+      if (locateFirst)
+        await new Promise((resolve) => {
+          finishLocate = resolve;
+        });
+      return { status: 'found', lat: 5, lon: 50 };
+    },
+  };
+  const manager = {
+    isEnabled: (id) => id === 'ais-live-vessels',
+    getAll: () => [],
+    layers: new Map([['ais-live-vessels', { module }]]),
+  };
+  t.after(() => {
+    cards.clear();
+    chrome.detach(owner);
+  });
+  const { pinia, cards, flown, requested, release } = airportNavigationFixture(
+    t,
+    manager,
+  );
+  const chrome = usePanelChromeStore(pinia);
+  const owner = chrome.connect({});
+  chrome.publish(owner, 'global-context-panel', { collapsed: false });
+  assert.equal(cards.select({ layerId: 'ais-live-vessels', id: 'v1' }), true);
+  const key = cards.card.key;
+  inFeed = false;
+  cards.refresh();
+  assert.equal(cards.lost, true, 'out of its feed');
+  const earlier = locateFirst ? cards.locate() : null;
+  announcePlacePick({
+    name: 'AUS',
+    airport: 'AUS',
+    latitude: 30.19,
+    longitude: -97.67,
+  });
+  await requested;
+
+  if (locateFirst) {
+    finishLocate();
+    await earlier;
+    assert.equal(cards.finding, 'idle');
+    assert.equal(flown.length, 0);
+    release();
+    await setImmediate();
+    assert.equal(cards.card.identity.place.airport.ident, 'KAUS');
+    return;
+  }
+  await cards.locate();
+  assert.equal(flown.length, 1, 'Locate flies to where it was found');
+  release();
+  await setImmediate();
+  assert.equal(
+    cards.card.key,
+    key,
+    'the late airport pick does not take the card',
+  );
+  assert.equal(flown.length, 1, 'nor the camera');
+}
+
+test('Fly to on a train the rail layer focuses also supersedes an airport pick still resolving', async (t) => {
+  const { port, emit } = fakeCameraPort();
+  let followed = null;
+  const camera = {
+    ...port,
+    get followed() {
+      return followed;
+    },
+    follow(target) {
+      followed = target;
+      emit('followChanged');
+    },
+  };
+  const order = [];
+  const manager = {
+    isEnabled: (id) => id === 'rail',
+    getAll: () => [],
+    layers: new Map([
+      [
+        'rail',
+        {
+          module: {
+            focusTrain: (id) => {
+              order.push(['focus', id]);
+              followed = { key: `rail:${id}` };
+              emit('followChanged');
+              return true;
+            },
+          },
+        },
+      ],
+    ]),
+  };
+  const { cards, flown, requested, release } = airportNavigationFixture(
+    t,
+    manager,
+    camera,
+    (navigation) => ({
+      navigateToSelection: (fly) => {
+        order.push(['handoff']);
+        navigation._stampNavigation();
+        return fly();
+      },
+      supersedeDeferredNavigation: () => {
+        order.push(['supersede']);
+        return navigation._stampNavigation();
+      },
+    }),
+  );
+  const key = 'rail:train-1';
+  cards.card = {
+    key,
+    layerId: 'rail',
+    kind: 'train',
+    identity: { layerId: 'rail', id: 'train-1' },
+    lat: 48,
+    lon: 2,
+  };
+  announcePlacePick({
+    name: 'AUS',
+    airport: 'AUS',
+    latitude: 30.19,
+    longitude: -97.67,
+  });
+  await requested;
+
+  assert.equal(cards.flyTo(), true);
+  release();
+  await setImmediate();
+  assert.equal(cards.card.key, key, 'the late airport does not take over');
+  assert.deepEqual(
+    order,
+    [['handoff'], ['focus', 'train-1']],
+    'older navigation is retired before the train takes the camera, once',
+  );
+  assert.equal(flown.length, 0, 'the rail layer flies the camera itself');
+  assert.equal(cards.following, key);
+  cards.clear();
+  assert.equal(followed, null, 'closing the card releases its train');
+});
+
+test('a pick refused while the dock restores its photo is not reported as taken', (t) => {
+  const viewer = { scene: { pick: () => null, drillPick: () => [] } };
+  const input = fakeInput(viewer);
+  const pinia = createPinia();
+  let restoring = true;
+  const opened = [];
+  const streetLevel = {
+    getAnalystRecords: () => [
+      { id: 'mapillary:A', name: 'A', lat: 47, lon: 2 },
+      { id: 'mapillary:B', name: 'B', lat: 48, lon: 2 },
+    ],
+    hasDockedPhoto: () => true,
+    dockedPhotoRestoring: () => restoring,
+    openPhoto: (id) => {
+      opened.push(id);
+      return new Promise(() => {});
+    },
+  };
+  const disconnect = installEntityContext({
+    viewer,
+    getDataManager: () => ({
+      isEnabled: () => true,
+      layers: new Map([['street-level', { module: streetLevel }]]),
+      getAll: () => [],
+    }),
+    pinia,
+  });
+  t.after(() => {
+    disconnect();
+    input.destroy();
+  });
+  const original = { layerId: 'street-level', id: 'mapillary:A' };
+  const dock = useDockedStore(pinia);
+  dock.dock({
+    key: 'street-level:mapillary:A',
+    kind: 'street',
+    title: 'A',
+    identity: original,
+  });
+  const store = useEntityCardStore(pinia);
+  assert.equal(store.select(original, { reveal: false }), true);
+  const selected = store.card;
+  const generation = store.selectionGeneration();
+  const reveals = [];
+  const dispatchEvent = globalThis.dispatchEvent;
+  globalThis.dispatchEvent = (event) => {
+    if (event.type === 'gev:context-show-view')
+      reveals.push(event.detail?.inspect);
+    return dispatchEvent?.(event);
+  };
+  t.after(() => {
+    if (dispatchEvent) globalThis.dispatchEvent = dispatchEvent;
+    else delete globalThis.dispatchEvent;
+  });
+  const photo = { id: original.id, lat: 47, lon: 2, requestId: 1 };
+  document.dispatchEvent(
+    new CustomEvent(STREET_LEVEL_PHOTO_REQUEST_EVENT, {
+      detail: { requestId: photo.requestId },
+    }),
+  );
+  document.dispatchEvent(
+    new CustomEvent(STREET_LEVEL_PHOTO_EVENT, { detail: photo }),
+  );
+  assert.deepEqual(reveals, [], 'passive confirmation leaves the tab alone');
+  document.dispatchEvent(
+    new CustomEvent(STREET_LEVEL_PHOTO_EVENT, {
+      detail: { ...photo, revealFromOpen: true },
+    }),
+  );
+  assert.deepEqual(
+    reveals,
+    [true],
+    'explicit OPEN reveals the same docked photo',
+  );
+  assert.equal(store.selectionGeneration(), generation);
+
+  const pick = { layerId: 'street-level', id: 'mapillary:B' };
+  assert.equal(store.open(pick, { follow: false }), false);
+  assert.deepEqual(opened, [], 'the dock is not asked while it restores');
+  assert.equal(dock.view?.key, selected.key);
+  assert.equal(store.card, selected, 'the original card stays selected');
+  assert.equal(store.selectionGeneration(), generation);
+
+  restoring = false;
+  assert.equal(store.open(pick), true);
+  assert.deepEqual(opened, ['mapillary:B']);
+  assert.equal(store.card, selected, 'the original card stays until commit');
+});
+
+// The map's Esc clears the pick only for an Esc nobody else took: not one
+// already handled, not one from a control that takes its own Esc, and not
+// while a dialog that owns its Esc is open.
+test('the map’s Esc leaves the pick to an Esc another owner takes', (t) => {
+  const viewer = { scene: { pick: () => null, drillPick: () => [] } };
+  const input = fakeInput(viewer);
+  const pinia = createPinia();
+  const dataManager = {
+    isEnabled: () => true,
+    layers: new Map(),
+    getAll: () => [],
+  };
+  const disconnect = installEntityContext({
+    viewer,
+    getDataManager: () => dataManager,
+    pinia,
+  });
+  const extra = [];
+  t.after(() => {
+    disconnect();
+    input.destroy();
+    for (const element of extra) element.remove();
+  });
+  const store = useEntityCardStore(pinia);
+  const key = 'street-level:mapillary:A';
+  store.card = {
+    key,
+    layerId: 'street-level',
+    identity: { id: 'mapillary:A' },
+  };
+  const esc = (target, { handled = false } = {}) => {
+    const event = new KeyboardEvent('keydown', {
+      key: 'Escape',
+      bubbles: true,
+      cancelable: true,
+    });
+    if (handled) event.preventDefault();
+    target.dispatchEvent(event);
+    return event;
+  };
+  const add = (attributes) => {
+    const element = document.createElement('div');
+    for (const [name, value] of Object.entries(attributes))
+      element.setAttribute(name, value);
+    extra.push(document.body.appendChild(element));
+    return element;
+  };
+
+  esc(document.body, { handled: true });
+  assert.equal(store.card?.key, key, 'an Esc already handled');
+  const owner = add({ 'data-owns-escape': '' });
+  esc(owner);
+  assert.equal(
+    store.card?.key,
+    key,
+    'an Esc from a control that takes its own',
+  );
+  const popup = add({ role: 'dialog', 'data-owns-escape': '' });
+  esc(document.body);
+  assert.equal(
+    store.card?.key,
+    key,
+    'an Esc on the page while such a dialog is open',
+  );
+  popup.remove();
+  owner.remove();
+  const scenes = useSceneStore(pinia);
+  scenes.publishPanel({ running: true });
+  esc(document.body);
+  assert.equal(store.card?.key, key, 'a playing scene owns this Escape');
+  scenes.publishPanel({ running: false });
+  assert.equal(esc(document.body).defaultPrevented, true);
+  assert.equal(store.card, null, 'an unowned Esc clears the photo card');
+  assert.equal(store.wasDismissed(key), false, 'Esc keeps the photo open');
+});
 
 // Nearby opens a cable laid in pieces at its nearest piece: the card stays
 // there and the camera flies there, not to the cable's first piece.
@@ -438,6 +1430,104 @@ test('opening a far piece of a multi-piece cable from Nearby flies to that piece
   assert.ok(Math.abs(landed.lon - far.lon) < 1e-6, `lon ${landed.lon}`);
 });
 
+test('Ask withholds a pinned wildlife location when its source or exact observation is gone', (t) => {
+  const nowMs = Date.UTC(2026, 10, 24, 12);
+  const [sighting, replacement] = normalizeInatObservations(
+    [
+      {
+        id: 1,
+        geojson: { coordinates: [-97.743, 30.271] },
+        observed_on: '2026-11-24',
+        quality_grade: 'research',
+        taxon: {
+          name: 'Ardea herodias',
+          preferred_common_name: 'Great Blue Heron',
+        },
+      },
+      {
+        id: 2,
+        geojson: { coordinates: [-96.8, 31.1] },
+        observed_on: '2026-11-24',
+        quality_grade: 'research',
+        taxon: {
+          name: 'Ardea herodias',
+          preferred_common_name: 'Great Blue Heron',
+        },
+      },
+    ],
+    { nowMs },
+  );
+  const state = {
+    enabled: true,
+    rows: new Map([[sighting.stableId, sighting]]),
+  };
+  const { methods } = createWildlifeControls({
+    state,
+    services: { now: () => nowMs },
+    parts: {},
+  });
+  const id = 'wildlife-sightings';
+  const layer = { id, enabled: true, module: methods };
+  const manager = {
+    layers: new Map([[id, layer]]),
+    getAll: () => [layer],
+    isEnabled: (layerId) => layerId === id && state.enabled,
+  };
+  const viewer = { scene: {} };
+  const input = fakeInput(viewer);
+  const pinia = createPinia();
+  const disconnect = installEntityContext({
+    viewer,
+    pinia,
+    getDataManager: () => manager,
+  });
+  const store = useEntityCardStore(pinia);
+  const voice = useVoiceStore(pinia);
+  t.after(() => {
+    voice.connect(null);
+    store.clear();
+    disconnect();
+    input.destroy();
+  });
+  let attachment;
+  voice.connect({
+    emit(event, detail) {
+      if (event === 'chat-item') attachment = detail;
+    },
+  });
+  const [group] = store.nearbyLayers(30.271, -97.743, { radiusKm: 25 });
+  const pin = group.items[0].identity;
+  assert.equal(pin.id, sighting.stableId);
+  const saved = { ...pin };
+  delete saved.record;
+  assert.ok(store.open(saved, { fromPin: true }));
+  store.ask();
+  assert.ok(attachment.resolveLocation());
+  state.enabled = false;
+  layer.enabled = false;
+  assert.equal(attachment.resolveLocation(), null);
+  assert.equal(store.card.key, attachment.key);
+
+  store.clear();
+  state.enabled = true;
+  layer.enabled = true;
+  state.rows = new Map([[replacement.stableId, replacement]]);
+  assert.ok(store.open(saved, { fromPin: true }));
+  store.ask();
+  assert.equal(
+    attachment.resolveLocation(),
+    null,
+    'never send coordinates from the same-named observation',
+  );
+  assert.equal(store.card.identity.id, sighting.stableId);
+  assert.equal(store.locationWithheld, true);
+
+  state.rows.set(sighting.stableId, sighting);
+  store.ask();
+  assert.deepEqual(attachment.resolveLocation(), { lat: 30.271, lon: -97.743 });
+  assert.equal(store.card.identity.id, sighting.stableId);
+});
+
 test('Nearby rows give the navigation owner the wildlife cell and locator pin frames', async (t) => {
   const nowMs = Date.UTC(2026, 10, 24, 12);
   const [sighting] = normalizeInatObservations(
@@ -535,6 +1625,106 @@ test('Nearby rows give the navigation owner the wildlife cell and locator pin fr
       assert.ok(Math.abs(atHeight - height) < 1e-3, `height ${atHeight}`);
     });
   }
+});
+
+test('a quake row frames once and either pick releases its marker when the card leaves', async (t) => {
+  const viewer = { scene: {} };
+  const input = fakeInput(viewer);
+  const flights = [];
+  const marker = new Map();
+  const { unbind } = bindFakeDraw(viewer, {
+    camera: {
+      pose: () => ({ heading: 0 }),
+      on: () => () => {},
+      flyToBounds: () => flights.push('Context'),
+    },
+  });
+  const quake = { stableId: 'ak1', usgsId: 'ak1', lat: 30, lon: -97, mag: 4 };
+  const earthquake = createEarthquakesLayer({
+    source: {
+      getSnapshot: async () => [
+        quake,
+        { ...quake, stableId: 'ak2', usgsId: 'ak2' },
+      ],
+    },
+    overlayHost: {
+      setEntries: (id, entries) => marker.set(id, entries),
+      setVisible() {},
+      clearSource: (id) => marker.delete(id),
+    },
+    context,
+    focus: { requestWorldFocus: () => flights.push('globe') },
+    ripples: {
+      show: (target) => marker.set('contours', target.id),
+      hide: () => marker.delete('contours'),
+    },
+  });
+  const aircraft = { id: 'abc123', icao24: 'abc123', lat: 30, lon: -97 };
+  const layers = [
+    {
+      id: 'earthquakes',
+      name: 'Earthquakes',
+      enabled: true,
+      module: earthquake,
+    },
+    {
+      id: 'flights',
+      name: 'Flights',
+      enabled: true,
+      module: { getAnalystRecords: () => [aircraft] },
+    },
+  ];
+  const dm = {
+    layers: new Map(layers.map((layer) => [layer.id, layer])),
+    getAll: () => layers,
+    isEnabled: () => true,
+  };
+  const pinia = createPinia();
+  const disconnect = installEntityContext({
+    viewer,
+    pinia,
+    getDataManager: () => dm,
+  });
+  const store = useEntityCardStore(pinia);
+  t.after(() => {
+    store.clear();
+    disconnect();
+    earthquake.destroy();
+    input.destroy();
+    unbind();
+  });
+
+  earthquake.init(viewer);
+  earthquake.enable(viewer);
+  await earthquake.update(viewer);
+
+  const row = store
+    .nearbyLayers(30, -97)
+    .find(({ layerId }) => layerId === 'earthquakes').items[0];
+  const generation = store.selectionGeneration();
+  assert.equal(store.open(row.identity, { fromPin: true }), true);
+  assert.equal(store.selectionGeneration(), generation + 1);
+  assert.equal(store.fromPin, true);
+  assert.deepEqual(flights, ['Context']);
+  assert.equal(marker.get('contours'), 'ak1');
+  store.clear({ dismiss: true });
+  await nextTick();
+  assert.equal(marker.has('contours'), false);
+  assert.deepEqual(marker.get('earthquake-card'), []);
+
+  // The layer-owned map selection (same path as the magnitude label) can
+  // replace a quake with a second one before Context releases the first.
+  assert.equal(earthquake.pickById('earthquake:ak1'), true);
+  assert.equal(earthquake.pickById('earthquake:ak2'), true);
+  await nextTick();
+  assert.equal(store.card?.identity.id, 'ak2');
+  assert.equal(marker.get('contours'), 'ak2');
+
+  assert.equal(store.select({ layerId: 'flights', id: 'abc123' }), true);
+  await nextTick();
+  assert.equal(store.card?.identity.id, 'abc123');
+  assert.equal(marker.has('contours'), false);
+  assert.deepEqual(marker.get('earthquake-card'), []);
 });
 
 test('an explicit moving row takes over a pending place flight, is selected in its layer and framed at its range', async (t) => {
@@ -914,7 +2104,10 @@ test('a quiet spell between thresholded changes keeps an active camera move unse
   const owner = chrome.connect({});
   chrome.publish(owner, 'global-context-panel', { collapsed: false });
   const settled = [];
-  store.setView = (_, options) => settled.push(options.settled);
+  store.setView = (view, options) => {
+    assert.equal(view.groundFootprint, false);
+    settled.push(options.settled);
+  };
   const disconnect = installEntityContext({
     viewer,
     pinia,
@@ -944,6 +2137,198 @@ test('a quiet spell between thresholded changes keeps an active camera move unse
     true,
     'a jump without moveStart retains the quiet fallback',
   );
+});
+
+test('the view snapshot carries the screen corners when all four land', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const viewer = { scene: {} };
+  const input = fakeInput(viewer);
+  const events = new Map();
+  const unbind = bindRenderer(viewer, {
+    camera: {
+      pose: () => ({ lat: 0, lon: 0, height: 40_000 }),
+      viewRectangle: () => ({ west: -1, east: 1, south: -1, north: 1 }),
+      on(event, listener) {
+        events.set(event, listener);
+        return () => events.delete(event);
+      },
+    },
+  });
+  const pinia = createPinia();
+  const store = useEntityCardStore(pinia);
+  const chrome = usePanelChromeStore(pinia);
+  const owner = chrome.connect({});
+  chrome.publish(owner, 'global-context-panel', { collapsed: false });
+  let skyUntil = 0;
+  const disconnect = installEntityContext({
+    viewer,
+    pinia,
+    getDataManager: () => null,
+    pickWorld: (_, x, y) =>
+      x === 1 && y < skyUntil ? null : { lat: 1 - 2 * y, lon: 2 * x - 1 },
+  });
+  t.after(() => {
+    disconnect();
+    chrome.detach(owner);
+    unbind();
+    input.destroy();
+  });
+  t.mock.timers.tick(0);
+  assert.deepEqual(store.view.corners, [
+    { lat: 1, lon: -1 },
+    { lat: -1, lon: -1 },
+    { lat: -1, lon: 1 },
+    { lat: 1, lon: 1 },
+  ]);
+  skyUntil = 0.25;
+  events.get('moveEnd')();
+  assert.deepEqual(store.view.corners, [
+    { lat: 1, lon: -1 },
+    { lat: -1, lon: -1 },
+    { lat: -1, lon: 1 },
+    { lat: 0.5, lon: 1, edge: true },
+  ]);
+  skyUntil = 1;
+  events.get('moveEnd')();
+  assert.equal(store.view.corners, null);
+});
+
+test('Lists and Pinned leave footprint and terrain reads to Inspect, while Omnibar still reads its centre', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const pinia = createPinia();
+  const tabs = useContextStore(pinia);
+  const store = useEntityCardStore(pinia);
+  const chrome = usePanelChromeStore(pinia);
+  const owner = chrome.connect({});
+  chrome.publish(owner, 'global-context-panel', { collapsed: false });
+  const viewer = { scene: {} };
+  const input = fakeInput(viewer);
+  const { port, emit } = fakeCameraPort();
+  let lon = 0;
+  const picks = [];
+  const sampleHeightNow = t.mock.fn(() => 250);
+  let progress;
+  const unbind = bindRenderer(viewer, {
+    camera: port,
+    query: { sampleHeightNow },
+    globe: {
+      on(_, cb) {
+        progress = cb;
+        return () => {};
+      },
+    },
+  });
+  const disconnect = installEntityContext({
+    viewer,
+    pinia,
+    getDataManager: () => null,
+    pickWorld: (_, x, y) => {
+      picks.push([x, y]);
+      return { lon: lon + x - 0.5, lat: y - 0.5 };
+    },
+  });
+  const search = document.body.appendChild(document.createElement('input'));
+  search.id = 'gev-omnibar-input';
+  t.after(() => {
+    disconnect();
+    search.remove();
+    chrome.detach(owner);
+    unbind();
+    input.destroy();
+  });
+  t.mock.timers.tick(0);
+  assert.equal(picks.length, 5);
+  assert.equal(store.view.groundM, 250);
+  picks.length = 0;
+  for (const tab of ['lists', 'pinned']) {
+    tabs.setInspectorTab(tab);
+    await nextTick();
+    lon++;
+    emit('moveEnd');
+    progress({ terrainPending: 1 });
+    progress({ terrainPending: 0 });
+    assert.deepEqual(picks, []);
+    assert.equal(sampleHeightNow.mock.callCount(), 1);
+  }
+  search.focus();
+  assert.deepEqual(picks, [[0.5, 0.5]]);
+  assert.equal(store.view.center.lon, 2);
+  assert.equal(sampleHeightNow.mock.callCount(), 1);
+  search.blur();
+  picks.length = 0;
+  lon++;
+  tabs.setInspectorTab('inspect');
+  await nextTick();
+  assert.equal(picks.length, 5);
+  assert.equal(store.view.center.lon, 3);
+  assert.equal(store.view.corners.length, 4);
+  assert.equal(store.view.groundM, 250);
+});
+
+test('a stationary Inspector resamples loaded terrain and distinguishes sea level from the ellipsoid', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const viewer = { scene: {} };
+  const input = fakeInput(viewer);
+  const pinia = createPinia();
+  const chrome = usePanelChromeStore(pinia);
+  const owner = chrome.connect({});
+  chrome.publish(owner, 'global-context-panel', { collapsed: false });
+  const store = useEntityCardStore(pinia);
+  const port = fakeCameraPort().port;
+  let ground = 0;
+  let source = 'ellipsoid';
+  let progress;
+  const unbind = bindRenderer(viewer, {
+    camera: port,
+    query: {
+      sampleHeightNow: () => ground,
+      sampleHeight: async () => [{ height: ground, source }],
+    },
+    globe: {
+      on(event, listener) {
+        assert.equal(event, 'progress');
+        progress = listener;
+        return () => {
+          progress = null;
+        };
+      },
+    },
+  });
+  const disconnect = installEntityContext({
+    viewer,
+    pinia,
+    getDataManager: () => null,
+    pickWorld: () => ({ lat: 48, lon: 2 }),
+  });
+  t.after(() => {
+    disconnect();
+    chrome.detach(owner);
+    input.destroy();
+    unbind();
+  });
+  t.mock.timers.tick(0);
+  await setImmediate();
+  assert.equal(
+    store.view.groundM,
+    null,
+    'ellipsoid fallback has no measured elevation',
+  );
+
+  async function settleTerrain(height, kind) {
+    progress?.({ terrainPending: 2 });
+    ground = height;
+    source = kind;
+    progress?.({ terrainPending: 0 });
+    await setImmediate();
+  }
+  await settleTerrain(1250, 'terrain');
+  assert.equal(store.view.groundM, 1250);
+  await settleTerrain(0, 'ellipsoid');
+  assert.equal(store.view.groundM, null);
+  await settleTerrain(0, 'terrain');
+  assert.equal(store.view.groundM, 0);
+  disconnect();
+  assert.equal(progress, null, 'disconnect releases the globe listener');
 });
 
 test('on a tilted globe view, what is in view is bounded by the camera, not the middle of the screen', (t) => {
@@ -1016,6 +2401,158 @@ test('on a tilted globe view, what is in view is bounded by the camera, not the 
     store.inView()[0].items.map((item) => item.identity.id),
     ['visible'],
   );
+  const [inspector] = store.inView({
+    viewport: true,
+    breakdown: true,
+    includeEmpty: true,
+  });
+  assert.deepEqual(
+    inspector.items.map((item) => item.identity.id),
+    ['visible'],
+    'a centre hit with no rectangle still uses the visible horizon',
+  );
+});
+
+test('an explicit camera step shows the card in Context', async (t) => {
+  let active = 'cam-a';
+  const flights = [];
+  const viewer = { scene: { pick: () => null, drillPick: () => [] } };
+  const input = fakeInput(viewer);
+  const cameras = [
+    { id: 'cam-a', name: 'A', lat: 30.2, lon: -97.7 },
+    { id: 'cam-b', name: 'B', lat: 30.3, lon: -97.7 },
+  ];
+  const cctv = {
+    id: 'cctv',
+    name: 'Cameras',
+    enabled: true,
+    module: {
+      getUIState: () => ({ activeCameraId: active, cameras }),
+      focusNearest: () => active,
+      selectCamera: (id) => id === active,
+      focusCamera(id) {
+        flights.push(id);
+        return 'focused';
+      },
+      getAnalystRecords: () => cameras,
+      findByQuery: (id) => cameras.find((camera) => camera.id === id),
+    },
+  };
+  const pinia = createPinia();
+  let reveals = 0;
+  const dataManager = {
+    isEnabled: (id) => id === 'cctv',
+    layers: new Map([['cctv', cctv]]),
+    getAll: () => [cctv],
+  };
+  const disconnect = installEntityContext({
+    viewer,
+    getDataManager: () => dataManager,
+    pinia,
+    revealContext: () => reveals++,
+  });
+  t.after(() => {
+    disconnect();
+    input.destroy();
+    document.body.removeAttribute('data-mobile-sheet');
+  });
+  const store = useEntityCardStore(pinia);
+  assert.equal(
+    store.card,
+    null,
+    'the opening camera alone leaves Context closed',
+  );
+  document.body.setAttribute('data-mobile-sheet', 'layers');
+  await controlCctv(dataManager, { action: 'nearest' });
+  assert.equal(store.card?.key, 'cctv:cam-a', 'the card opens');
+  assert.equal(reveals, 1, 'the Context sheet opens');
+  document.body.removeAttribute('data-mobile-sheet');
+  active = 'cam-b';
+  await controlCctv(dataManager, { action: 'select', cameraQuery: 'cam-b' });
+  assert.deepEqual(flights, ['cam-a', 'cam-b']);
+  assert.equal(store.card?.key, 'cctv:cam-b');
+  assert.equal(reveals, 2, 'the second pick also reveals Context');
+  let viewEvents = 0;
+  const showView = () => viewEvents++;
+  globalThis.addEventListener('gev:context-show-view', showView);
+  t.after(() =>
+    globalThis.removeEventListener('gev:context-show-view', showView),
+  );
+  const generation = store.selectionGeneration();
+  await controlCctv(dataManager, { action: 'select', cameraQuery: 'cam-b' });
+  assert.equal(reveals, 3, 'an explicit re-pick reveals the existing card');
+  assert.equal(store.selectionGeneration(), generation);
+  assert.deepEqual(flights, ['cam-a', 'cam-b', 'cam-b']);
+  assert.equal(viewEvents, 1, 'the re-pick brings the view tab forward');
+});
+
+// A camera opened from a list makes it the active camera; the layer's notice
+// of that pick comes back to the bridge, which finds its card already
+// showing and leaves it: the card is selected once, not twice.
+test('a camera opened from a Context row keeps Context in front and is selected once', async (t) => {
+  const rail = document.body.appendChild(document.createElement('div'));
+  rail.className = 'ui-rail--right';
+  const button = rail.appendChild(document.createElement('button'));
+  button.className = 'ui-rail__item';
+  button.dataset.railItem = 'global-context-panel';
+  button.setAttribute('aria-pressed', 'true');
+  button.onclick = () => button.setAttribute('aria-pressed', 'true');
+  t.after(() => rail.remove());
+  const viewer = { scene: { pick: () => null, drillPick: () => [] } };
+  const input = fakeInput(viewer);
+  const cameras = [
+    { id: 'cam-a', name: 'A', lat: 30.2, lon: -97.7 },
+    { id: 'cam-b', name: 'B', lat: 30.3, lon: -97.7 },
+  ];
+  let activeCameraId = 'cam-b';
+  const selections = [];
+  const cctv = {
+    id: 'cctv',
+    name: 'Cameras',
+    enabled: true,
+    module: {
+      getUIState: () => ({ activeCameraId, cameras }),
+      getAnalystRecords: () => cameras,
+      findByQuery: (id) => cameras.find((camera) => camera.id === id),
+      // The layer announces a pick at once, as its notify does.
+      selectCamera(cameraId) {
+        selections.push(cameraId);
+        activeCameraId = cameraId;
+        button.setAttribute('aria-pressed', 'false');
+        document.dispatchEvent(
+          new CustomEvent(CCTV_SELECTED_EVENT, { detail: { cameraId } }),
+        );
+      },
+    },
+  };
+  const pinia = createPinia();
+  const dataManager = {
+    isEnabled: (id) => id === 'cctv',
+    layers: new Map([['cctv', cctv]]),
+    getAll: () => [cctv],
+  };
+  const disconnect = installEntityContext({
+    viewer,
+    getDataManager: () => dataManager,
+    pinia,
+  });
+  t.after(() => {
+    disconnect();
+    input.destroy();
+  });
+  const store = useEntityCardStore(pinia);
+  // The bridge's own selects: none, since the card is already showing.
+  const select = store.select;
+  let bridgeSelects = 0;
+  store.select = (...args) => {
+    bridgeSelects++;
+    return select(...args);
+  };
+  assert.equal(store.open({ layerId: 'cctv', id: 'cam-a' }), true);
+  assert.deepEqual(selections, ['cam-a']);
+  assert.equal(store.card?.key, 'cctv:cam-a');
+  assert.equal(bridgeSelects, 0, 'selected once, by open');
+  assert.equal(button.getAttribute('aria-pressed'), 'true');
 });
 
 const countAnswer = (count) => ({
@@ -1031,7 +2568,7 @@ function inspectorFixture(
   t,
   { controlWeatherCompletion = false, onWeatherAbort } = {},
 ) {
-  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: Date.now() });
+  t.mock.timers.enable({ apis: ['setTimeout'] });
   const pinia = createPinia();
   const store = useEntityCardStore(pinia);
   const countStore = useLayerCountsStore(pinia);
@@ -1056,7 +2593,11 @@ function inspectorFixture(
   const weatherRequests = [];
   const countRequests = [];
   const countUpdates = [];
+  const visibilityListeners = new Set();
+  const weatherTimers = new Set();
   let elapsed = 0;
+  const start = Date.now();
+  t.mock.method(Date, 'now', () => start + elapsed);
   let samples = 0;
   function port(requests, fields) {
     const { promise, resolve } = Promise.withResolvers();
@@ -1064,10 +2605,12 @@ function inspectorFixture(
     return promise;
   }
   const readWeather = (lat, lon, { signal }) => {
-    if (onWeatherAbort)
+    if (onWeatherAbort && weatherRequests.length > 0)
       signal.addEventListener('abort', onWeatherAbort, { once: true });
     return port(weatherRequests, { lat, lon, signal });
   };
+  // This fixture can resolve the exact promise awaited by the owner, before
+  // the bridge's queued update. Other tests use the real store action.
   if (controlWeatherCompletion) store.readWeather = readWeather;
   function managerFor(rows) {
     const listeners = new Set();
@@ -1110,6 +2653,25 @@ function inspectorFixture(
             return counts.update(snapshot);
           },
         },
+        weatherClock: {
+          nowMonotonic: () => elapsed,
+          onPageVisibility(listener) {
+            visibilityListeners.add(listener);
+            return () => visibilityListeners.delete(listener);
+          },
+          setTimeout(callback, ms) {
+            const timer = setTimeout(() => {
+              weatherTimers.delete(timer);
+              callback();
+            }, ms);
+            weatherTimers.add(timer);
+            return timer;
+          },
+          clearTimeout(timer) {
+            weatherTimers.delete(timer);
+            clearTimeout(timer);
+          },
+        },
       },
     });
     return disconnect;
@@ -1136,6 +2698,8 @@ function inspectorFixture(
     weatherRequests,
     countRequests,
     countUpdates,
+    visibilityListeners,
+    weatherTimers,
     connect,
     get disconnect() {
       return disconnect;
@@ -1178,7 +2742,7 @@ test('a replacement bridge admits its initial count request after the mounted In
   assert.equal(f.countRequests.length, 1, 'the unchanged shown view asks once');
 });
 
-test('the first pre-flush sample includes a manager attached during bridge setup', async (t) => {
+test('the first Inspector read includes a manager attached during bridge setup', async (t) => {
   const f = inspectorFixture(t);
   f.disconnect();
   f.show(true);
@@ -1198,6 +2762,27 @@ test('the first pre-flush sample includes a manager attached during bridge setup
   await nextTick();
   assert.equal(f.store.inspectorRows[0].stats.count, 17);
   assert.deepEqual(f.countStore.state.counts, {});
+});
+
+test('Missions leaves the last known Satellite count alone while it owns the row', async (t) => {
+  const f = inspectorFixture(t);
+  await f.openAndRead();
+  const [counts] = f.countRequests;
+  counts.resolve({ counts: [{ layerId: 'satellites', count: 100, at: 1 }] });
+  await setImmediate();
+  assert.equal(f.countStore.state.counts.satellites.count, 100);
+
+  f.missions.setEnabled(true);
+  f.setRows([
+    enabled('satellites', { count: 25, lastUpdate: 2, scope: 'worldwide' }),
+  ]);
+  await nextTick();
+  assert.equal(f.countStore.state.counts.satellites.count, 100);
+
+  f.missions.setEnabled(false);
+  await nextTick();
+  assert.equal(f.countStore.state.counts.satellites.count, 100);
+  assert.equal(f.countRequests.length, 1);
 });
 
 test('counts admit only the settled Inspector state, and Directions does not fill it', async (t) => {
@@ -1249,7 +2834,33 @@ test('count admission waits for matching metadata when an earlier post callback 
   );
 });
 
-test('an unapplied count sample is reconsidered when post callbacks coalesce visibility', async (t) => {
+test('count admission uses a manager replaced after the Inspector reads its rows', async (t) => {
+  const f = inspectorFixture(t);
+  f.disconnect();
+  const replace = ref(false);
+  t.after(
+    watch(replace, () => f.replaceManager([enabled('satellites')]), {
+      flush: 'post',
+    }),
+  );
+  f.connect();
+  await nextTick();
+  t.after(
+    watch(
+      () => f.store.inspectorRows,
+      () => {},
+    ),
+  );
+
+  replace.value = true;
+  f.show(true);
+  await setImmediate();
+
+  assert.equal(f.countRequests.length, 0);
+  assert.equal(f.store.inspectorRows[0].id, 'satellites');
+});
+
+test('count admission follows the final visibility when post callbacks hide and reopen the Inspector', async (t) => {
   const f = inspectorFixture(t);
   await nextTick();
   const hide = ref(false);
@@ -1268,7 +2879,7 @@ test('an unapplied count sample is reconsidered when post callbacks coalesce vis
   );
 });
 
-test('a globe-only refresh updates an unapplied count sample when post callbacks coalesce visibility', async (t) => {
+test('a reopened Inspector uses the current globe rows when deciding whether to request counts', async (t) => {
   const f = inspectorFixture(t);
   await nextTick();
   const hide = ref(false);
@@ -1292,8 +2903,8 @@ test('a globe-only refresh updates an unapplied count sample when post callbacks
   assert.equal(f.store.inspectorRows[0].id, 'satellites');
   assert.equal(
     f.countRequests.length,
-    0,
-    'the updated metadata wins before admission',
+    1,
+    'the enabled satellite layer can use its globe total',
   );
 });
 
@@ -1337,7 +2948,7 @@ test('Radio and the Missions roster prevent a counts request; a pulse finds a si
   );
 });
 
-test('a same-center globe crossing refreshes metadata and pauses weather without admitting counts', async (t) => {
+test('a same-center globe crossing refreshes metadata and pauses weather and admits the globe count', async (t) => {
   const f = inspectorFixture(t);
   f.setRows([enabled('flights')]);
   await f.openAndRead();
@@ -1345,12 +2956,12 @@ test('a same-center globe crossing refreshes metadata and pauses weather without
   assert.equal(f.countRequests.length, 0);
 
   f.replaceManager([]);
-  f.pose.height = 5_000_000;
+  f.pose.height = 6_000_000;
   f.cameraEvents.get('moveEnd')();
   await nextTick();
   assert.deepEqual(f.store.inspectorRows, []);
   assert.ok(f.weatherRequests[0].signal.aborted);
-  assert.equal(f.countRequests.length, 0);
+  assert.equal(f.countRequests.length, 1);
   f.store.pulseInspector();
   await nextTick();
   await f.advance(400);
@@ -1544,12 +3155,12 @@ test('a weather completion that sees cell B releases its slot even when delivery
 
 test('an abort listener that disposes the bridge cannot restore its previous weather', async (t) => {
   let dispose;
-  const f = inspectorFixture(t, { onWeatherAbort: () => dispose?.() });
+  const f = inspectorFixture(t, { onWeatherAbort: () => dispose() });
+  dispose = f.disconnect;
   await f.openAndRead();
   f.weatherRequests[0].resolve({ weather: reading });
   await setImmediate();
   assert.deepEqual(f.store.viewWeather.reading, reading);
-  dispose = f.disconnect;
   await f.advance(11 * 60_000);
   f.store.pulseInspector();
   await nextTick();
@@ -1577,6 +3188,7 @@ test('bridge replacement keeps saved counts, cancels both old requests, and wait
   f.disconnect();
   assert.ok(oldWeather.signal.aborted);
   assert.ok(oldCount.signal.aborted);
+  assert.equal(f.visibilityListeners.size, 0);
   assert.equal(f.cameraEvents.size, 0);
   assert.equal(f.store.viewWeather, null);
   assert.deepEqual(f.store.inspectorRows, []);
@@ -1617,7 +3229,10 @@ test('bridge replacement keeps saved counts, cancels both old requests, and wait
   f.pose.lat = 49;
   f.cameraEvents.get('moveEnd')();
   await nextTick();
+  assert.equal(f.weatherTimers.size, 1, 'new cell has a queued settle timer');
   f.disconnect();
+  assert.equal(f.weatherTimers.size, 0);
+  assert.equal(f.visibilityListeners.size, 0);
   const completedAttempt = f.countStore.state.lastAttemptAt;
   assert.notEqual(completedAttempt, null);
   f.connect();

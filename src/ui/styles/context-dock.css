@@ -1,19 +1,37 @@
 /* ── Context expanded ───────────────────────────────────────────────────
-   Expanded, Context becomes a full-height column over the right edge of the
-   screen. The globe and HUD stay where they are, under it. */
+   Expanded, Context becomes a column over the right edge of the screen. */
 :root {
   --context-dock-width: clamp(360px, 30vw, 460px);
+  /* The column starts below the top-right row (the Stories button and the
+     ACTIVE STYLE readout, both 32px down and up to about 40px tall), so
+     neither ever draws over its header. contextDockLayout.test.mjs pins it
+     against those two. */
+  --context-dock-top: 84px;
 }
 
-/* The column: edge to edge, top to bottom, no rail beside it. */
+/* End level with the desktop Tactical readout when it is shown. */
+:where(:root.hud-tactical-active)
+  body.context-docked:not(
+    .cockpit-mode,
+    .mobile-shell,
+    .scene-playback-mode,
+    .ui-clean-view,
+    .recording-mode
+  ) {
+  --context-dock-bottom: var(--tactical-hud-bottom);
+}
+
+/* The column runs from below the top row to the readout or the viewport floor. */
 body.context-docked #right-context-rail {
   z-index: 170;
-  top: 0 !important;
+  top: var(--context-dock-top) !important;
   right: 0 !important;
-  bottom: 0 !important;
+  bottom: var(--context-dock-bottom, 0px) !important;
   width: var(--context-dock-width) !important;
   max-height: none !important;
-  height: 100vh !important;
+  height: calc(
+    100vh - var(--context-dock-top) - var(--context-dock-bottom, 0px)
+  ) !important;
 }
 
 /* The map credits stay readable beside the column: their row ends short of
@@ -46,25 +64,25 @@ body.context-docked
   display: none !important;
 }
 
+/* The column is already at the screen edge: the shift that moves an open
+   panel over the rail's gutter (panel-edge.css) would push it past the
+   window's right edge. */
 body.context-docked #right-context-rail > #global-context-panel {
   flex: 1 1 auto !important;
   width: 100% !important;
   height: 100% !important;
   max-height: none !important;
+  transform: none !important;
 }
 
+/* Same size as ever; the panel's own glass, border, radius and glow, as
+   the other panels have. */
 body.context-docked #global-context-panel .global-context-panel-inner {
   height: 100%;
   padding: 22px 24px 16px;
-  background: rgba(10, 11, 16, 0.94);
-  border: 0;
-  border-left: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 0;
-  box-shadow: -18px 0 40px rgba(0, 0, 0, 0.35);
-}
-
-body.context-docked #global-context-panel .panel-glow {
-  display: none;
+  /* A column, so the radio mini player's foot can stand at its bottom. */
+  display: flex;
+  flex-direction: column;
 }
 
 /* The expand button sits beside the collapse button in the header. */
@@ -93,6 +111,25 @@ body.context-docked #global-context-panel .panel-glow {
   color: var(--accent);
   border-color: var(--accent-dim);
   background: var(--accent-dim);
+}
+
+/* Context's header buttons are one size on one line: search, expand, the
+   edge switch and the ▶ that folds it. */
+#global-context-panel:not(.collapsed) .panel-header {
+  align-items: center;
+}
+
+#global-context-panel:not(.collapsed)
+  .panel-header
+  :is(.ui-panel-edge, .panel-collapse-btn) {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-block: 0;
+  padding: 0;
+  border-radius: var(--btn-radius);
+  align-self: center;
 }
 
 /* Phones keep their sheets; the dock is a desktop layout. */
@@ -171,10 +208,18 @@ body.mobile-shell .context-dock-btn {
   font-size: 0.66rem;
 }
 
+/* Use the containing field's focus ring instead of the global input outline. */
 .context-search__input:focus,
 .context-search__input:focus-visible {
-  outline: 0;
+  outline: none !important;
   box-shadow: none;
+}
+
+@media (forced-colors: active) {
+  .context-search:focus-within {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
 }
 
 /* During a search, keep the radius and matching rows in view. A matching
@@ -192,6 +237,7 @@ body.mobile-shell .context-dock-btn {
     .view-context__bar,
     .view-context__bar-key,
     .altitude-graph,
+    .route-profile,
     .entity-card__route,
     .entity-card__route-stats,
     .entity-card__route-places,
@@ -234,11 +280,62 @@ html[dir='rtl'] body.context-docked #right-context-rail {
   left: 0 !important;
 }
 
-html[dir='rtl']
-  body.context-docked
+
+/* Folded, Context's name is a button that opens it: it looks like the plain
+   title. */
+.context-title-open {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.context-title-open:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Expanded, the radio mini player stands at the column's foot, across the
+   panel's content width, while what is above it scrolls; it takes its own
+   room at the end, so the last rows are never under it. */
+.context-mini-foot {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  flex: none;
+  /* At the column's bottom however short the content above is. */
+  margin-top: auto;
+  padding-block: 0.6rem 0.2rem;
+  background: rgba(12, 12, 20, 0.96);
+  border-top: 1px solid var(--glass-border);
+}
+
+.context-mini-foot:not(:has(> .radio-mini)) {
+  display: none;
+}
+
+.context-mini-foot > .radio-mini {
+  box-shadow: none;
+}
+
+/* Its parts keep their height, so a long Context scrolls the column rather
+   than running under the foot. The panel body lays its own parts out in the
+   column (display: contents), so they are the column's items too. */
+body.context-docked #global-context-panel .global-context-panel-inner > *,
+body.context-docked
   #global-context-panel
-  .global-context-panel-inner {
-  border-left: 0;
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 18px 0 40px rgba(0, 0, 0, 0.35);
+  .global-context-panel-inner
+  > .cyber-panel-body
+  > * {
+  flex-shrink: 0;
+}
+
+body.context-docked
+  #global-context-panel
+  .global-context-panel-inner:has(.context-mini-foot > .radio-mini) {
+  scroll-padding-bottom: 4rem;
 }

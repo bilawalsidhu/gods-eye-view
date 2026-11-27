@@ -21,8 +21,14 @@ import { RecordingControls } from './recordingControls.js';
 import { readShellElements } from './shellElements.js';
 import { CockpitCoordinator } from './cockpitCoordinator.js';
 import { ContextControls } from './context.js';
+import { useBhoteKoshiPanelStore } from './stores/bhoteKoshiPanel.js';
+import { useContextStore } from './stores/context.js';
 import { CctvControls } from './cctv.js';
 import { StreetLevelControls } from './streetLevelControls.js';
+import {
+  announceStreetLevelPhoto,
+  STREET_LEVEL_PHOTO_REQUEST_EVENT,
+} from './streetLevelEvents.js';
 import { createWildlifeSightingCard } from './wildlifeSightingCard.js';
 import { RadioControls } from './radio.js';
 import { LiveControls } from './liveControls.js';
@@ -60,19 +66,24 @@ import {
 import { applyLocaleChoice } from './localePicker.js';
 import { PanelNavigation } from './panelNavigation.js';
 import { applicationPinia, createUiRuntime } from './vueRuntime.js';
-import { useContextStore } from './stores/context.js';
 import { useLiveStore } from './stores/live.js';
 import { useStationStore } from './stores/station.js';
 import { useSpaceMissionsStore } from './stores/spaceMissions.js';
 import { SpaceMissionsControls } from './spaceMissionsControls.js';
+import {
+  CONTEXT_MISSIONS_EVENT,
+  CONTEXT_SHOW_VIEW_EVENT,
+} from './contextEvents.js';
 import { useMissionReplayStore } from './stores/missionReplay.js';
 import { useStreetLevelPhotoStore } from './stores/streetLevelPhoto.js';
+import { useDockedStore } from './stores/docked.js';
 import { useCelestialRingStore } from './stores/celestialRing.js';
 import { icrfToFixedAxes } from '../sky/icrf.js';
 import { useWorldOverlayActionsStore } from './stores/worldOverlayActions.js';
 import { useAwarenessDirectionStore } from './stores/awarenessDirection.js';
 import { useHudStore } from './stores/hud.js';
 import { useDisplayStore } from './stores/display.js';
+import { usePanelChromeStore } from './stores/panelChrome.js';
 import { useLocaleStore } from './stores/locale.js';
 import { useLocationStore } from './stores/location.js';
 import { useOmnibarStore } from './stores/omnibar.js';
@@ -80,6 +91,7 @@ import { useEntityCardStore } from './stores/entityCard.js';
 import { useLayerCountsStore } from './stores/layerCounts.js';
 import { installEntityContext } from './entityContextBridge.js';
 import { createLayerCounts } from './layerCounts.js';
+import { installPlacePick } from './placePick.js';
 import { installRailEdgeScroll } from './railEdgeScroll.js';
 import { useCockpitStore } from './stores/cockpit.js';
 import { useGlobeActionsStore } from './stores/globeActions.js';
@@ -89,6 +101,7 @@ import {
   hideOsmCredit,
   registerDynamicCredit,
   showOsmCredit,
+  OURAIRPORTS_CREDIT,
   WIKIDATA_PLACES_CREDIT,
 } from '../data/dataCredits.js';
 import { withPlacePacks } from './placePacksLoading.js';
@@ -139,6 +152,8 @@ export class StyleManager extends ShellFacade {
     } = {},
   ) {
     super();
+    const creditAirports = () =>
+      registerDynamicCredit(this.viewer, OURAIRPORTS_CREDIT);
     this._localePickerEnabled = localePicker;
     const {
       IntelHUD,
@@ -177,8 +192,7 @@ export class StyleManager extends ShellFacade {
         _rightPanelStack: this._rightPanelStack,
       },
       operations: {
-        _syncCctvPanelViewport: (...args) =>
-          this._syncCctvPanelViewport(...args),
+        _closeLocationSearch: () => this._locationNavigation?.closeSearch(),
         _showToast: (...args) => this._showToast(...args),
         _revealPanel: (panelId) => this.revealPanel(panelId),
       },
@@ -230,6 +244,7 @@ export class StyleManager extends ShellFacade {
       getDataManager: () => this._dataManager,
       pinia,
       pickWorld: services.pickWorldFromScreen,
+      manualCameraInputCount: services.manualCameraInputCount,
       regionalBrief: services.fetchRegionalBrief,
       spotWeather: services.fetchSpotWeather,
       inspector: {
@@ -240,6 +255,10 @@ export class StyleManager extends ShellFacade {
           readShown: () => cards.inspector.shown,
         }),
       },
+      revealContext: () => this._revealContextInspector(),
+      exitContextSelectionView: (cover) => this.exitContextSelectionView(cover),
+      supersedeDeferredNavigation: () => this.supersedeDeferredNavigation(),
+      creditAirports,
     });
     this.mapStackController = mapStackController;
     this.placeSearch = placeSearch;
@@ -413,6 +432,7 @@ export class StyleManager extends ShellFacade {
           useLocationStore(applicationPinia()).connect(controls),
         _connectGlobeReset: (controls) => this._connectGlobeReset(controls),
         _publishGlobeResetting: (busy) => this._publishGlobeResetting(busy),
+        _noteViewCommand: cards.noteViewCommand,
         _beginDeferredNavigation: (...args) =>
           this._beginDeferredNavigation(...args),
         _reassertNavigationHandoff: (...args) =>
@@ -426,6 +446,18 @@ export class StyleManager extends ShellFacade {
           this._updateTrafficSyncChip(...args),
         _showToast: (...args) => this._showToast(...args),
       },
+    });
+    // A place picked (a search row or chip, voice) opens its card.
+    this._removePlacePick = installPlacePick({
+      pinia: applicationPinia(),
+      subscribeCameraHandoff: (listener) =>
+        this.subscribeCameraHandoff(listener),
+      subscribe: (listener) =>
+        this._locationNavigation.subscribeLocationSearch(listener, {
+          emitCurrent: false,
+        }),
+      getDataManager: () => this._dataManager,
+      creditAirports,
     });
     this._lastTrafficChipUpdateAt = 0;
 
@@ -442,6 +474,7 @@ export class StyleManager extends ShellFacade {
     this._recording.hud = this.hud;
     this._cockpitCoordinator = new CockpitCoordinator({
       viewer,
+      cockpitStore: useCockpitStore(pinia),
       services: {
         flightsLayer: services.flightsLayer,
         militaryFlightsLayer: services.militaryFlightsLayer,
@@ -705,7 +738,7 @@ export class StyleManager extends ShellFacade {
     this._initRightPanelAdaptiveLayout();
     this._initRadioPanel();
     this._initCctvPanel();
-    this._initStreetLevelPanel();
+    this._initStreetLevelControls();
     this._initWildlifeSightingCard();
     this._initGlobalContextPanel();
     this._initSpaceMissionsPanel();
@@ -727,10 +760,8 @@ export class StyleManager extends ShellFacade {
 
     // Keep the parameter panel from overlapping toggle controls.
     this._layoutRightPanels();
-    this._syncCctvPanelViewport();
     this._windowResizeHandler = () => {
       this._scheduleRightPanelLayout({ reconsiderAutoCollapse: true });
-      this._syncCctvPanelViewport();
       this._scheduleLeftPanelLayout({ reconsiderAutoCollapse: true });
     };
     window.addEventListener('resize', this._windowResizeHandler);
@@ -994,23 +1025,13 @@ export class StyleManager extends ShellFacade {
   }
 
   _initGlobalContextPanel() {
-    const {
-      radioLayer,
-      militaryInstallationsLayer,
-      militaryAwarenessLayer,
-      satellitesLayer,
-    } = this.services;
-    const contextStore = useContextStore(applicationPinia());
+    const { radioLayer, militaryAwarenessLayer, satellitesLayer } =
+      this.services;
     this._contextControls = new ContextControls({
-      elements: {
-        _globalContextFlightsBtn: this._globalContextFlightsBtn,
-        _installationsSearchBtn: this._installationsSearchBtn,
-      },
-      installations: militaryInstallationsLayer,
-      publish: (view) => contextStore.publish(view),
       actions: {
         getCockpit: () => this.cockpitView,
         refreshRadio: () => this._renderRadioState(radioLayer.getUIState()),
+        revealPanel: (id) => this.revealPanel(id),
         claimVisualAuthority: () =>
           this.shareLinkManager?.claimRestoreLane?.('visual'),
         syncDetection: () => this._syncContactsDetection(),
@@ -1022,15 +1043,8 @@ export class StyleManager extends ShellFacade {
         setClearBusy: (busy) => this._publishClearBusy(busy),
       },
     });
-    // The Contacts layer publishes its panel; the view calls its navigation.
-    contextStore.connectAwareness(militaryAwarenessLayer);
-    // A panel left by an earlier shell must not outlive its layer.
-    this._awarenessPanelUnsubscribe?.();
-    contextStore.publishAwareness(null);
-    this._awarenessPanelUnsubscribe = militaryAwarenessLayer?.subscribePanel?.(
-      (view) => contextStore.publishAwareness(view),
-    );
-    // And its compass and contact bearings, which the scene chrome renders.
+    // The Contacts layer's compass and contact bearings, which the scene
+    // chrome renders.
     const awarenessDirectionStore =
       useAwarenessDirectionStore(applicationPinia());
     this._awarenessDirectionUnsubscribe?.();
@@ -1082,12 +1096,18 @@ export class StyleManager extends ShellFacade {
       layer: rocketLaunchesLayer,
       store: useSpaceMissionsStore(applicationPinia()),
       actions: {
-        setPanelCollapsed: (...args) => this.setPanelCollapsed(...args),
         isCockpitActive: () => Boolean(this.cockpitView?.active),
-        // After the panel has rendered as shown: the phone shell will not
-        // open the Missions sheet over a hidden panel.
-        revealPanel: () =>
-          nextTick(() => this.revealPanel('space-missions-panel')),
+        // Open Context (on a phone, its sheet) and show the Missions list
+        // or globe pick in Inspect. Context keeps an existing follow.
+        showMissions: (detail) => {
+          this.setPanelCollapsed('global-context-panel', false, {
+            explicit: true,
+          });
+          this.revealPanel('global-context-panel');
+          globalThis.document?.dispatchEvent?.(
+            new CustomEvent(CONTEXT_MISSIONS_EVENT, { detail }),
+          );
+        },
       },
     });
     // And its replay vehicle overlay, which the scene chrome renders.
@@ -1110,14 +1130,9 @@ export class StyleManager extends ShellFacade {
         _cockpitRadioEnableBtn: this._cockpitRadioEnableBtn,
         _cockpitRadioToggleBtn: this._cockpitRadioToggleBtn,
         _cockpitUtilityControls: this._cockpitUtilityControls,
-        _radioEnableBtn: this._radioEnableBtn,
-        _radioLayerState: this._radioLayerState,
         _radioPanel: this._radioPanel,
         _radioPlaybackState: this._radioPlaybackState,
         _radioStationHomepage: this._radioStationHomepage,
-        _radioStationMeta: this._radioStationMeta,
-        _radioStationName: this._radioStationName,
-        _radioStationTags: this._radioStationTags,
         _radioTunerSlider: this._radioTunerSlider,
         _radioVolume: this._radioVolume,
         _radioVolumeValue: this._radioVolumeValue,
@@ -1135,16 +1150,13 @@ export class StyleManager extends ShellFacade {
           this._dataManager?.getLayerLifecycleState?.('radio'),
         runUserAction: (...args) => this._runUserFacingContextAction(...args),
         setPanelCollapsed: (...args) => this.setPanelCollapsed(...args),
+        revealPanel: (id) => this.revealPanel(id),
         revealStyleParameters: () => this._revealCockpitStyleParameters(),
         setSignalCollapsed: (value) =>
           this.cockpitView?.setSignalCollapsed(value),
         isCockpitActive: () => this.cockpitView?.active,
         signalUserCollapsed: () => this.cockpitView?.signalUserCollapsed,
         layoutCockpit: () => this.cockpitView?.scheduleContextLayout(),
-        // An open local receiver keeps the shared Radio panel expanded.
-        preservePanelStateDuringClear: () =>
-          this._preservePanelStateDuringLayerClear ||
-          Boolean(this._localSdrControls?.isActive()),
         scheduleLayout: () => this._scheduleRightPanelLayout(),
       },
     });
@@ -1197,31 +1209,39 @@ export class StyleManager extends ShellFacade {
     });
   }
 
-  /** Compose the Street Level panel controls from its layer and application actions. */
-  _initStreetLevelPanel() {
+  /**
+   * Compose Street Level's controls from its layer and application actions:
+   * the photo viewer on its card in Context and the filters on its Data
+   * Layers row.
+   */
+  _initStreetLevelControls() {
     const { streetLevelLayer } = this.services;
     this._streetLevelControls?.destroy();
     this._streetLevelControls = null;
-    // The photo viewer (KartaView, Panoramax), which the layer panels draw
-    // into the viewer host. A viewer left by an earlier shell must
-    // not outlive its layer.
+    // A still viewer left by an earlier shell must not outlive its layer.
     const streetLevelPhotoStore = useStreetLevelPhotoStore(applicationPinia());
     this._streetLevelPhotoUnsubscribe?.();
     this._streetLevelPhotoUnsubscribe = null;
     streetLevelPhotoStore.publish(null);
-    if (!this._streetLevelPanel || !streetLevelLayer) return;
-    this._streetLevelPhotoUnsubscribe =
-      streetLevelLayer.subscribePhotoViewer?.((view) =>
-        streetLevelPhotoStore.publish(view),
-      ) ?? null;
-    // Photo framing yields to newer navigation and releases tracking like
-    // any deferred flight.
-    streetLevelLayer.attachNavigation?.({
-      begin: (noun) => this._beginDeferredNavigation(noun),
-      reassert: (generation) => this._reassertNavigationHandoff(generation),
-    });
+    if (!streetLevelLayer) return;
+    if (this._streetLevelViewer) {
+      this._streetLevelPhotoUnsubscribe =
+        streetLevelLayer.subscribePhotoViewer?.((view) =>
+          streetLevelPhotoStore.publish(view),
+        ) ?? null;
+      streetLevelLayer.attachNavigation?.({
+        begin: (noun, options) => this._beginDeferredNavigation(noun, options),
+        reassert: (generation) => this._reassertNavigationHandoff(generation),
+      });
+    }
+    const pinia = applicationPinia();
+    const display = useDisplayStore(pinia);
+    const chrome = usePanelChromeStore(pinia);
+    const bhote = useBhoteKoshiPanelStore(pinia);
+    const dock = useDockedStore(pinia);
+    const context = useContextStore(pinia);
     this._streetLevelControls = new StreetLevelControls({
-      root: this._streetLevelPanel,
+      root: this._streetLevelViewer,
       layer: streetLevelLayer,
       actions: {
         isEnabled: () => this._dataManager?.isEnabled('street-level') === true,
@@ -1231,16 +1251,55 @@ export class StyleManager extends ShellFacade {
           }),
         setParams: (params, options) =>
           this._dataManager?.setLayerParams('street-level', params, options),
-        setPanelCollapsed: (collapsed, options) =>
-          this.setPanelCollapsed('street-level-panel', collapsed, options),
-        revealPanel: () => this.revealPanel('street-level-panel'),
+        dockedPhoto: () => (dock.view?.kind === 'street' ? dock.view : null),
+        dockedPhotoCanPresent: () =>
+          !dock.stowed &&
+          !document.hidden &&
+          !document.body.classList.contains('stories-mode') &&
+          Boolean(
+            document
+              .querySelector('.docked-view[data-kind="street"]')
+              ?.getClientRects().length,
+          ),
+        // Tie the accepted photo to its pick so a newer selection can win.
+        contextSelectionCover: () => this.contextSelectionCover?.(),
+        photoRequested: (requestId, cover) =>
+          document.dispatchEvent(
+            new CustomEvent(STREET_LEVEL_PHOTO_REQUEST_EVENT, {
+              detail: { requestId, cover },
+            }),
+          ),
+        // A newer panel, tab or sheet choice owns the surface.
+        watchContextSurface: (changed) =>
+          watch(
+            [
+              () => chrome.panels['global-context-panel']?.collapsed,
+              () => chrome.rightRailOpenRevision,
+              () => display.phoneShell?.sheet,
+              () => bhote.visiblePanel?.owner,
+              () => context.inspectorTab,
+            ],
+            changed,
+            { flush: 'sync' },
+          ),
+        revealPaidPhoto: (cover) => {
+          if (!this.exitContextSelectionView(cover)) return false;
+          this.setPanelCollapsed('global-context-panel', false, {
+            persist: false,
+          });
+          this._revealContextInspector();
+          return true;
+        },
+        isInspectorTab: () => context.inspectorTab === 'inspect',
+        isContextExpanded: () =>
+          chrome.panels['global-context-panel']?.collapsed === false,
+        showPhoto: (photo, { revealFromOpen } = {}) =>
+          announceStreetLevelPhoto(photo, { revealFromOpen }),
+        focusContext: () =>
+          document
+            .querySelector('#global-context-panel .cyber-panel-body')
+            ?.focus?.({ preventScroll: true }),
         showToast: (message) => this._showToast(message),
-        // Lets the panel open for a user, voice or tool switch-on, not a restore.
-        subscribeEnableRequests: (listener) =>
-          this._dataManager?.subscribeVisibilityRequests?.((change) => {
-            if (change?.layerId === 'street-level' && change.enabled)
-              listener(change.origin);
-          }) || null,
       },
     });
     this._streetLevelControls.connect();
@@ -1254,24 +1313,17 @@ export class StyleManager extends ShellFacade {
       elements: {
         _cctvAdjustBtn: this._cctvAdjustBtn,
         _cctvAutoHopBtn: this._cctvAutoHopBtn,
+        _cctvAutoHopSec: this._cctvAutoHopSec,
         _cctvCalReadout: this._cctvCalReadout,
         _cctvCalibResetBtn: this._cctvCalibResetBtn,
         _cctvCalibSaveBtn: this._cctvCalibSaveBtn,
         _cctvCoverageBtn: this._cctvCoverageBtn,
-        _cctvEnableBtn: this._cctvEnableBtn,
-        _cctvFocusBtn: this._cctvFocusBtn,
         _cctvFrame: this._cctvFrame,
         _cctvFrameWrap: this._cctvFrameWrap,
         _cctvVideo: this._cctvVideo,
-        _cctvMeta: this._cctvMeta,
-        _cctvNearestBtn: this._cctvNearestBtn,
-        _cctvNextBtn: this._cctvNextBtn,
         _cctvPanel: this._cctvPanel,
-        _cctvPrevBtn: this._cctvPrevBtn,
         _cctvProjectionBtn: this._cctvProjectionBtn,
         _cctvQualityChip: this._cctvQualityChip,
-        _cctvSelect: this._cctvSelect,
-        _cctvSourceBadge: this._cctvSourceBadge,
         _cctvSummary: this._cctvSummary,
       },
       cctv: cctvLayer,
@@ -1280,16 +1332,7 @@ export class StyleManager extends ShellFacade {
         isEnabled: () => this._dataManager?.isEnabled('cctv'),
         setParams: (params, options) =>
           this._dataManager?.setLayerParams('cctv', params, options),
-        toggleEnabled: (...args) => this._toggleCctvEnabled(...args),
-        runExplicitFocus: (...args) => this._runExplicitCctvFocus(...args),
-        setPanelCollapsed: (...args) => this.setPanelCollapsed(...args),
-        // Clear selected data layers and Context isolation switch the layer
-        // off without the user asking: the panel keeps its state for both.
-        preservePanelState: () =>
-          this._preservePanelStateDuringLayerClear ||
-          this._contextSuspendsLayer('cctv'),
         showToast: (message) => this._showToast(message),
-        syncViewport: () => this._syncCctvPanelViewport(),
       },
     });
   }
@@ -1341,11 +1384,54 @@ export class StyleManager extends ShellFacade {
    * @returns {void}
    */
   revealPanel(panelId) {
-    const sheet = sheetForPanelId(panelId);
     if (!globalThis.matchMedia?.(MOBILE_SHELL_MEDIA_QUERY)?.matches) return;
+    const sheet = sheetForPanelId(panelId);
     if (sheet) this._mobileShell?.setSheet(sheet);
     // The sheet opens at its top; a panel lower in the rail is scrolled to.
     document.getElementById(panelId)?.scrollIntoView?.({ block: 'nearest' });
+  }
+
+  _revealContextInspector() {
+    this.revealPanel('global-context-panel');
+    globalThis.dispatchEvent(
+      new CustomEvent(CONTEXT_SHOW_VIEW_EVENT, { detail: { inspect: true } }),
+    );
+  }
+
+  contextSelectionCover() {
+    const clean = document.body.classList.contains('ui-clean-view');
+    return {
+      cleanView: clean ? (this._cleanViewRevision ?? 0) : null,
+      reconstruction:
+        useBhoteKoshiPanelStore(applicationPinia()).visiblePanel?.owner ?? null,
+    };
+  }
+
+  /** A deliberate item pick can leave Clean View or the reconstruction. */
+  exitContextSelectionView(expected) {
+    const body = document.body;
+    if (
+      [
+        'ui-embed',
+        'cockpit-mode',
+        'recording-mode',
+        'stories-mode',
+        'scene-playback-mode',
+      ].some((mode) => body.classList.contains(mode))
+    )
+      return false;
+    const bhote = useBhoteKoshiPanelStore(applicationPinia());
+    const { cleanView, reconstruction } = this.contextSelectionCover();
+    if (
+      expected &&
+      ((cleanView !== null && cleanView !== expected.cleanView) ||
+        (reconstruction && reconstruction !== expected.reconstruction))
+    )
+      return false;
+    const clean = cleanView !== null;
+    if (reconstruction && bhote.controls?.leaveView?.() !== true) return false;
+    if (clean) this.setCleanView(false);
+    return true;
   }
 
   /**
@@ -1358,6 +1444,8 @@ export class StyleManager extends ShellFacade {
       typeof forceEnabled === 'boolean'
         ? forceEnabled
         : !document.body.classList.contains('ui-clean-view');
+    if (document.body.classList.contains('ui-clean-view') !== shouldEnable)
+      this._cleanViewRevision = (this._cleanViewRevision ?? 0) + 1;
     document.body.classList.toggle('ui-clean-view', shouldEnable);
     if (this._cleanViewBtn) {
       this._cleanViewBtn.classList.toggle('active', shouldEnable);
@@ -1877,33 +1965,6 @@ export class StyleManager extends ShellFacade {
     this._initCockpitDisplayPortal();
   }
 
-  /**
-   * Recalculates the CCTV panel max-height based on its current top position
-   * and the window height, enabling internal scroll without viewport overflow.
-   * @returns {void}
-   */
-  _syncCctvPanelViewport() {
-    if (!this._cctvPanel) return;
-    const inner = this._cctvPanel.querySelector('.cctv-panel-inner');
-    this._lifetime.frame(() => {
-      if (this._cctvPanel.parentElement?.id === 'right-context-rail') {
-        this._cctvPanel.style.maxHeight = '';
-        if (inner) inner.style.maxHeight = '';
-        this._scheduleRightPanelLayout();
-        return;
-      }
-      const rect = this._cctvPanel.getBoundingClientRect();
-      const availableHeight = Math.max(
-        190,
-        Math.floor(window.innerHeight - rect.top - 12),
-      );
-      this._cctvPanel.style.maxHeight = `${availableHeight}px`;
-      if (inner) {
-        inner.style.maxHeight = `${availableHeight}px`;
-      }
-    });
-  }
-
   /** Terminal result for the complete initial share restoration. */
   get initialRestorePromise() {
     return (
@@ -1925,6 +1986,7 @@ export class StyleManager extends ShellFacade {
     useOmnibarStore(applicationPinia()).connect(null);
     this._removeRailEdgeScroll?.();
     this._removeEntityContext?.();
+    this._removePlacePick?.();
     this._shareRestoration.destroy();
     this._feedback.clearLoadingStatus();
     this._disposed = true;
@@ -1961,8 +2023,6 @@ export class StyleManager extends ShellFacade {
       useStationStore(applicationPinia()).detach(this._stationOwner);
     this._stationOwner = null;
     this._localSdrControls?.destroy();
-    this._awarenessPanelUnsubscribe?.();
-    this._awarenessPanelUnsubscribe = null;
     this._awarenessDirectionUnsubscribe?.();
     this._awarenessDirectionUnsubscribe = null;
     useAwarenessDirectionStore(applicationPinia()).publish(null);
@@ -1974,9 +2034,6 @@ export class StyleManager extends ShellFacade {
     this._streetLevelPhotoUnsubscribe = null;
     useMissionReplayStore(applicationPinia()).publish(null);
     useStreetLevelPhotoStore(applicationPinia()).publish(null);
-    const contextStore = useContextStore(applicationPinia());
-    contextStore.connectAwareness(null);
-    contextStore.publishAwareness(null);
     this._cockpitCoordinator.stop();
     this._visualSettings.stop();
     this.shareLinkManager?.destroy();

@@ -1,3 +1,4 @@
+import { isFollowing } from '../../data/followed.js';
 import { isPointerFree } from '../../data/inputOwnership.js';
 import { inputFor } from '../../input/dispatcher.js';
 import { canvasOf, findCamera, findFrame } from '../../render/rendererOf.js';
@@ -329,16 +330,22 @@ export function createLifecycle({
         layerState._entryLandedView = null;
       }
       const token = layerState._lifecycleToken;
-      const flying = parts.selection.focusFullGlobe(layerState._viewer, {
-        complete: () => {
-          if (token === layerState._lifecycleToken)
-            layerState._entryLandedView = captureCameraView(layerState._viewer);
-        },
-        cancel: () => {
-          if (token === layerState._lifecycleToken)
-            layerState._entryCameraView = null;
-        },
-      });
+      const followed = isFollowing(layerState._viewer);
+      if (followed) layerState._cameraReleased = true;
+      const flying =
+        !followed &&
+        parts.selection.focusFullGlobe(layerState._viewer, {
+          complete: () => {
+            if (token === layerState._lifecycleToken)
+              layerState._entryLandedView = captureCameraView(
+                layerState._viewer,
+              );
+          },
+          cancel: () => {
+            if (token === layerState._lifecycleToken)
+              layerState._entryCameraView = null;
+          },
+        });
       if (!flying) layerState._entryCameraView = null;
       if (layerState._selectedLaunchId)
         parts.selection.setSelectedMission(

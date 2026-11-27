@@ -1,3 +1,4 @@
+import { bindLayerFinder, createLayerFinder } from '../ui/layerFinderFilter.js';
 import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -666,6 +667,24 @@ test('a plain link never auto-loads a billed photo: it arms the panel and says s
   const toasts = [];
   const panels = [];
   const revealed = [];
+  const scrolled = [];
+  const linkWindow = new EventTarget();
+  const container = {};
+  const finder = createLayerFinder();
+  finder.select({ query: 'flights' });
+  const detachFinder = bindLayerFinder(container, finder);
+  const row = {
+    parentElement: container,
+    classList: {
+      contains: (name) => name === 'is-filtered' && finder.narrowed.value,
+    },
+    scrollIntoView: (options) =>
+      scrolled.push([options, finder.narrowed.value]),
+  };
+  linkWindow.document = {
+    querySelector: (selector) =>
+      selector === '#data-toggles [data-layer-id="street-level"]' ? row : null,
+  };
   const { calls, run } = recorder({
     show_street_level: () => ({ ok: true, armed: true }),
   });
@@ -684,7 +703,7 @@ test('a plain link never auto-loads a billed photo: it arms the panel and says s
       search: '',
       hash: '#v=2&lat=1&lon=2&map=photoreal&sl=google,38.57986,-121.49372',
     },
-    windowRef: new EventTarget(),
+    windowRef: linkWindow,
   });
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.equal(calls[0][1].autoOpen, false);
@@ -693,10 +712,16 @@ test('a plain link never auto-loads a billed photo: it arms the panel and says s
   ]);
   assert.deepEqual(
     panels,
-    [['street-level-panel', false, { explicit: true, persist: false }]],
-    "the panel opens so OPEN is in view, without saving the layout as the recipient's",
+    [['data-panel', false, { explicit: true, persist: false }]],
+    "Data Layers opens so OPEN (on Street Level's row) is in view, without saving the layout as the recipient's",
   );
-  assert.deepEqual(revealed, ['street-level-panel'], 'its phone sheet too');
+  assert.deepEqual(revealed, ['data-panel'], 'its phone sheet too');
+  detachFinder();
+  assert.deepEqual(
+    scrolled,
+    [[{ block: 'center' }, false]],
+    "Street Level's row is visible before it scrolls into view",
+  );
   // Adding ?embed=1 to a published link does not lift the gate: the page is
   // still a plain top-level load.
   const framedToasts = [];

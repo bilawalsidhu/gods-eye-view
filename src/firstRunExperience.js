@@ -52,10 +52,10 @@ export const FIRST_RUN_SESSION_KEY = 'gev:first-run-mission-session:v1';
  *   TOUCHED, DURABLE      layer enables for the mission's OWN layers, at
  *                         `origin: 'user'` — identical to clicking those rows.
  *                         Choosing ENVIRONMENTAL *is* choosing those layers.
- *   TOUCHED, DURABLE      the Space Missions panel, which opens as it does when
- *                         its layer is switched on from its Data Layers row.
- *                         No mission reveals the Context panel, and the globe
- *                         missions open no panel at all — nothing there needs
+ *   TOUCHED, DURABLE      the Space Missions list, which opens in Context as it
+ *                         does when its layer is switched on from its Data
+ *                         Layers row.
+ *                         The globe missions open no panel at all — nothing there needs
  *                         explaining, and a panel-collapse write is a pref
  *                         nobody chose.
  *   TOUCHED, SESSION      the camera. Never persisted by anything.
@@ -82,8 +82,8 @@ export const FIRST_RUN_SESSION_KEY = 'gev:first-run-mission-session:v1';
 /** @type {Readonly<Record<string, object>>} */
 export const FIRST_RUN_MISSIONS = Object.freeze({
   'space-missions': Object.freeze({
-    // An ordinary layer with its own panel: no camera flight, and its panel
-    // opens as it does for a click on its Data Layers row.
+    // An ordinary layer with a list: no camera flight, and its list opens in
+    // Context as it does for a click on its Data Layers row.
     kind: 'layer',
     layerIds: Object.freeze(['rocket-launches']),
     busyKey: msg('Opening space missions…'),

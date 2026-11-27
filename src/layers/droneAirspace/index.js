@@ -1,3 +1,8 @@
+import {
+  CONTEXT_AREA,
+  CONTEXT_LINES,
+  contextLine,
+} from '../../data/contextGeometry.js';
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { drawOf } from '../../render/rendererOf.js';
 import { cssColor } from '../../render/color.js';
@@ -258,12 +263,15 @@ export function createDroneAirspaceLayer({
         _rowById.clear();
         for (const row of rows) {
           const color = droneAirspaceColor(row.typeCode);
+          const contextPaths = [];
           for (const [index, rings] of row.polygons.entries()) {
             const id = `${PICK_PREFIX}${row.stableId}:${index}`;
+            const degrees = rings.map(ringDegrees);
+            contextPaths.push(contextLine(degrees[0]));
             // Each exterior keeps its own holes.
             nextFills.push({
               id,
-              geometry: { kind: 'polygon', rings: rings.map(ringDegrees) },
+              geometry: { kind: 'polygon', rings: degrees },
               fill: withAlpha(color, 0.25),
               height: 'clampGround',
             });
@@ -281,6 +289,8 @@ export function createDroneAirspaceLayer({
           _rowById.set(row.stableId, {
             ...facts,
             anchor: droneAirspaceAnchorDegrees(polygons),
+            contextPaths,
+            contextArea: polygons,
           });
         }
 
@@ -336,13 +346,16 @@ export function createDroneAirspaceLayer({
       const result = [];
       for (const row of _rowById.values()) {
         if (result.length >= limit) break;
-        const { anchor, stableId, ...facts } = row;
-        result.push({
+        const { anchor, stableId, contextPaths, contextArea, ...facts } = row;
+        const record = {
           id: stableId,
           ...facts,
           lat: anchor.lat,
           lon: anchor.lon,
-        });
+        };
+        Object.defineProperty(record, CONTEXT_LINES, { value: contextPaths });
+        Object.defineProperty(record, CONTEXT_AREA, { value: contextArea });
+        result.push(record);
       }
       return result;
     },

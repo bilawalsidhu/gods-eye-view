@@ -259,7 +259,7 @@ test('recording restores the original HUD after repeated entry and revokes retai
   }
 });
 
-test('Context leads the right rail, weather follows CCTV, observes and presents chrome', (t) => {
+test('Context leads the right rail, observes and presents chrome (Weather is a list in it)', (t) => {
   const f = fixture();
   const observed = new Set();
   const previousResizeObserver = globalThis.ResizeObserver;
@@ -286,20 +286,15 @@ test('Context leads the right rail, weather follows CCTV, observes and presents 
       stack.children.splice(index, 0, panel);
     };
     stack.prepend = (panel) => stack.insertBefore(panel, stack.children[0]);
-    for (const id of [
-      'pp-toggles',
-      'cctv-panel',
-      'weather-panel',
-      'global-context-panel',
-    ]) {
+    for (const id of ['pp-toggles', 'global-context-panel']) {
       const panel = f.nodes.get(id) || f.element();
       panel.id = id;
       panel.style = {};
       panel.classList.add('collapsed');
       f.nodes.set(id, panel);
     }
-    const weather = f.nodes.get('weather-panel');
-    stack.children = [weather, f.nodes.get('global-context-panel')];
+    const context = f.nodes.get('global-context-panel');
+    stack.children = [context];
     const store = usePanelChromeStore(createPinia());
     const chrome = {
       _chromeStore: store,
@@ -319,17 +314,17 @@ test('Context leads the right rail, weather follows CCTV, observes and presents 
     owner._initRightPanelAdaptiveLayout();
     assert.deepEqual(
       stack.children.map((panel) => panel.id),
-      ['global-context-panel', 'pp-toggles', 'cctv-panel', 'weather-panel'],
+      ['global-context-panel', 'pp-toggles'],
     );
-    assert.ok(observed.has(weather));
+    assert.ok(observed.has(context));
     // Moving a panel into the rail leaves its state as it was.
     assert.deepEqual(presented, []);
-    followPanelState(store, 'weather-panel', weather);
-    PanelChrome.prototype._presentPanel.call(chrome, weather, {
+    followPanelState(store, 'global-context-panel', context);
+    PanelChrome.prototype._presentPanel.call(chrome, context, {
       collapsed: false,
     });
-    assert.equal(store.panels['weather-panel'].collapsed, false);
-    assert.equal(weather.classList.contains('collapsed'), false);
+    assert.equal(store.panels['global-context-panel'].collapsed, false);
+    assert.equal(context.classList.contains('collapsed'), false);
     owner.destroy();
     assert.equal(observed.size, 0);
     assert.equal(f.frames.size, 0);

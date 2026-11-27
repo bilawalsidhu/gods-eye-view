@@ -1502,6 +1502,27 @@ test('a successful empty page keeps the selected observation until explicit dese
   h.layer.destroy();
 });
 
+test('an open Context card retains an omitted sighting with an unconfirmed position', async () => {
+  let rows = [base];
+  const h = harness({ getSnapshot: async () => rows });
+  await h.update();
+  const release = h.layer.retainContextRecord(base.stableId);
+  assert.equal(h.store.selectedEntityId, null);
+  assert.equal(h.layer.getAnalystRecords()[0].positionUnconfirmed, undefined);
+  rows = [];
+  await h.update();
+  assert.equal(h.layer.getAnalystRecords().length, 1);
+  assert.equal(h.layer.getAnalystRecords()[0].positionUnconfirmed, true);
+  rows = [base];
+  await h.update();
+  assert.equal(h.layer.getAnalystRecords()[0].positionUnconfirmed, undefined);
+  rows = [];
+  await h.update();
+  release();
+  assert.deepEqual(h.layer.getAnalystRecords(), []);
+  h.layer.destroy();
+});
+
 test('provider credits sit in the layer row, never on the globe; Acartia failure still surfaces degradation', async () => {
   let healthy = true;
   const acartia = {

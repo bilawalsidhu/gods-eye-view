@@ -211,8 +211,6 @@ export class CockpitViewController {
     this.lookTarget = { yawDeg: 0, pitchDeg: VESSEL_BRIDGE_PITCH_DEG };
     this.lookView = { ...this.lookTarget };
     this.lookLastMs = 0;
-    this.entry = document.getElementById('cockpit-entry');
-    this.tr3bToggle = document.getElementById('tr3b-toggle');
     this._tr3bSignature = null;
     this.mapViewButton = document.getElementById('map-view-switch');
     this.hud = document.getElementById('cockpit-hud');
@@ -296,6 +294,11 @@ export class CockpitViewController {
       entryAvailable: false,
       // Which subject the entry button would enter, and the active subject.
       entryKind: null,
+      // The layer of the item entry would ride (a card offers its own view
+      // only for its own layer); null for an aircraft, which its card asks
+      // for by tracking it.
+      entryLayerId: null,
+      entryId: null,
       // A provider's entry face, `{icon, label}`; null for the built-ins.
       entryFace: null,
       subjectKind: null,
@@ -341,7 +344,6 @@ export class CockpitViewController {
         else this.syncEntry();
       }),
     );
-    this._listen(this.entry, 'click', () => this.enter());
     // Double-clicking the followed track is a third way in.
     this._listen(
       canvasOf(viewer),
@@ -360,12 +362,6 @@ export class CockpitViewController {
       (event) => this.onOrbitalWheel(event),
       { passive: false },
     );
-    // The readout's entry renders inside the Intel HUD, which may mount after
-    // this controller; delegated like the radar's range button.
-    this._listen(document, 'click', (event) => {
-      if (event.target?.closest?.('#cockpit-entry-readout')) this.enter();
-    });
-    this._listen(this.tr3bToggle, 'click', () => this.toggleTrackedTr3b());
     this._listen(this.mapViewButton, 'click', () => this.exit());
     this._listen(this.visionPrevious, 'click', () => this.cycleVisionMode(-1));
     this._listen(this.visionCurrent, 'click', () => this.cycleVisionMode(1));

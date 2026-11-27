@@ -680,6 +680,19 @@ test('the subject says whether its class may be ridden', () => {
     assert.equal(subject(satelliteClass).enterable, true, satelliteClass);
 });
 
+test('a catalog satellite says before tracking whether it can be ridden', async (t) => {
+  const f = await fixture(t);
+  assert.equal(f.methods.cockpitEnterable(ISS_NORAD), true);
+  assert.equal(f.methods.cockpitEnterable(String(GPS)), true, 'a string id');
+  assert.equal(f.methods.cockpitEnterable(99999), false, 'not in the catalog');
+  assert.equal(f.methods.cockpitEnterable(null), false);
+  // A rocket body is debris: tracked, never ridden.
+  const gps = f.state._catalog.get(GPS);
+  gps.satelliteClass = 'debris';
+  assert.equal(f.methods.cockpitEnterable(GPS), false);
+  assert.equal(gps.cockpitIdentity, undefined, 'asking keeps nothing on it');
+});
+
 test('the station offers its mount only while the Cockpit rides it', async (t) => {
   const f = await fixture(t);
   const mount = { label: 'ZARYA' };

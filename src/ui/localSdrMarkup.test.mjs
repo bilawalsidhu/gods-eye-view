@@ -1,3 +1,4 @@
+import '../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -14,11 +15,16 @@ const css = readFileSync(
   'utf8',
 );
 
-test('the Local RTL-SDR card lives inside the Radio panel with every control', () => {
-  const radioStart = html.indexOf('id="radio-panel"');
-  const cardStart = html.indexOf('id="sdr-radio-card"');
-  const radioEnd = html.indexOf('</section>', radioStart);
-  assert.ok(radioStart >= 0 && cardStart > radioStart && cardStart < radioEnd);
+test('the Local RTL-SDR card lives in its own home, not Radio’s fold, with every control', () => {
+  const markup = new DOMParser().parseFromString(html, 'text/html');
+  const fold = markup.querySelector('details#radio-panel');
+  const homes = markup.querySelectorAll('.sdr-card-home[hidden]');
+  const cards = markup.querySelectorAll('#sdr-radio-card');
+  assert.ok(fold, 'the Radio fold exists');
+  assert.equal(homes.length, 1, 'the receiver has one hidden home');
+  assert.equal(cards.length, 1, 'there is one receiver card');
+  assert.ok(homes[0].contains(cards[0]), 'the hidden home contains the card');
+  assert.equal(fold.contains(cards[0]), false, 'the fold does not contain it');
   for (const id of [
     'sdr-connection-state',
     'sdr-connect-btn',

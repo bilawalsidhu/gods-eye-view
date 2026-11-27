@@ -15,13 +15,30 @@ import { bindRenderer } from '../../../../render/rendererOf.js';
 
 function fakeContext(filter = { pano: 'all', sinceMs: null }) {
   const opened = [];
+  const nearest = [];
+  let selected;
+  let cancelled = 0;
   return {
     opened,
+    nearest,
+    get sequenceId() {
+      return selected;
+    },
+    get cancelled() {
+      return cancelled;
+    },
     services: {},
     getFilter: () => filter,
     isActive: () => true,
     notify: () => {},
-    actions: { openImage: (id) => opened.push(id) },
+    actions: {
+      openImage: (id) => opened.push(id),
+      openNearest: (point, sequenceId) => {
+        selected = sequenceId;
+        nearest.push(point);
+      },
+      cancelNearest: () => cancelled++,
+    },
   };
 }
 
@@ -195,4 +212,183 @@ test('nearestImage opens the closest image that passes the filter, not the first
     fakeContext({ pano: 'all', sinceMs: 100 }),
   );
   assert.equal(await tooOld.nearestImage({ lat: 1, lon: 2 }), null);
+});
+
+/** A Mapillary provider over `answer`, on a viewer, recording the sequences it loads. */
+function lineClickSetup(answer, filter) {
+  const loaded = [];
+  const asked = [];
+  const source = fakeMapillarySource({
+    nearestImages: async (query) => {
+      asked.push(query);
+      return answer;
+    },
+    getSequenceImages: async (sequenceId) => {
+      loaded.push(sequenceId);
+      return [];
+    },
+  });
+  const context = fakeContext(filter);
+  const instance = createMapillaryProvider({ source }).create(context);
+  instance.init(streetViewer());
+  return { context, instance, loaded, asked };
+}
+
+const CLICK = { lon: 2, lat: 1 };
+const atClick = { groundPoint: () => ({ ...CLICK }) };
+const lineAnswer = [
+  imageAt('other-near', 2.00002, 1, { sequence: 'B' }), // ~2 m, another sequence
+  imageAt('own-far', 2.0003, 1, { sequence: 'A' }), // ~33 m
+  imageAt('own', 2.0001, 1, { sequence: 'A' }), // ~11 m
+];
+
+test('a line click opens its own sequence’s image nearest the click and still draws its cones', async () => {
+  const { context, instance, loaded, asked } = lineClickSetup(lineAnswer);
+  assert.equal(instance.handlePick('mly:seq:A', atClick), true);
+  assert.deepEqual(context.nearest, [CLICK], 'the core looks up the click');
+  assert.deepEqual(loaded, ['A'], 'the clicked sequence is drawn');
+  assert.deepEqual(context.opened, [], 'no image picked directly');
+  // The core then asks the provider at the click point.
+  assert.equal(
+    await instance.nearestImage(CLICK, { sequenceId: context.sequenceId }),
+    'own',
+  );
+  assert.equal(asked.length, 1, 'one request, as any nearest search');
+  // Only that lookup: the next one at the same point is a plain one.
+  assert.equal(await instance.nearestImage(CLICK), 'other-near');
+});
+
+test('a line click falls back to the nearest image when its sequence has none in range', async () => {
+  const { instance } = lineClickSetup(lineAnswer);
+  assert.equal(instance.handlePick('mly:seq:C', atClick), true);
+  assert.equal(await instance.nearestImage(CLICK), 'other-near');
+});
+
+test('a line click over the sky opens nothing', async () => {
+  const { context, instance } = lineClickSetup(lineAnswer);
+  assert.equal(
+    instance.handlePick('mly:seq:A', { groundPoint: () => null }),
+    true,
+  );
+  assert.equal(instance.handlePick('mly:seq:A'), true, 'no click data');
+  assert.equal(context.cancelled, 2);
+  assert.deepEqual(context.nearest, []);
+  assert.deepEqual(context.opened, []);
+});
+
+test('a cone click still opens its own image, with no lookup', () => {
+  const { context, instance } = lineClickSetup(lineAnswer);
+  assert.equal(instance.handlePick('mly:img:77', atClick), true);
+  assert.deepEqual(context.opened, ['77']);
+  assert.deepEqual(context.nearest, []);
+});
+
+test('a line click keeps to the imagery filter', async () => {
+  const answer = [
+    imageAt('own-pano', 2.00001, 1, { sequence: 'A', is_pano: true }),
+    imageAt('own-flat', 2.0002, 1, { sequence: 'A' }),
+    imageAt('own-new', 2.0003, 1, { sequence: 'A', captured_at: 500 }),
+    imageAt('other-new', 2.00005, 1, { sequence: 'B', captured_at: 500 }),
+  ];
+  const flat = lineClickSetup(answer, { pano: 'flat', sinceMs: null });
+  flat.instance.handlePick('mly:seq:A', atClick);
+  assert.equal(
+    await flat.instance.nearestImage(CLICK, {
+      sequenceId: flat.context.sequenceId,
+    }),
+    'own-flat',
+  );
+  const recent = lineClickSetup(answer, { pano: 'all', sinceMs: 100 });
+  recent.instance.handlePick('mly:seq:A', atClick);
+  assert.equal(
+    await recent.instance.nearestImage(CLICK, {
+      sequenceId: recent.context.sequenceId,
+    }),
+    'own-new',
+  );
+  const none = lineClickSetup(answer, { pano: 'all', sinceMs: 1000 });
+  none.instance.handlePick('mly:seq:A', atClick);
+  assert.equal(
+    await none.instance.nearestImage(CLICK, {
+      sequenceId: none.context.sequenceId,
+    }),
+    null,
+  );
+});
+
+test('a line lookup uses the imagery filter selected while it was waiting', async () => {
+  const answer = [
+    imageAt('pano', 2.00002, 1, { sequence: 'A', is_pano: true }),
+    imageAt('flat', 2.0002, 1, { sequence: 'A' }),
+  ];
+  const pending = Promise.withResolvers();
+  let filter = { pano: 'all', sinceMs: null };
+  const context = { ...fakeContext(), getFilter: () => filter };
+  const source = fakeMapillarySource({ nearestImages: () => pending.promise });
+  const provider = createMapillaryProvider({ source }).create(context);
+  const opening = provider.nearestImage(CLICK, { sequenceId: 'A' });
+  filter = { pano: 'flat', sinceMs: null };
+  pending.resolve(answer);
+  assert.equal(await opening, 'flat');
+});
+
+test('a Nearby line row asks for its own sequence first', async () => {
+  const { instance } = lineClickSetup(lineAnswer);
+  assert.equal(await instance.nearestImage(CLICK, { sequenceId: 'A' }), 'own');
+  assert.equal(
+    await instance.nearestImage(CLICK, { sequenceId: 'C' }),
+    'other-near',
+  );
+});
+
+test('a line pick still uses the area lookup when drawn coordinates disagree', async () => {
+  let queries = 0;
+  const source = fakeMapillarySource({
+    getSequenceImages: async () => [imageAt('drawn', 2, 1, { sequence: 'A' })],
+    nearestImages: async () => {
+      queries++;
+      return [imageAt('accepted', 2, 1, { sequence: 'A' })];
+    },
+  });
+  const instance = createMapillaryProvider({ source }).create(fakeContext());
+  instance.init(streetViewer());
+  await instance.selectSequence('A');
+  assert.equal(
+    await instance.nearestImage(CLICK, { sequenceId: 'A' }),
+    'accepted',
+  );
+  assert.equal(queries, 1);
+});
+
+test('a crowded crossing shares the clicked sequence read before choosing a different line', async () => {
+  const sequence = Promise.withResolvers();
+  let reads = 0;
+  const source = fakeMapillarySource({
+    nearestImages: async () =>
+      Array.from({ length: 100 }, (_, i) =>
+        imageAt(String(i), 2, 1, { sequence: 'other' }),
+      ),
+    getSequenceImages: () => {
+      reads++;
+      return sequence.promise;
+    },
+  });
+  const context = fakeContext({ pano: 'flat', sinceMs: null });
+  const instance = createMapillaryProvider({ source }).create(context);
+  instance.init(streetViewer());
+  instance.handlePick('mly:seq:A', atClick);
+  const result = instance.nearestImage(CLICK, {
+    sequenceId: context.sequenceId,
+  });
+  sequence.resolve([
+    imageAt('pano', 2, 1, { is_pano: true }),
+    imageAt('distant', 2.01, 1),
+    imageAt('own', 2.00002, 1),
+  ]);
+  assert.equal(await result, 'own');
+  assert.equal(reads, 1);
+  assert.equal(
+    await instance.nearestImage({ lon: 2.02, lat: 1 }, { sequenceId: 'A' }),
+    '0',
+  );
 });

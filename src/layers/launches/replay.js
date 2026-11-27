@@ -345,6 +345,7 @@ export function createReplay({ state: layerState, services, parts, source }) {
 
     parts.selection.stopMissionZoomAnchor();
     stopMissionReplay();
+    layerState._focusAfterActiveLookup = false;
     layerState._replayCameraLaunchId = launchId;
     layerState._replayPaused = false;
     layerState._replayPausedAtMs = null;

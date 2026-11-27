@@ -180,8 +180,8 @@ export async function _clearLayersOutsideContextMode(
 ) {
   const allowed = contextAllowedLayerIds(mode);
   const pending = [];
-  // Panels read this while their layer goes off (suspendsLayer): a layer
-  // isolation switches off is suspended, not switched off by the user.
+  // suspendsLayer reports this while a layer goes off: a layer isolation
+  // switches off is suspended, not switched off by the user.
   const isolating = [];
   let results;
   try {

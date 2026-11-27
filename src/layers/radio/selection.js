@@ -1,5 +1,6 @@
+import { cycleIndex } from '../../data/layerSteps.js';
 import { normalizeRadioFilter } from '../../data/layerState.js';
-import { RADIO_TUNER_DIRECTORY_LIMIT } from './policy.js';
+import { RADIO_DIRECTORY_REFRESH_MS, RADIO_SOURCES } from './policy.js';
 
 export function createSelection({
   state: layerState,
@@ -8,10 +9,11 @@ export function createSelection({
   source,
 }) {
   const { warmGroundFloor } = services.ground;
+  let directoryReadInterrupted = false;
 
   /** Durable Radio preferences; this surface never creates or plays audio. */
 
-  function setRadioParams(params = {}) {
+  function setRadioParams(params = {}, { origin } = {}) {
     const nextFilter = Object.hasOwn(params, 'filter')
       ? normalizeRadioFilter(params.filter)
       : null;
@@ -25,6 +27,12 @@ export function createSelection({
       numericVolume === null
         ? null
         : parts.volume.clampRadioVolume(numericVolume);
+    const nextSource = Object.hasOwn(params, 'source')
+      ? RADIO_SOURCES.includes(params.source)
+        ? params.source
+        : null
+      : undefined;
+    if (nextSource === null) return false;
 
     let changed = false;
     let filterChanged = false;
@@ -55,17 +63,57 @@ export function createSelection({
       parts.tuningNoise.syncTuningNoiseGain();
       changed = true;
     }
+    const sourceChanged =
+      nextSource !== undefined && nextSource !== layerState._source;
+    if (sourceChanged) {
+      setRadioSource(nextSource);
+      changed = true;
+    }
     if (changed && parts.interaction.radioPresentationAllowed()) {
       parts.rendering.updateRenderVisibility();
       if (filterChanged) parts.rendering.reclusterStations();
       parts.rendering.scheduleRadioOverlayPublish();
     }
-    parts.presentation.emitState();
+    parts.presentation.emitState(sourceChanged ? origin : undefined);
     return true;
   }
 
   function getRadioParams() {
-    return { filter: layerState._filter, volume: layerState._userVolume };
+    return {
+      filter: layerState._filter,
+      volume: layerState._userVolume,
+      source: layerState._source,
+    };
+  }
+
+  /**
+   * Switch between the internet stations and a local receiver. The local
+   * receiver stops the internet stream and takes the stations off the map;
+   * back on Internet, cached stations are drawn while any due read runs. The receiver's own audio is stopped by its controls
+   * (LocalSdrControls), which follow this source.
+   */
+  function setRadioSource(next) {
+    layerState._source = next;
+    if (next === 'local') {
+      parts.tuning.endRadioTuning();
+      if (layerState._audioStationId)
+        parts.playback.stopRadioPlayback({ origin: 'user' });
+      directoryReadInterrupted = Boolean(layerState._abortController);
+      layerState._requestGeneration += 1;
+      layerState._abortController?.abort();
+      layerState._abortController = null;
+      layerState._loading = false;
+    }
+    parts.interaction.syncRadioLifecyclePresentation();
+    if (
+      next === 'internet' &&
+      layerState._enabled &&
+      (!layerState._stations.length ||
+        directoryReadInterrupted ||
+        Date.now() - Date.parse(layerState._updatedAt) >=
+          RADIO_DIRECTORY_REFRESH_MS)
+    )
+      void parts.ingestion?.methods?.update?.();
   }
 
   // A paused or failed stream of another station would outlive its selection.
@@ -141,6 +189,63 @@ export function createSelection({
     return true;
   }
 
+  /**
+   * Play a station whether or not the layer is on: with the layer off (a
+   * pinned station, the mini player) the stream starts from the station
+   * catalogue already read, without drawing the layer or turning it on.
+   * False when the catalogue has no such station, or while the local
+   * receiver is the source: it plays no internet station until the user
+   * switches back.
+   */
+  function playRadioStation(id, { origin = 'programmatic' } = {}) {
+    if (layerState._source === 'local') return false;
+    const station = layerState._stationById.get(String(id));
+    if (!station?.streamUrl) return false;
+    parts.playback.clearRadioFallback();
+    if (parts.interaction.radioPresentationAllowed())
+      return selectRadioStation(id, { autoplay: true, origin });
+    releaseStaleRadioStream(station.id);
+    parts.navigation.invalidateRadioCameraNavigation();
+    layerState._cancelledTuningPresentationStation = null;
+    layerState._tuningUnavailableStationId = null;
+    layerState._selectedId = station.id;
+    layerState._selectionGeneration += 1;
+    parts.presentation.emitState();
+    void parts.playback.playSelectedRadio({ origin, whileOff: true });
+    return true;
+  }
+
+  function steppedStationIndex(ranked, direction) {
+    const current = ranked.findIndex(
+      (station) => station.id === layerState._selectedId,
+    );
+    return cycleIndex(current, direction < 0 ? -1 : 1, ranked.length, 0);
+  }
+
+  /**
+   * Step to the previous or next station of the catalogue already read,
+   * with the layer off: nearest the view first, as with the layer on, but
+   * without moving the camera or drawing anything. The stream follows the
+   * step while one is heard. False when there is nothing to step to.
+   */
+  function stepRadioStationWhileOff(
+    direction = 1,
+    { origin = 'programmatic' } = {},
+  ) {
+    const ranked = parts.queries.rankedVisibleStations();
+    if (ranked.length < 2) return false;
+    const next = ranked[steppedStationIndex(ranked, direction)];
+    const sounding = ['loading', 'buffering', 'playing'].includes(
+      layerState._audioState,
+    );
+    if (sounding) return playRadioStation(next.id, { origin });
+    releaseStaleRadioStream(next.id);
+    layerState._selectedId = next.id;
+    layerState._selectionGeneration += 1;
+    parts.presentation.emitState();
+    return true;
+  }
+
   /** Select the previous or next station and optionally retain a UI-owned band order. */
 
   function cycleRadioStation(
@@ -157,7 +262,6 @@ export function createSelection({
     const ranked =
       Array.isArray(stationIds) && stationIds.length
         ? stationIds
-            .slice(0, RADIO_TUNER_DIRECTORY_LIMIT)
             .map((id) => layerState._stationById.get(String(id)))
             .filter(
               (station) =>
@@ -169,13 +273,15 @@ export function createSelection({
             )
         : parts.queries.rankedVisibleStations();
     if (!ranked.length) return false;
-    const current = ranked.findIndex(
-      (station) => station.id === layerState._selectedId,
-    );
-    const nextIndex =
-      current < 0
-        ? 0
-        : (current + (direction < 0 ? -1 : 1) + ranked.length) % ranked.length;
+    const nextIndex = steppedStationIndex(ranked, direction);
+    const station = ranked[nextIndex];
+    if (
+      autoplay &&
+      station.id === layerState._selectedId &&
+      station.id === layerState._audioStationId &&
+      ['loading', 'buffering', 'playing'].includes(layerState._audioState)
+    )
+      return false;
     // Voice defers playback, so its silent step keeps a fallback; silent UI steps do not.
     const fallbackId =
       fallback && ranked.length > 1
@@ -199,7 +305,6 @@ export function createSelection({
             return rotationNavigation;
           }
         : false;
-    const station = ranked[nextIndex];
     if (rotate)
       parts.navigation.rotateRadioStationIntoView(
         station,
@@ -279,6 +384,8 @@ export function createSelection({
     setRadioParams,
     getRadioParams,
     selectRadioStation,
+    playRadioStation,
+    stepRadioStationWhileOff,
     cycleRadioStation,
     selectRequestedRadioStation,
     setRadioFilter,

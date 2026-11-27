@@ -1,3 +1,4 @@
+import { insertRanked } from '../../data/insertRanked.js';
 import { rayEllipsoid, toLonLatH } from '../../geo/ellipsoid.js';
 import { rectangleCenter } from '../../geo/rectangle.js';
 import { toDegrees, toRadians } from '../../geo/vector.js';
@@ -32,6 +33,25 @@ const LEVEL_LABELS = Object.freeze({
   medium: msg('Low-accuracy score 2–10%'),
   high: msg('Low-accuracy score > 10%'),
 });
+/** The same bands in short, beside the score's name (LEVEL_MEASURE). */
+const LEVEL_SHORT = Object.freeze({
+  low: msg('< 2%'),
+  medium: msg('2–10%'),
+  high: msg('> 10%'),
+});
+const LEVEL_MEASURE = msg('Low-accuracy score');
+const EMPTY_POPULATION = Object.freeze([]);
+/** Worst first. */
+const LEVEL_RANK = Object.freeze({ high: 2, medium: 1, low: 0 });
+
+function compareAreas(a, b) {
+  return (
+    LEVEL_RANK[b.level] - LEVEL_RANK[a.level] ||
+    b.percentDegraded - a.percentDegraded ||
+    b.degraded - a.degraded ||
+    a.id.localeCompare(b.id)
+  );
+}
 
 /** The middle of a degree rectangle, across the antimeridian too. */
 function degreesCentre(rect) {
@@ -407,8 +427,9 @@ export function createGnssIntegrityLayer({
     },
 
     /**
-     * The navigation-accuracy score band and raw report counts for the
-     * already-binned cell under a point. Null while off or unsampled.
+     * The navigation-accuracy score band (its legend label, level and
+     * colour) and raw report counts for the already-binned cell under a
+     * point. Null while off or unsampled.
      */
     getValueAt(lat, lon) {
       if (!_enabled || !_cells.length) return null;
@@ -431,6 +452,67 @@ export function createGnssIntegrityLayer({
           { degraded: formatNumber(cell.degraded) },
         ),
         at: cell.observedAt,
+        // The legend band and its colour, so a reading can match the map,
+        // and the band in short beside the score's name.
+        level: cell.level,
+        color: GNSS_LEVEL_COLORS[cell.level],
+        short: t(LEVEL_SHORT[cell.level]),
+        measure: t(LEVEL_MEASURE),
+      };
+    },
+
+    /** Sampled cells for spatial filtering, empty while the layer is off. */
+    getContextPopulation() {
+      return _enabled ? _cells : EMPTY_POPULATION;
+    },
+
+    /**
+     * What Context shows of the layer at globe view: the areas sampled, by
+     * band, the worst of them, and that they are a regional sample. Null
+     * while off.
+     */
+    getContextSummary({ population }) {
+      if (!_enabled) return null;
+      const counts = { low: 0, medium: 0, high: 0 };
+      const worst = [];
+      for (const cell of population) {
+        counts[cell.level]++;
+        if (LEVEL_RANK[cell.level] > 0)
+          insertRanked(worst, cell, 3, compareAreas);
+      }
+      const n = counts.low + counts.medium + counts.high;
+      return {
+        ...(_lastUpdate !== null &&
+          (!_lastError || _cells.length > 0) && {
+            headline: tn(n, '{n} area', '{n} areas', {
+              n: formatNumber(n),
+            }),
+          }),
+        bands: ['low', 'medium', 'high'].map((level) => ({
+          id: level,
+          label: LEVEL_SHORT[level],
+          color: GNSS_LEVEL_COLORS[level],
+          count: counts[level],
+        })),
+        // Without areas worse than the best band, the layer's own name heads it.
+        ...(worst.length
+          ? { itemsLabel: t('Least accurate sampled areas') }
+          : {}),
+        items: worst.map((area) => ({
+          key: `gnss-integrity:${area.id}`,
+          lead: t(LEVEL_SHORT[area.level]),
+          level: area.level,
+          color: GNSS_LEVEL_COLORS[area.level],
+          text: tn(
+            area.aircraft,
+            '{degraded} of {count} aircraft',
+            '{degraded} of {count} aircraft',
+            { degraded: formatNumber(area.degraded) },
+          ),
+          lat: area.lat,
+          lon: area.lon,
+        })),
+        note: t('Sampled around views you visited'),
       };
     },
 

@@ -1,8 +1,6 @@
 import { renderApplicationHtml } from './testSupport/applicationHtml.mjs';
 import { readStylesheet } from './testSupport/readStylesheet.mjs';
 import { _selectContextMode } from './ui/contextTransactions.js';
-import { _initGlobalContextPanel } from './ui/contextBindings.js';
-import { ContextControls } from './ui/contextControls.js';
 import { clearSelectedLayers } from './ui/contextActions.js';
 import { PANEL_RAIL_ITEMS } from './ui/panelRailCatalog.js';
 import { readFileSync as readRadioSource } from 'node:fs';
@@ -10,12 +8,9 @@ const radioBindings = readRadioSource(
   new URL('./ui/radioBindings.js', import.meta.url),
   'utf8',
 );
-const contextView = readRadioSource(
-  new URL('./ui/views/ContextView.vue', import.meta.url),
-  'utf8',
-);
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
+import { Window } from 'happy-dom';
 import assert from 'node:assert/strict';
 
 const html = await renderApplicationHtml(
@@ -23,19 +18,24 @@ const html = await renderApplicationHtml(
 );
 const css = readStylesheet(new URL('../style.css', import.meta.url));
 
-test('Contacts stays in the keyboard sequence and Space Missions owns its rail item', () => {
-  const button = html.match(
-    /<button\b[^>]*\bid="global-context-flights-btn"[\s\S]*?<\/button>/,
-  )?.[0];
-  assert.ok(button, 'Contacts control is missing');
-  assert.match(button, /role="tab"/);
-  assert.match(button, /tabindex="0"/);
-  const tag = contextView.match(/<UiButton id="global-context-flights-btn"[^>]*>/)?.[0];
-  assert.ok(tag, 'Contacts control is missing from the view');
-  assert.doesNotMatch(tag, /:tabindex|:disabled|\sdisabled/);
+test('Context has no Contacts control, and Space Missions no panel or rail item of its own', () => {
+  assert.doesNotMatch(html, /id="global-context-flights-btn"/);
+  assert.doesNotMatch(html, /id="installations-search-btn"/);
   assert.doesNotMatch(html, /id="global-context-missions-btn"/);
-  assert.match(html, /id="space-missions-panel"[^>]*data-panel-id="space-missions-panel"/);
-  assert.equal(PANEL_RAIL_ITEMS['space-missions-panel'].icon, 'rocket_launch');
+  // Its list is Context's Inspect view while the layer is on; Weather's,
+  // News's and Recent Imagery's share the Lists tab.
+  for (const id of ['space-missions-panel', 'weather-panel', 'news-panel', 'recent-imagery-panel']) {
+    assert.doesNotMatch(html, new RegExp(`id="${id}"`));
+    assert.equal(PANEL_RAIL_ITEMS[id], undefined, `${id} has no rail item`);
+  }
+  assert.doesNotMatch(html, /id="context-missions"/);
+  const template = new Window().document.createElement('template');
+  template.innerHTML = html;
+  const lists = template.content.querySelector('#context-lists');
+  assert.ok(lists, 'Context has a shared Lists panel');
+  assert.equal(lists.querySelector('#context-list-space-missions'), null);
+  for (const body of ['weather-panel-body', 'news-panel-body', 'recent-imagery-panel-body'])
+    assert.ok(lists.querySelector(`#${body}`), `${body} belongs in Lists`);
 });
 
 test('Context activation and Clear All never native-disable tabs and guard repeated clicks', () => {
@@ -51,71 +51,13 @@ test('Context activation and Clear All never native-disable tabs and guard repea
   );
 });
 
-test('a Contacts click while Context is busy is ignored', () => {
-  const button = new EventTarget();
-  const controls = new ContextControls({
-    elements: { _globalContextFlightsBtn: button },
-    installations: {},
-    actions: { getCockpit: () => null, claimVisualAuthority() {} },
-  });
-  const runs = [];
-  controls._runUserFacingContextAction = (operation) => {
-    runs.push(operation);
-    return Promise.resolve(false);
-  };
-  const click = () => button.dispatchEvent(new Event('click'));
-  controls._contextModeChanging = true;
-  click();
-  controls._contextModeChanging = false;
-  controls._clearSelectedLayersPromise = Promise.resolve();
-  click();
-  assert.equal(runs.length, 0, 'a transition or Clear All in flight drops it');
-  controls._clearSelectedLayersPromise = null;
-  click();
-  assert.equal(runs.length, 1, 'an idle panel takes the click');
-  controls.stop();
-});
-
-test('Context tabs draw a visible keyboard-focus outline including active tabs', () => {
-  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)];
-  const focusRule = rules.find(
-    ([, selector, body]) =>
-      selector.trim().endsWith('.context-mode-button:focus-visible') &&
-      /outline:\s*2px solid var\(--text-primary\)/.test(body),
-  );
-  assert.ok(
-    focusRule,
-    'Context focus-visible rule must draw a two-pixel outline',
-  );
-  assert.match(focusRule[2], /outline-offset:\s*-3px/);
-
-  const activeRule = rules.find(([, selector]) =>
-    selector.trim().endsWith('.context-mode-button.active'),
-  );
-  assert.ok(activeRule, 'Context active-state rule is missing');
-  assert.doesNotMatch(activeRule[2], /outline:\s*none/);
-});
-
 test('Context async action buttons remain focused while busy', () => {
   const radio = radioBindings.slice(
     radioBindings.indexOf('const toggleRadio = async (trigger) => {'),
     radioBindings.indexOf('this._storeToken = this.store?.connect?.('),
   );
-  const radioPanel = readFileSync(
-    new URL('./ui/views/panels/RadioPanel.vue', import.meta.url),
-    'utf8',
-  );
   const clear = clearSelectedLayers.toString();
 
-  const init = _initGlobalContextPanel.toString();
-  assert.match(init, /if \(this\._installationsSearchBusy\) return;/);
-  assert.doesNotMatch(init, /\.disabled\s*=\s*true/);
-  const search = contextView.match(
-    /<UiButton id="installations-search-btn"[^>]*>/,
-  )?.[0];
-  assert.ok(search, 'nearby sites search is missing');
-  assert.doesNotMatch(search, /:disabled|\sdisabled/);
-  assert.match(search, /:aria-busy=/);
   assert.match(radio, /trigger\.getAttribute\('aria-busy'\) === 'true'/);
   assert.doesNotMatch(radio, /trigger\.disabled\s*=\s*true/);
   const cockpitRadio = readFileSync(
@@ -128,11 +70,6 @@ test('Context async action buttons remain focused while busy', () => {
   assert.ok(cockpitEnable, 'Cockpit Radio Enable button is missing');
   assert.doesNotMatch(cockpitEnable, /disabled(?!=")|:disabled/);
   assert.match(cockpitEnable, /:aria-busy=/);
-  // The Radio view never disables its Enable button; it marks it busy.
-  const enable = radioPanel.match(/<UiButton id="radio-enable-btn"[^>]*>/)?.[0];
-  assert.ok(enable, 'Radio Enable button is missing');
-  assert.doesNotMatch(enable, /disabled(?!=")|:disabled/);
-  assert.match(enable, /:aria-busy=/);
   assert.match(clear, /this\.setClearBusy\(true\)/);
   // The globe actions view marks the clear button busy, never disabled.
   const globeActions = readFileSync(
@@ -167,9 +104,10 @@ test('Context header holds its title, search, expand, edge switch and collapse c
         .join(' ')}`,
   );
   assert.deepEqual(tags, [
-    'span.panel-title',
+    // Folded (as it renders first), the name is a button that opens it.
+    'button.panel-title context-title-open',
     'span.panel-divider',
-    'button.context-dock-btn',
+    'button.context-dock-btn context-search-toggle',
     'span.material-symbols-outlined',
     'button.context-dock-btn',
     'span.material-symbols-outlined',
@@ -179,7 +117,7 @@ test('Context header holds its title, search, expand, edge switch and collapse c
   ]);
 });
 
-test('Context reads as one segmented control with legible type and no halo', () => {
+test('Context keeps a legible title and no halo', () => {
   const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)];
   const clean = (selector) =>
     selector
@@ -188,29 +126,8 @@ test('Context reads as one segmented control with legible type and no halo', () 
       .trim();
   const rule = (selector) =>
     rules.find(([, s]) => clean(s) === selector)?.[2] || '';
-  const px = (body, prop) =>
-    Number(
-      body.match(new RegExp(`${prop}:[^;]*?(\\d+(?:\\.\\d+)?)px`))?.[1] || 0,
-    );
 
   assert.match(rule('#global-context-panel .panel-glow'), /display:\s*none/);
-  const modes = rule('.global-context-modes');
-  assert.match(modes, /border:\s*1px solid/);
-  assert.match(modes, /padding:\s*2px/);
-  assert.ok(
-    px(rule('.context-mode-button'), 'font') >= 10,
-    'mode labels must stay at least 10px',
-  );
-  assert.doesNotMatch(rule('.context-mode-button.active'), /box-shadow/);
-  const standby = rule('.context-mode-standby');
-  assert.ok(
-    px(standby, 'font') >= 10,
-    'standby guidance must stay at least 10px',
-  );
-  assert.doesNotMatch(standby, /dashed/);
-  assert.ok(
-    px(rule('.global-context-actions .panel-layer-toggle'), 'font-size') >= 10,
-  );
   // The shared rail title colour (brighter than --text-secondary) keeps the
   // open Context title legible; no Context-only rule dims it again.
   assert.equal(

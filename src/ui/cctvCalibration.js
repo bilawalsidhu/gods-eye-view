@@ -88,8 +88,23 @@ function calValueText(field, value) {
   return `${t(field.label)} ${isolate(`${number}${field.unit}`)}`;
 }
 
+/** A calibration value with its unit and no code ("67.5°", "145 m"). */
+function calNumberText(field, value) {
+  const number = formatNumber(Number(value), {
+    useGrouping: false,
+    minimumFractionDigits: field.decimals,
+    maximumFractionDigits: field.decimals,
+  });
+  return isolate(
+    field.unit === 'm' ? t('{n} m', { n: number }) : `${number}${field.unit}`,
+  );
+}
+
 export function _activeCctvCameraId() {
-  return this._cctvState?.activeCameraId || this._cctvSelect?.value || '';
+  const active = this._cctvState?.activeCameraId || '';
+  return this.store.settingsCameraId && this.store.settingsCameraId !== active
+    ? ''
+    : active;
 }
 
 export function _resetCctvCalibration() {
@@ -116,6 +131,7 @@ export function _beginCctvCalValueEdit(chip) {
   const activeCamera = this._cctvState?.activeCamera;
   if (!field || !activeCamera?.basePose) return;
   const cameraId = this._activeCctvCameraId();
+  if (!cameraId) return;
   const basePose = { ...activeCamera.basePose };
 
   let finished = false;
@@ -172,18 +188,33 @@ export function presentCctvCalibration(state, enabled) {
   const canCalibrate = !!enabled && !!activeCamera;
   const adjustOn = !!state?.calibrationMode;
   const values = {};
+  // The number alone, with its unit, for the tools' label/value grid.
+  const numbers = {};
   for (const [id, field] of Object.entries(CCTV_CAL_FIELDS)) {
     const value = canCalibrate ? field.get(activeCamera) : null;
     values[id] = Number.isFinite(value)
       ? calValueText(field, value)
       : `${t(field.label)} --`;
+    numbers[id] = Number.isFinite(value) ? calNumberText(field, value) : '--';
   }
   return {
+    estimatedHeadingLabel:
+      canCalibrate &&
+      activeCamera.headingEstimated &&
+      Number.isFinite(activeCamera.headingDeg)
+        ? t('HDG {value}° (ESTIMATED)', {
+            value: formatNumber(activeCamera.headingDeg, {
+              minimumFractionDigits: 1,
+              maximumFractionDigits: 1,
+            }),
+          })
+        : undefined,
     disabled: !canCalibrate,
     adjust: {
       active: adjustOn && canCalibrate,
       text: adjustOn ? t('ADJUST ON') : t('ADJUST'),
     },
     values,
+    numbers,
   };
 }

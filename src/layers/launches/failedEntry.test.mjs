@@ -3,9 +3,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DataLayerManager } from '../../data/manager.js';
+import { followedOf } from '../../data/followed.js';
+import { cameraOf } from '../../render/rendererOf.js';
 import { ContextControls } from '../../ui/contextControls.js';
 import { createLaunchSource } from './source.js';
 import { createState } from './state.js';
+import { createSelection } from './selection.js';
 import { createModel } from './model.js';
 import { createPolicyHelpers } from './policyHelpers.js';
 import { createIngestion } from './ingestion.js';
@@ -14,6 +17,7 @@ import { createPanel } from './panel.js';
 import { createControls } from './controls.js';
 import { createLifecycle } from './lifecycle.js';
 import { createReplay } from './replay.js';
+import { POST_TLE_RETRY_DELAY_MS } from './policy.js';
 import { bindFakeCesiumCamera } from '../../testSupport/fakeCameraPort.mjs';
 
 const noop = () => {};
@@ -98,11 +102,12 @@ function fakeCamera() {
   return camera;
 }
 
-async function fixture(t, { beforeConnect } = {}) {
+async function fixture(t, { beforeConnect, missionCamera = false } = {}) {
   const upstream = { status: 429, results: [launchRecord] };
   const source = createLaunchSource({
     async fetchImpl(url) {
-      if (url === '/api/celestrak/active') return new Response('');
+      if (url === '/api/celestrak/active')
+        return new Response((await upstream.activeTle) ?? '');
       if (upstream.hold) await upstream.hold;
       return Response.json(
         upstream.status === 200 ? { results: upstream.results } : {},
@@ -186,6 +191,17 @@ async function fixture(t, { beforeConnect } = {}) {
     },
   };
   const context = { state, services, parts, source };
+  if (missionCamera) {
+    services.geometry = {};
+    Object.assign(parts.rendering, {
+      projectedOrbitPath: () => [],
+      selectLaunchEntity: noop,
+      isolateMission: noop,
+    });
+    const selection = createSelection(context);
+    parts.selection.setSelectedMission = selection.setSelectedMission;
+    parts.selection.focusMission = selection.focusMission;
+  }
   parts.policyHelpers = createPolicyHelpers(context);
   parts.model = createModel(context);
   parts.panel = createPanel(context);
@@ -267,11 +283,76 @@ async function fixture(t, { beforeConnect } = {}) {
     camera,
     rosters,
     panel: parts.panel,
+    viewer,
     enabledIds,
     view,
     settle,
   };
 }
+
+test('a late mission orbit refocuses only if the camera is free at the rebuild', async (t) => {
+  for (const owner of [
+    'follow',
+    'free',
+    'cockpit',
+    'kept-follow',
+    'navigated',
+  ]) {
+    await t.test(owner, async (t) => {
+      const f = await fixture(t, { missionCamera: true });
+      f.upstream.status = 200;
+      const activeTle = Promise.withResolvers();
+      f.upstream.activeTle = activeTle.promise;
+      assert.equal(
+        await f.manager.setEnabled('rocket-launches', true, { origin: 'user' }),
+        true,
+      );
+      const port = cameraOf(f.viewer);
+      Object.defineProperty(port, 'followed', {
+        configurable: true,
+        writable: true,
+        value: owner === 'kept-follow' ? { key: 'flights:passenger' } : null,
+      });
+      const beforePick = f.camera.flights;
+      f.panel.selectMissionAt(0, { keepFollow: true });
+      const afterPick = f.camera.flights;
+      assert.equal(afterPick - beforePick, owner === 'kept-follow' ? 0 : 1);
+      const lookup = f.state._activeTlePromise;
+      assert.ok(lookup);
+
+      t.mock.timers.enable({ apis: ['setTimeout'] });
+      activeTle.resolve('deferred active catalog');
+      await lookup;
+      assert.ok(f.state._retryTimer);
+
+      // The camera can acquire an owner between lookup and its late rebuild.
+      const followed = owner === 'follow' ? { key: 'satellites:25544' } : null;
+      if (owner === 'navigated') f.missions.releaseCameraOwnership();
+      port.followed = followed;
+      const documentBefore = globalThis.document;
+      if (owner === 'cockpit') {
+        globalThis.document = {
+          body: { classList: { contains: (name) => name === 'cockpit-mode' } },
+        };
+      }
+      try {
+        t.mock.timers.tick(POST_TLE_RETRY_DELAY_MS);
+        assert.ok(f.state._updatePromise);
+        await f.state._updatePromise;
+      } finally {
+        if (owner === 'cockpit') {
+          if (documentBefore === undefined) delete globalThis.document;
+          else globalThis.document = documentBefore;
+        }
+        t.mock.timers.reset();
+      }
+      assert.equal(f.state._renderedTleText, 'deferred active catalog');
+      assert.equal(f.state._selectedLaunchId, launchRecord.id);
+      assert.equal(followedOf(f.viewer), followed);
+      assert.equal(f.camera.flights - afterPick, owner === 'free' ? 1 : 0);
+    });
+  }
+});
 
 test('a Space Missions start that gets HTTP 429 rolls back and leaves other layers alone', async (t) => {
   const f = await fixture(t);
@@ -492,6 +573,66 @@ for (const phase of ['while starting', 'after start']) {
     assert.equal(f.controls.getContextModeState().mode, 'flights');
   });
 }
+
+test('Satellites already on keeps its display choices through Space Missions', async (t) => {
+  const f = await fixture(t);
+  f.upstream.status = 200;
+  const chosen = {
+    catalog: 'core',
+    classes: { starlink: false, debris: false },
+    showPoints: true,
+    showOrbits: false,
+    selectedSatTrackingId: 25544,
+  };
+  f.manager.setLayerParams('satellites', chosen, { origin: 'user' });
+  assert.equal(
+    await f.manager.setEnabled('satellites', true, { origin: 'user' }),
+    true,
+  );
+  await f.settle();
+  assert.equal(
+    await f.manager.setEnabled('rocket-launches', true, { origin: 'user' }),
+    true,
+  );
+  await f.settle();
+  assert.deepEqual(f.manager.getLayerParams('satellites'), chosen);
+
+  const latest = { ...chosen, showPoints: false, showOrbits: true };
+  f.manager.setLayerParams('satellites', latest, { origin: 'user' });
+  assert.deepEqual(f.manager.getLayerParams('satellites'), latest);
+
+  await f.manager.setEnabled('rocket-launches', false, { origin: 'user' });
+  await f.settle();
+  assert.deepEqual(f.enabledIds(), ['satellites']);
+  assert.deepEqual(f.manager.getLayerParams('satellites'), latest);
+});
+
+test('an explicit Satellites ON immediately gives a borrowed layer its display choices back', async (t) => {
+  const f = await fixture(t);
+  f.upstream.status = 200;
+  const chosen = { catalog: 'core', showPoints: true, showOrbits: false };
+  f.manager.setLayerParams('satellites', chosen, { origin: 'user' });
+  assert.equal(
+    await f.manager.setEnabled('rocket-launches', true, { origin: 'user' }),
+    true,
+  );
+  await f.settle();
+  assert.deepEqual(f.enabledIds(), ['rocket-launches', 'satellites']);
+  const borrowed = f.manager.getLayerParams('satellites');
+  assert.equal(borrowed.showPoints, false);
+  assert.equal(borrowed.showOrbits, false);
+
+  assert.equal(
+    await f.manager.setEnabled('satellites', true, { origin: 'voice' }),
+    true,
+  );
+  assert.deepEqual(f.manager.getLayerParams('satellites'), chosen);
+  assert.equal(borrowed.catalog, chosen.catalog);
+  await f.manager.setEnabled('rocket-launches', false, { origin: 'user' });
+  await f.settle();
+  assert.deepEqual(f.enabledIds(), ['satellites']);
+  assert.deepEqual(f.manager.getLayerParams('satellites'), chosen);
+});
 
 test('Contacts started and ended while Space Missions runs leaves it and Satellites alone', async (t) => {
   const f = await fixture(t);

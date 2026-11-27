@@ -549,6 +549,38 @@ test('the selected quake runs contour rings to its disc edge; clearing stops the
   assert.deepEqual(calls.at(-1), ['dispose']);
 });
 
+test('an Inspector pick runs the same quake animation without a second flight', async () => {
+  const shown = [];
+  const idless = quake('event-stable', { usgsId: null });
+  const h = harness([quake('ak1'), idless], {
+    ripples: {
+      show: (target, options) => shown.push([target, options]),
+    },
+  });
+  h.layer.enable(h.viewer);
+  await h.layer.update(h.viewer);
+
+  h.clickDisc('ak1');
+  const globe = shown.at(-1);
+  h.click(null);
+  const rowId = h.layer.getAnalystRecords().find(({ id }) => id === 'ak1').id;
+  assert.equal(h.layer.pickById(rowId, { center: false }), true);
+  assert.deepEqual(shown.at(-1), globe);
+  assert.equal(globe[1].restart, true);
+  assert.equal(h.lastCard()[0].id, 'earthquake-card:ak1');
+  assert.deepEqual(h.focused, []);
+  assert.equal(h.layer.pickById('missing', { center: false }), false);
+  await h.layer.update(h.viewer);
+  assert.equal(shown.at(-1)[1].restart, false);
+
+  const idlessRow = h.layer.getAnalystRecords()[1];
+  h.setRows([idless, quake('ak1')]);
+  await h.layer.update(h.viewer);
+  assert.equal(h.layer.pickById(idlessRow.id, { center: false }), true);
+  assert.equal(shown.at(-1)[0].id, 'event-stable');
+  h.layer.destroy();
+});
+
 test('ripple rings run from the marker to the edge, staggered, fading at both ends', () => {
   const rings = earthquakeRippleRings(0, { count: 3, periodMs: 3000 });
   assert.deepEqual(

@@ -68,3 +68,31 @@ export function greatCircleKm(from, to) {
 export function greatCircleMeters(from, to) {
   return greatCircleKm(from, to) * 1000;
 }
+
+/** Wrap a longitude, or a difference of two, into [-180, 180]: the short way round. */
+export function wrapLon(lon) {
+  if (lon >= -180 && lon <= 180) return lon;
+  return ((((lon + 180) % 360) + 360) % 360) - 180;
+}
+
+/** Project a geographic point onto a short segment in a local metre projection. */
+export function nearestOnSegment(point, [ax, ay], [bx, by], xScale, yScale) {
+  const dx = wrapLon(bx - ax);
+  const dy = by - ay;
+  const x = dx * xScale;
+  const y = dy * yScale;
+  const length2 = x * x + y * y;
+  // Unwrap around the segment midpoint so the far side of the
+  // world cannot project onto a short antimeridian crossing.
+  const offsetX = (wrapLon(point.lon - (ax + dx / 2)) + dx / 2) * xScale;
+  const fraction = length2
+    ? Math.max(
+        0,
+        Math.min(1, (offsetX * x + (point.lat - ay) * yScale * y) / length2),
+      )
+    : 0;
+  const lon =
+    fraction === 0 ? ax : fraction === 1 ? bx : wrapLon(ax + fraction * dx);
+  const lat = fraction === 0 ? ay : fraction === 1 ? by : ay + fraction * dy;
+  return { lat, lon };
+}

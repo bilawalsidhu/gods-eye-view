@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/** Camera-panel browser acceptance with controlled sources, images and terrain. */
+/** Camera controls browser acceptance with controlled sources, images and terrain. */
 import fs from 'node:fs';
 import puppeteer from 'puppeteer';
 const origin = process.env.QA_BASE_URL || 'http://localhost:4173';
@@ -112,39 +112,84 @@ try {
       document.getElementById('loading-screen')?.classList.contains('hidden'),
     { timeout: 60000 },
   );
-  await page.$eval('[data-collapse-target="cctv-panel"]', (button) =>
-    button.click(),
-  );
-  await page.click('#cctv-enable-btn');
+  // Cameras is switched on from its Data Layers row; a camera's card opens in
+  // Context, and its tools are the card's Camera settings tab.
+  const cctvRow = '#data-toggles [data-layer-id="cctv"]';
+  const toggleCctv = async () => {
+    await page.evaluate(() =>
+      window.__godsEyeView.styleManager.setPanelCollapsed('data-panel', false, {
+        persist: false,
+        syncShare: false,
+      }),
+    );
+    await page.waitForSelector(`${cctvRow} .data-toggle-btn`, {
+      visible: true,
+    });
+    await page.click(`${cctvRow} .data-toggle-btn`);
+  };
+  const frameShows = (cameraId) =>
+    page.waitForFunction(
+      (id) => {
+        const frame = document.getElementById('cctv-frame');
+        return (
+          frame.dataset.cameraId === id && frame.classList.contains('active')
+        );
+      },
+      {},
+      cameraId,
+    );
+  const openCameraCard = async (cameraId) => {
+    await page.evaluate(async (id) => {
+      const [{ applicationPinia }, { useEntityCardStore }] = await Promise.all([
+        import('/src/ui/vueRuntime.js'),
+        import('/src/ui/stores/entityCard.js'),
+      ]);
+      useEntityCardStore(applicationPinia()).open({ layerId: 'cctv', id });
+      window.__godsEyeView.styleManager.setPanelCollapsed(
+        'global-context-panel',
+        false,
+        { persist: false, syncShare: false },
+      );
+    }, cameraId);
+    await page.waitForFunction(
+      (id) =>
+        window.__godsEyeView.dataManager.layers.get('cctv').module.getUIState()
+          .activeCameraId === id &&
+        Boolean(document.querySelector('#entity-card[data-layer="cctv"]')),
+      {},
+      cameraId,
+    );
+  };
+  const showCameraSettings = async () => {
+    await page.waitForSelector('#context-tab-camera', { visible: true });
+    await page.click('#context-tab-camera');
+    await page.waitForSelector('#cctv-tools-slot #cctv-tools', {
+      visible: true,
+    });
+  };
+  await toggleCctv();
   await page.waitForFunction(
     () =>
       window.__godsEyeView.dataManager.layers.get('cctv').module.getUIState()
-        .cameras.length === 2 &&
-      !document.getElementById('cctv-camera-select').disabled,
+        .cameras.length === 2,
     { timeout: 30000 },
   );
   check(
     'CCTV enable uses the supplied two-camera catalog',
-    await page.$eval(
-      '#cctv-camera-select',
-      (select) => select.options.length === 2 && !select.disabled,
+    await page.evaluate(
+      () =>
+        window.__godsEyeView.dataManager.layers.get('cctv').module.getUIState()
+          .cameras.length === 2,
     ),
   );
-  await page.select('#cctv-camera-select', 'qa-camera-a');
-  await page.waitForFunction(
-    () =>
-      document.getElementById('cctv-frame').dataset.cameraId ===
-        'qa-camera-a' &&
-      document
-        .getElementById('cctv-frame-wrap')
-        .classList.contains('has-frame'),
-  );
+  await openCameraCard('qa-camera-a');
+  await frameShows('qa-camera-a');
   const state = () =>
     page.evaluate(() =>
       window.__godsEyeView.dataManager.layers.get('cctv').module.getUIState(),
     );
   check(
-    'selected camera, decoded preview and source label agree',
+    'selected camera, decoded preview and card agree',
     await page.evaluate(() => {
       const camera = window.__godsEyeView.dataManager.layers
         .get('cctv')
@@ -153,11 +198,12 @@ try {
         camera.id === 'qa-camera-a' &&
         document.getElementById('cctv-frame').src.includes('qa-camera-a') &&
         document
-          .getElementById('cctv-meta')
-          .textContent.includes('QA camera fixture')
+          .querySelector('#entity-card[data-layer="cctv"]')
+          .textContent.includes('QA Camera A')
       );
     }),
   );
+  await showCameraSettings();
   const coverage = (await state()).coverageMode;
   const modes = [];
   for (let i = 0; i < 3; i++) {
@@ -176,22 +222,33 @@ try {
     (await state()).showProjection === !projection,
   );
   await page.click('#cctv-projection-btn');
-  await page.click('#cctv-next-btn');
+  // Prev and Next are the Cameras row's chips.
+  await page.evaluate(
+    (row) =>
+      document.querySelector(`${row} [data-chip-id="next-camera"]`).click(),
+    cctvRow,
+  );
   await page.waitForFunction(
     () =>
       window.__godsEyeView.dataManager.layers.get('cctv').module.getUIState()
         .activeCameraId === 'qa-camera-b',
   );
-  await page.click('#cctv-prev-btn');
+  await page.evaluate(
+    (row) =>
+      document.querySelector(`${row} [data-chip-id="previous-camera"]`).click(),
+    cctvRow,
+  );
   await page.waitForFunction(
     () =>
       window.__godsEyeView.dataManager.layers.get('cctv').module.getUIState()
         .activeCameraId === 'qa-camera-a',
   );
   check(
-    'native Next and Previous return to the original camera',
+    'the Cameras row Next and Previous return to the original camera',
     (await state()).activeCameraId === 'qa-camera-a',
   );
+  await openCameraCard('qa-camera-a');
+  await showCameraSettings();
   for (const [selector, key] of [
     ['#cctv-auto-hop-btn', 'autoHop'],
     ['#cctv-adjust-btn', 'calibrationMode'],
@@ -206,14 +263,10 @@ try {
     );
   }
   // Auto Hop can legitimately advance immediately; restore the calibration target.
-  await page.select('#cctv-camera-select', 'qa-camera-a');
-  await page.waitForFunction(
-    () =>
-      window.__godsEyeView.dataManager.layers.get('cctv').module.getUIState()
-        .activeCameraId === 'qa-camera-a',
-  );
+  await openCameraCard('qa-camera-a');
+  await showCameraSettings();
   const heading = (await state()).activeCamera.headingDeg;
-  const chip = '.cctv-cal-value[data-cal-field="heading"]';
+  const chip = '#cctv-tools .cctv-cal-value[data-cal-field="heading"]';
   await page.click(chip);
   await page.focus(`${chip} input`);
   await page.keyboard.down(selectAllModifier);
@@ -249,13 +302,20 @@ try {
   await page.keyboard.type('110');
   await page.keyboard.press('Escape');
   check(
-    'Escape cancels editing without collapsing CCTV',
+    'Escape cancels editing without leaving Camera settings',
     (await page.evaluate(
       () =>
         !document.querySelector('.cctv-cal-input') &&
-        !document.getElementById('cctv-panel').classList.contains('collapsed'),
+        !document
+          .getElementById('global-context-panel')
+          .classList.contains('collapsed') &&
+        Boolean(document.querySelector('#cctv-tools-slot #cctv-tools')),
     )) && Math.abs((await state()).activeCamera.headingDeg - heading) < 0.01,
   );
+  if (!(await page.$('#cctv-tools-slot #cctv-tools'))) {
+    await openCameraCard('qa-camera-a');
+    await showCameraSettings();
+  }
   await page.click(chip);
   await page.evaluate(() => {
     const input = document.querySelector('.cctv-cal-input');
@@ -271,17 +331,14 @@ try {
       Math.abs((await state()).activeCamera.headingDeg - 200) < 0.01 &&
       (await page.$('.cctv-cal-input')) === null,
   );
-  await page.waitForFunction(
-    () =>
-      document.getElementById('cctv-frame').dataset.cameraId ===
-        'qa-camera-b' &&
-      document
-        .getElementById('cctv-frame-wrap')
-        .classList.contains('has-frame'),
-  );
+  await frameShows('qa-camera-b');
   await page.setCacheEnabled(false);
   delayCameraA = true;
-  await page.select('#cctv-camera-select', 'qa-camera-a');
+  await page.evaluate(() =>
+    window.__godsEyeView.dataManager.layers
+      .get('cctv')
+      .module.selectCamera('qa-camera-a'),
+  );
   await page.waitForFunction(
     () =>
       document.getElementById('cctv-frame').dataset.cameraId ===
@@ -304,19 +361,16 @@ try {
   check(
     'a newly selected camera clears old pixels while its frame loads',
     await page.$eval(
-      '#cctv-frame-wrap',
-      (element) => !element.classList.contains('has-frame'),
+      '#cctv-frame',
+      (element) => !element.classList.contains('active'),
     ),
   );
-  await page.select('#cctv-camera-select', 'qa-camera-b');
-  await page.waitForFunction(
-    () =>
-      document.getElementById('cctv-frame').dataset.cameraId ===
-        'qa-camera-b' &&
-      document
-        .getElementById('cctv-frame-wrap')
-        .classList.contains('has-frame'),
+  await page.evaluate(() =>
+    window.__godsEyeView.dataManager.layers
+      .get('cctv')
+      .module.selectCamera('qa-camera-b'),
   );
+  await frameShows('qa-camera-b');
   delayCameraA = false;
   await Promise.all([...delayedFrames].map((respond) => respond()));
   delayedFrames.clear();
@@ -331,7 +385,7 @@ try {
     ),
   );
   delayCameraA = false;
-  await page.click('#cctv-enable-btn');
+  await toggleCctv();
   await page.waitForFunction(
     () => !window.__godsEyeView.dataManager.isEnabled('cctv'),
   );
@@ -339,95 +393,39 @@ try {
     '#cctv-frame',
     (image) => !image.getAttribute('src') && image.dataset.cameraId === '',
   );
-  // The address bar follows the share state after a short delay: wait for the
-  // CCTV panel token (1 collapsed, 0 open) the step expects.
-  const panelState = async (expectedToken) => {
-    const settled = await page
-      .waitForFunction(
-        (token) =>
-          new RegExp(`(?:^|_)v\\.c\\.${token}(?:_|$)`).test(
-            new URLSearchParams(location.hash.slice(1)).get('ui') || '',
-          ),
-        { timeout: 5000 },
-        expectedToken,
-      )
+  check(
+    'disable takes the Camera settings tab away',
+    await page
+      .waitForFunction(() => !document.getElementById('context-tab-camera'), {
+        timeout: 5000,
+      })
       .then(
         () => true,
         () => false,
-      );
-    return page.evaluate(
-      (shared) => ({
-        collapsed: document
-          .getElementById('cctv-panel')
-          .classList.contains('collapsed'),
-        shared,
-        ui: new URLSearchParams(location.hash.slice(1)).get('ui'),
-      }),
-      settled ? expectedToken : null,
-    );
-  };
-  const closedOnDisable = await panelState('1');
-  check(
-    'disable collapses the panel and its share preference',
-    closedOnDisable.collapsed && closedOnDisable.shared === '1',
-    JSON.stringify(closedOnDisable),
+      ),
   );
-  // The switch sits inside the collapsed panel: reopen it from the right rail.
-  await page.click('[data-rail-item="cctv-panel"]');
-  await page.waitForFunction(
-    () =>
-      !document.getElementById('cctv-panel').classList.contains('collapsed'),
-  );
-  await page.click('#cctv-enable-btn');
-  await page.waitForFunction(
-    () =>
-      window.__godsEyeView.dataManager.isEnabled('cctv') &&
-      document
-        .getElementById('cctv-frame-wrap')
-        .classList.contains('has-frame'),
-  );
-  check(
-    'disable clears the preview and re-enable reacquires the camera frame',
-    disabledCleanly,
-  );
-  // Contacts switches CCTV off to isolate itself and restores it on the way
-  // out: the open panel and its share preference survive the round trip.
-  const cameraBeforeContacts = await page.evaluate(
-    () =>
-      window.__godsEyeView.styleManager._cctvControls.getState()
-        ?.activeCameraId,
-  );
-  const entered = await page.evaluate(() =>
-    window.__godsEyeView.styleManager.setContextMode('flights'),
-  );
-  await page.waitForFunction(
-    () => !window.__godsEyeView.dataManager.isEnabled('cctv'),
-  );
-  const duringContacts = await panelState('0');
-  await page.evaluate(() =>
-    window.__godsEyeView.styleManager.setContextMode(null),
-  );
+  await toggleCctv();
   await page.waitForFunction(() =>
     window.__godsEyeView.dataManager.isEnabled('cctv'),
   );
-  const afterContacts = await panelState('0');
+  await openCameraCard('qa-camera-a');
+  await frameShows('qa-camera-a');
+  await page.waitForFunction(() => {
+    const image = document.querySelector(
+      '#entity-card[data-layer="cctv"] .cctv-preview__frame img',
+    );
+    return (
+      image?.checkVisibility({
+        visibilityProperty: true,
+        opacityProperty: true,
+      }) &&
+      image.naturalWidth > 0 &&
+      new URL(image.currentSrc).pathname === '/api/cctv/frame/qa-camera-a'
+    );
+  });
   check(
-    'Contacts isolation keeps the open CCTV panel and restores its camera',
-    entered?.ok === true &&
-      !duringContacts.collapsed &&
-      duringContacts.shared === '0' &&
-      !afterContacts.collapsed &&
-      afterContacts.shared === '0' &&
-      (await page.evaluate(
-        (cameraId) =>
-          window.__godsEyeView.styleManager._cctvControls.getState()
-            ?.activeCameraId === cameraId,
-        cameraBeforeContacts,
-      )),
-    JSON.stringify({ entered, duringContacts, afterContacts }),
-  );
-  await page.$eval('#cctv-frame', (image) =>
-    image.scrollIntoView({ block: 'nearest' }),
+    'disable clears the preview and re-enable reacquires the camera frame',
+    disabledCleanly,
   );
   fs.mkdirSync('qa-shots/camera-controls', { recursive: true });
   await page.screenshot({ path: 'qa-shots/camera-controls/desktop.png' });
@@ -445,31 +443,15 @@ try {
   await page.screenshot({ path: 'qa-shots/camera-controls/angle.png' });
   await page.setViewport({ width: 390, height: 844 });
   await new Promise((resolve) => setTimeout(resolve, 700));
-  // Phones present CCTV in the Cameras tab's sheet.
-  await page.click('#mobile-tab-bar [data-mobile-sheet="cameras"]');
+  // Phones present a camera's card in the Context tab's sheet.
+  await page.click('#mobile-tab-bar [data-mobile-sheet="context"]');
   await new Promise((resolve) => setTimeout(resolve, 400));
   await page.screenshot({ path: 'qa-shots/camera-controls/narrow.png' });
   check(
-    'narrow camera panel remains within the viewport',
-    await page.$eval('#cctv-panel', (panel) => {
-      const rect = panel.getBoundingClientRect();
+    'narrow camera card remains within the viewport',
+    await page.$eval('#entity-card[data-layer="cctv"]', (card) => {
+      const rect = card.getBoundingClientRect();
       return rect.width > 0 && rect.left >= 0 && rect.right <= innerWidth + 1;
-    }),
-  );
-  check(
-    'rebuilding Radio preserves the active camera controller and subscription',
-    await page.evaluate(() => {
-      const ui = window.__godsEyeView.styleManager;
-      const camera = ui._cctvControls;
-      const cameraId = camera.getState()?.activeCameraId;
-      ui._initRadioPanel();
-      ui._radioControls.connect();
-      return (
-        ui._cctvControls === camera &&
-        !camera.destroyed &&
-        Boolean(camera._cctvUnsubscribe) &&
-        camera.getState()?.activeCameraId === cameraId
-      );
     }),
   );
   await page.evaluate(() => window.__godsEyeView.styleManager.dispose());

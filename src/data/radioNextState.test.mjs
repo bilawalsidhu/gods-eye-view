@@ -30,7 +30,6 @@ function render(state) {
       store: { publish: (published) => (view = published), publishTuner() {} },
       actions: {
         getLifecycle: () => null,
-        preservePanelStateDuringClear: () => false,
         setPanelCollapsed() {},
         scheduleLayout() {},
       },
@@ -64,6 +63,19 @@ test('Next before Play only selects, and Play tries just that station', async ()
     assert.deepEqual(playUrls, [stations[1].streamUrl], 'no fallback picked by the silent step');
     assert.equal(state.selected?.id, ids[1]);
     assert.equal(state.audioState, 'error');
+  });
+});
+
+test('cycling a filtered directory can reach matches beyond the tuner band', async () => {
+  const rows = Array.from({ length: 752 }, (_, index) => radioStationRow({
+    id: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+    name: `Station ${index}`,
+  }));
+  await withRadioLayer({ stations: rows }, async () => {
+    const stationIds = rows.map(({ id }) => id);
+    radioLayer.selectStation(stationIds[749], { autoplay: false });
+    assert.equal(radioLayer.cycleStation(1, { stationIds, autoplay: false }), true);
+    assert.equal(radioLayer.getUIState().selected.id, stationIds[750]);
   });
 });
 
@@ -413,5 +425,23 @@ test('a silent dial release drops the fallback a voice step left behind', async 
     await settle();
     assert.deepEqual(playUrls, [stations[0].streamUrl]);
     assert.equal(radioLayer.getUIState().audioState, 'error');
+  });
+});
+
+test('Prev and Next on the Data Layers row step through the stations, silent while nothing plays', async () => {
+  await withLayer([], async ({ playUrls }) => {
+    radioLayer.selectStation(ids[0], { autoplay: false });
+    const chip = (id) => radioLayer.getRowControls()?.chips.find((one) => one.id === id);
+    for (const id of ['previous-station', 'next-station'])
+      assert.match(chip(id).title, /broadcasters.*IP address/);
+    const before = radioLayer.getUIState().selected?.id;
+    chip('next-station').onClick();
+    await settle();
+    const after = radioLayer.getUIState().selected?.id;
+    assert.ok(after && after !== before, 'the next station is selected');
+    assert.deepEqual(playUrls, [], 'nothing starts playing');
+    chip('previous-station').onClick();
+    await settle();
+    assert.equal(radioLayer.getUIState().selected?.id, before, 'and back');
   });
 });

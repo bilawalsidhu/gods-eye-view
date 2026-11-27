@@ -1,7 +1,9 @@
 import '../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { nextTick } from 'vue';
 import { setLocale } from '../i18n/index.js';
+import { resetListCardMemory } from './kit/ContextListCard.vue';
 import { createNewsPanel } from './newsPanel.js';
 import {
   NEWS_CATEGORIES,
@@ -74,6 +76,7 @@ function view(extra = {}) {
       color: level.color,
     })),
     items: [feedCardView(big, NOW), feedCardView(report('lone'), NOW)],
+    mapCount: 5,
     inView: { active: false, loading: false, error: null, items: [] },
     selected: null,
     hasMore: true,
@@ -85,39 +88,37 @@ function view(extra = {}) {
 }
 
 function fixture() {
+  // News's list in Context: a body the readout renders into, and the list's
+  // presence (whether its tab shows, and its count) reported as it goes.
   document.body.innerHTML = `
-    <div id="news-panel" class="collapsed" hidden>
-      <span id="news-panel-count">0</span>
-      <button data-collapse-target="news-panel"></button>
+    <div id="context-list-news">
       <div id="news-panel-body"></div>
     </div>`;
-  const panel = document.getElementById('news-panel');
-  let opened = 0;
-  panel
-    .querySelector('[data-collapse-target]')
-    .addEventListener('click', () => {
-      opened++;
-      panel.classList.remove('collapsed');
-    });
+  const panel = document.getElementById('context-list-news');
+  const reports = [];
   const calls = [];
   const news = createNewsPanel({
     container: document.getElementById('news-panel-body'),
     setLayerParams: (id, params, options) => calls.push([id, params, options]),
+    onPresence: (state) => reports.push(state),
   });
-  return { news, panel, calls, opened: () => opened };
+  return { news, panel, calls, presence: () => reports.at(-1) };
 }
 
-test('the panel shows the last 24 h as event cards and opens once', () => {
-  const { news, panel, opened } = fixture();
+const countOf = (presence) => String(presence()?.count);
+
+test('the list shows the last 24 h as event cards, with its tab only while News is on', () => {
+  const { news, panel, presence } = fixture();
   news.update(null);
-  assert.equal(panel.hidden, true);
+  assert.equal(presence(), null);
   news.update(view());
-  assert.equal(panel.hidden, false);
-  assert.equal(opened(), 1);
-  assert.equal(document.getElementById('news-panel-count').textContent, '2');
+  assert.notEqual(presence(), null);
+  // The tab counts the reports on the map, as Context's News tile does, not
+  // the feed's loaded cards.
+  assert.equal(countOf(presence), '5');
   assert.equal(
-    panel.querySelector('.news-readout__window').textContent,
-    'Last 24 h',
+    panel.querySelector('.news-readout__chosen').textContent,
+    'Last 24 h · Significant and above · All categories',
   );
   assert.deepEqual(
     [...panel.querySelectorAll('.news-readout__chips [data-chip-id]')].map(
@@ -126,7 +127,7 @@ test('the panel shows the last 24 h as event cards and opens once', () => {
     ['All 7', 'Ukraine–Russia 7'],
   );
   const [first, second] = panel.querySelectorAll(
-    '.news-readout__feed .news-card',
+    '[data-list-card="news"] .news-card',
   );
   assert.equal(
     first.querySelector('.news-card__title').textContent,
@@ -158,12 +159,8 @@ test('the panel shows the last 24 h as event cards and opens once', () => {
   assert.equal(first.querySelector('.news-card__credit').textContent, 'A');
   // A lone report has no picture.
   assert.equal(second.querySelector('.news-card__thumb') === null, true);
-  // A later update does not reopen a panel the reader collapsed.
-  panel.classList.add('collapsed');
-  news.update(view());
-  assert.equal(opened(), 1);
   news.destroy();
-  assert.equal(panel.hidden, true);
+  assert.equal(presence(), null, 'its tab goes with it');
 });
 
 test('a card click flies there; open, it links the source and closes', () => {
@@ -172,7 +169,7 @@ test('a card click flies there; open, it links the source and closes', () => {
   panel.querySelector('.news-card__main').click();
   assert.deepEqual(calls.at(-1), [
     'news',
-    { reportId: 'big', focus: true },
+    { reportId: 'big', focus: true, fromNewsList: true },
     { origin: 'user' },
   ]);
   news.update(view({ selected: feedCardView(big, NOW) }));
@@ -190,10 +187,137 @@ test('a card click flies there; open, it links the source and closes', () => {
   news.destroy();
 });
 
-test('filters, the Local section and empty or failed reads', () => {
-  const { news, panel, calls } = fixture();
+test('the list card reports its order to the layer, for Prev and Next', async () => {
+  const { news, calls } = fixture();
   news.update(view());
-  assert.equal(panel.querySelector('[aria-label="Local"]') === null, true);
+  await nextTick();
+  assert.deepEqual(calls.at(-1), [
+    'news',
+    { listOrder: ['big', 'lone'] },
+    { origin: 'user' },
+  ]);
+  news.destroy();
+});
+
+test('publishing the initial list order can refresh a failed feed while it mounts', async () => {
+  const container = document.createElement('div');
+  const failed = view({
+    items: [],
+    error: 'News feed unavailable',
+    hasMore: false,
+  });
+  let publications = 0;
+  const panel = createNewsPanel({
+    container,
+    setLayerParams: (_id, params) => {
+      assert.deepEqual(params.listOrder, []);
+      if (++publications === 1) panel.update({ ...failed });
+    },
+    onPresence() {},
+  });
+  panel.update(null);
+  panel.update(failed);
+  await nextTick();
+  assert.equal(publications, 1);
+  assert.match(container.textContent, /News feed unavailable/);
+  panel.update(null);
+  assert.equal(container.querySelector('.news-readout'), null);
+  panel.destroy();
+});
+
+test('a selected report keeps its open detail and source across pages', async (t) => {
+  const { news, panel } = fixture();
+  resetListCardMemory();
+  t.after(() => {
+    news.destroy();
+    resetListCardMemory();
+  });
+  const items = Array.from({ length: 8 }, (_, i) =>
+    feedCardView(report(String(i + 1)), NOW),
+  );
+  news.update(view({ items, selected: items[6] }));
+  const open = () => [...panel.querySelectorAll('.news-card.is-open')];
+  assert.deepEqual(
+    open().map((card) => card.querySelector('.news-card__link').href),
+    ['https://www.example.com/7'],
+  );
+  assert.ok(open()[0].classList.contains('news-readout__selected'));
+
+  panel.querySelector('[data-list-next]').click();
+  await nextTick();
+  assert.equal(open().length, 1);
+  assert.ok(open()[0].classList.contains('news-readout__selected'));
+
+  panel.querySelector('[data-list-previous]').click();
+  await nextTick();
+  assert.equal(open().length, 1);
+  assert.ok(open()[0].classList.contains('news-readout__selected'));
+});
+
+test('a feed refresh keeps focus on the selected report source when the detail moves', (t) => {
+  const { news, panel } = fixture();
+  resetListCardMemory();
+  t.after(() => {
+    news.destroy();
+    resetListCardMemory();
+  });
+  const items = Array.from({ length: 8 }, (_, i) =>
+    feedCardView(
+      report(
+        String(i + 1),
+        i === 4
+          ? {
+              event: {
+                size: 1,
+                sides: [],
+                image: {
+                  url: 'https://example.com/thumb.jpg',
+                  publisher: 'News',
+                  video: 'https://example.com/clip.mp4',
+                },
+              },
+            }
+          : {},
+      ),
+      NOW,
+    ),
+  );
+  const selected = items[4];
+  news.update(view({ items, selected }));
+  const link = () => panel.querySelector('.news-card.is-open .news-card__link');
+  const originalLink = link();
+  const clip = panel.querySelector('video');
+  clip.currentTime = 17;
+  link().focus();
+
+  news.update(
+    view({ items: [feedCardView(report('new'), NOW), ...items], selected }),
+  );
+  assert.ok(
+    panel.querySelector('video') === clip,
+    'the playing element stays mounted',
+  );
+  assert.equal(clip.currentTime, 17);
+  assert.ok(link() === originalLink, 'the selected detail remains mounted');
+  assert.ok(
+    document.activeElement === link(),
+    'the link in the detail above the page',
+  );
+
+  news.update(view({ items, selected }));
+  assert.ok(
+    document.activeElement === link(),
+    'the link in the detail on its page',
+  );
+});
+
+test('filters, the Local section and empty or failed reads', () => {
+  const { news, panel, calls, presence } = fixture();
+  news.update(view());
+  const heading = () =>
+    panel.querySelector('.context-list-card__head .view-context__block-name')
+      .textContent;
+  assert.equal(heading(), 'Latest');
   assert.equal(panel.querySelector('.news-toggle') === null, true);
   const severity = panel.querySelector('select[aria-label="Severity"]');
   assert.equal(severity.value, '2');
@@ -215,7 +339,10 @@ test('filters, the Local section and empty or failed reads', () => {
     panel.textContent,
     /No news matches these filters in the last 24 h/,
   );
-  assert.equal(panel.querySelector('.news-readout__footer button') === null, true);
+  assert.equal(
+    panel.querySelector('.news-readout__footer button') === null,
+    true,
+  );
 
   // Local: no hotspot chips or severity floor, and its own empty states.
   const localView = (inView) =>
@@ -224,19 +351,32 @@ test('filters, the Local section and empty or failed reads', () => {
       inView: { loading: false, error: null, items: [], ...inView },
     });
   news.update(localView({ active: false }));
-  const section = panel.querySelector('[aria-label="Local"]');
-  assert.match(section.textContent, /Zoom in to see local news/);
-  assert.equal(panel.querySelector('[data-chip-id="ua-ru-war"]') === null, true);
-  assert.equal(panel.querySelector('select[aria-label="Severity"]') === null, true);
-  assert.equal(panel.querySelector('[aria-label="Latest news"]') === null, true);
-  assert.equal(document.getElementById('news-panel-count').textContent, '0');
+  const card = () => panel.querySelector('[data-list-card="news"]');
+  assert.equal(heading(), 'Local');
+  assert.match(card().textContent, /Zoom in to see local news/);
+  assert.equal(
+    panel.querySelector('[data-chip-id="ua-ru-war"]') === null,
+    true,
+  );
+  assert.equal(
+    panel.querySelector('select[aria-label="Severity"]') === null,
+    true,
+  );
   news.update(
     localView({ active: true, items: [feedCardView(report('near'), NOW)] }),
   );
-  assert.equal(document.getElementById('news-panel-count').textContent, '1');
+  assert.equal(countOf(presence), '5');
+  news.update({
+    ...localView({ active: true, items: [feedCardView(report('near'), NOW)] }),
+    mapCount: 1,
+  });
+  assert.equal(countOf(presence), '1');
+  // A view without the map's count shows no count rather than a wrong one.
+  news.update({ ...view(), mapCount: undefined });
+  assert.equal(presence()?.count, null);
   news.update(localView({ active: true }));
   assert.match(
-    panel.querySelector('[aria-label="Local"]').textContent,
+    card().textContent,
     /Nothing reported near here in the last 24 h/,
   );
   news.update(view());
@@ -245,7 +385,7 @@ test('filters, the Local section and empty or failed reads', () => {
     view({ items: [], error: 'News feed unavailable', hasMore: false }),
   );
   assert.equal(
-    panel.querySelector('.news-readout__status').textContent,
+    card().querySelector('.context-list-card__state').textContent,
     'News feed unavailable',
   );
   news.destroy();
@@ -258,7 +398,7 @@ test('each section says which key it lacks; Local names the area it reads', () =
     hint: 'Needs LIVEUAMAP_API_KEY — add it in Provider Settings',
   };
   news.update(view({ key, items: [], hasMore: false }));
-  const latest = panel.querySelector('[aria-label="Latest news"]');
+  const latest = panel.querySelector('[data-list-card="news"]');
   assert.match(latest.textContent, /Liveuamap key required/);
   assert.match(latest.textContent, /Needs LIVEUAMAP_API_KEY/);
   assert.doesNotMatch(latest.textContent, /No news matches/);
@@ -275,7 +415,7 @@ test('each section says which key it lacks; Local names the area it reads', () =
         ...inView,
       },
     });
-  const section = () => panel.querySelector('[aria-label="Local"]');
+  const section = () => panel.querySelector('[data-list-card="news"]');
   const heading = () => section().querySelector('.news-readout__area');
   news.update(
     localView({
@@ -326,7 +466,7 @@ test('a card credits the service its report came through', () => {
 });
 
 test('scrolling to the end asks once per page, again after a filter change or a failed read', () => {
-  const { news, calls } = fixture();
+  const { news, calls, panel } = fixture();
   const body = document.getElementById('news-panel-body');
   // A scroller at its bottom.
   Object.defineProperty(body, 'scrollHeight', {
@@ -359,19 +499,61 @@ test('scrolling to the end asks once per page, again after a filter change or a 
   news.update(view({ filters: hotspot, error: 'News feed unavailable' }));
   scroll();
   assert.equal(loadMores(), 3);
-  // While loading, or with no older page, nothing is asked.
+  // The action keeps its place while the older page is loading.
+  const olderButton = () => panel.querySelector('.news-readout__footer button');
+  const older = olderButton();
   news.update(view({ filters: hotspot, loading: true }));
-  scroll();
-  news.update(view({ filters: hotspot, hasMore: false }));
+  assert.ok(
+    olderButton() === older,
+    'the same older-news button stays mounted',
+  );
+  assert.equal(older.disabled, true);
+  older.click();
   scroll();
   assert.equal(loadMores(), 3);
+  news.update(view({ filters: hotspot }));
+  assert.ok(olderButton() === older);
+  assert.equal(older.disabled, false);
+  older.click();
+  assert.equal(loadMores(), 4);
+  news.update(view({ filters: hotspot, hasMore: false }));
+  assert.equal(olderButton(), null);
+  scroll();
+  assert.equal(loadMores(), 4);
+  news.destroy();
+});
+
+test('the window, severity and category fold into one Filters row', () => {
+  const { news, panel } = fixture();
+  news.update(view({ windowHours: 24, windowChoices: [24, 12, 6, 3, 1] }));
+  const filters = panel.querySelectorAll('details.news-readout__filters');
+  assert.equal(filters.length, 1);
+  const [row] = filters;
+  assert.equal(row.open, false, 'folded at first');
+  // The summary (a keyboard stop of its own) names what is chosen.
+  const summary = row.querySelector('summary');
+  assert.equal(
+    summary.querySelector('.news-readout__filters-label').textContent,
+    'Filters',
+  );
+  assert.equal(
+    summary.querySelector('.news-readout__chosen').textContent,
+    'Last 24 h · Significant and above · All categories',
+  );
+  // Every select is inside it, and none is left outside.
+  assert.deepEqual(
+    [...row.querySelectorAll('select')].map((select) =>
+      select.getAttribute('aria-label'),
+    ),
+    ['Time window', 'Severity', 'Category'],
+  );
+  assert.equal(panel.querySelectorAll('select').length, 3);
   news.destroy();
 });
 
 test('the window choice offers shorter windows; the longest is the server window', () => {
   const { news, panel, calls } = fixture();
   news.update(view({ windowHours: 12, windowChoices: [12, 6, 3, 1] }));
-  assert.equal(panel.querySelector('.news-readout__window') === null, true);
   const choice = panel.querySelector('select[aria-label="Time window"]');
   assert.deepEqual(
     [...choice.options].map((option) => option.textContent),
@@ -396,12 +578,18 @@ test('the time window agrees with its number of hours', (t) => {
   );
   assert.deepEqual(
     [...choice.options].map((option) => option.textContent),
-    ['Últimas 24 h', 'Últimas 12 h', 'Últimas 6 h', 'Últimas 3 h', 'Última 1 h'],
+    [
+      'Últimas 24 h',
+      'Últimas 12 h',
+      'Últimas 6 h',
+      'Últimas 3 h',
+      'Última 1 h',
+    ],
   );
   news.update(view({ windowHours: 1, items: [], hasMore: false }));
-  assert.equal(
-    panel.querySelector('.news-readout__window').textContent,
-    'Última 1 h',
+  assert.match(
+    panel.querySelector('.news-readout__chosen').textContent,
+    /^Última 1 h · /,
   );
   assert.equal(
     panel.querySelector('.news-readout').getAttribute('aria-label'),
@@ -430,17 +618,23 @@ test('the Latest news heading agrees with the news it heads (fr)', (t) => {
   setLocale('fr');
   const { news, panel } = fixture();
   news.update(view());
-  assert.equal(panel.querySelector('.news-readout__head').textContent, 'Dernières');
+  assert.equal(
+    panel.querySelector('.context-list-card__head .view-context__block-name')
+      .textContent,
+    'Dernières',
+  );
   news.destroy();
 });
 
 test('the panel names the window the server serves', () => {
   const { news, panel } = fixture();
   news.update(view({ windowHours: 12 }));
-  assert.equal(
-    panel.querySelector('.news-readout__window').textContent,
-    'Last 12 h',
+  assert.match(
+    panel.querySelector('.news-readout__chosen').textContent,
+    /^Last 12 h · /,
   );
+  // With one window there is nothing to choose: no window select.
+  assert.equal(panel.querySelector('select[aria-label="Time window"]'), null);
 });
 
 test('a clip waits behind its picture and plays, on request, in the open card', () => {
@@ -487,4 +681,88 @@ test('a clip waits behind its picture and plays, on request, in the open card', 
   );
   assert.equal(panel.querySelector('.news-card.is-open video') === null, true);
   news.destroy();
+});
+
+test('switching News sections resets pagination', async (t) => {
+  resetListCardMemory();
+  const { news, panel } = fixture();
+  t.after(() => {
+    news.destroy();
+    resetListCardMemory();
+  });
+  const items = Array.from({ length: 12 }, (_, i) =>
+    feedCardView(report(String(i + 1)), NOW),
+  );
+  news.update(view({ items }));
+  panel.querySelector('[data-list-next]').click();
+  await nextTick();
+  const first = () => panel.querySelector('[data-list-key]').dataset.listKey;
+  assert.notEqual(first(), items[0].id);
+  news.update(
+    view({
+      items,
+      filters: { section: 'local' },
+      inView: { active: true, items, error: 'Cached Local update failed' },
+    }),
+  );
+  await nextTick();
+  assert.equal(first(), items[0].id);
+});
+
+test('a hidden news list releases its playing media and restores the report without autoplay', async (t) => {
+  const { news, panel } = fixture();
+  t.after(() => news.destroy());
+  const clip = feedCardView(
+    report('clip', {
+      event: {
+        size: 1,
+        sides: [],
+        image: {
+          url: 'https://example.com/thumb.jpg',
+          publisher: 'News',
+          video: 'https://example.com/v.mp4',
+        },
+      },
+    }),
+    NOW,
+  );
+  news.update(view({ items: [clip], selected: clip }));
+  const video = panel.querySelector('video');
+  assert.ok(video);
+  panel.querySelector('#news-panel-body').setAttribute('data-news-hidden', '');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(Boolean(panel.querySelector('video')), false);
+  assert.equal(video.hasAttribute('src'), false);
+  panel.querySelector('#news-panel-body').removeAttribute('data-news-hidden');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(panel.querySelector('video')?.hasAttribute('autoplay'), false);
+  assert.match(
+    panel.querySelector('.news-card.is-open').textContent,
+    /Report clip/,
+  );
+});
+
+test('Local News shows its own stale error with cached reports and a healthy empty state after recovery', (t) => {
+  const { news, panel } = fixture();
+  t.after(() => news.destroy());
+  const publish = (error, items) =>
+    news.update(
+      view({
+        filters: { section: 'local' },
+        items: [],
+        inView: { active: true, items, error },
+      }),
+    );
+  publish('Local refresh failed', [feedCardView(big, NOW)]);
+  assert.ok(panel.querySelector('.news-card'));
+  assert.match(
+    panel.querySelector('.news-readout__status')?.textContent || '',
+    /Local refresh failed/,
+  );
+  publish(null, []);
+  assert.equal(Boolean(panel.querySelector('.news-readout__status')), false);
+  assert.match(
+    panel.querySelector('.news-readout__empty').textContent,
+    /Nothing reported/,
+  );
 });

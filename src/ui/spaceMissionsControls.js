@@ -1,12 +1,30 @@
+import { useEntityCardStore } from './stores/entityCard.js';
+import { useContextStore } from './stores/context.js';
+import { applicationPinia } from './vueRuntime.js';
+
 const LAYER_ID = 'rocket-launches';
-const PANEL_ID = 'space-missions-panel';
+// An explicit list command reveals after checking its own turn and Context ownership.
+export const MISSION_LIST_REVEAL = Symbol('mission-list-reveal');
+
+export function captureMissionReveal() {
+  const pinia = applicationPinia();
+  const cards = useEntityCardStore(pinia);
+  const context = useContextStore(pinia);
+  const generation = cards.selectionGeneration();
+  const tab = context.inspectorTab;
+  return () =>
+    cards.selectionGeneration() === generation && context.inspectorTab === tab;
+}
 
 /**
- * The Space Missions panel's wiring. Space Missions is an ordinary layer: the
+ * The Space Missions layer's wiring. Space Missions is an ordinary layer: the
  * layer owns its data and Satellites dependency, and this connects it to its
- * panel. The panel shows while the layer is on, and opens when the person
- * turns the layer on (by hand or by voice) or picks a mission on the globe. Opening it closes the
- * other right-side panels, Context among them (see setPanelCollapsed).
+ * list in Context's Inspect view. The list shows when a person turns the
+ * layer on (by hand or by voice) or picks a mission on the globe.
+ * This wiring switches no layer itself. The layer leaves the person's other
+ * layers as they are, apart from Satellites, which it uses for orbit data
+ * and restores when it turns off
+ * (`src/layers/launches/ingestion.js`).
  */
 export class SpaceMissionsControls {
   /**
@@ -14,10 +32,9 @@ export class SpaceMissionsControls {
    * @param {?object} options.layer The Space Missions layer.
    * @param {object} options.store The Space Missions store.
    * @param {object} options.actions
-   * @param {(panelId: string, collapsed: boolean, options?: object) => void} options.actions.setPanelCollapsed
+   * @param {(options: {keepFollow: boolean}) => void} options.actions.showMissions Opens Context on the
+   *   Missions list (and, on a phone, its sheet).
    * @param {() => boolean} options.actions.isCockpitActive
-   * @param {() => void} [options.actions.revealPanel] Opens the phone sheet that
-   *   holds the panel; does nothing on desktop.
    */
   constructor({ layer, store, actions }) {
     this._layer = layer || null;
@@ -32,16 +49,31 @@ export class SpaceMissionsControls {
     this._unsubscribePanel =
       this._layer?.subscribePanel?.((view) => store.publish(view)) ?? null;
     this._unsubscribeGlobePick =
-      this._layer?.subscribeGlobePick?.(() => this._reveal()) ?? null;
+      this._layer?.subscribeGlobePick?.(() =>
+        this._reveal({ keepFollow: false }),
+      ) ?? null;
   }
 
   /** Follow a data manager's Space Missions visibility; null disconnects. */
   connect(manager) {
     this._unsubscribeManager?.();
+    this._unsubscribeRequest?.();
+    this._pendingReveal = null;
     this._unsubscribeManager = null;
     this._manager = manager || null;
     if (this.destroyed) return;
     this._syncEnabled();
+    this._unsubscribeRequest = manager?.subscribeVisibilityRequests?.(
+      (change) => {
+        if (change.layerId !== LAYER_ID) return;
+        this._pendingReveal =
+          change.enabled &&
+          change.notificationToken !== MISSION_LIST_REVEAL &&
+          (change.origin === 'user' || change.origin === 'voice')
+            ? { epoch: change.intentEpoch, current: captureMissionReveal() }
+            : null;
+      },
+    );
     this._unsubscribeManager =
       this._manager?.subscribe?.((change) => this._handleChange(change)) ??
       null;
@@ -58,22 +90,26 @@ export class SpaceMissionsControls {
     if (
       change.type === 'visibility' &&
       change.enabled &&
+      change.notificationToken !== MISSION_LIST_REVEAL &&
+      (!this._pendingReveal ||
+        (change.intentEpoch === this._pendingReveal.epoch &&
+          this._pendingReveal.current())) &&
       (change.origin === 'user' || change.origin === 'voice')
     )
       this._reveal();
   }
 
-  /** Open the panel, unless the Cockpit owns the screen. */
-  _reveal() {
+  /** Open Context on the Missions list, unless the Cockpit owns the screen. */
+  _reveal({ keepFollow = true } = {}) {
     if (this.destroyed || this._actions.isCockpitActive?.()) return;
-    this._actions.setPanelCollapsed(PANEL_ID, false, { explicit: true });
-    // A phone shows the rail only as tab sheets: open the Missions sheet too.
-    this._actions.revealPanel?.();
+    this._actions.showMissions?.({ keepFollow });
   }
 
   destroy() {
     if (this.destroyed) return;
     this.destroyed = true;
+    this._unsubscribeRequest?.();
+    this._pendingReveal = null;
     this._unsubscribeManager?.();
     this._unsubscribeManager = null;
     this._unsubscribePanel?.();

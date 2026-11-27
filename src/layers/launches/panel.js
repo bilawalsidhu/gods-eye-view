@@ -1,5 +1,13 @@
+import { isFollowing } from '../../data/followed.js';
 import { toCartographicRadians } from '../../geo/ellipsoid.js';
-import { formatNumber, isolate, onLocaleChange, t } from '../../i18n/index.js';
+import {
+  formatDate,
+  formatNumber,
+  getLocale,
+  isolate,
+  onLocaleChange,
+  t,
+} from '../../i18n/index.js';
 import {
   MISSION_CLOSE_VIEW_RANGE_M,
   MISSION_GLOBE_VIEW_RANGE_M,
@@ -200,6 +208,50 @@ export function createPanel({ state: layerState, services, parts, source }) {
     };
   }
 
+  // The launch time as the card's figure gives it, in UTC.
+  const LAUNCH_TIME_FORMAT = Object.freeze({
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'UTC',
+    timeZoneName: 'short',
+  });
+  function presentLaunchTime({ launchTime, launchPrecision }) {
+    const at = Date.parse(launchTime ?? '');
+    if (!Number.isFinite(at)) return null;
+    if (!launchPrecision) return formatDate(at, LAUNCH_TIME_FORMAT);
+    const timeZone = 'UTC';
+    const year = 'numeric';
+    const month = 'short';
+    if (launchPrecision === 'year') return formatDate(at, { year, timeZone });
+    if (launchPrecision === 'month')
+      return formatDate(at, { year, month, timeZone });
+    if (launchPrecision === 'quarter') {
+      const date = new Date(at);
+      const startMonth = Math.floor(date.getUTCMonth() / 3) * 3;
+      const start = Date.UTC(date.getUTCFullYear(), startMonth);
+      const end = Date.UTC(date.getUTCFullYear(), startMonth + 2);
+      return new Intl.DateTimeFormat(getLocale(), {
+        year,
+        month,
+        timeZone,
+      }).formatRange(start, end);
+    }
+    const day = 'numeric';
+    if (launchPrecision === 'hour')
+      return formatDate(at, {
+        year,
+        month,
+        day,
+        hour: 'numeric',
+        timeZone,
+        timeZoneName: 'short',
+      });
+    return formatDate(at, { year, month, day, timeZone });
+  }
+
   /**
    * The selected mission as the panel shows it, or null when none is
    * selected and the panel hides. Text arrives in the UI language.
@@ -209,14 +261,17 @@ export function createPanel({ state: layerState, services, parts, source }) {
       (item) => item.id === layerState._selectedLaunchId,
     );
     if (!launch) return null;
-    const index = layerState._launches.indexOf(launch);
     const pathPresentation = parts.policyHelpers.missionPathPresentation(
       launch,
       layerState._replayTracks.has(launch.id),
     );
     const telemetry = layerState._missionTelemetry;
     return {
+      id: String(launch.id ?? ''),
       scrollRequest: layerState._missionPanelScrollRequest,
+      // The launch site, which the card's map shows and its pin keeps.
+      lat: Number.isFinite(launch.lat) ? launch.lat : null,
+      lon: Number.isFinite(launch.lon) ? launch.lon : null,
       title: parts.overlays.shortMissionLabel(launch.name, 32).toUpperCase(),
       provider: presentField(launch.provider),
       // Launch Library status names are provider data, shown as sent; only
@@ -232,6 +287,7 @@ export function createPanel({ state: layerState, services, parts, source }) {
           : null,
       ),
       time: presentField(launch.launchTime),
+      when: presentLaunchTime(launch),
       orbit: presentField(pathPresentation.orbit),
       ascent: pathPresentation.ascent ?? '',
       distance: telemetry?.distance ?? null,
@@ -247,9 +303,6 @@ export function createPanel({ state: layerState, services, parts, source }) {
             })
           : null,
       stages: launch.recoveryStages.map((stage) => presentStage(stage, launch)),
-      index: `${index + 1} / ${layerState._launches.length}`,
-      previousDisabled: index <= 0,
-      nextDisabled: index < 0 || index >= layerState._launches.length - 1,
       replay: parts.replay.presentReplay(),
     };
   }
@@ -279,14 +332,26 @@ export function createPanel({ state: layerState, services, parts, source }) {
         const label = parts.overlays
           .shortMissionLabel(launch.name, 27)
           .toUpperCase();
+        const launchAt = Date.parse(launch.launchTime ?? '');
         return {
           index,
           id: String(launch.id ?? ''),
           color: parts.model.missionMarkerCss(launch),
           label,
+          name: launch.name,
+          missionName: launch.missionName ?? null,
           ariaLabel: t('Select {mission}', { mission: label }),
           provider: launch.provider || t('UNSPECIFIED OPERATOR'),
-          date: launch.launchTime?.slice(0, 10) || t('DATE UNAVAILABLE'),
+          date:
+            (launch.launchPrecision
+              ? presentLaunchTime(launch)
+              : launch.launchTime?.slice(0, 10)) || t('DATE UNAVAILABLE'),
+          status: launch.status,
+          ...(launch.launchPrecision && {
+            launchPrecision: launch.launchPrecision,
+          }),
+          // In ms, or null: Inspect lists missions by launch time.
+          launchAt: Number.isFinite(launchAt) ? launchAt : null,
         };
       });
     return {
@@ -356,11 +421,12 @@ export function createPanel({ state: layerState, services, parts, source }) {
     if (republish) publishPanel();
   }
 
-  function selectMissionAt(index) {
+  function selectMissionAt(index, { keepFollow = false } = {}) {
     const launch = layerState._launches[index];
     if (!launch) return;
     parts.selection.setSelectedMission(launch.id, true);
-    parts.selection.focusMission(launch);
+    if (!keepFollow || !isFollowing(layerState._viewer))
+      parts.selection.focusMission(launch);
   }
 
   function clearMissionRosterPreviewState() {
@@ -398,25 +464,14 @@ export function createPanel({ state: layerState, services, parts, source }) {
         layerState._launches,
         launch.id,
       );
-      if (currentLaunch)
+      if (currentLaunch && !isFollowing(layerState._viewer))
         parts.policyHelpers.previewMissionFromRoster(currentLaunch);
     }, 140);
-  }
-
-  /** Select the mission before or after the selected one. */
-  function selectAdjacentMission(step) {
-    selectMissionAt(
-      layerState._launches.findIndex(
-        (item) => item.id === layerState._selectedLaunchId,
-      ) + step,
-    );
   }
 
   /** The panel's commands, called by Core's mission components. */
   const commands = {
     selectMissionAt,
-    selectPreviousMission: () => selectAdjacentMission(-1),
-    selectNextMission: () => selectAdjacentMission(1),
     deselectMission: () => parts.selection.setSelectedMission(null),
     focusSelectedLaunchSite() {
       const launch = layerState._launches.find(
@@ -434,6 +489,7 @@ export function createPanel({ state: layerState, services, parts, source }) {
     },
     cancelReplay: () => parts.replay.stopMissionReplay(),
     setReplaySpeed: (value) => parts.replay.setReplaySpeed(value),
+    rosterReset: clearMissionRosterHover,
     rosterPointerEnter: (index) =>
       layerState._missionRosterPreviewOwnership?.pointerEnter(index),
     rosterPointerLeave: () =>

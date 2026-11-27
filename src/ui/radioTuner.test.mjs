@@ -82,7 +82,6 @@ function fixture(t, { commitResult = { ok: true }, width = 300 } = {}) {
       signalUserCollapsed: () => false,
       scheduleLayout() {},
       getLifecycle: () => null,
-      preservePanelStateDuringClear: () => true,
     },
     canvas: document.createElement('canvas'),
     store: useRadioStore(pinia),

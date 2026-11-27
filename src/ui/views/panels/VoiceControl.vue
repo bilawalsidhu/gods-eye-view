@@ -102,7 +102,7 @@ const frameStyle = (panel) => ({
             <UiButton id="gev-voice-preview-tab" class="gev-voice-panel-tab" role="tab" :aria-label="t('Preview')" :title="t('Preview')" :aria-selected="String(view.voicePanel.selected === 'preview')" :tabindex="view.voicePanel.selected === 'preview' ? 0 : -1" aria-controls="gev-voice-preview-panel" @click="emit('tab', 0)" @keydown="emit('tab-keydown', 0, $event)"><UiIcon name="visibility" class="gev-voice-panel-tab-icon" :size="null" /></UiButton>
             <UiButton id="gev-voice-settings-tab" class="gev-voice-panel-tab" role="tab" :aria-label="t('Settings')" :title="t('Settings')" :aria-selected="String(view.voicePanel.selected === 'settings')" :tabindex="view.voicePanel.selected === 'settings' ? 0 : -1" aria-controls="gev-voice-settings-panel" @click="emit('tab', 1)" @keydown="emit('tab-keydown', 1, $event)"><UiIcon name="settings" class="gev-voice-panel-tab-icon" :size="null" /></UiButton>
           </div>
-          <PanelLayoutButtons :docked="view.layout.docked" :minimized="view.voicePanel.minimized" @dock="emit('layout-dock')" @minimize="emit('voice-minimize')" />
+          <PanelLayoutButtons :minimized="view.voicePanel.minimized" @minimize="emit('voice-minimize')" />
           <UiCloseButton id="gev-voice-settings-close" :label="t('Close voice panel')" @click="emit('settings-close')" />
         </div>
         <div class="gev-voice-mini" role="group" :aria-label="t('Latest voice exchange')">

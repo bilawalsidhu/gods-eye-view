@@ -24,28 +24,29 @@ const text = (value) =>
   value === null || value === undefined ? '' : String(value).trim();
 
 /**
- * The sprite kind of an item, read from its layer record as the map picks
- * it: an aircraft's class (its own `aircraftClass`, else worked out from its
- * type), a vessel's kind, or {@link AID_MARK}. Empty for a layer that draws
+ * The sprite kind of an item, read from its card (`aircraftClass`,
+ * `modelSubject`) or its layer record, as the map picks it: an aircraft's
+ * class, a vessel's kind, or {@link AID_MARK}. Empty for a layer that draws
  * no sprite per kind.
  */
 export function markKind(layerId, source) {
   if (!source) return '';
+  const subject = source.modelSubject || source;
   if (isAircraftLayer(layerId)) {
     const own = text(source.aircraftClass);
     if (AIRCRAFT_KINDS.has(own)) return own;
     return classifyAircraft({
-      typeCode: text(source.typeCode ?? source.type),
-      category: source.category ?? null,
+      typeCode: text(subject.typeCode ?? subject.type),
+      category: subject.category ?? null,
     });
   }
   if (VESSEL_LAYERS.has(layerId)) {
-    const type = source.shipType ?? source.type;
+    const type = subject.shipType ?? subject.type;
     if (
       isAidToNavigation({
         type,
-        mmsi: source.mmsi,
-        virtual: source.virtual,
+        mmsi: subject.mmsi,
+        virtual: subject.virtual,
       })
     )
       return AID_MARK;

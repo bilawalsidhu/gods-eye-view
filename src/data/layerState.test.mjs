@@ -555,7 +555,11 @@ test('unknown and forbidden option fields are ignored while missing options use 
     selectedFlightsTrackingId: null,
     selectedMilitaryTrackingId: null,
   });
-  assert.deepEqual(decoded.options.radio, { filter: 'news', volume: 0.35 });
+  assert.deepEqual(decoded.options.radio, {
+    filter: 'news',
+    volume: 0.35,
+    source: 'internet',
+  });
 
   const raw = normalizeLayerState({
     enabledLayerIds: ['cctv', 'unknown-layer'],
@@ -1316,6 +1320,7 @@ test('absent share payload restores local state without rewriting it', async () 
   assert.deepEqual(manager.getLayerParams('radio'), {
     filter: 'talk',
     volume: 0.42,
+    source: 'internet',
     selectedStationId: 'private-station',
     audioState: 'playing',
     voiceDucked: true,
@@ -1695,6 +1700,7 @@ test('startup gesture clears passive Follow but preserves slow layer and display
   assert.deepEqual(manager.getLayerParams('radio'), {
     filter: 'genre:r&b',
     volume: 0.42,
+    source: 'internet',
     selectedStationId: 'private-station',
     audioState: 'playing',
     voiceDucked: true,
@@ -2256,7 +2262,11 @@ test('newer explicit tracked target cancels stale shared resolution without clea
 
 test('Radio durable params work before enable and never start playback', () => {
   assert.equal(radioLayer.setParams({ filter: 'news', volume: 0.33 }), true);
-  assert.deepEqual(radioLayer.getParams(), { filter: 'news', volume: 0.33 });
+  assert.deepEqual(radioLayer.getParams(), {
+    filter: 'news',
+    volume: 0.33,
+    source: 'internet',
+  });
   assert.equal(radioLayer.getUIState().audioState, 'stopped');
   assert.equal(radioLayer.getUIState().playingStationId, null);
   radioLayer.setParams({ filter: 'all', volume: 0.8 });

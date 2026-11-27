@@ -1,112 +1,8 @@
 import { t } from '../i18n/index.js';
 
+// Context’s Camera settings tab controls projection, coverage, auto-hop and calibration.
 export function _initCctvPanel() {
   if (!this._cctvPanel) return;
-
-  this.listen(this._cctvEnableBtn, 'click', async () => {
-    this._actionGeneration++;
-    await this.actions.toggleEnabled();
-  });
-
-  this.listen(this._cctvNearestBtn, 'click', async () => {
-    const generation = ++this._actionGeneration;
-    const activeId = this._cctvState?.activeCameraId;
-    if (!(await this.actions.toggleEnabled(true))) return;
-    if (
-      this.destroyed ||
-      generation !== this._actionGeneration ||
-      !this.actions.isEnabled() ||
-      (activeId && activeId !== this._cctvState?.activeCameraId)
-    )
-      return;
-    this.actions.runExplicitFocus(
-      () => this.cctv.focusNearest({ focus: false }),
-      (cameraId) => this.cctv.focusCamera(cameraId, 1.8),
-    );
-  });
-
-  this.listen(this._cctvPrevBtn, 'click', async () => {
-    const generation = ++this._actionGeneration;
-    const activeId = this._cctvState?.activeCameraId;
-    if (!(await this.actions.toggleEnabled(true))) return;
-    if (
-      this.destroyed ||
-      generation !== this._actionGeneration ||
-      !this.actions.isEnabled() ||
-      (activeId && activeId !== this._cctvState?.activeCameraId)
-    )
-      return;
-    this.actions.runExplicitFocus(
-      () => this.cctv.cycleCamera(-1),
-      (cameraId) => this.cctv.focusCamera(cameraId, 1.4),
-    );
-  });
-
-  this.listen(this._cctvNextBtn, 'click', async () => {
-    const generation = ++this._actionGeneration;
-    const activeId = this._cctvState?.activeCameraId;
-    if (!(await this.actions.toggleEnabled(true))) return;
-    if (
-      this.destroyed ||
-      generation !== this._actionGeneration ||
-      !this.actions.isEnabled() ||
-      (activeId && activeId !== this._cctvState?.activeCameraId)
-    )
-      return;
-    this.actions.runExplicitFocus(
-      () => this.cctv.cycleCamera(1),
-      (cameraId) => this.cctv.focusCamera(cameraId, 1.4),
-    );
-  });
-
-  // The picker defers rebuilds while focused; catch up once it lets go.
-  this.listen(this._cctvSelect, 'blur', () => {
-    this._picker = null;
-    this._renderCctvState(this._cctvState);
-  });
-
-  this.listen(this._cctvSelect, 'change', async () => {
-    const generation = ++this._actionGeneration;
-    const activeId = this._cctvState?.activeCameraId;
-    const cameraId = this._cctvSelect.value;
-    if (!cameraId) return;
-    if (!(await this.actions.toggleEnabled(true))) return;
-    if (
-      this.destroyed ||
-      generation !== this._actionGeneration ||
-      !this.actions.isEnabled() ||
-      (activeId && activeId !== this._cctvState?.activeCameraId)
-    )
-      return;
-    // Picking a camera from the dropdown flies to it. The dropdown lists the
-    // cameras in view (and the active camera, which may be far away), so a
-    // bare selection could leave the view somewhere else.
-    this.actions.runExplicitFocus(
-      () => (this.cctv.selectCamera(cameraId) ? cameraId : null),
-      (selectedId) => this.cctv.focusCamera(selectedId, 2.2),
-    );
-    this.actions.setParams({ selectedCameraId: cameraId }, { origin: 'user' });
-  });
-
-  this.listen(this._cctvFocusBtn, 'click', async () => {
-    const generation = ++this._actionGeneration;
-    const activeId = this._cctvState?.activeCameraId;
-    const selected = this._cctvState?.activeCameraId || this._cctvSelect?.value;
-    if (!selected) return;
-    if (!(await this.actions.toggleEnabled(true))) return;
-    if (
-      this.destroyed ||
-      generation !== this._actionGeneration ||
-      !this.actions.isEnabled() ||
-      (activeId && activeId !== this._cctvState?.activeCameraId)
-    )
-      return;
-    this.actions.runExplicitFocus(
-      () => selected,
-      (cameraId) => this.cctv.focusCamera(cameraId, 1.9),
-    );
-    this.actions.setParams({ selectedCameraId: selected }, { origin: 'user' });
-  });
 
   this.listen(this._cctvCoverageBtn, 'click', () => {
     const current =
@@ -122,12 +18,20 @@ export function _initCctvPanel() {
     this.actions.setParams({ autoHop: !current }, { origin: 'user' });
   });
 
+  // How long auto-hop stays on each camera.
+  this.listen(this._cctvAutoHopSec, 'change', (event) => {
+    const sec = Number(event.target?.value);
+    if (Number.isFinite(sec) && sec > 0)
+      this.actions.setParams({ autoHopSec: sec }, { origin: 'user' });
+  });
+
   this.listen(this._cctvProjectionBtn, 'click', () => {
     const current = this._cctvState?.showProjection !== false;
     this.actions.setParams({ showProjection: !current }, { origin: 'user' });
   });
 
   this.listen(this._cctvAdjustBtn, 'click', () => {
+    if (!this._activeCctvCameraId()) return;
     const current = !!this._cctvState?.calibrationMode;
     this.actions.setParams({ calibrationMode: !current }, { origin: 'user' });
   });
@@ -159,5 +63,4 @@ export function _initCctvPanel() {
   });
 
   this._renderCctvState(null);
-  this.actions.syncViewport();
 }

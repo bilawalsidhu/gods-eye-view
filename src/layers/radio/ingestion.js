@@ -27,7 +27,8 @@ export function createIngestion({
   const methods = {
     /** Refresh directory metadata through the hardened same-origin broker. */
     async update() {
-      if (!layerState._enabled) return;
+      // A local receiver needs no station directory.
+      if (!layerState._enabled || layerState._source === 'local') return;
       const generation = ++layerState._requestGeneration;
       const sessionGeneration = layerState._sessionGeneration;
       layerState._abortController?.abort();

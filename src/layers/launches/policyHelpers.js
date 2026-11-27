@@ -14,19 +14,22 @@ export function createPolicyHelpers({
   source,
 }) {
   /**
-   * Derive the temporary Satellite display mode required by Space Missions.
+   * Derive display parameters for a Space Missions satellite dependency.
+   * Satellites the person already had on keep their dots and orbits as they
+   * were; Satellites switched on only for orbit data draws nothing. Neither
+   * case changes the catalog or its class choices.
    * @param {object|null} currentParams Complete pre-mission Satellite parameters.
+   * @param {{ shown?: boolean }} [options] Whether Satellites was on before.
    * @returns {object} Temporary mission-specific Satellite parameters.
    */
 
-  function satelliteParamsForSpaceMissions(currentParams) {
-    return {
-      ...SATELLITE_STANDALONE_DEFAULTS,
-      ...(currentParams || {}),
-      catalog: 'dense',
-      showPoints: false,
-      showOrbits: false,
-    };
+  function satelliteParamsForSpaceMissions(
+    currentParams,
+    { shown = false } = {},
+  ) {
+    const params = satelliteParamsAfterSpaceMissions(currentParams);
+    if (shown) return params;
+    return { ...params, showPoints: false, showOrbits: false };
   }
 
   /**

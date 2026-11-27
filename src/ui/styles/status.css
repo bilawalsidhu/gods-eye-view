@@ -410,8 +410,7 @@ html:not([lang='en']) #global-loading-detail {
 }
 
 /* ── Render failure notice ───────────────────── */
-/* Above the loading screen, so a globe that fails while it loads says so too,
-   and above floating panels such as the Québec camera viewer (2000). */
+/* Keep the notice visible if the globe fails behind the loading screen or a floating panel. */
 #render-failure {
   position: fixed;
   top: 50%;

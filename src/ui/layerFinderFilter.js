@@ -1,4 +1,4 @@
-import { computed, ref, shallowRef, watch } from 'vue';
+import { computed, nextTick, ref, shallowRef, watch } from 'vue';
 
 const findersByContainer = new WeakMap();
 
@@ -14,6 +14,23 @@ export function bindLayerFinder(container, finder) {
 
 export function layerFinderFor(container) {
   return findersByContainer.get(container)?.finder;
+}
+
+/** Look for a registered layer in Data Layers or Utilities. */
+export function findDataLayerRow(doc, escapedId) {
+  const selector = `[data-layer-id="${escapedId}"]`;
+  return (
+    doc?.querySelector?.(`#data-toggles ${selector}`) ??
+    doc?.querySelector?.(`#utilities-toggles ${selector}`)
+  );
+}
+
+export async function scrollDataLayerRow(row, options = {}) {
+  if (row?.classList?.contains('is-filtered')) {
+    layerFinderFor(row.parentElement)?.clearAll?.();
+    await nextTick();
+  }
+  row?.scrollIntoView?.({ block: 'center', ...options });
 }
 
 const allLayers = () => ({ query: '', show: 'all', category: '', picked: [] });

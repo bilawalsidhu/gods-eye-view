@@ -4,6 +4,7 @@ import { getEventListeners } from 'node:events';
 import * as Cesium from 'cesium';
 import { bindFakeCesiumCamera } from '../../testSupport/fakeCameraPort.mjs';
 import { createStreetLevelLayer } from './index.js';
+import { viewSummaryForLayer } from '../../data/entityContext.js';
 import { MAPILLARY_CREDIT_HTML } from './providers/mapillary/policy.js';
 import { creditFromMarkup } from '../../render/creditMarkup.js';
 import { createMapillaryProvider } from './providers/mapillary/index.js';
@@ -28,7 +29,9 @@ async function startLayer(
   t,
   {
     source = fakeMapillarySource(),
-    photoViewer = fakePhotoViewer(),
+    photoViewer = fakePhotoViewer({
+      pose: { position: { lon: -121.49, lat: 38.58 } },
+    }),
     providers = [createMapillaryProvider({ source, photoViewer })],
     view = false,
     enable = true,
@@ -468,7 +471,7 @@ test('openNearest without the panel reports it instead of loading forever', asyn
   assert.equal(await layer.openNearest({ lat: 38.58, lon: -121.49 }), false);
   const { street } = layer.getUIState();
   assert.equal(street.loading, false);
-  assert.match(street.error, /Open the Street Level panel/);
+  assert.match(street.error, /Open Context to view street-level imagery/);
   assert.equal(provider.calls.mount, 0);
 });
 
@@ -515,8 +518,39 @@ test('a provider withdraws only the error it reported', async (t) => {
   actions.reportError('Sequence images unavailable');
   await layer.openImage('mapillary', 'img1');
   actions.reportError(null);
-  assert.match(layer.getUIState().street.error, /Open the Street Level panel/);
+  assert.match(
+    layer.getUIState().street.error,
+    /Open Context to view street-level imagery/,
+  );
 });
+test('a successful line lookup stops playback before opening the picked photo', async (t) => {
+  const { lookups, nearestImage } = slowLookups();
+  const provider = posingProvider({ nearestImage });
+  const create = provider.create;
+  const playback = [];
+  provider.create = (context) => {
+    const instance = create(context);
+    instance.viewer.stopPlayback = () =>
+      playback.push([...provider.calls.open]);
+    return instance;
+  };
+  const { layer } = await enabledLayer(t, [provider]);
+  layer.attachViewerHost({});
+  assert.equal(await layer.openImage('mapillary', 'playing'), true);
+  const point = { lat: 38.58, lon: -121.49 };
+  const options = { replace: false, sequenceId: 'sequence', frame: false };
+  const miss = layer.openNearest(point, options);
+  lookups[0].answer.resolve(null);
+  assert.equal(await miss, false);
+  assert.deepEqual(playback, []);
+
+  const found = layer.openNearest(point, options);
+  lookups[1].answer.resolve('picked');
+  assert.equal(await found, true);
+  assert.deepEqual(playback, [['playing']]);
+  assert.equal(layer.settledPhotoId(), 'mapillary:picked');
+});
+
 test('an older nearest lookup that answers late cannot replace a newer one', async (t) => {
   const { lookups, nearestImage } = slowLookups();
   const provider = fakeProvider({ nearestImage });
@@ -659,7 +693,10 @@ async function withStreetView(
   const { layer, viewer } = await enabledLayer(t, [mapillary, google]);
   const stack = fakeMapStack(mapStack);
   layer.attachMapStackController(stack);
-  layer.attachViewerHost(fakeHost());
+  layer.attachViewerHost(fakeHost(), {
+    prepare: () => true,
+    isVisible: () => true,
+  });
   return { layer, viewer, stack, fake, loader, mapillaryLookups };
 }
 
@@ -1156,6 +1193,134 @@ test('a provider’s openNearest (a line click) asks only that provider and leav
   await lit.context().actions.openNearest(point);
   assert.deepEqual(lit.calls.open, ['lit-near']);
   assert.equal(viewer.flights.started, 0, 'the user picked the spot');
+});
+
+test('Inspect searches the chosen Street Level radius before clipping coverage to the viewport', async (t) => {
+  const provider = posingProvider();
+  const create = provider.create;
+  const reads = [];
+  provider.create = (context) => ({
+    ...create(context),
+    coverageNear(_point, km, rect) {
+      reads.push({ km, rect });
+      const visible = { sequenceId: 'visible', lat: 0, lon: 0.008 };
+      if (rect) return [visible];
+      return km >= 3
+        ? [visible, { sequenceId: 'nearby', lat: 0, lon: 0.027 }]
+        : [];
+    },
+  });
+  const { layer } = await enabledLayer(t, [provider]);
+  const row = {
+    id: 'street-level',
+    name: 'Street Level',
+    enabled: true,
+    module: layer,
+  };
+  const dm = { layers: new Map([[row.id, row]]) };
+  const rect = { west: -0.01, east: 0.01, south: -0.01, north: 0.01 };
+  const read = (radius) =>
+    viewSummaryForLayer(
+      dm,
+      row,
+      rect,
+      { lat: 0, lon: 0 },
+      {
+        includeDrawnCoverage: true,
+        includeEmpty: true,
+        inspector: { nearbyFirst: true, radius, isPoint: () => true },
+      },
+    );
+  const nearby = read(25);
+  assert.deepEqual(
+    nearby.items.map(({ identity }) => identity.record.sequenceId),
+    ['visible', 'nearby'],
+  );
+  assert.equal(nearby.scope, 'nearby');
+  assert.deepEqual(reads, [{ km: 25, rect: null }]);
+  reads.length = 0;
+  const visible = read(0.5);
+  assert.equal(visible.items[0].identity.record.sequenceId, 'visible');
+  assert.equal(visible.scope, 'view');
+  assert.deepEqual(reads, [
+    { km: 0.5, rect: null },
+    { km: Infinity, rect },
+  ]);
+});
+
+test('Context reads the drawn lines near a point, and a line opens the photo nearest it', async (t) => {
+  const asked = [];
+  const lit = posingProvider({
+    nearestImage: async (point) => {
+      asked.push(point);
+      return 'near-photo';
+    },
+  });
+  const create = lit.create;
+  lit.create = (context) => ({
+    ...create(context),
+    coverageNear: (point, radiusKm) =>
+      radiusKm >= 1
+        ? [
+            {
+              sequenceId: 's1',
+              lat: 38.581,
+              lon: -121.494,
+              km: 0.1,
+              capturedAt: 0,
+              isPano: true,
+            },
+            {
+              sequenceId: 's2',
+              lat: 38.585,
+              lon: -121.494,
+              km: 0.5,
+              capturedAt: 0,
+              isPano: false,
+            },
+          ]
+        : [],
+  });
+  const { layer } = await enabledLayer(t, [lit]);
+  layer.attachViewerHost({});
+  const here = { lat: 38.58, lon: -121.494 };
+  const records = layer.getRecordsNear(here, 2);
+  assert.deepEqual(
+    records.map((record) => [record.id, record.lat, record.provider]),
+    [
+      ['near:mapillary:38.581000,-121.494000:s1', 38.581, 'Mapillary'],
+      ['near:mapillary:38.585000,-121.494000:s2', 38.585, 'Mapillary'],
+    ],
+    'one record per drawn line in Nearby',
+  );
+  assert.deepEqual(
+    layer.getRecordsNear(here, 0.5),
+    [],
+    'nothing past the radius',
+  );
+  const beforeOpen = layer.getStats().recordsRevision;
+  assert.equal(await layer.openPhoto(records[0].id), true);
+  assert.notEqual(layer.getStats().recordsRevision, beforeOpen);
+  const beforeDraw = layer.getStats().recordsRevision;
+  lit.stats.drawnVersion = 1;
+  assert.notEqual(layer.getStats().recordsRevision, beforeDraw);
+  assert.deepEqual(
+    asked,
+    [{ lat: 38.581, lon: -121.494 }],
+    'the source is asked at the line',
+  );
+  assert.deepEqual(lit.calls.open, ['near-photo']);
+  assert.equal(
+    layer.getRecordsNear(here, 2)[0].id,
+    'mapillary:near-photo',
+    'the opened photo leads, before the lines',
+  );
+  layer.disable();
+  assert.deepEqual(
+    layer.getRecordsNear(here, 2),
+    [],
+    'nothing while the layer is off',
+  );
 });
 
 test('KartaView through the core: its lines counted as streets', async (t) => {
@@ -1950,12 +2115,12 @@ test('show_street_level switches from KartaView to Panoramax and opens its photo
 });
 
 test('the panel says why a lit Street View draws nothing off Google 3D', async (t) => {
-  const { presentStreetLevelPanel } =
+  const { presentStreetLevel } =
     await import('../../ui/streetLevelPresentation.js');
   const { layer, stack } = await withStreetView(t);
   layer.setProviderEnabled('google', true);
   stack.switchTo('esri-imagery');
-  const view = presentStreetLevelPanel(layer.getUIState());
+  const view = presentStreetLevel(layer.getUIState());
   assert.match(view.meta, /Google Street View needs the Google 3D map/);
 });
 
@@ -2213,4 +2378,93 @@ test('subscribePhotoViewer hands on the photo viewer a provider presents, the la
   unsubscribe();
   a.present(viewA);
   assert.equal(shown.length, 4, 'unsubscribed');
+});
+
+test('another pick withdraws a Mapillary line click’s lookup before it opens', async (t) => {
+  const answer = deferred();
+  const source = fakeMapillarySource({ nearestImages: () => answer.promise });
+  const photoViewer = posingViewer();
+  const def = createMapillaryProvider({ source, photoViewer });
+  let instance = null;
+  const { layer } = await startLayer(t, {
+    source,
+    photoViewer,
+    providers: [
+      {
+        ...def,
+        create(context) {
+          instance = def.create(context);
+          return instance;
+        },
+      },
+    ],
+  });
+  layer.attachViewerHost({});
+  const point = { lon: -121.49, lat: 38.58 };
+  assert.equal(
+    instance.handlePick('mly:seq:S', { groundPoint: () => point }),
+    true,
+  );
+  assert.equal(layer.getUIState().street.loading, true, 'looking it up');
+  assert.equal(layer.withdrawPhoto(), true);
+  answer.resolve([
+    {
+      id: 'S1',
+      sequence: 'S',
+      is_pano: false,
+      captured_at: 10,
+      geometry: { type: 'Point', coordinates: [point.lon, point.lat] },
+    },
+  ]);
+  await settle();
+  await settle();
+  assert.deepEqual(photoViewer.calls.open, [], 'nothing opens later');
+  const { street } = layer.getUIState();
+  assert.deepEqual([street.open, street.loading], [false, false]);
+});
+
+test('a card holds its lookup through stale steps and reselecting the displayed photo cancels it without another load', async (t) => {
+  const answer = deferred();
+  const provider = posingProvider({ nearestImage: () => answer.promise });
+  const { layer } = await enabledLayer(t, [provider]);
+  layer.attachViewerHost({});
+  await layer.openPhoto('mapillary:A');
+  const lookup = layer.openPhoto('near:mapillary:48.000000,2.000000:S');
+  assert.equal(
+    await provider.context().actions.openImage('step', { request: false }),
+    false,
+  );
+  assert.equal(await layer.openPhoto('mapillary:A'), true);
+  answer.resolve('B');
+  assert.equal(await lookup, null);
+  assert.deepEqual(provider.calls.open, ['A']);
+  assert.equal(layer.getUIState().acceptedPhoto.cardPhotoId, 'mapillary:A');
+});
+
+test('a line acceptance identifies the row which owns it', async (t) => {
+  const provider = posingProvider({ nearestImage: async () => 'B' });
+  const { layer } = await enabledLayer(t, [provider]);
+  layer.attachViewerHost({});
+  const near = 'near:mapillary:48.000000,2.000000:S';
+  assert.equal(await layer.openPhoto(near), true);
+  const accepted = layer.getUIState().acceptedPhoto;
+  assert.equal(accepted.id, 'mapillary:B');
+  assert.equal(accepted.cardPhotoId, near);
+  assert.ok(accepted.requestId > 0);
+});
+
+test('a remembered photo cannot open on a disabled provider, and a cancelled card load has no error', async (t) => {
+  const pending = deferred();
+  const first = posingProvider({ nearestImage: () => pending.promise });
+  const second = fakeProvider({ id: 'other', pickPrefix: 'oth:' });
+  const { layer } = await enabledLayer(t, [first, second]);
+  layer.attachViewerHost({});
+  await layer.openPhoto('mapillary:A');
+  const loading = layer.openPhoto('near:mapillary:48.000000,2.000000:S');
+  layer.setProviderEnabled('other', true);
+  pending.resolve('B');
+  assert.equal(await loading, null);
+  assert.equal(await layer.openPhoto('mapillary:A'), false);
+  assert.deepEqual(first.calls.open, ['A']);
+  assert.equal(layer.getUIState().street.error, null);
 });

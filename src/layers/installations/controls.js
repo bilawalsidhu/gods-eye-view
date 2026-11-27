@@ -17,6 +17,25 @@ export function createControls({
   source,
   overlayHost,
 }) {
+  async function searchNearbyFromRow() {
+    if (
+      layerState.nearbySearchBusy ||
+      !layerState.enabled ||
+      layerState.contextAnchor
+    )
+      return;
+    layerState.nearbySearchBusy = true;
+    layerState.rowControlsListener?.();
+    try {
+      await methods.searchNearby();
+    } catch (error) {
+      console.warn('[Installations] nearby search failed:', error);
+    } finally {
+      layerState.nearbySearchBusy = false;
+      layerState.rowControlsListener?.();
+    }
+  }
+
   const methods = {
     id: LAYER_ID,
 
@@ -36,8 +55,36 @@ export function createControls({
 
     /** Request a one-shot Google Maps Places search around the current map view. */
     searchNearby() {
-      layerState.googleSearchRequested = true;
-      return parts.ingestion.loadInstallations();
+      if (!layerState.enabled || layerState.contextAnchor) return;
+      return parts.ingestion.loadInstallations({ searchPlaces: true });
+    },
+
+    /**
+     * The Data Layers row offers the one-shot nearby search while the layer
+     * is on. One search runs at a time; the row repaints when it settles.
+     */
+    getRowControls() {
+      if (!layerState.enabled) return null;
+      return {
+        chips: [
+          {
+            id: 'search-nearby',
+            label: t('Search nearby sites'),
+            title: t('Search for mapped sites around the current view'),
+            icon: 'travel_explore',
+            action: true,
+            disabled: Boolean(
+              layerState.nearbySearchBusy || layerState.contextAnchor,
+            ),
+            onClick: () => void searchNearbyFromRow(),
+          },
+        ],
+      };
+    },
+
+    setRowControlsListener(listener) {
+      layerState.rowControlsListener =
+        typeof listener === 'function' ? listener : null;
     },
 
     /**
@@ -77,6 +124,7 @@ export function createControls({
       if (!next) {
         if (!previous) return false;
         layerState.contextAnchor = null;
+        layerState.rowControlsListener?.();
         parts.viewport.scheduleLoad();
         return true;
       }
@@ -91,6 +139,7 @@ export function createControls({
       )
         return false;
       layerState.contextAnchor = next;
+      if (!previous) layerState.rowControlsListener?.();
       parts.viewport.scheduleLoad();
       return true;
     },

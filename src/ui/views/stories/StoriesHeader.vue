@@ -1,14 +1,8 @@
 <script setup>
-import {
-  computed,
-  nextTick,
-  onBeforeUnmount,
-  onMounted,
-  ref,
-  watch,
-} from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { t } from '../../../i18n/index.js';
 import { useStoriesStore } from '../../stores/stories.js';
+import MarqueeText from '../panels/MarqueeText.vue';
 import UiButton from '../../kit/UiButton.vue';
 
 /**
@@ -38,38 +32,16 @@ async function share() {
     store.flashToast(t('Copy this link: {url}', { url }), 4000);
   }
 }
-// Long titles scroll gently so the whole name can be read.
-const mtitle = ref(null);
 // Back is a UiButton; its root is the button.
 const back = ref(null);
 const trail = ref(null);
-let observer = null;
-function fitTitle() {
-  const el = mtitle.value;
-  const sp = el?.firstElementChild;
-  if (!sp) return;
-  const over = sp.scrollWidth - el.clientWidth;
-  el.classList.toggle('marquee', over > 4);
-  el.style.setProperty('--mq', `${-(over + 22)}px`);
-  el.style.setProperty('--mq-dur', `${Math.max(5, (over + 22) / 22)}s`);
-}
 onMounted(() => {
   const backEl = back.value?.$el;
   const target = backEl?.getClientRects().length
     ? backEl
     : trail.value?.querySelector('button');
   target?.focus({ preventScroll: true });
-  if (globalThis.ResizeObserver && mtitle.value) {
-    observer = new ResizeObserver(fitTitle);
-    observer.observe(mtitle.value);
-  }
-  fitTitle();
 });
-watch(
-  () => props.title,
-  () => nextTick(fitTitle),
-);
-onBeforeUnmount(() => observer?.disconnect());
 </script>
 
 <template>
@@ -119,9 +91,12 @@ onBeforeUnmount(() => observer?.disconnect());
         </template>
       </nav>
     </div>
-    <span ref="mtitle" class="s-mtitle glass"
-      ><span>{{ screen === 'explore' ? t('Stories') : title }}</span></span
-    >
+    <span class="s-mtitle glass">
+      <MarqueeText
+        :text="screen === 'explore' ? t('Stories') : title"
+        :titled="false"
+      />
+    </span>
     <div class="h-right">
       <UiButton
         v-if="screen === 'explore'"

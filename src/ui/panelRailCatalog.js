@@ -17,19 +17,9 @@ export const PANEL_RAIL_ITEMS = Object.freeze({
   // `context` keeps the panel's name apart from the satellite class of the
   // same English word.
   'pp-toggles': { icon: 'palette', label: msg('VISUAL'), context: 'panel' },
-  'cctv-panel': { icon: 'videocam', label: msg('CCTV') },
-  'weather-panel': { icon: 'partly_cloudy_day', label: msg('WEATHER') },
-  'news-panel': { icon: 'public', label: msg('NEWS') },
-  'recent-imagery-panel': {
-    icon: 'satellite_alt',
-    label: msg('RECENT IMAGERY'),
-  },
-  'street-level-panel': { icon: 'streetview', label: msg('STREET LEVEL') },
+  // Weather, News and Recent Imagery have list tabs in Context.
+  // Space Missions shows its list in Inspect.
   'global-context-panel': { icon: 'radar', label: msg('CONTEXT') },
-  'space-missions-panel': {
-    icon: 'rocket_launch',
-    label: msg('Space Missions'),
-  },
 });
 
 /**

@@ -231,7 +231,10 @@ export class RealtimeRadio {
       pendingResult,
       {
         prepareRadio: () =>
-          this.radioLayer?.playForVoice?.({ attemptId: handoffAttemptId }),
+          this.radioLayer?.playForVoice?.({
+            attemptId: handoffAttemptId,
+            resumeStationId: pendingResult.resumeStationId,
+          }),
         stopVoice: () => this.stop({ preserveRadioPlayback: true }),
         cancelRadio: () =>
           this.radioLayer?.stopPlayback?.({

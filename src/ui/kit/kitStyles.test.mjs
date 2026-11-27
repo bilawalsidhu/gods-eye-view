@@ -247,8 +247,6 @@ test('the kit’s skins load before the feature stylesheets that restyle them', 
   for (const [kit, feature] of [
     ['.ui-chip,', '.gev-voice-card-chip {'],
     ['.ui-empty,', '.scene-shot-empty {'],
-    ['.ui-empty,', '.recent-imagery-readout .ri-strip-empty {'],
-    ['.ui-empty,', '#space-mission-panel-host .space-mission-roster-empty {'],
     ['.ui-close-button,', '.data-toggle-chip {'],
     ['.ui-close-button,', '.geo-import-action {'],
     ['.ui-close-button,', '.panel-surface-control {'],
@@ -278,12 +276,10 @@ test('the kit’s skins load before the feature stylesheets that restyle them', 
 
 test('feature rules over a kit skin keep the type they inherit', () => {
   // The chip and empty skins set a font and colour; these feature surfaces
-  // inherit theirs from the card or strip around them.
+  // inherit theirs from the card around them.
   for (const [selector, property] of [
     ['.gev-voice-card-chip', /font:\s*inherit/],
     ['.scene-shot-empty', /font:\s*inherit/],
-    ['.recent-imagery-readout .ri-strip-empty', /font:\s*inherit/],
-    ['.recent-imagery-readout .ri-strip-empty', /color:\s*inherit/],
   ])
     assert.ok(
       all.some(

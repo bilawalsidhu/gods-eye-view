@@ -61,12 +61,13 @@ test('a selected aircraft card shows its 3D model view and asks the renderer for
     stats: { count: 1, lastUpdate: Date.now() },
     module: { getAnalystRecords: () => [AIRLINER] },
   };
+  const dataManager = {
+    layers: new Map([['flights', flights]]),
+    isEnabled: (id) => id === 'flights',
+    getAll: () => [flights],
+  };
   cards.connect({
-    dataManager: () => ({
-      layers: new Map([['flights', flights]]),
-      isEnabled: (id) => id === 'flights',
-      getAll: () => [flights],
-    }),
+    dataManager: () => dataManager,
     regionalBrief: async () => null,
     previews: () => previews,
     canFollow: () => false,

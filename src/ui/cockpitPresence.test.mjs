@@ -9,8 +9,10 @@ import { createApp, defineComponent, h, nextTick } from 'vue';
 import { CockpitViewController } from './cockpitController.js';
 import { setLocale } from '../i18n/index.js';
 import { useCockpitStore } from './stores/cockpit.js';
+import EntityCard from './views/panels/EntityCard.vue';
+import { useEntityCardStore } from './stores/entityCard.js';
 import CockpitView from './views/CockpitView.vue';
-import ContextView from './views/ContextView.vue';
+import IntelHudView from './views/IntelHudView.vue';
 import {
   bindFakeCesiumCamera,
   followEntity,
@@ -28,21 +30,25 @@ function fixture(t) {
   const host = document.body.appendChild(document.createElement('div'));
   const pinia = createPinia();
   const app = createApp(
-    defineComponent(() => () => [h(ContextView), h(CockpitView)]),
+    defineComponent(() => () => [
+      h(IntelHudView),
+      h(CockpitView),
+      h(EntityCard),
+    ]),
   ).use(pinia);
   app.mount(host);
   const store = useCockpitStore(pinia);
   // A browser does not focus a hidden control; happy-dom does, so refuse
   // here the way a browser would.
   const hiddenFocus = [];
-  for (const id of ['cockpit-entry', 'map-view-switch']) {
-    const button = document.getElementById(id);
+  const refuseHiddenFocus = (button, name) => {
     const focus = button.focus.bind(button);
     button.focus = (options) => {
-      if (button.hidden) hiddenFocus.push(id);
+      if (button.hidden) hiddenFocus.push(name);
       else focus(options);
     };
-  }
+  };
+  refuseHiddenFocus(document.getElementById('map-view-switch'), 'exit');
   const converted = new Set();
   const listeners = () => ({ addEventListener: () => () => {} });
   const entity = { position: {}, show: true };
@@ -83,18 +89,46 @@ function fixture(t) {
     scheduleContextLayout() {},
     clearPredictiveRoute() {},
   });
+  const cards = useEntityCardStore(pinia);
+  const layer = {
+    id: 'flights',
+    name: 'Flights',
+    enabled: true,
+    module: { getAnalystRecords: () => [{ ...INFO, id: INFO.icao24 }] },
+  };
+  cards.connect({
+    dataManager: () => ({
+      layers: new Map([[layer.id, layer]]),
+      getAll: () => [layer],
+    }),
+    canCockpit: () => Boolean(store.presence?.entryAvailable),
+    cockpit: () => cockpit.enter(),
+  });
+  cards.select({ layerId: layer.id, id: INFO.icao24, label: INFO.callsign });
   t.after(() => {
+    cards.connect(null);
     cockpit.stop();
     app.unmount();
     document.body.classList.remove('cockpit-mode');
   });
   const $ = (selector) => document.querySelector(selector);
-  return { $, cockpit, store, converted, hiddenFocus };
+  presence = () => store.presence;
+  return {
+    $,
+    cockpit,
+    store,
+    converted,
+    hiddenFocus,
+    cardEntry: () => $('#entity-card [data-entity-cockpit-entry]'),
+  };
 }
 
+// The TR-3B action lives on the followed aircraft's card in Context; here
+// it is read from what Cockpit publishes for it.
+let presence = () => null;
 const shown = ($) => ({
-  entry: !$('#cockpit-entry').hidden,
-  tr3b: !$('#tr3b-toggle').hidden,
+  entry: Boolean(presence()?.entryAvailable),
+  tr3b: Boolean(presence()?.tr3b),
   hud: !$('#cockpit-hud').hidden,
   exit: !$('#map-view-switch').hidden,
   reset: !$('#cockpit-reset-globe').hidden,
@@ -114,8 +148,8 @@ test('before anything is tracked, every Cockpit surface is hidden', (t) => {
   assert.equal($('#cockpit-context').hidden, true);
 });
 
-test('a tracked aircraft shows the entry and a TR-3B chip that names its action', async (t) => {
-  const { $, cockpit } = fixture(t);
+test('a tracked aircraft shows the entry and publishes its TR-3B conversion state', async (t) => {
+  const { $, cockpit, store } = fixture(t);
   cockpit.syncEntry();
   await nextTick();
   assert.deepEqual(shown($), {
@@ -126,27 +160,22 @@ test('a tracked aircraft shows the entry and a TR-3B chip that names its action'
     reset: false,
     briefing: false,
   });
-  const chip = $('#tr3b-toggle');
-  assert.equal(chip.getAttribute('aria-pressed'), 'false');
-  assert.equal(chip.title, 'Reclassify as TR-3B');
-  chip.click();
+  assert.deepEqual(store.presence.tr3b, { converted: false });
+  cockpit.toggleTrackedTr3b();
   await nextTick();
-  assert.equal(chip.getAttribute('aria-pressed'), 'true');
-  assert.equal(chip.title, 'Restore real aircraft');
-  // The static accessible name survives the re-render.
-  assert.equal(
-    chip.getAttribute('aria-label'),
-    'Reclassify tracked contact as TR-3B',
-  );
+  assert.deepEqual(store.presence.tr3b, { converted: true });
+  cockpit.toggleTrackedTr3b();
+  await nextTick();
+  assert.deepEqual(store.presence.tr3b, { converted: false });
 });
 
-test('entering shows the HUD and focuses the exit once it renders; exiting returns focus to the entry', async (t) => {
-  const { $, cockpit } = fixture(t);
+test('entering shows the HUD and focuses the exit once it renders; exiting returns focus to the card', async (t) => {
+  const { $, cockpit, cardEntry } = fixture(t);
   cockpit.syncEntry();
   await nextTick();
-  const entry = $('#cockpit-entry');
-  entry.focus();
-  entry.click();
+  const origin = cardEntry();
+  origin.focus();
+  origin.click();
   assert.equal(cockpit.active, true);
   await nextTick();
   await Promise.resolve();
@@ -175,49 +204,69 @@ test('entering shows the HUD and focuses the exit once it renders; exiting retur
     briefing: false,
   });
   assert.equal(hud.classList.contains('signals-active'), false);
-  assert.equal(document.activeElement?.id, 'cockpit-entry');
+  assert.equal(origin.isConnected, false);
+  assert.ok(cardEntry());
+  assert.ok(
+    document.activeElement === cardEntry(),
+    'focus returns to the current card entry',
+  );
 });
 
-test('exiting leaves focus alone when the entry is no longer available', async (t) => {
-  const { $, cockpit, hiddenFocus } = fixture(t);
+test('the HUD offers no entry of its own: the ride starts from the card', async (t) => {
+  const { $, cockpit } = fixture(t);
   cockpit.syncEntry();
   await nextTick();
-  $('#cockpit-entry').focus();
-  cockpit.enter();
+  assert.equal(presence()?.entryAvailable, true);
+  assert.equal($('#cockpit-entry-readout'), null);
+  assert.equal($('#intel-hud button'), null);
+});
+
+test('exiting leaves focus alone when the card no longer offers the ride', async (t) => {
+  const { cockpit, hiddenFocus, cardEntry } = fixture(t);
+  cockpit.syncEntry();
+  await nextTick();
+  const origin = cardEntry();
+  origin.focus();
+  origin.click();
   await nextTick();
   await Promise.resolve();
   cockpit.isEntryAllowed = () => false;
+  assert.equal(origin.isConnected, false);
   cockpit.exit();
   await nextTick();
   await Promise.resolve();
-  assert.equal($('#cockpit-entry').hidden, true);
-  assert.notEqual(document.activeElement?.id, 'cockpit-entry');
+  assert.equal(presence()?.entryAvailable, false);
+  assert.equal(cardEntry(), null);
+  assert.notEqual(document.activeElement, origin);
   assert.deepEqual(hiddenFocus, []);
 });
 
-test('a second entry hides the entry again and focuses the exit', async (t) => {
-  const { $, cockpit, hiddenFocus } = fixture(t);
+test('a second entry withdraws the entry again and focuses the exit', async (t) => {
+  const { cockpit, hiddenFocus, cardEntry } = fixture(t);
   cockpit.syncEntry();
   await nextTick();
   for (let pass = 0; pass < 2; pass += 1) {
-    $('#cockpit-entry').focus();
-    cockpit.enter();
+    cardEntry().focus();
+    cardEntry().click();
     await nextTick();
     await Promise.resolve();
-    assert.equal($('#cockpit-entry').hidden, true);
-    assert.equal($('#tr3b-toggle').hidden, true);
+    assert.equal(presence()?.entryAvailable, false);
+    assert.equal(presence()?.tr3b, null);
     assert.equal(document.activeElement?.id, 'map-view-switch');
     cockpit.exit();
     await nextTick();
     await Promise.resolve();
-    assert.equal($('#cockpit-entry').hidden, false);
-    assert.equal($('#tr3b-toggle').hidden, false);
-    assert.equal(document.activeElement?.id, 'cockpit-entry');
+    assert.equal(presence()?.entryAvailable, true);
+    assert.ok(presence()?.tr3b);
+    assert.ok(
+      document.activeElement === cardEntry(),
+      'focus returns to the current card entry',
+    );
   }
   assert.deepEqual(hiddenFocus, []);
 });
 
-test('disposing an active Cockpit hides the HUD and leaves the entry hidden', async (t) => {
+test('disposing an active Cockpit hides the HUD and offers no entry', async (t) => {
   const { $, cockpit } = fixture(t);
   cockpit.syncEntry();
   await nextTick();
@@ -228,8 +277,7 @@ test('disposing an active Cockpit hides the HUD and leaves the entry hidden', as
   await Promise.resolve();
   assert.equal($('#cockpit-hud').hidden, true);
   assert.equal($('#map-view-switch').hidden, true);
-  assert.equal($('#cockpit-entry').hidden, true);
-  assert.notEqual(document.activeElement?.id, 'cockpit-entry');
+  assert.equal(presence()?.entryAvailable, false);
 });
 
 test('the Contact card and the HUD mark show and hide together', async (t) => {

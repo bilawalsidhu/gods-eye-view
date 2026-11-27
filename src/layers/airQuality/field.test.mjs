@@ -891,7 +891,7 @@ test('without a field the layer registers nothing', async () => {
     // The card is the stations' card: the nearest station, no model line.
     const controls = layer.getRowControls();
     assert.equal(controls.sublists[0].subtitle, 'nearest station · Cape Town');
-    assert.match(controls.summary.detail, /^NATIONAL · updated /);
+    assert.match(controls.summary.detail, /^NATIONAL · Updated /);
     assert.equal(
       controls.summary.lines.some((line) => /Model field/.test(line.text)),
       false,
@@ -947,7 +947,7 @@ test('with a field the tiles read the model at the view centre, and the time lin
   assert.equal(tileOf(controls, 'pollutants', 'PM2.5').value, '8.0');
   assert.equal(tileOf(controls, 'pollutants', 'CO').value, '0.30');
   // At now: the model and how old its run is.
-  assert.equal(controls.summary.detail, 'CAMS · updated 6h ago');
+  assert.equal(controls.summary.detail, 'CAMS · Updated 6h ago');
   // Scrubbing on to +24 h draws that step: the tiles change.
   const later = host.run + 24 * HOUR;
   clock.seek(later);
@@ -1491,7 +1491,7 @@ test('a short source name heads the time line; an expired or withdrawn run leave
   await settle();
   assert.equal(
     first.layer.getRowControls().summary.detail,
-    'CAMS · updated 6h ago',
+    'CAMS · Updated 6h ago',
   );
   // A run whose last step is long past: not held, nothing registered.
   const old = hostField({ run: Date.now() - 200 * HOUR });

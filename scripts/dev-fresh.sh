@@ -310,8 +310,8 @@ case "${HOST}" in
 esac
 echo "Google Maps key source: ${GOOGLE_MAPS_API_KEY_SOURCE}"
 echo "Tip: after server starts, hard refresh browser (Cmd+Shift+R)."
-echo "The CCTV panel starts collapsed; open it from its header, or in browser console:"
-echo "localStorage.setItem('godsEyeView.v6.panelCollapsed.cctv-panel', '0'); location.reload();"
+echo "The Context panel starts collapsed; open it from its rail icon, or in browser console:"
+echo "localStorage.setItem('godsEyeView.v6.panelCollapsed.global-context-panel', '0'); location.reload();"
 echo "OpenSky auth mode: ${OPENSKY_AUTH_MODE}"
 if [[ -n "${OPENSKY_CREDENTIALS_FILE}" ]]; then
   if [[ -f "${OPENSKY_CREDENTIALS_FILE}" ]]; then

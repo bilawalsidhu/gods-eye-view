@@ -170,45 +170,92 @@ async function countInspector(t, requestServices, constructControls) {
   };
 }
 
+const spot = { lat: 12.34567, lon: 45.6789 };
 
-async function openCard(t, requestServices, constructControls) {
+async function openCard(t, weather, regional) {
   t.mock.timers.enable({ apis: ['setTimeout'] });
-  t.mock.method(globalThis, 'fetch', async () => new Response(null, { status: 503 }));
-  const inspector = await countInspector(t, requestServices, constructControls);
-  const advance = async (ms) => {
-    t.mock.timers.tick(ms);
+  t.mock.method(
+    globalThis,
+    'fetch',
+    async () => new Response(null, { status: 503 }),
+  );
+  const inspector = await countInspector(t, { weather, regional });
+  const settle = async () => {
+    await nextTick();
+    t.mock.timers.tick(400);
     await new Promise((resolve) => setImmediate(resolve));
     await nextTick();
   };
   await inspector.show();
   const cards = useEntityCardStore(applicationPinia());
-  assert.ok(cards.select({ layerId: 'local-dams', id: 'host-site-' + Math.random(), label: 'Host site', lat: 12.34567 + Math.random(), lon: 45.6789 }));
-  await nextTick();
-  await advance(400);
-  await advance(10);
-  return inspector.host.querySelector('.spot-conditions')?.textContent || '';
+  const selected = cards.select({
+    ...spot,
+    layerId: 'local-dams',
+    id: 'host-weather-site',
+    label: 'Host site',
+  });
+  assert.equal(selected, true);
+  await settle();
+  return { host: inspector.host, cards, settle };
 }
 
-test('a documented { signal } weather adapter renders card weather', async (t) => {
-  const calls = [];
+test('a documented signal reaches the exact-point weather host and its reading renders', async (t) => {
   const weather = {
     getConditions: t.mock.fn(async (_lat, _lon, { signal }) => {
-      calls.push(signal);
-      return { weather: { temperatureC: 17, weatherCode: 0 } };
+      assert.ok(signal instanceof AbortSignal);
+      return {
+        coordinates: spot,
+        weather: { temperatureC: 17, weatherCode: 0 },
+      };
     }),
   };
-  const regional = { getBrief: t.mock.fn(async () => ({ weather: { temperatureC: 21, weatherCode: 0 } })) };
-  const text = await openCard(t, { weather, regional });
-  console.log('card text:', JSON.stringify(text.slice(0, 160)), 'weather calls', weather.getConditions.mock.callCount(), 'args', weather.getConditions.mock.calls.map((c) => c.arguments.length));
-  assert.match(text, /17°C/);
+  const regional = {
+    getBrief: t.mock.fn(async () => ({ weather: { temperatureC: 21 } })),
+  };
+  const { host } = await openCard(t, weather, regional);
+  const call = weather.getConditions.mock.calls.find(
+    ({ arguments: [lat, lon] }) => lat === spot.lat && lon === spot.lon,
+  );
+  assert.ok(call);
+  assert.equal(call.arguments[2].exactPoint, true);
+  const weatherFact = [...host.querySelectorAll('.entity-card__fact')].find(
+    (fact) => fact.querySelector('dt')?.textContent === 'Weather here',
+  );
+  assert.match(weatherFact?.textContent ?? '', /17\s*°C/);
+  assert.equal(regional.getBrief.mock.callCount(), 0);
 });
 
-test('control: adapter with a default options object renders card weather', async (t) => {
+test('closing a card aborts its in-flight exact-point weather request', async (t) => {
+  const pending = Promise.withResolvers();
   const weather = {
-    getConditions: t.mock.fn(async (_lat, _lon, { signal } = {}) => ({ weather: { temperatureC: 17, weatherCode: 0 } })),
+    getConditions: t.mock.fn((_lat, _lon, { signal }) => {
+      assert.ok(signal instanceof AbortSignal);
+      return pending.promise;
+    }),
   };
-  const regional = { getBrief: t.mock.fn(async () => ({ weather: { temperatureC: 21, weatherCode: 0 } })) };
-  const text = await openCard(t, { weather, regional });
-  console.log('control text:', JSON.stringify(text.slice(0, 60)), 'third arg', weather.getConditions.mock.calls.map((c) => typeof c.arguments[2]));
-  assert.match(text, /17°C/);
+  const { host, cards, settle } = await openCard(t, weather, null);
+  const call = weather.getConditions.mock.calls.find(
+    ({ arguments: [lat, lon] }) => lat === spot.lat && lon === spot.lon,
+  );
+  assert.ok(call);
+  const { signal } = call.arguments[2];
+  assert.equal(signal.aborted, false);
+  cards.clear();
+  await settle();
+  assert.equal(signal.aborted, true);
+  pending.resolve({
+    coordinates: spot,
+    weather: { temperatureC: 17, weatherCode: 0 },
+  });
+  await settle();
+  assert.ok(!host.querySelector('.entity-card'));
+});
+
+test('a weather adapter with a default options object gets the cancellation signal', async (t) => {
+  const getConditions = t.mock.fn(async (_lat, _lon, { signal } = {}) => {
+    assert.ok(signal instanceof AbortSignal);
+    return { weather: { temperatureC: 17, weatherCode: 0 } };
+  });
+  const { host } = await openCard(t, { getConditions }, null);
+  assert.match(host.querySelector('.entity-card')?.textContent ?? '', /17\s*°C/);
 });

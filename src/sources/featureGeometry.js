@@ -1,3 +1,5 @@
+import { nearestOnSegment, wrapLon } from '../geoDistance.js';
+
 /** Portable polygon and corridor operations; coordinates remain longitude/latitude. */
 export function ringAreaM2(ring) {
   if (!Array.isArray(ring) || ring.length < 3) return 0;
@@ -261,23 +263,24 @@ export function ringCentroid(ring) {
 export function nearestPointOnLines(lines, lat, lon) {
   const mLat = 111320;
   const mLon = mLat * Math.cos((lat * Math.PI) / 180);
+  const point = { lat, lon };
   let best = null;
   let bestD2 = Infinity;
   for (const line of lines || []) {
     for (let i = 0; i + 1 < line.length; i++) {
-      const ax = (line[i][0] - lon) * mLon;
-      const ay = (line[i][1] - lat) * mLat;
-      const dx = (line[i + 1][0] - line[i][0]) * mLon;
-      const dy = (line[i + 1][1] - line[i][1]) * mLat;
-      const len2 = dx * dx + dy * dy;
-      const t = len2
-        ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / len2))
-        : 0;
-      const x = ax + t * dx;
-      const y = ay + t * dy;
-      if (x * x + y * y < bestD2) {
-        bestD2 = x * x + y * y;
-        best = { lat: lat + y / mLat, lon: lon + x / mLon, distanceM: 0 };
+      const candidate = nearestOnSegment(
+        point,
+        line[i],
+        line[i + 1],
+        mLon,
+        mLat,
+      );
+      const x = wrapLon(candidate.lon - lon) * mLon;
+      const y = (candidate.lat - lat) * mLat;
+      const distance2 = x * x + y * y;
+      if (distance2 < bestD2) {
+        bestD2 = distance2;
+        best = candidate;
       }
     }
   }

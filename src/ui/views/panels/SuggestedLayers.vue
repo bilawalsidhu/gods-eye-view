@@ -4,7 +4,8 @@ import UiButton from '../../kit/UiButton.vue';
 import UiIcon from '../../kit/UiIcon.vue';
 
 // Suggested layers: their names, then one Open that shows
-// them in Data Layers picked out. Display only: a name switches nothing on.
+// them in Data Layers picked out, unless a caller supplies its own action.
+// A name switches nothing on.
 defineProps({
   /** `[{id, name, icon}]`, from suggestLayers. */
   layers: { type: Array, required: true },
@@ -20,10 +21,12 @@ defineEmits(['open']);
         <UiIcon :name="layer.icon" :size="null" />{{ layer.name }}
       </span>
     </p>
-    <UiButton class="view-context__pointer view-context__suggest-open" @click="$emit('open')">
-      <UiIcon name="layers" :size="null" />
-      <span class="view-context__pointer-text">{{ t('See them in Data Layers') }}</span>
-      <span class="view-context__pointer-go">{{ t('Open') }} ›</span>
-    </UiButton>
+    <slot name="action">
+      <UiButton class="view-context__pointer view-context__suggest-open" @click="$emit('open')">
+        <UiIcon name="layers" :size="null" />
+        <span class="view-context__pointer-text">{{ t('See them in Data Layers') }}</span>
+        <span class="view-context__pointer-go">{{ t('Open') }} ›</span>
+      </UiButton>
+    </slot>
   </div>
 </template>

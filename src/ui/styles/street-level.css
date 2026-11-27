@@ -1,6 +1,9 @@
-/* ── Street Level panel ─────────────────────────────────────────
-   The rail owns position and width (layers.css). */
-#street-level-panel {
+/* ── Street Level photo ─────────────────────────────────────────
+   The photo viewer on a street-level photo's card in Context, or in its
+   offscreen home (StreetLevelViewer.vue). The wrap moves between them, so
+   its own element carries the source colours. */
+.sl-viewer-root,
+.sl-viewer-wrap {
   --sl-green: #05cb63;
   /* KartaView's purple for lines; a lighter one where it is text (WCAG AA). */
   --sl-kartaview: #635bff;
@@ -11,131 +14,31 @@
   --sl-text: 0.6rem;
 }
 
-#street-level-panel .panel-glow {
-  position: absolute;
-  inset: -18px;
-  background: radial-gradient(
-    ellipse at center,
-    rgba(5, 203, 99, 0.16) 0%,
-    transparent 65%
-  );
-  filter: blur(16px);
-  opacity: 0.25;
-  pointer-events: none;
-}
-
-.street-level-panel-inner {
-  position: relative;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--panel-radius);
-  padding: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  backdrop-filter: blur(24px) saturate(1.4);
-  -webkit-backdrop-filter: blur(24px) saturate(1.4);
-  box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.5),
-    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
-    0 1px 0 rgba(255, 255, 255, 0.06) inset;
-}
-
-/* Class-qualified, not id-qualified, so a theme's header rule still wins. */
-.street-level-panel-inner > .panel-header {
-  gap: 8px;
-}
-
-.sl-status {
-  background: transparent;
-  font: inherit;
-  font-family: var(--font-mono);
-  font-size: var(--sl-text);
-  letter-spacing: 0.1em;
-  padding: 2px 7px;
-  border-radius: 999px;
-  border: 1px solid var(--glass-border-hover);
-  color: var(--text-secondary);
-  white-space: nowrap;
-  cursor: pointer;
-  transition:
-    border-color var(--transition-fast),
-    color var(--transition-fast);
-}
-
-.sl-status:hover,
-.sl-status:focus-visible {
-  color: var(--text-primary);
-  border-color: var(--accent);
-  outline: none;
-}
-
-.sl-status.is-on {
-  color: var(--sl-green);
-  border-color: rgba(5, 203, 99, 0.55);
-}
-
-.sl-status.is-busy {
-  color: var(--accent);
-  border-color: rgba(0, 212, 255, 0.55);
-}
-
-.sl-status.is-warn {
-  color: #ffb300;
-  border-color: rgba(255, 179, 0, 0.55);
-}
-
-/* Collapsed strips hide the body entirely: nothing to paint or tab into. */
-#street-level-panel.collapsed .sl-body,
-#street-level-panel.collapsed .sl-status {
+.sl-seg[hidden] {
   display: none;
 }
 
-.sl-body,
-.sl-controls {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.sl-body {
-  min-height: 0;
-}
-
-.sl-controls {
-  min-width: 0;
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-
-.sl-controls:disabled {
-  opacity: 0.45;
+/* Out of view, not display: none, so a viewer a provider builds before the
+   photo's card shows (or while Context is closed) has a size to build at. */
+.sl-viewer-home {
+  position: fixed;
+  top: 0;
+  left: -10000px;
+  width: 400px;
   pointer-events: none;
+  visibility: hidden;
 }
 
-/* ── Providers ───────────────────────────────────────────────────────────── */
-.sl-providers {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.sl-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-/* `--chip-color` comes from the provider. */
-.sl-chips .data-toggle-chip {
+/* ── Data Layers row ────────────────────────────────────────────────────────
+   Street Level's provider chips keep their source colours on its row:
+   `--chip-color` comes from the provider (streetLevelRowControls.js). */
+[data-layer-id='street-level'] .data-toggle-chip[data-chip-color] {
   display: inline-flex;
   align-items: center;
   gap: 5px;
 }
 
-.sl-chips .data-toggle-chip::before {
+[data-layer-id='street-level'] .data-toggle-chip[data-chip-color]::before {
   content: '';
   width: 7px;
   height: 7px;
@@ -145,7 +48,7 @@
   flex: none;
 }
 
-.sl-chips .data-toggle-chip.active {
+[data-layer-id='street-level'] .data-toggle-chip[data-chip-color].active {
   color: var(--chip-color, var(--accent));
   border-color: var(--chip-color, var(--accent));
   background: color-mix(
@@ -156,52 +59,14 @@
 }
 
 /* #635bff text on its own tint is 3.7:1 at this size; the lighter one is ~6:1. */
-.sl-chips .data-toggle-chip.active[data-chip-id='kartaview'] {
-  color: var(--sl-kartaview-text);
+[data-layer-id='street-level']
+  .data-toggle-chip.active[data-chip-id='sl-provider-kartaview'] {
+  color: #8f8aff;
 }
 
-.sl-chips .data-toggle-chip.active::before {
+[data-layer-id='street-level']
+  .data-toggle-chip[data-chip-color].active::before {
   opacity: 1;
-}
-
-.sl-chips .data-toggle-chip.chip-error {
-  color: #ffb300;
-  border-color: rgba(255, 179, 0, 0.55);
-}
-
-/* The coverage hint and OPEN STREET VIEW share a line; the hint wraps. */
-.sl-meta-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.sl-meta-row .sl-meta {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-/* Scoped to outrank .scene-btn's flex: 1, which squeezed the button to its
-   min-width beside a long coverage line and clipped its one-line label. */
-.sl-meta-row .sl-nearest-btn {
-  flex: 0 0 auto;
-}
-
-.sl-nearest-btn[hidden] {
-  display: none;
-}
-
-/* When the hint and the button do not both fit, the button takes its own line. */
-html:not([lang='en']) .sl-meta-row {
-  flex-wrap: wrap;
-}
-
-html:not([lang='en']) .sl-meta-row .sl-meta {
-  flex: 1 1 14em;
-}
-
-html:not([lang='en']) .sl-meta-row .sl-nearest-btn {
-  flex: 1 0 auto;
 }
 
 /* ── Errors ──────────────────────────────────────────────────────────────── */
@@ -210,62 +75,6 @@ html:not([lang='en']) .sl-meta-row .sl-nearest-btn {
   font-size: 0.72rem;
   line-height: 1.4;
   color: #ff8a80;
-}
-
-/* ── Filters ──────────────────────────────────────────────────── */
-.sl-filters {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.sl-seg[hidden],
-.sl-controls[hidden],
-.sl-filters[hidden],
-.sl-since[hidden] {
-  display: none;
-}
-
-.sl-since {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: center;
-  gap: 4px 10px;
-}
-
-/* The shared slider surface, in Street Level's green. */
-.sl-range {
-  --accent: var(--sl-green);
-  --accent-glow: color-mix(in srgb, var(--sl-green) 55%, transparent);
-}
-
-/* The value and its note share a line: ANY DATE (by upload date). */
-.sl-since-value {
-  grid-column: 2;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0 6px;
-  min-width: 0;
-}
-
-.sl-since-note {
-  font-family: var(--font-mono);
-  font-size: 0.5rem;
-  letter-spacing: 0.08em;
-  color: var(--text-secondary);
-}
-
-.sl-since-note[hidden] {
-  display: none;
-}
-
-.sl-since-label {
-  font-family: var(--font-mono);
-  font-size: var(--sl-text);
-  letter-spacing: 0.08em;
-  color: var(--text-primary);
 }
 
 /* ── Embedded viewer ─────────────────────────────────────────────────────── */
@@ -371,29 +180,6 @@ html:not([lang='en']) .sl-meta-row .sl-nearest-btn {
   }
 }
 
-.sl-viewer-x {
-  flex: none;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  background: rgba(10, 10, 15, 0.8);
-  color: var(--text-primary);
-  font-family: var(--font-mono);
-  font-size: 1.1rem;
-  line-height: 1;
-  cursor: pointer;
-  display: grid;
-  place-items: center;
-  transition: all var(--transition-fast);
-}
-
-.sl-viewer-x:hover {
-  color: #0a0a0f;
-  background: #fff;
-  border-color: #fff;
-}
-
 .sl-image-meta {
   flex: 0 0 auto;
   padding: 6px 10px;
@@ -442,14 +228,57 @@ html:not([lang='en']) .sl-meta-row .sl-nearest-btn {
   text-decoration: underline;
 }
 
-.sl-meta {
-  font-family: var(--font-mono);
-  font-size: var(--sl-text);
-  letter-spacing: 0.06em;
-  color: var(--text-secondary);
+/* ── On the photo's card ──────────────────────────────────────────────────── */
+/* In a card the tools share one line with the credit under the photo instead
+   of a row of their own above it, so nothing sits over the image; and the
+   date stays out of the credit: the card shows it under its title. Full
+   screen keeps both as they are. */
+.sl-hero__slot
+  .sl-viewer-wrap:not([hidden]):not(:is(:fullscreen, :popover-open)) {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    'error error'
+    'stage stage'
+    'tools meta';
+  align-items: stretch;
 }
 
-.sl-meta:empty {
+.sl-hero__slot
+  .sl-viewer-wrap:not([hidden]):not(:is(:fullscreen, :popover-open))
+  .sl-error {
+  grid-area: error;
+}
+
+.sl-hero__slot
+  .sl-viewer-wrap:not([hidden]):not(:is(:fullscreen, :popover-open))
+  .sl-viewer-stage {
+  grid-area: stage;
+}
+
+.sl-hero__slot
+  .sl-viewer-wrap:not([hidden]):not(:is(:fullscreen, :popover-open))
+  .sl-viewer-bar {
+  grid-area: tools;
+  padding: 3px 0 3px 6px;
+  background: rgba(0, 0, 0, 0.7);
+  border-bottom: 0;
+}
+
+.sl-hero__slot
+  .sl-viewer-wrap:not([hidden]):not(:is(:fullscreen, :popover-open))
+  .sl-image-meta {
+  grid-area: meta;
+  padding: 4px 10px 4px 8px;
+}
+
+.sl-hero__slot
+  .sl-viewer-wrap:not([hidden]):not(:is(:fullscreen, :popover-open))
+  .sl-image-date {
+  display: none;
+}
+
+.sl-image-date[hidden] {
   display: none;
 }
 
@@ -586,24 +415,18 @@ html:not([lang='en']) .sl-meta-row .sl-nearest-btn {
 
 /* ── Short viewports ─────────────────────────────────────────────────────── */
 @media (max-height: 640px) {
-  .street-level-panel-inner {
-    padding: 10px;
-    gap: 6px;
-  }
-
   .sl-viewer {
     min-height: 150px;
   }
 }
 
 /* ── Phones ──────────────────────────────────────────────────────────────── */
-/* The phone rail spans 50vh + 8px to 2vh + 7.5rem from the bottom
-   (responsive.css). Size the photo to that band, less ~150px of panel chrome,
-   so it shows without scrolling. */
+/* The Context sheet is short on a phone: the photo keeps to a band that
+   leaves its card's name and buttons in view. */
 @media (max-width: 720px) {
   .sl-viewer {
     aspect-ratio: auto;
-    height: clamp(110px, calc(48vh - 8px - 7.5rem - 150px), 320px);
+    height: clamp(140px, 32vh, 260px);
     min-height: 0;
   }
 }

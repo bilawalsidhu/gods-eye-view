@@ -26,6 +26,7 @@ import { useStatusStore } from './stores/status.js';
 import { applicationPinia } from './vueRuntime.js';
 import { onLocaleChange } from '../i18n/index.js';
 import { createQuebecCctvOverlay } from './quebecCctvOverlay.js';
+import { CCTV_VIDEO_HOST_EVENT } from './cctvEvents.js';
 
 /**
  * Own camera-panel interaction and presentation; receive the camera port and
@@ -56,7 +57,7 @@ export class CctvControls {
     this._cctvSummaryTypingTimer = null;
     this._lastCctvSummaryText = '';
     this._lastSeenCctvActiveId = null;
-    this._wasCctvEnabled = false;
+    this._lastSeenCctvEnabled = false;
     this._cctvChipHideTimer = null;
     this._cctvChipWasBusy = false;
     // The camera grid chip as last published; its label stays while hidden.
@@ -65,7 +66,6 @@ export class CctvControls {
     this._cctvFramePreloader = null;
     this._frame = EMPTY_CCTV_FRAME;
     this._calibrationEdit = null;
-    this._actionGeneration = 0;
     this._initCctvPanel();
     // The panel and the grid chip hold translated text; show it again in a
     // new locale, from a fresh layer state when there is one (its summary is
@@ -75,28 +75,37 @@ export class CctvControls {
       if (state) this._renderCctvState(state);
       if (this._cctvChip) this._publishCctvChip({});
     });
-    if (
-      (this._cctvVideo || this._cctvFrame) &&
-      typeof MutationObserver !== 'undefined'
-    ) {
-      this._videoVisibilityObserver = new MutationObserver(() =>
-        this._renderCctvState(this._cctvState),
-      );
-      if (this._cctvPanel)
-        this._videoVisibilityObserver.observe(this._cctvPanel, {
-          attributes: true,
-          attributeFilter: ['class', 'hidden'],
-        });
-      // On phones the panel is on screen only while the Cameras sheet is open.
-      this._videoVisibilityObserver.observe(document.body, {
-        attributes: true,
-        attributeFilter: ['class', MOBILE_SHEET_ATTR],
-      });
+    // The live video plays while its canvas is in a camera card's top image:
+    // the card says when it moves the canvas in or out, and a hidden tab
+    // pauses it. A still is fetched for the camera card or its bigger view.
+    // Built without a page (tests, workers), there is no document to watch.
+    const doc = globalThis.document;
+    if (this._cctvVideo || this._cctvFrame) {
+      if (this._cctvVideo)
+        this.listen(doc, CCTV_VIDEO_HOST_EVENT, () =>
+          this._renderCctvState(this._cctvState),
+        );
+      if (typeof MutationObserver !== 'undefined') {
+        this._videoVisibilityObserver = new MutationObserver(() =>
+          this._renderCctvState(this._cctvState),
+        );
+        // On phones the card is on screen only while Context is open.
+        if (doc?.body)
+          this._videoVisibilityObserver.observe(doc.body, {
+            attributes: true,
+            attributeFilter: ['class', MOBILE_SHEET_ATTR],
+          });
+      }
       this._offPreviews = watch(
-        [() => this.store.previewCards, () => this.store.previewPopups],
+        [
+          () => this.store.previewCards,
+          () => this.store.previewPopups,
+          () => this.store.settingsCameraId,
+          () => this.store.settingsVisible,
+        ],
         () => this._renderCctvState(this._cctvState),
       );
-      this.listen(document, 'visibilitychange', () =>
+      this.listen(doc, 'visibilitychange', () =>
         this._renderCctvState(this._cctvState),
       );
     }
@@ -169,7 +178,8 @@ export class CctvControls {
     this._cctvVideoSurface?.stop();
     this._videoVisibilityObserver?.disconnect();
     this._offPreviews?.();
-    this._actionGeneration++;
+    this.cctv.setVideoConsumer?.('card', null);
+    this.cctv.setPreviewedCamera?.(null);
     this.listeners.abort();
     this._cctvUnsubscribe?.();
     this._cctvUnsubscribe = null;

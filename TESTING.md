@@ -216,10 +216,10 @@ While recording, call out anything in these areas — this is the feedback I mos
 
 > Requires the DelDOT pack (loads by default; `CCTV_DELDOT_ENABLED=0` disables it).
 
-1. Turn on **CCTV**, fly to Dover, DE, and activate **DE 1 @ Main Toll Plaza**. ✅ Within ~30 s the monitor plane and the panel preview both show moving video,.
-2. Leave it for **five minutes**. ✅ Continuous playback; at most a short hitch about once a minute (the agency restarts its stream on a timer). ❌ A freeze that does not recover, or the panel picture stopping while the plane keeps moving.
-3. Toggle **PROJECTION** off. ✅ The panel keeps playing; the plane and the active camera's cone hide.
-4. Switch to **DE 8 @ Saulsbury Rd**, then back. ✅ Each switch resumes within ~10 s with no stale frame from the previous camera.
+1. Turn on **Cameras** and fly to Dover, DE. In Context, pick **DE 1 @ Main Toll Plaza** from the camera list. Under **Camera settings**, set **Coverage** to Off and **Projection** to On, then return to **Inspect**. Within about 30 seconds, look for moving video both at the top of the camera card and on the monitor plane in the scene.
+2. Keep the card visible for **five minutes**. A brief hitch when the agency restarts its stream is expected. Flag a freeze that persists or a card that stops while the plane keeps moving.
+3. Open **Camera settings** and turn **Projection** off. The monitor plane and the active camera’s cone should disappear. Return to **Inspect** and check that the video resumes at the top of the same card.
+4. Close the card to return to the camera list. Pick **DE 8 @ Saulsbury Rd**, then return to **DE 1 @ Main Toll Plaza** the same way. Check the camera name each time. Its own feed should start within about 10 seconds, without showing a frame from the previous camera.
 5. Optional: DevTools → Network, filter `media/`. ✅ Playlist responses carry `X-CCTV-Source: hls-pull`; segments return `video/mp2t`.
 
 ## If something looks off

@@ -72,7 +72,7 @@ onBeforeUnmount(() => clearInterval(timer));
 </script>
 
 <template>
-  <div ref="root" class="preview-hud" :class="`preview-hud--${variant}`" aria-hidden="true">
+  <div ref="root" class="preview-hud" :class="[`preview-hud--${variant}`, { 'is-paused': !running && variant !== 'ground' }]" aria-hidden="true">
     <template v-if="variant === 'ground'">
       <span class="preview-hud__grid" :style="{ left: `${grid.left}px`, top: `${grid.top}px`, width: `${grid.cols * CELL}px`, height: `${grid.rows * CELL}px` }"></span>
       <i v-for="cell in cells" :key="cell.key" class="preview-hud__cell" :style="{ transform: `translate(${cell.x}px, ${cell.y}px)`, opacity: cell.fade }"></i>

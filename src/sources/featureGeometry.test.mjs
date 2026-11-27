@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { approximateDistanceM } from './featureGeometry.js';
+import {
+  approximateDistanceM,
+  nearestPointOnLines,
+} from './featureGeometry.js';
 
 test('approximate distance takes the short way round 180°', () => {
   // Lau Islands (-179.0) to Savusavu (179.33): about 178 km apart.
@@ -12,4 +15,19 @@ test('approximate distance takes the short way round 180°', () => {
   );
   // Away from 180° nothing changes.
   assert.equal(Math.round(approximateDistanceM(0, 0, 0, 1)), 111_320);
+});
+
+test('nearest point on a crossing stays near the antimeridian, including for a distant query', () => {
+  const crossing = [
+    [
+      [179, 0],
+      [-179, 0],
+    ],
+  ];
+  const near = nearestPointOnLines(crossing, 1, -180);
+  assert.equal(Math.abs(near.lon), 180);
+  assert.equal(near.lat, 0);
+  const far = nearestPointOnLines(crossing, 0, 0);
+  assert.equal(Math.abs(far.lon), 179);
+  assert.ok(far.distanceM > 19_000_000);
 });

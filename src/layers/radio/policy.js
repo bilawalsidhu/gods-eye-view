@@ -23,6 +23,8 @@ export const RADIO_TUNER_STATIC_MAX_GAIN = 0.018;
 
 export const RADIO_VOICE_PLAYBACK_TIMEOUT_MS = 12_000;
 
+export const RADIO_DIRECTORY_REFRESH_MS = 45 * 60 * 1000;
+
 export const RADIO_DIRECTORY_STALE_MS = 7 * 24 * 60 * 60 * 1000;
 
 export const RADIO_DIRECTORY_FUTURE_SKEW_MS = 5 * 60 * 1000;
@@ -55,6 +57,9 @@ export const RADIO_OVERLAY_SOURCE_OPTIONS = Object.freeze({
 });
 
 export const DEFAULT_RADIO_FILTER = 'all';
+
+/** What Radio plays: the internet station directory or a local receiver. */
+export const RADIO_SOURCES = Object.freeze(['internet', 'local']);
 
 export const GLOBAL_RADIO_ALTITUDE_M = 2_000_000;
 

@@ -5,8 +5,8 @@
  * weather layer on and exercises it (history playback, a wind reading, a
  * storm selection), turns them all off, and asserts the scene is back to the
  * baseline (imagery layers on the globe and the tileset, primitives, ground
- * primitives, data sources, entities, camera/scene listeners, the weather
- * panel, the wind reading marker). Then it enables a set of non-weather
+ * primitives, data sources, entities, camera/scene listeners, the Context
+ * Weather list, the wind reading marker). Then it enables a set of non-weather
  * layers one at a time and samples the render rate, long tasks and console
  * errors for each, and repeats the same non-weather sequence in a control
  * page that never had weather on. Writes <out>/<label>/results.json.
@@ -137,8 +137,10 @@ const snapshot = (page) =>
         tick: v.clock.onTick.numberOfListeners,
       },
       dom: {
-        weatherPanelHidden:
-          document.getElementById('weather-panel')?.hidden ?? null,
+        // Weather's list is a Context list tab; its standalone panel is retired.
+        weatherListShown:
+          document.getElementById('context-list-weather')?.checkVisibility() ??
+          null,
         weatherCards: document.querySelectorAll('.weather-card').length,
         windReading: !!document.querySelector(
           '.gev-wind-reading:not([hidden])',
@@ -270,7 +272,36 @@ try {
     dm.setLayerParams('weather-radar', { play: true }, { origin: 'user' });
   });
   await sleep(4000);
+  await a.page.evaluate(() =>
+    window.__godsEyeView.styleManager.setPanelCollapsed(
+      'global-context-panel',
+      false,
+      {
+        persist: false,
+        syncShare: false,
+      },
+    ),
+  );
+  await a.page.waitForSelector('#context-tab-lists', { visible: true });
+  await a.page.click('#context-tab-lists');
+  if (await a.page.$('#context-list-tab-weather'))
+    await a.page.click('#context-list-tab-weather');
+  results.weatherReadoutShown = await a.page
+    .waitForFunction(() =>
+      [
+        ...document.querySelectorAll(
+          '#context-list-weather .weather-readout .weather-compact',
+        ),
+      ].some(
+        (reading) => reading.checkVisibility() && reading.textContent.trim(),
+      ),
+    )
+    .then(
+      () => true,
+      () => false,
+    );
   const weatherOn = await snapshot(a.page);
+  results.weatherOn = weatherOn;
   console.log('weather on', JSON.stringify(weatherOn));
   results.weatherOnSample = await sample(a.page, 5);
   for (const id of WEATHER) await setLayer(a.page, id, false);
@@ -345,6 +376,9 @@ try {
   // separately reported diagnostic evidence in both runs.
   if (
     !weatherReady ||
+    !results.weatherReadoutShown ||
+    weatherOn.dom.weatherListShown !== true ||
+    afterOff.dom.weatherListShown === true ||
     Object.keys(leak).length ||
     [...a.errors, ...b.errors].some((e) => e.startsWith('pageerror:'))
   ) {

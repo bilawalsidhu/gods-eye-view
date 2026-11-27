@@ -9,6 +9,8 @@ import { vClassToggle } from '../../rail/classToggle.js';
 import { useLiveScreen } from '../../liveScreen.js';
 import { usePanelChromeStore } from '../../stores/panelChrome.js';
 
+const props = defineProps({ shown: { type: Boolean, default: true } });
+
 // The LIVE section inside Context: the live streams attached to the selected
 // object (LiveControls publishes them), one at a time in the platform's own
 // player. It is there only while the selection has a stream. The player is
@@ -32,6 +34,7 @@ const {
 const { panels } = storeToRefs(usePanelChromeStore());
 const hidden = computed(
   () =>
+    !props.shown ||
     (panels.value[PANEL_ID]?.collapsed ?? true) ||
     panels.value['global-context-panel']?.collapsed === true,
 );
@@ -48,7 +51,7 @@ const liveWords = computed(() => ({
 </script>
 
 <template>
-<RailPanel :id="PANEL_ID" tag="section" start-collapsed :hidden="!view" v-class-toggle="{ 'live-on-air': playing }" :aria-label="t('Live streams for the selected object')" :title="t('LIVE')" :toggle-words="liveWords" :glow="false" scroll>
+<RailPanel :id="PANEL_ID" tag="section" start-collapsed :hidden="!view || !props.shown" v-class-toggle="{ 'live-on-air': playing }" :aria-label="t('Live streams for the selected object')" :title="t('LIVE')" :toggle-words="liveWords" :glow="false" scroll>
   <template #badge><span class="live-badge"><span class="live-dot" :class="{ 'on-air': playing, waiting: loading }" aria-hidden="true"></span><span id="live-badge-text">{{ badgeText }}</span></span></template>
   <template v-if="view">
     <div class="live-subject">{{ view.label }}</div>

@@ -2,10 +2,6 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useHudStore } from '../stores/hud.js';
-import { useCockpitStore } from '../stores/cockpit.js';
-import { cockpitEntryFace } from '../cockpitPresentation.js';
-import UiButton from '../kit/UiButton.vue';
-import UiIcon from '../kit/UiIcon.vue';
 import { vRootClass } from '../rail/rootClass.js';
 import { vTextData } from '../rail/textData.js';
 
@@ -17,14 +13,6 @@ const { hud } = storeToRefs(hudStore);
 // right after IntelHUD is built.
 const EMPTY = Object.freeze({ vessel: {}, sensor: [], recShown: null });
 const view = computed(() => hud.value ?? EMPTY);
-// The selected vehicle's readout offers the same entry as the Contacts
-// button, so first person needs no Contacts panel. The Cockpit controller
-// answers its clicks.
-const { presence: cockpit } = storeToRefs(useCockpitStore());
-// The entry names the subject it would ride (cockpitEntryFace).
-const entry = computed(() =>
-  cockpitEntryFace(cockpit.value?.entryKind, cockpit.value?.entryFace),
-);
 // Whether the HUD is on screen: a stylesheet can give #intel-hud or a parent
 // `display: none` (the Cockpit does). IntelHUD does no readout work while it
 // is not, and shows current readouts as soon as it is again. A resize
@@ -55,7 +43,17 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div id="intel-hud" ref="root" :class="{ active: hud?.active }" v-root-class="{ 'hud-minimal-active': Boolean(hud?.active) && hud?.variant === 'minimal' }" :data-variant="hud?.variant" :style="hud?.colors ?? undefined">
+  <div
+    id="intel-hud"
+    ref="root"
+    :class="{ active: hud?.active }"
+    v-root-class="{
+      'hud-minimal-active': hud?.active && hud.variant === 'minimal',
+      'hud-tactical-active': hud?.active && hud.variant === 'tactical',
+    }"
+    :data-variant="hud?.variant"
+    :style="hud?.colors ?? undefined"
+  >
     <div class="hud-sonar" aria-hidden="true"></div>
     <div class="hud-corner hud-top-left">
       <div class="hud-bracket">┌</div>
@@ -88,10 +86,6 @@ onBeforeUnmount(() => {
         <div class="hud-readout"><div id="hud-gsd" v-text-data="view.gsd"></div></div>
         <div class="hud-readout"><div id="hud-alt" v-text-data="view.alt"></div></div>
         <div class="hud-readout"><div id="hud-ais-vessel" :class="['hud-ais-vessel', { active: view.vessel.active }]" v-text-data="view.vessel.text"></div></div>
-        <UiButton id="cockpit-entry-readout" :hidden="!cockpit?.entryAvailable">
-          <UiIcon :name="entry.icon" :size="null" />
-          <span>{{ entry.label }}</span>
-        </UiButton>
       </div>
       <div class="hud-bracket">┘</div>
     </div>

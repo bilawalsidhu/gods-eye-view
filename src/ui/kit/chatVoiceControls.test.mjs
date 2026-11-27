@@ -56,8 +56,8 @@ const views = {
     svgs: 3,
   },
   'VoiceCard.vue': { UiButton: 0, UiCloseButton: 1, UiIcon: 0, svgs: 0 },
-  // Dock and minimize.
-  'PanelLayoutButtons.vue': { UiButton: 2, UiIcon: 0, svgs: 2 },
+  // Minimize and expand share one button.
+  'PanelLayoutButtons.vue': { UiButton: 1, UiIcon: 0, svgs: 1 },
   'VoiceVisualizer.vue': { UiButton: 0, UiIcon: 0, svgs: 1 },
 };
 const markup = Object.fromEntries(
@@ -85,12 +85,6 @@ test('the pressed toggles take the kit pressed state', () => {
     markup['VoiceControl.vue'],
     tag(
       String.raw`<UiButton\s+id="gev-voice-button"ATTRS\s:pressed="view\.button\.pressed \?\? undefined"`,
-    ),
-  );
-  assert.match(
-    markup['PanelLayoutButtons.vue'],
-    tag(
-      String.raw`<UiButton\s+data-layout-dockATTRS\s:pressed="props\.docked"`,
     ),
   );
   // The panel tabs are tabs: selected, never pressed.

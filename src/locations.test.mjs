@@ -202,6 +202,35 @@ test('a successful nearby recovery resolves after a geocoder miss', async () => 
   assert.equal(viewer.flights.length, 1);
 });
 
+test('a withdrawn place request skips recovery and an active one retains its original view', async () => {
+  for (const active of [false, true]) {
+    const viewer = alpsViewer();
+    const centers = [];
+    const result = await searchAndFlyTo(viewer, 'Example Park', {
+      beforeRecover: () => active,
+      resolveOnly: true,
+      placeSearch: {
+        async geocode() {
+          viewer.camera.positionCartographic.longitude = Cesium.Math.toRadians(20);
+          return { place: null };
+        },
+      },
+      recoverNearView: async (_viewer, _query, _hit, _signal, _service, center) => {
+        centers.push(center);
+        return { label: 'Example Park', lat: 46.6, lon: 10.1 };
+      },
+    });
+    if (active) {
+      assert.equal(result.label, 'Example Park');
+      assert.equal(centers.length, 1);
+      assert.ok(Math.abs(centers[0].lon - 10) < 1e-8);
+    } else {
+      assert.deepEqual(centers, []);
+      assert.equal(result, CANCELLED_SEARCH);
+    }
+  }
+});
+
 test('a geocoder miss returns null even over a namesake region', async () => {
   for (const answered of [true, false]) {
     const viewer = alpsViewer();
