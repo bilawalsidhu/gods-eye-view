@@ -353,18 +353,3 @@ export function createHybridFill(segments) {
     );
   };
 }
-
-/**
- * Select the roads a mode draws from already-fetched inputs.
- * @param {Array<object>} osmRoads - OpenFreeMap road records.
- * @param {Array<object>} segments - Decoded TomTom flow lines.
- * @param {'tomtom'|'osm'|'hybrid'} mode - Resolved mode.
- * @returns {Array<object>} Road records for `parseRoads`.
- */
-export function selectTrafficRoads(osmRoads, segments, mode) {
-  if (mode === 'osm') return osmRoads;
-  const tomtom = flowSegmentsToRoads(segments);
-  if (mode === 'tomtom') return tomtom;
-  const fill = createHybridFill(segments);
-  return [...tomtom, ...osmRoads.flatMap(fill)];
-}
