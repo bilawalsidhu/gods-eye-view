@@ -126,3 +126,42 @@ test('the book shows and hides its draw set, and keeps the order icons came in',
   assert.deepEqual(book.ids(), ['x', 'y']);
   assert.equal(book.size, 2);
 });
+
+test('a position is written into a given vector, and the kept id list lasts until ids come or go', () => {
+  const book = createIconBook();
+  book.put(mover());
+  book.put(mover({ id: 'b', motion: undefined }));
+  const out = { x: 0, y: 0, z: 0 };
+  const t = T0 + 4_000;
+  assert.equal(book.position('a', t, out), out);
+  assert.deepEqual({ ...out }, iconPosition(mover(), t));
+  assert.deepEqual(book.position('a', t), iconPosition(mover(), t));
+  assert.equal(book.position('missing', t, out), null);
+
+  // Without motion segments the icon reads where its item puts it.
+  const still = createIconBook(null, { capabilities: new Set() });
+  still.put(mover());
+  assert.deepEqual(
+    { ...still.position('a', t, out) },
+    { x: A.x, y: A.y, z: A.z },
+  );
+
+  const list = book.idList();
+  assert.deepEqual(list, ['a', 'b']);
+  assert.equal(book.idList(), list, 'kept while no id comes or goes');
+  book.put(mover({ motion: undefined })); // a restyle: same ids
+  book.putMany([mover({ id: 'b' })]);
+  assert.equal(book.idList(), list);
+  book.put(mover({ id: 'c' }));
+  const grown = book.idList();
+  assert.notEqual(grown, list);
+  assert.deepEqual(grown, ['a', 'b', 'c']);
+  book.putMany([mover({ id: 'd' })]);
+  assert.deepEqual(book.idList(), ['a', 'b', 'c', 'd']);
+  const before = book.idList();
+  book.remove('b');
+  assert.notEqual(book.idList(), before);
+  assert.deepEqual(book.idList(), ['a', 'c', 'd']);
+  // ids() still hands each caller a copy of its own.
+  assert.notEqual(book.ids(), book.ids());
+});

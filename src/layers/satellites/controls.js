@@ -11,6 +11,10 @@ import {
 import { ISS_NORAD, POINT_STYLES, classPointStyle } from './policy.js';
 import { modelFor, trackedStation } from './stationModels.js';
 
+/** satelliteClassText's options, made once rather than per satellite per paint. */
+const ISS_CLASS_TEXT = Object.freeze({ isIss: true });
+const OTHER_CLASS_TEXT = Object.freeze({ isIss: false });
+
 export function createControls({ state: layerState, services, parts, source }) {
   const { isExplicitLayerStateOrigin } = services.layerState;
 
@@ -223,7 +227,12 @@ export function createControls({ state: layerState, services, parts, source }) {
     refreshInterval: 5 * 60 * 1000,
 
     getDetectableObjects(options = {}) {
-      if (!parts.rendering._pointsShown()) return [];
+      // Read on every detection paint: one result array and each satellite's
+      // own object, so a paint allocates nothing here. The result is valid
+      // until the next call.
+      const result = (layerState._detectionResult ??= []);
+      result.length = 0;
+      if (!parts.rendering._pointsShown()) return result;
       // Dense extras are points-only: excluded from the detection overlay.
       const eligibleCount = Math.max(
         1,
@@ -236,7 +245,6 @@ export function createControls({ state: layerState, services, parts, source }) {
       const stride = Math.max(1, Math.ceil(eligibleCount / maxCount));
       const start = seed % stride;
 
-      const result = [];
       let idx = 0;
       for (const noradId of layerState._points.keys()) {
         if (
@@ -277,9 +285,11 @@ export function createControls({ state: layerState, services, parts, source }) {
         // ("GPS-OPS"). The detection canvas composites ABOVE the post-FX
         // chain, so this is how class survives NVG/FLIR once the dot colors
         // are collapsed. Read each time: SATCAT can reclassify a satellite.
-        object.klass = satelliteClassText(cat?.satelliteClass, cat?.group, {
-          isIss: noradId === ISS_NORAD,
-        });
+        object.klass = satelliteClassText(
+          cat?.satelliteClass,
+          cat?.group,
+          noradId === ISS_NORAD ? ISS_CLASS_TEXT : OTHER_CLASS_TEXT,
+        );
         object.position = position;
         object.skipLabel = isTracked;
         result.push(object);

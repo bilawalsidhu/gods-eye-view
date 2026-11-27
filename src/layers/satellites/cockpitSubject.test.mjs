@@ -750,3 +750,17 @@ test('a satellite docked to the ISS draws no ring of its own: the ISS’s shows'
   assert.equal(f.ring(GPS).show, true);
   assert.equal(f.ring(ISS_NORAD).show, false);
 });
+
+test('destroying the layer empties the result array detection last read', async (t) => {
+  const f = await fixture(t);
+  const list = f.methods.getDetectableObjects();
+  assert.ok(list.length > 0, 'satellites were collected');
+  const { log } = console;
+  console.log = () => {};
+  try {
+    f.parts.lifecycle.methods.destroy(f.viewer);
+  } finally {
+    console.log = log;
+  }
+  assert.equal(list.length, 0, 'no satellite stays reachable through it');
+});
