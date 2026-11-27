@@ -6,7 +6,6 @@ import {
   ORBITAL_EARTH_RADIUS_M,
   ORBITAL_SETTLE_MAX_MS,
   ORBITAL_WHEEL_COOLDOWN_MS,
-  cesiumFrustumFovRad,
   earthAngularRadiusRad,
   footprintWidthKm,
   fovForZoom,
@@ -187,15 +186,6 @@ test('the footprint shrinks with zoom and stops at the limb', () => {
   assert.ok(Math.abs(footprintWidthKm(35.786e6, 40 * RAD) - cap) < 1e-6);
   assert.equal(footprintWidthKm(0, 1), null);
   assert.equal(footprintWidthKm(420e3, NaN), null);
-});
-
-test('Cesium frustum fov widens to the horizontal on a landscape canvas', () => {
-  const vertical = 30 * RAD;
-  assert.equal(cesiumFrustumFovRad(vertical, 0.75), vertical);
-  const horizontal = cesiumFrustumFovRad(vertical, 2);
-  assert.ok(
-    Math.abs(Math.tan(horizontal / 2) - 2 * Math.tan(vertical / 2)) < 1e-12,
-  );
 });
 
 test('zoom transition curves stay bounded and settle', () => {

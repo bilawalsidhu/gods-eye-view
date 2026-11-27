@@ -219,18 +219,6 @@ export function fovForZoom(baseFovRad, zoom) {
 }
 
 /**
- * Cesium's `PerspectiveFrustum.fov` is horizontal on a landscape canvas and
- * vertical on a portrait one; convert a vertical field of view to it.
- * @param {number} verticalFovRad Vertical field of view, radians.
- * @param {number} aspect Canvas width / height.
- * @returns {number} The value to assign to `frustum.fov`, radians.
- */
-export function cesiumFrustumFovRad(verticalFovRad, aspect) {
-  if (!(aspect > 1)) return verticalFovRad;
-  return 2 * Math.atan(Math.tan(verticalFovRad / 2) * aspect);
-}
-
-/**
  * Ground width covered across the frame, along a great circle through the
  * sub-satellite point, km. A ray past the limb ends at the horizon, so a
  * frame wider than the disk reports the visible cap's width.
