@@ -4748,5 +4748,7 @@
   "Low-cost sensor": "Недорогой датчик",
   "{name} · sensor": "{name} · датчик",
   "Reference monitor": "Эталонный прибор",
-  "Needs {envVars} — add one in Provider Settings": "Нужен {envVars} — добавьте любой из них в «Настройках провайдеров»"
+  "Needs {envVars} — add one in Provider Settings": "Нужен {envVars} — добавьте любой из них в «Настройках провайдеров»",
+  "CABLE \u00b7 {name}": "КАБЕЛЬ · {name}",
+  "LANDING POINT \u00b7 {name}": "ТОЧКА ВЫХОДА НА БЕРЕГ · {name}"
 }

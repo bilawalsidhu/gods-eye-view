@@ -4433,5 +4433,7 @@
   "Low-cost sensor": "低成本傳感器",
   "{name} · sensor": "{name} · 傳感器",
   "Reference monitor": "參考監測儀",
-  "Needs {envVars} — add one in Provider Settings": "需要 {envVars}，請在服務商設置中添加其中一個"
+  "Needs {envVars} — add one in Provider Settings": "需要 {envVars}，請在服務商設置中添加其中一個",
+  "CABLE · {name}": "海纜 · {name}",
+  "LANDING POINT · {name}": "登陸點 · {name}"
 }
