@@ -268,11 +268,6 @@ export function createRendering({
     sets?.rings.upsert([path.item]);
   }
 
-  /** Whether a ring is shown; false when there is none. */
-  function _orbitPathShown(noradId) {
-    return layerState._orbitPaths.get(noradId)?.item.show === true;
-  }
-
   /**
    * Draw a ring at `factor` times the alpha it was built with; 1 restores
    * it exactly.
@@ -297,11 +292,6 @@ export function createRendering({
     if (!point || point.show === show) return;
     point.show = show;
     _markDirty(noradId);
-  }
-
-  /** Whether a satellite's dot is shown; false when it has none. */
-  function _pointShown(noradId) {
-    return layerState._points.get(noradId)?.show === true;
   }
 
   /** Show or hide the tracked satellite's dot (the Cockpit rides it). */
@@ -1002,11 +992,9 @@ export function createRendering({
     _setPointsShown,
     _setOrbitPathsShown,
     _setOrbitPathShown,
-    _orbitPathShown,
     _setOrbitPathAlpha,
     _setPointShown,
     _setPointStyle,
-    _pointShown,
     _setTrackedDotShown,
     _setPointDisplayRange,
     _pointDisplayRange,
@@ -1032,7 +1020,6 @@ export function createRendering({
     _preRenderTick,
     _startPace,
     _stopPace,
-    _paceForTest: () => ({ ...pace.state(), pxPerSec: pacePxPerSec }),
     _updatePointFocus,
     applySatellitePointFocusDeemphasis,
     _flushPoints,

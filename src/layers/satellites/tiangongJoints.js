@@ -271,10 +271,3 @@ export function tiangongJoint(node) {
   if (!joint) throw new Error(`Tiangong has no joint ${node}`);
   return joint;
 }
-
-/** The visiting vehicles' mesh nodes; hiding one hides its arrays with it. */
-export const TIANGONG_VEHICLE_NODES = Object.freeze([
-  'SHENZHOU_FORWARD',
-  'SHENZHOU_NADIR',
-  'TIANZHOU_AFT',
-]);
