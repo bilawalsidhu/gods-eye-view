@@ -583,7 +583,7 @@ const KM_PER_DEGREE = 111.32;
  * @returns {null | {latSpanDeg:number, lonSpanDeg:number, latSpanKm:number,
  *   lonSpanKm:number, spanKm:number, centerLat:number, centerLng:number}}
  */
-export function viewportMetrics(viewport) {
+function viewportMetrics(viewport) {
   const southwest = viewport?.southwest;
   const northeast = viewport?.northeast;
   if (

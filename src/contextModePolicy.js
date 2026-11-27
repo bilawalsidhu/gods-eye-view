@@ -123,7 +123,7 @@ export async function settleUserFacingContextAction({
  * one into `userAdded` makes exit restoration re-enable the mode layer the
  * user just turned off.
  */
-export const CONTEXT_ENTRY_LAYER_IDS = Object.freeze(['military-awareness']);
+const CONTEXT_ENTRY_LAYER_IDS = Object.freeze(['military-awareness']);
 
 /**
  * Leave a Context transaction: publish the settled coordination flag, then
@@ -361,7 +361,7 @@ export function entryAllowed({
  * apart — one saying "flights" while the other says "contacts" is the bug
  * this whole seam exists to prevent.
  */
-export const CONTEXT_MODE_VOICE_NAMES = Object.freeze({
+const CONTEXT_MODE_VOICE_NAMES = Object.freeze({
   flights: 'contacts',
 });
 

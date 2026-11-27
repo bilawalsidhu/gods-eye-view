@@ -9,7 +9,7 @@ import { projectGroundArcLatLon } from './data/motionModel.js';
 export const VESSEL_BRIDGE_PITCH_DEG = -2;
 
 /** The AIS antenna usually sits on the bridge, so the eye is not moved forward. */
-export const VESSEL_BRIDGE_FORWARD_OFFSET_M = 0;
+const VESSEL_BRIDGE_FORWARD_OFFSET_M = 0;
 
 /** Clearance over the shared ground floor for a camera that floats on water. */
 export const VESSEL_BRIDGE_MIN_CLEARANCE_M = 2;
@@ -33,16 +33,16 @@ export const VESSEL_DEAD_RECKON_MAX_S = 180;
 export const VESSEL_WATERLINE_PROBE_RADIUS_M = 30;
 
 /** Probes on the ring around the ship. */
-export const VESSEL_WATERLINE_PROBE_COUNT = 8;
+const VESSEL_WATERLINE_PROBE_COUNT = 8;
 
 /** How often the bridge reads the water under its ship again, ms. */
 export const VESSEL_WATERLINE_REFRESH_MS = 5000;
 
 /** A surface less than this above sea level is the sea itself, metres. */
-export const VESSEL_WATERLINE_MIN_RISE_M = 2;
+const VESSEL_WATERLINE_MIN_RISE_M = 2;
 
 /** Highest navigable water trusted from a sample (Lake Titicaca ~3,810 m). */
-export const VESSEL_WATERLINE_MAX_RISE_M = 4000;
+const VESSEL_WATERLINE_MAX_RISE_M = 4000;
 
 /**
  * Where to read the surface around a ship: the ship's own position, then a

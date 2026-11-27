@@ -285,7 +285,7 @@ export function routeSpeedProfile(u, r) {
  * @param {boolean} [reducedMotion] Flatten the roll entirely.
  * @returns {number} Degrees of roll, + = right wing down.
  */
-export function routeBankTargetDeg(turnRateDegS, reducedMotion = false) {
+function routeBankTargetDeg(turnRateDegS, reducedMotion = false) {
   if (reducedMotion || !Number.isFinite(turnRateDegS)) return 0;
   const raw = turnRateDegS * ROUTE_BANK_PER_DEG_S;
   return Math.max(-ROUTE_BANK_MAX_DEG, Math.min(ROUTE_BANK_MAX_DEG, raw));

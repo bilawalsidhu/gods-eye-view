@@ -1,9 +1,9 @@
 import { installationFeedback } from './data/installationFeedback.js';
 
-export const LOADING_REVEAL_DELAY_MS = 160;
-export const LOADING_TERMINAL_DWELL_MS = 2200;
+const LOADING_REVEAL_DELAY_MS = 160;
+const LOADING_TERMINAL_DWELL_MS = 2200;
 export const LOADING_FAILURE_DWELL_MS = 5000;
-export const LOADING_LONG_THRESHOLD_MS = 30000;
+const LOADING_LONG_THRESHOLD_MS = 30000;
 export const TRAFFIC_SYNC_CONFIRM_MS = 1500;
 /** Layer statuses that are user guidance, not feed faults (see data/feedState.js layerFeedState). */
 export const GUIDANCE_STATUSES = Object.freeze(['zoom-in', 'empty', 'idle']);

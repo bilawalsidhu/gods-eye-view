@@ -19,5 +19,3 @@ application.start().catch((error) => {
   });
   loaderStatus.style.color = '#ff4444';
 });
-
-export { application };

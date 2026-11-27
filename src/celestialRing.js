@@ -38,7 +38,7 @@ export const CELESTIAL_PLANE_EPSILON = 0.045;
  * this is the Detection FADE (label/card fading), NOT the scope-mask feather
  * in scopeMask.js. */
 export const KEYHOLE_LABEL_FEATHER_RATIO = 0.07;
-export const KEYHOLE_LABEL_FEATHER_MAX_RATIO = 0.4;
+const KEYHOLE_LABEL_FEATHER_MAX_RATIO = 0.4;
 /**
  * First-run OUTSIDE opacity for keyhole-aligned world overlays.
  *
@@ -67,12 +67,12 @@ const FULL_GLOBE_RADIUS_RATIO = 0.61;
 const TAU = Math.PI * 2;
 // This overlay is a secondary HUD treatment. Keep it smooth while reserving
 // the majority of the frame budget for Cesium's terrain and 3D tiles.
-export const CELESTIAL_MAX_FRAME_RATE = 30;
+const CELESTIAL_MAX_FRAME_RATE = 30;
 // There are two independently rotating effect canvases (sun and moon), so
 // this is a per-layer budget; their combined allocation remains comparable to
 // the former single 4 MP canvas.
-export const CELESTIAL_MAX_BACKING_PIXELS = 2_000_000;
-export const CELESTIAL_MAX_BACKING_DIMENSION = 1_600;
+const CELESTIAL_MAX_BACKING_PIXELS = 2_000_000;
+const CELESTIAL_MAX_BACKING_DIMENSION = 1_600;
 const CELESTIAL_MAX_DEVICE_PIXEL_RATIO = 1.25;
 
 let keyholeFadeRatio = KEYHOLE_LABEL_FEATHER_RATIO;

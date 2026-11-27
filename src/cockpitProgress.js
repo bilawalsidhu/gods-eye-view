@@ -14,9 +14,9 @@
  */
 
 /** Bare ticks closer than this merge (px). */
-export const COCKPIT_PROGRESS_MIN_TICK_PX = 6;
+const COCKPIT_PROGRESS_MIN_TICK_PX = 6;
 /** Room kept between two labels (px). */
-export const COCKPIT_PROGRESS_LABEL_GAP_PX = 8;
+const COCKPIT_PROGRESS_LABEL_GAP_PX = 8;
 
 /** Tones from weakest to strongest, for a merged tick. */
 const TONE_RANK = Object.freeze([

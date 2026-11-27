@@ -30,7 +30,7 @@ export const ORBITAL_EARTH_RADIUS_M = 6371008.8;
 export const ORBITAL_ZOOM_LADDER = Object.freeze([1, 2, 4, 8, 16, 32, 64, 128]);
 
 /** The tightest step for a satellite without sensor data. */
-export const ORBITAL_BASE_MAX_ZOOM = 8;
+const ORBITAL_BASE_MAX_ZOOM = 8;
 
 /** The zoom an orbital view opens at. */
 export const ORBITAL_DEFAULT_ZOOM = 1;
@@ -48,16 +48,16 @@ export const ORBITAL_BASE_FOV_LEO_RAD = (60 * Math.PI) / 180;
  * above about 8,000 km the base frame instead fits the whole disk with this
  * margin, so 1x is "the whole Earth" and the steps zoom into it.
  */
-export const ORBITAL_DISK_MARGIN = 1.15;
+const ORBITAL_DISK_MARGIN = 1.15;
 
 /** Duration of one zoom step's field-of-view change, ms. */
 export const ORBITAL_ZOOM_TRANSITION_MS = 400;
 
 /** How long the reticle shows its lock tick after a step settles, ms. */
-export const ORBITAL_LOCK_TICK_MS = 220;
+const ORBITAL_LOCK_TICK_MS = 220;
 
 /** Peak focus-pull blur at the middle of a zoom step, CSS pixels. */
-export const ORBITAL_MAX_BLUR_PX = 6;
+const ORBITAL_MAX_BLUR_PX = 6;
 
 /**
  * Longest a zoom step holds its focus pull for the new field of view's
@@ -489,7 +489,7 @@ export function offNadirOrientation(nadir, { northDeg = 0, eastDeg = 0 } = {}) {
 }
 
 /** Scroll distance, in pixels, that makes one zoom step. A mouse notch is ~100. */
-export const ORBITAL_WHEEL_PIXELS_PER_STEP = 100;
+const ORBITAL_WHEEL_PIXELS_PER_STEP = 100;
 
 /**
  * After a step, the rest of that gesture is absorbed for this long, so one
@@ -664,7 +664,7 @@ const WGS84_MAXIMUM_RADIUS_M = 6378137;
  * @param {number} level
  * @returns {number}
  */
-export function ellipsoidTerrainLevelErrorM(level) {
+function ellipsoidTerrainLevelErrorM(level) {
   return (WGS84_MAXIMUM_RADIUS_M * 2 * Math.PI * 0.25) / (64 * 2) / 2 ** level;
 }
 

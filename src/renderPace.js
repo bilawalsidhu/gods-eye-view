@@ -21,10 +21,10 @@ export const PACE_MIN_HZ = 3;
 /** Draws a second however fast the marks move. */
 export const PACE_MAX_HZ = 30;
 /** From this many draws a second the pace holds the loop instead. */
-export const PACE_HOLD_HZ = 12;
+const PACE_HOLD_HZ = 12;
 /** Below this the hold is let go again (a gap, so it does not flap; above
  * ROTOR_FPS, so a turning rotor alone draws on the timer at its own rate). */
-export const PACE_RELEASE_HZ = 11;
+const PACE_RELEASE_HZ = 11;
 /** Held rates, each dividing 60 and 120 evenly so draws come at even gaps. */
 const HELD_RATES = [15, 20, 30];
 

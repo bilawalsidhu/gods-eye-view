@@ -10,7 +10,7 @@ import { findGlobe } from './render/rendererOf.js';
 
 const STORAGE_KEY = 'godsEyeView.viewSky';
 /** The switches the panel lists, in its order. */
-export const SKY_SWITCHES = Object.freeze([
+const SKY_SWITCHES = Object.freeze([
   'atmosphere',
   'lighting',
   'sun',

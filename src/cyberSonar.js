@@ -9,8 +9,8 @@ export const CYBER_SONAR_PERIOD_MS = 5_200;
 // contacts still compose after layer updates on each actual draw so owner
 // color writes cannot flash through during camera/fleet animation.
 export const CYBER_SONAR_RENDER_INTERVAL_MS = 80;
-export const CYBER_SONAR_FEATHER_DEG = 10;
-export const CYBER_SONAR_DEFAULTS = Object.freeze({
+const CYBER_SONAR_FEATHER_DEG = 10;
+const CYBER_SONAR_DEFAULTS = Object.freeze({
   rings: 8,
   range: 100,
   intensity: 70,
