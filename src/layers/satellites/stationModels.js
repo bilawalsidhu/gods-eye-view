@@ -20,8 +20,11 @@ import { STATIONS, stationTrackedOn } from './policy.js';
  */
 export function stationModelFor(models, noradId) {
   if (noradId === null || noradId === undefined) return null;
-  for (const model of models)
+  // Asked per satellite per detection paint: indexed, no iterator.
+  for (let i = 0; i < models.length; i++) {
+    const model = models[i];
     if (model.norad === noradId || model._standsInFor?.(noradId)) return model;
+  }
   return null;
 }
 
