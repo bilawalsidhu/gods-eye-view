@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as Cesium from 'cesium';
 import {
-  moonPositionFixed,
   moonPositionInertial,
   sunPositionFixed,
   sunPositionInertial,
@@ -167,12 +166,6 @@ test('sunPositionFixed matches the pseudo-fixed rotation of the sun', () => {
   );
 });
 
-test('moonPositionFixed matches the pseudo-fixed rotation of the moon', () => {
-  sameOver('moon fixed', moonPositionFixed, (ms) =>
-    cesiumFixed(ms, Simon.computeMoonPositionInEarthInertialFrame),
-  );
-});
-
 test('positions are plausible: 1 AU sun, ~384,000 km moon', () => {
   const ms = Date.UTC(2026, 10, 5);
   const sun = sunPositionInertial(ms);
@@ -189,7 +182,6 @@ test('times outside the model throw', () => {
     moonPositionInertial,
     temeToPseudoFixed,
     sunPositionFixed,
-    moonPositionFixed,
   ])
     for (const ms of [NaN, Infinity, -Infinity, 8.64e15 + 1])
       assert.throws(() => fn(ms), RangeError, `${fn.name}(${ms})`);

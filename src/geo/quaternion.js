@@ -18,8 +18,6 @@ import { normalize, vec } from './vector.js';
 
 export const quat = (x, y, z, w) => ({ x, y, z, w });
 
-export const IDENTITY_QUATERNION = Object.freeze(quat(0, 0, 0, 1));
-
 /**
  * Rotation by `angle` radians (right-handed) about `axis`, normalised first.
  * Throws a RangeError for an axis with no direction, where Cesium's debug
@@ -45,8 +43,6 @@ export function multiplyQuaternions(left, right) {
     lw * rw - lx * rx - ly * ry - lz * rz,
   );
 }
-
-export const conjugateQuaternion = (q) => quat(-q.x, -q.y, -q.z, q.w);
 
 /** The rotation's axes: where it takes the unit x, y and z vectors. */
 export function toAxes(q) {

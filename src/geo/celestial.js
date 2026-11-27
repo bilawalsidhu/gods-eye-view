@@ -631,13 +631,3 @@ export function temeToPseudoFixed(ms) {
 export function sunPositionFixed(ms) {
   return frameVector(temeToPseudoFixed(ms), sunPositionInertial(ms));
 }
-
-/**
- * The Moon in Earth-fixed (ECEF) metres, in the same pseudo-fixed frame as
- * `sunPositionFixed`.
- * @param {number} ms UTC epoch milliseconds.
- * @returns {{x: number, y: number, z: number}}
- */
-export function moonPositionFixed(ms) {
-  return frameVector(temeToPseudoFixed(ms), moonPositionInertial(ms));
-}

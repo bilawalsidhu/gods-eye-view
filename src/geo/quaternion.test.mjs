@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as Cesium from 'cesium';
 import {
-  conjugateQuaternion,
   fromAxes,
   fromAxisAngle,
   fromDegrees,
@@ -98,12 +97,6 @@ test('fromAxes inverts toAxes up to sign', () => {
         `${k}: ${back[k]} vs ${q[k]}`,
       );
   }
-});
-
-test('conjugateQuaternion undoes a rotation', () => {
-  const q = fromAxisAngle({ x: 1, y: 2, z: 3 }, 0.7);
-  const id = multiplyQuaternions(q, conjugateQuaternion(q));
-  assert.ok(Math.abs(id.w - 1) < 1e-15 && Math.hypot(id.x, id.y, id.z) < 1e-15);
 });
 
 test("heading-pitch-roll matches the default renderer's", () => {
