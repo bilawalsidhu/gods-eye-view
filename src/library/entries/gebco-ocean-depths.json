@@ -1,0 +1,34 @@
+{
+  "id": "gebco-ocean-depths",
+  "kind": "tiles",
+  "family": "environment",
+  "title": "Ocean depths and land relief (GEBCO 2026)",
+  "provider": "GEBCO",
+  "description": "Shaded relief of the GEBCO_2026 global grid: sea-floor depth and land height at 15 arc-seconds (about 450 m), produced with the Nippon Foundation-GEBCO Seabed 2030 project. Not for navigation.",
+  "icon": "≋",
+  "maintainer": "github:Herr-Enklo",
+  "coverage": {
+    "global": true
+  },
+  "source": {
+    "format": "bbox",
+    "url": "https://wms.gebco.net/2026/mapserv?service=WMS&request=GetMap&version=1.3.0&layers=GEBCO_2026&styles=&crs=EPSG:3857&bbox={bbox-epsg-3857}&width=256&height=256&format=image/jpeg",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 0,
+    "maxZoom": 9
+  },
+  "display": {
+    "opacity": 0.9
+  },
+  "licence": {
+    "name": "GEBCO Grid: public domain (GEBCO terms of use); not for navigation",
+    "url": "https://www.gebco.net/data-products/gridded-bathymetry/terms-of-use"
+  },
+  "attribution": {
+    "text": "Imagery reproduced from the GEBCO_2026 Grid, GEBCO Compilation Group (2026) GEBCO 2026 Grid (doi:10.5285/4f68d5c7-45eb-f999-e063-7086abc036fa)",
+    "url": "https://www.gebco.net/"
+  },
+  "status": "community",
+  "reviewed": "2026-11-17"
+}

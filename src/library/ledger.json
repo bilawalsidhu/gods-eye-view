@@ -91,5 +91,20 @@
   ["kartverket-topo", "2h"],
   ["kartverket-toporaster", "2i"],
   ["mapterhorn-terrain", "2j"],
-  ["amsterdam-traffic-cameras", "2k"]
+  ["amsterdam-traffic-cameras", "2k"],
+  ["bfs-gamma-dose-rate", "2l"],
+  ["brandenburg-berlin-dop20", "2m"],
+  ["digitraffic-ais-vessels", "2n"],
+  ["dwd-lightning-density", "2o"],
+  ["dwd-rain-radar", "2p"],
+  ["dwd-weather-warnings", "2q"],
+  ["emodnet-offshore-installations", "2r"],
+  ["emodnet-offshore-wind-farm-areas", "2s"],
+  ["emodnet-offshore-wind-farm-sites", "2t"],
+  ["emodnet-vessel-density", "2u"],
+  ["gebco-ocean-depths", "2v"],
+  ["gibs-precipitation-rate", "2w"],
+  ["gibs-sea-surface-temperature", "2x"],
+  ["pegelonline-water-levels", "2y"],
+  ["hamburg-traffic-cameras", "2z"]
 ]

@@ -14,8 +14,10 @@ import arStatewideImagery from './entries/ar-statewide-imagery.json' with { type
 import azStatewideImagery from './entries/az-statewide-imagery.json' with { type: 'json' };
 import amsterdamTrafficCameras from './entries/amsterdam-traffic-cameras.json' with { type: 'json' };
 import bayernDop40 from './entries/bayern-dop40.json' with { type: 'json' };
+import bfsGammaDoseRate from './entries/bfs-gamma-dose-rate.json' with { type: 'json' };
 import bismarckMandanNd from './entries/bismarck-mandan-nd.json' with { type: 'json' };
 import bkgTopplusOpen from './entries/bkg-topplus-open.json' with { type: 'json' };
+import brandenburgBerlinDop20 from './entries/brandenburg-berlin-dop20.json' with { type: 'json' };
 import cctvFloridaFl511 from './entries/cctv-florida-fl511.json' with { type: 'json' };
 import cctvLithuania from './entries/cctv-lithuania.json' with { type: 'json' };
 import cctvNycDot from './entries/cctv-nyc-dot.json' with { type: 'json' };
@@ -23,18 +25,30 @@ import ctStatewideImagery from './entries/ct-statewide-imagery.json' with { type
 import dakotaCountyMn from './entries/dakota-county-mn.json' with { type: 'json' };
 import dcStatewideImagery from './entries/dc-statewide-imagery.json' with { type: 'json' };
 import deStatewideImagery from './entries/de-statewide-imagery.json' with { type: 'json' };
+import digitrafficAisVessels from './entries/digitraffic-ais-vessels.json' with { type: 'json' };
+import dwdLightningDensity from './entries/dwd-lightning-density.json' with { type: 'json' };
+import dwdRainRadar from './entries/dwd-rain-radar.json' with { type: 'json' };
+import dwdWeatherWarnings from './entries/dwd-weather-warnings.json' with { type: 'json' };
 import eeMaaAmetOrtofoto from './entries/ee-maa-amet-ortofoto.json' with { type: 'json' };
 import eiaPowerPlants from './entries/eia-power-plants.json' with { type: 'json' };
+import emodnetOffshoreInstallations from './entries/emodnet-offshore-installations.json' with { type: 'json' };
+import emodnetOffshoreWindFarmAreas from './entries/emodnet-offshore-wind-farm-areas.json' with { type: 'json' };
+import emodnetOffshoreWindFarmSites from './entries/emodnet-offshore-wind-farm-sites.json' with { type: 'json' };
+import emodnetVesselDensity from './entries/emodnet-vessel-density.json' with { type: 'json' };
 import epaSuperfundSites from './entries/epa-superfund-sites.json' with { type: 'json' };
 import epaToxicReleaseFacilities from './entries/epa-toxic-release-facilities.json' with { type: 'json' };
 import epcEnglandWales from './entries/epc-england-wales.json' with { type: 'json' };
 import femaUsaStructures from './entries/fema-usa-structures.json' with { type: 'json' };
 import gbifOccurrenceDensity from './entries/gbif-occurrence-density.json' with { type: 'json' };
 import gdacsDisasterAlerts from './entries/gdacs-disaster-alerts.json' with { type: 'json' };
+import gebcoOceanDepths from './entries/gebco-ocean-depths.json' with { type: 'json' };
+import gibsPrecipitationRate from './entries/gibs-precipitation-rate.json' with { type: 'json' };
+import gibsSeaSurfaceTemperature from './entries/gibs-sea-surface-temperature.json' with { type: 'json' };
 import grandForksNd from './entries/grand-forks-nd.json' with { type: 'json' };
 import gsiJapanMap from './entries/gsi-japan-map.json' with { type: 'json' };
 import gsiJapanPhoto from './entries/gsi-japan-photo.json' with { type: 'json' };
 import gvpHoloceneVolcanoes from './entries/gvp-holocene-volcanoes.json' with { type: 'json' };
+import hamburgTrafficCameras from './entries/hamburg-traffic-cameras.json' with { type: 'json' };
 import iaStatewideImagery from './entries/ia-statewide-imagery.json' with { type: 'json' };
 import idStatewideImagery from './entries/id-statewide-imagery.json' with { type: 'json' };
 import ignOrthophotosFrance from './entries/ign-orthophotos-france.json' with { type: 'json' };
@@ -89,6 +103,7 @@ import oaklandCountyMi from './entries/oakland-county-mi.json' with { type: 'jso
 import ohStatewideImagery from './entries/oh-statewide-imagery.json' with { type: 'json' };
 import orStatewideImagery from './entries/or-statewide-imagery.json' with { type: 'json' };
 import paStatewideImagery from './entries/pa-statewide-imagery.json' with { type: 'json' };
+import pegelonlineWaterLevels from './entries/pegelonline-water-levels.json' with { type: 'json' };
 import plOrtofotomapa from './entries/pl-ortofotomapa.json' with { type: 'json' };
 import pnoaMa from './entries/pnoa-ma.json' with { type: 'json' };
 import portlandMetroOr from './entries/portland-metro-or.json' with { type: 'json' };
@@ -113,8 +128,10 @@ export const LIBRARY_MANIFESTS = Object.freeze([
   arStatewideImagery,
   azStatewideImagery,
   bayernDop40,
+  bfsGammaDoseRate,
   bismarckMandanNd,
   bkgTopplusOpen,
+  brandenburgBerlinDop20,
   cctvFloridaFl511,
   cctvLithuania,
   cctvNycDot,
@@ -122,18 +139,30 @@ export const LIBRARY_MANIFESTS = Object.freeze([
   dakotaCountyMn,
   dcStatewideImagery,
   deStatewideImagery,
+  digitrafficAisVessels,
+  dwdLightningDensity,
+  dwdRainRadar,
+  dwdWeatherWarnings,
   eeMaaAmetOrtofoto,
   eiaPowerPlants,
+  emodnetOffshoreInstallations,
+  emodnetOffshoreWindFarmAreas,
+  emodnetOffshoreWindFarmSites,
+  emodnetVesselDensity,
   epaSuperfundSites,
   epaToxicReleaseFacilities,
   epcEnglandWales,
   femaUsaStructures,
   gbifOccurrenceDensity,
   gdacsDisasterAlerts,
+  gebcoOceanDepths,
+  gibsPrecipitationRate,
+  gibsSeaSurfaceTemperature,
   grandForksNd,
   gsiJapanMap,
   gsiJapanPhoto,
   gvpHoloceneVolcanoes,
+  hamburgTrafficCameras,
   iaStatewideImagery,
   idStatewideImagery,
   ignOrthophotosFrance,
@@ -188,6 +217,7 @@ export const LIBRARY_MANIFESTS = Object.freeze([
   ohStatewideImagery,
   orStatewideImagery,
   paStatewideImagery,
+  pegelonlineWaterLevels,
   plOrtofotomapa,
   pnoaMa,
   portlandMetroOr,
