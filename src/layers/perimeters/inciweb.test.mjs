@@ -1,14 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  findInciwebLink,
   findInciwebLinks,
-  resolveInciwebNodeLink,
   createInciwebIndexSource,
   createInciwebPublicationSource,
   isCurrentPublication,
   inciwebNodeId,
 } from './inciweb.js';
+
+const firstLink = (rows, incident) =>
+  findInciwebLinks(rows, incident)[0] ?? null;
 
 const catalog = [
   {
@@ -52,34 +53,28 @@ test('incidents resolve by exact normalized title to a node link', () => {
   // Title formats vary: with/without a 'Fire' suffix, with/without a year
   // prefix ('2026 Coleman Creek'). All normalize to the WFIGS name.
   assert.equal(
-    resolveInciwebNodeLink(catalog, { name: 'Second Flat', state: 'US-OR' }),
+    firstLink(catalog, { name: 'Second Flat', state: 'US-OR' }),
     'https://inciweb.wildfire.gov/node/329195',
   );
   assert.equal(
-    resolveInciwebNodeLink(catalog, { name: 'Coleman Creek', state: 'US-OR' }),
+    firstLink(catalog, { name: 'Coleman Creek', state: 'US-OR' }),
     'https://inciweb.wildfire.gov/node/329273',
   );
   assert.equal(
-    resolveInciwebNodeLink(catalog, { name: 'Timber', state: 'US-CA' }),
+    firstLink(catalog, { name: 'Timber', state: 'US-CA' }),
     'https://inciweb.wildfire.gov/node/291765',
   );
   assert.equal(
-    resolveInciwebNodeLink(catalog, { name: 'Coyote', state: 'US-OR' }),
+    firstLink(catalog, { name: 'Coyote', state: 'US-OR' }),
     'https://inciweb.wildfire.gov/node/328922',
   );
   // Substring-style near-misses never match.
   assert.equal(
-    resolveInciwebNodeLink(catalog, { name: 'Gobernador', state: 'US-NM' }),
+    firstLink(catalog, { name: 'Gobernador', state: 'US-NM' }),
     null,
   );
-  assert.equal(
-    resolveInciwebNodeLink(catalog, { name: 'Nope', state: null }),
-    null,
-  );
-  assert.equal(
-    resolveInciwebNodeLink(null, { name: 'Coyote', state: 'US-OR' }),
-    null,
-  );
+  assert.equal(firstLink(catalog, { name: 'Nope', state: null }), null);
+  assert.equal(firstLink(null, { name: 'Coyote', state: 'US-OR' }), null);
 });
 
 test('a unique candidate in the wrong state is rejected, not linked', () => {
@@ -93,12 +88,9 @@ test('a unique candidate in the wrong state is rejected, not linked', () => {
       incident_title: 'Willow Fire',
     },
   ];
+  assert.equal(firstLink(willow, { name: 'Willow', state: 'US-AZ' }), null);
   assert.equal(
-    resolveInciwebNodeLink(willow, { name: 'Willow', state: 'US-AZ' }),
-    null,
-  );
-  assert.equal(
-    resolveInciwebNodeLink(willow, { name: 'Willow', state: 'US-MT' }),
+    firstLink(willow, { name: 'Willow', state: 'US-MT' }),
     'https://inciweb.wildfire.gov/node/300001',
   );
 });
@@ -117,13 +109,10 @@ test('ambiguous titles disambiguate by state, then newest id', () => {
     },
   ];
   assert.equal(
-    resolveInciwebNodeLink(twoCoyotes, { name: 'Coyote', state: 'US-AZ' }),
+    firstLink(twoCoyotes, { name: 'Coyote', state: 'US-AZ' }),
     'https://inciweb.wildfire.gov/node/100',
   );
-  assert.equal(
-    resolveInciwebNodeLink(twoCoyotes, { name: 'Coyote', state: null }),
-    null,
-  );
+  assert.equal(firstLink(twoCoyotes, { name: 'Coyote', state: null }), null);
   const twoSameState = [
     {
       incident_id: '100',
@@ -138,7 +127,7 @@ test('ambiguous titles disambiguate by state, then newest id', () => {
   ];
   // Same-state duplicates are usually reburns of the same name — newest wins.
   assert.equal(
-    resolveInciwebNodeLink(twoSameState, { name: 'Coyote', state: 'US-OR' }),
+    firstLink(twoSameState, { name: 'Coyote', state: 'US-OR' }),
     'https://inciweb.wildfire.gov/node/328922',
   );
 });
@@ -173,7 +162,7 @@ test('same-name pages list newest first, falling back to the complex', () => {
 
 test('a complex member falls back to its complex page', () => {
   assert.equal(
-    findInciwebLink(catalog, {
+    firstLink(catalog, {
       name: 'Crosswhite',
       state: 'US-OR',
       complexName: 'ROWE CREEK COMPLEX',
@@ -182,7 +171,7 @@ test('a complex member falls back to its complex page', () => {
   );
   // A fire with its own page keeps it even when it belongs to a complex.
   assert.equal(
-    findInciwebLink(catalog, {
+    firstLink(catalog, {
       name: 'Timber',
       state: 'US-CA',
       complexName: 'SOME COMPLEX',
@@ -190,7 +179,7 @@ test('a complex member falls back to its complex page', () => {
     'https://inciweb.wildfire.gov/node/291765',
   );
   assert.equal(
-    findInciwebLink(catalog, {
+    firstLink(catalog, {
       name: 'Nope',
       state: 'US-NM',
       complexName: null,
