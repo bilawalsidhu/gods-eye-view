@@ -4,6 +4,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  AID_MODELS,
+  CLASS_MODELS,
   DEFAULT_AID_MODEL,
   FLEET_MODEL_BASE,
   aidToNavigationModel,
@@ -15,7 +17,6 @@ import {
   hullBeam,
   hullLength,
   loadFleetModelSet,
-  namedFleetModels,
   placeScale,
   resetFleetModelSet,
   resolveAircraft,
@@ -219,6 +220,35 @@ test('scale: aircraft by the type length, vessels by length and beam', () => {
   assert.deepEqual(placeScale(ship, ship.length / 2, 24), [0.5, 0.5, 0.5]);
   assert.deepEqual(placeScale(ship, null), [1, 1, 1]);
 });
+
+/**
+ * Every model the type map names, defaults and fallbacks included.
+ * @param {object} types Parsed `types.json`.
+ * @returns {Set<string>}
+ */
+function namedFleetModels(types) {
+  const pairs = (map) => Object.values(map).map(([model]) => model);
+  const transit = types.transit;
+  return new Set([
+    ...pairs(types.aircraft),
+    ...pairs(types.helicopters),
+    ...pairs(types.categories),
+    ...Object.values(types.aircraft_callsign ?? {}).flatMap((rules) =>
+      rules.map((rule) => rule.model),
+    ),
+    ...types.vessels.flatMap((group) => group.rules.map((rule) => rule.model)),
+    types.default_aircraft[0],
+    types.default_vessel,
+    ...pairs(transit.modes),
+    ...pairs(transit.route_types),
+    ...Object.values(transit.rail).flatMap(pairs),
+    transit.default[0],
+    ...Object.keys(transit.elevation),
+    ...Object.values(CLASS_MODELS),
+    ...AID_MODELS.map(([, model]) => model),
+    DEFAULT_AID_MODEL,
+  ]);
+}
 
 test('every model the type map names is in the catalog, and its file is a GLB on disk', () => {
   for (const name of namedFleetModels(types))
