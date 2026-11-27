@@ -408,6 +408,8 @@ watch(
         <span v-if="position" class="entity-card__where">{{ position }}</span>
       </div>
 
+      <p v-if="card.description" class="entity-card__description">{{ card.description }}</p>
+
       <div v-if="card.warnings?.length" class="entity-card__warning" role="alert">
         <UiIcon name="warning" :size="null" />
         <span>{{ card.warnings.map((warning, index) => sayWords(card.warningWords?.[index], warning)).join(' · ') }}</span>
