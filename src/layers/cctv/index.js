@@ -131,7 +131,6 @@ export function createCctvLayer({ services, source }) {
   );
 }
 export {
-  CCTV_CALIBRATION_STORAGE_KEY_V1,
   CCTV_CALIBRATION_STORAGE_KEY_V2,
   FRUSTUM_GROUND_CLEARANCE_M,
   CCTV_FOCUS_RESULT,

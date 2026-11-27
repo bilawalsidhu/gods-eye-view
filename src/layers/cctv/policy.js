@@ -125,12 +125,6 @@ export const VIEW_GEOMETRY_RETRY_MS = 1500;
 
 export const PLACEHOLDER_REPAINT_MS = 750;
 
-// The v1 calibration key is never read. It is exported so the unit suite can assert that
-// v1 is ignored.
-
-export const CCTV_CALIBRATION_STORAGE_KEY_V1 =
-  'godsEyeView.cctv.calibration.v1';
-
 /** v2 store key. Entries: { values: <7-field calibration offsets>, source: 'manual', savedAt: <epoch ms> }. */
 
 export const CCTV_CALIBRATION_STORAGE_KEY_V2 =

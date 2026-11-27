@@ -116,8 +116,7 @@ export function createCalibration({
    * Loads all persisted per-camera calibration overrides from the v2 store.
    *
    * v2 entries carry provenance: `{ values: <7-field offsets>, source: 'manual',
-   * savedAt: <epoch ms> }`. The v1 key (`CCTV_CALIBRATION_STORAGE_KEY_V1`) is
-   * never read: v1 values are not imported.
+   * savedAt: <epoch ms> }`.
    *
    * @param {{getItem:function}|null} [storage] - Injectable storage (defaults
    *   to `window.localStorage`); lets the unit suite test this pure of a DOM.
