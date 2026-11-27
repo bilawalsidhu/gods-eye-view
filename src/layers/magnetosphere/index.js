@@ -207,7 +207,9 @@ export function createMagnetosphereLayer({
     showInTogglePanel: true,
     updateInterval: REFRESH_MS,
 
-    async init(viewer) {
+    async init(viewer, { panel = null } = {}) {
+      // The panels' handle: invalidated when the row or readout changed.
+      listener = panel ? () => panel.invalidate() : null;
       rendering = createRendering({ viewer });
       const year = decimalYear(new Date(now()));
       coefficients = coefficientsFor(year);
@@ -371,10 +373,6 @@ export function createMagnetosphereLayer({
         return true;
       }
       return false;
-    },
-
-    setRowControlsListener(fn) {
-      listener = typeof fn === 'function' ? fn : null;
     },
 
     destroy() {

@@ -449,3 +449,18 @@ test('the renderer hands the draw port two line sets of 3d solid lines', () => {
   rendering.destroy();
   assert.equal(filaments.disposed && boundary.disposed, true);
 });
+
+test('tells the panels its row changed through the handle its init receives', async () => {
+  const { layer } = harness([t96State]);
+  assert.equal(layer.setRowControlsListener, undefined);
+  let invalidations = 0;
+  await layer.init(null, { panel: { invalidate: () => invalidations++ } });
+  const before = invalidations;
+  assert.equal(layer.setParams({ opacity: 'light' }), true);
+  assert.equal(invalidations, before + 1);
+  await layer.disable();
+  assert.equal(invalidations, before + 2);
+  layer.destroy();
+  layer.setParams({ opacity: 'strong' });
+  assert.equal(invalidations, before + 2);
+});
