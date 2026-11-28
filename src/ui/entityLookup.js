@@ -8,16 +8,16 @@
 import { isWorldTime } from '../time/worldClock.js';
 
 /** The kinds a lookup may answer with, and the layer each is shown in. */
-export const LOOKUP_LAYERS = Object.freeze({
+const LOOKUP_LAYERS = Object.freeze({
   aircraft: 'flights',
   vessel: 'ais-live-vessels',
   camera: 'cctv',
   satellite: 'satellites',
 });
 /** The most matches the search box lists from one answer. */
-export const MAX_LOOKUP_MATCHES = 8;
+const MAX_LOOKUP_MATCHES = 8;
 /** How long a picked match may take to arrive in its layer, in ms. */
-export const LOOKUP_ARRIVAL_MS = 20_000;
+const LOOKUP_ARRIVAL_MS = 20_000;
 /** How often the layer is asked again while a picked match is on its way, in ms. */
 export const LOOKUP_RECHECK_MS = 500;
 
@@ -113,7 +113,7 @@ export function loadedId(dataManager, match) {
  * or after one of its loads (or a recheck), within `timeoutMs`. Null when it never arrives,
  * the layer goes off, or `signal` aborts.
  */
-export function waitForLoaded(
+function waitForLoaded(
   dataManager,
   match,
   { signal = null, timeoutMs = LOOKUP_ARRIVAL_MS } = {},

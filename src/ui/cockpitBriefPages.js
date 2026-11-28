@@ -8,7 +8,7 @@ import { msg, t } from '../i18n/index.js';
 
 // i18n-ignore: provider name
 /** The news feed named before any briefing has answered. */
-export const DEFAULT_NEWS_SOURCE = 'GOOGLE NEWS RSS';
+const DEFAULT_NEWS_SOURCE = 'GOOGLE NEWS RSS';
 
 /**
  * The Regional News footer for a fresh, empty or unavailable list: the feed
@@ -24,7 +24,7 @@ export function newsWindowFooter(
   return t('{source} · LAST {hours} H', { source, hours });
 }
 
-export const COCKPIT_BRIEF_PAGES = [
+const COCKPIT_BRIEF_PAGES = [
   {
     id: 'signals',
     kickerKey: msg('LIVE SIGNALS'),
@@ -51,7 +51,7 @@ export const COCKPIT_BRIEF_PAGES = [
  * of Context in the card. Offered only while a stream is on offer (the
  * `gev-live` store's view is not null); the automatic cycle never turns to it.
  */
-export const COCKPIT_LIVE_BRIEF_PAGE = Object.freeze({
+const COCKPIT_LIVE_BRIEF_PAGE = Object.freeze({
   id: 'live',
   kickerKey: msg('LIVE VIDEO'),
   subtitleKey: msg('STREAM ATTACHED TO THE SUBJECT'),

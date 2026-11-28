@@ -8,7 +8,7 @@ import { findInput, findQuery } from '../render/rendererOf.js';
 import { trackedPositionNow } from './cockpitCamera.js';
 
 /** How far from the followed track a double-click may land, CSS pixels. */
-export const SUBJECT_DOUBLE_CLICK_RADIUS_PX = 32;
+const SUBJECT_DOUBLE_CLICK_RADIUS_PX = 32;
 
 /**
  * Whether a double-click landed on the followed track's mark.
@@ -17,7 +17,7 @@ export const SUBJECT_DOUBLE_CLICK_RADIUS_PX = 32;
  *   the track, or nothing when it is off screen.
  * @param {number} [radiusPx]
  */
-export function doubleClickHitsSubject(
+function doubleClickHitsSubject(
   click,
   subject,
   radiusPx = SUBJECT_DOUBLE_CLICK_RADIUS_PX,
@@ -32,7 +32,7 @@ export function doubleClickHitsSubject(
  * ms: a click on a selected ship re-centres the camera, so the ship can move
  * on screen before the second click lands.
  */
-export const DOUBLE_CLICK_MEMORY_MS = 700;
+const DOUBLE_CLICK_MEMORY_MS = 700;
 
 /** Where the track `kind` would ride is drawn now, as a world position. */
 function subjectWorldPosition(kind) {
