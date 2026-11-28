@@ -158,24 +158,6 @@ function frameIsTilted(frame) {
   return Number.isFinite(pitch) ? pitch > OBLIQUE_THRESHOLD : false;
 }
 
-/** Toggle between a straight-down map and a useful oblique map angle. */
-export function toggleCameraTilt(viewer) {
-  const frame = readCameraTargetFrame(viewer);
-  if (!frame) return false;
-  const tilted = frameIsTilted(frame);
-  const pitch = tilted ? STRAIGHT_DOWN_PITCH : OBLIQUE_PITCH;
-  return setCameraTargetFrame(viewer, { ...frame, pitch })
-    ? { tilted: !tilted, pitch }
-    : false;
-}
-
-/** Rotate around the viewport center until north is at the top. */
-export function resetCameraNorth(viewer) {
-  const frame = readCameraTargetFrame(viewer);
-  if (!frame) return false;
-  return setCameraTargetFrame(viewer, { ...frame, heading: 0 });
-}
-
 function headingDegrees(viewer) {
   return toDegrees(normalizedHeading(poseOf(findCamera(viewer))?.heading));
 }
