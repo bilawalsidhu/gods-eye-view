@@ -266,6 +266,19 @@ export function bindFakeCesiumCamera(viewer, ports = {}) {
           });
       },
     },
+    // `Sphere.center` is `Ecef` (contract/common.d.ts). The Cesium port also
+    // takes lon, lat and height, which a camera that reads the contract's
+    // type cannot fly to, so a test's flight is held to the contract here.
+    flyToBounds: {
+      value(sphere, options) {
+        const c = sphere?.center;
+        if (![c?.x, c?.y, c?.z].every(Number.isFinite))
+          throw new TypeError(
+            `flyToBounds: the sphere's centre must be ECEF {x, y, z}, got ${JSON.stringify(c)}`,
+          );
+        return real.flyToBounds(sphere, options);
+      },
+    },
     // A fake that computes a view rectangle answers with it, as the
     // renderer does; one that does not has none.
     viewRectangle: {

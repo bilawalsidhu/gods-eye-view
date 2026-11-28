@@ -179,7 +179,7 @@ export function createSelection({
     parts.rendering.selectLaunchEntity(launch.id);
     layerState._cameraReleased = false;
     cameraOf(layerState._viewer).flyToBounds(
-      { center: { lon: launch.lon, lat: launch.lat }, radius: 0 },
+      { center: fromDegrees(launch.lon, launch.lat), radius: 0 },
       {
         offset: {
           heading: 0,

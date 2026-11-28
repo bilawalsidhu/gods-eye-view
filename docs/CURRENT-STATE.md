@@ -9363,6 +9363,19 @@ headless Chromium, in CI too. After `destroy()` the Cesium renderer's
 handles do nothing, and `renderOnce` and `capture` reject. See
 [RENDERER-CONTRACT.md](RENDERER-CONTRACT.md).
 
+A `flyToBounds` sphere's `center` is ECEF (`Sphere.center: Ecef`,
+`src/render/contract/common.d.ts`). The Cesium camera port also reads a
+`{ lon, lat, height }` centre, but a camera that reads the contract's type
+finds no `x`, `y` or `z` in one, flies to a NaN eye, and the next frame stops
+the globe drawing. Every caller converts with `fromDegrees` (`src/geo/`): a
+drawn mark's Fly to, an installation's focus, a launch's site focus and
+roster preview, and street level's photo framing. The shared test camera
+(`bindFakeCesiumCamera`, `src/testSupport/fakeCameraPort.mjs`) throws on a
+centre that is not `{x, y, z}`, and
+`src/render/contract/flyToBoundsCentre.test.mjs` fails on a call in `src`
+whose centre the call site settles as an object literal with `lon` or
+`lat` and not all of `x`, `y` and `z`.
+
 ### The application and its renderer
 
 The application starts on whichever `RendererPlugin` it is given
