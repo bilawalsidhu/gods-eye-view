@@ -936,10 +936,6 @@ body.recording-mode .gev-panel-rail {
   stroke: none;
 }
 
-.mission-replay-rocket-flame {
-  display: none;
-}
-
 .mission-replay-thrust {
   display: none;
   position: absolute;

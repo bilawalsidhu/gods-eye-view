@@ -10,8 +10,7 @@
    the dock) get a lift so their edges hold against bright imagery. */
 :root[data-scope-mask='off'] .ui-rail,
 :root[data-scope-mask='off'] .gev-panel-rail .ui-rail--expanded::after,
-:root[data-scope-mask='off']
-  :is(.data-panel-inner, .utilities-panel-inner, .ui-panel__inner),
+:root[data-scope-mask='off'] :is(.data-panel-inner, .utilities-panel-inner),
 :root[data-scope-mask='off'] #left-panel-stack > #pp-toggles,
 :root[data-scope-mask='off']
   #right-context-rail
