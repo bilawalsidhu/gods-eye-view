@@ -4749,6 +4749,11 @@
   "{name} · sensor": "{name} · датчик",
   "Reference monitor": "Еталонний прилад",
   "Needs {envVars} — add one in Provider Settings": "Потрібен {envVars} — додайте будь-який із них у «Налаштуваннях постачальників»",
-  "CABLE \u00b7 {name}": "КАБЕЛЬ · {name}",
-  "LANDING POINT \u00b7 {name}": "ТОЧКА ВИХОДУ НА БЕРЕГ · {name}"
+  "CABLE · {name}": "КАБЕЛЬ · {name}",
+  "LANDING POINT · {name}": "ТОЧКА ВИХОДУ НА БЕРЕГ · {name}",
+  "Line Intensity": "Інтенсивність ліній",
+  "Grid Density": "Щільність сітки",
+  "BLUEPRINT": "КРЕСЛЕННЯ",
+  "Blueprint": "Креслення",
+  "Render architectural cyan blueprint schematics with technical contour lines.": "Відображення архітектурних креслень у кольорі ціан із технічними контурами."
 }

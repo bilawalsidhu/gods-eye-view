@@ -4959,6 +4959,11 @@
   "{name} · sensor": "{name} · مستشعر",
   "Reference monitor": "جهاز رصد مرجعي",
   "Needs {envVars} — add one in Provider Settings": "يحتاج إلى {envVars} — أضف أحدها في إعدادات المزوّدين",
-  "CABLE \u00b7 {name}": "كابل · {name}",
-  "LANDING POINT \u00b7 {name}": "نقطة إنزال · {name}"
+  "CABLE · {name}": "كابل · {name}",
+  "LANDING POINT · {name}": "نقطة إنزال · {name}",
+  "Line Intensity": "كثافة الخطوط",
+  "Grid Density": "كثافة الشبكة",
+  "BLUEPRINT": "مخطط",
+  "Blueprint": "مخطط",
+  "Render architectural cyan blueprint schematics with technical contour lines.": "عرض مخططات معمارية باللون السماوي مع خطوط كنتورية تقنية."
 }

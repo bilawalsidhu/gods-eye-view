@@ -65,15 +65,21 @@ function shortcuts() {
   return { documentRef, calls, controller, press };
 }
 
-test('number keys retain the six style mappings', () => {
+test('number keys retain the seven style mappings', () => {
   const f = shortcuts();
   for (const key of ['1', '2', '3', '4', '5', '6', '7', '8', 'Space'])
     f.press(key);
   assert.deepEqual(
     f.calls,
-    ['normal', 'retro', 'surveillance', 'thermal', 'anime', 'noir'].map(
-      (style) => ['setStyle', style],
-    ),
+    [
+      'normal',
+      'retro',
+      'surveillance',
+      'thermal',
+      'anime',
+      'noir',
+      'blueprint',
+    ].map((style) => ['setStyle', style]),
   );
 });
 

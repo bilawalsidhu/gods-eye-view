@@ -5,6 +5,7 @@ const STYLE_KEYS = Object.freeze({
   4: 'thermal',
   5: 'anime',
   6: 'noir',
+  7: 'blueprint',
 });
 
 /**

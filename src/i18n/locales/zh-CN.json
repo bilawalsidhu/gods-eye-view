@@ -4434,6 +4434,11 @@
   "{name} · sensor": "{name} · 传感器",
   "Reference monitor": "参考监测仪",
   "Needs {envVars} — add one in Provider Settings": "需要 {envVars}，请在服务商设置中添加其中一个",
-  "CABLE \u00b7 {name}": "海缆 · {name}",
-  "LANDING POINT \u00b7 {name}": "登陆点 · {name}"
+  "CABLE · {name}": "海缆 · {name}",
+  "LANDING POINT · {name}": "登陆点 · {name}",
+  "Line Intensity": "线条强度",
+  "Grid Density": "网格密度",
+  "BLUEPRINT": "蓝图",
+  "Blueprint": "蓝图",
+  "Render architectural cyan blueprint schematics with technical contour lines.": "渲染具有技术轮廓线的青色建筑蓝图图表。"
 }

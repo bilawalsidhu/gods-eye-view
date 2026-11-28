@@ -4644,6 +4644,11 @@
   "{name} · sensor": "{name} · sensor",
   "Reference monitor": "Monitor de referencia",
   "Needs {envVars} — add one in Provider Settings": "Necesita {envVars} — añade una en Ajustes de proveedores",
-  "CABLE \u00b7 {name}": "CABLE SUBMARINO · {name}",
-  "LANDING POINT \u00b7 {name}": "PUNTO DE AMARRE · {name}"
+  "CABLE · {name}": "CABLE SUBMARINO · {name}",
+  "LANDING POINT · {name}": "PUNTO DE AMARRE · {name}",
+  "Line Intensity": "Intensidad de líneas",
+  "Grid Density": "Densidad de cuadrícula",
+  "BLUEPRINT": "PLANO",
+  "Blueprint": "Plano",
+  "Render architectural cyan blueprint schematics with technical contour lines.": "Renderizar esquemas arquitectónicos en cian con líneas de contorno técnicas."
 }

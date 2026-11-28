@@ -3,6 +3,7 @@ import { animeShader } from '../styles/anime.js';
 import { noirShader } from '../styles/noir.js';
 import { nightVisionShader } from '../styles/surveillance.js';
 import { thermalShader } from '../styles/thermal.js';
+import { blueprintShader } from '../styles/blueprint.js';
 import { BLOOM_INTENSITY_DEFAULT } from '../bloom.js';
 import { msg } from '../i18n/marker.js';
 
@@ -15,6 +16,7 @@ export const STYLES = {
   thermal: thermalShader,
   anime: animeShader,
   noir: noirShader,
+  blueprint: blueprintShader,
 };
 
 /**
@@ -154,4 +156,5 @@ export const STYLE_STATUS_LABELS = {
   thermal: msg('FLIR'),
   anime: msg('ANIME'),
   noir: msg('NOIR'),
+  blueprint: msg('BLUEPRINT'),
 };
