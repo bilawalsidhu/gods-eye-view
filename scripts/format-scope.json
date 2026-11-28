@@ -1017,7 +1017,6 @@
   "scripts/qa-director-sharing.mjs",
   "src/ui/weatherPanel.js",
   "src/ui/weatherPanel.test.mjs",
-  "src/ui/railCards.js",
   "src/ui/railCards.test.mjs",
   "src/layers/weather/imageryOrder.js",
   "src/layers/weather/imageryOrder.test.mjs",

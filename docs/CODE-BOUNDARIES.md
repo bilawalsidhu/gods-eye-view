@@ -340,9 +340,9 @@ the user's later collapse choice, including body remounts. Mark the body
 `max-height` and puts the scroll offset back afterwards. Panel bodies only
 scroll on an open-card change, with one write, never on a refresh.
 
-Compose `createRailCards({ container, document, onParams, onOpen })`. Rails
-have no time controls of their own; the world timeline moves time. Cards
-reconcile `{ id, title, badge, open, compact,
+Mount `RailCards` (`src/ui/rail/RailCards.vue`) with `cards`, `onParams` and
+`onOpen`. Rails have no time controls of their own; the world timeline moves
+time. Cards reconcile `{ id, title, badge, open, compact,
 compactStatus, blocks }` in place. Their full-width native button headers expose
 `aria-expanded` and `aria-controls`; articles expose `data-open`. The feature
 adapter owns accordion state. Generic cards do not select data or enable layers.

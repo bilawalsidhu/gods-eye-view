@@ -3,8 +3,8 @@ import test from 'node:test';
 import { setLocale } from '../i18n/index.js';
 import assert from 'node:assert/strict';
 import { assertSameNode } from '../testSupport/domAssert.mjs';
-import { nextTick } from 'vue';
-import { createRailCards } from './railCards.js';
+import { h, nextTick, render } from 'vue';
+import RailCards from './rail/RailCards.vue';
 import { createWeatherPanel } from './weatherPanel.js';
 import { railDocumentFixture as railFixture } from './railTestFixture.mjs';
 
@@ -14,6 +14,33 @@ const legend = {
   units: '°C',
   zeroIndex: 1,
 };
+// Renders RailCards into `container` the way the panels mount it, patched
+// synchronously on every update so a test can measure at once.
+function railCards({
+  container,
+  cardClassName = '',
+  badgeClassName = '',
+  onParams = () => {},
+  onOpen = () => {},
+}) {
+  return {
+    update(cards = []) {
+      render(
+        h(RailCards, {
+          cards,
+          cardClassName,
+          badgeClassName,
+          onParams,
+          onOpen,
+        }),
+        container,
+      );
+    },
+    destroy() {
+      render(null, container);
+    },
+  };
+}
 const card = {
   id: 'a',
   title: 'Temperature',
@@ -31,7 +58,7 @@ const card = {
 };
 test('keyed cards and optional blocks reorder without redundant writes', () => {
   const f = railFixture();
-  const view = createRailCards(f);
+  const view = railCards(f);
   view.update([card]);
   const article = f.container.children[0];
   assert.equal(article.tagName, 'ARTICLE');
@@ -67,11 +94,10 @@ test('keyed cards and optional blocks reorder without redundant writes', () => {
   );
   view.destroy();
   assert.equal(f.container.children.length, 0);
-  assert.equal(createRailCards(), null);
 });
 test('footer buttons retain focus and current callbacks; links use safe new tabs', () => {
   const f = railFixture();
-  const view = createRailCards(f);
+  const view = railCards(f);
   const calls = [];
   const model = (actions) => ({
     ...card,
@@ -152,7 +178,7 @@ test('a live setting range whose owner clamps shows the clamped value', async ()
     ],
   });
   // The owner takes at most 80 and answers at once.
-  const view = createRailCards({
+  const view = railCards({
     ...f,
     onParams: (_id, params) => view.update([model(Math.min(80, params.gain))]),
   });
@@ -168,7 +194,7 @@ test('a live setting range whose owner clamps shows the clamped value', async ()
 test('setting ranges stay below presets and commit expensive filters on release', async () => {
   const f = railFixture();
   const calls = [];
-  const view = createRailCards({
+  const view = railCards({
     ...f,
     onParams: (...args) => calls.push(args),
   });
@@ -261,7 +287,7 @@ test('setting ranges stay below presets and commit expensive filters on release'
 test('controls of a removed block dispatch nothing', () => {
   const f = railFixture();
   const calls = [];
-  const view = createRailCards({
+  const view = railCards({
     ...f,
     onParams: (...args) => calls.push(args),
   });
@@ -283,7 +309,7 @@ test('controls of a removed block dispatch nothing', () => {
 
 test('legend validates colors, preserves the freezing anchor and ignores CSSOM normalization', () => {
   const f = railFixture();
-  const view = createRailCards(f);
+  const view = railCards(f);
   const show = (legend) =>
     view.update([
       { ...card, blocks: [{ id: 'legend', type: 'legend', legend }] },
@@ -315,7 +341,7 @@ test('legend validates colors, preserves the freezing anchor and ignores CSSOM n
 test('labelled rows, lists and results retain focus and dispatch current params', () => {
   const f = railFixture();
   const calls = [];
-  const view = createRailCards({
+  const view = railCards({
     ...f,
     onParams: (...args) => calls.push(args),
   });
@@ -432,7 +458,7 @@ const tilesBlock = (active = 'aqi') => ({
 
 test('a tiles block draws one button per tile with its value, bracketed note and label', () => {
   const f = railFixture();
-  const view = createRailCards(f);
+  const view = railCards(f);
   view.update([{ ...card, blocks: [tilesBlock()] }]);
   const block = f.find((n) => n.dataset.blockId === 'tiles-index');
   // The Globe view's worldwide tiles, two to a row.
@@ -480,7 +506,7 @@ test('a group of one tile fills its row; a group of two shares it', async () => 
   document.head.appendChild(style);
   try {
     const f = railFixture();
-    const view = createRailCards(f);
+    const view = railCards(f);
     const [aqi, pm25] = tilesBlock().tiles;
     const span = () =>
       [...f.container.querySelectorAll('[data-tile-id]')].map((tile) => [
@@ -507,7 +533,7 @@ test('a group of one tile fills its row; a group of two shares it', async () => 
 test('a tile click dispatches its params', () => {
   const f = railFixture();
   const calls = [];
-  const view = createRailCards({
+  const view = railCards({
     ...f,
     onParams: (...args) => calls.push(args),
   });
@@ -524,7 +550,7 @@ test('a tile click dispatches its params', () => {
 test('a toggle block flips aria-checked and dispatches its params', () => {
   const f = railFixture();
   const calls = [];
-  const view = createRailCards({
+  const view = railCards({
     ...f,
     onParams: (...args) => calls.push(args),
   });
@@ -627,7 +653,7 @@ test('a lead result renders first', () => {
 
 test('a list row draws its colour dot before its value; a bad colour draws none', () => {
   const f = railFixture();
-  const view = createRailCards(f);
+  const view = railCards(f);
   const paint = (swatch) =>
     view.update([
       {
@@ -670,7 +696,7 @@ test('a list row draws its colour dot before its value; a bad colour draws none'
 
 test("a result's title is its header's tooltip", () => {
   const f = railFixture();
-  const view = createRailCards(f);
+  const view = railCards(f);
   const paint = (title) =>
     view.update([
       {
@@ -703,7 +729,7 @@ test("a result's title is its header's tooltip", () => {
 
 test('clearing a lead result keeps focus in the card', (t) => {
   const f = railFixture(),
-    view = createRailCards(f);
+    view = railCards(f);
   t.after(() => view.destroy());
   for (const [active, tile, selector] of [
     [true, true, '.data-row-list-item.active'],
@@ -745,7 +771,7 @@ test('clearing a lead result keeps focus in the card', (t) => {
 });
 test('in Arabic a tile value and a row lead are isolated', (t) => {
   const f = railFixture(),
-    view = createRailCards(f);
+    view = railCards(f);
   t.after(() => view.destroy());
   setLocale('ar');
   try {
