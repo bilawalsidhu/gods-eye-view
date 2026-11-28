@@ -60,7 +60,7 @@ const DETECTION_ALLOCATION_STORAGE_KEY = 'gev:detection-allocation:v1';
  * Scope were off while labels still fade outside the keyhole and the HUD gets
  * no backplates, so the slider stops here.
  */
-export const SCOPE_OPACITY_MIN_PCT = 50;
+const SCOPE_OPACITY_MIN_PCT = 50;
 
 export class VisualSettings {
   async restoreShareState(state) {

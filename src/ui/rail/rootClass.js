@@ -55,7 +55,7 @@ export function holdRootClass(doc, name) {
  * @param {string} name
  * @returns {{set: (on: boolean) => void, release: () => void}}
  */
-export function rootClassSwitch(doc, name) {
+function rootClassSwitch(doc, name) {
   let release = null;
   const set = (on) => {
     if (on && !release) release = holdRootClass(doc, name);

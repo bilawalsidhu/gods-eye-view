@@ -18,7 +18,7 @@ function applySharedWorldTime(state) {
 }
 
 /** How long a shared vessel may take to appear in the vessel feed. */
-export const SHARED_VESSEL_WAIT_MS = 120_000;
+const SHARED_VESSEL_WAIT_MS = 120_000;
 const SHARED_VESSEL_POLL_MS = 2_000;
 const DAY_MS = 86_400_000;
 const ENTITY_BY_KIND = new Map(

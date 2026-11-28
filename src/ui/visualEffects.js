@@ -15,7 +15,7 @@ const OFF = 0.001;
  * @param {string} name
  * @param {{fragmentShader: string, uniforms?: Record<string, {default: number, min: number, max: number}>}} shader
  */
-export function styleDefinition(name, shader) {
+function styleDefinition(name, shader) {
   return {
     id: name,
     params: Object.entries(shader.uniforms || {}).map(([key, meta]) => ({

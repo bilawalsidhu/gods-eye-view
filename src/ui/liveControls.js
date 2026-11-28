@@ -21,7 +21,7 @@ export const COCKPIT_LIVE_PLAYER_HOST_ID = 'cockpit-live-player-host';
  * is docked to the station once both orbits have been compared): the keys
  * are read again this often while something is selected.
  */
-export const LIVE_SUBJECT_REFRESH_MS = 2000;
+const LIVE_SUBJECT_REFRESH_MS = 2000;
 
 /**
  * Own the live video: which object is selected (the tracking layers'

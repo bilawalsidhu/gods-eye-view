@@ -10,7 +10,7 @@ const COMPANIONS = Object.freeze({
   earthquakes: ['local-firms'],
 });
 
-export const MAX_SUGGESTIONS = 3;
+const MAX_SUGGESTIONS = 3;
 
 /**
  * Up to `MAX_SUGGESTIONS` layer ids to suggest.

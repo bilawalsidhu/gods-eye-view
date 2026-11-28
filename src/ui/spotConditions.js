@@ -72,7 +72,7 @@ const COMPASS = [
   msg('NW'),
 ];
 /** The compass point from one spot to another, like "NE". */
-export function compassPoint(from, to) {
+function compassPoint(from, to) {
   return compassName(
     bearingBetweenCoordinates(from.lat, from.lon, to.lat, to.lon) ?? 0,
   );
