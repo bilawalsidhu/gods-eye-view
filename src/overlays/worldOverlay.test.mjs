@@ -40,11 +40,9 @@ import {
   normalizeOverlayEntry,
   paintLaneForOverlayEntry,
   registerWorldOverlayPaintLane,
-  removeOverlayEntry,
   selectBoundedOverlayCohort,
   setOverlayEntries,
   setOverlaySourceVisible,
-  upsertOverlayEntry,
 } from './worldOverlay.js';
 
 class MockEvent {
@@ -1077,7 +1075,7 @@ test('projection records never retain keys for entries that are no longer live',
       assert.ok(recordMap);
       assert.ok(recordMap.size < getWorldOverlayDiagnostics().entryCount);
       assertNoStaleKeys();
-      assert.equal(removeOverlayEntry('churn', entries[0].id), true);
+      setOverlayEntries('churn', entries.slice(1), { cohortLimit: 8, collisionCapacity: 4 });
       liveKeys.delete(`churn\u0000${entries[0].id}`);
       assertNoStaleKeys();
       assert.equal(clearOverlaySource('churn'), true);
@@ -1152,11 +1150,10 @@ test('entry normalization validates required fields and source lifecycle is stab
 
   const env = installMockEnvironment();
   initWorldOverlay(env.viewer);
-  setOverlayEntries('fires', [normalized]);
-  upsertOverlayEntry('fires', { id: 'b', position: position(), variant: 'card' });
+  setOverlayEntries('fires', [normalized, { id: 'b', position: position(), variant: 'card' }]);
   assert.deepEqual(getWorldOverlayDiagnostics().entriesBySource, { fires: 2 });
-  assert.equal(removeOverlayEntry('fires', 'a'), true);
-  assert.equal(removeOverlayEntry('fires', 'missing'), false);
+  setOverlayEntries('fires', [{ id: 'b', position: position(), variant: 'card' }]);
+  assert.deepEqual(getWorldOverlayDiagnostics().entriesBySource, { fires: 1 });
   setOverlaySourceVisible('fires', false);
   assert.equal(clearOverlaySource('fires'), true);
   assert.deepEqual(getWorldOverlayDiagnostics().entriesBySource, { fires: 0 });
@@ -2609,8 +2606,6 @@ test('every exported entry point is inert after destroy', () => {
 
   assert.doesNotThrow(() => setOverlayEntries('post-destroy', [selectedEntry('zombie')]));
   assert.doesNotThrow(() => setOverlayEntries('post-destroy', 'not-an-array'));
-  assert.doesNotThrow(() => upsertOverlayEntry('post-destroy', { id: 'zombie-2', position: position() }));
-  assert.equal(removeOverlayEntry('post-destroy', 'live'), false);
   assert.equal(clearOverlaySource('post-destroy'), false);
   assert.doesNotThrow(() => setOverlaySourceVisible('post-destroy', false));
   assert.equal(hitTestWorldOverlay(200, 120), null);
