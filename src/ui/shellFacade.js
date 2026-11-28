@@ -33,78 +33,6 @@ export class ShellFacade {
     this._layerBindings._dataManager = value;
   }
 
-  get _directionsShellModule() {
-    return this._layerBindings?._directionsShellModule;
-  }
-
-  set _directionsShellModule(value) {
-    this._layerBindings._directionsShellModule = value;
-  }
-
-  get _cctvRequestFocusHandler() {
-    return this._layerBindings?._cctvRequestFocusHandler;
-  }
-
-  set _cctvRequestFocusHandler(value) {
-    this._layerBindings._cctvRequestFocusHandler = value;
-  }
-
-  get _removeCctvRequestFocusListener() {
-    return this._layerBindings?._removeCctvRequestFocusListener;
-  }
-
-  set _removeCctvRequestFocusListener(value) {
-    this._layerBindings._removeCctvRequestFocusListener = value;
-  }
-
-  get _worldRequestFocusHandler() {
-    return this._layerBindings?._worldRequestFocusHandler;
-  }
-
-  set _worldRequestFocusHandler(value) {
-    this._layerBindings._worldRequestFocusHandler = value;
-  }
-
-  get _removeWorldRequestFocusListener() {
-    return this._layerBindings?._removeWorldRequestFocusListener;
-  }
-
-  set _removeWorldRequestFocusListener(value) {
-    this._layerBindings._removeWorldRequestFocusListener = value;
-  }
-
-  get _removeNavigationAuthorityListener() {
-    return this._layerBindings?._removeNavigationAuthorityListener;
-  }
-
-  set _removeNavigationAuthorityListener(value) {
-    this._layerBindings._removeNavigationAuthorityListener = value;
-  }
-
-  get _navigationOwnerChangedRemover() {
-    return this._layerBindings?._navigationOwnerChangedRemover;
-  }
-
-  set _navigationOwnerChangedRemover(value) {
-    this._layerBindings._navigationOwnerChangedRemover = value;
-  }
-
-  get _awarenessSelectedHandler() {
-    return this._layerBindings?._awarenessSelectedHandler;
-  }
-
-  set _awarenessSelectedHandler(value) {
-    this._layerBindings._awarenessSelectedHandler = value;
-  }
-
-  get _awarenessClearedHandler() {
-    return this._layerBindings?._awarenessClearedHandler;
-  }
-
-  set _awarenessClearedHandler(value) {
-    this._layerBindings._awarenessClearedHandler = value;
-  }
-
   get _dataManagerUnsubscribe() {
     return this._layerBindings?._dataManagerUnsubscribe;
   }
@@ -121,62 +49,6 @@ export class ShellFacade {
     this._displayBindings._applicationShortcuts = value;
   }
 
-  get _frameRateMonitor() {
-    return this._displayBindings?._frameRateMonitor;
-  }
-
-  set _frameRateMonitor(value) {
-    this._displayBindings._frameRateMonitor = value;
-  }
-
-  get _activeLocationId() {
-    return this._locationNavigation._activeLocationId;
-  }
-
-  set _activeLocationId(value) {
-    this._locationNavigation._activeLocationId = value;
-  }
-
-  get _expandedCityId() {
-    return this._locationNavigation._expandedCityId;
-  }
-
-  set _expandedCityId(value) {
-    this._locationNavigation._expandedCityId = value;
-  }
-
-  get _activePoiIndex() {
-    return this._locationNavigation._activePoiIndex;
-  }
-
-  set _activePoiIndex(value) {
-    this._locationNavigation._activePoiIndex = value;
-  }
-
-  get _currentTarget() {
-    return this._locationNavigation._currentTarget;
-  }
-
-  set _currentTarget(value) {
-    this._locationNavigation._currentTarget = value;
-  }
-
-  get _currentPoi() {
-    return this._locationNavigation._currentPoi;
-  }
-
-  set _currentPoi(value) {
-    this._locationNavigation._currentPoi = value;
-  }
-
-  get _trafficTransitionTimer() {
-    return this._locationNavigation._trafficTransitionTimer;
-  }
-
-  set _trafficTransitionTimer(value) {
-    this._locationNavigation._trafficTransitionTimer = value;
-  }
-
   get _locationLookup() {
     return this._locationNavigation._locationLookup;
   }
@@ -185,36 +57,12 @@ export class ShellFacade {
     this._locationNavigation._locationLookup = value;
   }
 
-  get _locationLookupUnsubscribe() {
-    return this._locationNavigation._locationLookupUnsubscribe;
-  }
-
-  set _locationLookupUnsubscribe(value) {
-    this._locationNavigation._locationLookupUnsubscribe = value;
-  }
-
   get _locationControls() {
     return this._locationNavigation._locationControls;
   }
 
   set _locationControls(value) {
     this._locationNavigation._locationControls = value;
-  }
-
-  get _locationState() {
-    return this._locationNavigation._locationState;
-  }
-
-  set _locationState(value) {
-    this._locationNavigation._locationState = value;
-  }
-
-  get _globeResetPromise() {
-    return this._locationNavigation._globeResetPromise;
-  }
-
-  set _globeResetPromise(value) {
-    this._locationNavigation._globeResetPromise = value;
   }
 
   get orbitController() {
@@ -253,60 +101,12 @@ export class ShellFacade {
     this._navigation._activeLocationSearchGeneration = value;
   }
 
-  get _shareTrackingAcquiringKey() {
-    return this._shareRestoration._shareTrackingAcquiringKey;
-  }
-
-  set _shareTrackingAcquiringKey(value) {
-    this._shareRestoration._shareTrackingAcquiringKey = value;
-  }
-
-  get _shareTrackingNoticeGeneration() {
-    return this._shareRestoration._shareTrackingNoticeGeneration;
-  }
-
-  set _shareTrackingNoticeGeneration(value) {
-    this._shareRestoration._shareTrackingNoticeGeneration = value;
-  }
-
   get _initialShareState() {
     return this._shareRestoration._initialShareState;
   }
 
   set _initialShareState(value) {
     this._shareRestoration._initialShareState = value;
-  }
-
-  get _initialShareNavigationGeneration() {
-    return this._shareRestoration._initialShareNavigationGeneration;
-  }
-
-  set _initialShareNavigationGeneration(value) {
-    this._shareRestoration._initialShareNavigationGeneration = value;
-  }
-
-  get _initialShareRestoreTimeout() {
-    return this._shareRestoration._initialShareRestoreTimeout;
-  }
-
-  set _initialShareRestoreTimeout(value) {
-    this._shareRestoration._initialShareRestoreTimeout = value;
-  }
-
-  get _layerStateCoordinator() {
-    return this._shareRestoration._layerStateCoordinator;
-  }
-
-  set _layerStateCoordinator(value) {
-    this._shareRestoration._layerStateCoordinator = value;
-  }
-
-  get _layerStateRestorePromise() {
-    return this._shareRestoration._layerStateRestorePromise;
-  }
-
-  set _layerStateRestorePromise(value) {
-    this._shareRestoration._layerStateRestorePromise = value;
   }
 
   get _initialShareRestorePromise() {
@@ -317,36 +117,12 @@ export class ShellFacade {
     this._shareRestoration._initialShareRestorePromise = value;
   }
 
-  get _resolveInitialShareRestore() {
-    return this._shareRestoration._resolveInitialShareRestore;
-  }
-
-  set _resolveInitialShareRestore(value) {
-    this._shareRestoration._resolveInitialShareRestore = value;
-  }
-
   get _hasShareState() {
     return this._shareRestoration._hasShareState;
   }
 
   set _hasShareState(value) {
     this._shareRestoration._hasShareState = value;
-  }
-
-  get _initialShareSelectionSuperseded() {
-    return this._shareRestoration._initialShareSelectionSuperseded;
-  }
-
-  set _initialShareSelectionSuperseded(value) {
-    this._shareRestoration._initialShareSelectionSuperseded = value;
-  }
-
-  get _initialShareGestureHandler() {
-    return this._shareRestoration._initialShareGestureHandler;
-  }
-
-  set _initialShareGestureHandler(value) {
-    this._shareRestoration._initialShareGestureHandler = value;
   }
 
   get _visualEffects() {
@@ -373,84 +149,12 @@ export class ShellFacade {
     this._visualSettings._detectionUserOverridden = value;
   }
 
-  get _cockpitVisionMode() {
-    return this._visualSettings._cockpitVisionMode;
-  }
-
-  set _cockpitVisionMode(value) {
-    this._visualSettings._cockpitVisionMode = value;
-  }
-
-  get _cockpitVisionRestore() {
-    return this._visualSettings._cockpitVisionRestore;
-  }
-
-  set _cockpitVisionRestore(value) {
-    this._visualSettings._cockpitVisionRestore = value;
-  }
-
-  get _contactsDetectionRestore() {
-    return this._visualSettings._contactsDetectionRestore;
-  }
-
-  set _contactsDetectionRestore(value) {
-    this._visualSettings._contactsDetectionRestore = value;
-  }
-
   get _detectionAllocationPreference() {
     return this._visualSettings._detectionAllocationPreference;
   }
 
   set _detectionAllocationPreference(value) {
     this._visualSettings._detectionAllocationPreference = value;
-  }
-
-  get _irBoostActive() {
-    return this._visualSettings._irBoostActive;
-  }
-
-  set _irBoostActive(value) {
-    this._visualSettings._irBoostActive = value;
-  }
-
-  get _irFogWasEnabled() {
-    return this._visualSettings._irFogWasEnabled;
-  }
-
-  set _irFogWasEnabled(value) {
-    this._visualSettings._irFogWasEnabled = value;
-  }
-
-  get _panelDisclosureControls() {
-    return this._panelChrome._panelDisclosureControls;
-  }
-
-  set _panelDisclosureControls(value) {
-    this._panelChrome._panelDisclosureControls = value;
-  }
-
-  get _cockpitContextCollapsedForDataPanel() {
-    return this._panelChrome._cockpitContextCollapsedForDataPanel;
-  }
-
-  set _cockpitContextCollapsedForDataPanel(value) {
-    this._panelChrome._cockpitContextCollapsedForDataPanel = value;
-  }
-
-  get _cockpitPanelRestore() {
-    return this._panelChrome._cockpitPanelRestore;
-  }
-
-  set _cockpitPanelRestore(value) {
-    this._panelChrome._cockpitPanelRestore = value;
-  }
-
-  get _panelPosition() {
-    return this._panelChrome._panelPosition;
-  }
-
-  set _panelPosition(value) {
-    this._panelChrome._panelPosition = value;
   }
 
   get _panelLayout() {
@@ -493,18 +197,6 @@ export class ShellFacade {
   }
 
   /**
-   * Hand the Directions layer the camera seams its FLY chip needs: the same
-   * immediate-navigation facade voice route flights go through, so there is
-   * one camera owner rather than a second one inside a data layer, the shared
-   * ground-floor read/warm the route dolly flies over, and the app's own toast
-   * so the layer can speak where the rest of the UI speaks.
-   * @returns {void}
-   */
-  _connectDirectionsCamera(...args) {
-    return this._layerBindings._connectDirectionsCamera(...args);
-  }
-
-  /**
    * Creates one CesiumJS PostProcessStage per visual style and registers
    * it with the scene. Each stage starts with intensity 0 (invisible)
    * so crossfade transitions can animate it in later.
@@ -512,35 +204,6 @@ export class ShellFacade {
    */
   _initStages() {
     return this._visualSettings._initStages(...arguments);
-  }
-
-  /**
-   * Single write path for style-stage intensity: keeps `enabled` in
-   * lockstep so zero-intensity stages cost nothing (safe now that the
-   * scope is explicit — see _initStages). The stage enables on the same
-   * frame the first non-zero intensity lands, so crossfades never pop.
-   * @param {Cesium.PostProcessStage} stage - Style post-process stage.
-   * @param {number} value - Intensity in [0, 1].
-   * @returns {void}
-   */
-  _setStageIntensity(stage, value) {
-    return this._visualSettings._setStageIntensity(...arguments);
-  }
-
-  /**
-   * Re-sync every stage's `enabled` flag from its CURRENT intensity.
-   *
-   * The cockpit-vision policy helpers (src/cockpitVisionPolicy.js) are pure
-   * intensity math — they write `uniforms.intensity` directly and know
-   * nothing about the enabled/intensity lockstep _setStageIntensity owns.
-   * Without this sweep a stage the policy raised to 1 would stay DISABLED
-   * and cockpit NVG/FLIR/CRT would render nothing at all. (Inert while the
-   * chain is permanently enabled; load-bearing again once the explicit
-   * scope frees the zero-intensity stages — see _initStages.)
-   * @returns {void}
-   */
-  _syncStagesEnabledFromIntensity() {
-    return this._visualSettings._syncStagesEnabledFromIntensity(...arguments);
   }
 
   /**
@@ -557,21 +220,6 @@ export class ShellFacade {
     return this._visualSettings._syncContactsDetection(...arguments);
   }
 
-  /** IR hot-target boost: under the luminance-
-   *  mapped NVG/FLIR looks the 3D fleets flip to flat white so contacts read
-   *  HOT instead of vanishing mid-gray; restored when the look exits. The
-   *  EFFECTIVE look is Cockpit's vision override while Cockpit is active
-   *  ('nvg'/'thermal', which can differ from the map preset in BOTH
-   *  directions), otherwise the map preset ('surveillance'/'thermal'). */
-  _syncIrBoost() {
-    return this._visualSettings._syncIrBoost(...arguments);
-  }
-
-  /** Keep Cockpit's exit restore target aligned with the active map preset. */
-  _syncCockpitInheritedStyle() {
-    return this._visualSettings._syncCockpitInheritedStyle(...arguments);
-  }
-
   /**
    * Configures Cesium's built-in bloom stage and adds a custom unsharp-mask
    * sharpen stage to the post-process pipeline. Both start disabled.
@@ -579,34 +227,6 @@ export class ShellFacade {
    */
   _initBloomSharpen() {
     return this._visualSettings._initBloomSharpen(...arguments);
-  }
-
-  /**
-   * Reads the current bloom intensity percentage from the effects controller.
-   * @returns {number} Clamped bloom intensity (0-200).
-   */
-  _getBloomIntensity() {
-    return this._visualSettings._getBloomIntensity(...arguments);
-  }
-
-  /**
-   * Enables or disables the Cesium bloom stage based on both the user toggle
-   * and whether the computed strength exceeds the perceptual threshold (0.06).
-   * @returns {void}
-   */
-  _syncBloomStageEnabled() {
-    return this._visualSettings._syncBloomStageEnabled(...arguments);
-  }
-
-  /**
-   * Maps a bloom intensity percentage to Cesium bloom stage uniforms.
-   * Uses smoothstep easing (Hermite interpolation: 3t^2 - 2t^3) to
-   * produce a perceptually linear glow ramp from zero to full strength.
-   * @param {number} intensity - Bloom intensity percentage (0-200).
-   * @returns {void}
-   */
-  _applyBloomIntensity(intensity) {
-    return this._visualSettings._applyBloomIntensity(...arguments);
   }
 
   /**
@@ -701,31 +321,6 @@ export class ShellFacade {
   }
 
   /**
-   * Applies preset defaults (bloom, sharpen, shader uniforms, HUD variant)
-   * when a military-class style (CRT, NVG, FLIR) is selected. Does nothing
-   * for styles without entries in STYLE_PRESET_DEFAULTS.
-   * @param {string} styleName - The style whose defaults to apply.
-   * @returns {void}
-   */
-  _applyStylePresetDefaults(styleName) {
-    return this._visualSettings._applyStylePresetDefaults(...arguments);
-  }
-
-  /**
-   * Apply a detection preset's density and mode through the real UI path.
-   *
-   * Deliberately does NOT consult `_detectionUserOverridden` — the CALLER owns
-   * that decision. The style path checks it (an explicit Sparse/Off must
-   * survive a style switch). If detection is off when Contacts opens, Contacts
-   * applies the tactical preset even if the user explicitly turned detection off.
-   * @param {{mode?: string, densityPct?: number}} det Preset detection config.
-   * @returns {void}
-   */
-  _applyDetectionPreset(det) {
-    return this._visualSettings._applyDetectionPreset(...arguments);
-  }
-
-  /**
    * Applies the global post-processing baseline (GLOBAL_POST_DEFAULTS) at
    * startup before any share-link restore runs. Sets bloom, sharpen, HUD,
    * and detection to their factory defaults.
@@ -733,23 +328,6 @@ export class ShellFacade {
    */
   _applyGlobalPostDefaults() {
     return this._visualSettings._applyGlobalPostDefaults(...arguments);
-  }
-
-  /**
-   * Detection as a DURABLE preference, for serialization into a share link.
-   *
-   * While Contacts is active it OWNS detection and forces Dense @ 75%. That is
-   * a session-scoped override, not something the operator chose: it is undone
-   * verbatim on deactivation. Serializing the forced values shipped a link that
-   * pinned Dense @ 75% on the recipient — as a durable preference, with no
-   * Contacts mode present to explain or undo it — even though the author's own
-   * setting was (say) OFF @ 50%. Publish what deactivation would restore.
-   *
-   * `_contactsDetectionRestore` is exactly that snapshot and is null whenever
-   * Contacts does not own detection, so the live values are used normally.
-   */
-  _shareableDetectionState() {
-    return this._visualSettings._shareableDetectionState(...arguments);
   }
 
   /** Current shareable visual preferences; subscriptions include an initial snapshot. */
@@ -780,48 +358,12 @@ export class ShellFacade {
   }
 
   /**
-   * Collapses the nearest expanded panel that owns keyboard focus on Escape.
-   * Nested panels consume the event first, so one key closes one level and
-   * returns focus to that level's disclosure. If Escape was pressed on the
-   * disclosure itself, remove focus after closing so the collapsed button does
-   * not keep a stale keyboard ring.
-   * @param {KeyboardEvent} event - Candidate Escape key event.
-   * @param {string} panelId - Collapsible panel containing the listener.
-   * @returns {boolean} Whether this panel handled the key.
-   */
-  _collapsePanelOnEscape(event, panelId) {
-    return this._panelChrome._collapsePanelOnEscape(...arguments);
-  }
-
-  /**
-   * Tracks the live pinned-tray height so a hovered sibling can stack above it
-   * without hardcoded content dimensions.
-   * @returns {void}
-   */
-  _initCommandDockTrayMetrics() {
-    return this._panelChrome._initCommandDockTrayMetrics(...arguments);
-  }
-
-  /**
-   * Writes each pinned tray height and their combined stack height as CSS
-   * variables. The most recently pinned tray forms the upper level.
-   * @returns {void}
-   */
-  _updateCommandDockTrayStack() {
-    return this._panelChrome._updateCommandDockTrayStack(...arguments);
-  }
-
-  /**
    * One-time toast when stored v6 panel positions are superseded by the v7
    * layout defaults (positions reset; collapsed states are preserved).
    * @returns {void}
    */
   _maybeNotifyLayoutReset() {
     return this._panelChrome._maybeNotifyLayoutReset(...arguments);
-  }
-
-  _persistAwarenessSelection(...args) {
-    return this._layerBindings._persistAwarenessSelection(...args);
   }
 
   /**
@@ -832,12 +374,6 @@ export class ShellFacade {
    */
   attachDataManager(...args) {
     return this._layerBindings.attachDataManager(...args);
-  }
-
-  _handleShareTrackingRestoreStatus(result) {
-    return this._shareRestoration._handleShareTrackingRestoreStatus(
-      ...arguments,
-    );
   }
 
   get _contextMode() {
@@ -878,15 +414,6 @@ export class ShellFacade {
 
   _renderRadioState(...args) {
     return this._radioControls?._renderRadioState?.(...args);
-  }
-
-  /**
-   * Returns the versioned localStorage key for a panel's collapsed state.
-   * @param {string} panelId - DOM id of the panel.
-   * @returns {string} localStorage key.
-   */
-  _panelCollapseStorageKey(panelId) {
-    return this._panelPosition._panelCollapseStorageKey(panelId);
   }
 
   /**
@@ -1001,10 +528,6 @@ export class ShellFacade {
     return this._visualSettings.celestialRingEnabled;
   }
 
-  setOrbit(...args) {
-    return this._locationNavigation.setOrbit(...args);
-  }
-
   /**
    * Reads global context mode state for voice/state-sync consumers.
    * @returns {{mode: 'flights'|null, active: boolean, changing: boolean, entering: 'flights'|null, snapshotCaptured: boolean}}
@@ -1038,24 +561,6 @@ export class ShellFacade {
    */
   getCockpitState(...args) {
     return this._cockpitCoordinator.getCockpitState(...args);
-  }
-
-  /**
-   * Point Cockpit entry at a requested contact layer before it enters.
-   *
-   * Reuses the filtered Context navigation NEXT already uses, so "cockpit in
-   * that military helicopter" lands on the same contact "next military
-   * helicopter" would. Cockpit flies aircraft only; vessel and installation
-   * layers are refused by name rather than silently ignored.
-   * @param {object} options Retarget request.
-   * @param {string} options.targetLayer Requested contact layer.
-   * @param {string|null} options.aircraftClass Optional class filter.
-   * @param {{layerId: string}|null} options.currentTarget Current tracker.
-   * @param {{layerId: string}|null} options.selectedTarget Pending selection.
-   * @returns {{ok: boolean, retargeted?: boolean, error?: string}} Outcome.
-   */
-  _retargetCockpitEntryLayer(...args) {
-    return this._cockpitCoordinator._retargetCockpitEntryLayer(...args);
   }
 
   /**
@@ -1106,23 +611,6 @@ export class ShellFacade {
     return this._recording.setRecordingMode(enabled, options);
   }
 
-  /** Reveal the map-only parameter surface in the standard Display scroll owner. */
-  _revealStyleParameters() {
-    return this._visualSettings._revealStyleParameters(...arguments);
-  }
-
-  /**
-   * Enqueues a smooth intensity transition for a shader stage. The animation
-   * loop interpolates from `fromValue` to `toValue` over TRANSITION_DURATION_MS.
-   * @param {string} styleName - Name of the shader stage to transition.
-   * @param {number} fromValue - Starting intensity (typically current value).
-   * @param {number} toValue - Target intensity (0.0 to fade out, 1.0 to fade in).
-   * @returns {void}
-   */
-  _startTransition(styleName, fromValue, toValue) {
-    return this._visualSettings._startTransition(...arguments);
-  }
-
   /**
    * Sample the manager's layer set and paint the global loading chip.
    * Driven by manager events AND by a ticker, because the underlying state
@@ -1150,66 +638,12 @@ export class ShellFacade {
     return this._feedback._startTrafficChipTicker();
   }
 
-  /**
-   * Self-stopping 60 ms ticker for the global loading chip.
-   *
-   * The time-driven reducer in src/loadingFeedback.js needs its own ticks while the style
-   * loop is idle. DOM updates take no governor hold and request no render.
-   * _updateGlobalLoadingFeedback arms it when loading leaves idle or a universal notice
-   * begins. It stops when both settle.
-   * @returns {void}
-   */
-  _armLoadingFeedbackTicker() {
-    return this._feedback._armLoadingFeedbackTicker();
-  }
-
-  /** Stop the loading-chip ticker if it is running. Idempotent. */
-  _stopLoadingFeedbackTicker() {
-    return this._feedback._stopLoadingFeedbackTicker();
-  }
-
   subscribeLocationSearch(...args) {
     return this._locationNavigation.subscribeLocationSearch(...args);
   }
 
-  _handleLocationSearchState(...args) {
-    return this._locationNavigation._handleLocationSearchState(...args);
-  }
-
   _initLocationControls(...args) {
     return this._locationNavigation._initLocationControls(...args);
-  }
-
-  _beginWorldJumpTransition(...args) {
-    return this._locationNavigation._beginWorldJumpTransition(...args);
-  }
-
-  _endWorldJumpTransition(...args) {
-    return this._locationNavigation._endWorldJumpTransition(...args);
-  }
-
-  _flyWithTransition(...args) {
-    return this._locationNavigation._flyWithTransition(...args);
-  }
-
-  _onCityPillClick(...args) {
-    return this._locationNavigation._onCityPillClick(...args);
-  }
-
-  _onPoiClick(...args) {
-    return this._locationNavigation._onPoiClick(...args);
-  }
-
-  _expandPOIRow(...args) {
-    return this._locationNavigation._expandPOIRow(...args);
-  }
-
-  _collapsePOIRow(...args) {
-    return this._locationNavigation._collapsePOIRow(...args);
-  }
-
-  _setActiveLocation(...args) {
-    return this._locationNavigation._setActiveLocation(...args);
   }
 
   /**
@@ -1261,11 +695,6 @@ export class ShellFacade {
     return this._feedback._showToast(message);
   }
 
-  /** One 3D toggle drives BOTH aircraft layers (commercial + military) so all planes flip together. */
-  _setModels3dParams(...args) {
-    return this._aircraftDisplay._setModels3dParams(...args);
-  }
-
   _syncModels3dFromLayerState(...args) {
     return this._aircraftDisplay._syncModels3dFromLayerState(...args);
   }
@@ -1284,10 +713,6 @@ export class ShellFacade {
 
   _setModels3dMode(...args) {
     return this._aircraftDisplay._setModels3dMode(...args);
-  }
-
-  _syncModels3dButtonState(...args) {
-    return this._aircraftDisplay._syncModels3dButtonState(...args);
   }
 
   /**
@@ -1355,9 +780,5 @@ export class ShellFacade {
   /** Whether a share link was used to load the page */
   get hasShareState() {
     return !!this._hasShareState;
-  }
-
-  _settleInitialShareRestore(result) {
-    return this._shareRestoration._settleInitialShareRestore(...arguments);
   }
 }

@@ -31,3 +31,13 @@ test('camera handoffs reach listeners through the navigation owner', () => {
   unsubscribe();
   assert.equal(listeners.size, 0);
 });
+
+// Startup chrome, the loader status and the first-run launcher read
+// `hasShareState` on the shell; the flag itself lives on the share owner.
+test('hasShareState reports the share owner’s flag', () => {
+  const shell = Object.create(ShellFacade.prototype);
+  shell._shareRestoration = { _hasShareState: true };
+  assert.equal(shell.hasShareState, true);
+  shell._shareRestoration._hasShareState = false;
+  assert.equal(shell.hasShareState, false);
+});
