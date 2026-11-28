@@ -6,7 +6,7 @@
  * Turn-rate estimation + constant-rate-turn arc integration are adapted from
  * skylight (https://github.com/cpaczek/skylight, MIT) shared/src/aim.ts.
  */
-import { fromRadians, toCartographicRadians } from '../geo/ellipsoid.js';
+import { fromRadians, toCartographicRadians, WGS84 } from '../geo/ellipsoid.js';
 import { eastNorthUp, framePoint } from '../geo/frames.js';
 import {
   julianFromEpochMs,
@@ -293,6 +293,9 @@ export const COAST_FLOOR_LIFT_M = 1.5;
  */
 export function floorCoastedPosition(position, cachedGroundFloor) {
   if (typeof cachedGroundFloor !== 'function') return position;
+  // One above COAST_FLOOR_CEILING_M cannot be lifted by any ground, so it
+  // needs neither the geodetic conversion nor the floor read.
+  if (clearOfAllGround(position)) return position;
   const carto = toCartographicRadians(position);
   if (!carto) return position;
   const ground = cachedGroundFloor(toDegrees(carto.lat), toDegrees(carto.lon));
@@ -301,6 +304,32 @@ export function floorCoastedPosition(position, cachedGroundFloor) {
   return copyInto(
     fromRadians(carto.lon, carto.lat, ground + COAST_FLOOR_LIFT_M),
     position,
+  );
+}
+
+/**
+ * @constant {number} No ground reaches this height above the ellipsoid:
+ * Everest's summit is about 8,821 m (8,849 m above a geoid that sits 28 m
+ * below the ellipsoid there).
+ */
+export const COAST_FLOOR_CEILING_M = 9000;
+const _oneOverRadiiSq = WGS84.oneOverRadiiSquared;
+const COAST_CLEAR_SCALED_SQ = (1 + COAST_FLOOR_CEILING_M / WGS84.radii.z) ** 2;
+
+/**
+ * Whether a position is certainly more than COAST_FLOOR_CEILING_M above the
+ * ellipsoid. With the axes scaled so the ellipsoid is the unit sphere, a point
+ * h metres up its normal is at most 1 + h / (polar radius) from the centre.
+ * Near the equator this answers yes only from about 30 m above the ceiling.
+ * @param {{x: number, y: number, z: number}} position ECEF.
+ * @returns {boolean}
+ */
+function clearOfAllGround(position) {
+  return (
+    position.x * position.x * _oneOverRadiiSq.x +
+      position.y * position.y * _oneOverRadiiSq.y +
+      position.z * position.z * _oneOverRadiiSq.z >
+    COAST_CLEAR_SCALED_SQ
   );
 }
 

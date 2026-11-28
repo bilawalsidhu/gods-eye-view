@@ -169,3 +169,91 @@ test('an out-of-range cache bound falls back to the default instead of disabling
     );
   }
 });
+
+test('a synchronous read finds exactly the entry its 5-decimal key names', async () => {
+  // Stored coordinates, and for each the reads that must and must not reach it.
+  // The expectation is the 5-decimal string key, with "-0.00000" read as "0.00000".
+  const stored = [
+    [0, 0.001],
+    [51.47, -0.454],
+    [-33.94611, 151.17722],
+    [0.00001, 0.00002],
+    [-0.00001, 0.00003],
+    [89.99999, 179.99999],
+    [-89.99999, -179.99999],
+    [12.345675, 98.765435],
+    [1e-7, 5],
+    [-1e-7, 6],
+    [7, -1e-7],
+    [200.5, 361.25],
+    [10, 500],
+    [10, 499.999999],
+  ];
+  const same = (text) => text.replaceAll('-0.00000', '0.00000');
+  const key = (lat, lon) => same(`${lat.toFixed(5)},${lon.toFixed(5)}`);
+  const heights = new Map(
+    stored.map(([lat, lon], i) => [key(lat, lon), 100 + i]),
+  );
+  const terrain = createTerrainHeights({
+    source: {
+      async getHeights(chunk) {
+        return chunk.map((item) => ({
+          ellipsoid: heights.get(same(item.key)),
+        }));
+      },
+    },
+  });
+  await terrain.resolveEllipsoidalGround(
+    stored.map(([lat, lon]) => ({ lat, lon })),
+  );
+
+  const probes = [];
+  const nudges = [
+    0, 1e-13, -1e-13, 1e-9, -1e-9, 4e-6, -4e-6, 4.9999e-6, 5e-6, -5e-6,
+    5.0001e-6, 1e-5, -1e-5,
+  ];
+  for (const [lat, lon] of stored)
+    for (const a of nudges)
+      for (const b of [0, 4e-6, -5e-6])
+        probes.push([lat + a, lon + b], [lat + b, lon + a]);
+  probes.push([0, 0], [-0, 0.001], [0, -0], [NaN, 1], [1, Infinity], [1e21, 2]);
+
+  let hits = 0;
+  for (const [lat, lon] of probes) {
+    const expected = heights.get(key(lat, lon)) ?? null;
+    assert.equal(
+      terrain.cachedEllipsoidalGround(lat, lon),
+      expected,
+      `plain read at ${lat}, ${lon}`,
+    );
+    assert.equal(
+      terrain.cachedRealEllipsoidalGround(lat, lon),
+      expected,
+      `real read at ${lat}, ${lon}`,
+    );
+    if (expected !== null) hits += 1;
+  }
+  assert.ok(
+    hits > 100 && hits < probes.length,
+    `${hits} of ${probes.length} reads hit`,
+  );
+});
+
+test('a synchronous read of an ordinary coordinate formats no numbers', async (t) => {
+  const terrain = createTerrainHeights({ source: stubSource() });
+  await terrain.resolveEllipsoidalGround([pointAt(1), pointAt(2)]);
+  const toFixed = t.mock.method(Number.prototype, 'toFixed');
+  assert.equal(
+    terrain.cachedRealEllipsoidalGround(0, lonAt(1)),
+    heightAt(lonAt(1)),
+  );
+  assert.equal(
+    terrain.cachedEllipsoidalGround(0, lonAt(2)),
+    heightAt(lonAt(2)),
+  );
+  // Misses are the common case: an aircraft over a cell nobody resolved.
+  for (let i = 10; i < 1010; i += 1)
+    assert.equal(terrain.cachedRealEllipsoidalGround(45.123, lonAt(i)), null);
+  toFixed.mock.restore();
+  assert.equal(toFixed.mock.callCount(), 0);
+});
