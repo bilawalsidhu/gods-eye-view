@@ -423,6 +423,7 @@
       "build/allowedHosts.js",
       "build/embed-framing.js",
       "build/panel.js",
+      "build/localeChunks.js",
       "build/vueOptions.js",
       "build/registerVue.js",
       "build/vueLoader.js"
@@ -1631,6 +1632,7 @@
       "src/ui/localSdrPresentation.js",
       "src/data/cameraArrival.js",
       "src/i18n/index.js",
+      "src/i18n/page.js",
       "src/i18n/locale.js",
       "src/i18n/locales/ar.json",
       "src/i18n/locales/de.json",
@@ -5383,6 +5385,7 @@
       "src/view/index.js",
       "src/app/embed.js",
       "src/i18n/index.js",
+      "src/i18n/page.js",
       "src/i18n/locale.js",
       "src/i18n/locales/ar.json",
       "src/i18n/locales/de.json",

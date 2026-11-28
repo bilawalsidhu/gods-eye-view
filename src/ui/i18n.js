@@ -25,9 +25,13 @@ const resolveFlat = (messages, key) =>
  */
 export function applicationI18n() {
   if (pageI18n) return pageI18n;
+  // The catalogs loaded so far; each other one joins when its locale is
+  // chosen, as setLocale applies it only once it is loaded.
   const messages = {};
-  for (const locale of LOCALES)
-    if (locale !== DEFAULT_LOCALE) messages[locale] = getCatalog(locale);
+  for (const locale of LOCALES) {
+    const catalog = locale === DEFAULT_LOCALE ? null : getCatalog(locale);
+    if (catalog) messages[locale] = catalog;
+  }
   pageI18n = createI18n({
     legacy: false,
     globalInjection: false,
@@ -52,7 +56,12 @@ export function applicationI18n() {
   // locale changed (setLocale or the ref).
   watch(
     () => getLocale(),
-    () => notifyLocaleChange(),
+    (locale) => {
+      const catalog = getCatalog(locale);
+      if (catalog && !pageI18n.global.availableLocales.includes(locale))
+        pageI18n.global.setLocaleMessage(locale, catalog);
+      notifyLocaleChange();
+    },
     { flush: 'sync' },
   );
   return pageI18n;

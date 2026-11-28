@@ -16,6 +16,10 @@
  * Cesium keeps one static credit per markup and placement: a page credit
  * and another caller's of the same markup share one entry in the display,
  * which goes when the one added first is removed.
+ *
+ * Cesium's logo is not drawn on the map: CesiumJS is credited in the
+ * display's expandable list with the rest, and the map's credit line keeps
+ * only the credits that must be on it.
  */
 import * as Cesium from 'cesium';
 import {
@@ -28,6 +32,10 @@ import {
 import { provideUnboundCredits } from '../rendererOf.js';
 import { listenerList, uncaught } from './common.js';
 import { creditDisplayContents } from './internals.js';
+
+/** CesiumJS's credit, in the expandable list. */
+const CESIUM_CREDIT_HTML =
+  '<a href="https://cesium.com/cesiumjs/" target="_blank" rel="noopener">CesiumJS</a>';
 
 const CREDIT_KEYS = new Set(['text', 'href', 'linkText', 'logoUrl', 'inline']);
 /** Readings kept per Cesium credit id; past this many, the cache restarts. */
@@ -101,6 +109,11 @@ export function createCesiumCredits({ display, scene, report, requestRender }) {
   const shown = new Map();
   /** Cesium credit id → its text, link and logo. */
   const readings = new Map();
+  // No logo on the map (the display drops it at its next frame); CesiumJS
+  // is listed instead.
+  Cesium.CreditDisplay.cesiumCredit = undefined;
+  const cesiumListed = new Cesium.Credit(CESIUM_CREDIT_HTML, false);
+  if (displayLive()) display.addStaticCredit(cesiumListed);
 
   const reading = (credit) => {
     let read = readings.get(credit.id);
@@ -318,9 +331,11 @@ export function createCesiumCredits({ display, scene, report, requestRender }) {
       disposed = true;
       offFrame();
       listeners.clear();
-      if (displayLive())
+      if (displayLive()) {
+        display.removeStaticCredit(cesiumListed);
         for (const { credit } of shown.values())
           display.removeStaticCredit(credit);
+      }
       shown.clear();
       coreCredits.clear();
     },

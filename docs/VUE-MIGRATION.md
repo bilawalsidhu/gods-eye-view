@@ -734,7 +734,8 @@ holds each class to its state and every stylesheet to the pattern.
   components are compiled by a test loader; component tests render with
   `@vue/test-utils` and `happy-dom`. `npm test` registers the loader; to run
   one file that reaches a component (including anything importing the
-  shell), use `node --import=./build/registerVue.js --test <file>`.
+  shell), use `node --import=./build/registerVue.js --test <file>` (add
+  `--import=./src/testSupport/loadCatalogs.mjs` when it switches language).
 - Never pass happy-dom nodes to `assert.equal` or `deepEqual`: a failure
   prints both operands, and a node reaches the whole page and window, which
   runs the process out of memory. Compare nodes with `assertSameNode()`

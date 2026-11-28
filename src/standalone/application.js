@@ -6,11 +6,7 @@ import { createStandaloneScene, loadDefaultRenderer } from './scene.js';
 import { createStandaloneControls } from './controls.js';
 import { createStandaloneData } from './data.js';
 import { createStandaloneTools } from './tools.js';
-import {
-  applyDocumentTranslations,
-  followPageLocale,
-  startPageLocale,
-} from '../i18n/page.js';
+import { applyDocumentTranslations, followPageLocale } from '../i18n/page.js';
 import { mountApplicationViews } from '../ui/views/index.js';
 import { createGoogleTokenSource } from '../maps/googleTokens.js';
 
@@ -18,7 +14,8 @@ import { createGoogleTokenSource } from '../maps/googleTokens.js';
 let constructed = false;
 
 /**
- * Compose the standalone application once per page. Reload to start again.
+ * Compose the standalone application once per page, after the page's locale
+ * has started (`await startPageLocale(document)`). Reload to start again.
  * `renderer` is the renderer plugin it draws with (default: Cesium).
  */
 export function createStandaloneApplication({
@@ -38,12 +35,12 @@ export function createStandaloneApplication({
   // A failed load is the scene's to report, when it asks for the renderer.
   const rendererPlugin = renderer ?? loadDefaultRenderer();
   if (!renderer) Promise.resolve(rendererPlugin).catch(() => {});
-  // Locale is resolved before any UI initialization so <html lang>/<html dir>
-  // and every catalog lookup agree from the first painted frame. Module
-  // scripts execute after parsing, so the DOM is ready here: the views
-  // translate as they render, and the page's static data-i18n* markup (the
-  // loading screen) is translated here and after every language switch.
-  startPageLocale(document);
+  // The page's locale is started (startPageLocale, awaited by the entry)
+  // before this runs, so <html lang>/<html dir> and every catalog lookup
+  // agree from the first painted frame. Module scripts execute after
+  // parsing, so the DOM is ready here: the views translate as they render,
+  // and the page's static data-i18n* markup (the loading screen) is
+  // translated here and after every language switch.
   // Views render the page's markup; wiring reads it.
   mountApplicationViews(document);
   applyDocumentTranslations(document);

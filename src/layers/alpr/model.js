@@ -32,9 +32,10 @@ export function destinationPointDeg(latDeg, lonDeg, bearingDeg, distanceM) {
 }
 
 /**
- * The on-map credit for the renderer's credits port, from plain text and an
- * HTTPS URL only; the port escapes it as it shows it.
- * @returns {{text: string, href: string, inline: true}|null}
+ * The source's credit for the renderer's credits port, in the "Data
+ * attribution" list, from plain text and an HTTPS URL only; the port
+ * escapes it as it shows it.
+ * @returns {{text: string, href: string, inline: false}|null}
  */
 export function alprCredit(attribution) {
   if (!attribution?.text || !attribution?.href) return null;
@@ -42,5 +43,5 @@ export function alprCredit(attribution) {
   if (href.protocol !== 'https:' || href.username || href.password) {
     throw new TypeError('Camera attribution requires a public HTTPS link');
   }
-  return { text: `ALPR: ${attribution.text}`, href: href.href, inline: true };
+  return { text: `ALPR: ${attribution.text}`, href: href.href, inline: false };
 }

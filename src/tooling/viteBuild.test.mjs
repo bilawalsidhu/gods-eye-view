@@ -132,7 +132,7 @@ test('build helper does not discover environment values or construct local provi
     );
     assert.deepEqual(
       config.plugins.slice(4).map((plugin) => plugin.name),
-      ['embed-framing', 'panel-build'],
+      ['embed-framing', 'panel-build', 'locale-chunks'],
     );
   } finally {
     if (before === undefined) delete process.env.GOOGLE_MAPS_API_KEY;
@@ -145,7 +145,7 @@ test('root config retains existing named exports and standalone provider order',
     assert.equal(compatibility[name], value, name);
   const config = standaloneConfig({ mode: 'test' }, { nominatimStorageDir });
   const standaloneProviders = config.plugins
-    .slice(4, -7)
+    .slice(4, -8)
     .map((plugin) => plugin.name);
   assert.equal(
     standaloneProviders.filter((name) => name === 'gemini-live-proxy').length,
@@ -161,17 +161,18 @@ test('root config retains existing named exports and standalone provider order',
       .localProviderPlugins({ nominatimStorageDir })
       .map((plugin) => plugin.name),
   );
-  assert.equal(config.plugins.at(-8).name, 'gev-key-setup');
+  assert.equal(config.plugins.at(-9).name, 'gev-key-setup');
   // Token fallback follows real providers and local MCP before the API 404.
-  assert.equal(config.plugins.at(-7).name, 'local-mcp');
-  assert.equal(config.plugins.at(-6).name, 'google-token-unavailable');
+  assert.equal(config.plugins.at(-8).name, 'local-mcp');
+  assert.equal(config.plugins.at(-7).name, 'google-token-unavailable');
   // Dev-only, under its own path.
-  assert.equal(config.plugins.at(-5).name, 'conformance-references');
-  assert.equal(config.plugins.at(-4).name, 'api-not-found');
+  assert.equal(config.plugins.at(-6).name, 'conformance-references');
+  assert.equal(config.plugins.at(-5).name, 'api-not-found');
   // Config-only, so it sits after the provider slice rather than in it.
-  assert.equal(config.plugins.at(-3).name, 'gev-unwatched-runtime-dirs');
-  assert.equal(config.plugins.at(-2).name, 'embed-framing');
-  assert.equal(config.plugins.at(-1).name, 'panel-build');
+  assert.equal(config.plugins.at(-4).name, 'gev-unwatched-runtime-dirs');
+  assert.equal(config.plugins.at(-3).name, 'embed-framing');
+  assert.equal(config.plugins.at(-2).name, 'panel-build');
+  assert.equal(config.plugins.at(-1).name, 'locale-chunks');
 });
 
 test('standalone config passes a validated Photon setting into the browser define', () => {

@@ -17,7 +17,6 @@ export function createInfrastructureLayers(services) {
       color: '#00ffff', // Cyan
       icon: '▣',
       source: 'Local',
-      osmDerived: true,
       labels: true,
       labelMax: 700,
       labelGridPx: 138,
@@ -33,7 +32,6 @@ export function createInfrastructureLayers(services) {
       color: '#0088ff', // Blue
       icon: '▰',
       source: 'OpenStreetMap / OpenInfraMap',
-      osmDerived: true,
       labels: true,
       labelMax: 900,
       labelGridPx: 132,

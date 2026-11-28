@@ -1163,14 +1163,13 @@ test('a recent place that came from Photon shows the OpenStreetMap credit', asyn
   );
   t.after(() => store.removeItem('gev:omnibar:recent-places'));
   stubPhoton(t);
-  const { type, credits } = recordingOmnibar(t);
+  const { type } = recordingOmnibar(t);
   await type('Tokyo');
   assert.ok(
     [...document.querySelectorAll('.omnibar-strip__chip')].some((chip) =>
       chip.textContent.includes('Shibuya Crossing'),
     ),
   );
-  assert.equal(credits.at(-1), true);
 });
 
 /** The fixture with a recording runner and globe actions, as the shell has. */
@@ -1184,7 +1183,6 @@ function recordingOmnibar(
   const calls = [];
   const acted = [];
   const switched = [];
-  const credits = [];
   // One list, so a test can change a layer's live state.
   const layerList = [
     { id: 'flights', name: 'Flights', enabled: false },
@@ -1197,7 +1195,6 @@ function recordingOmnibar(
   useOmnibarStore(fixture.pinia).connect({
     layers: () => layerList,
     setLayer: (...args) => switched.push(args),
-    creditSuggestions: (shown) => credits.push(shown),
   });
   useOmnibarStore(fixture.pinia).connectRunner(async (name, args) => {
     calls.push([name, args]);
@@ -1218,7 +1215,6 @@ function recordingOmnibar(
     calls,
     acted,
     switched,
-    credits,
     layerList,
     enter,
   };
@@ -1757,27 +1753,6 @@ test('a globe action nobody answers fails the plan', async (t) => {
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.deepEqual(acted, []);
   assert.ok($('#gev-omnibar [role="alert"]').textContent.trim());
-});
-
-test('the OpenStreetMap credit shows while Photon suggestions do', async (t) => {
-  stubPhoton(t, () => [
-    {
-      geometry: { type: 'Point', coordinates: [139.69, 35.69] },
-      properties: {
-        name: 'Tokyo',
-        country: 'Japan',
-        countrycode: 'jp',
-        osm_value: 'city',
-      },
-    },
-  ]);
-  const { type, key, credits } = recordingOmnibar(t);
-  await type('Tokyo');
-  await settle();
-  assert.deepEqual(credits, [true]);
-  await key('Escape');
-  await nextTick();
-  assert.deepEqual(credits, [true, false]);
 });
 
 test('ids name no layer: "Local" and "Global" search a place', async (t) => {

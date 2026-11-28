@@ -363,11 +363,13 @@ body.cockpit-mode #cockpit-cloud-effects.active {
   text-decoration: underline;
   cursor: pointer;
 }
+/* The "Data attribution" list, once opened, is over everything else on the
+   page: panels, players and their controls (both renderers' lists). */
 .gev-credits-panel {
   position: fixed;
   bottom: 60px;
   left: 36px;
-  z-index: 200;
+  z-index: 9000;
   display: flex;
   flex-direction: column;
   width: 470px;
@@ -427,7 +429,7 @@ body.cockpit-mode #cockpit-cloud-effects.active {
    Keep the title and close affordance fixed while the complete, unabridged
    credit list wraps and scrolls inside a compact panel. */
 .cesium-credit-lightbox-overlay {
-  z-index: 200 !important;
+  z-index: 9000 !important;
 }
 
 .cesium-credit-lightbox {
@@ -467,17 +469,18 @@ body.cockpit-mode #cockpit-cloud-effects.active {
     margin: 0 !important;
   }
 }
-/* Clean-view / recording: the Google + Cesium attribution MUST stay visible.
-   Google Maps Platform ToS and Cesium's terms require the credit whenever the
-   content is displayed — and these are exactly the modes used to record demos
-   and launch videos, so hiding #cesium-credits here (as it was before) shipped
-   non-compliant footage. The full credit line — Cesium/Ion logo, "Google Maps",
-   and the "Data attribution" link that opens the per-layer license popover —
-   stays on screen; it's already styled small and unobtrusive above. The GEV
-   chrome (panels/HUD) still fades via its own rules; only the required notice
-   is exempt. (Note: Cesium re-applies inline styles on the credit elements each
-   frame, so the on-screen credit content is owned by Cesium's update loop, not
-   CSS overrides — we deliberately don't fight it here.) */
+/* Clean-view / recording: the credit line MUST stay visible. Google Maps
+   Platform's terms require Google's attribution whenever its content is
+   displayed, and these are exactly the modes used to record demos and launch
+   videos, so hiding #cesium-credits here (as it was before) shipped
+   non-compliant footage. The line keeps only what must be on the map
+   (Google's, while its content is shown) and the "Data attribution" link
+   that opens every other credit; it stays on screen, already styled small
+   and unobtrusive above. The GEV chrome (panels/HUD) still fades via its own
+   rules; only the required notice is exempt. (Note: Cesium re-applies inline
+   styles on the credit elements each frame, so the on-screen credit content
+   is owned by Cesium's update loop, not CSS overrides — we deliberately don't
+   fight it here.) */
 
 #gev-voice-control {
   position: fixed;

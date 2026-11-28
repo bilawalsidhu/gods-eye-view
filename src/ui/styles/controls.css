@@ -304,6 +304,12 @@ html:not([lang='en']):not(:lang(zh)):not(:lang(ja))
   margin-bottom: 12px;
 }
 
+/* The page's static text waits for its language (startPageLocale) rather
+   than showing English first; the logo and title stay. */
+html[data-locale-pending] [data-i18n] {
+  visibility: hidden;
+}
+
 .loader-status {
   font-family: var(--font-mono);
   font-size: 11px;
