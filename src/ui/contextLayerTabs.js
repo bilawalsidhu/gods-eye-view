@@ -75,8 +75,6 @@ export const availableTabs = computed(() =>
     : [],
 );
 
-export const hasTab = (id) => availableTabs.value.some((tab) => tab.id === id);
-
 /** The tab Context shows: 'view' (the card) or a layer tab's id. */
 export const activeTab = ref('view');
 
