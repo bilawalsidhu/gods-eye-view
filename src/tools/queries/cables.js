@@ -19,13 +19,29 @@ function cableLines(feature) {
   return [];
 }
 
+/**
+ * The facts a feature's data gives of it beyond its name (`properties.facts`:
+ * owners, status, length…), plain values only; absent when it gives none.
+ */
+function featureFacts(feature) {
+  const facts = feature?.properties?.facts;
+  if (!facts || typeof facts !== 'object' || Array.isArray(facts)) return {};
+  const plain = Object.fromEntries(
+    Object.entries(facts).filter(([, value]) =>
+      ['string', 'number', 'boolean'].includes(typeof value),
+    ),
+  );
+  return Object.keys(plain).length ? { facts: plain } : {};
+}
+
 export const findSubmarineCables = defineTool({
   name: 'find_submarine_cables',
   title: 'Submarine cables',
   description:
     'Undersea telecommunication cables and landing points from the ' +
     'TeleGeography map: those passing through or landing in an area, ' +
-    'and/or those whose name matches.',
+    'and/or those whose name matches, with any facts the data gives ' +
+    '(owners, status, length, landings…).',
   inputSchema: {
     type: 'object',
     properties: {
@@ -50,6 +66,7 @@ export const findSubmarineCables = defineTool({
         name: feature.properties?.name ?? null,
         lon: feature.geometry?.coordinates?.[0],
         lat: feature.geometry?.coordinates?.[1],
+        ...featureFacts(feature),
       }))
       .filter(
         (point) =>
@@ -71,8 +88,10 @@ export const findSubmarineCables = defineTool({
       .map((feature) => ({
         id: feature.properties.id ?? null,
         name: feature.properties.name,
+        ...featureFacts(feature),
       }))
-      // TeleGeography splits some cables into several features under one id.
+      // TeleGeography splits some cables into several features under one id;
+      // the first one's facts stand for the cable.
       .filter((row) => {
         const key = row.id ?? row.name;
         return !seen.has(key) && seen.add(key);
