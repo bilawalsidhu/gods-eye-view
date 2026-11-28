@@ -37,7 +37,6 @@ function panel(t, { video = false } = {}) {
     elements: {
       ...elements,
       _cctvPanel: document.getElementById('cctv-panel'),
-      _cctvSourceBadge: document.getElementById('cctv-source-badge'),
       _cctvFrame: document.getElementById('cctv-frame'),
       _cctvFrameWrap: document.getElementById('cctv-frame-wrap'),
       _cctvSummary: document.getElementById('cctv-summary'),
