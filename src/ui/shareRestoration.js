@@ -167,7 +167,10 @@ export class ShareRestoration {
     feedback,
     updateFeedback,
     applyFollowOffset = null,
+    startLayers = [],
   }) {
+    // The layers a bare address starts with; a link names its own.
+    this._startLayers = startLayers;
     Object.assign(this, {
       viewer,
       navigation,
@@ -321,7 +324,16 @@ export class ShareRestoration {
       if (vessel) void this._restoreSharedVessel(vessel, current);
       // The token tells listeners whether anyone navigated after the
       // restore's flight landed (while the layers were still loading).
-      settle({ status: 'settled', share, layers, tracking, navigationToken });
+      // `thing` says the share is of a thing (a followed or selected one),
+      // not only a view.
+      settle({
+        status: 'settled',
+        share,
+        layers,
+        tracking,
+        navigationToken,
+        thing: state?.shareView?.kind === 'thing',
+      });
     } catch (error) {
       if (!current()) return;
       this.shareLinkManager.completeInitialRestore(state.restoreToken);
@@ -417,9 +429,11 @@ export class ShareRestoration {
       this._layerStateRestorePromise = this._layerStateCoordinator.start({
         shareLayerState: this._initialShareState?.layerState || null,
         shareCreatedAtMs: this._initialShareState?.sharedAtMs ?? null,
-        // Any valid camera/style share isolates recipient-local preferences,
-        // including legacy and malformed-v2 layer payloads.
-        allowLocalState: !this._initialShareState,
+        // A link restores what it carries; a bare address is a clean start
+        // with the default layers. Saved layer choices never come back on
+        // their own, so clearing the address always resets the view.
+        allowLocalState: false,
+        startLayerIds: this._initialShareState ? [] : this._startLayers,
       });
       if (this._initialShareSelectionSuperseded) {
         this._layerStateCoordinator.cancelPendingShareTracking(
@@ -441,9 +455,12 @@ export class ShareRestoration {
   }
 
   /**
-   * Select a shared vessel once the vessel feed has it. Vessels are selected,
-   * not followed: the camera is already at the shared view. If the vessel does
-   * not appear in time, the view stays where it was when the link was made.
+   * Select a shared vessel once the vessel feed has it, and follow it when
+   * the link was made following it (`followed`), from the shared offset; a
+   * vessel a link only selected (every link made before the format said
+   * so) is selected, the camera already at the shared view. If the vessel
+   * does not appear in time, the view stays where it was when the link was
+   * made.
    */
   async _restoreSharedVessel(view, current) {
     const generation = ++this._sharedVesselGeneration;
@@ -455,7 +472,15 @@ export class ShareRestoration {
     try {
       while (live()) {
         const vessels = this._dataManager?.layers?.get?.(layerId)?.module;
-        if (vessels?.hasContact?.(id) && vessels.selectById(id)) return true;
+        if (vessels?.hasContact?.(id)) {
+          if (
+            view.followed === true &&
+            typeof vessels.trackById === 'function' &&
+            this._followSharedVessel(vessels, view, layerId)
+          )
+            return true;
+          if (vessels.selectById(id)) return true;
+        }
         if (Date.now() >= deadline) break;
         await new Promise((resolve) =>
           this._lifetime.timeout(resolve, SHARED_VESSEL_POLL_MS),
@@ -473,6 +498,21 @@ export class ShareRestoration {
       ++this._shareTrackingNoticeGeneration,
     );
     return false;
+  }
+
+  /** Follow a shared vessel and put the camera at the link's offset. */
+  _followSharedVessel(vessels, view, layerId) {
+    const { id } = view.entity;
+    if (!vessels.trackById(id)) return false;
+    const followed = followedOf(this.viewer);
+    if (
+      String(followed?.key || '').startsWith(`${layerId}:`) &&
+      view.lastKnown
+    ) {
+      this._stopFollowOffset?.();
+      this._stopFollowOffset = this.applyFollowOffset?.(followed, view.offset);
+    }
+    return true;
   }
 
   /** The current share's thing view when `result` is about its entity. */

@@ -1,42 +1,22 @@
-import { describeInstallationFeedback } from '../../data/installationFeedback.js';
+import { installationFeedback } from '../../data/installationFeedback.js';
 import {
   LAYER_ID,
   DISTANCE_PREFILTER_MARGIN_M,
   ANCHOR_REFRESH_M,
 } from './policy.js';
-import { formatNumber, t, tn } from '../../i18n/index.js';
+import { t } from '../../i18n/index.js';
 import { fromDegrees, toCartographicRadians } from '../../geo/ellipsoid.js';
 import { surfaceDistance } from '../../geo/geodesic.js';
 import { toDegrees, toRadians } from '../../geo/vector.js';
 import { cameraOf } from '../../render/rendererOf.js';
 
-// installationFeedback.js is shared with the HUD (src/loadingFeedback.js) and
-// hands back msg()-marked English plus values; getStats translates them here.
-function localizeInstallationFeedback(feedback) {
-  if (feedback.text !== undefined) {
-    const values = {};
-    if (feedback.reason !== undefined) values.reason = t(feedback.reason);
-    if (feedback.seconds !== undefined) values.seconds = feedback.seconds;
-    return t(feedback.text, values);
-  }
-  const { count, km } = feedback;
-  if (km) {
-    const kmText = formatNumber(km);
-    return count === 0
-      ? t('No mapped sites within {km} km of the contact', { km: kmText })
-      : tn(
-          count,
-          '{count} mapped site within {km} km of the contact',
-          '{count} mapped sites within {km} km of the contact',
-          { km: kmText },
-        );
-  }
-  return count === 0
-    ? t('No mapped sites in view')
-    : tn(count, '{count} mapped site in view', '{count} mapped sites in view');
-}
-
-export function createControls({ state: layerState, services, parts, source }) {
+export function createControls({
+  state: layerState,
+  services,
+  parts,
+  source,
+  overlayHost,
+}) {
   const methods = {
     id: LAYER_ID,
 
@@ -198,6 +178,29 @@ export function createControls({ state: layerState, services, parts, source }) {
     },
 
     /**
+     * The mapped installation whose label box the shared overlay paints at a
+     * canvas position: what a click lands on from far out, where the dot is
+     * 7 px. Another layer's card or label that takes clicks there wins, so
+     * this answers null. The dot, outline and fill themselves are query port
+     * hits, read with {@link findByPick}. Null for anything else.
+     * @param {{x: number, y: number}|null|undefined} position Canvas CSS px.
+     * @returns {object|null} As {@link getById}.
+     */
+    findAt(position) {
+      if (!Number.isFinite(position?.x) || !Number.isFinite(position?.y))
+        return null;
+      let top = null;
+      try {
+        top = overlayHost?.hitTest?.(position.x, position.y) ?? null;
+      } catch {
+        top = null;
+      }
+      if (top) return null;
+      const id = parts.namedMarkers?.labelAt?.(position) ?? null;
+      return id ? methods.getById(id) : null;
+    },
+
+    /**
      * Select and frame a mapped installation from another contextual UI.
      * @param {string} id Source-backed installation id.
      * @returns {boolean} True when an available installation was focused.
@@ -240,7 +243,7 @@ export function createControls({ state: layerState, services, parts, source }) {
         )
           continue;
         result.push({
-          id: record.name || record.id,
+          id: record.id || record.name,
           name: record.name || null,
           class: record.class || null,
           kind: record.kind || null,
@@ -285,13 +288,12 @@ export function createControls({ state: layerState, services, parts, source }) {
         retryAt: layerState.retryAt,
         retrying: layerState.loading && Boolean(layerState.failureReason),
         failureReason: layerState.failureReason,
-        statusMessage: localizeInstallationFeedback(
-          describeInstallationFeedback({
-            ...layerState,
-            count: layerState.lastUpdate ? mappedCount : undefined,
-            retrying: layerState.loading && Boolean(layerState.failureReason),
-          }),
-        ),
+        // English: the analyst reads it as is; displays translate it.
+        statusMessage: installationFeedback({
+          ...layerState,
+          count: layerState.lastUpdate ? mappedCount : undefined,
+          retrying: layerState.loading && Boolean(layerState.failureReason),
+        }),
         loadingLabel: layerState.loading
           ? t('loading mapped installation context')
           : '',

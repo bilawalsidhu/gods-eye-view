@@ -87,8 +87,9 @@ export function createLifecycle({ state, services, parts }) {
      * Create the point collection. Called once at bootstrap.
      * @param {object} viewer
      */
-    init(viewer) {
+    init(viewer, { panel = null } = {}) {
       state._viewer = viewer;
+      state._panel = panel;
       parts.rendering.createMarkers(viewer);
       state._enabled = false;
       state._activeFeeds.clear();
@@ -165,6 +166,8 @@ export function createLifecycle({ state, services, parts }) {
       state._visible.clear();
       clearTimeout(state._cameraDebounceTimer);
       state._cameraDebounceTimer = null;
+      // A hold ends with the layer (cockpitSubject.js).
+      state._cockpitSubjectKey = null;
       parts.selection.clearSelection();
       state._overlayHost.setVisible(TRANSIT_SELECTED_OVERLAY_SOURCE_ID, false);
       parts.selection.removeClickHandler();
@@ -226,7 +229,7 @@ export function createLifecycle({ state, services, parts }) {
       state._overlayHost.clearSource(TRANSIT_SELECTED_OVERLAY_SOURCE_ID);
       parts.height.clear();
       unbindStyleEvents();
-      state._dataManager = null;
+      state._panel = null;
       state._viewer = null;
     },
   };

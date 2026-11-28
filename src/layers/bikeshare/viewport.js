@@ -115,9 +115,21 @@ export function createViewport({ state: layerState, services, parts, source }) {
     parts.rendering.removeCityPoints(cityId);
   }
 
+  /**
+   * Show the covered cities' markers, or hide them: shown while the layer is
+   * on and the camera is too high for stations.
+   * @param {boolean} shown
+   */
+  function showCoverage(shown) {
+    const set = layerState._coverageSet;
+    if (!set || set.show === shown) return;
+    set.show = shown;
+    governorRequestRender('bikeshare-coverage');
+  }
+
   /** Repaint the row now: it follows the camera, the manager tick is 60 s. */
   function refreshRow() {
-    layerState._dataManager?.refreshLayerStats?.('bikeshare');
+    layerState._panel?.invalidate();
   }
 
   /** Deactivate all currently active cities and clear the active set. */
@@ -212,11 +224,13 @@ export function createViewport({ state: layerState, services, parts, source }) {
     const wasGateEnabled = layerState._altitudeGateEnabled;
     // Altitude gate: disable all cities when camera is too high
     if (!shouldActivateAtAltitude(altitude)) {
+      showCoverage(true);
       deactivateAllCities();
       if (wasGateEnabled) refreshRow();
       return;
     }
 
+    showCoverage(false);
     const center = getCameraCenterLatLon(layerState._viewer);
     if (!center) return;
 
@@ -288,6 +302,7 @@ export function createViewport({ state: layerState, services, parts, source }) {
     activateCity,
     runProximityCheck,
     scheduleProximityCheck,
+    showCoverage,
     onCameraChanged,
   };
 }

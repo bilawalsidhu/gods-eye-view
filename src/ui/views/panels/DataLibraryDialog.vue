@@ -3,6 +3,9 @@ import { storeToRefs } from 'pinia';
 import { computed, nextTick, useTemplateRef, watch } from 'vue';
 import { formatNumber, t, tn } from '../../../i18n/index.js';
 import UiButton from '../../kit/UiButton.vue';
+import UiCheckbox from '../../kit/UiCheckbox.vue';
+import UiCloseButton from '../../kit/UiCloseButton.vue';
+import UiDialog from '../../kit/UiDialog.vue';
 import UiSelect from '../../kit/UiSelect.js';
 import {
   libraryStatTiles,
@@ -22,27 +25,18 @@ const { controls } = storeToRefs(useDataLibraryStore());
 const root = useTemplateRef('root');
 const search = useTemplateRef('search');
 
-watch(
-  () => props.view.open,
-  async (open, wasOpen) => {
-    await nextTick();
-    const dialog = root.value;
-    if (!dialog) return;
-    if (open) {
-      if (!dialog.open) dialog.showModal?.();
-      search.value?.focus();
-      return;
-    }
-    if (dialog.open) dialog.close();
-    // The browser may already have closed it (Escape is not always
-    // cancelable); either way focus returns to Browse, unless the viewer
-    // has moved it somewhere else meanwhile.
-    const active = document.activeElement;
-    if (wasOpen && (!active || active === document.body || dialog.contains(active)))
-      document.getElementById('data-library-browse')?.focus();
-  },
-  { immediate: true },
-);
+// UiDialog opens and closes the dialog as `view.open` says, once the content
+// has rendered; Escape and a click on the backdrop dismiss.
+const onOpened = () => search.value?.focus();
+// The browser may already have closed it (Escape is not always cancelable);
+// either way focus returns to Browse, unless the viewer has moved it
+// somewhere else meanwhile.
+const onClosed = () => {
+  const dialog = root.value?.element;
+  const active = document.activeElement;
+  if (!active || active === document.body || dialog?.contains(active))
+    document.getElementById('data-library-browse')?.focus();
+};
 watch(
   () => props.view.focusSearch,
   async () => {
@@ -79,36 +73,32 @@ const resetLabel = computed(() =>
     ? t('Confirm: remove every added entry from Data Layers')
     : t('Remove every added entry from Data Layers'),
 );
-// A click on the backdrop (the dialog box itself, outside its content)
-// dismisses, like Escape.
-const onDialogClick = (event) => {
-  if (event.target === event.currentTarget) controls.value?.close();
-};
 </script>
 
 <template>
-  <dialog
+  <UiDialog
     id="data-library"
     ref="root"
     class="data-library-dialog"
     data-panel-surface
     aria-labelledby="data-library-title"
     aria-describedby="data-library-intro"
-    @cancel.prevent="controls?.close()"
-    @close="view.open && controls?.close()"
-    @click="onDialogClick"
+    :open="view.open"
+    backdrop-dismiss
+    @dismiss="controls?.close()"
+    @browser-close="controls?.close()"
+    @opened="onOpened"
+    @closed="onClosed"
   >
     <header class="data-library-header" data-panel-header>
       <h2 id="data-library-title" class="panel-title panel-surface-title">
         {{ t('DATA LIBRARY') }}
       </h2>
-      <UiButton
+      <UiCloseButton
         class="panel-surface-control data-library-close"
         :label="t('Close data library')"
-        :native-title="false"
         @click="controls?.close()"
-        >×</UiButton
-      >
+      />
     </header>
     <div class="data-library-body" data-panel-body>
       <dl class="data-library-stats" :aria-label="t('Data Library at a glance')">
@@ -154,14 +144,13 @@ const onDialogClick = (event) => {
             @update:model-value="controls?.setFamily($event)"
           />
         </label>
-        <label class="data-library-check">
-          <input
-            type="checkbox"
-            :checked="view.filter.availableOnly"
-            @change="controls?.setAvailableOnly($event.target.checked)"
-          />
+        <UiCheckbox
+          class="data-library-check"
+          :model-value="view.filter.availableOnly"
+          @update:model-value="controls?.setAvailableOnly($event)"
+        >
           <span>{{ t('Only what this instance serves') }}</span>
-        </label>
+        </UiCheckbox>
       </div>
       <div class="data-library-toolbar">
         <p class="data-library-status" role="status" aria-live="polite">
@@ -189,5 +178,5 @@ const onDialogClick = (event) => {
         />
       </ul>
     </div>
-  </dialog>
+  </UiDialog>
 </template>

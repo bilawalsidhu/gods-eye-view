@@ -1,186 +1,32 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  AIR_QUALITY_BANDS,
-  AIR_QUALITY_PROVIDERS,
-  AIR_QUALITY_UNKNOWN_COLOR,
   OBSERVATION_MAX_AGE_MS,
   STALE_AFTER_MS,
-  airQualityColor,
-  aqhiDisplayValue,
-  bandForValue,
-  bandRiskText,
   mapAnalystRecord,
-  normalizeAqhiObservations,
-  normalizeAqhiStations,
+  newestObservation,
   readingsAreStale,
   readingsInView,
   selectAirQualityOverlayCohort,
-  valueLabel,
 } from './model.js';
 
 const NOW = Date.parse('2026-09-24T18:30:00Z');
-const RECENT = '2026-09-24T18:00:00Z';
-const collection = (features) => ({ type: 'FeatureCollection', features });
-const station = (id, name, zone, lon, lat) => ({
-  type: 'Feature',
-  geometry: { type: 'Point', coordinates: [lon, lat] },
-  properties: {
-    location_id: id,
-    location_name_en: name,
-    'eccc_administrative-zone': zone,
-  },
-});
-const observation = (id, aqhi, when = RECENT) => ({
-  type: 'Feature',
-  properties: { location_id: id, aqhi, observation_datetime: when },
-});
 
-const STATIONS = collection([
-  station('IAKID', 'Calgary', 'pnr', -114.0575, 51.0458),
-  station('OAAAA', 'Toronto', 'ont', -79.3832, 43.6532),
-  station('AAAAA', 'Halifax', 'atl', -63.5752, 44.6488),
-]);
+// ── freshness ──────────────────────────────────────────────────────────────
 
-// ── provider-shaped records ────────────────────────────────────────────────
-
-test('readings carry the provider-neutral {provider, scale, value, band} shape', () => {
-  // Indices are not interchangeable numbers: AQHI is 1-10+ on health risk,
-  // US AQI is 0-500 on concentration. The shape names which index a value is on
-  // so a second network can be added without inventing a shared meaning.
-  const stations = normalizeAqhiStations(STATIONS);
-  const [row] = normalizeAqhiObservations(
-    collection([observation('IAKID', 2.32)]),
-    stations,
-    NOW,
-  );
-  assert.equal(row.provider, 'eccc');
-  assert.equal(row.scale, 'AQHI');
-  assert.equal(row.value, 2);
-  assert.equal(row.band, 'low');
-});
-
-test('bands map from a value on a named provider scale', () => {
-  assert.equal(bandForValue('eccc', 1), 'low');
-  assert.equal(bandForValue('eccc', 3), 'low');
-  assert.equal(bandForValue('eccc', 4), 'moderate');
-  assert.equal(bandForValue('eccc', 7), 'high');
-  assert.equal(bandForValue('eccc', 11), 'very-high');
-  // An unregistered provider cannot be banded rather than being guessed at.
-  assert.equal(bandForValue('unknown-network', 5), null);
-  assert.equal(bandForValue('eccc', null), null);
-});
-
-test('the provider states its coverage plainly', () => {
-  assert.match(AIR_QUALITY_PROVIDERS.eccc.coverage, /Canada only/);
-  assert.equal(AIR_QUALITY_PROVIDERS.eccc.scale, 'AQHI');
-});
-
-test("values above ten collapse to the scale's open-ended label", () => {
-  assert.equal(valueLabel('eccc', 10), '10');
-  assert.equal(valueLabel('eccc', 11), '10+');
-  assert.equal(valueLabel('eccc', null), '--');
-});
-
-test('every band has a distinct colour, and an unknown band is neutral', () => {
-  const colors = AIR_QUALITY_BANDS.map((b) => b.color);
-  assert.equal(new Set(colors).size, colors.length);
-  assert.equal(airQualityColor('nonsense'), AIR_QUALITY_UNKNOWN_COLOR);
-  assert.equal(bandRiskText('high'), 'High health risk');
-  assert.equal(bandRiskText(null), null);
-});
-
-// ── published form ─────────────────────────────────────────────────────────
-
-test('AQHI rounds to the published integer form and floors at 1', () => {
-  assert.equal(aqhiDisplayValue(1.08), 1);
-  assert.equal(aqhiDisplayValue(3.5), 4);
-  assert.equal(aqhiDisplayValue(0), 1);
-  assert.equal(aqhiDisplayValue('3'), 3);
-});
-
-test('an absent reading never becomes a confident AQHI 1', () => {
-  // Number(null) and Number('') are both 0, which would floor to 1.
-  for (const empty of [null, undefined, '', '   ', NaN, true, {}, [], -1]) {
-    assert.equal(aqhiDisplayValue(empty), null, `${JSON.stringify(empty)}`);
-  }
-});
-
-// ── snapshot validation ────────────────────────────────────────────────────
-
-test('stations normalize into an id-keyed catalog carrying their zone', () => {
-  const stations = normalizeAqhiStations(STATIONS);
-  assert.equal(stations.size, 3);
-  assert.equal(stations.get('OAAAA').zone, 'ont');
-});
-
-test('malformed payloads are rejected atomically', () => {
-  assert.equal(normalizeAqhiStations(null), null);
-  assert.equal(normalizeAqhiStations(collection([{ properties: null }])), null);
-  const stations = normalizeAqhiStations(STATIONS);
-  assert.equal(normalizeAqhiObservations(null, stations, NOW), null);
-  assert.equal(
-    normalizeAqhiObservations(collection([]), 'not a map', NOW),
-    null,
-  );
-});
-
-test('an observation with no matching station is dropped', () => {
-  const stations = normalizeAqhiStations(STATIONS);
-  const rows = normalizeAqhiObservations(
-    collection([observation('IAKID', 2), observation('ZZZZZ', 9)]),
-    stations,
-    NOW,
-  );
-  assert.equal(rows.length, 1);
-});
-
-test('a stale reading is dropped rather than shown as current', () => {
-  const stations = normalizeAqhiStations(STATIONS);
-  const old = new Date(NOW - OBSERVATION_MAX_AGE_MS - 60_000).toISOString();
-  const rows = normalizeAqhiObservations(
-    collection([observation('IAKID', 3, old), observation('OAAAA', 4)]),
-    stations,
-    NOW,
-  );
-  assert.deepEqual(
-    rows.map((r) => r.stationId),
-    ['OAAAA'],
-  );
-});
-
-test('a snapshot whose every observation was too old is stale, not nominal', () => {
-  const stations = normalizeAqhiStations(STATIONS);
-  const old = new Date(NOW - OBSERVATION_MAX_AGE_MS - 60_000).toISOString();
-  const rows = normalizeAqhiObservations(
-    collection([observation('IAKID', 3, old), observation('OAAAA', 4, old)]),
-    stations,
-    NOW,
-  );
-  assert.deepEqual(rows, []);
-  assert.equal(readingsAreStale(rows, NOW), true);
+test('a set whose every observation was dropped as too old is stale, not nominal', () => {
+  assert.equal(readingsAreStale([], NOW), true);
   assert.equal(readingsAreStale([{ observedMs: NOW - 60_000 }], NOW), false);
   assert.equal(
     readingsAreStale([{ observedMs: NOW - STALE_AFTER_MS - 1 }], NOW),
     true,
   );
-});
-
-test('the newest reading per station wins and worst air sorts first', () => {
-  const stations = normalizeAqhiStations(STATIONS);
-  const rows = normalizeAqhiObservations(
-    collection([
-      observation('IAKID', 3, '2026-09-24T16:00:00Z'),
-      observation('IAKID', 7, '2026-09-24T18:00:00Z'),
-      observation('OAAAA', 5),
-    ]),
-    stations,
-    NOW,
+  assert.ok(OBSERVATION_MAX_AGE_MS > STALE_AFTER_MS);
+  assert.equal(
+    newestObservation([{ observedMs: NOW - 5 }, { observedMs: NOW - 1 }, {}]),
+    NOW - 1,
   );
-  assert.deepEqual(
-    rows.map((r) => r.value),
-    [7, 5],
-  );
+  assert.equal(newestObservation([]), null);
 });
 
 // ── readout selection ──────────────────────────────────────────────────────
@@ -251,19 +97,54 @@ test('the overlay cohort is capped and deterministic', () => {
 });
 
 test('analyst records are JSON-safe and name the provider and scale', () => {
-  const stations = normalizeAqhiStations(STATIONS);
-  const [row] = normalizeAqhiObservations(
-    collection([observation('IAKID', 2)]),
-    stations,
-    NOW,
+  const record = mapAnalystRecord(
+    {
+      id: 'national:1:PM2.5',
+      provider: 'national',
+      kind: 'observation',
+      parameter: 'PM2.5',
+      scale: 'PM2.5',
+      value: 12,
+      units: 'µg/m³',
+      name: 'Khayelitsha',
+      lat: -34.04,
+      lon: 18.67,
+      observedMs: NOW,
+    },
+    0,
   );
-  const record = mapAnalystRecord(row, 0);
   assert.deepEqual(JSON.parse(JSON.stringify(record)), record);
-  assert.equal(record.provider, 'eccc');
-  assert.equal(record.scale, 'AQHI');
+  assert.equal(record.provider, 'national');
+  assert.equal(record.scale, 'PM2.5');
   const empty = mapAnalystRecord(undefined, 7);
   assert.equal(empty.id, 'AIR-0007');
   for (const [key, value] of Object.entries(empty)) {
     assert.notEqual(value, undefined, `${key} must not be undefined`);
   }
+});
+
+test("an analyst record gives a pollutant's value in the layer's units, as the card does", () => {
+  const observation = (parameter, value, units) =>
+    mapAnalystRecord({
+      id: `national:1:${parameter}`,
+      provider: 'national',
+      kind: 'observation',
+      parameter,
+      scale: parameter,
+      value,
+      units,
+    });
+  // 10 ppb of NO2 is 18.82 µg/m³ at 25 °C; 2 ppm of CO is 2.29 mg/m³.
+  assert.deepEqual(
+    (({ value, units }) => ({ value, units }))(observation('NO2', 10, 'ppb')),
+    { value: 18.82, units: 'µg/m³' },
+  );
+  const co = observation('CO', 2, 'ppm');
+  assert.ok(Math.abs(co.value - 2 * 1.1456) < 1e-9);
+  assert.equal(co.units, 'mg/m³');
+  const unconverted = observation('CO2', 420, 'ppm');
+  assert.equal(unconverted.value, null);
+  assert.equal(unconverted.units, null);
+  assert.equal(unconverted.reportedValue, 420);
+  assert.equal(unconverted.reportedUnits, 'ppm');
 });

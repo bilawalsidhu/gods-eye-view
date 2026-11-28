@@ -1,5 +1,5 @@
 // src/ui/displayPanelActions.test.mjs — the Display panel's controls, the
-// clean-view exit and the dock's style buttons call the Display controls'
+// clean-view exit and the Visual panel's presets call the Display controls'
 // owner through the display store, and only while it is connected.
 import '../testSupport/registerDom.mjs';
 import test from 'node:test';
@@ -134,7 +134,9 @@ test('the Draw controls call the draw tool and show what it publishes', async (t
 test('style, allocation and model choices keep their ids and data attributes', async (t) => {
   const store = mount(t);
   const { calls } = recorder(store);
-  document.querySelector('.style-btn[data-style="thermal"]').click();
+  document
+    .querySelector('#pp-toggles .visual-presets [data-style="thermal"]')
+    .click();
   $('detection-allocation-weighted').click();
   $('models3d-mode-all').click();
   $('models3d-mode-proximity').click();
@@ -179,7 +181,6 @@ test('DisplayBindings answers the controls from init until destroy', (t) => {
   const bindings = new DisplayBindings({
     viewer: null,
     services: { isScopeMaskEnabled: () => false, cycleDetectionMode: () => {} },
-    elements: { _locationSearch: document.createElement('input') },
     operations: {
       _setScope: () => {},
       _setBloomEnabled: (enabled) => calls.push(['bloom', enabled]),
@@ -259,7 +260,7 @@ test('the Visual panel’s scope opacity, reset and presets call their actions',
     ['setStyle', 'noir'],
   ]);
   assert.deepEqual(selected, ['osm'], 'an unavailable source is not selected');
-  // The presets follow the published style, as the dock's do.
+  // The presets follow the published style.
   assert.equal(
     presets.querySelector('[data-style="normal"]').getAttribute('aria-pressed'),
     'true',
@@ -274,11 +275,6 @@ test('the Visual panel’s scope opacity, reset and presets call their actions',
     presets.querySelector('[data-style="normal"]').getAttribute('aria-pressed'),
     'false',
   );
-  // The dock keeps its own presets and map source beside them.
-  assert.ok(
-    document.querySelector('#control-panel .style-btn[data-style="noir"]'),
-  );
-  assert.ok($('map-stack-chips'));
 });
 
 test('DisplayBindings sets the scope opacity and resets Visual to its defaults', (t) => {
@@ -287,7 +283,6 @@ test('DisplayBindings sets the scope opacity and resets Visual to its defaults',
   const bindings = new DisplayBindings({
     viewer: null,
     services: { isScopeMaskEnabled: () => true, cycleDetectionMode: () => {} },
-    elements: { _locationSearch: document.createElement('input') },
     operations: {
       setStyle: (style, options) => calls.push(['style', style, options]),
       _applyGlobalPostDefaults: (options) =>
@@ -321,7 +316,7 @@ test('DisplayBindings sets the scope opacity and resets Visual to its defaults',
   document.querySelector('#pp-toggles .pp-reset-btn').click();
   assert.deepEqual(calls, [
     ['claim', 'visual'],
-    ['style', 'normal', { userInitiated: true }],
+    ['style', 'normal', undefined],
     ['postDefaults', { keepHudVariant: true }],
     ['allocation', 'ELASTIC'],
     ['scope', { enabled: true, featherPct: 100, opacityPct: 100 }],

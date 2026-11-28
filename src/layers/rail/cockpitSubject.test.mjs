@@ -4,16 +4,12 @@
 // hides its marker and card, keeps it selected and ends when it goes.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  RAIL_POLL_MS,
-  STOP_REFRESH_MS,
-  railTrainFollowable,
-  railTrainKey,
-} from './policy.js';
+import { RAIL_POLL_MS, STOP_REFRESH_MS, railTrainKey } from './policy.js';
 import {
   BOSTON,
   railLayerHarness as harness,
   railTrain as train,
+  railTrainMoving,
 } from '../../testSupport/railLayerHarness.mjs';
 import { RAIL_SELECTED_OVERLAY_SOURCE_ID } from './policy.js';
 import { publicRailCatalog } from '../../data/railFeeds.js';
@@ -42,6 +38,13 @@ const PACK = Object.freeze({
   shapeSources: ['operator'],
   trips: { 'trip-T1': 0, 'trip-T2': 0 },
   routes: { R1: [0] },
+});
+
+/** A floor service that knows the ground everywhere, at 12 m. */
+const WARM_GROUND = Object.freeze({
+  GROUND_FLOOR_LIFT_M: 1.5,
+  cachedGroundFloor: () => 12,
+  warmGroundFloor() {},
 });
 
 /** Two trains on the line, T1 running east and T2 west, a step a poll. */
@@ -76,7 +79,7 @@ const T1 = railTrainKey('mbta-rail', 'T1');
 const T2 = railTrainKey('mbta-rail', 'T2');
 
 test('the selected train reads as a snapshot of its place, motion and sources', async (t) => {
-  const app = await onTheLine(t);
+  const app = await onTheLine(t, { ground: WARM_GROUND });
   assert.equal(app.layer.getSelectedTrain(), null, 'nothing selected');
   app.parts().selection.selectTrain(T1);
   const view = app.layer.getSelectedTrain();
@@ -105,6 +108,7 @@ test('the selected train reads as a snapshot of its place, motion and sources', 
   assert.equal(view.provenance.positionSource, 'gps');
   assert.equal(view.provenance.timestampSource, 'vehicle');
   const drawn = app.entry(T1).drawnHeight;
+  assert.ok(view.position.heightQuality > 0, 'on a known floor');
   assert.equal(view.position.railHeightM, drawn.h - 1.5);
   assert.ok(Number.isFinite(view.position.latitude));
   assert.ok(Array.isArray(view.stops));
@@ -128,6 +132,71 @@ const stopList = (...names) =>
     lon: LON0 + (i * 2000) / KX,
     state: 'upcoming',
   }));
+
+test('a train drawn on an unknown floor reports no rail height', async (t) => {
+  // The harness's floor service is always cold: the train is drawn on the
+  // ellipsoid, which is no floor for a view to stand on.
+  const app = await onTheLine(t);
+  app.parts().selection.selectTrain(T1);
+  const view = app.layer.getSelectedTrain();
+  assert.equal(view.position.heightQuality, 0, 'no floor is known');
+  assert.equal(
+    view.position.railHeightM,
+    null,
+    'an unknown floor is no height',
+  );
+});
+
+test('a train on a known floor at sea level reports a rail height of 0 m', async (t) => {
+  const app = await onTheLine(t, {
+    ground: { ...WARM_GROUND, cachedGroundFloor: () => 0 },
+  });
+  app.parts().selection.selectTrain(T1);
+  const { position } = app.layer.getSelectedTrain();
+  assert.ok(position.heightQuality > 0, 'the floor is known');
+  assert.equal(position.railHeightM, 0, 'a height, not none');
+});
+
+test('a train first seen standing takes no direction from its GPS jitter', async (t) => {
+  // Reports 13 m apart, and the course drawn between them, do not tell which
+  // way it runs; an operator's bearing does.
+  const app = harness(t, { paths: { 'mbta-rail': PACK }, at: BOSTON });
+  let jitterM = 0;
+  app.feeds.set('mbta-rail', () => [
+    train('T1', LAT, LON0 + (1000 + jitterM) / KX),
+    train('T2', LAT, LON0 + (3000 + jitterM) / KX, { bearing: 270 }),
+  ]);
+  await app.enable();
+  const seen = [];
+  for (const next of [13, 0, 13, 0, 13, 0]) {
+    jitterM = next;
+    app.run(RAIL_POLL_MS);
+    await app.poll();
+    app.parts().selection.selectTrain(T1);
+    const standing = app.layer.getSelectedTrain().path.direction;
+    app.parts().selection.selectTrain(T2);
+    seen.push([standing, app.layer.getSelectedTrain().path.direction]);
+  }
+  assert.deepEqual(seen, Array(6).fill([0, -1]));
+});
+
+test('a standing train keeps its operator’s bearing through reports that leave it out', async (t) => {
+  const app = harness(t, { paths: { 'mbta-rail': PACK }, at: BOSTON });
+  let bearing = 270;
+  app.feeds.set('mbta-rail', () => [
+    train('T1', LAT, LON0 + 1000 / KX, { bearing }),
+  ]);
+  await app.enable();
+  const seen = [];
+  for (const next of [270, 270, 270, null, null, null]) {
+    bearing = next;
+    app.run(RAIL_POLL_MS);
+    await app.poll();
+    app.parts().selection.selectTrain(T1);
+    seen.push(app.layer.getSelectedTrain().path.direction);
+  }
+  assert.deepEqual(seen, Array(6).fill(-1));
+});
 
 test('a snapshot read again while nothing changed is the one read before', async (t) => {
   let list = stopList('Alpha', 'Bravo', 'Charlie');
@@ -292,12 +361,12 @@ test('a held train stays the copy drawn when another feed’s copy outranks it, 
   await app.enable();
   const a = railTrainKey('renfe-cercanias', 'A1');
   const b = railTrainKey('renfe-larga-distancia', 'B1');
-  for (let i = 0; i < 12 && !railTrainFollowable(app.entry(a)); i += 1) {
+  for (let i = 0; i < 12 && !railTrainMoving(app.entry(a)); i += 1) {
     step += 1;
     app.run(RAIL_POLL_MS);
     await app.poll();
   }
-  assert.ok(railTrainFollowable(app.entry(a)), 'the train is moving');
+  assert.ok(railTrainMoving(app.entry(a)), 'the train is moving');
   assert.equal(app.layer.setCockpitSubject(a), true);
 
   gpsCopy = true;
@@ -405,7 +474,7 @@ test('a ride let go with restore does not focus a train its category hides', asy
   app.layer.setCockpitSubject(null);
   assert.equal(app.layer.focusTrain(T1), false, 'not drawn');
   assert.equal(app.state()._selectedKey, null, 'not selected');
-  assert.equal(app.parts().follow.stats(), null, 'not followed');
+  assert.equal(app.camera.followed, null, 'not followed');
   assert.equal(app.viewer.trackedEntity, undefined);
   assert.equal(app.focusRequests.length, 0, 'not flown to');
   assert.equal(app.entry(T1).marker.show, false);
@@ -414,7 +483,8 @@ test('a ride let go with restore does not focus a train its category hides', asy
   app.layer.setParams({ regional: true });
   assert.equal(app.layer.focusTrain(T1), true);
   assert.equal(app.state()._selectedKey, T1);
-  assert.ok(app.parts().follow.isFollowing(T1), 'the camera is handed to it');
+  assert.equal(app.focusRequests.at(-1)?.id, T1, 'the camera centres it');
+  assert.equal(app.camera.followed, null, 'and does not follow it');
 });
 
 test('a held train that goes takes the hold with it; focusTrain selects', async (t) => {

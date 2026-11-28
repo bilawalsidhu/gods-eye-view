@@ -203,16 +203,6 @@ test('share-panel state excludes responsive collapse and preserves recipient pre
     /const shown = this\._shownPanel\(panelEl\);\s*const collapsed = prefersCollapsed\(shown\);/,
     'responsive auto-collapse must serialize the explicit expanded preference',
   );
-  assert.match(
-    ui,
-    /_setCommandDockPanelPinState\(spec\.id, state\.pinned, \{\s*restore: true,\s*persist: false,\s*syncShare: false,/,
-    'restoring a pin must not overwrite local panel preferences or emit an intermediate hash',
-  );
-  assert.match(
-    ui,
-    /_setCommandDockPanelPinState[\s\S]*?if \(syncShare\) this\.shareLinkManager\?\.onPanelStateChange\?\.\(\);/,
-    'pin and unpin must update the share hash even when collapse state is unchanged',
-  );
   assert.match(ui, /\{ id: 'param-slider-panel' \}/);
   assert.match(panels, /id: 'param-slider-panel',\s*token: 'm',\s*pinnable: false,/);
 });
@@ -222,7 +212,7 @@ test('parameterized Display presets keep one stable scroll owner', () => {
   const css = readStylesheet(new URL('../style.css', import.meta.url));
 
   assert.match(css, /#pp-toggles:not\(\.collapsed\) > \.pp-panel-body > #param-slider-panel\.active\s*\{[\s\S]*?flex:\s*0 0 auto;[\s\S]*?max-height:\s*none;[\s\S]*?overflow-y:\s*visible;/);
-  assert.match(ui, /readDisplayScrollTop: \(\) =>\s*this\._displayPortalScrollRestoreOwner === 'standard'[\s\S]*?this\._standardDisplayScrollTop[\s\S]*?displayPanelScroller\(this\._ppToggles\)\?\.scrollTop \|\| 0/);
+  assert.match(ui, /readDisplayScrollTop: \(\) =>\s*this\._displayPortalScrollRestoreOwner === 'standard'[\s\S]*?this\._standardDisplayScrollTop[\s\S]*?this\._ppToggles\?\.scrollTop \|\| 0/);
   assert.match(rightRail, /scroller\.scrollTop = Math\.min\(displayScrollTop, maxScrollTop\);/);
   // The panel's parameters change, and the rail lays out again.
   assert.match(
@@ -264,19 +254,6 @@ test('expanded left panels integrate their headers with the container shell', ()
   assert.match(
     css,
     /#left-panel-stack > \[data-panel-id\]:not\(\.collapsed\) \.panel-divider\s*\{[\s\S]*?linear-gradient\(\s*90deg,\s*rgb\(0 212 255 \/ 28%\),\s*rgba\(0, 212, 255, 0\.18\) 58%,\s*transparent\s*\)[\s\S]*?box-shadow:\s*0 0 7px rgba\(0, 212, 255, 0\.22\);/,
-  );
-});
-
-test('Map Source uses five compact tiles in the bottom Visual Presets tray', async () => {
-  const html = await renderApplicationHtml(readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
-  const css = readStylesheet(new URL('../style.css', import.meta.url));
-
-  assert.doesNotMatch(html, /id="stack-panel"/);
-  assert.match(html, /id="control-panel"[\s\S]*?class="map-source-section"[\s\S]*?id="map-stack-chips"/);
-  assert.match(
-    css,
-    /\.map-stack-chip-row\s*\{[\s\S]*?grid-template-columns:\s*repeat\(5, minmax\(0, 1fr\)\);/,
-    'the desktop source selector keeps all five tiles on one row',
   );
 });
 

@@ -234,6 +234,7 @@ const layers = [
         behavior: ['t'],
         complexity: ['t'],
         discoveredTime: ['ms'],
+        lastGrowthTime: ['ms'],
       },
       timeField: 'discoveredTime',
     },
@@ -282,15 +283,29 @@ const layers = [
     context: false,
     query: {
       fields: {
-        value: ['n', 'AQHI'],
+        value: ['n'],
+        units: ['t'],
+        parameter: ['t'],
+        averagingMinutes: ['n', 'min'],
+        kind: ['t'],
+        note: ['t'],
+        pm25: ['n', 'µg/m³'],
+        pm10: ['n', 'µg/m³'],
+        o3: ['n', 'µg/m³'],
+        no2: ['n', 'µg/m³'],
+        so2: ['n', 'µg/m³'],
+        co: ['n', 'mg/m³'],
         band: ['t'],
         scale: ['t'],
         provider: ['t'],
         name: ['t'],
         zone: ['t'],
-        risk: ['t'],
         observedMs: ['ms'],
       },
+      viewportLoaded: true,
+      // A region or area count outside the view holds only what is loaded.
+      viewportAreas: true,
+      viewportNote: 'air-quality loads OpenAQ stations by viewport',
       timeField: 'observedMs',
     },
   },
@@ -298,7 +313,7 @@ const layers = [
     id: 'traffic',
     aliases: ['street traffic', 'road traffic', 'congestion'],
     context: false,
-    noQuery: 'road-speed overlay; no countable records',
+    noQuery: 'road-speed overlay; segments listed in Context, not counted',
   },
   {
     id: 'transit',
@@ -437,7 +452,7 @@ const layers = [
     id: 'telegeography-submarine-cables',
     aliases: ['submarine cables', 'undersea cables', 'cables', 'telegeography'],
     context: false,
-    noQuery: 'cable records are not loaded for queries',
+    noQuery: 'cable routes; listed in Context, not counted',
   },
   {
     // Results of the last osm_query ("hospitals in Kathmandu").
@@ -519,6 +534,8 @@ function normalizeEntry(entry) {
           window: entry.query.window || null,
           caveat: entry.query.caveat || null,
           viewportLoaded: entry.query.viewportLoaded === true,
+          viewportAreas: entry.query.viewportAreas === true,
+          viewportNote: entry.query.viewportNote || null,
         })
       : null,
   });

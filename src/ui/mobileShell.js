@@ -1,8 +1,11 @@
 /**
  * Phone shell for narrow viewports (≤720px). The globe stays full screen and a
  * bottom tab bar opens one sheet at a time; each sheet shows existing panels,
- * which stay where they are in the rails and dock while CSS presents them
- * (styles/mobile-shell.css). Desktop never sees the class or the sheet state.
+ * which stay where they are in the rails while CSS presents them
+ * (styles/mobile-shell.css). The command dock is the desktop one, above the
+ * tab bar; while a keyboard is on screen the shell reports the height it
+ * covers (--mobile-keyboard-inset), so the dock rises above it. Desktop never
+ * sees the class or the sheet state.
  *
  * Sheets borrow panels: the panels a sheet expands are put back exactly as
  * they were when the sheets close, and nothing a sheet does is persisted or
@@ -18,27 +21,32 @@ import {
   readPanelState,
 } from './rail/panelState.js';
 
+import {
+  MOBILE_SHELL_CLASS,
+  MOBILE_SHEET_ATTR,
+  MOBILE_SHEET_PANELS,
+} from './mobileSheets.js';
+import { flushPanelContent } from './rail/panelContent.js';
+
+export {
+  MOBILE_SHELL_CLASS,
+  MOBILE_SHEET_ATTR,
+  MOBILE_SHEET_PANELS,
+  sheetForPanelId,
+} from './mobileSheets.js';
+
 export const MOBILE_SHELL_MEDIA_QUERY = '(max-width: 720px)';
-export const MOBILE_SHELL_CLASS = 'mobile-shell';
-export const MOBILE_SHEET_ATTR = 'data-mobile-sheet';
-
-/**
- * Panels each sheet expands. A sheet also shows its rail's other panels
- * collapsed (Scenes under Layers), per styles/mobile-shell.css.
- */
-export const MOBILE_SHEET_PANELS = Object.freeze({
-  layers: Object.freeze(['data-panel']),
-  cameras: Object.freeze(['cctv-panel', 'street-level-panel']),
-  context: Object.freeze(['global-context-panel']),
-  search: Object.freeze(['location-bar']),
-  more: Object.freeze(['control-panel', 'pp-toggles']),
-});
-
+/** On the page root while a phone keyboard covers part of the screen. */
+export const KEYBOARD_OPEN_CLASS = 'mobile-keyboard-open';
 export const MOBILE_TABS = Object.freeze([
   Object.freeze({ sheet: 'layers', label: msg('Layers'), icon: 'layers' }),
   Object.freeze({ sheet: 'cameras', label: msg('Cameras'), icon: 'videocam' }),
   Object.freeze({ sheet: 'context', label: msg('Context'), icon: 'radar' }),
-  Object.freeze({ sheet: 'search', label: msg('Search'), icon: 'search' }),
+  Object.freeze({
+    sheet: 'missions',
+    label: msg('Space Missions'),
+    icon: 'rocket_launch',
+  }),
   Object.freeze({ sheet: 'more', label: msg('More'), icon: 'more_horiz' }),
 ]);
 
@@ -51,23 +59,12 @@ const SHEET_BLOCKING_CLASSES = Object.freeze(
   EXCLUSIVE_SURFACE_CLASSES.filter((name) => name !== 'scene-playback-mode'),
 );
 
-/** Every panel any sheet borrows; the dock trays close each other. */
+/** Every panel any sheet borrows. */
 const BORROWED_PANELS = Object.freeze([
   ...new Set(Object.values(MOBILE_SHEET_PANELS).flat()),
 ]);
 
 const BORROW_OPTIONS = Object.freeze({ persist: false, syncShare: false });
-
-/**
- * @param {string} panelId
- * @returns {string|null} The sheet that presents `panelId`.
- */
-export function sheetForPanelId(panelId) {
-  for (const [sheet, ids] of Object.entries(MOBILE_SHEET_PANELS)) {
-    if (ids.includes(panelId)) return sheet;
-  }
-  return null;
-}
 
 /**
  * The sheet after a tab press: the same tab closes its sheet, another opens.
@@ -106,14 +103,14 @@ function currentSheetOf(body) {
  * @param {(callback: () => void) => number} [input.requestFrame]
  * @param {() => void} [input.onSheetsClosed] Runs after the last sheet closes
  *   and its panels are put back (e.g. to refresh the share link).
- * @param {(sheet: string) => void} [input.onTabOpened] Runs only when the user
- *   opens a sheet from its tab, never on close or programmatic presentation.
  * @param {(view: ?{enabled: boolean, sheet: string|null, tabs: typeof MOBILE_TABS}) => void} [input.publish]
  *   Receives the tab bar: whether the shell is on, the open sheet and the
  *   tabs; null once the shell is destroyed.
  * @param {(callback: () => void) => void} [input.afterPublish] Runs a callback
  *   once a publish has rendered, so focus returns to a tab whose state is
  *   already current.
+ * @param {VisualViewport} [input.visualViewport] What the page shows of the
+ *   layout viewport; the part a keyboard covers is the rest.
  * @returns {{ destroy: () => void, setSheet: (sheet: string|null) => void, getSheet: () => string|null, sharedCollapsed: (panelId: string) => boolean|undefined }}
  */
 export function initMobileShell({
@@ -125,9 +122,9 @@ export function initMobileShell({
   ResizeObserverImpl = globalThis.ResizeObserver,
   requestFrame = globalThis.requestAnimationFrame?.bind(globalThis),
   onSheetsClosed = () => {},
-  onTabOpened = () => {},
   publish = () => {},
   afterPublish = (callback) => callback(),
+  visualViewport = globalThis.visualViewport,
 } = {}) {
   const body = documentRef.body;
   const viewport = documentRef.querySelector('meta[name="viewport"]');
@@ -141,7 +138,7 @@ export function initMobileShell({
   const rails = ['left-panel-stack', 'right-context-rail']
     .map(element)
     .filter(Boolean);
-  const dock = element('command-dock');
+  const missionsPanel = element('space-missions-panel');
   const shown = (node) =>
     node && globalThis.getComputedStyle?.(node).display !== 'none';
 
@@ -162,8 +159,7 @@ export function initMobileShell({
     body.style.setProperty(name, value);
   };
 
-  // The dock (Presets, Search) sits on top of whichever rail is the sheet,
-  // and the required map attribution sits above everything the sheet covers.
+  // The required map attribution sits above everything the sheet covers.
   const measureSheet = () => {
     if (!body.classList.contains(MOBILE_SHELL_CLASS)) return;
     const height = Math.max(
@@ -176,12 +172,46 @@ export function initMobileShell({
     const viewportHeight = globalThis.innerHeight || 0;
     const cover = Math.max(
       0,
-      ...[...rails, currentSheetOf(body) ? dock : null]
+      ...rails
         .filter(shown)
         .map((node) => viewportHeight - node.getBoundingClientRect().top),
     );
     writeVar('--mobile-sheet-cover', `${Math.round(cover)}px`);
   };
+
+  // A phone keyboard covers the bottom of the layout viewport, where the dock
+  // is: while a field has focus, the part the visual viewport leaves out
+  // below it is the keyboard's.
+  const editing = () =>
+    documentRef.activeElement?.matches?.(
+      'input, textarea, [contenteditable]:not([contenteditable="false"])',
+    ) ?? false;
+  const measureKeyboard = () => {
+    if (!body.classList.contains(MOBILE_SHELL_CLASS)) return;
+    const covered =
+      visualViewport && editing()
+        ? (globalThis.innerHeight || 0) -
+          visualViewport.height -
+          visualViewport.offsetTop
+        : 0;
+    const inset = Math.max(0, Math.round(covered));
+    writeVar('--mobile-keyboard-inset', `${inset}px`);
+    // With a keyboard up the dock and its results take the screen above it;
+    // the top corner buttons step aside (mobile-shell.css).
+    if (inset > 0) body.classList.add(KEYBOARD_OPEN_CLASS);
+    else body.classList.remove(KEYBOARD_OPEN_CLASS);
+  };
+  const clearKeyboard = () => {
+    written.delete('--mobile-keyboard-inset');
+    body.style.removeProperty('--mobile-keyboard-inset');
+    body.classList.remove(KEYBOARD_OPEN_CLASS);
+  };
+  if (visualViewport) {
+    listen(visualViewport, 'resize', measureKeyboard);
+    listen(visualViewport, 'scroll', measureKeyboard);
+  }
+  listen(documentRef, 'focusin', measureKeyboard);
+  listen(documentRef, 'focusout', () => requestFrame?.(measureKeyboard));
 
   const resize =
     typeof ResizeObserverImpl === 'function'
@@ -232,9 +262,19 @@ export function initMobileShell({
     measureSheet();
   };
 
+  /**
+   * Repaint what every panel in the sheet's rail owes. The sheet shows more
+   * than the panels it expands (Utilities under Layers; Weather, News and
+   * Recent Imagery under Context), and repainting a panel it hides costs one
+   * paint of owed content.
+   */
+  const revealSheetContent = (sheet) => {
+    const rail = element(MOBILE_SHEET_PANELS[sheet][0])?.parentElement;
+    for (const panel of rail?.children ?? []) flushPanelContent(panel);
+  };
+
   /** The first visible control of the sheet's first panel, for focus on open. */
   const sheetFocusTarget = (sheet) => {
-    if (sheet === 'search') return element('location-search');
     const panel = element(MOBILE_SHEET_PANELS[sheet][0]);
     const controls =
       panel?.querySelectorAll?.(
@@ -254,7 +294,9 @@ export function initMobileShell({
   const setSheet = (requested) => {
     swipe = null;
     if (!body.classList.contains(MOBILE_SHELL_CLASS)) return;
-    const sheet = sheetBlocked(body) ? null : requested;
+    const unavailableMissions =
+      requested === 'missions' && missionsPanel?.hidden;
+    const sheet = sheetBlocked(body) || unavailableMissions ? null : requested;
     const previous = currentSheetOf(body);
     if (previous === sheet) return;
     if (!previous) {
@@ -262,9 +304,12 @@ export function initMobileShell({
       borrowed = { before: panelStates(), applied: panelStates() };
       returnFocus = documentRef.activeElement ?? null;
     } else {
-      if (previous === 'search') element('location-search')?.blur?.();
       restoreBorrowed();
     }
+    // A sheet shows panels of its rail that may already be expanded, so
+    // nothing presents them open: repaint what they owe before the sheet is
+    // measured or its focus target read.
+    if (sheet) revealSheetContent(sheet);
     present(sheet);
     if (!sheet) {
       borrowed = null;
@@ -313,16 +358,17 @@ export function initMobileShell({
           'content',
           `${viewportContent || ''}, viewport-fit=cover`,
         );
-      for (const node of [...rails, dock].filter(Boolean))
-        resize?.observe(node);
+      for (const node of rails) resize?.observe(node);
       publishChrome();
       measureSheet();
+      measureKeyboard();
     } else {
       // Crossing to desktop closes the sheet, which puts its panels back.
       setSheet(null);
       body.classList.remove(MOBILE_SHELL_CLASS);
       present(null);
       resize?.disconnect();
+      clearKeyboard();
       if (viewport && viewportContent !== null)
         viewport.setAttribute('content', viewportContent);
     }
@@ -356,22 +402,17 @@ export function initMobileShell({
     // Closing from the tab bar returns focus to the tab that was pressed.
     if (!sheet) returnFocus = button;
     setSheet(sheet);
-    if (sheet && currentSheetOf(body) === sheet) onTabOpened(sheet);
   });
   // Touch events let native scrolling continue until a downward pull at the
   // top is intentional. Pointer capture/touch-action:none would also seize
   // ordinary vertical scrolling inside the borrowed panels.
   const sheetRoot = (target, sheet) => {
-    const roots =
-      sheet === 'layers'
-        ? [element('left-panel-stack')]
-        : sheet === 'search'
-          ? [dock]
-          : sheet === 'more'
-            ? // Visual lives in the left stack; the dock holds the presets.
-              [element('left-panel-stack'), dock]
-            : [element('right-context-rail')];
-    return roots.find((root) => root?.contains(target));
+    // Visual lives in the left stack, as Layers does.
+    const root =
+      sheet === 'layers' || sheet === 'more'
+        ? element('left-panel-stack')
+        : element('right-context-rail');
+    return root?.contains(target) ? root : undefined;
   };
   const scrolled = (target, root) => {
     for (let node = target; node; node = node.parentElement) {
@@ -487,9 +528,21 @@ export function initMobileShell({
 
   if (typeof MutationObserverImpl === 'function') {
     const observer = new MutationObserverImpl(() => {
-      if (currentSheetOf(body) && sheetBlocked(body)) setSheet(null);
+      const sheet = currentSheetOf(body);
+      if (!sheet) return;
+      if (sheet === 'missions' && missionsPanel?.hidden) {
+        returnFocus = tabFor('layers') ?? returnFocus;
+        setSheet(null);
+      } else if (sheetBlocked(body)) {
+        setSheet(null);
+      }
     });
     observer.observe(body, { attributes: true, attributeFilter: ['class'] });
+    if (missionsPanel)
+      observer.observe(missionsPanel, {
+        attributes: true,
+        attributeFilter: ['hidden'],
+      });
     removers.push(() => observer.disconnect());
   }
 
@@ -515,6 +568,7 @@ export function initMobileShell({
       body.removeAttribute(MOBILE_SHEET_ATTR);
       body.style.removeProperty('--mobile-sheet-height');
       body.style.removeProperty('--mobile-sheet-cover');
+      clearKeyboard();
       if (viewport && viewportContent !== null)
         viewport.setAttribute('content', viewportContent);
       publish(null);

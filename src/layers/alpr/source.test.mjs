@@ -148,7 +148,7 @@ test('provider attribution is plain text with a public HTTPS link only', () => {
     {
       text: 'ALPR: <img onerror=alert(1)>',
       href: 'https://example.org/?a=1&b=2',
-      inline: true,
+      inline: false,
     },
     'left as text: the credits port escapes it',
   );

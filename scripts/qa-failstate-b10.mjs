@@ -90,7 +90,19 @@ function record(name, ok, detail) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * Open Data Layers before reading its rows: they repaint while it is
+ * displayed, and it starts collapsed.
+ */
+const openDataLayers = (page) =>
+  page.evaluate(() => {
+    const panel = document.getElementById('data-panel');
+    if (panel?.classList.contains('collapsed'))
+      panel.querySelector('[data-collapse-target="data-panel"]')?.click();
+  });
+
 async function readLayerControl(page, layerId, expectedLabel) {
+  await openDataLayers(page);
   await page.waitForFunction(
     (id, label) => {
       const button = document.querySelector(`[data-layer-id="${id}"] .data-toggle-btn`);
@@ -358,7 +370,7 @@ async function main() {
     }
     const aisControl = await readLayerControl(page, 'ais-live-vessels', 'UNAVAILABLE');
     const aisChipHonest = aisControl.feedState === 'unavailable'
-      && aisControl.ariaLabel === 'Live AIS Vessels: UNAVAILABLE';
+      && aisControl.ariaLabel === 'Live Vessels: UNAVAILABLE';
     const aisMetaHonest = /^UNAVAILABLE · AISStream · /i.test(aisControl.meta)
       && aisStats.error
       && aisControl.meta.includes(aisStats.error);
@@ -501,9 +513,10 @@ async function main() {
           const octx = off.getContext('2d');
           // The detection pass (banner included) paints on the host-owned
           // blend-isolation surface beneath the shared canvas — composite
-          // both so the sample sees whichever surface carries the banner.
+          // both so the sample sees whichever surface carries the banner. An idle
+          // surface is released to 0x0, which drawImage refuses.
           const detSurface = document.getElementById('world-overlay-detection-surface');
-          if (detSurface) octx.drawImage(detSurface, 0, 0);
+          if (detSurface && detSurface.width > 0 && detSurface.height > 0) octx.drawImage(detSurface, 0, 0);
           octx.drawImage(canvas, 0, 0);
           const dpr = window.devicePixelRatio || 1;
           const bw = Math.min(w, Math.round(260 * dpr));

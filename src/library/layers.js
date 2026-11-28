@@ -167,7 +167,8 @@ export function createLibraryDatasetLayer(
   let truncated = false;
   let loaded = 0;
   let extent = null;
-  let rowListener = null;
+  /** @type {{ invalidate: () => void } | null} the panels' handle, from init */
+  let panel = null;
   let legendCounts = null;
   // Live data: features older than the source's cacheSeconds are loaded
   // again, on the next enable and on the manager's refresh tick while the
@@ -187,7 +188,7 @@ export function createLibraryDatasetLayer(
     loaded = result.features.length;
     extent = featureExtent(result.features);
     if (colorBy) legendCounts = countColorKeys(result.features);
-    rowListener?.();
+    panel?.invalidate();
   }
   const colorBy = entry.display.colorBy || null;
   const layer = createLocalGeoJsonLayer(
@@ -214,6 +215,7 @@ export function createLibraryDatasetLayer(
     },
     services,
   );
+  const init = layer.init;
   const enable = layer.enable;
   const disable = layer.disable;
   const destroy = layer.destroy;
@@ -225,6 +227,10 @@ export function createLibraryDatasetLayer(
   return Object.assign(layer, {
     libraryEntryId: entry.id,
     refreshInterval: maxAgeMs,
+    init(viewer, options = {}) {
+      panel = options.panel ?? null;
+      return init(viewer, options);
+    },
     async enable(viewer, ...rest) {
       on = true;
       registerDynamicCredit(viewer, libraryCredit(entry));
@@ -283,9 +289,6 @@ export function createLibraryDatasetLayer(
         onRemove,
         colorByLegend(entry.display, legendCounts),
       ),
-    setRowControlsListener(listener) {
-      rowListener = typeof listener === 'function' ? listener : null;
-    },
   });
 }
 
@@ -410,9 +413,11 @@ export const LIBRARY_AERIAL_Z = 10;
  * The globe port imagery spec for a tiles entry.
  * @param {object} entry Validated tiles entry.
  * @param {string} url Tile URL template.
+ * @param {import('../render/contract/globe').ImagerySpec['fetchTile']|null} [fetchTile]
+ *   Fetches each tile in place of the renderer (`source.tileFetch`).
  * @returns {import('../render/contract/globe').ImagerySpec}
  */
-export function libraryImagerySpec(entry, url) {
+export function libraryImagerySpec(entry, url, fetchTile = null) {
   const bbox = entry.source.bounded ? entry.coverage.bbox : null;
   const minZoom = entry.source.minZoom ?? 0;
   // A dense entry (`minimumTerrainLevelFor`) is hidden where the view is
@@ -442,6 +447,7 @@ export function libraryImagerySpec(entry, url) {
       : {}),
     ...(entry.display.aerial ? { zOrder: LIBRARY_AERIAL_Z } : {}),
     ...(tileTransform ? { tileTransform } : {}),
+    ...(fetchTile ? { fetchTile } : {}),
   };
 }
 
@@ -563,7 +569,11 @@ export function createLibraryTileLayer(
     if (host.kind === 'tileset') markBaseTileset(tileset);
     try {
       imagery = globe.imagery.add(
-        libraryImagerySpec(entry, source.tileTemplate(entry)),
+        libraryImagerySpec(
+          entry,
+          source.tileTemplate(entry),
+          source.tileFetch?.(entry) ?? null,
+        ),
       );
     } catch (error) {
       // A renderer without tile hooks cannot draw relief or clear the

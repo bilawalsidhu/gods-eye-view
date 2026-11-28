@@ -1,7 +1,7 @@
 // A Rail layer on a scene host bound to fake renderer ports (draw, camera,
 // frame, globe, query, input), a scripted proxy and fake camera services
 // that record what the layer asks of the camera. Shared by the Rail layer's
-// tests that run a whole layer (camera follow, live-only feeds, ground
+// tests that run a whole layer (the camera on a selection, live-only feeds, ground
 // height, layer stats, selected route lines).
 import { createRailLayer } from '../layers/rail/index.js';
 import { fromDegrees } from '../geo/ellipsoid.js';
@@ -11,12 +11,21 @@ import { bindRenderer } from '../render/rendererOf.js';
 import { fakeDrawPort } from './fakeDrawPort.mjs';
 import { layerPlacement } from '../data/placementProvider.js';
 import { CAMERA_DEBOUNCE_MS } from '../layers/rail/policy.js';
-import { WORLD_FOCUS_FRAMING } from '../worldFocus.js';
 import { publicRailCatalog } from '../data/railFeeds.js';
 
 /** The tests' wall clock at the start: 2026-09-10T00:26:40Z. */
 export const RAIL_HARNESS_T0 = 1_789_000_000_000;
 export const BOSTON = Object.freeze({ lat: 42.3601, lon: -71.0589 });
+
+/**
+ * Whether a train's playback glides along its reports now: what the tests
+ * wait for before they pick a moving train.
+ * @param {{sample?: object}|null|undefined} entry
+ */
+export function railTrainMoving(entry) {
+  const sample = entry?.sample;
+  return sample?.phase === 'playing' && sample.segmentSpeedMps > 0;
+}
 
 /** A train as the rail proxy sends it. */
 export function railTrain(id, lat, lon, extra = {}) {
@@ -392,12 +401,11 @@ export function railLayerHarness(
       ...(fleet ? { fleet } : {}),
       ...(placement ? { placement: layerPlacement(placement, 'rail') } : {}),
       camera: {
-        framing: WORLD_FOCUS_FRAMING.train,
+        // The shell's policy refuses inside the Cockpit, after the request.
         requestWorldFocus(detail) {
           focusRequests.push(detail);
-          return true;
+          return !cockpit;
         },
-        isCockpitActive: () => cockpit,
       },
     },
   });

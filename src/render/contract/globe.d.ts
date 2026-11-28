@@ -40,7 +40,24 @@ export type TerrainSpec = (
    * Quantized-mesh terrain (Cesium's tile format) in the folder `url`,
    * holding `layer.json` and its tiles; heights above the ellipsoid.
    */
-  | { kind: 'quantizedMesh'; url: string; requestVertexNormals?: boolean }
+  | {
+      kind: 'quantizedMesh';
+      url: string;
+      requestVertexNormals?: boolean;
+      /**
+       * Fetches a tile in place of the renderer, as imagery's `fetchTile`
+       * does, with the tile's URL as the renderer resolved it (`layer.json`
+       * is still read from `url`). `tile` is in the terrain's tiling scheme,
+       * rows counted from the north; `bytes` are the tile uncompressed.
+       * `missing` draws the parent tile's terrain there; `defer` asks
+       * again shortly. `signal` aborts when the tile is no longer wanted.
+       */
+      fetchTile?: (request: {
+        tile: TileRequest;
+        url: string;
+        signal: AbortSignal;
+      }) => Promise<TileFetch>;
+    }
 ) & {
   /** Vertical exaggeration of the drawn terrain; default 1. */
   exaggeration?: number;
@@ -68,13 +85,29 @@ export interface ImagerySpec {
   /**
    * `world`: the renderer's global imagery through
    * `CreateOptions.worldDataToken` (for the default renderer, Cesium ion's
-   * world imagery), in `worldStyle`. `canvas`: `imageHooks`.
+   * world imagery), in `worldStyle`. `canvas`: `imageHooks`. `vector`
+   * (`vectorBase`): a MapLibre style's vector map at `styleUrl`, draped as
+   * any imagery layer, its labels drawn as text.
    */
-  kind: 'xyz' | 'world' | 'single-image' | 'canvas';
+  kind: 'xyz' | 'world' | 'single-image' | 'canvas' | 'vector';
+  /** `vector`: the MapLibre style document drawn. */
+  styleUrl?: string;
+  /**
+   * `vector`: over other imagery, the style's lines and labels alone (roads,
+   * rail, borders, names), without its background and area fills, so what
+   * is under it shows.
+   */
+  overlay?: boolean;
   /** `world`: aerial (the default), or aerial with labels. */
   worldStyle?: 'aerial' | 'aerialLabels';
   /** URL or URL template (`{x}`, `{y}`, `{z}`, `{s}`, `{time}`). */
   url?: string;
+  /**
+   * `single-image`: the picture itself, in place of `url` (one or the
+   * other). Its pixels must stay unchanged while the layer uses it. A spec
+   * with both, or with `image` on another kind, throws a `TypeError`.
+   */
+  image?: HTMLCanvasElement;
   /** `'canvas'` (`imageHooks`): draws one tile. */
   drawTile?: (tile: TileRequest, canvas: HTMLCanvasElement) => void;
   subdomains?: string[];
@@ -122,6 +155,11 @@ export interface ImagerySpec {
   ) => Promise<unknown> | undefined;
   /** Draw order among imagery layers; higher draws on top. */
   zOrder?: number;
+  /**
+   * What the imagery shows, such as `'clouds'` or `'radar'`. Drawing never
+   * depends on it; a renderer may use it to tell such a layer apart.
+   */
+  shows?: string;
 }
 
 export interface TimedUrl {
@@ -131,16 +169,50 @@ export interface TimedUrl {
 }
 
 /**
+ * A tile of a `decoded` source at one slot: its finished image, `missing`
+ * (no tile there; draw the parent's), or `defer` (ask again on a later
+ * frame). The renderer owns the image once answered: it draws it as it is
+ * (its alpha too) and may close it once drawn.
+ */
+export type DecodedTile =
+  { image: ImageBitmap } | { missing: true } | { defer: true };
+
+/** What a `decoded` source is asked for: one tile at one slot. */
+export interface DecodedTileRequest {
+  tile: TileRequest;
+  /** The slot, as `slotAt` or `prefetch` named it. */
+  slot: number;
+  /** Aborted once the renderer no longer wants the tile. */
+  signal: AbortSignal;
+  /** `shown`: the slot the clock shows; `prefetch`: one held ahead. */
+  urgency: 'shown' | 'prefetch';
+}
+
+/**
  * A timed source: frames as URLs (one template per time), or video tiles
  * in segments, each a template whose tiles are videos spanning `start` to
  * `end` (epoch ms), a time within shown by its offset into the segment's
  * videos. Outside every segment, the nearest segment end is shown.
+ *
+ * `decoded` (`imageryDecoded`): tiles the application makes itself and hands
+ * over as finished images. Its slots are times (epoch ms): `slotAt` names
+ * the slot a time shows (`null`: none, and nothing is drawn), `prefetch` the
+ * slots to hold ahead of it, nearest first. The renderer asks `tile` for the
+ * tiles each held slot draws, in the layer's tiling, and only draws what it
+ * is given. It shows the nearest slot only (`mode` is not read); the
+ * `prefetch` option caps how many of the source's slots it holds ahead.
  */
 export type TimedSource =
   | { kind: 'frames'; frames: TimedUrl[] }
   | {
       kind: 'video';
       segments: Array<{ url: string; start: number; end: number }>;
+    }
+  | {
+      kind: 'decoded';
+      slotAt(time: number): number | null;
+      prefetch?(time: number): number[];
+      tile(request: DecodedTileRequest): Promise<DecodedTile>;
     };
 
 export interface ImageryLayer {
@@ -176,8 +248,8 @@ export interface ImageryLayer {
   /** `imageryFrames`: which time to show, on the `own` clock. */
   setFrameTime?(ms: number): void;
   /**
-   * `imageryFrames`: the frame the layer's clock now shows (by its time)
-   * has been drawn. Fires once each time the shown frame changes, never
+   * `imageryFrames`: the frame the layer's clock now shows (by its time;
+   * a `decoded` source's by its slot) has been drawn. Fires once each time the shown frame changes, never
    * for frames only prefetched.
    */
   on(event: 'frameReady', cb: (time: number) => void): Off;

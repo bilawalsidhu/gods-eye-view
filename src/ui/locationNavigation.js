@@ -3,6 +3,7 @@ import { stopFollowing } from '../data/followed.js';
 import { t } from '../i18n/index.js';
 import { createStateChannel } from '../app/stateChannel.js';
 import { LocationControls } from './location.js';
+import { worldClock } from '../time/worldClock.js';
 
 /** Own destination selection, lookup, orbit and world-jump lifetime. */
 export class LocationNavigation {
@@ -10,15 +11,14 @@ export class LocationNavigation {
     viewer,
     placeSearch,
     services,
-    elements,
     navigation,
     readCockpit,
     operations,
+    homeView = null,
   }) {
     Object.assign(
       this,
-      { viewer, placeSearch, services, navigation, readCockpit },
-      elements,
+      { viewer, placeSearch, services, navigation, readCockpit, homeView },
       operations,
     );
     this._disposed = false;
@@ -27,7 +27,6 @@ export class LocationNavigation {
     this._activePoiIndex = null;
     this._currentTarget = null;
     this._currentPoi = null;
-    this._searchedLocationLabel = null;
     this._trafficTransitionTimer = null;
     this._globeResetPromise = null;
     this._cancelGlobeReset = null;
@@ -84,11 +83,9 @@ export class LocationNavigation {
       this._activeLocationSearchGeneration = change.generation;
       this._setLocationSearchError(null);
     } else if (change.type === 'found') {
-      this._searchedLocationLabel = state.destination.label || state.query;
       this._setActiveLocation(null);
       this._currentPoi = null;
       this._collapsePOIRow();
-      this._updateLocationMiniStatus();
     } else if (change.type === 'missing')
       this._setLocationSearchError(
         `${t('Location not found')}. ${t('Check the spelling and press Enter to search again.')}`,
@@ -98,9 +95,7 @@ export class LocationNavigation {
         `${t('Search failed')}. ${t('Press Enter to try again.')}`,
       );
     else if (change.type === 'settled')
-      this._settleLocationSearchUi(change.generation, {
-        keepQuery: state.status === 'missing' || state.status === 'failed',
-      });
+      this._settleLocationSearchUi(change.generation);
     else if (
       change.type === 'reset' &&
       this._activeLocationSearchGeneration !== null
@@ -109,20 +104,17 @@ export class LocationNavigation {
     }
   }
 
-  /** Show, or with null clear, the announced error under the search field. */
+  /** Show, or with null clear, the lookup's announced error. */
   _setLocationSearchError(message) {
     this._locationControls?.setSearchError(message);
   }
 
-  _initLocationBar() {
+  _initLocationControls() {
     const { CITY_POIS, searchAndFlyTo, LocationSearch } = this.services;
-    // An open field stays open in the new controls.
-    const searchExpanded = Boolean(this._locationControls?.searchExpanded);
     this._locationControls?.destroy();
     this._locationLookupUnsubscribe?.();
     this._locationLookup?.destroy();
     this._locationLookup = new LocationSearch({
-      input: this._locationSearch,
       setSearching: (active) => this._locationControls?.setSearching(active),
       begin: () => this._beginDeferredNavigation('location'),
       isCurrent: (generation) =>
@@ -140,9 +132,6 @@ export class LocationNavigation {
       onError: (error) => console.error('[Search] Geocoding failed:', error),
     });
     this._locationControls = new LocationControls({
-      elements: {
-        search: this._locationSearch,
-      },
       publish: (view) => this._publishLocation?.(view),
       cities: CITY_POIS,
       getExpandedCity: () => this._expandedCityId,
@@ -151,7 +140,6 @@ export class LocationNavigation {
       onSearch: (query) => this._locationLookup.run(query),
       onSearchEdit: () => this._setLocationSearchError(null),
       onReset: () => this.resetToGlobeView(),
-      searchExpanded,
     });
     // The new lookup's reset settles a replaced lookup's search through the
     // new controls, so it subscribes once they are in place.
@@ -217,14 +205,12 @@ export class LocationNavigation {
     this._expandPOIRow(cityId);
     this._setActiveLocation(cityId);
     this._activePoiIndex = 0;
-    this._updatePoiHighlight();
 
     // Track current target + POI for orbit
     if (result) {
       this._currentTarget = result.targetPosition;
       this._currentPoi = CITY_POIS[cityId].pois[0];
     }
-    this._updateLocationMiniStatus();
   }
 
   _onPoiClick(cityId, poiIndex) {
@@ -237,14 +223,12 @@ export class LocationNavigation {
     if (result === false) return;
     this._setActiveLocation(cityId);
     this._activePoiIndex = poiIndex;
-    this._updatePoiHighlight();
 
     // Track current target + POI for orbit
     if (result) {
       this._currentTarget = result.targetPosition;
       this._currentPoi = CITY_POIS[cityId].pois[poiIndex];
     }
-    this._updateLocationMiniStatus();
   }
 
   _expandPOIRow(cityId) {
@@ -257,36 +241,10 @@ export class LocationNavigation {
   _collapsePOIRow() {
     this._expandedCityId = null;
     this._activePoiIndex = null;
-    this._locationControls.hidePois();
-  }
-
-  _updatePoiHighlight() {
-    this._locationControls.highlightPoi(this._activePoiIndex);
-  }
-
-  clearSearchedLocation() {
-    if (this._searchedLocationLabel === null) return;
-    this._searchedLocationLabel = null;
-    this._updateLocationMiniStatus();
   }
 
   _setActiveLocation(locationId) {
     this._activeLocationId = locationId;
-    // A preset city is now what the camera is framed on, so any earlier
-    // free-text destination has been superseded. Clearing only on a real id
-    // leaves the search path's own _setActiveLocation(null) untouched.
-    if (locationId) this._searchedLocationLabel = null;
-    this._locationControls?.highlightCity(locationId);
-    this._updateLocationMiniStatus();
-  }
-
-  _updateLocationMiniStatus() {
-    const { CITY_POIS } = this.services;
-    this._locationControls?.renderStatus({
-      city: this._activeLocationId ? CITY_POIS[this._activeLocationId] : null,
-      currentPoi: this._currentPoi,
-      searchedLabel: this._searchedLocationLabel,
-    });
   }
 
   _initOrbit() {
@@ -315,7 +273,24 @@ export class LocationNavigation {
     }
   }
 
-  resetToGlobeView() {
+  /**
+   * Back to live, at the view the app started from (the logo): the world
+   * clock goes live and the camera flies to the start view as the globe reset
+   * does, letting go of whatever it follows.
+   */
+  returnToStart() {
+    if (!this._disposed) worldClock.goLive();
+    if (!this.homeView) return this.resetToGlobeView();
+    // A globe reset under way flies elsewhere: this one replaces it.
+    this._cancelGlobeReset?.();
+    return this.resetToGlobeView({ view: this.homeView });
+  }
+
+  /**
+   * Fly out to the full globe over the current spot, or to `view` (the start
+   * view's shape: `{ lon, lat, height, heading?, pitch? }`, degrees).
+   */
+  resetToGlobeView({ view = null } = {}) {
     const {
       GLOBE_VIEW,
       flyToGlobeView,
@@ -374,6 +349,7 @@ export class LocationNavigation {
     camera?.release();
     this._beginWorldJumpTransition();
 
+    const heightM = view?.height ?? GLOBE_VIEW.heightM;
     let resolveReset;
     const resetPromise = new Promise((resolve) => {
       resolveReset = resolve;
@@ -391,7 +367,7 @@ export class LocationNavigation {
         ok: !cancelled,
         action: 'zoom_to_globe',
         cancelled,
-        heightKm: Math.round(GLOBE_VIEW.heightM / 1000),
+        heightKm: Math.round(heightM / 1000),
         centeredOn: {
           latitude: Number.isFinite(pose?.lat)
             ? Number(pose.lat.toFixed(2))
@@ -409,30 +385,21 @@ export class LocationNavigation {
     this._cancelGlobeReset = () => finish(true);
     timer = window.setTimeout(() => {
       const height = findCamera(this.viewer)?.pose().height;
-      finish(
-        !Number.isFinite(height) ||
-          Math.abs(height - GLOBE_VIEW.heightM) > 1000,
-      );
+      finish(!Number.isFinite(height) || Math.abs(height - heightM) > 1000);
     }, 4200);
     this._publishGlobeResetting?.(true);
     const target = flyToGlobeView(this.viewer, {
       onComplete: () => finish(false),
       onCancel: () => finish(true),
+      ...(view ? { view } : {}),
     });
     if (!target) finish(true);
     return resetPromise;
   }
 
-  /** Settle the search field once its lookup has (LocationControls.settleSearch). */
-  settleSearch(options) {
-    this._locationControls?.settleSearch(options);
-  }
-
-  /** Close the search field; with `ifOpen`, only when it is open. */
-  closeSearch({ ifOpen = false } = {}) {
-    const controls = this._locationControls;
-    if (ifOpen && !controls?.searchExpanded) return;
-    controls?.closeSearch();
+  /** Settle the lookup's presentation once it has (LocationControls.settleSearch). */
+  settleSearch() {
+    this._locationControls?.settleSearch();
   }
 
   /** Revoke callbacks and settle owned camera work before the viewer is released. */

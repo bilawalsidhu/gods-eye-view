@@ -1,3 +1,5 @@
+import { watch } from 'vue';
+import { MOBILE_SHEET_ATTR } from './mobileSheets.js';
 import {
   EMPTY_CCTV_FRAME,
   _clearCctvFrame,
@@ -63,6 +65,11 @@ export class CctvControls {
     this._cctvChip = null;
     this._cctvFrameRequestToken = 0;
     this._cctvFramePreloader = null;
+    // A frame being fetched for its time, and the object URLs of the frame
+    // read for that request and of the frame on screen.
+    this._cctvFrameFetch = null;
+    this._cctvFramePendingUrl = null;
+    this._cctvFrameShownUrl = null;
     this._frame = EMPTY_CCTV_FRAME;
     this._calibrationEdit = null;
     this._actionGeneration = 0;
@@ -75,7 +82,10 @@ export class CctvControls {
       if (state) this._renderCctvState(state);
       if (this._cctvChip) this._publishCctvChip({});
     });
-    if (this._cctvVideo && typeof MutationObserver !== 'undefined') {
+    if (
+      (this._cctvVideo || this._cctvFrame) &&
+      typeof MutationObserver !== 'undefined'
+    ) {
       this._videoVisibilityObserver = new MutationObserver(() =>
         this._renderCctvState(this._cctvState),
       );
@@ -84,6 +94,15 @@ export class CctvControls {
           attributes: true,
           attributeFilter: ['class', 'hidden'],
         });
+      // On phones the panel is on screen only while the Cameras sheet is open.
+      this._videoVisibilityObserver.observe(document.body, {
+        attributes: true,
+        attributeFilter: ['class', MOBILE_SHEET_ATTR],
+      });
+      this._offPreviews = watch(
+        [() => this.store.previewCards, () => this.store.previewPopups],
+        () => this._renderCctvState(this._cctvState),
+      );
       this.listen(document, 'visibilitychange', () =>
         this._renderCctvState(this._cctvState),
       );
@@ -203,6 +222,7 @@ export class CctvControls {
     this._quebecCctvOverlay?.dispose();
     this._cctvVideoSurface?.stop();
     this._videoVisibilityObserver?.disconnect();
+    this._offPreviews?.();
     this._actionGeneration++;
     this.listeners.abort();
     this._cctvViewUnsubscribe?.();

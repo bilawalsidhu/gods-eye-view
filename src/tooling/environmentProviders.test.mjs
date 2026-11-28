@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { promises as fsp } from 'node:fs';
+import { gunzipSync } from 'node:zlib';
+import {
+  filterTrailing24h,
+  parseFirmsCsv,
+} from 'gods-eye-view/sources/firms-csv';
 import { terrainHeightsProxy } from 'gods-eye-view/server/providers/terrain';
 import { tomtomProxy } from 'gods-eye-view/server/providers/traffic';
 import { firmsProxy } from 'gods-eye-view/server/providers/firms';
@@ -329,6 +334,137 @@ test('FIRMS retains a large successful source during partial failure and filters
   const stale = json(await request());
   assert.equal(stale.stale, true);
   assert.equal(stale.count, 0);
+});
+
+const FIRMS_NOW = Date.UTC(2026, 8, 12, 12);
+// 40 detections an hour old and one that turns 24 h old five minutes after FIRMS_NOW.
+const firmsCsv = (lat = 30) =>
+  'latitude,longitude,acq_date,acq_time,confidence,frp\n' +
+  '30,-97,2026-09-11,1205,h,10\n' +
+  `${lat},-97,2026-09-12,1100,h,10\n`.repeat(40);
+const LEAVES_AT = FIRMS_NOW + 5 * 60_000;
+
+/** The payload serialised afresh for `now`: a kept body must equal it byte for byte. */
+const afresh = (body, csv, now) => {
+  const { fetchedAt, stale, ttlMs, sources } = JSON.parse(body);
+  const fires = filterTrailing24h(parseFirmsCsv(csv), now);
+  return JSON.stringify({
+    fetchedAt,
+    stale,
+    ttlMs,
+    sources,
+    count: fires.length,
+    fires,
+  });
+};
+
+function firmsHarness(t) {
+  isolate(t, { FIRMS_MAP_KEY: 'fixture-key' });
+  const clock = { now: FIRMS_NOW, csv: firmsCsv() };
+  t.mock.method(Date, 'now', () => clock.now);
+  t.mock.method(globalThis, 'fetch', async (raw) =>
+    new URL(raw).pathname.includes('VIIRS_NOAA20') && clock.csv
+      ? new Response(clock.csv)
+      : new Response('offline', { status: 503 }),
+  );
+  const request = install(firmsProxy());
+  return {
+    clock,
+    request: (encoding) =>
+      request(
+        '/',
+        'GET',
+        encoding === undefined ? {} : { 'accept-encoding': encoding },
+      ),
+  };
+}
+
+test('FIRMS reuses the kept body and gzips it once for clients that accept gzip', async (t) => {
+  const { clock, request } = firmsHarness(t);
+  const first = await request();
+  clock.now = LEAVES_AT;
+  const second = await request();
+  assert.equal(first.status, 200);
+  assert.ok(Buffer.isBuffer(first.body));
+  assert.equal(second.body, first.body);
+  assert.equal(first.body.toString(), afresh(first.body, clock.csv, FIRMS_NOW));
+  assert.equal(json(first).count, 41);
+  assert.deepEqual(first.headers, {
+    'Content-Type': 'application/json',
+    'Cache-Control': 'no-store',
+    Vary: 'Accept-Encoding',
+  });
+  const gzipped = await request('gzip, deflate, br');
+  assert.deepEqual(gzipped.headers, {
+    ...first.headers,
+    'Content-Encoding': 'gzip',
+  });
+  const refused = await request('gzip;q=0, br');
+  assert.deepEqual(refused.headers, first.headers);
+  assert.equal(refused.body, first.body);
+  assert.equal(gunzipSync(gzipped.body).toString(), first.body.toString());
+  assert.ok(gzipped.body.byteLength < first.body.byteLength);
+  assert.equal((await request('gzip')).body, gzipped.body);
+
+  clock.now = LEAVES_AT + 1;
+  const a = request('gzip');
+  const b = request('gzip');
+  let zipped = false;
+  a.then(() => {
+    zipped = true;
+  });
+  const plain = await request();
+  assert.equal(zipped, false, 'an identity response does not wait for gzip');
+  const [x, y] = await Promise.all([a, b]);
+  assert.equal(
+    x.body,
+    y.body,
+    'concurrent gzip requests share one compression',
+  );
+  assert.equal(gunzipSync(x.body).toString(), plain.body.toString());
+});
+
+test('FIRMS rebuilds the kept body when the request would get a different payload', async (t) => {
+  const { clock, request } = firmsHarness(t);
+  const before = await request();
+  const { count, ttlMs } = json(before);
+  assert.equal(count, 41);
+
+  clock.now = LEAVES_AT + 1;
+  const after = gunzipSync((await request('gzip')).body);
+  assert.equal(JSON.parse(after).count, 40);
+  assert.equal(after.toString(), afresh(after, clock.csv, clock.now));
+
+  clock.now = LEAVES_AT;
+  const rollback = await request();
+  assert.equal(json(rollback).count, 41);
+  assert.equal(
+    rollback.body.toString(),
+    afresh(rollback.body, clock.csv, clock.now),
+  );
+
+  clock.now = LEAVES_AT + 1;
+  const previous = await request();
+  assert.equal(json(previous).count, 40);
+  clock.csv = firmsCsv(31);
+  clock.now = FIRMS_NOW + ttlMs + 60_000;
+  const refreshed = await request();
+  const payload = json(refreshed);
+  assert.equal(payload.fetchedAt, clock.now);
+  assert.equal(payload.stale, false);
+  assert.equal(payload.count, 40);
+  assert.ok(payload.fires.every((fire) => fire.lat === 31));
+  assert.notEqual(refreshed.body, previous.body);
+  assert.equal(
+    refreshed.body.toString(),
+    afresh(refreshed.body, clock.csv, clock.now),
+  );
+
+  clock.csv = null;
+  clock.now += ttlMs;
+  const stale = await request();
+  assert.equal(json(stale).stale, true);
+  assert.equal((await request()).body, stale.body);
 });
 
 test('GBFS keeps host/path/method guards, response caps and distinct information/status cache headers', async (t) => {

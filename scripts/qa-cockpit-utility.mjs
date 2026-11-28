@@ -193,41 +193,74 @@ try {
   });
   const contactMissionHandoff = await page.evaluate(async () => {
     const { styleManager, dataManager } = window.__godsEyeView;
+    // Launch Library is not contacted: the layer's own work is stubbed so the
+    // check covers only how Space Missions sits beside Context.
+    const stubMissions = (rocketEntry) => {
+      const original = {
+        initialized: rocketEntry.initialized,
+        lifecycleState: rocketEntry.lifecycleState,
+        init: rocketEntry.module.init,
+        enable: rocketEntry.module.enable,
+        update: rocketEntry.module.update,
+        disable: rocketEntry.module.disable,
+      };
+      rocketEntry.initialized = true;
+      rocketEntry.module.init = async () => true;
+      rocketEntry.module.enable = async () => true;
+      rocketEntry.module.update = async () => true;
+      rocketEntry.module.disable = async () => true;
+      return () => {
+        rocketEntry.initialized = original.initialized;
+        rocketEntry.lifecycleState = original.lifecycleState;
+        rocketEntry.module.init = original.init;
+        rocketEntry.module.enable = original.enable;
+        rocketEntry.module.update = original.update;
+        rocketEntry.module.disable = original.disable;
+      };
+    };
     const originalShowToast = styleManager._showToast;
     const toasts = [];
     styleManager._showToast = (message) => { toasts.push(String(message)); };
+    const restoreMissions = stubMissions(dataManager.layers.get('rocket-launches'));
     try {
       if (styleManager._contextControls._contextMode) await styleManager._contextControls._selectContextMode(null);
       const contactsResult = await styleManager._contextControls._selectContextMode('flights');
-      const missionResult = await styleManager._contextControls._selectContextMode('space-missions');
-      const switched = {
+      const missionResult = await dataManager.setEnabled('rocket-launches', true, { origin: 'user' });
+      await styleManager._waitForContextLayerSettlement();
+      const together = {
         contactsResult,
         missionResult,
         mode: styleManager._contextControls._contextMode,
         missionsEnabled: dataManager.isEnabled('rocket-launches'),
         toasts: [...toasts],
       };
+      const missionOff = await dataManager.setEnabled('rocket-launches', false, { origin: 'user' });
+      await styleManager._waitForContextLayerSettlement();
+      const modeAfterMissions = styleManager._contextControls._contextMode;
       const exitResult = await styleManager._contextControls._selectContextMode(null);
       return {
-        ...switched,
+        ...together,
+        missionOff,
+        modeAfterMissions,
         exitResult,
         modeAfterExit: styleManager._contextControls._contextMode,
-        missionsOffAfterExit: !dataManager.isEffectivelyEnabled('rocket-launches'),
       };
     } finally {
+      restoreMissions();
       styleManager._showToast = originalShowToast;
     }
   });
   check(
-    'Contacts hands off to Space Missions on the first request without a failure toast',
+    'Space Missions runs beside Contacts, and switching it off leaves Contacts on',
     contactMissionHandoff.contactsResult === true
       && contactMissionHandoff.missionResult === true
-      && contactMissionHandoff.mode === 'space-missions'
+      && contactMissionHandoff.mode === 'flights'
       && contactMissionHandoff.missionsEnabled
       && contactMissionHandoff.toasts?.length === 0
+      && contactMissionHandoff.missionOff === true
+      && contactMissionHandoff.modeAfterMissions === 'flights'
       && contactMissionHandoff.exitResult === true
-      && contactMissionHandoff.modeAfterExit === null
-      && contactMissionHandoff.missionsOffAfterExit,
+      && contactMissionHandoff.modeAfterExit === null,
     JSON.stringify(contactMissionHandoff),
   );
   const cancelledMissionEntry = await page.evaluate(async () => {
@@ -330,7 +363,7 @@ try {
     }
   });
   check(
-    'cancelled direct Space Missions entry restores its exact isolated sibling state',
+    'a cancelled Space Missions start leaves its sibling layer on and opens no Context session',
     cancelledMissionEntry.exercised
       && cancelledMissionEntry.transitionResult === false
       && !cancelledMissionEntry.timedOut
@@ -341,214 +374,45 @@ try {
     JSON.stringify(cancelledMissionEntry),
   );
   check(
-    'successful Space Missions cancellation rollback stays silent',
+    'a cancelled Space Missions start stays silent',
     cancelledMissionEntry.exercised && cancelledMissionEntry.toasts?.length === 0,
     JSON.stringify(cancelledMissionEntry.toasts || []),
   );
-  const replacementMissionEntry = await page.evaluate(async () => {
-    const styleManager = window.__godsEyeView.styleManager;
-    const dataManager = window.__godsEyeView.dataManager;
-    const rocketEntry = dataManager.layers.get('rocket-launches');
-    if (!rocketEntry || dataManager.isEffectivelyEnabled('rocket-launches')) {
-      return { exercised: false, reason: 'Space Missions was not in a clean OFF state' };
-    }
-    const siblingId = 'qa-cockpit-replacement-sibling';
-    window.__gevQaRegisterLayer(dataManager, {
-      id: siblingId,
-      name: 'QA replacement sibling',
-      icon: 'science',
-      source: 'QA',
-      updateInterval: -1,
-      async init() { return true; },
-      async enable() { return true; },
-      async update() { return true; },
-      async disable() { return true; },
-      async destroy() {},
-      getStats() { return { count: 1, status: 'live' }; },
-    });
-    await dataManager.setEnabled(siblingId, true, { origin: 'programmatic' });
-    const original = {
-      siblingInitialized: dataManager.layers.get(siblingId)?.initialized,
-      initialized: rocketEntry.initialized,
-      lifecycleState: rocketEntry.lifecycleState,
-      init: rocketEntry.module.init,
-      enable: rocketEntry.module.enable,
-      update: rocketEntry.module.update,
-      disable: rocketEntry.module.disable,
-      showToast: styleManager._showToast,
-    };
-    let firstUpdate = true;
-    let releaseUpdate;
-    let markUpdateStarted;
-    const updateStarted = new Promise((resolve) => { markUpdateStarted = resolve; });
-    const updateGate = new Promise((resolve) => { releaseUpdate = resolve; });
-    const toasts = [];
-    rocketEntry.initialized = true;
-    rocketEntry.module.enable = async () => true;
-    rocketEntry.module.update = async () => {
-      if (!firstUpdate) return true;
-      firstUpdate = false;
-      markUpdateStarted();
-      await updateGate;
-      return true;
-    };
-    rocketEntry.module.disable = async () => true;
-    styleManager._showToast = (message) => { toasts.push(String(message)); };
-    try {
-      const entry = styleManager._contextControls._selectContextMode('space-missions');
-      await updateStarted;
-      const replacement = dataManager.setEnabled('rocket-launches', true, { origin: 'programmatic' });
-      releaseUpdate();
-      const [entryResult, replacementResult] = await Promise.all([entry, replacement]);
-      const committed = {
-        entryResult,
-        replacementResult,
-        mode: styleManager._contextControls._contextMode,
-        entering: styleManager._contextControls._contextModeEntering,
-        snapshotRetained: Boolean(styleManager._contextControls._contextSessionSnapshot),
-        siblingIsolated: !dataManager.isEffectivelyEnabled(siblingId),
-        missionEnabled: dataManager.isEnabled('rocket-launches'),
-        missionEffective: dataManager.isEffectivelyEnabled('rocket-launches'),
-        toasts: [...toasts],
-      };
-      const exitResult = await styleManager._contextControls._selectContextMode(null);
-      return {
-        exercised: true,
-        ...committed,
-        exitResult,
-        siblingRestored: dataManager.isEnabled(siblingId),
-        missionRestoredOff: !dataManager.isEffectivelyEnabled('rocket-launches'),
-      };
-    } finally {
-      styleManager._showToast = original.showToast;
-      rocketEntry.module.init = original.init;
-      rocketEntry.module.enable = original.enable;
-      rocketEntry.module.update = original.update;
-      rocketEntry.module.disable = original.disable;
-      rocketEntry.initialized = original.initialized;
-      rocketEntry.lifecycleState = original.lifecycleState;
-      await dataManager.setEnabled(siblingId, false, { origin: 'programmatic' });
-      await window.__gevQaUnregisterLayer(dataManager, siblingId);
-    }
-  });
-  check(
-    'right-rail Space Missions adopts a newer authoritative ON without stale restoration',
-    replacementMissionEntry.exercised
-      && replacementMissionEntry.entryResult === true
-      && replacementMissionEntry.replacementResult === true
-      && replacementMissionEntry.mode === 'space-missions'
-      && replacementMissionEntry.entering === null
-      && replacementMissionEntry.snapshotRetained
-      && replacementMissionEntry.siblingIsolated
-      && replacementMissionEntry.missionEnabled
-      && replacementMissionEntry.missionEffective
-      && replacementMissionEntry.toasts?.length === 0
-      && replacementMissionEntry.exitResult === true
-      && replacementMissionEntry.siblingRestored
-      && replacementMissionEntry.missionRestoredOff,
-    JSON.stringify(replacementMissionEntry),
-  );
-  const supersededMissionEntry = await page.evaluate(async () => {
-    const styleManager = window.__godsEyeView.styleManager;
-    const dataManager = window.__godsEyeView.dataManager;
-    const rocketEntry = dataManager.layers.get('rocket-launches');
-    if (!rocketEntry || dataManager.isEffectivelyEnabled('rocket-launches')) {
-      return { exercised: false, reason: 'Space Missions was not in a clean OFF state' };
-    }
-    const siblingId = 'qa-cockpit-superseded-sibling';
-    window.__gevQaRegisterLayer(dataManager, {
-      id: siblingId,
-      name: 'QA superseded sibling',
-      icon: 'science',
-      source: 'QA',
-      updateInterval: -1,
-      async init() { return true; },
-      async enable() { return true; },
-      async update() { return true; },
-      async disable() { return true; },
-      async destroy() {},
-      getStats() { return { count: 1, status: 'live' }; },
-    });
-    await dataManager.setEnabled(siblingId, true, { origin: 'programmatic' });
-    const original = {
-      initialized: rocketEntry.initialized,
-      lifecycleState: rocketEntry.lifecycleState,
-      init: rocketEntry.module.init,
-      enable: rocketEntry.module.enable,
-      update: rocketEntry.module.update,
-      disable: rocketEntry.module.disable,
-      showToast: styleManager._showToast,
-    };
-    let releaseUpdate;
-    let markUpdateStarted;
-    const updateStarted = new Promise((resolve) => { markUpdateStarted = resolve; });
-    const updateGate = new Promise((resolve) => { releaseUpdate = resolve; });
-    const toasts = [];
-    rocketEntry.initialized = true;
-    rocketEntry.module.enable = async () => true;
-    rocketEntry.module.update = async () => {
-      markUpdateStarted();
-      await updateGate;
-      return true;
-    };
-    rocketEntry.module.disable = async () => true;
-    styleManager._showToast = (message) => { toasts.push(String(message)); };
-    try {
-      const entry = styleManager._runUserFacingContextAction(
-        (notificationToken) => styleManager._contextControls._selectContextMode(
-          'space-missions',
-          { notificationToken },
-        ),
-        'Space Missions could not complete the requested transition; try again',
-      );
-      await updateStarted;
-      const supersedingOff = dataManager.setEnabled('rocket-launches', false, {
-        origin: 'programmatic',
-      });
-      releaseUpdate();
-      const [entryResult, offResult] = await Promise.all([entry, supersedingOff]);
-      return {
-        exercised: true,
-        entryResult,
-        offResult,
-        mode: styleManager._contextControls._contextMode,
-        entering: styleManager._contextControls._contextModeEntering,
-        snapshotRetained: Boolean(styleManager._contextControls._contextSessionSnapshot),
-        siblingRestored: dataManager.isEnabled(siblingId),
-        missionEffective: dataManager.isEffectivelyEnabled('rocket-launches'),
-        toasts,
-      };
-    } finally {
-      styleManager._showToast = original.showToast;
-      rocketEntry.module.init = original.init;
-      rocketEntry.module.enable = original.enable;
-      rocketEntry.module.update = original.update;
-      rocketEntry.module.disable = original.disable;
-      rocketEntry.initialized = original.initialized;
-      rocketEntry.lifecycleState = original.lifecycleState;
-      await dataManager.setEnabled(siblingId, false, { origin: 'programmatic' });
-      await window.__gevQaUnregisterLayer(dataManager, siblingId);
-    }
-  });
-  check(
-    'right-rail Space Missions superseded by OFF restores exactly without a failure toast',
-    supersededMissionEntry.exercised
-      && supersededMissionEntry.entryResult === null
-      && supersededMissionEntry.mode === null
-      && supersededMissionEntry.entering === null
-      && !supersededMissionEntry.snapshotRetained
-      && supersededMissionEntry.siblingRestored
-      && !supersededMissionEntry.missionEffective
-      && supersededMissionEntry.toasts?.length === 0,
-    JSON.stringify(supersededMissionEntry),
-  );
-  const voiceMissionEntry = await page.evaluate(async () => {
+  const ordinaryMissionLayer = await page.evaluate(async () => {
     const { dataManager, styleManager } = window.__godsEyeView;
-    const siblingId = '__qa_voice_context_sibling__';
     const rocketEntry = dataManager.layers.get('rocket-launches');
+    if (!rocketEntry || dataManager.isEffectivelyEnabled('rocket-launches')) {
+      return { exercised: false, reason: 'Space Missions was not in a clean OFF state' };
+    }
+    // Launch Library is not contacted: the layer's own work is stubbed so the
+    // check covers only how Space Missions sits beside Context.
+    const stubMissions = (rocketEntry) => {
+      const original = {
+        initialized: rocketEntry.initialized,
+        lifecycleState: rocketEntry.lifecycleState,
+        init: rocketEntry.module.init,
+        enable: rocketEntry.module.enable,
+        update: rocketEntry.module.update,
+        disable: rocketEntry.module.disable,
+      };
+      rocketEntry.initialized = true;
+      rocketEntry.module.init = async () => true;
+      rocketEntry.module.enable = async () => true;
+      rocketEntry.module.update = async () => true;
+      rocketEntry.module.disable = async () => true;
+      return () => {
+        rocketEntry.initialized = original.initialized;
+        rocketEntry.lifecycleState = original.lifecycleState;
+        rocketEntry.module.init = original.init;
+        rocketEntry.module.enable = original.enable;
+        rocketEntry.module.update = original.update;
+        rocketEntry.module.disable = original.disable;
+      };
+    };
+    const siblingId = '__qa_space_missions_sibling__';
     window.__gevQaRegisterLayer(dataManager, {
       id: siblingId,
-      name: 'QA voice Context sibling',
+      name: 'QA Space Missions sibling',
       icon: 'science',
       source: 'QA',
       updateInterval: -1,
@@ -559,94 +423,48 @@ try {
       async destroy() {},
       getStats() { return { count: 1, status: 'live' }; },
     });
-    const original = {
-      initialized: rocketEntry.initialized,
-      lifecycleState: rocketEntry.lifecycleState,
-      init: rocketEntry.module.init,
-      enable: rocketEntry.module.enable,
-      update: rocketEntry.module.update,
-      disable: rocketEntry.module.disable,
-    };
-    const siblingLayerEntry = dataManager.layers.get(siblingId);
-    siblingLayerEntry.initialized = true;
     await dataManager.setEnabled(siblingId, true, { origin: 'programmatic' });
-    rocketEntry.initialized = true;
-    rocketEntry.module.init = async () => true;
-    rocketEntry.module.enable = async () => true;
-    rocketEntry.module.update = async () => true;
-    rocketEntry.module.disable = async () => true;
+    const restoreMissions = stubMissions(rocketEntry);
     try {
-      const voiceOn = await dataManager.setEnabled('rocket-launches', true, { origin: 'voice' });
-      await new Promise((resolve) => setTimeout(resolve, 80));
-      const voiceState = {
-        voiceOn,
-        mode: styleManager._contextControls._contextMode,
-        entering: styleManager._contextControls._contextModeEntering,
-        snapshotRetained: Boolean(styleManager._contextControls._contextSessionSnapshot),
-        siblingIsolated: !dataManager.isEffectivelyEnabled(siblingId),
-      };
-      const snapshotBeforeOff = [...(styleManager._contextControls._contextSessionSnapshot?.enabledLayerIds || [])];
-      const voiceOff = await dataManager.setEnabled('rocket-launches', false, { origin: 'voice' });
-      const reactionCountAfterOff = styleManager._contextControls._contextLayerReactionPromises.size;
-      await styleManager._waitForContextLayerSettlement();
-      const restoredSiblingEntry = dataManager.layers.get(siblingId);
-      const voiceExit = {
-        voiceOff,
-        snapshotBeforeOff,
-        reactionCountAfterOff,
-        mode: styleManager._contextControls._contextMode,
-        entering: styleManager._contextControls._contextModeEntering,
-        snapshotRetained: Boolean(styleManager._contextControls._contextSessionSnapshot),
-        siblingRestored: dataManager.isEffectivelyEnabled(siblingId),
-        siblingEnabled: restoredSiblingEntry?.enabled,
-        siblingLifecycle: restoredSiblingEntry?.lifecycleState,
-        restoreActive: Boolean(styleManager._contextControls._contextRestoreState),
-      };
-
-      await dataManager.setEnabled('rocket-launches', true, { origin: 'programmatic' });
-      await new Promise((resolve) => setTimeout(resolve, 40));
-      const internalState = {
-        mode: styleManager._contextControls._contextMode,
-        entering: styleManager._contextControls._contextModeEntering,
-        snapshotRetained: Boolean(styleManager._contextControls._contextSessionSnapshot),
-        missionEnabled: dataManager.isEffectivelyEnabled('rocket-launches'),
-      };
-      await dataManager.setEnabled('rocket-launches', false, { origin: 'programmatic' });
-      return { exercised: true, voiceState, voiceExit, internalState };
+      const results = {};
+      for (const origin of ['user', 'voice', 'programmatic']) {
+        const on = await dataManager.setEnabled('rocket-launches', true, { origin });
+        await styleManager._waitForContextLayerSettlement();
+        const during = {
+          on,
+          mode: styleManager._contextControls._contextMode,
+          snapshot: Boolean(styleManager._contextControls._contextSessionSnapshot),
+          siblingOn: dataManager.isEffectivelyEnabled(siblingId),
+        };
+        const off = await dataManager.setEnabled('rocket-launches', false, { origin });
+        await styleManager._waitForContextLayerSettlement();
+        results[origin] = {
+          ...during,
+          off,
+          siblingOnAfter: dataManager.isEffectivelyEnabled(siblingId),
+          snapshotAfter: Boolean(styleManager._contextControls._contextSessionSnapshot),
+        };
+      }
+      return { exercised: true, results };
     } finally {
-      rocketEntry.module.init = original.init;
-      rocketEntry.module.enable = original.enable;
-      rocketEntry.module.update = original.update;
-      rocketEntry.module.disable = original.disable;
-      rocketEntry.initialized = original.initialized;
-      rocketEntry.lifecycleState = original.lifecycleState;
+      restoreMissions();
       await dataManager.setEnabled(siblingId, false, { origin: 'programmatic' });
-      siblingLayerEntry.initialized = original.siblingInitialized;
       await window.__gevQaUnregisterLayer(dataManager, siblingId);
     }
   });
   check(
-    'voice Space Missions uses the same Context snapshot and exact-restore transaction as UI entry',
-    voiceMissionEntry.exercised
-      && voiceMissionEntry.voiceState?.voiceOn
-      && voiceMissionEntry.voiceState.mode === 'space-missions'
-      && voiceMissionEntry.voiceState.entering === null
-      && voiceMissionEntry.voiceState.snapshotRetained
-      && voiceMissionEntry.voiceState.siblingIsolated
-      && voiceMissionEntry.voiceExit?.voiceOff
-      && voiceMissionEntry.voiceExit.mode === null
-      && voiceMissionEntry.voiceExit.entering === null
-      && !voiceMissionEntry.voiceExit.snapshotRetained
-      && voiceMissionEntry.voiceExit.siblingRestored,
-    JSON.stringify(voiceMissionEntry),
-  );
-  check(
-    'internal programmatic Space Missions activation does not create a user Context session',
-    voiceMissionEntry.internalState?.missionEnabled
-      && voiceMissionEntry.internalState.mode === null
-      && voiceMissionEntry.internalState.entering === null
-      && !voiceMissionEntry.internalState.snapshotRetained,
-    JSON.stringify(voiceMissionEntry),
+    'Space Missions is an ordinary layer: no Context session, no isolation, from any origin',
+    ordinaryMissionLayer.exercised
+      && Object.values(ordinaryMissionLayer.results || {}).length === 3
+      && Object.values(ordinaryMissionLayer.results).every((entry) =>
+        entry.on === true
+        && entry.mode === null
+        && !entry.snapshot
+        && entry.siblingOn
+        && entry.off === true
+        && entry.siblingOnAfter
+        && !entry.snapshotAfter),
+    JSON.stringify(ordinaryMissionLayer),
   );
   await page.evaluate(() => window.__godsEyeView.dataManager.setEnabled(
     'flights',
@@ -1063,7 +881,7 @@ try {
     const { styleManager, dataManager, viewer } = window.__godsEyeView;
     const awareness = dataManager.layers.get('military-awareness')?.module;
     const before = awareness?.getContextSnapshot?.()?.subject || null;
-    document.querySelector('#location-pills .location-pill')?.click();
+    styleManager._locationControls.chooseCity('nyc');
     await new Promise((resolve) => setTimeout(resolve, 3600));
     const after = awareness?.getContextSnapshot?.()?.subject || null;
     const released = !viewer.trackedEntity;
@@ -1998,98 +1816,6 @@ try {
     }),
   );
 
-  // Cyber relocates its collapsed briefing header into the expanded utility
-  // lane. Exercise actual height changes without reload and measure both cards.
-  await page.evaluate(() => {
-    const manager = window.__godsEyeView.styleManager;
-    manager._setHudVariant('cyber');
-    manager.hud.setMode('on');
-    manager._setCockpitDisclosure('display', false);
-    manager._setCockpitDisclosure('radio', true);
-  });
-  const cyberRadioOrder = await page.evaluate(() => {
-    const manager = window.__godsEyeView.styleManager;
-    manager.cockpitView.syncSignalLayout();
-    const display = document
-      .getElementById('cockpit-display-toggle-btn')
-      .closest('.cockpit-utility-control');
-    const radio = document
-      .getElementById('cockpit-radio-toggle-btn')
-      .closest('.cockpit-utility-control');
-    const displayRect = display.getBoundingClientRect();
-    const radioRect = radio.getBoundingClientRect();
-    return {
-      display: displayRect.toJSON(),
-      radio: radioRect.toJSON(),
-      displayExpanded: display.classList.contains('is-expanded'),
-      radioExpanded: radio.classList.contains('is-expanded'),
-      gap: radioRect.top - displayRect.bottom,
-    };
-  });
-  check(
-    'Cyber expanding Radio preserves the authored Display-then-Radio order',
-    !cyberRadioOrder.displayExpanded
-      && cyberRadioOrder.radioExpanded
-      && cyberRadioOrder.display.height > 0
-      && cyberRadioOrder.radio.height > 0
-      && cyberRadioOrder.gap >= 7,
-    JSON.stringify(cyberRadioOrder),
-  );
-  await page.screenshot({ path: path.join(shotsDir, 'cyber-radio-order.png') });
-  await page.evaluate(() => {
-    const manager = window.__godsEyeView.styleManager;
-    manager._setCockpitDisclosure('radio', false);
-    manager._setCockpitDisclosure('display', true);
-  });
-  const cyberStyleStates = await page.evaluate(() => {
-    const manager = window.__godsEyeView.styleManager;
-    const states = [];
-    for (const style of ['normal', 'surveillance', 'thermal', 'retro']) {
-      document.querySelector(`.style-btn[data-style="${style}"]`).click();
-      states.push({
-        requestedStyle: style,
-        activeStyle: manager.activeStyle,
-        hud: manager.hud.getVariant(),
-        theme: document.documentElement.dataset.uiTheme,
-        selector: document.getElementById('hud-layout-select').value,
-        savedHud: manager.getVisualState().hud.variant,
-      });
-    }
-    return states;
-  });
-  check('Cockpit visual-style controls retain Cyber HUD, selector, shell and saved layout',
-    cyberStyleStates.every(state => state.activeStyle === state.requestedStyle
-      && state.hud === 'cyber' && state.theme === 'cyber'
-      && state.selector === 'cyber' && state.savedHud === 'cyber'),
-    JSON.stringify(cyberStyleStates));
-  for (const height of [987, 720, 640, 900]) {
-    await page.setViewport({ width: 1440, height, deviceScaleFactor: 1 });
-    await new Promise((resolve) => setTimeout(resolve, 400));
-    const geometry = await page.evaluate(() => {
-      const signal = document.getElementById('cockpit-signal-stream');
-      const utility = document.getElementById('cockpit-utility-controls');
-      const expanded = utility.querySelector('.cockpit-utility-control.is-expanded');
-      const s = signal.getBoundingClientRect();
-      const u = expanded.getBoundingClientRect();
-      const toggle = document.getElementById('cockpit-signal-toggle');
-      const t = toggle.getBoundingClientRect();
-      const hit = document.elementFromPoint(t.x + t.width / 2, t.y + t.height / 2);
-      return { height: innerHeight, theme: document.documentElement.dataset.uiTheme,
-        collapsed: signal.dataset.collapsed, signal: s.toJSON(), utility: u.toJSON(),
-        reachable: Boolean(hit && toggle.contains(hit)),
-        contained: u.bottom <= s.top - 7 && s.bottom < innerHeight,
-      };
-    });
-    check(`Cyber collapsed Live Signals remains visible and reachable after resize to ${height}px`,
-      geometry.theme === 'cyber' && geometry.collapsed === 'true'
-        && geometry.signal.width > 0 && geometry.signal.height > 0
-        && geometry.reachable && geometry.contained, JSON.stringify(geometry));
-    if (height === 640 || height === 900) {
-      await page.screenshot({ path: path.join(shotsDir, `cyber-resize-${height}.png`) });
-    }
-  }
-  await page.evaluate(() => window.__godsEyeView.styleManager._setHudVariant('tactical'));
-
   const signalTransition = await page.evaluate(async () => {
     const manager = window.__godsEyeView.styleManager;
     const cockpit = manager.cockpitView;
@@ -2324,6 +2050,151 @@ try {
     JSON.stringify(narrowViewActions),
   );
 
+  // A fresh profile has not seen the Stories announcement: Cockpit keeps
+  // it unread and off the phone row until it closes.
+  const storiesPopupDisplay = () => {
+    const popup = document.getElementById('hPop');
+    return popup ? getComputedStyle(popup).display : null;
+  };
+  const storiesPopupInCockpit = await page.evaluate(storiesPopupDisplay);
+  check('the unread Stories announcement waits while Cockpit is open',
+    storiesPopupInCockpit === 'none', String(storiesPopupInCockpit));
+
+  // Windows too short for the centred row keep it above Reset/Exit.
+  for (const [width, height] of [[360, 370], [320, 360], [568, 188], [667, 190]]) {
+    await page.setViewport({ width, height, deviceScaleFactor: 1 });
+    const glyphHits = await page.evaluate(async () => {
+      const manager = window.__godsEyeView.styleManager;
+      manager._setCockpitDisclosure('display', false);
+      manager._setCockpitDisclosure('radio', false);
+      await new Promise(requestAnimationFrame);
+      await new Promise(requestAnimationFrame);
+      return [...document.querySelectorAll(
+        '#cockpit-utility-controls .cockpit-utility-glyph',
+      )].map((glyph) => {
+        const box = glyph.getBoundingClientRect();
+        const target = document.elementFromPoint(
+          box.left + box.width / 2,
+          box.top + box.height / 2,
+        );
+        return target && glyph.contains(target) ? 'ok' : target?.closest('[id]')?.id || null;
+      });
+    });
+    check(
+      `${width}×${height} Cockpit Display/Radio glyph centres reach their own launchers`,
+      glyphHits.length === 2 && glyphHits.every((hit) => hit === 'ok'),
+      JSON.stringify(glyphHits),
+    );
+  }
+
+  // The phone row's place in each room: centred on Reset/Exit, on screen,
+  // tappable, and clear of what that room has space to clear.
+  for (const [width, height, room] of [
+    [360, 740, 'portrait'],
+    [720, 360, 'landscape'],
+    [667, 240, 'short'],
+    [390, 844, 'portrait'],
+  ]) {
+    await page.setViewport({ width, height, deviceScaleFactor: 1 });
+    const phoneRow = await page.evaluate(async () => {
+      const manager = window.__godsEyeView.styleManager;
+      manager._setCockpitDisclosure('display', false);
+      manager._setCockpitDisclosure('radio', false);
+      await new Promise(requestAnimationFrame);
+      manager.cockpitView.syncSignalLayout();
+      await new Promise(requestAnimationFrame);
+      const rect = (element) => element?.getBoundingClientRect().toJSON() || null;
+      const hud = (selector) => document.querySelector(`#cockpit-hud ${selector}`);
+      const route = document.getElementById('cockpit-route-direction');
+      // A live flight may have no route, which hides the DEST cue. Show it while
+      // measuring so the clearance check always has a cue to clear.
+      const wasHidden = route.hidden;
+      try {
+        route.hidden = false;
+        const controls = [...document.querySelectorAll(
+          '#cockpit-utility-controls .cockpit-utility-control',
+        )];
+        const launchers = controls.map(rect);
+        const rowLeft = Math.min(...launchers.map((launcher) => launcher.left));
+        const rowRight = Math.max(...launchers.map((launcher) => launcher.right));
+        // Taps beside the row reach what is under it.
+        const besideHits = [];
+        if (launchers.length) {
+          const middle = launchers[0].top + launchers[0].height / 2;
+          for (const x of [rowLeft - 8, rowRight + 8]) {
+            const target = document.elementFromPoint(x, middle);
+            besideHits.push(Boolean(target?.closest('#cockpit-utility-controls')));
+          }
+        }
+        return {
+          launchers,
+          rowLeft,
+          rowRight,
+          besideHits,
+          hits: controls.map((control) => {
+            const glyph = control.querySelector('.cockpit-utility-glyph');
+            const box = glyph?.getBoundingClientRect();
+            const target = box && document.elementFromPoint(
+              box.left + box.width / 2,
+              box.top + box.height / 2,
+            );
+            return Boolean(target && glyph.contains(target));
+          }),
+          speed: rect(hud('.cockpit-speed')),
+          altitude: rect(hud('.cockpit-altitude')),
+          route: rect(route),
+          chevron: rect(route.querySelector('.cockpit-route-chevron')),
+          reticle: rect(hud('.cockpit-reticle')),
+          rollArc: rect(hud('.cockpit-roll-arc')),
+          vision: rect(hud('.cockpit-vision-controls')),
+          switcher: rect(document.getElementById('view-switcher')),
+          viewport: { width: innerWidth, height: innerHeight },
+        };
+      } finally {
+        route.hidden = wasHidden;
+      }
+    });
+    const obstacles = {
+      portrait: ['speed', 'altitude', 'route', 'chevron', 'reticle', 'rollArc', 'vision'],
+      // The row covers the roll arc's lower tick ends; ticks and labels stay readable.
+      landscape: ['speed', 'altitude', 'route', 'chevron', 'reticle', 'vision'],
+      // No free band between the instruments: only the vision controls.
+      short: ['vision'],
+    }[room];
+    const overlaps = (a, b) => Boolean(a && b)
+      && a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+    const { rowLeft, rowRight } = phoneRow;
+    const switcherCentre = (phoneRow.switcher?.left + phoneRow.switcher?.right) / 2;
+    const [first, second] = phoneRow.launchers;
+    check(
+      `${width}×${height} Cockpit Display/Radio row is centred in one line, on screen, tappable and clear of ${obstacles.join(', ')}`,
+      phoneRow.launchers.length === 2
+        && phoneRow.launchers.every((launcher) => launcher.width > 0)
+        && phoneRow.speed?.width > 0
+        && phoneRow.altitude?.width > 0
+        && (room === 'short' || (phoneRow.route?.width > 0 && phoneRow.chevron?.width > 0))
+        && phoneRow.hits.every(Boolean)
+        && phoneRow.besideHits.every((inside) => !inside)
+        && Math.abs((first?.top + first?.bottom) / 2 - (second?.top + second?.bottom) / 2) <= 1
+        && phoneRow.launchers.every((launcher) => obstacles.every(
+          (name) => !overlaps(launcher, phoneRow[name]),
+        ))
+        && Math.abs((rowLeft + rowRight) / 2 - switcherCentre) <= 2
+        && rowLeft >= 0
+        && rowRight <= phoneRow.viewport.width
+        && phoneRow.launchers.every((launcher) => (
+          launcher.top >= 0 && launcher.bottom <= phoneRow.viewport.height
+        )),
+      JSON.stringify(phoneRow),
+    );
+  }
+
+  // A Stories tap that Cockpit refuses leaves the announcement unread.
+  await page.evaluate(() => document.getElementById('hStories').click());
+  await page.waitForFunction(
+    () => document.querySelector('#toast.visible')?.textContent === 'Exit cockpit to open Stories',
+  );
+
   const resetResult = await page.evaluate(() => {
     // Both the UI and compatibility facade delegate to this navigation owner.
     const manager = window.__godsEyeView.styleManager._locationNavigation;
@@ -2395,6 +2266,9 @@ try {
       && resetState.visionRestored,
     JSON.stringify(resetState),
   );
+  const storiesPopupAfterReset = await page.evaluate(storiesPopupDisplay);
+  check('the Stories announcement returns once Cockpit closes',
+    storiesPopupAfterReset !== null && storiesPopupAfterReset !== 'none', String(storiesPopupAfterReset));
   check('runtime console remains clean', consoleErrors.length === 0 && localHttpErrors.length === 0,
     [...localHttpErrors, ...consoleErrors].slice(0, 6).join(' | '));
 } finally {

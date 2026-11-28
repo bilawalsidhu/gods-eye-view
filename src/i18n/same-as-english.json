@@ -56,7 +56,9 @@
     "{n} hPa",
     "{kind} {name}",
     "{speed} {direction}",
-    "3D"
+    "3D",
+    "{utc} UTC",
+    "UTC"
   ],
   "de": [
     "1090 MHz",
@@ -86,7 +88,6 @@
     "Chat",
     "Country",
     "Cyan",
-    "Cyber",
     "DEST ---°",
     "DEST {bearing}",
     "Dance",
@@ -297,6 +298,14 @@
     "Route",
     "3D",
     "KT",
+    "{utc} UTC",
+    "ON AIR",
+    "Stream",
+    "{seconds} s",
+    "Mode",
+    "UTC",
+    "Radius",
+    "Cyber",
     "<1 km",
     "{distance} km"
   ],
@@ -475,7 +484,6 @@
     "Inspector",
     "{n} m",
     "{n} km",
-    "Error",
     "Squawk",
     "MMSI",
     "ICAO24",
@@ -493,6 +501,13 @@
     "{n} mm",
     "3D",
     "KT",
+    "{utc} UTC",
+    "Manual",
+    "{seconds} s",
+    "UTC",
+    "{fps} fps",
+    "{name} · sensor",
+    "Error",
     "<1 km",
     "{distance} km"
   ],
@@ -540,8 +555,7 @@
     "Conversation",
     "Country",
     "Cyan",
-    "Cyber",
-    "Cyclones · NHC / CPHC",
+    "Cyclones · NHC / CPHC · JTWC",
     "DENSE",
     "DEST ---°",
     "DEST {bearing}",
@@ -649,7 +663,6 @@
     "Source",
     "Station",
     "Station {id}",
-    "Style",
     "Suggestions",
     "TAGS · {tags}",
     "TEMP",
@@ -753,6 +766,16 @@
     "{n} mm",
     "3D",
     "KT",
+    "{utc} UTC",
+    "{seconds} s",
+    "contact",
+    "train",
+    "UTC",
+    "air quality monitors|STATIONS",
+    "{count} stations",
+    "Cyber",
+    "Cyclones · NHC / CPHC",
+    "Style",
     "<1 km",
     "{distance} km"
   ],
@@ -794,7 +817,6 @@
     "CRT",
     "Chat",
     "Country",
-    "Cyber",
     "DEST ---°",
     "DEST {bearing}",
     "DISPLAY",
@@ -989,6 +1011,11 @@
     "{n} mm",
     "3D",
     "KT",
+    "{utc} UTC",
+    "{seconds} s",
+    "UTC",
+    "{fps} fps",
+    "Cyber",
     "<1 km",
     "{distance} km"
   ],
@@ -1075,6 +1102,8 @@
     "{n} mm",
     "3D",
     "KT",
+    "UTC",
+    "{fps} fps",
     "<1 km",
     "{distance} km"
   ],
@@ -1271,6 +1300,11 @@
     "{n} mm",
     "3D",
     "KT",
+    "{utc} UTC",
+    "Manual",
+    "{seconds} s",
+    "UTC",
+    "{name} · sensor",
     "<1 km",
     "{distance} km"
   ],
@@ -1317,7 +1351,9 @@
     "M {n}",
     "{n}%",
     "{kind} {name}",
-    "3D"
+    "3D",
+    "{utc} UTC",
+    "UTC"
   ],
   "sv": [
     "STATION",
@@ -1443,7 +1479,6 @@
     "SIG",
     "AUTO",
     "FM MHZ",
-    "Cyber",
     "Sonar",
     "Cyan",
     "≥ {value} MW",
@@ -1511,6 +1546,12 @@
     "{n} mm",
     "3D",
     "KT",
+    "{utc} UTC",
+    "{seconds} s",
+    "UTC",
+    "{count} stations",
+    "{name} · sensor",
+    "Cyber",
     "<1 km",
     "{distance} km"
   ],
@@ -1552,6 +1593,8 @@
     "{n}%",
     "{kind} {name}",
     "3D",
+    "{utc} UTC",
+    "UTC",
     "<1 km",
     "{distance} km"
   ],
@@ -1639,6 +1682,7 @@
     "{n}%",
     "{n} hPa",
     "3D",
+    "UTC",
     "<1 km",
     "{distance} km"
   ],
@@ -1726,6 +1770,7 @@
     "{n}%",
     "{n} hPa",
     "3D",
+    "UTC",
     "<1 km",
     "{distance} km"
   ],
@@ -1844,6 +1889,8 @@
     "{n} hPa",
     "{kind} {name}",
     "3D",
-    "KT"
+    "KT",
+    "{utc} UTC",
+    "UTC"
   ]
 }

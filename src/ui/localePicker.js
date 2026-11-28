@@ -3,7 +3,8 @@
  * opens a listbox of the shipped languages.
  *
  * The logic is pure and DOM-free; the LocalePicker view renders it. The
- * shell decides what a choice does (confirm, reload).
+ * shell decides what a choice does (src/ui/applicationShell.js
+ * `_chooseLocale`).
  *
  * The list follows the ARIA listbox pattern: the button opens it, focus moves
  * into the list (or into the search field, which is a combobox, once there are
@@ -177,19 +178,6 @@ export function typeaheadIndex(options, buffer, fromIndex) {
       return index;
   }
   return -1;
-}
-
-/**
- * What choosing a language does: the current one changes nothing, another
- * one switches.
- * @param {string} locale
- * @param {{current: string, switchLocale: (locale: string) => void}} actions
- * @returns {'unchanged'|'switched'}
- */
-export function applyLocaleChoice(locale, { current, switchLocale }) {
-  if (locale === current) return 'unchanged';
-  switchLocale(locale);
-  return 'switched';
 }
 
 /**

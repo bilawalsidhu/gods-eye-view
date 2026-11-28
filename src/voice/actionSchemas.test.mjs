@@ -42,7 +42,7 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // omit top-level anyOf (OpenAI rejects it). Contacts list routing preserves
     // requested radius and center authority in descriptions only.
     // Street Level and GNSS extend the manifest; tracked and analyst aircraft describe broadcasts.
-    // Air quality (ECCC AQHI) extends the manifest.
+    // Air quality includes each station's value, pollutant, averaging period, kind and method note.
     // Globe rotation adds one motion; visual keyhole fit and explicit
     // reset guidance/defaults update only move_camera and mode descriptions.
     // S2 GhostMaps extends the generated layer enums.
@@ -60,7 +60,13 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // absolute with its -45 default, with steps sent as a direction.
     // show_street_level (map, source, photo) adds one tool.
     // open_stories adds the Stories Explore entry action.
-    '5a2deb65bef5db8fa49ee55dd66efb884e7c3ba97dbdcaad3fada087170d2225',
+    // The Cyber HUD layout leaves set_hud's layout enum (its sonar is a
+    // visual style; set_cyber_sonar is excluded above).
+    // The Space Missions panel adds one panel target.
+    // Fire Perimeters queries add lastGrowthTime.
+    // The dock's Location and Visual Presets trays leave set_panel_open's
+    // targets; Visual (pp-toggles) takes the presets' and map sources' names.
+    '8df28dafaafde3e83e983528e2cc486dc68f282df99f6cde939325a2ee5461a0',
   );
 });
 
@@ -169,6 +175,14 @@ test('all legacy action arguments are byte-identical after removing the delibera
   delete property('set_layer_visibility').layerId.enum;
   delete property('show_data_layers_menu').layerId.enum;
   delete property('get_entity_context').layerId.enum;
+  // The dock's Location and Visual Presets trays are gone, and their panel
+  // ids with them.
+  property('set_panel_open').panelId.enum.splice(
+    1,
+    0,
+    'location-bar',
+    'control-panel',
+  );
   delete property('analyst_query').layers.items.enum;
   // Earth-centered rotation is additive; local camera yaw keeps its contract.
   const motion = property('move_camera').motion;
@@ -193,6 +207,7 @@ test('all legacy action arguments are byte-identical after removing the delibera
         'voice-preview',
         'provider-settings',
         'utilities-panel',
+        'space-missions-panel',
       ].includes(id),
   );
   for (const tool of legacy) {
@@ -227,9 +242,9 @@ test('all legacy action arguments are byte-identical after removing the delibera
     delete center.properties[axis].minimum;
     delete center.properties[axis].maximum;
   }
-  // Cyber adds one HUD layout and Operator was retired.
+  // Operator and then Cyber were retired.
   const hud = property('set_hud').layout;
-  assert.deepEqual(hud.enum, ['tactical', 'minimal', 'cyber']);
+  assert.deepEqual(hud.enum, ['tactical', 'minimal']);
   hud.enum = ['tactical', 'operator', 'minimal'];
   // Snow is retired from set_visual_style; restore it to keep the legacy pin.
   const visualStyle = legacy.find((tool) => tool.name === 'set_visual_style')
@@ -338,5 +353,19 @@ test('tilt accepts an angle with no direction', () => {
   // No range in the schema (prompt budget): the runner clamps to -89..-5.
   assert.ok(
     validateArgs(schema, { motion: 'tilt', pitchDeg: 'steep' }).length > 0,
+  );
+});
+
+test('set_panel_open accepts the Space Missions panel', () => {
+  const schema = GEV_ACTION_SCHEMAS.find(
+    (tool) => tool.name === 'set_panel_open',
+  ).parameters;
+  assert.deepEqual(
+    validateArgs(schema, { panelId: 'space-missions-panel', open: true }),
+    [],
+  );
+  assert.ok(
+    validateArgs(schema, { panelId: 'space-missions', open: true }).length > 0,
+    'the Context mode name is not a panel id',
   );
 });

@@ -181,13 +181,16 @@ try {
     sameAfterReorder: true,
     count: 4000,
   });
+  console.log(
+    'PASS: search, scope, local cycling, empty-view Nearest and 4,000-option reuse',
+  );
   const translated = await page.evaluate(async () => {
     const { setLocale } = await import('/src/i18n/index.js');
     const results = [];
     for (const locale of ['es', 'ru']) {
-      setLocale(locale);
+      await setLocale(locale);
       window.mapMoved();
-    await window.vueTick();
+      await window.vueTick();
       results.push({
         status: document.getElementById('cctv-discovery-status').textContent,
         placeholder: document.querySelector('#cctv-camera-search').placeholder,

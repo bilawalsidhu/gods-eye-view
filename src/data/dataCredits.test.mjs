@@ -25,6 +25,17 @@ test('every credit carries a unique key and some markup to render', () => {
   }
 });
 
+test("Canada's retired AQHI has no credit: no layer reads ECCC data", () => {
+  assert.deepEqual(
+    DATA_CREDITS.filter(
+      (entry) =>
+        entry.key === 'eccc-aqhi' ||
+        /AQHI|Environment and Climate Change Canada/.test(entry.html),
+    ).map((entry) => entry.key),
+    [],
+  );
+});
+
 test('adsbdb is credited and carries its published route-data restriction', () => {
   const credit = DATA_CREDITS.find((entry) => entry.key === 'adsbdb');
   assert.ok(
@@ -100,69 +111,16 @@ test('OpenStreetMap has one generic data credit with separate tile and names dis
   );
 });
 
-test('inline OSM attribution persists until its last display owner leaves', async (t) => {
-  const { showOsmCredit, hideOsmCredit } = await import('./dataCredits.js');
-  t.mock.timers.enable({ apis: ['setTimeout'] });
-  const visible = new Set();
-  const viewer = bindFakeCesiumCredits({
-    creditDisplay: {
-      addStaticCredit: (c) => visible.add(c),
-      removeStaticCredit: (c) => visible.delete(c),
-    },
-    scene: { requestRender() {} },
-  });
-  assert.equal(showOsmCredit(viewer, 'alpr'), true);
-  assert.equal(showOsmCredit(viewer, 'alpr'), false);
-  assert.equal(visible.size, 1);
+test('the Data attribution list holds the OpenStreetMap and OpenMapTiles credits, never on the map line', () => {
+  for (const key of ['openstreetmap', 'openfreemap']) {
+    const entry = DATA_CREDITS.find((credit) => credit.key === key);
+    assert.ok(entry, `${key} is in the static list`);
+    assert.notEqual(entry.inline, true);
+  }
   assert.match(
-    [...visible][0].html,
-    /href="https:\/\/www.openstreetmap.org\/copyright"/,
+    DATA_CREDITS.find((credit) => credit.key === 'openfreemap').html,
+    /openmaptiles\.org/,
   );
-  assert.match([...visible][0].html, />© OpenStreetMap</);
-  assert.ok([...visible][0].showOnScreen);
-  t.mock.timers.tick(60000);
-  assert.equal(visible.size, 1);
-  showOsmCredit(viewer, 'traffic', { openMapTiles: true });
-  assert.equal(visible.size, 2);
-  hideOsmCredit(viewer, 'alpr');
-  assert.equal(visible.size, 2, 'traffic still owns both credits');
-  showOsmCredit(viewer, 'datacenters');
-  hideOsmCredit(viewer, 'traffic');
-  assert.equal(
-    visible.size,
-    1,
-    'bundled data does not retain the tile distributor',
-  );
-  hideOsmCredit(viewer, 'datacenters');
-  assert.equal(visible.size, 0);
-  assert.equal(hideOsmCredit(viewer, 'datacenters'), false);
-  showOsmCredit(viewer, 'alpr');
-  assert.equal(visible.size, 1, 'reenabling restores the short credit');
-});
-
-test('tile attribution follows source changes and viewers have independent ownership', async () => {
-  const { showOsmCredit, hideOsmCredit } = await import('./dataCredits.js');
-  const create = () => {
-    const credits = new Set();
-    return bindFakeCesiumCredits({
-      credits,
-      creditDisplay: {
-        addStaticCredit: (c) => credits.add(c),
-        removeStaticCredit: (c) => credits.delete(c),
-      },
-    });
-  };
-  const a = create(),
-    b = create();
-  showOsmCredit(a, 'installations', { openMapTiles: true });
-  showOsmCredit(b, 'installations');
-  assert.equal(a.credits.size, 2);
-  assert.equal(b.credits.size, 1);
-  showOsmCredit(a, 'installations');
-  assert.equal(a.credits.size, 1, 'wide names no longer use tiles');
-  hideOsmCredit(a, 'installations');
-  assert.equal(a.credits.size, 0);
-  assert.equal(b.credits.size, 1);
 });
 
 test('the NYC camera credit carries NYC DOT’s requested disclaimer', () => {
@@ -171,6 +129,18 @@ test('the NYC camera credit carries NYC DOT’s requested disclaimer', () => {
   assert.ok(credit.html.includes(NYC_DOT_DISCLAIMER));
   assert.match(credit.html, /make no representation as to the accuracy/);
   assert.match(credit.html, /observe posted signage/);
+});
+
+test('the Ontario 511 camera credit carries the licence attribution statement', () => {
+  const credit = DATA_CREDITS.find((entry) => entry.key === 'ontario-511-cctv');
+  assert.ok(credit, 'Ontario 511 camera frames must be credited');
+  assert.ok(
+    credit.html.includes(
+      'Contains information licensed under the <a href="https://www.ontario.ca/page/open-government-licence-ontario"',
+    ),
+  );
+  assert.match(credit.html, />Open Government Licence – Ontario<\/a>/);
+  assert.match(credit.html, /Provided as is, without warranty/);
 });
 
 test("the Houston camera credit names TranStar's terms and the permission they require", () => {
@@ -231,16 +201,6 @@ test('a credit with several links becomes one credit per link, in order', async 
     ],
     ['Incident information: InciWeb', 'https://inciweb.wildfire.gov/'],
   ]);
-  assert.deepEqual(read(html('eccc-aqhi')), [
-    [
-      'Air quality (AQHI): Environment and Climate Change Canada — MSC GeoMet (eccc-msc.github.io/open-data)',
-      'https://eccc-msc.github.io/open-data/',
-    ],
-    [
-      'ECCC Data Servers End-use Licence',
-      'https://eccc-msc.github.io/open-data/licence/readme_en/',
-    ],
-  ]);
   assert.deepEqual(
     read(BHOTE_KOSHI_CREDIT.html)[1][0].slice(0, 15),
     'and GeoPera (CC',
@@ -280,7 +240,8 @@ test('data credits go through the renderer to the attribution list', async () =>
   const shown = [];
   const viewer = bindFakeCesiumCredits({
     creditDisplay: {
-      addStaticCredit: (c) => shown.push(c),
+      // The renderer's own CesiumJS credit aside.
+      addStaticCredit: (c) => c.html.includes('CesiumJS') || shown.push(c),
       removeStaticCredit() {},
     },
   });
@@ -363,4 +324,12 @@ test('the always-on rail credit names live feeds only, never timetables', () => 
   assert.ok(rail);
   assert.match(rail.html, /realtime feeds/);
   assert.doesNotMatch(rail.html, /timetable|placed from/i);
+});
+
+test('the OpenAQ credit says where each station names its network and licence', () => {
+  const credit = DATA_CREDITS.find((entry) => entry.key === 'openaq');
+  assert.match(
+    credit.html,
+    /The originating network and its licence are named in each station’s details\.$/,
+  );
 });

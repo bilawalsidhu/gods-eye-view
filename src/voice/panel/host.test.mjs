@@ -5,6 +5,11 @@ import { readFileSync } from 'node:fs';
 import { createPinia } from 'pinia';
 import { createVoiceControl } from '../control.js';
 import { useVoiceStore } from '../../ui/stores/voice.js';
+import {
+  createContextCardOpener,
+  useEntityCardStore,
+} from '../../ui/stores/entityCard.js';
+import { applicationPinia } from '../../ui/vueRuntime.js';
 import { createGevActionRunner } from '../gevActions.js';
 import { createVoiceCommands as bind } from '../sessionCommands.js';
 import { createVoiceCommands as compose } from '../commands.js';
@@ -138,6 +143,8 @@ function mounted(t, options = {}) {
     createSession: factory(instances, options),
     createControl: (control) => createTestVoiceUi({ ...control, pinia }),
     panelHost: host,
+    styleManager: options.styleManager ?? null,
+    contextCard: createContextCardOpener(applicationPinia()),
     nativePanelProvider: options.native
       ? (options.nativeProvider ?? 'gemini')
       : null,
@@ -618,7 +625,7 @@ test('named voice settings exits Cockpit directly; Preview stays disabled and vi
   assert.equal(f.state.exits, 1);
   assert.deepEqual(
     f.state.visual.map(([id]) => id),
-    ['control-panel', 'control-panel', 'control-panel', 'scene-panel'],
+    ['pp-toggles', 'pp-toggles', 'pp-toggles', 'scene-panel'],
   );
   await assert.rejects(
     () => f.run('set_panel_open', { panelId: 'settings', open: true }),
@@ -779,7 +786,7 @@ test('voice timeout change preserves a pending voice reveal', async (t) => {
   assert.equal(f.commands.getVoicePreferences().minutes, 0);
 });
 
-test('active provider output reveals Preview after done; manual choice wins until genuine input, replays do not reset idle', async (t) => {
+test('active provider output reveals Preview after done; manual choice wins until genuine input, replays change nothing', async (t) => {
   const f = mounted(t, { native: true, nativeProvider: 'openai', view: true });
   await f.commands.session.start();
   const emit = f.instances[0].hooks.emit;
@@ -795,10 +802,12 @@ test('active provider output reveals Preview after done; manual choice wins unti
   emit({ type: 'completion', responseId: 'r1' });
   reply('Late answer');
   assert.equal(f.commands.voicePanel.snapshot().panelOpen, true);
-  const timer = f.commands.voiceCard.hideTimer;
+  const shown = f.commands.voiceCard.state;
   reply('Late answer');
   reply('Late', 'r1', { final: false });
-  assert.equal(f.commands.voiceCard.hideTimer, timer);
+  assert.equal(f.commands.voiceCard.state, shown);
+  // The panel's card keeps its reply; it has no idle deadline.
+  assert.equal(f.commands.voiceCard.hideTimer, null);
   assert.equal(f.commands.voiceCard.state.assistant, 'Late answer');
   f.commands.voicePanel.close();
   emit({
@@ -1152,153 +1161,6 @@ test('Escape does not minimize chat', async (t) => {
   assert.equal($('#gev-chat-panel').hidden, false);
 });
 
-function dockWing(t) {
-  const doc = globalThis.document;
-  const wing = doc.createElement('div');
-  wing.id = 'control-panel';
-  wing.className = 'panel-collapsible collapsed';
-  const toggle = doc.createElement('button');
-  toggle.className = 'dock-tray-toggle';
-  const tray = doc.createElement('div');
-  tray.className = 'dock-popover-content';
-  wing.append(toggle, tray);
-  doc.body.append(wing);
-  t.after(() => wing.remove());
-  return {
-    wing,
-    toggle,
-    open: () => wing.classList.remove('collapsed'),
-    close: () => wing.classList.add('collapsed'),
-  };
-}
-
-test('reaching for a dock wing minimizes a centred chat or voice panel', async (t) => {
-  const f = mounted(t, { view: true });
-  await f.settle();
-  // The dock can mount after the layouts bind; they find it on use.
-  const wing = dockWing(t);
-  $('#gev-chat-button').click();
-  await f.settle();
-  wing.toggle.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
-  await f.settle();
-  assert.equal($('#gev-chat-panel').dataset.minimized, 'true');
-  // Leaving the wing with no tray open ends the yield.
-  wing.wing.dispatchEvent(new PointerEvent('pointerleave'));
-  await f.settle();
-  assert.equal($('#gev-chat-panel').dataset.minimized, undefined);
-  $('#gev-chat-button').click();
-  await f.settle();
-  $('#gev-chat-button').click();
-  await f.settle();
-  f.commands.voicePanel.select('preview');
-  await f.settle();
-  assert.equal($('#gev-voice-panel').dataset.minimized, undefined);
-  wing.toggle.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
-  await f.settle();
-  assert.equal($('#gev-voice-panel').dataset.minimized, 'true');
-});
-
-test('expanding a panel over an open tray docks it right without saving', async (t) => {
-  const f = mounted(t, { view: true });
-  // The view mount resets the body; the layouts bind on the next tick.
-  const wing = dockWing(t);
-  await f.settle();
-  $('#gev-chat-button').click();
-  await f.settle();
-  wing.toggle.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
-  wing.open();
-  await f.settle();
-  assert.equal($('#gev-chat-panel').dataset.placement, 'compact');
-  $('#gev-chat-restore').click();
-  await f.settle();
-  await f.settle();
-  assert.equal($('#gev-chat-panel').dataset.minimized, undefined);
-  assert.equal($('#gev-chat-panel').dataset.placement, 'docked');
-  assert.notEqual(globalThis.localStorage.getItem('gev.panel.docked'), 'true');
-  // The dock was only for the tray; it ends once the tray closes.
-  wing.close();
-  await f.settle();
-  await f.settle();
-  assert.equal(f.ui.state.layout.docked, false);
-  assert.equal($('#gev-chat-panel').dataset.placement, 'compact');
-  assert.equal($('#gev-chat-panel').dataset.minimized, undefined);
-});
-
-test('yielding to a dock tray leaves keyboard focus where it is', async (t) => {
-  const f = mounted(t, { view: true });
-  const wing = dockWing(t);
-  const field = globalThis.document.createElement('input');
-  globalThis.document.body.append(field);
-  t.after(() => field.remove());
-  await f.settle();
-  $('#gev-chat-button').click();
-  await f.settle();
-  for (const target of [$('#gev-chat-input'), field]) {
-    target.focus();
-    wing.toggle.dispatchEvent(
-      new PointerEvent('pointerover', { bubbles: true }),
-    );
-    await f.settle();
-    assert.equal($('#gev-chat-panel').dataset.minimized, 'true');
-    assert.equal(globalThis.document.activeElement, target);
-    wing.wing.dispatchEvent(new PointerEvent('pointerleave'));
-    await f.settle();
-    assert.equal($('#gev-chat-panel').dataset.minimized, undefined);
-    assert.equal(globalThis.document.activeElement, target);
-  }
-});
-
-test('a panel that yielded to a tray expands in the centre once it closes', async (t) => {
-  const f = mounted(t, { view: true });
-  const wing = dockWing(t);
-  await f.settle();
-  $('#gev-chat-button').click();
-  await f.settle();
-  wing.toggle.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
-  wing.open();
-  await f.settle();
-  assert.equal($('#gev-chat-panel').dataset.minimized, 'true');
-  wing.close();
-  await f.settle();
-  assert.equal($('#gev-chat-panel').dataset.minimized, undefined);
-  assert.equal($('#gev-chat-panel').dataset.placement, 'compact');
-  assert.equal(f.ui.state.layout.yielded, null);
-});
-
-test('switching to voice while chat yields to a tray starts voice as its bar', async (t) => {
-  const f = mounted(t, { view: true });
-  const wing = dockWing(t);
-  await f.settle();
-  $('#gev-chat-button').click();
-  await f.settle();
-  wing.toggle.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
-  await f.settle();
-  $('#gev-chat-button').click();
-  await f.settle();
-  f.commands.voicePanel.select('preview');
-  await f.settle();
-  assert.equal($('#gev-voice-panel').dataset.minimized, 'true');
-  assert.equal(f.ui.state.layout.yielded, 'voicePanel');
-});
-
-test('undocking while a tray is open brings the panel back as its bar', async (t) => {
-  const f = mounted(t, { view: true });
-  const wing = dockWing(t);
-  await f.settle();
-  $('#gev-chat-button').click();
-  await f.settle();
-  $('#gev-chat-panel [data-layout-dock]').click();
-  await f.settle();
-  assert.equal($('#gev-chat-panel').dataset.placement, 'docked');
-  wing.open();
-  await f.settle();
-  $('#gev-chat-panel [data-layout-dock]').click();
-  await f.settle();
-  await f.settle();
-  assert.equal($('#gev-chat-panel').dataset.minimized, 'true');
-  assert.equal($('#gev-chat-panel').dataset.placement, 'compact');
-});
-
 test('opening chat or closing the voice panel clears a stale voice error', async (t) => {
   for (const leave of ['chat', 'close']) {
     const f = mounted(t, { view: true });
@@ -1443,4 +1305,223 @@ test('teardown inside sendText prevents appending the submitted message', async 
     globalThis.document.querySelectorAll('.gev-chat-message').length,
     0,
   );
+});
+
+// What the selection actions report, as the real runner does.
+const selectionRunner = async (name) =>
+  name === 'select_nearest_aircraft'
+    ? {
+        ok: true,
+        action: name,
+        layerId: 'flights',
+        label: 'UAL12',
+        aircraft: { id: 'a1b2c3', callsign: 'UAL12' },
+      }
+    : name === 'track_entity'
+      ? {
+          ok: true,
+          action: name,
+          layerId: 'military',
+          kind: 'aircraft',
+          id: 'ae01ce',
+          label: 'RCH401',
+          latitude: 42.3,
+          longitude: -71,
+        }
+      : { ok: true };
+// The Context panel's entity card, cleared for each test.
+function contextCard(t) {
+  const store = useEntityCardStore(applicationPinia());
+  store.clear();
+  t.after(() => store.clear());
+  return store;
+}
+
+// Docks the assistant panels into the right rail's lane for one test.
+async function dockIntoRail(t, f) {
+  t.after(() => globalThis.localStorage.removeItem('gev.panel.docked'));
+  f.ui.emit('layout-dock');
+  await f.settle();
+  await f.settle();
+}
+
+test('a voice selection opens its Context card, steps the docked voice panel down and keeps the reply', async (t) => {
+  const context = contextCard(t);
+  const f = mounted(t, { view: true, runner: selectionRunner });
+  await f.settle();
+  await f.commands.session.start();
+  f.commands.voicePanel.select('preview');
+  await f.settle();
+  await dockIntoRail(t, f);
+  const panel = $('#gev-voice-panel');
+  assert.equal(panel.dataset.placement, 'docked');
+  assert.equal(globalThis.document.body.dataset.assistantDocked, 'true');
+  const { emit, runAction } = f.instances[0].hooks;
+  // A failed selection selects nothing, so the panel stays.
+  emit({
+    type: 'action-result',
+    name: 'track_entity',
+    result: { ok: false, error: 'Nothing matched' },
+  });
+  await f.settle();
+  assert.equal(panel.dataset.minimized, undefined);
+  assert.equal(context.card, null);
+  await runAction('select_nearest_aircraft', { location: 'Boston' });
+  // Context shows the aircraft, as after a click on it.
+  assert.equal(context.card.layerId, 'flights');
+  assert.equal(context.card.key, 'flights:a1b2c3');
+  emit({
+    type: 'transcript',
+    role: 'assistant',
+    text: 'The nearest aircraft is UAL12.',
+    final: true,
+    responseId: 'r1',
+  });
+  await f.settle();
+  assert.equal(panel.dataset.minimized, 'true');
+  // The rail, and its Context panel, show again.
+  assert.equal(globalThis.document.body.dataset.assistantDocked, undefined);
+  assert.equal(
+    $('#gev-voice-mini-assistant').textContent,
+    'The nearest aircraft is UAL12.',
+  );
+  // The reply is not retired on a timer: expanding the bar shows it.
+  assert.equal(f.commands.voiceCard.hideTimer, null);
+  f.commands.voicePanel.select('preview');
+  await f.settle();
+  assert.equal(panel.dataset.minimized, undefined);
+  assert.equal(f.commands.voicePanel.snapshot().previewVisible, true);
+  assert.equal($('#gev-voice-preview-empty').hidden, true);
+  assert.equal(
+    f.commands.voiceCard.snapshot().assistant.text,
+    'The nearest aircraft is UAL12.',
+  );
+  // The next turn replaces it.
+  emit({ type: 'interruption', reason: 'user-speech' });
+  assert.equal(f.commands.voiceCard.state.assistant, null);
+});
+
+test('a voice selection leaves a voice panel above the dock as it is', async (t) => {
+  const context = contextCard(t);
+  const f = mounted(t, { view: true, runner: selectionRunner });
+  await f.settle();
+  await f.commands.session.start();
+  f.commands.voicePanel.select('preview');
+  await f.settle();
+  assert.equal($('#gev-voice-panel').dataset.placement, 'compact');
+  await f.instances[0].hooks.runAction('track_entity', { query: 'RCH401' });
+  await f.settle();
+  assert.equal(context.card.key, 'military:ae01ce');
+  assert.equal($('#gev-voice-panel').dataset.minimized, undefined);
+});
+
+test('a voice selection in Cockpit leaves the hidden Context card alone', async (t) => {
+  const context = contextCard(t);
+  const f = mounted(t, { view: true, runner: selectionRunner });
+  await f.settle();
+  await f.commands.session.start();
+  globalThis.document.body.classList.add('cockpit-mode');
+  t.after(() => globalThis.document.body.classList.remove('cockpit-mode'));
+  await f.instances[0].hooks.runAction('track_entity', { query: 'RCH401' });
+  assert.equal(context.card, null);
+});
+
+test('a typed chat selection opens its Context card and steps the docked chat panel down', async (t) => {
+  const context = contextCard(t);
+  const f = mounted(t, { view: true, runner: selectionRunner });
+  typedChat(f);
+  await f.settle();
+  $('#gev-chat-button').click();
+  await f.settle();
+  await dockIntoRail(t, f);
+  assert.equal($('#gev-chat-panel').dataset.placement, 'docked');
+  await f.commands.session.start({ textOnly: true });
+  await f.instances[0].hooks.runAction('track_entity', { query: 'RCH401' });
+  await f.settle();
+  assert.equal(context.card.key, 'military:ae01ce');
+  assert.equal($('#gev-chat-panel').dataset.minimized, 'true');
+  assert.equal(f.ui.state.chat.open, true);
+  assert.equal(globalThis.document.body.dataset.assistantDocked, undefined);
+});
+
+test('the voice panel keeps the last reply until the next turn starts', async (t) => {
+  const f = mounted(t, { view: true });
+  await f.settle();
+  await f.commands.session.start();
+  f.commands.voicePanel.select('preview');
+  const { emit } = f.instances[0].hooks;
+  emit({
+    type: 'transcript',
+    role: 'assistant',
+    text: 'Tracking UAL12.',
+    final: true,
+    responseId: 'r1',
+  });
+  await f.settle();
+  // Only the card floating on a control without the panel hides when idle.
+  assert.equal(f.commands.voiceCard.hideTimer, null);
+  assert.equal(f.commands.voicePanel.snapshot().previewVisible, true);
+  assert.equal($('#gev-voice-preview-empty').hidden, true);
+  emit({ type: 'interruption', reason: 'user-speech' });
+  emit({
+    type: 'transcript',
+    role: 'assistant',
+    text: 'Now following DAL4.',
+    final: true,
+    responseId: 'r2',
+  });
+  assert.equal(f.commands.voiceCard.state.assistant, 'Now following DAL4.');
+});
+
+test('a voice selection in Cockpit, as Cockpit reports it, leaves the Context card alone', async (t) => {
+  const context = contextCard(t);
+  let cockpit = true;
+  const f = mounted(t, {
+    view: true,
+    runner: selectionRunner,
+    styleManager: { getCockpitState: () => ({ active: cockpit }) },
+  });
+  await f.settle();
+  await f.commands.session.start();
+  // Cockpit's own state decides, not the page's classes.
+  assert.equal(
+    globalThis.document.body.classList.contains('cockpit-mode'),
+    false,
+  );
+  await f.instances[0].hooks.runAction('track_entity', { query: 'RCH401' });
+  assert.equal(context.card, null);
+  cockpit = false;
+  await f.instances[0].hooks.runAction('track_entity', { query: 'RCH401' });
+  assert.equal(context.card.key, 'military:ae01ce');
+});
+
+test('a slow voice selection never replaces a card clicked since it was asked', async (t) => {
+  const context = contextCard(t);
+  let finish;
+  const f = mounted(t, {
+    view: true,
+    runner: (name) =>
+      name === 'track_entity'
+        ? new Promise((resolve) => {
+            finish = () => resolve(selectionRunner(name));
+          })
+        : selectionRunner(name),
+  });
+  await f.settle();
+  await f.commands.session.start();
+  const pending = f.instances[0].hooks.runAction('track_entity', {
+    query: 'RCH401',
+  });
+  await Promise.resolve();
+  // The person clicks another aircraft while the lookup runs.
+  context.select({ layerId: 'flights', id: 'click1', label: 'CLICKED' });
+  const clicked = context.card.key;
+  finish();
+  await pending;
+  assert.equal(context.card.key, clicked);
+  // A selection with no newer pick still opens its card.
+  await f.instances[0].hooks.runAction('select_nearest_aircraft', {
+    location: 'Boston',
+  });
+  assert.equal(context.card.key, 'flights:a1b2c3');
 });

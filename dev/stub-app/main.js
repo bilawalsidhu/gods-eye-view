@@ -7,10 +7,12 @@
  * checks that no Cesium module loads.
  *
  * The stub runs nothing on its own: each animation frame here ticks it once.
- * `window.__stubBoot` exposes the application and the renderer it made.
+ * `window.__stubBoot` exposes the application (a promise of it: the page's
+ * language loads first) and the renderer it made.
  */
 import { createStandaloneApplication } from '../../src/standalone/application.js';
 import { createStubRendererPlugin } from '../../src/render/stub/index.js';
+import { startPageLocale } from '../../src/i18n/page.js';
 
 const renderers = [];
 
@@ -42,19 +44,24 @@ const plugin = createStubRendererPlugin(
   },
 );
 
-const application = createStandaloneApplication({
-  renderer: plugin,
-  allowQaRegistration: true,
-});
+// The page's language loads before any view renders.
+const application = startPageLocale(document).then(() =>
+  createStandaloneApplication({
+    renderer: plugin,
+    allowQaRegistration: true,
+  }),
+);
 
 window.__stubBoot = {
   application,
   renderers,
-  started: application.start().then(
-    () => ({ ok: true }),
-    (error) => {
-      console.error('Stub application failed to start:', error);
-      return { ok: false, error: String(error?.stack || error) };
-    },
-  ),
+  started: application
+    .then((app) => app.start())
+    .then(
+      () => ({ ok: true }),
+      (error) => {
+        console.error('Stub application failed to start:', error);
+        return { ok: false, error: String(error?.stack || error) };
+      },
+    ),
 };

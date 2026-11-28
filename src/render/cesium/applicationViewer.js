@@ -1,6 +1,6 @@
 import * as Cesium from 'cesium';
 import { applyModelAtmosphereWorkaround } from '../../app/atmosphereCompat.js';
-import { IDLE_FRAME_RATE } from '../../renderGovernor.js';
+import { frameRateCap } from '../../renderGovernor.js';
 import { preloadImageryAhead } from './imageryLookAhead.js';
 import { StarrySky } from './starrySky.js';
 
@@ -107,9 +107,9 @@ export function createApplicationViewer({
   );
   try {
     // Until the render governor takes over (src/renderGovernor.js, installed
-    // by src/app/scene.js), tick at the idle rate so the startup load does
-    // not compete with drawing at 240 fps.
-    viewer.targetFrameRate = IDLE_FRAME_RATE;
+    // by src/app/scene.js), tick at its cap (the Display panel's Frame rate;
+    // undefined, the display's rate, when unlimited).
+    viewer.targetFrameRate = frameRateCap() || undefined;
     // No double-click follow or zoom: the Viewer's own (it tracked or
     // zoomed to the entity picked) is off. Following is a layer's click.
     viewer.screenSpaceEventHandler.removeInputAction(

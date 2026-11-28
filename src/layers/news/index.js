@@ -8,8 +8,8 @@ import {
   findFrame,
   rendererOf,
 } from '../../render/rendererOf.js';
-import { hitTestWorldOverlay } from '../../overlays/worldOverlay.js';
 import {
+  clickCard,
   isOwnedByOtherLayer,
   registerPickOwner,
   resolvePickId,
@@ -203,7 +203,6 @@ export function createNewsLayer({
   inputFor = defaultInputFor,
   matchMedia = globalThis.matchMedia?.bind(globalThis),
   now = () => Date.now(),
-  hitTestOverlay = hitTestWorldOverlay,
   openUrl = (url) => globalThis.open?.(url, '_blank', 'noopener,noreferrer'),
   getViewCentre = viewCentre,
   registerCredit = registerDynamicCredit,
@@ -1348,11 +1347,13 @@ export function createNewsLayer({
     clickOff = inputFor(viewer).onClick((event) => {
       const at = event?.screenPosition;
       if (!enabled || destroyed || !isPointerFree() || !at) return;
-      const card = hitTestOverlay(at.x, at.y, {
-        sourceId: NEWS_OVERLAY_SOURCE_ID,
-      });
-      if (card?.entry?.activate) {
-        card.entry.activate();
+      // The card or label painted on top takes the click, read once per
+      // click so every layer agrees: our own card acts whatever is drawn
+      // under it; another layer's is that layer's click, so the pins under
+      // it do not act and the selection stays.
+      const card = clickCard(event);
+      if (card) {
+        if (card.sourceId === NEWS_OVERLAY_SOURCE_ID) card.entry?.activate?.();
         return;
       }
       // What is on top under the click: a draw-set item, or null for the
@@ -1483,7 +1484,9 @@ export function createNewsLayer({
     source: 'GEV news',
     updateInterval: 120_000,
 
-    init(nextViewer) {
+    init(nextViewer, { panel = null } = {}) {
+      // The panels' handle: invalidated when the row or readout changed.
+      listener = panel ? () => panel.invalidate() : null;
       viewer = nextViewer;
       // A scene with no renderer to draw with draws nothing.
       const draw = viewer ? findDraw(viewer) : null;
@@ -1732,12 +1735,6 @@ export function createNewsLayer({
         // which takes no layer imports: labels and colours are resolved here.
         feed: feedView(),
       };
-    },
-    setRowControlsListener(value) {
-      listener = typeof value === 'function' ? value : null;
-    },
-    getAnalystRecords() {
-      return [];
     },
     getStats() {
       return {

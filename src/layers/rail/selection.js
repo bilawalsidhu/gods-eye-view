@@ -7,16 +7,26 @@ import {
 } from './policy.js';
 import { getRegisteredRailFeed } from '../../data/railFeeds.js';
 import { inputFor } from '../../input/dispatcher.js';
+import { isUnderOtherCard } from '../../data/pickRegistry.js';
+import { onFollowChanged } from '../../data/followed.js';
+import {
+  claimSelection,
+  releaseSelection,
+  yieldSelectionToOthers,
+} from '../../data/clickSelect.js';
 import { t } from '../../i18n/index.js';
 
 /**
- * Click-to-select one train, a card that follows it, and the camera handed
- * to it (follow.js). Escape or a click on anything else deselects it.
+ * Click-to-select one train, a card that stays on it, and one camera
+ * flight that centres it (focus.js); the camera does not follow it. Escape,
+ * a click on anything else, or another layer's selection deselects it.
  * @param {object} context
  * @returns {object}
  */
 export function createSelection({ state, services, parts }) {
   const { governorRequestRender } = services.render;
+  /** Offs for the listeners that let the selection go to another layer. */
+  let yieldOffs = [];
 
   /**
    * The card's anchor: the marker's current position, read on every paint,
@@ -78,17 +88,19 @@ export function createSelection({ state, services, parts }) {
   /**
    * Select a train without touching the camera. Called by a click (through
    * selectAndFocusTrain) and by the duplicate filter, which moves the
-   * selection to another feed's copy of the same train; a follow on the old
-   * copy then glides to the new one.
+   * selection to another feed's copy of the same train.
    * @param {string} key
    */
   function selectTrain(key) {
     if (!state._trains.has(key)) return;
     const hadSelection = state._selectedKey !== null;
     const previous = state._trains.get(state._selectedKey);
+    if (state._selectedKey !== null && state._selectedKey !== key)
+      releaseSelection('rail', state._selectedKey);
     state._selectedKey = key;
+    // The one selection: any other layer's selected thing lets go.
+    claimSelection('rail', key);
     const entry = state._trains.get(key);
-    if (previous && previous !== entry) parts.follow.handover(entry);
     // The first selection dims every other train; a change of selection only
     // swaps the two trains involved.
     if (!hadSelection) parts.rendering.paintAll();
@@ -105,31 +117,22 @@ export function createSelection({ state, services, parts }) {
   }
 
   /**
-   * Select the train the user picked and give it the camera (follow.js): a
-   * moving train is followed, any other flown to once. Picking the train
-   * already followed keeps the follow as it is.
+   * Select the train the user picked and centre it once (focus.js), even
+   * the selected train again. The camera does not follow it.
    * @param {string} key
    */
   function selectAndFocusTrain(key) {
     if (!state._trains.has(key)) return;
     // A selection by the user, even of the selected train (cockpitSubject.js).
     state._selectedAtMs = Date.now();
-    const following = parts.follow.isFollowing(key);
-    // Another train's follow lets go first, so this is never taken for a
-    // move between two copies of one train.
-    if (!following) parts.follow.release();
     selectTrain(key);
-    if (!following) parts.follow.focus(state._trains.get(key));
+    parts.focus.focus(state._trains.get(key));
   }
 
-  /**
-   * Deselect, letting go of the camera where it is.
-   * @param {{untrack?: boolean}} [options] `untrack: false` when another
-   *   camera owner took over and what the camera follows must stay.
-   */
-  function clearSelection({ untrack = true } = {}) {
+  /** Deselect, leaving the camera where it is. */
+  function clearSelection() {
     const hadSelection = state._selectedKey !== null;
-    parts.follow.release({ untrack });
+    if (hadSelection) releaseSelection('rail', state._selectedKey);
     state._selectedKey = null;
     state._selectedAtMs = null;
     state._selectedCardText = null;
@@ -173,19 +176,32 @@ export function createSelection({ state, services, parts }) {
       if (!state._enabled) return;
       // A held train keeps the selection until its view lets it go.
       if (state._cockpitSubjectKey) return;
+      // Another layer's card or label painted on top takes the click: the item
+      // under it does not act, and the click is not empty space either.
+      if (isUnderOtherCard(event)) return;
       const key = trainKeyOf(event.drawHit);
       if (key) selectAndFocusTrain(key);
       else if (state._selectedKey) clearSelection();
     });
     globalThis.document?.addEventListener?.('keydown', onKeyDown);
-    parts.follow.install(viewer);
+    // Another layer's selection, or anything the camera starts following,
+    // takes the scene from the train, unless a first-person view holds it.
+    const yields = () =>
+      state._selectedKey !== null && !state._cockpitSubjectKey;
+    yieldOffs = [
+      yieldSelectionToOthers('rail', yields, () => clearSelection()),
+      onFollowChanged(viewer, (followed) => {
+        if (followed && yields()) clearSelection();
+      }),
+    ];
   }
 
   function removeClickHandler() {
     state._clickSubscription?.();
     state._clickSubscription = null;
     globalThis.document?.removeEventListener?.('keydown', onKeyDown);
-    parts.follow.uninstall();
+    for (const off of yieldOffs) off();
+    yieldOffs = [];
   }
 
   return {

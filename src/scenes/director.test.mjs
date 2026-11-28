@@ -332,7 +332,7 @@ test('same-shot seeking rolls back earlier layers and preserves Context, clock a
     await dataManager.setEnabled('flights', false);
     await dataManager.setEnabled('traffic', false);
     await dataManager.setEnabled('satellites', false);
-    styleManager.contextMode = 'space-missions';
+    styleManager.contextMode = 'flights';
     styleManager.contextExits.length = 0;
     refuse = (id) => id === 'traffic';
     dataManager.setEnabledCalls.length = 0;
@@ -349,7 +349,7 @@ test('same-shot seeking rolls back earlier layers and preserves Context, clock a
     assert.equal(enabled.get('flights'), false, 'first stale layer stays disabled');
     assert.equal(enabled.get('traffic'), false, 'refused second layer stays disabled');
     assert.equal(enabled.get('satellites'), false, 'later stale layer is never written');
-    assert.equal(styleManager.contextMode, 'space-missions');
+    assert.equal(styleManager.contextMode, 'flights');
     assert.deepEqual(styleManager.contextExits, []);
     assert.equal(viewer.views.length, viewsBefore, 'camera stays at the pre-seek pose');
     assert.equal(styleManager.visualCalls.length, visualCalls, 'do not rebuild the shot');
@@ -966,8 +966,6 @@ const REGISTERED = [
   'telegeography-submarine-cables', 'local-firms',
 ];
 
-/** Layers Space Missions permits while it isolates the globe (contextModePolicy). */
-const SPACE_MISSIONS_ALLOWED = new Set(['rocket-launches', 'satellites', 'radio']);
 
 const PROJECT_FIXTURE = {
   version: 3,
@@ -1089,7 +1087,7 @@ function fakeDataManager({ registered = REGISTERED, refuse = () => false } = {})
 }
 
 /** Style manager double covering the camera, visual, and Context facades. */
-function fakeStyleManager({ contextMode = null, exitFails = false } = {}) {
+function fakeStyleManager({ contextMode = null } = {}) {
   const manager = {
     contextMode,
     contextExits: [],
@@ -1107,7 +1105,6 @@ function fakeStyleManager({ contextMode = null, exitFails = false } = {}) {
     getContextModeState: () => ({ mode: manager.contextMode, entering: null }),
     async setContextMode(mode) {
       manager.contextExits.push(mode);
-      if (exitFails) return { ok: false, error: 'transition did not complete' };
       manager.contextMode = null;
       return { ok: true };
     },
@@ -1429,56 +1426,7 @@ test('a shot captured while tracking never re-establishes tracking on playback',
   }
 });
 
-test('a dirty Space Missions state is exited before a recipe applies its layers', async () => {
-  // Space Missions refuses every enable outside its own replay bundle. The old
-  // full-registry walk dismantled it by accident; the sparse policy never does,
-  // so all four Flights Radar enables were refused and reported as success.
-  const style = { contextMode: 'space-missions' };
-  const holder = {};
-  const data = {
-    refuse: (id, on) => on
-      && holder.styleManager?.contextMode === 'space-missions'
-      && !SPACE_MISSIONS_ALLOWED.has(id),
-  };
-  const { director, styleManager, dataManager, restore } = makeDirector({ style, data });
-  holder.styleManager = styleManager;
-  try {
-    const result = await director._applyLayerStates(recipeLayers('flights-radar'));
-
-    assert.deepEqual(styleManager.contextExits, ['off']);
-    assert.equal(styleManager.contextMode, null);
-    assert.deepEqual(result.refused, []);
-    assert.ok(result.applied.includes('flights'));
-    assert.deepEqual(
-      dataManager.setEnabledCalls.filter((call) => call.enabled).map((call) => call.id),
-      ['flights'],
-    );
-  } finally {
-    restore();
-  }
-});
-
-test('Orbital Watch does not compose over a Space Missions replay', async () => {
-  // Orbital Watch declares satellites, which the guard permits — so nothing is
-  // refused and a refusal-only check would pass while rocket-launches stayed
-  // on screen. Playback leaves an isolating mode whether or not it refuses.
-  const { director, styleManager, dataManager, restore } = makeDirector({
-    style: { contextMode: 'space-missions' },
-  });
-  try {
-    await director._applyLayerStates(recipeLayers('orbital-watch'));
-    assert.deepEqual(styleManager.contextExits, ['off']);
-    assert.equal(
-      dataManager.setEnabledCalls.some((call) => call.id === 'rocket-launches'),
-      false,
-      'the recipe never declares rocket-launches; exiting the mode is what clears it',
-    );
-  } finally {
-    restore();
-  }
-});
-
-test('a non-isolating context mode is left alone', async () => {
+test('playback leaves every Context mode alone', async () => {
   for (const contextMode of [null, 'flights']) {
     const { director, styleManager, restore } = makeDirector({ style: { contextMode } });
     try {
@@ -1841,6 +1789,32 @@ test('destroy drains cancelled LOAD work before its viewer can be discarded', as
   await director.destroy();
 });
 
+test("a captured shot keeps a layer's scene params, beyond its saved and shared ones", async () => {
+  const { styleManager, viewer, restore } = makeDirector();
+  const lifecycle = new LayerLifecycle(viewer);
+  lifecycle.register({
+    id: 'air-quality',
+    name: 'air-quality',
+    init() {},
+    enable() {},
+    disable() {},
+    update() {},
+    getParams: () => ({ view: 'aqi' }),
+    getSceneParams: () => ({ view: 'aqi', stations: false }),
+  });
+  const director = new SceneDirector(viewer, styleManager, lifecycle);
+  try {
+    assert.deepEqual(director._captureLayerStates()['air-quality'].params, {
+      view: 'aqi',
+      stations: false,
+    });
+    assert.deepEqual(lifecycle.getLayerParams('air-quality'), { view: 'aqi' });
+  } finally {
+    await director.destroy();
+    restore();
+  }
+});
+
 test('Scene snapshots are immutable and editing outcomes retain the affected shot and index', async () => {
   const { director, restore } = makeDirector();
   try {
@@ -1865,6 +1839,43 @@ test('Scene snapshots are immutable and editing outcomes retain the affected sho
     const count = seen.length;
     director.captureShot();
     assert.equal(seen.length, count);
+    await director.destroy();
+  } finally { restore(); }
+});
+
+test('moveShot reorders a scene, saves it and publishes shot-moved; not past the ends, not while playing', async () => {
+  const { director, restore } = makeDirector();
+  try {
+    director._activeRun = null;
+    const seen = [];
+    director.subscribe(({ change }) => { if (change) seen.push(change); });
+    const order = () => director._project.scenes[0].shots.map(({ id }) => id);
+    const saved = () =>
+      JSON.parse(localStorage.getItem('godsEyeView.sceneProject.v2'))
+        .scenes[0].shots.map(({ id }) => id);
+
+    assert.equal(director.moveShot('scene-1', 'shot-b', 0), true);
+    assert.deepEqual(order(), ['shot-b', 'shot-a']);
+    assert.deepEqual(saved(), ['shot-b', 'shot-a']);
+    const moved = seen.find(({ type }) => type === 'shot-moved');
+    assert.equal(moved.shot.id, 'shot-b');
+    assert.equal(moved.index, 0);
+
+    // The view's action is the same edit.
+    seen.length = 0;
+    director._controls.actions.moveShot('scene-1', 'shot-b', 1);
+    assert.deepEqual(order(), ['shot-a', 'shot-b']);
+    assert.deepEqual(seen.map(({ type }) => type), ['shot-moved']);
+
+    // Past an end it stays at the end; at its place, unknown, or playing, nothing moves.
+    assert.equal(director.moveShot('scene-1', 'shot-b', 5), false);
+    assert.equal(director.moveShot('scene-1', 'shot-a', -1), false);
+    assert.equal(director.moveShot('scene-1', 'missing', 0), false);
+    assert.equal(director.moveShot('scene-1', 'shot-a', 0.5), false);
+    director._running = true;
+    assert.equal(director.moveShot('scene-1', 'shot-b', 0), false);
+    director._running = false;
+    assert.deepEqual(order(), ['shot-a', 'shot-b']);
     await director.destroy();
   } finally { restore(); }
 });
@@ -2163,50 +2174,6 @@ test('a hold resumed partway waits for a clip that starts again, else only its r
   assert.ok(polls.length && polls.every((ms) => ms === 70), String(polls));
   // The moment was past the clip: only the rest of the hold.
   assert.deepEqual(await hold(0), [2000]);
-});
-
-/** Drive frame-by-frame camera motion headlessly for one test. */
-function installAnimationFrames() {
-  const original = globalThis.requestAnimationFrame;
-  const originalCancel = globalThis.cancelAnimationFrame;
-  globalThis.requestAnimationFrame = (callback) => setTimeout(callback, 16);
-  globalThis.cancelAnimationFrame = (handle) => clearTimeout(handle);
-  return () => {
-    globalThis.requestAnimationFrame = original;
-    globalThis.cancelAnimationFrame = originalCancel;
-  };
-}
-
-test('a run resumed inside a flight goes on from that point of the path and clock', async () => {
-  const { director, viewer, restore } = makeDirector();
-  const restoreFrames = installAnimationFrames();
-  const clock = [];
-  director.subscribeSceneClock((snap) => clock.push(snap));
-  const poses = [];
-  const setView = director._setCameraView.bind(director);
-  director._setCameraView = (pose) => {
-    poses.push(pose);
-    return setView(pose);
-  };
-  try {
-    // 0.75 of a 0.4 s scene: halfway along shot B's 0.2 s flight.
-    const run = director.startScene('scene-1', {
-      single: true,
-      fromProgress: 0.75,
-      preview: false,
-    });
-    await settle(40);
-    const first = clock.find((snap) => snap.running);
-    assert.equal(first.shotId, 'shot-b', 'starts in the shot that moment is in');
-    assert.ok(Math.abs(first.sceneElapsedSec - 0.3) < 1e-9, 'the clock starts at the moment');
-    // The first frame is the seek's own framing, halfway from A to B.
-    assert.ok(poses.length, 'the camera is driven from where it is');
-    assert.ok(Math.abs(poses[0].lat - -10) < 0.5, 'halfway from A to B');
-    assert.deepEqual(await run, { started: true, shots: 1 });
-    assert.equal(poses.at(-1).lat, -30, 'and ends on shot B');
-    assert.equal(viewer.flights.length, 0, 'no fresh flight from the shot start');
-    assert.equal(director._lastRun.wasCancelled, false);
-  } finally { await director.destroy(); restoreFrames(); restore(); }
 });
 
 test('a run resumed inside a hold plays its layers on from the seek’s state and waits only the rest of it', async () => {

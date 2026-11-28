@@ -188,8 +188,13 @@
   width: 17px;
   height: 17px;
 }
-body:has(#loading-screen:not(.hidden)) #gev-stories .gs-entry,
-body:has(#loading-screen:not(.hidden)) #gev-stories .gs-pop,
+/* `.loading-screen-shown` is a page-root class (src/ui/rail/rootClass.js). */
+body:is(.loading-screen-shown *, #loading-screen:not(.hidden))
+  #gev-stories
+  .gs-entry,
+body:is(.loading-screen-shown *, #loading-screen:not(.hidden))
+  #gev-stories
+  .gs-pop,
 body.recording-mode #gev-stories .gs-entry,
 body.recording-mode #gev-stories .gs-pop,
 body.ui-clean-view #gev-stories .gs-entry,

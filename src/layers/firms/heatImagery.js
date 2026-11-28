@@ -16,8 +16,9 @@ const WORLD = Object.freeze({ west: -180, south: -90, east: 180, north: 90 });
 
 /**
  * Drawn over the port's other imagery (zOrder 0) and under the weather
- * layers (`WEATHER_IMAGERY_Z` starts at 1), so weather turned on after the
- * heat stacks above it, as each weather frame went on top of the stack.
+ * layers (`WEATHER_IMAGERY_Z`, from 0.75 for an air-quality model field),
+ * so weather turned on after the heat stacks above it, as each weather
+ * frame went on top of the stack.
  */
 export const HEAT_IMAGERY_Z = 0.5;
 

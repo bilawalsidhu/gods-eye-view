@@ -110,7 +110,9 @@ function harness(
         ),
     },
     creditDisplay: {
-      addStaticCredit: (credit) => credits.add(credit),
+      // The renderer's own CesiumJS credit aside.
+      addStaticCredit: (credit) =>
+        credit.html.includes('CesiumJS') || credits.add(credit),
       removeStaticCredit: (credit) => credits.delete(credit),
     },
   };
@@ -196,8 +198,9 @@ function harness(
       },
       setVisible: (id, value) => overlay.visible.set(id, value),
       clearSource: (id) => overlay.entries.delete(id),
-      hitTest: (_x, _y, { sourceId }) =>
-        cardHit?.sourceId === sourceId ? cardHit : null,
+      // As the host does: unfiltered, the topmost entry.
+      hitTest: (_x, _y, { sourceId } = {}) =>
+        !sourceId || cardHit?.sourceId === sourceId ? cardHit : null,
     },
     input: () => ({
       onClick(fn) {
@@ -220,6 +223,8 @@ function harness(
       unregisterPickOwner: (id) => owners.delete(id),
       resolvePickId: (pick) => pick?.id ?? pick?.primitive?.id,
       isOwnedByOtherLayer: (_layerId, id) => id?.startsWith('other:'),
+      // The card on top at a click, as the registry answers from the host.
+      clickCard: () => cardHit,
     },
     sprites: { spriteDrawOrder: () => -9 },
     render: { governorRequestRender: (reason) => renders.push(reason) },
@@ -1300,6 +1305,7 @@ test('legend keeps semantic order, omits zero groups and puts one blurb first; s
   const allowed = new Set([
     'count',
     'lastUpdate',
+    'recordsRevision',
     'error',
     'stale',
     'loading',
@@ -1312,7 +1318,12 @@ test('legend keeps semantic order, omits zero groups and puts one blurb first; s
     'statusMessage',
     'retryInSec',
   ]);
-  assert.ok(Object.keys(h.layer.getStats()).every((key) => allowed.has(key)));
+  const stats = h.layer.getStats();
+  assert.deepEqual(
+    Object.keys(stats).filter((key) => !allowed.has(key)),
+    [],
+  );
+  assert.equal(stats.recordsRevision, null);
   h.layer.destroy();
 });
 
@@ -1474,11 +1485,19 @@ test('a successful empty page keeps the selected observation until explicit dese
   const h = harness({ getSnapshot: async () => rows });
   await h.update();
   h.layer.selectSighting(base.stableId);
+  assert.equal(h.layer.getStats().recordsRevision, base.stableId);
   rows = [];
   await h.update();
   assert.equal(h.clicks.collection.values.length, 1);
   assert.equal(h.store.selectedEntityId, base.stableId);
+  assert.equal(h.layer.getAnalystRecords()[0].positionUnconfirmed, true);
+  h.layer.selectSighting(base.stableId);
+  assert.equal(h.layer.getAnalystRecords()[0].positionUnconfirmed, true);
+  const { lastUpdate, recordsRevision } = h.layer.getStats();
+  assert.equal(recordsRevision, base.stableId);
   h.layer.clearSightingSelection();
+  assert.equal(h.layer.getStats().recordsRevision, null);
+  assert.equal(h.layer.getStats().lastUpdate, lastUpdate);
   await h.update();
   assert.equal(h.clicks.collection.values.length, 0);
   assert.equal(h.store.selectedEntityId, null);

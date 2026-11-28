@@ -48,7 +48,10 @@ import {
   readCyberSonarSettings,
   setCyberSonarEnabled,
 } from '../cyberSonar.js';
-import { cyberVisualDefaultsForHudTransition } from '../hudLayouts.js';
+import {
+  isLegacySonarHudLayout,
+  LEGACY_SONAR_HUD_LAYOUTS,
+} from '../hudLayouts.js';
 const DETECTION_ALLOCATION_STORAGE_KEY = 'gev:detection-allocation:v1';
 
 /** Own visual preferences, detection overrides and display-control state. */
@@ -70,6 +73,7 @@ export class VisualSettings {
       bloomVersion,
       sharpenIntensity,
       hudVariant,
+      hudSonar,
       hudVisible,
       detectionMode,
       detectionDensity,
@@ -119,7 +123,8 @@ export class VisualSettings {
       this._setSharpenIntensity(sharpenIntensity, { syncShare: false });
     if (typeof bloom === 'boolean') this._setBloomEnabled(bloom);
     if (typeof sharpen === 'boolean') this._setSharpenEnabled(sharpen);
-    if (hudVariant) this._setHudVariant(hudVariant);
+    if (hudVariant)
+      this._setHudVariant(hudVariant, { restore: true, sonar: hudSonar });
     if (typeof hudVisible === 'boolean') {
       this.hud.setMode(hudVisible ? 'on' : 'off');
       this._updateHudButtonState();
@@ -243,8 +248,6 @@ export class VisualSettings {
     this._scopeOpacityShown = null;
     this._celestialShown = null;
     this.activeStyle = 'normal';
-    this._preCyberStyle = null;
-    this._cyberStyleUserSelected = false;
     document.documentElement.dataset.gevStyle = this.activeStyle;
     this._detectionUserOverridden = false;
     this._cockpitVisionMode = 'optical';
@@ -716,62 +719,31 @@ export class VisualSettings {
     this._syncShareState();
   }
 
-  _setHudVariant(variantName, { applyVisualDefaults = false } = {}) {
+  /**
+   * @param {string} variantName Layout, or the removed `cyber` layout.
+   * @param {{restore?: boolean, sonar?: boolean}} [options] A share link,
+   *   scene or saved view is authoritative for Sonar too: it is on only when
+   *   the state names Cyber or says `sonar: true`, so a state that does not
+   *   mention Sonar turns it off unless it names Cyber. Other callers leave
+   *   Sonar as the viewer set it.
+   */
+  _setHudVariant(
+    variantName,
+    { restore = false, sonar: sonarOn = false } = {},
+  ) {
     if (!variantName) return;
-    const previousVariant = this.hud.getVariant();
+    // Cyber was removed; its sonar became a visual style. A state that names
+    // Cyber opens in Tactical with Sonar on.
+    const sonar =
+      isLegacySonarHudLayout(variantName) || (restore && sonarOn === true);
+    if (sonar || (restore && isCyberSonarEnabled()))
+      this._setCyberSonarEnabled(sonar);
     this.hud.setVariant(variantName);
-    const nextVariant = this.hud.getVariant();
-    const enteredCyber = previousVariant !== 'cyber' && nextVariant === 'cyber';
-    const leftCyber = previousVariant === 'cyber' && nextVariant !== 'cyber';
-    if (!applyVisualDefaults) {
-      // Scene/share/programmatic state is authoritative even when it reapplies
-      // the current Cyber variant. Do not let an older explicit entry restore
-      // stale local preset memory on the next user-selected exit.
-      this._preCyberStyle = null;
-      this._cyberStyleUserSelected = false;
-    } else if (enteredCyber) {
-      this._preCyberStyle = this.activeStyle;
-      this._cyberStyleUserSelected = false;
-    }
-    this._hudVariantShown = nextVariant;
+    this._hudVariantShown = this.hud.getVariant();
     this._publishDisplay();
-    const visualDefaults = cyberVisualDefaultsForHudTransition(
-      previousVariant,
-      nextVariant,
-      { explicit: applyVisualDefaults },
-    );
-    if (visualDefaults) this._applyCyberVisualDefaults(visualDefaults);
-    if (leftCyber) {
-      const restoreStyle =
-        applyVisualDefaults && !this._cyberStyleUserSelected
-          ? this._preCyberStyle
-          : null;
-      this._preCyberStyle = null;
-      this._cyberStyleUserSelected = false;
-      if (restoreStyle && restoreStyle !== this.activeStyle) {
-        this.setStyle(restoreStyle, {
-          applyPreset: false,
-          revealParameters: false,
-          preserveCyberRestore: true,
-        });
-      }
-    }
     this._syncCyberSonarControl();
     this._syncShareState();
     this._scheduleAdaptivePanelLayout({ settle: true });
-  }
-
-  _applyCyberVisualDefaults({ style, ironbow }) {
-    this.setStyle(style, {
-      applyPreset: false,
-      revealParameters: false,
-      preserveCyberRestore: true,
-    });
-    const thermalUniforms = this.stages?.thermal?.uniforms;
-    if (!thermalUniforms || thermalUniforms.palette === undefined) return;
-    thermalUniforms.palette = ironbow;
-    this._updateSliderPanel('thermal', { reveal: false });
-    this.services.governorRequestRender('cyber-visual-defaults');
   }
 
   _syncCyberSonarControl() {
@@ -791,7 +763,31 @@ export class VisualSettings {
     const next = setCyberSonarEnabled(!!enabled);
     this._syncCyberSonarControl();
     this.services.governorRequestRender('cyber-sonar-toggle');
+    this._syncShareState();
     return next;
+  }
+
+  /**
+   * The HUD layout a share link or scene shot records. Tactical with Sonar on
+   * is written as the retired Cyber code, which restores exactly that and
+   * which older readers understand too.
+   */
+  _sharedHudVariant() {
+    const variant = this.hud.getVariant();
+    return variant === 'tactical' && isCyberSonarEnabled()
+      ? LEGACY_SONAR_HUD_LAYOUTS[0]
+      : variant;
+  }
+
+  /**
+   * Whether a share link or scene shot records Sonar on beside its layout:
+   * only when the layout code does not already say so (Minimal with Sonar),
+   * so a state with Tactical and Sonar stays the Cyber code alone.
+   */
+  _sharedHudSonar() {
+    return (
+      isCyberSonarEnabled() && !isLegacySonarHudLayout(this._sharedHudVariant())
+    );
   }
 
   _setCyberSonarSetting(name, value) {
@@ -838,9 +834,7 @@ export class VisualSettings {
       this._setSharpenEnabled(sharpenInput.enabled);
     }
 
-    // Cyber is an explicit shell choice, independent of the imagery filter.
-    // Scene/share restoration still applies its own HUD through _setHudVariant.
-    if (preset.hudVariant && this.hud.getVariant() !== 'cyber') {
+    if (preset.hudVariant) {
       this._setHudVariant(preset.hudVariant);
     }
     if (typeof preset.hudVisible === 'boolean') {
@@ -865,8 +859,8 @@ export class VisualSettings {
   }
 
   /**
-   * @param {{keepHudVariant?: boolean}} [options] `keepHudVariant` leaves the
-   *   HUD layout to the style, as choosing a style does (Visual's reset).
+   * @param {{keepHudVariant?: boolean}} [options] `keepHudVariant` keeps the
+   *   current HUD layout (Visual's reset).
    */
   _applyGlobalPostDefaults({ keepHudVariant = false } = {}) {
     const defaults = GLOBAL_POST_DEFAULTS;
@@ -943,7 +937,8 @@ export class VisualSettings {
         bloomIntensity: this._getBloomIntensity(),
         bloomVersion: BLOOM_SCALE_VERSION,
         sharpenIntensity: this._sharpenPct,
-        hudVariant: this.hud.getVariant(),
+        hudVariant: this._sharedHudVariant(),
+        hudSonar: this._sharedHudSonar(),
         hudVisible: this.hud.visible,
         detectionMode: detection.mode,
         detectionDensity: detection.densityPct,
@@ -1261,7 +1256,10 @@ export class VisualSettings {
       },
       hud: {
         visible: this.hud.visible,
-        variant: this.hud.getVariant(),
+        variant: this._sharedHudVariant(),
+        // Written only when on beside a layout that cannot say it, so a shot
+        // without Sonar or with Tactical and Sonar reads in older builds.
+        ...(this._sharedHudSonar() ? { sonar: true } : {}),
       },
       detection: {
         mode: getDetectionMode(),
@@ -1309,7 +1307,10 @@ export class VisualSettings {
 
     const hudState = state.hud || {};
     if (hudState.variant) {
-      this._setHudVariant(hudState.variant);
+      this._setHudVariant(hudState.variant, {
+        restore: true,
+        sonar: hudState.sonar,
+      });
     }
     if (typeof hudState.visible === 'boolean') {
       this.hud.setMode(hudState.visible ? 'on' : 'off');
@@ -1527,8 +1528,6 @@ export class VisualSettings {
       applyPreset = true,
       revealParameters = applyPreset,
       restore = false,
-      userInitiated = false,
-      preserveCyberRestore = false,
     } = {},
   ) {
     if (
@@ -1538,18 +1537,6 @@ export class VisualSettings {
       return;
     const { setDetectionStyle } = this.services;
     if (!restore) this.shareLinkManager?.claimRestoreLane?.('visual');
-    if (this.hud.getVariant() === 'cyber') {
-      if (userInitiated) {
-        // A direct preset choice owns the active style even when it selects the
-        // same value as Cyber's automatic FLIR default.
-        this._cyberStyleUserSelected = true;
-      } else if (!preserveCyberRestore) {
-        // Scene/share/reset state is authoritative and must not be overwritten
-        // by a remembered local Cyber entry when the user later exits.
-        this._preCyberStyle = null;
-        this._cyberStyleUserSelected = false;
-      }
-    }
     if (styleName === this.activeStyle) {
       if (revealParameters && styleName !== 'normal')
         this._revealStyleParameters();
@@ -1586,7 +1573,7 @@ export class VisualSettings {
       this._applyStylePresetDefaults(styleName);
     }
 
-    // The style buttons, the dock's mini status and the ACTIVE STYLE corner.
+    // Visual's presets and the ACTIVE STYLE corner.
     this._publishActiveStyle(styleName);
 
     // Update parameter sliders

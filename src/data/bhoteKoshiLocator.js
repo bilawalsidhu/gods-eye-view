@@ -1,7 +1,11 @@
+import { analystRecordLimit } from './analystRecordLimit.js';
 import {
   clearOverlaySource,
   setOverlayEntries,
 } from '../overlays/worldOverlay.js';
+import { inputFor } from '../input/dispatcher.js';
+import { clickCard } from './pickRegistry.js';
+import { isTrackingSelectionGesture } from './trackingClickGesture.js';
 import { governorRequestRender } from '../renderGovernor.js';
 import { drawOf, findCamera } from '../render/rendererOf.js';
 import { hexColor } from '../render/color.js';
@@ -11,8 +15,6 @@ import { lengthFraction } from '../geo/polyline.js';
 import {
   BHOTE_KOSHI_LOCATOR_CREDIT,
   registerDynamicCredit,
-  showOsmCredit,
-  hideOsmCredit,
 } from './dataCredits.js';
 import { BHOTE_KOSHI_FLOOD_PATH } from './bhoteKoshiFloodPath.js';
 import { INCIDENT_OVERVIEW_PLACES } from './bhoteKoshiIncidentPlaces.js';
@@ -85,6 +87,7 @@ const INCIDENT = Object.freeze({
   subtitle: msg('NEPAL · 26 AUG 2026'),
 });
 const TRIGGER_RECORD = Object.freeze({
+  id: 'us7000tbwb',
   lat: 28.271,
   lon: 85.515,
   heightM: 4200,
@@ -265,6 +268,48 @@ export function largestGeoJsonRing(geojson) {
   return rings.sort((a, b) => b.length - a.length)[0] || [];
 }
 
+/** The presentations that pin the incident's key places. */
+const PLACE_PRESENTATIONS = new Set([
+  BHOTE_KOSHI_INCIDENT_PLACES_PRESENTATION,
+  BHOTE_KOSHI_FLOOD_PATH_PRESENTATION,
+  BHOTE_KOSHI_PATH_OVERVIEW_PRESENTATION,
+]);
+
+/**
+ * Plain records for locator pins. Translate descriptive marks and turn
+ * uppercase place names into title case ("Syabru Besi").
+ * @param {ReadonlyArray<{id: string, title: string, lat: number, lon: number, heightM: number, elevationM?: number}>} places
+ * @param {number} [maxCount]
+ * @returns {Array<object>}
+ */
+export function bhoteKoshiPlaceRecords(places, maxCount = Infinity) {
+  const limit = analystRecordLimit(maxCount);
+  return (Array.isArray(places) ? places : [])
+    .filter(
+      (place) => Number.isFinite(place?.lat) && Number.isFinite(place?.lon),
+    )
+    .slice(0, limit)
+    .map((place) => {
+      const title = String(place.title || place.id);
+      const translation = PLACE_TITLE_TEXT.get(title);
+      return {
+        id: place.id,
+        name: translation
+          ? t(translation)
+          : title
+              .toLowerCase()
+              .replace(/(^|\s)\p{L}/gu, (letter) => letter.toUpperCase()),
+        lat: place.lat,
+        lon: place.lon,
+        pinHeightM: place.heightM,
+        ...(Number.isFinite(place.elevationM) && {
+          elevationM: place.elevationM,
+        }),
+        source: 'OpenStreetMap + GeoPera',
+      };
+    });
+}
+
 /**
  * Lightweight scene overlay for the multi-shot Nepal incident setup. It uses
  * the local OpenStreetMap boundary proxy and deliberately avoids the full
@@ -279,8 +324,11 @@ export function createBhoteKoshiLocatorLayer({
   cancelFrame = (handle) => cancelAnimationFrame(handle),
   scheduleDelay = (callback, delayMs) => setTimeout(callback, delayMs),
   cancelDelay = (handle) => clearTimeout(handle),
+  input = inputFor,
 } = {}) {
   let _viewer = null;
+  // The globe click that opens an actionable callout of ours on top.
+  let _removeClick = null;
   const _serial = ++layerSerial;
   // Whether the layer draws: from enable until it is let go.
   let _drawing = false;
@@ -1106,7 +1154,7 @@ export function createBhoteKoshiLocatorLayer({
     _drawing = true;
     renderPresentation();
     registerDynamicCredit(viewer, BHOTE_KOSHI_LOCATOR_CREDIT);
-    showOsmCredit(viewer, BHOTE_KOSHI_LOCATOR_LAYER_ID);
+    installCalloutClick(viewer);
     requestRender('bhote-koshi-locator-callout');
 
     try {
@@ -1141,8 +1189,33 @@ export function createBhoteKoshiLocatorLayer({
     }
   }
 
+  /**
+   * An actionable callout of ours (the trigger record's) is a card painted
+   * over the globe: a click on it opens its source, as its keyboard action
+   * does. Like the other cards, it leaves a drag alone and, on top, takes the
+   * click over whatever is drawn under it.
+   */
+  function installCalloutClick(viewer) {
+    if (_removeClick) return;
+    let clicks = null;
+    try {
+      clicks = input?.(viewer) ?? null;
+    } catch {
+      clicks = null;
+    }
+    _removeClick =
+      clicks?.onClick?.((event) => {
+        if (!_enabled || !isTrackingSelectionGesture(event.gesture)) return;
+        // The card painted on top, read once per click so every layer agrees.
+        const top = clickCard(event);
+        if (top?.sourceId !== BHOTE_KOSHI_LOCATOR_OVERLAY_SOURCE_ID) return;
+        if (typeof top.entry?.activate === 'function') top.entry.activate();
+      }) ?? null;
+  }
+
   async function disable() {
-    hideOsmCredit(_viewer, BHOTE_KOSHI_LOCATOR_LAYER_ID);
+    _removeClick?.();
+    _removeClick = null;
     _enabled = false;
     _boundaryReady = false;
     _boundaryResolved = false;
@@ -1259,6 +1332,33 @@ export function createBhoteKoshiLocatorLayer({
         ],
         legend: [],
       };
+    },
+    /**
+     * Plain records for the active presentation's incident places, nearby
+     * cities or USGS trigger report.
+     * @param {number} [maxCount]
+     * @returns {Array<object>}
+     */
+    getAnalystRecords(maxCount = Infinity) {
+      if (!_enabled) return [];
+      if (_presentation === BHOTE_KOSHI_TRIGGER_RECORD_PRESENTATION) {
+        if (maxCount < 1) return [];
+        return [
+          {
+            id: TRIGGER_RECORD.id,
+            name: t(TRIGGER_RECORD.title),
+            lat: TRIGGER_RECORD.lat,
+            lon: TRIGGER_RECORD.lon,
+            pinHeightM: TRIGGER_RECORD.heightM,
+            source: 'USGS',
+            website: TRIGGER_SOURCE_URL,
+          },
+        ];
+      }
+      if (_presentation === BHOTE_KOSHI_CITY_CONTEXT_PRESENTATION)
+        return bhoteKoshiPlaceRecords(NEARBY_CITIES, maxCount);
+      if (!PLACE_PRESENTATIONS.has(_presentation)) return [];
+      return bhoteKoshiPlaceRecords(INCIDENT_OVERVIEW_PLACES, maxCount);
     },
     getStats() {
       return {

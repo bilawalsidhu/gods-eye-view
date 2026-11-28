@@ -27,6 +27,7 @@ import {
   followsClock,
 } from './policy.js';
 import { VESSEL_OVERLAY_SOURCE_ID } from '../../data/vesselLabels.js';
+import { locateOnTrack } from '../../data/locate.js';
 
 const UUID_KEY =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -61,6 +62,59 @@ export function createQueries({
     for (const candidate of state.records.byId?.values() ?? [])
       if (candidate.mmsi === id) return candidate;
     return null;
+  }
+
+  /** Each vessel's detection object, reused while its record is. */
+  const detectionObjects = new WeakMap();
+
+  /**
+   * A vessel's detection object where it is drawn now (its icon, or its
+   * model on the water), or null when it is not drawn: past the horizon, not
+   * there yet at the time drawn, or the ship the bridge camera rides with
+   * its icon hidden (drawn as its model, it still counts).
+   * @param {Object} record
+   * @returns {Object|null}
+   */
+  function detectableObject(record) {
+    const visual = components.rendering.getVisual(record);
+    if (!visual.visible) return null;
+    if (
+      state.cockpitSubjectId &&
+      record.id === state.cockpitSubjectId &&
+      !visual.modelOwnsVisual
+    )
+      return null;
+    components.rendering.readVesselNow(record);
+    const position = visual.position;
+    if (!position) return null;
+    let object = detectionObjects.get(record);
+    if (!object) {
+      object = {
+        sourceId: record.id,
+        type: 'SEA',
+        // Detection hides the callout while this card paints. A record
+        // keeps its card identity (an unkeyed one is rebuilt every poll).
+        cardSourceId: VESSEL_OVERLAY_SOURCE_ID,
+        cardEntryId: components.cards.vesselOverlayEntryId(record),
+      };
+      detectionObjects.set(record, object);
+    }
+    object.position = position;
+    object.skipLabel = record === state.selectedRecord;
+    // Text is rebuilt only when what it shows changes in place.
+    const name = record.name || record.mmsi || 'VESSEL';
+    if (object.id !== name) object.id = name;
+    if (object._labelType !== record.type) {
+      object._labelType = record.type;
+      object.klass = record.type
+        ? String(record.type).toUpperCase().slice(0, 14)
+        : undefined;
+    }
+    if (object._labelSpeed !== record.speed) {
+      object._labelSpeed = record.speed;
+      object.metric = formatKnots(record.speed); // record.speed is knots
+    }
+    return object;
   }
 
   /**
@@ -509,6 +563,33 @@ export function createQueries({
       return result;
     },
 
+    // A Context card refresh names a specific source vessel. A bare legacy
+    // lookup can still try the MMSI when the key does not identify a row.
+    getContextRecord(key, { exact = false } = {}) {
+      if (!state.feed.enabled) return null;
+      const record = state.records.byId.get(key);
+      if (record) return mapAnalystRecord(record);
+      return exact ? null : undefined;
+    },
+
+    /**
+     * Select a vessel by id as a click on it does: selected with its trail
+     * and card, and centred once (src/data/clickSelect.js).
+     * @param {string|number} id Vessel id.
+     * @param {{center?: boolean}} [options] `center: false` selects it and
+     *   leaves the camera to the caller (a pick from a list frames it).
+     * @returns {boolean} True if a matching vessel was selected.
+     */
+    pickById(id, { center = true } = {}) {
+      if (id === null || id === undefined) return false;
+      const record = recordFor(String(id).trim());
+      if (!record || !state.feed.enabled) return false;
+      if (center) return components.selection.selectAndFocusVessel(record);
+      if (state.selectedRecord?.id !== record.id)
+        components.selection.selectVessel(record);
+      return true;
+    },
+
     /**
      * Select a vessel by id via the same path as a map click
      * (highlight + HUD update). An AIS feed's vessels are keyed by MMSI.
@@ -523,6 +604,27 @@ export function createQueries({
       if (!record) return false;
       components.selection.selectVessel(record);
       return true;
+    },
+
+    /**
+     * Follow a vessel by id with the camera (the card's Follow, a spoken
+     * "track"): selected as a click selects it, then followed where the
+     * layer draws it. The one already followed stays followed.
+     * @param {string|number} id Vessel id.
+     * @returns {boolean} True if the camera follows the vessel.
+     */
+    trackById(id) {
+      if (id === null || id === undefined || !state.feed.enabled) return false;
+      const record = recordFor(String(id).trim());
+      if (!record) return false;
+      if (state.selectedRecord?.id !== record.id)
+        components.selection.selectVessel(record);
+      return components.selection.followSelected();
+    },
+
+    /** Whether the camera follows the selected vessel now. */
+    isFollowed() {
+      return components.selection.isSelectedFollowed();
     },
 
     /**
@@ -629,9 +731,43 @@ export function createQueries({
     },
 
     /**
-     * Return a subset of vessels for the universal detection overlay.
-     * Deterministic stride sampling distributes selections evenly across the
-     * current record list while honoring the overlay's per-layer budget.
+     * The track reference of a loaded vessel, so it can be looked up again
+     * once it has left the feed (see locate).
+     * @param {string} id
+     * @returns {string|null}
+     */
+    referenceOf(id) {
+      if (id === null || id === undefined) return null;
+      return recordFor(String(id).trim())?.reference ?? null;
+    },
+
+    /**
+     * Where a vessel is at the layer's time (the world clock's while the
+     * layer follows it, else now), from its own track: for a vessel that has
+     * left the feed, so it can be found again.
+     * @param {string} id
+     * @param {{reference?: string, signal?: AbortSignal}} [options]
+     * @returns {Promise<{status: 'found', lat: number, lon: number,
+     *   altitudeM: ?number, observedAtMs: number}|{status: 'none'}>}
+     */
+    locate(id, { reference, signal } = {}) {
+      const atMs = followsClock(vesselState)
+        ? vesselState.worldNow()
+        : undefined;
+      return locateOnTrack(
+        vesselState._source,
+        reference ??
+          recordFor(String(id ?? '').trim())?.reference ??
+          String(id ?? ''),
+        { atMs, signal },
+      );
+    },
+
+    /**
+     * Return the vessels drawn now, for the universal detection overlay: the
+     * selected vessel first, then the others in list order. A `maxCount`
+     * below the drawn count samples the list with a deterministic stride;
+     * the selected vessel is never the one left out.
      * @param {Object} [options={}] - Options from the detection system.
      * @param {number} [options.maxCount] - Maximum objects to return (defaults to all).
      * @param {number} [options.seed] - Seed offset for stride sampling.
@@ -652,38 +788,15 @@ export function createQueries({
 
       const selected = state.selectedRecord;
       const result = [];
+      const selectedObject = selected ? detectableObject(selected) : null;
+      if (selectedObject) result.push(selectedObject);
       for (let idx = 0; idx < records.length; idx += 1) {
+        if (result.length >= maxCount) break;
         if ((idx - start) % stride !== 0) continue;
         const record = records[idx];
-        const visual = components.rendering.getVisual(record);
-        // Horizon visibility: a vessel drawn as its model still counts.
-        if (!visual.visible) continue;
-        // The ship the bridge camera rides, its icon hidden, is no object in
-        // view (drawn as its model, it still counts).
-        if (
-          state.cockpitSubjectId &&
-          record.id === state.cockpitSubjectId &&
-          !visual.modelOwnsVisual
-        )
-          continue;
-        components.rendering.readVesselNow(record);
-        const position = visual.position;
-        if (!position) continue;
-        result.push({
-          position,
-          sourceId: record.id,
-          id: record.name || record.mmsi || 'VESSEL',
-          type: 'SEA',
-          skipLabel: record === selected,
-          // Detection hides the callout while this card paints.
-          cardSourceId: VESSEL_OVERLAY_SOURCE_ID,
-          cardEntryId: components.cards.vesselOverlayEntryId(record),
-          klass: record.type
-            ? String(record.type).toUpperCase().slice(0, 14)
-            : undefined,
-          metric: formatKnots(record.speed), // record.speed is knots
-        });
-        if (result.length >= maxCount) break;
+        if (record === selected) continue;
+        const object = detectableObject(record);
+        if (object) result.push(object);
       }
       return result;
     },

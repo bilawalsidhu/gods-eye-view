@@ -1,9 +1,13 @@
-import { cameraOf, findFrame } from '../../render/rendererOf.js';
-import { followedOf } from '../../data/followed.js';
+import { findFrame } from '../../render/rendererOf.js';
 import { approxDistanceKm as _approxDistanceKm } from './recordPolicy.js';
 import { displayedKinematics } from '../../data/motionModel.js';
 import { toLonLatH } from '../../geo/ellipsoid.js';
-import { clone, distance as distanceBetween, vec } from '../../geo/vector.js';
+import {
+  clone,
+  distance as distanceBetween,
+  vec,
+  Vec3,
+} from '../../geo/vector.js';
 import { isExplicitLayerStateOrigin } from '../../data/layerState.js';
 import { modelVisualAnchor } from '../../data/modelVisualAnchor.js';
 import {
@@ -21,6 +25,7 @@ import {
   followsClock,
 } from './policy.js';
 import { emergencyBroadcastPhrase } from '../../data/aircraftEmergency.js';
+import { locateOnTrack } from '../../data/locate.js';
 
 export function createQueries({
   flightState,
@@ -145,6 +150,7 @@ export function createQueries({
       derivedSpeedMps: flightState._drSpeedMps,
       derivedTrackDeg: flightState._drCourseDeg,
       reportedSpeedMps: info?.velocity,
+      derivedFromPlacement: flightState._drSpeedPlaced === true,
       reportedTrackDeg: info?.true_track,
     });
     const carto = toLonLatH(basePos);
@@ -345,11 +351,11 @@ export function createQueries({
 
     /**
      * Live layer params.
-     * `models3d` toggles 3D glTF model rendering for the FLEET (altitude-gated): when on,
-     * surrounding aircraft become 3D models once the camera is zoomed in past MODEL_ALT_CEIL_M.
+     * `models3d` toggles 3D glTF model rendering for the FLEET: when on, aircraft within
+     * MODEL_ADD_M (3 km) of the camera become 3D models, drawn at their true size.
      * The TRACKED contact follows the same rule (`_trackedModelRegimeActive`), so selecting
      * a contact never turns its icon into a model or its model into an icon.
-     * `models3dMode` is 'proximity' (nearest MODEL_MAX in view) or 'all' (every in-view plane).
+     * `models3dMode` is 'proximity' (cap MODEL_MAX) or 'all' (cap MODEL_MAX_ALL); both use the 3 km radius.
      * @param {{models3d?: boolean, models3dMode?: 'proximity'|'all', selectedFlightsTrackingId?: string|null}} params
      */
     setParams(params = {}, { origin = 'programmatic' } = {}) {
@@ -452,7 +458,12 @@ export function createQueries({
      */
     getDetectableObjects(options = {}) {
       const icons = flightState._icons;
-      if (!icons || !icons.show) return [];
+      // Read on every detection paint: one result array, the icons' kept id
+      // list, and each contact's own object and position vectors, so a paint
+      // allocates nothing here. The result is valid until the next call.
+      const result = (flightState._detectionResult ??= []);
+      result.length = 0;
+      if (!icons || !icons.show) return result;
       // Compute a stride that evenly samples the icon rows.
       // seed shifts the starting offset so successive calls can sample
       // different aircraft without reordering the rows.
@@ -465,8 +476,7 @@ export function createQueries({
       const occluder = parts.icons._occluder();
       const t = parts.icons._displayMs();
 
-      const result = [];
-      const ids = icons.ids();
+      const ids = icons.idList ? icons.idList() : icons.ids();
       /** One camera and viewport for every model's drawn scale. */
       let view = null;
       for (let i = start; i < ids.length; i += stride) {
@@ -491,8 +501,8 @@ export function createQueries({
           object = {
             sourceId: icao24,
             type: 'AIR',
-            _weldPos: vec(),
-            _iconPos: vec(),
+            _weldPos: new Vec3(),
+            _iconPos: new Vec3(),
           };
           flightState._detectionObjects.set(icao24, object);
         }
@@ -517,7 +527,7 @@ export function createQueries({
                   spec,
                   (view ??= parts.rendering._drawnScaleView()),
                 ),
-                object._weldPos || (object._weldPos = vec()),
+                object._weldPos || (object._weldPos = new Vec3()),
               )
             : icons.position(icao24, t, object._iconPos);
         // An icon past the horizon is not drawn, so it is not detectable.
@@ -544,7 +554,9 @@ export function createQueries({
           object._labelCallsign = callsign;
           object._labelRegistration = registration;
         }
-        const altitude = info?.altitude;
+        // A grounded contact shows no flight level: its sticky `altitude` may
+        // still be the approach height.
+        const altitude = info?.onGround ? 0 : info?.altitude;
         if (object._altitude !== altitude) {
           object._altitude = altitude;
           object.metric = formatFlightLevel(altitude); // altitude is metres
@@ -778,6 +790,46 @@ export function createQueries({
     },
 
     /**
+     * The track reference of a loaded aircraft, so it can be looked up again
+     * once it has left the feed (see locate).
+     * @param {string} icao24
+     * @returns {string|null}
+     */
+    referenceOf(icao24) {
+      const id = String(icao24 ?? '')
+        .trim()
+        .toLowerCase();
+      if (!id) return null;
+      return flightState.records.data.get(id)?.sourceReference ?? id;
+    },
+
+    /**
+     * Where an aircraft is at the layer's time (the world clock's while the
+     * layer follows it, else now), from its own track: for an aircraft that
+     * has left the feed, so it can be found again.
+     * @param {string} icao24
+     * @param {{reference?: string, signal?: AbortSignal}} [options]
+     * @returns {Promise<{status: 'found', lat: number, lon: number,
+     *   altitudeM: ?number, observedAtMs: number}|{status: 'none'}>}
+     */
+    locate(icao24, { reference, signal } = {}) {
+      const atMs = followsClock(flightState) ? flightState.now() : undefined;
+      return locateOnTrack(
+        flightState.feed._source,
+        reference ??
+          flightState.records.data.get(
+            String(icao24 ?? '')
+              .trim()
+              .toLowerCase(),
+          )?.sourceReference ??
+          String(icao24 ?? '')
+            .trim()
+            .toLowerCase(),
+        { atMs, signal },
+      );
+    },
+
+    /**
      * Ask for an aircraft's scheduled route (origin and destination airports),
      * as tracking does; it lands on the record when the lookup answers.
      * @param {string} icao24
@@ -787,6 +839,32 @@ export function createQueries({
         parts.enrichment._requestRouteEnrichment(
           String(icao24).trim().toLowerCase(),
         );
+    },
+
+    /**
+     * Select an aircraft by ICAO24 address as a click on it does: selected
+     * with its trail and card, centred once, not followed
+     * (src/data/clickSelect.js). A click on the selected one centres it
+     * again, unless the camera follows it.
+     * @param {string} icao24
+     * @param {{origin?: string, center?: boolean}} [options] `center: false`
+     *   selects it and leaves the camera to the caller (a pick from a list
+     *   frames it).
+     * @returns {boolean} True if the aircraft exists and was selected.
+     */
+    pickById(icao24, { origin = 'user', center = true } = {}) {
+      if (!icao24) return false;
+      let id = String(icao24).trim();
+      if (!flightState._icons?.has(id)) id = id.toLowerCase();
+      if (!flightState._icons?.has(id)) return false;
+      parts.tracking._cancelPendingTrackingRestore();
+      if (flightState._trackedIcao === id) {
+        if (center && !parts.tracking._trackedIsFollowed())
+          parts.tracking._centerTracked();
+        return true;
+      }
+      parts.tracking._trackFlight(id, { origin, follow: false, center });
+      return flightState._trackedIcao === id;
     },
 
     /**
@@ -801,8 +879,13 @@ export function createQueries({
       if (!flightState._icons?.has(id)) return false;
       if (parts.tracking._isExplicitTrackingOrigin(origin))
         parts.tracking._cancelPendingTrackingRestore();
-      if (flightState._trackedIcao === id)
+      if (flightState._trackedIcao === id) {
+        // Selected by a click, which does not follow: following is asked
+        // for now.
+        if (!parts.tracking._trackedIsFollowed())
+          parts.tracking._followTracked();
         return parts.tracking._publishTrackedSelection(id, origin);
+      }
       parts.tracking._trackFlight(id, { origin });
       return true;
     },
@@ -869,15 +952,11 @@ export function createQueries({
         return false;
       let id = String(icao24).trim();
       if (!flightState._icons?.has(id)) id = id.toLowerCase();
-      if (
-        id !== flightState._trackedIcao ||
-        followedOf(flightState._viewer) !== flightState._followTarget
-      )
+      if (id !== flightState._trackedIcao || !flightState._followTarget)
         return false;
-      // Following the same target again frames it afresh.
-      const camera = cameraOf(flightState._viewer);
-      camera.cancelFlight();
-      camera.follow(flightState._followTarget);
+      // Following the same target again frames it afresh; one a click
+      // selected (not followed) is followed from here.
+      parts.tracking._followTracked();
       parts.tracking._publishTrackedSelection(id, origin);
       return true;
     },

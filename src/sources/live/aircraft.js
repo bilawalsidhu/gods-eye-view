@@ -6,15 +6,30 @@ import {
   epoch,
   finite,
 } from './contract.js';
-import { readAdsbVerticalRateFpm } from '../adsbFields.js';
+import {
+  openSkyAircraftId,
+  positionedOpenSkyAircraftId,
+  readAdsbVerticalRateFpm,
+} from '../adsbFields.js';
 
-const openSkyId = (row) =>
-  Array.isArray(row) ? cleanText(row[0]).toLowerCase() : '';
+/** The aircraft (lowercase ICAO) a state-vector snapshot's `estimatedByIcao` names. */
+const estimatedCache = new WeakMap();
+function estimatedIds(payload) {
+  const list = payload?.estimatedByIcao;
+  if (!Array.isArray(list)) return EMPTY_IDS;
+  let ids = estimatedCache.get(list);
+  if (!ids) {
+    ids = new Set(list.map((id) => cleanText(id).toLowerCase()));
+    estimatedCache.set(list, ids);
+  }
+  return ids;
+}
+const EMPTY_IDS = new Set();
 
 /** Normalize the OpenSky state-vector route, including its regional fallback. */
 export function normalizeOpenSkyAircraft(row) {
-  const id = openSkyId(row);
-  if (!id || !coordinates(row[6], row[5])) return null;
+  const id = positionedOpenSkyAircraftId(row);
+  if (!id) return null;
   return {
     id,
     reference: id,
@@ -89,7 +104,7 @@ export function normalizeReadsbAircraft(row, snapshotTimeMs) {
  */
 function openSkyUnpositionedId(row) {
   return Array.isArray(row) && row[5] === null && row[6] === null
-    ? openSkyId(row)
+    ? openSkyAircraftId(row)
     : '';
 }
 
@@ -109,6 +124,15 @@ export function openSkySnapshot(
       const statuses = payload?.emergencyByIcao;
       if (record && statuses && Object.hasOwn(statuses, record.id))
         record.emergency = cleanText(statuses[record.id]).toLowerCase() || null;
+      // A state vector has no type field; a feed that knows the airframe's
+      // ICAO type designator sends it alongside, by ICAO address.
+      const types = payload?.typeByIcao;
+      if (record && types && Object.hasOwn(types, record.id))
+        record.typeCode = cleanText(types[record.id]).toUpperCase() || null;
+      // Nor a position source; a feed that estimates some positions (carried
+      // on the last course out of receiver range) names those aircraft.
+      if (record && estimatedIds(payload).has(record.id))
+        record.estimated = true;
       return record;
     },
     'OpenSky',
@@ -152,7 +176,12 @@ export function readsbSnapshot(
 ) {
   const admitted = admitRecords(
     payload?.ac,
-    (row) => normalizeReadsbAircraft(row, observedAtMs),
+    (row) => {
+      const record = normalizeReadsbAircraft(row, observedAtMs);
+      // A row whose position the feed estimated rather than received.
+      if (record && row.estimated === true) record.estimated = true;
+      return record;
+    },
     'adsb.lol',
     readsbUnpositionedId,
   );

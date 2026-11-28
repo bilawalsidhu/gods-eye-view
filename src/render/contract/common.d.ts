@@ -157,6 +157,8 @@ export type Capability =
   | 'terrain'
   /** Atmosphere scattering applied to drawn models. */
   | 'modelAtmosphere'
+  /** A model item's `nodes` pose the model's named glTF nodes. */
+  | 'modelNodes'
   /** Clouds, fog, haze, rain and snow around the view (`globe.weather`). */
   | 'weather'
   /** Imagery draped onto 3D tiles as well as the globe. */
@@ -165,6 +167,8 @@ export type Capability =
   | 'splitSwipe'
   /** Timed imagery frames with hidden prefetch. */
   | 'imageryFrames'
+  /** Timed imagery the application hands over as finished tile images (`decoded`). */
+  | 'imageryDecoded'
   /** Wind-relief and similar shading of the globe surface. */
   | 'surfaceShading'
   /** A version of what surface heights answer against (`globe.surfaceVersion`). */
@@ -179,6 +183,8 @@ export type Capability =
   | 'pickPosition'
   /** Points tested against the frame's depth (`query.occlusionTest`). */
   | 'occlusionTest'
+  /** Conservative camera visibility of a point set (`camera.visiblePoints`). */
+  | 'pointVisibility'
   /** Outward user zooms that keep the Earth framed (`controls.keepEarthFramed`). */
   | 'keepEarthFramed'
   /** Height sampling against tiles and terrain. */
@@ -191,6 +197,8 @@ export type Capability =
   | 'motionSegments'
   /** glTF models. */
   | 'models'
+  /** Moving parts of glTF models posed as an item's `parts` says. */
+  | 'modelParts'
   /** Image, video and canvas planes. */
   | 'quads'
   /** Custom meshes in a local east-north-up frame. */
@@ -199,6 +207,14 @@ export type Capability =
   | 'fields'
   /** Rate-limited course easing (`IconItem.courseGlide`). */
   | 'courseGlide'
+  /** Icons drawn from a sheet of views, by where the eye is (`ViewSheet`). */
+  | 'viewSheets'
+  /** Lines that fade with the age of their points (`LineItem.ageFade`). */
+  | 'lineAgeFade'
+  /** Lines drawn only within a span of the scene clock (`LineAgeFade.showMs`). */
+  | 'lineTimeWindow'
+  /** Lines drawn as several runs, not joined across their breaks (`LineItem.breaks`). */
+  | 'lineBreaks'
   /** Screen-space clustering of icons. */
   | 'cluster'
   /** Post-processing styles. */
@@ -214,4 +230,6 @@ export type Capability =
   /** Reading the frame the eye is placed in (`camera.followFrame`). */
   | 'followFrame'
   /** A `threshold` per `changed` listener (`camera.on`). */
-  | 'cameraChangeThreshold';
+  | 'cameraChangeThreshold'
+  /** Hearing every hold taken or released (`frame.onHoldsChange`). */
+  | 'holdChanges';

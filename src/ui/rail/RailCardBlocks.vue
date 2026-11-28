@@ -1,7 +1,10 @@
 <script setup>
 import { onBeforeUnmount } from 'vue';
-import { t } from '../../i18n/index.js';
+import { isolate, t } from '../../i18n/index.js';
 import { formatScaleRange } from '../unitLabels.js';
+import UiButton from '../kit/UiButton.vue';
+import UiCloseButton from '../kit/UiCloseButton.vue';
+import UiSwitch from '../kit/UiSwitch.vue';
 import RailCardSetting from './RailCardSetting.vue';
 import RailChips from './RailChips.vue';
 import RailRowList from './RailRowList.vue';
@@ -26,6 +29,13 @@ function dispatch(descriptor, block) {
   if (descriptor.params) props.onParams(props.cardId, descriptor.params);
   else descriptor.onClick?.();
 }
+
+// A tile's band colour, as a bar where the Globe view tile has its icon; an
+// unreadable colour draws no bar.
+const tileAccent = (tile) =>
+  /^#(?:[0-9a-f]{6}|[0-9a-f]{8})$/i.test(tile.accent || '')
+    ? `background: ${tile.accent}`
+    : undefined;
 
 const rootTag = (block) =>
   block.type === 'list' ? 'ol' : block.type === 'actions' ? 'footer' : 'div';
@@ -66,6 +76,20 @@ function legendView(legend) {
     labels: legend?.labels || [],
   };
 }
+// Clearing removes the focused close button: focus first moves to what
+// stays, the cleared item's row, else the card's pressed tile, else its
+// header, so the keyboard keeps its place.
+function clearResult(block, event) {
+  const button = event?.currentTarget;
+  const card = button?.closest?.('.rail-card');
+  if (card && button.ownerDocument?.activeElement === button)
+    (
+      card.querySelector('.data-row-list-item.active') ||
+      card.querySelector('.rail-card-tile.is-active') ||
+      card.querySelector('.rail-card-header')
+    )?.focus();
+  dispatch(block.clear, block);
+}
 </script>
 
 <template>
@@ -78,7 +102,11 @@ function legendView(legend) {
     /><component
       :is="rootTag(block)"
       v-else
-      :class="`rail-card-${block.type}`"
+      :class="[
+        `rail-card-${block.type}`,
+        block.type === 'tiles' ? 'view-context__world' : null,
+        block.type === 'result' && block.lead ? 'is-lead' : null,
+      ]"
       :data-block-id="block.id"
       :hidden="
         block.type === 'legend' ? !legendView(block.legend).visible : undefined
@@ -99,17 +127,16 @@ function legendView(legend) {
         :dispatch="(descriptor) => dispatch(descriptor, block)"
       /><template v-else-if="block.type === 'result'"
         ><div class="rail-card-result-header"
-          ><span class="panel-title">{{ block.label }}</span
-          ><button
+          ><span class="panel-title" :title="block.title || undefined">{{
+            block.label
+          }}</span
+          ><UiCloseButton
             class="data-toggle-chip"
-            type="button"
             data-action-id="clear"
-            :aria-label="t('Clear reading')"
-            :title="t('Clear reading')"
+            :label="block.clear?.label || t('Clear reading')"
+            :title="block.clear?.label || t('Clear reading')"
             :hidden="!block.clear"
-            @click="dispatch(block.clear, block)"
-            >×</button
-          ></div
+            @click="clearResult(block, $event)" /></div
         ><div class="rail-card-result-lines"
           ><RailCardBlocks
             :blocks="[
@@ -168,32 +195,64 @@ function legendView(legend) {
             :title="action.title || undefined"
             @click="dispatch(action, block)"
             >{{ action.label }}</a
-          ><button
+          ><UiButton
             v-else
-            :class="[
-              'data-toggle-chip',
-              { active: action.pressed, 'is-reserved': action.reserved },
-            ]"
-            type="button"
+            :class="['data-toggle-chip', { 'is-reserved': action.reserved }]"
             :data-action-id="action.id"
             :title="action.title || undefined"
             :disabled="Boolean(action.disabled)"
-            :aria-pressed="
-              action.pressed === undefined
-                ? undefined
-                : String(Boolean(action.pressed))
+            :pressed="
+              action.pressed === undefined ? undefined : Boolean(action.pressed)
             "
+            pressed-class="active"
             :aria-hidden="
               action.reserved === undefined
                 ? undefined
                 : String(Boolean(action.reserved))
             "
             @click="dispatch(action, block)"
-            >{{ action.label }}</button
+            >{{ action.label }}</UiButton
           ><span class="rail-card-action-hint" :hidden="!action.hint">{{
             action.hint || ''
           }}</span></template
         ></template
+      ><template v-else-if="block.type === 'tiles'"
+        ><h4
+          >{{ block.title || ''
+          }}<span class="rail-card-tiles-sub" :hidden="!block.subtitle">{{
+            block.subtitle || ''
+          }}</span></h4
+        ><div class="view-context__world-grid"
+          ><UiButton
+            v-for="tile in block.tiles || []"
+            :key="tile.id"
+            class="view-context__world-tile rail-card-tile"
+            :class="{ 'is-wide': (block.tiles || []).length === 1 }"
+            :data-tile-id="tile.id"
+            :title="tile.title || undefined"
+            :pressed="Boolean(tile.active)"
+            pressed-class="is-active"
+            @click="dispatch(tile, block)"
+            ><i
+              class="rail-card-tile-swatch"
+              aria-hidden="true"
+              :style="tileAccent(tile)"
+            ></i
+            ><strong
+              >{{ isolate(String(tile.value ?? ''))
+              }}<small v-if="tile.note"> ({{ tile.note }})</small></strong
+            ><span>{{ tile.label || '' }}</span></UiButton
+          ></div
+        ></template
+      ><template v-else-if="block.type === 'toggle'"
+        ><span class="rail-card-setting-label panel-title">{{
+          block.label
+        }}</span
+        ><UiSwitch
+          :checked="Boolean(block.on)"
+          :label="String(block.label ?? '')"
+          :data-toggle-id="block.id"
+          @change="dispatch(block, block)" /></template
       ><template v-else
         ><div
           v-for="line in lines(block)"

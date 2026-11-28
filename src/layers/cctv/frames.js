@@ -1,3 +1,4 @@
+import { findCamera } from '../../render/rendererOf.js';
 import {
   FRAME_SIGNATURE_W,
   FRAME_SIGNATURE_H,
@@ -40,6 +41,11 @@ export function fitToProjection(sourceW, sourceH) {
     h,
   };
 }
+
+const PLANE_POINTS = ['mount', 'tl', 'tr', 'br', 'bl'];
+const _scratchPoints = [];
+// Keep the occluding surface below common negative geoid undulations.
+const HORIZON_MARGIN_M = 200;
 
 export function createFrames({ state: layerState, services, parts, source }) {
   /**
@@ -237,6 +243,22 @@ export function createFrames({ state: layerState, services, parts, source }) {
   }
 
   /**
+   * Whether a camera's monitor plane may be on screen; what cannot be judged counts as visible.
+   * @param {Object} record - Camera record.
+   * @returns {boolean}
+   */
+  function projectionInView(record) {
+    const camera = findCamera(layerState._viewer);
+    if (typeof camera?.visiblePoints !== 'function') return true;
+    const placed = record.frustumPositions;
+    if (!placed) return true;
+    const points = _scratchPoints;
+    points.length = 0;
+    for (const key of PLANE_POINTS) points.push(placed[key]);
+    return camera.visiblePoints(points, HORIZON_MARGIN_M) !== false;
+  }
+
+  /**
    * Triggers a new frame fetch for an image-mode projection if the refresh
    * interval has elapsed. Active cameras refresh more frequently than idle ones.
    * @param {Object} record - Camera record.
@@ -269,6 +291,8 @@ export function createFrames({ state: layerState, services, parts, source }) {
     // bypass a provider's explicit minimum between image requests.
     if (sourceRefreshMs > 0 && sinceLastRefresh < sourceRefreshMs) return;
     if (!force && sinceLastRefresh < refreshMs) return;
+    // Skip before stamping lastImageRefreshAt, so the first tick back in view fetches.
+    if (!force && !projectionInView(record)) return;
     runtime.lastImageRefreshAt = now;
 
     const frameUrl = frameUrlFor(record.camera, refreshMs);

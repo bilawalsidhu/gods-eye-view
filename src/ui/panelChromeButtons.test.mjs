@@ -1,6 +1,6 @@
-// src/ui/panelChromeButtons.test.mjs — panel collapse, dock tray and pin
-// buttons render each panel's state from the panel chrome store, and their
-// clicks reach PanelChrome only while it presents the panels.
+// src/ui/panelChromeButtons.test.mjs — panel collapse buttons render each
+// panel's state from the panel chrome store, and their clicks reach
+// PanelChrome only while it presents the panels.
 import '../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -14,7 +14,8 @@ import PanelCollapseButton from './rail/PanelCollapseButton.vue';
 import RailPanel from './rail/RailPanel.vue';
 import UiPanel from './kit/UiPanel.vue';
 import { usePanelChromeStore } from './stores/panelChrome.js';
-import CommandDockView from './views/CommandDockView.vue';
+import { useDisplayStore } from './stores/display.js';
+import { DisplayBindings } from './displayBindings.js';
 
 function mount(t, component) {
   document.body.replaceChildren();
@@ -33,8 +34,6 @@ test('the store republishes a panel only when its state changes', () => {
   const first = store.panels;
   assert.deepEqual(store.panels['data-panel'], {
     collapsed: true,
-    pinned: false,
-    pinnedTop: false,
     auto: null,
   });
   store.publish(token, 'data-panel', { collapsed: true });
@@ -202,11 +201,8 @@ test('RailPanel follows the store, forwards clicks, and never restores a class i
   assert.equal(panel.classList.contains('collapsed'), false, 'written at once');
   await nextTick();
   assert.equal(toggle.textContent, '−');
-  // The re-render above left the class as written; pinning keeps it too.
-  store.publish(token, 'radio-panel', { pinned: true });
-  await nextTick();
+  // The re-render above left the class as written.
   assert.equal(panel.classList.contains('collapsed'), false);
-  assert.equal(panel.classList.contains('dock-pinned'), true);
   toggle.click();
   assert.deepEqual(toggled, ['radio-panel']);
 });
@@ -224,15 +220,11 @@ test('a panel whose class binding changes keeps the presented state', async (t) 
       }),
   });
   const panel = document.getElementById('cctv-panel');
-  store.publish(store.connect({}), 'cctv-panel', {
-    collapsed: false,
-    pinned: true,
-  });
+  store.publish(store.connect({}), 'cctv-panel', { collapsed: false });
   extra.value = 'two';
   await nextTick();
   assert.equal(panel.classList.contains('two'), true);
   assert.equal(panel.classList.contains('collapsed'), false);
-  assert.equal(panel.classList.contains('dock-pinned'), true);
 });
 
 test("Radio's collapse button keeps its own wording", async (t) => {
@@ -261,39 +253,8 @@ test("Radio's collapse button keeps its own wording", async (t) => {
   assert.equal(button.getAttribute('aria-label'), 'Collapse Radio section');
 });
 
-test('dock trays name their state and pins press without opening the tray', async (t) => {
-  const store = mount(t, CommandDockView);
-  const toggle = document.getElementById('location-bar-toggle');
-  const pin = document.querySelector(
-    '.dock-pin-btn[data-pin-target="location-bar"]',
-  );
-  assert.equal(toggle.getAttribute('aria-expanded'), 'false');
-  assert.equal(toggle.getAttribute('aria-label'), 'Expand LOCATION');
-  assert.equal(pin.getAttribute('aria-pressed'), 'false');
-  assert.equal(pin.getAttribute('aria-label'), 'Pin location tray');
-  assert.equal(pin.title, 'Keep location tray open');
-
-  const pinned = [];
-  const token = store.connect({ pin: (id) => pinned.push(id) });
-  store.publish(token, 'location-bar', { collapsed: false, pinned: true });
-  await nextTick();
-  assert.equal(toggle.getAttribute('aria-expanded'), 'true');
-  assert.equal(toggle.getAttribute('aria-label'), 'Collapse LOCATION');
-  assert.equal(toggle.title, 'Collapse LOCATION');
-  assert.equal(pin.getAttribute('aria-pressed'), 'true');
-
-  let reachedTray = false;
-  document
-    .getElementById('location-bar')
-    .addEventListener('click', () => (reachedTray = true));
-  pin.click();
-  assert.deepEqual(pinned, ['location-bar']);
-  assert.equal(reachedTray, false, 'the pin click stops at the pin');
-});
-
 function panelChrome(store) {
   return new PanelChrome({
-    elements: {},
     operations: { _showToast() {}, _syncCctvPanelViewport() {} },
     readHud: () => ({ visible: false, getVariant: () => null }),
     readCockpit: () => null,
@@ -305,14 +266,13 @@ function panelChrome(store) {
   });
 }
 
-test('PanelChrome takes clicks only once initialized, pins only dock trays, and detaches on destroy', () => {
+test('PanelChrome takes clicks only once initialized and detaches on destroy', () => {
   document.body.innerHTML = `
     <div id="data-panel" class="collapsed"><button class="panel-collapse-btn" data-collapse-target="data-panel"></button></div>
-    <div id="cctv-panel"></div>
-    <div id="control-panel" class="collapsed"></div>`;
+    <div id="cctv-panel"></div>`;
   const store = usePanelChromeStore(createPinia());
   const chrome = panelChrome(store);
-  for (const id of ['data-panel', 'cctv-panel', 'control-panel'])
+  for (const id of ['data-panel', 'cctv-panel'])
     followPanelState(store, id, document.getElementById(id));
   const calls = [];
   const setPanelCollapsed = chrome.setPanelCollapsed.bind(chrome);
@@ -322,26 +282,12 @@ test('PanelChrome takes clicks only once initialized, pins only dock trays, and 
   };
 
   store.act('toggle', 'data-panel');
-  store.act('pin', 'control-panel');
   assert.deepEqual(calls, [], 'no clicks before the chrome is initialized');
   chrome._disclosurePanelIds = new Set(['data-panel']);
   store.act('toggle', 'data-panel');
   store.act('toggle', 'cctv-panel');
   assert.deepEqual(calls, [['data-panel', false, { explicit: true }]]);
   assert.equal(store.panels['data-panel'].collapsed, false);
-
-  assert.equal(chrome._setCommandDockPanelPinState('data-panel'), undefined);
-  store.act('pin', 'control-panel');
-  assert.deepEqual(store.panels['control-panel'], {
-    collapsed: false,
-    pinned: true,
-    pinnedTop: true,
-    auto: null,
-  });
-  assert.equal(
-    document.getElementById('control-panel').classList.contains('dock-pinned'),
-    true,
-  );
 
   chrome.destroy();
   const before = calls.length;
@@ -355,22 +301,20 @@ test('PanelChrome takes clicks only once initialized, pins only dock trays, and 
   );
 });
 
-test('a remounted chrome starts from its own states, not a pin left behind', () => {
-  document.body.innerHTML = '<div id="location-bar" class="collapsed"></div>';
+test('a remounted chrome starts from its own states, not one left behind', () => {
+  document.body.innerHTML = '<div id="scene-panel"></div>';
   const store = usePanelChromeStore(createPinia());
   const first = panelChrome(store);
-  first._disclosurePanelIds = new Set();
-  store.act('pin', 'location-bar');
-  assert.equal(store.panels['location-bar'].pinned, true);
+  first._disclosurePanelIds = new Set(['scene-panel']);
+  first._presentPanel('scene-panel', { collapsed: false });
+  assert.equal(store.panels['scene-panel'].collapsed, false);
   first.destroy();
-  document.body.innerHTML = '<div id="location-bar" class="collapsed"></div>';
+  document.body.innerHTML = '<div id="scene-panel" class="collapsed"></div>';
   const second = panelChrome(store);
-  assert.equal(store.panels['location-bar'], undefined);
-  second._presentPanel('location-bar');
-  assert.deepEqual(store.panels['location-bar'], {
+  assert.equal(store.panels['scene-panel'], undefined);
+  second._presentPanel('scene-panel');
+  assert.deepEqual(store.panels['scene-panel'], {
     collapsed: true,
-    pinned: false,
-    pinnedTop: false,
     auto: null,
   });
   second.destroy();
@@ -406,9 +350,6 @@ test('a panel root draws its state at once, keeping classes others own', async (
   assert.equal(panel.classList.contains('accordion-collapsed'), false);
   assert.equal(panel.classList.contains('running'), true);
   assert.equal(panel.classList.contains('panel-collapsible'), true);
-  store.publish(token, 'scene-panel', { pinned: true, pinnedTop: true });
-  assert.ok(panel.classList.contains('dock-pinned'));
-  assert.ok(panel.classList.contains('dock-pinned-top'));
 });
 
 test('destroying the chrome inside Cockpit puts back the panels its entry closed', () => {
@@ -425,6 +366,31 @@ test('destroying the chrome inside Cockpit puts back the panels its entry closed
   assert.equal(data.classList.contains('collapsed'), false);
   chrome.exitCockpit();
   assert.equal(data.classList.contains('collapsed'), false);
+});
+
+test('Cockpit entry folds the Space Missions panel away and exit brings it back', () => {
+  document.body.innerHTML = `<div id="space-missions-panel"></div>`;
+  const store = usePanelChromeStore(createPinia());
+  const chrome = panelChrome(store);
+  const missions = document.getElementById('space-missions-panel');
+  followPanelState(store, 'space-missions-panel', missions);
+  chrome.enterCockpit();
+  assert.equal(missions.classList.contains('collapsed'), true);
+  chrome.exitCockpit();
+  assert.equal(missions.classList.contains('collapsed'), false);
+  chrome.destroy();
+});
+
+test('a share link records whether the Space Missions panel is open', () => {
+  document.body.innerHTML = `<div id="space-missions-panel"></div>`;
+  const store = usePanelChromeStore(createPinia());
+  const chrome = panelChrome(store);
+  const state = chrome._buildSharePanelState();
+  assert.deepEqual(
+    state.specs.filter((spec) => spec.id === 'space-missions-panel'),
+    [{ id: 'space-missions-panel', collapsed: false }],
+  );
+  chrome.destroy();
 });
 
 test('the accordion closes peers through the real store, and opens them again', () => {
@@ -448,8 +414,6 @@ test('the accordion closes peers through the real store, and opens them again', 
   });
   assert.deepEqual(store.panels['data-panel'], {
     collapsed: true,
-    pinned: false,
-    pinnedTop: false,
     auto: 'accordion',
   });
   assert.equal(panels[0].className, 'collapsed accordion-collapsed');
@@ -461,4 +425,163 @@ test('the accordion closes peers through the real store, and opens them again', 
   settleSideAccordion({ panels, enabled: false, onCollapse });
   assert.equal(panels[0].className, '');
   chrome.destroy();
+});
+
+test('F collapses Data Layers like its button and keeps its rail entry', (t) => {
+  document.body.innerHTML = `
+    <nav class="ui-rail"><button data-rail-item="data-panel" style="visibility: visible"></button></nav>
+    <div id="data-panel" class="active"><button class="panel-collapse-btn" data-collapse-target="data-panel"></button></div>`;
+  const panel = document.getElementById('data-panel');
+  const item = document.querySelector('[data-rail-item="data-panel"]');
+  panel.getClientRects = () =>
+    panel.classList.contains('collapsed') ? [] : [{}];
+  item.getClientRects = () => [{}];
+  const store = usePanelChromeStore(createPinia());
+  const chrome = panelChrome(store);
+  followPanelState(store, 'data-panel', panel);
+  chrome._disclosurePanelIds = new Set(['data-panel']);
+  const bindings = new DisplayBindings({
+    viewer: null,
+    services: { isScopeMaskEnabled: () => false, cycleDetectionMode() {} },
+    operations: {
+      _setScope() {},
+      _togglePanel: (panelId) => chrome._togglePanel(panelId),
+    },
+    readState: () => ({}),
+    claimDetection() {},
+    displayStore: useDisplayStore(createPinia()),
+  });
+  bindings._initUI();
+  t.after(() => {
+    bindings.destroy();
+    chrome.destroy();
+  });
+  const press = (init = {}) =>
+    document.activeElement.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'f', bubbles: true, ...init }),
+    );
+
+  panel.querySelector('button').focus();
+  press();
+  assert.equal(store.panels['data-panel']?.collapsed, true);
+  assert.ok(document.activeElement === item, 'focus moves to the rail');
+  assert.ok(panel.classList.contains('collapsed'));
+  // `active` is what shows Data Layers at all (layers.css).
+  assert.ok(panel.classList.contains('active'));
+  press({ metaKey: true });
+  assert.equal(store.panels['data-panel'].collapsed, true, 'Cmd+F is not ours');
+  press();
+  assert.equal(store.panels['data-panel'].collapsed, false);
+  assert.ok(!panel.classList.contains('collapsed'));
+  assert.ok(panel.classList.contains('active'));
+});
+
+test('F that folds a focused peer hands the focus to a rail entry', (t) => {
+  document.body.innerHTML = `
+    <nav class="ui-rail">
+      <button data-rail-item="data-panel" style="visibility: visible"></button>
+      <button data-rail-item="pp-toggles" style="visibility: visible"></button>
+    </nav>
+    <div id="left-panel-stack">
+      <div id="data-panel" data-panel-id="data-panel" class="active collapsed"><button class="panel-collapse-btn" data-collapse-target="data-panel"></button></div>
+      <div id="pp-toggles" data-panel-id="pp-toggles"><button class="panel-collapse-btn" data-collapse-target="pp-toggles"></button><button id="crt2">CRT 2</button></div>
+    </div>`;
+  const stack = document.getElementById('left-panel-stack');
+  const store = usePanelChromeStore(createPinia());
+  const chrome = new PanelChrome({
+    elements: { _leftPanelStack: stack },
+    operations: { _showToast() {}, _syncCctvPanelViewport() {} },
+    readHud: () => ({ visible: false, getVariant: () => null }),
+    readCockpit: () => null,
+    readShareLinks: () => null,
+    readInitialShare: () => null,
+    readScrollRestoreOwner: () => null,
+    readDisplayScrollTop: () => 0,
+    store,
+  });
+  for (const id of ['data-panel', 'pp-toggles']) {
+    const panel = document.getElementById(id);
+    panel.getClientRects = () =>
+      panel.classList.contains('collapsed') ? [] : [{}];
+    followPanelState(store, id, panel);
+  }
+  for (const item of document.querySelectorAll('[data-rail-item]'))
+    item.getClientRects = () => [{}];
+  chrome._disclosurePanelIds = new Set(['data-panel', 'pp-toggles']);
+  const bindings = new DisplayBindings({
+    viewer: null,
+    services: { isScopeMaskEnabled: () => false, cycleDetectionMode() {} },
+    operations: {
+      _setScope() {},
+      _togglePanel: (panelId) => chrome._togglePanel(panelId),
+    },
+    readState: () => ({}),
+    claimDetection() {},
+    displayStore: useDisplayStore(createPinia()),
+  });
+  bindings._initUI();
+  t.after(() => {
+    bindings.destroy();
+    chrome.destroy();
+  });
+
+  const crt2 = document.getElementById('crt2');
+  crt2.focus();
+  assert.equal(document.activeElement, crt2);
+  crt2.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', bubbles: true }));
+  assert.equal(
+    store.panels['data-panel']?.collapsed,
+    false,
+    'Data Layers opens',
+  );
+  const visual = document.getElementById('pp-toggles');
+  assert.ok(
+    visual.classList.contains('collapsed'),
+    'the accordion folds Visual',
+  );
+  assert.ok(
+    document.activeElement?.matches?.('.ui-rail [data-rail-item]'),
+    `focus lands on a rail entry, not inside the hidden peer (got ${document.activeElement?.id || document.activeElement?.tagName})`,
+  );
+});
+
+test('opening Data Layers in Cockpit hands the focus from the folded Contact card to its toggle', (t) => {
+  document.body.innerHTML = `
+    <div id="left-panel-stack">
+      <div id="data-panel" data-panel-id="data-panel" class="active collapsed"><button class="panel-collapse-btn" data-collapse-target="data-panel"></button></div>
+    </div>
+    <aside id="cockpit-context"><button id="cockpit-context-toggle"></button><button id="cockpit-weather-toggle"></button></aside>`;
+  const store = usePanelChromeStore(createPinia());
+  const cockpit = {
+    active: true,
+    contextCollapsed: false,
+    setContextCollapsed(collapsed) {
+      this.contextCollapsed = collapsed;
+    },
+    setSignalCollapsed() {},
+    scheduleContextLayout() {},
+  };
+  const chrome = new PanelChrome({
+    elements: { _leftPanelStack: document.getElementById('left-panel-stack') },
+    operations: { _showToast() {}, _syncCctvPanelViewport() {} },
+    readHud: () => ({ visible: false, getVariant: () => null }),
+    readCockpit: () => cockpit,
+    readShareLinks: () => null,
+    readInitialShare: () => null,
+    readScrollRestoreOwner: () => null,
+    readDisplayScrollTop: () => 0,
+    store,
+  });
+  t.after(() => chrome.destroy());
+  followPanelState(store, 'data-panel', document.getElementById('data-panel'));
+  chrome._disclosurePanelIds = new Set(['data-panel']);
+  document.getElementById('cockpit-weather-toggle').focus();
+  chrome._togglePanel('data-panel');
+  assert.equal(
+    store.panels['data-panel']?.collapsed,
+    false,
+    'Data Layers opens',
+  );
+  assert.equal(cockpit.contextCollapsed, true, 'Contact folds for it');
+  assert.equal(document.activeElement?.id, 'cockpit-context-toggle');
 });

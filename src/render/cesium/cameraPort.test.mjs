@@ -19,7 +19,7 @@ import {
   headlessCamera,
   withVirtualClock,
 } from './cameraGoldens.js';
-import { createCesiumCamera } from './camera.js';
+import { createCesiumCamera, createPointsVisibility } from './camera.js';
 import { createCesiumPorts } from './ports.js';
 import { bindRenderer, cameraOf } from '../rendererOf.js';
 
@@ -337,6 +337,147 @@ test('the camera port gives the clock its own tick back as it goes', () => {
   }
 });
 
+test('visiblePoints is there only with its capability, and unknown outside 3D', (t) => {
+  const { scene } = headlessCamera();
+  for (const name of ['preUpdate', 'postUpdate', 'preRender', 'postRender'])
+    scene[name] = new Cesium.Event();
+  scene.primitives = { add() {}, remove() {} };
+  scene.requestRender = () => {};
+  const viewer = { scene, clock: { currentTime: Cesium.JulianDate.now() } };
+  const without = createCesiumPorts(viewer, { capabilities: new Set() });
+  assert.equal(without.camera.visiblePoints, undefined);
+  without.dispose();
+  const ports = createCesiumPorts(viewer, {
+    capabilities: new Set(['pointVisibility']),
+  });
+  t.after(() => ports.dispose());
+  const points = [Cesium.Cartesian3.fromDegrees(0, 0, 10)];
+  for (const mode of [
+    Cesium.SceneMode.SCENE2D,
+    Cesium.SceneMode.COLUMBUS_VIEW,
+    Cesium.SceneMode.MORPHING,
+    undefined,
+  ]) {
+    scene.mode = mode;
+    assert.equal(ports.camera.visiblePoints(points, 200), null);
+  }
+  scene.mode = Cesium.SceneMode.SCENE3D;
+  assert.equal(typeof ports.camera.visiblePoints(points, 200), 'boolean');
+});
+
+const point = (lon, lat, altitude = 20) =>
+  Cesium.Cartesian3.fromDegrees(lon, lat, altitude);
+const down = Cesium.Cartesian3.negate(
+  Cesium.Cartesian3.UNIT_X,
+  new Cesium.Cartesian3(),
+);
+const up = Cesium.Cartesian3.UNIT_Z;
+const frustum = new Cesium.PerspectiveFrustum({
+  fov: Cesium.Math.toRadians(60),
+  aspectRatio: 16 / 9,
+  near: 1,
+  // Cesium's default far plane, as the app uses.
+  far: 5e8,
+});
+
+function visibility(position, direction, up) {
+  const visiblePoints = createPointsVisibility(
+    { mode: Cesium.SceneMode.SCENE3D },
+    { positionWC: position, directionWC: direction, upWC: up, frustum },
+  );
+  return (points) => visiblePoints(points, 200);
+}
+
+function directionTo(position, target) {
+  return Cesium.Cartesian3.normalize(
+    Cesium.Cartesian3.subtract(target, position, new Cesium.Cartesian3()),
+    new Cesium.Cartesian3(),
+  );
+}
+
+function assertInFrustum(points, position, direction) {
+  const culling = frustum.computeCullingVolume(position, direction, up);
+  assert.notEqual(
+    culling.computeVisibility(Cesium.BoundingSphere.fromPoints(points)),
+    Cesium.Intersect.OUTSIDE,
+  );
+}
+
+test('a plane in front of the camera is visible', () => {
+  assert.equal(visibility(point(0, 0, 30000), down, up)([point(0, 0)]), true);
+});
+
+test('a plane behind the camera is outside the frustum', () => {
+  assert.equal(
+    visibility(point(0, 0, 30000), Cesium.Cartesian3.UNIT_X, up)([point(0, 0)]),
+    false,
+  );
+});
+
+test('a corner can be in view when the mount and centre are outside', () => {
+  const visible = visibility(point(0, 0, 30000), down, up);
+  const mount = point(0.3, 0);
+  const points = [
+    mount,
+    point(0.1, 0.0001),
+    point(0.3, 0.0001),
+    point(0.3, -0.0001),
+    point(0.1, -0.0001),
+  ];
+  assert.equal(visible(points), true);
+  assert.equal(visible([mount]), false);
+  assert.equal(visible([point(0.2, 0)]), false);
+});
+
+test('a nearby plane below the ellipsoid is visible to low and high viewers', () => {
+  const cap = point(0.00054, 0, -18);
+  const points = [point(0, 0, -18), cap];
+  for (const altitude of [4, 1200]) {
+    const position = point(0.00135, 0, altitude);
+    const direction = directionTo(position, cap);
+    assertInFrustum(points, position, direction);
+    assert.equal(visibility(position, direction, up)(points), true);
+  }
+});
+
+test('the horizon rejects a negative-height plane on the far side', () => {
+  const mount = point(0, 0, -18);
+  const points = [mount, point(0.00054, 0, -18)];
+  for (const altitude of [4, 30000, 2e7]) {
+    const position = point(180, 0, altitude);
+    const direction = directionTo(position, mount);
+    assertInFrustum(points, position, direction);
+    assert.equal(visibility(position, direction, up)(points), false);
+  }
+});
+
+test('a low viewer can see a plane beyond the WGS84 horizon', () => {
+  const mount = point(0, 0, 1);
+  const position = point(0.2, 0, 4);
+  assert.equal(
+    visibility(position, directionTo(position, mount), up)([mount]),
+    true,
+  );
+});
+
+test('deep viewers do not lose nearby planes to the horizon test', () => {
+  const mount = point(0, 0, -350);
+  const position = point(0.00135, 0, -300);
+  assert.equal(
+    visibility(position, directionTo(position, mount), up)([mount]),
+    true,
+  );
+});
+
+test('a non-finite camera direction leaves visibility unknown', () => {
+  const visible = visibility(
+    point(0, 0, 30000),
+    new Cesium.Cartesian3(NaN, 0, 0),
+    up,
+  );
+  assert.equal(visible([point(0, 0)]), null);
+});
+
 test('setFov holds the vertical angle across resizes, and waits for a first one', () => {
   const { scene, camera } = headlessCamera();
   scene.postUpdate = new Cesium.Event();
@@ -416,7 +557,16 @@ test('a pose measures heading, pitch and roll as Cesium does, and leaves the cam
     const pitch = camera.pitch;
     const roll = camera.roll;
     assert.equal(pose.heading, heading, `heading ${k}`);
-    assert.ok(Math.abs(pose.pitch - pitch) < 1e-12, `pitch ${k}`);
+    assert.ok(
+      pose.pitch >= -Math.PI / 2 && pose.pitch <= Math.PI / 2,
+      `canonical pitch ${k}`,
+    );
+    // Near vertical, acos amplifies last-bit direction differences. Match
+    // the conformance suite's well-conditioned pitch comparison.
+    assert.ok(
+      Math.abs(Math.sin(pose.pitch) - Math.sin(pitch)) < 1e-12,
+      `pitch ${k}`,
+    );
     const turn = Math.abs(pose.roll - roll);
     assert.ok(Math.min(turn, 2 * Math.PI - turn) < 1e-12, `roll ${k}`);
   }

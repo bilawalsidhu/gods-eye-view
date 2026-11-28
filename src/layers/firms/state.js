@@ -70,7 +70,8 @@ export function createFirmsState({ services, config }) {
 
   /** Panel callback: repaint the row controls (counter) after a load. */
 
-  layerState._rowControlsListener = null;
+  /** @type {{ invalidate: () => void } | null} the panels' handle, from init */
+  layerState._panel = null;
 
   layerState._cellCount = 0;
 
@@ -97,6 +98,14 @@ export function createFirmsState({ services, config }) {
   layerState._moveEndRemover = null;
 
   layerState._selectedFire = null;
+
+  /**
+   * What an application draws in place of the markers (`setMarkerStandIn`):
+   * while set, the glows, heatmap and ambient cards are hidden and clicks
+   * resolve through its `hitTest`.
+   */
+
+  layerState._standIn = null;
 
   /** Priority-ordered label candidates from the last rebuild (detections or cells). */
 

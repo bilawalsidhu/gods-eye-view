@@ -17,6 +17,7 @@ export { readLayerLifecycleSummary } from './layerSummary.js';
 import { defaultGeospatial } from '../search/defaults.js';
 import { msg } from '../i18n/index.js';
 import { useProviderSettingsStore } from '../ui/stores/providerSettings.js';
+import { layerFinderFor } from '../ui/layerFinderFilter.js';
 import { applicationPinia } from '../ui/vueRuntime.js';
 import {
   distance as chordM,
@@ -114,13 +115,11 @@ const PANEL_ALIASES = new Map([
   ['layers', 'data-panel'],
   ['layer menu', 'data-panel'],
   ['data layer menu', 'data-panel'],
-  ['locations', 'location-bar'],
-  ['location', 'location-bar'],
-  ['styles', 'control-panel'],
-  ['filters', 'control-panel'],
-  ['visual styles', 'control-panel'],
-  ['visual preset', 'control-panel'],
-  ['visual presets', 'control-panel'],
+  ['styles', 'pp-toggles'],
+  ['filters', 'pp-toggles'],
+  ['visual styles', 'pp-toggles'],
+  ['visual preset', 'pp-toggles'],
+  ['visual presets', 'pp-toggles'],
   ['provider settings', 'provider-settings'],
   ['cctv', 'cctv-panel'],
   ['cameras', 'cctv-panel'],
@@ -138,6 +137,9 @@ const PANEL_ALIASES = new Map([
   ['global context', 'global-context-panel'],
   ['right context', 'global-context-panel'],
   ['context right panel', 'global-context-panel'],
+  ['space missions panel', 'space-missions-panel'],
+  ['missions panel', 'space-missions-panel'],
+  ['mission panel', 'space-missions-panel'],
   ['utilities', 'utilities-panel'],
   ['utilities panel', 'utilities-panel'],
   ['draw', 'utilities-panel'],
@@ -149,11 +151,11 @@ const PANEL_ALIASES = new Map([
   ['scene', 'scene-panel'],
   ['post processing', 'pp-toggles'],
   ['hud controls', 'pp-toggles'],
-  ['map stack', 'control-panel'],
-  ['stack', 'control-panel'],
-  ['basemap', 'control-panel'],
-  ['map sources', 'control-panel'],
-  ['sources', 'control-panel'],
+  ['map stack', 'pp-toggles'],
+  ['stack', 'pp-toggles'],
+  ['basemap', 'pp-toggles'],
+  ['map sources', 'pp-toggles'],
+  ['sources', 'pp-toggles'],
   ['weather', 'weather-panel'],
   ['weather panel', 'weather-panel'],
   ['recent imagery', 'recent-imagery-panel'],
@@ -162,11 +164,10 @@ const PANEL_ALIASES = new Map([
 
 const PANEL_IDS = new Set([
   'data-panel',
-  'location-bar',
-  'control-panel',
   'cctv-panel',
   'radio-panel',
   'global-context-panel',
+  'space-missions-panel',
   'utilities-panel',
   'scene-panel',
   'pp-toggles',
@@ -607,6 +608,12 @@ export function createGevActionRunner({
             changeOptions,
           );
         }
+        if (layerId === 'satellites') {
+          // A Satellites OFF can end Space Missions, which needs it.
+          await dataManager.layers
+            .get('rocket-launches')
+            ?.module?.waitForSatelliteIntents?.();
+        }
         if (layerId === 'rocket-launches' || layerId === 'satellites') {
           await styleManager?._waitForContextLayerSettlement?.();
         }
@@ -981,6 +988,47 @@ export function createGevActionRunner({
           ...(!applied ? { error: say } : {}),
         };
       }
+      // The Space Missions panel exists only while its layer is on; opening it
+      // otherwise would fold the other right-rail panels for nothing.
+      if (
+        open &&
+        panelId === 'space-missions-panel' &&
+        !dataManager?.isEnabled?.('rocket-launches')
+      ) {
+        const say = dataManager?.isEffectivelyEnabled?.('rocket-launches')
+          ? 'Space Missions is still starting; its panel opens when it is on.'
+          : 'The Space Missions panel shows while Space Missions is on. Turn on Space Missions first.';
+        return {
+          ok: false,
+          action: 'set_panel_open',
+          panelId,
+          open,
+          applied: false,
+          unavailable: true,
+          say,
+          error: say,
+        };
+      }
+      // The Cockpit owns the screen and hides the right rail: the panel is
+      // not opened (or its preference written) under it.
+      if (
+        open &&
+        panelId === 'space-missions-panel' &&
+        styleManager?.getCockpitState?.()?.active
+      ) {
+        const say =
+          'The Space Missions panel opens once you leave the cockpit.';
+        return {
+          ok: false,
+          action: 'set_panel_open',
+          panelId,
+          open,
+          applied: false,
+          unavailable: true,
+          say,
+          error: say,
+        };
+      }
       if (!setPanelOpen(styleManager, panelId, open)) {
         const say = 'There is no panel to open here.';
         return {
@@ -992,6 +1040,9 @@ export function createGevActionRunner({
           error: say,
         };
       }
+      // A phone shows the right rail only as tab sheets: show this one's.
+      if (open && panelId === 'space-missions-panel')
+        styleManager?.revealPanel?.(panelId);
       return { ok: true, action: 'set_panel_open', panelId, open };
     }
 
@@ -1028,6 +1079,54 @@ export function createGevActionRunner({
           cancelled: true,
           error: 'Context request was cancelled before it could run',
           ...cancellationState(),
+        };
+      }
+      if (mode === 'space-missions') {
+        // Space Missions is an ordinary layer with its own panel, not a
+        // Context mode; older phrasings still reach it through this alias.
+        const result = await runGevAction(
+          'set_layer_visibility',
+          { layerId: 'rocket-launches', enabled: true },
+          runOptions,
+        );
+        // Open the panel even when the layer was already on, but never under
+        // the Cockpit, which owns the screen (as the layer's own reveal).
+        if (
+          result?.ok === true &&
+          current() &&
+          !styleManager?.getCockpitState?.()?.active
+        ) {
+          setPanelOpen(styleManager, 'space-missions-panel', true);
+          styleManager?.revealPanel?.('space-missions-panel');
+        }
+        return {
+          ...result,
+          action: 'set_context_mode',
+          mode: 'space-missions',
+        };
+      }
+      const contextState = styleManager.getContextModeState?.() || {};
+      if (
+        mode === 'off' &&
+        !contextState.mode &&
+        !contextState.changing &&
+        !contextState.entering &&
+        !dataManager.isEffectivelyEnabled?.('military-awareness') &&
+        (dataManager.isEffectivelyEnabled?.('rocket-launches') ??
+          dataManager.isEnabled?.('rocket-launches'))
+      ) {
+        // "Exit Space Missions" still arrives as context off. With no Context
+        // mode on, entering or starting (Contacts), Space Missions, on or
+        // still starting, is what is being left: switch its layer off.
+        const result = await runGevAction(
+          'set_layer_visibility',
+          { layerId: 'rocket-launches', enabled: false },
+          runOptions,
+        );
+        return {
+          ...result,
+          action: 'set_context_mode',
+          mode: 'off',
         };
       }
       if (mode && mode !== 'off') {
@@ -1108,13 +1207,28 @@ export function createGevActionRunner({
           args.type ||
           args.filterType,
       );
-      let contextChangedForEntry = false;
-      let priorContextMode = null;
-      let rollbackTarget = null;
-      if (
-        action === 'enter' &&
-        typeof styleManager.setContextMode === 'function'
-      ) {
+      // Entry changes no Context mode, layer or detection setting, as the
+      // COCKPIT button does not. The one exception is a military entry while
+      // Military Flights is off: that layer is switched on as a plain layer
+      // the person can switch off, and switched off again if entry fails.
+      // Contacts stays as it is.
+      let rollbackTarget;
+      let switchedOn = null;
+      // A switch-off undoing this action's own switch-on; it runs even for a
+      // turn that went stale, so a failed entry leaves no layer behind.
+      const switchBackOff = async () => {
+        if (!switchedOn) return null;
+        return runGevAction(
+          'set_layer_visibility',
+          { layerId: switchedOn, enabled: false },
+          {},
+        );
+      };
+      const failed = async (result) => {
+        const layerRollback = await switchBackOff();
+        return layerRollback ? { ...result, layerRollback } : result;
+      };
+      if (action === 'enter') {
         if (!current()) {
           return {
             ok: false,
@@ -1125,51 +1239,37 @@ export function createGevActionRunner({
           };
         }
         rollbackTarget = styleManager.getAircraftTrackingTarget?.() || null;
-        const contextState =
-          typeof styleManager.getContextModeState === 'function'
-            ? styleManager.getContextModeState()
-            : {};
-        priorContextMode = contextState?.mode || null;
-        const contactsReady =
-          contextState?.mode === 'flights' &&
-          contextState?.active !== false &&
-          contextState?.changing !== true;
-        if (!contactsReady) {
-          const contextResult = await styleManager.setContextMode('flights', {
-            signal: runOptions.signal,
-            isCurrent: runOptions.isCurrent,
-            // Cockpit entry establishes Contacts as its own precondition. That
-            // is internal choreography, not an operator Context request, so it
-            // must stay inert: claiming here would cancel a pending shared
-            // style/detection restore the operator never overrode.
-            claimVisualAuthority: false,
-          });
-          contextChangedForEntry = contextResult?.ok === true;
-          if (contextResult?.ok !== true || !current()) {
-            const contextRollback = contextChangedForEntry
-              ? await styleManager.setContextMode(priorContextMode, {
-                  claimVisualAuthority: false,
-                })
-              : null;
-            return {
+        if (
+          targetLayer === 'military' &&
+          dataManager.layers?.has?.('military') &&
+          !dataManager.isEnabled?.('military')
+        ) {
+          const layer = await runGevAction(
+            'set_layer_visibility',
+            { layerId: 'military', enabled: true },
+            runOptions,
+          );
+          if (layer?.ok === true) switchedOn = 'military';
+          // The search needs the layer's aircraft, which arrive with its
+          // first data, not with the switch.
+          if (layer?.ok === true && current())
+            await waitForLayerFirstData(dataManager, 'military', runOptions);
+          if (layer?.ok !== true || !current()) {
+            return failed({
               ok: false,
               action: 'control_cockpit',
-              cancelled: !current() || Boolean(contextResult?.cancelled),
+              cancelled: !current() || Boolean(layer?.cancelled),
               error:
-                contextResult?.error ||
-                'Contacts context could not be established for Cockpit entry',
-              context: contextResult
-                ? withContextModeVocabulary(contextResult)
-                : null,
-              contextRollback: withContextModeVocabulary(contextRollback),
+                layer?.error ||
+                (layer?.ok === true
+                  ? 'Cockpit entry was cancelled before it could run'
+                  : 'Military Flights could not be switched on'),
+              layer,
               state: styleManager.getCockpitState?.() || null,
-            };
+            });
           }
         }
       }
-      // Contacts activation can adopt a newer explicit aircraft selection.
-      // Sample only after that transaction settles so an older voice snapshot
-      // cannot overwrite the operator's newer choice.
       const selectedTarget =
         action === 'enter' ? selectedCockpitTarget(dataManager) : null;
       let cockpitResult;
@@ -1189,30 +1289,7 @@ export function createGevActionRunner({
           state: styleManager.getCockpitState?.() || null,
         };
       }
-      if (
-        action === 'enter' &&
-        cockpitResult?.ok !== true &&
-        contextChangedForEntry
-      ) {
-        const contextRollback = await styleManager.setContextMode(
-          priorContextMode,
-          {
-            // Undoing this action's own precondition — still choreography.
-            claimVisualAuthority: false,
-            ...(current()
-              ? {
-                  signal: runOptions.signal,
-                  isCurrent: runOptions.isCurrent,
-                }
-              : {}),
-          },
-        );
-        return {
-          ...cockpitResult,
-          contextRollback: withContextModeVocabulary(contextRollback),
-        };
-      }
-      return cockpitResult;
+      return cockpitResult?.ok === true ? cockpitResult : failed(cockpitResult);
     }
 
     if (name === 'show_data_layers_menu') {
@@ -1604,7 +1681,7 @@ export function createGevActionRunner({
         return {
           ok: false,
           action: 'set_cyber_sonar',
-          error: 'Cyber sonar controls are unavailable.',
+          error: 'Sonar controls are unavailable.',
         };
       }
       return { action: 'set_cyber_sonar', ...styleManager.setCyberSonar(args) };
@@ -2801,6 +2878,62 @@ export function formatTrackedEntityLabel(found, query = '') {
   );
 }
 
+/**
+ * Wait for a layer just switched on to report its first data: its stats name
+ * an update, or its next update lands. Bounded by that update, the layer
+ * failing or going off, and the request's own cancellation.
+ * @returns {Promise<boolean>} Whether the layer has reported data.
+ */
+function waitForLayerFirstData(
+  dataManager,
+  layerId,
+  { signal = null, isCurrent = null } = {},
+) {
+  const reported = () => {
+    try {
+      const stats = dataManager.layers?.get?.(layerId)?.module?.getStats?.();
+      return stats?.lastUpdate != null;
+    } catch {
+      return false;
+    }
+  };
+  if (reported()) return Promise.resolve(true);
+  if (typeof dataManager.subscribeActivity !== 'function' || signal?.aborted)
+    return Promise.resolve(false);
+  return new Promise((resolve) => {
+    const offs = [];
+    let settled = false;
+    const done = (value) => {
+      if (settled) return;
+      settled = true;
+      for (const off of offs) off?.();
+      resolve(value);
+    };
+    const onAbort = () => done(false);
+    signal?.addEventListener?.('abort', onAbort, { once: true });
+    offs.push(() => signal?.removeEventListener?.('abort', onAbort));
+    offs.push(
+      dataManager.subscribeActivity((change) => {
+        if (
+          !dataManager.isEnabled?.(layerId) ||
+          (typeof isCurrent === 'function' && !isCurrent())
+        )
+          return done(false);
+        if (reported()) return done(true);
+        if (change?.type === 'data-updated' && change.layerId === layerId)
+          done(reported());
+      }),
+    );
+    offs.push(
+      dataManager.subscribe?.((change) => {
+        if (change?.layerId !== layerId) return;
+        if (change.type === 'refresh-failed' || change.enabled === false)
+          done(false);
+      }),
+    );
+  });
+}
+
 /** Finds and tracks/selects an entity by spoken query across layer families. */
 async function trackEntity(
   viewer,
@@ -2915,8 +3048,21 @@ async function trackEntity(
       'track_entity',
       () => {
         let trackedOk = false;
-        if (family.kind === 'vessel') {
-          trackedOk = !!module.selectById?.(found.id ?? found.mmsi);
+        // The id the layer selects by, which also names it in Context.
+        const id =
+          family.kind === 'vessel'
+            ? (found.id ?? found.mmsi)
+            : family.kind === 'satellite'
+              ? found.noradId
+              : found.icao24;
+        if (
+          family.kind === 'vessel' &&
+          typeof module.trackById === 'function'
+        ) {
+          // Followed where the layer draws it, as an aircraft is.
+          trackedOk = !!module.trackById(id, { origin: 'voice' });
+        } else if (family.kind === 'vessel') {
+          trackedOk = !!module.selectById?.(id);
           flyToLandmark(viewer, found.latitude, found.longitude, {
             range: 6000,
             pitch: -45,
@@ -2924,10 +3070,8 @@ async function trackEntity(
             buildingHeight: 0,
             duration: 2.0,
           });
-        } else if (family.kind === 'satellite') {
-          trackedOk = !!module.trackById?.(found.noradId, { origin: 'voice' });
         } else {
-          trackedOk = !!module.trackById?.(found.icao24, { origin: 'voice' });
+          trackedOk = !!module.trackById?.(id, { origin: 'voice' });
         }
 
         return {
@@ -2935,6 +3079,7 @@ async function trackEntity(
           action: 'track_entity',
           layerId: family.layerId,
           kind: family.kind,
+          id: id == null ? null : String(id),
           // Aircraft follow the flight layers' label convention (callsign →
           // registration → icao24) so the spoken name matches what the UI shows;
           // `registration` is absent on vessels/satellites and simply falls
@@ -3821,10 +3966,8 @@ function findDataLayerRow(layerId) {
 }
 
 function focusDataLayerRow(row, layerId) {
-  // A row the Data Layers finder hides could not be seen: show every row
-  // again (LAYER_FINDER_CLEAR_EVENT in LayerFinder.vue).
   if (row.classList.contains('is-filtered'))
-    document.dispatchEvent(new CustomEvent('gev:layer-finder-clear'));
+    layerFinderFor(row.parentElement)?.clearAll?.();
   row.scrollIntoView({ block: 'center', behavior: 'smooth' });
   row.classList.remove('gev-voice-focus');
   void row.offsetWidth;
@@ -4401,8 +4544,8 @@ async function flyToRequestedLocation(
   const query = String(args.query || '').trim();
   if (query) {
     // A query that names a curated preset POI ("the Texas State Capitol", "Golden Gate Bridge")
-    // flies to its hand-tuned camera pose — the same beautiful framing as clicking the LOCATIONS
-    // panel button — instead of generic geocode framing. An explicit rangeM still overrides distance.
+    // flies to its hand-tuned camera pose — the same framing as choosing its landmark chip in the
+    // Omnibar — instead of generic geocode framing. An explicit rangeM still overrides distance.
     const poiMatch = findPoiByName(query);
     if (poiMatch) {
       const result = immediate(() =>
@@ -4579,7 +4722,7 @@ function locateLayerEntity(dataManager, { layerId, id, lat, lon }) {
     const matches =
       dataManager?.layers
         ?.get(layerId)
-        ?.module?.getAnalystRecords?.()
+        ?.module?.getAnalystRecords?.(ANALYST_RECORD_CAP)
         .filter(
           (item) =>
             String(
@@ -5848,6 +5991,14 @@ function analystProviders(
         truncated: true,
       };
     },
+    /** The moment a layer's records show when it is not now (a past snapshot), else null. */
+    getRecordsAt(layerKey) {
+      if (!dataManager.isEnabled(layerKey)) return null;
+      const at = dataManager.layers
+        .get(layerKey)
+        ?.module?.getAnalystRecordsAt?.();
+      return Number.isFinite(at) ? at : null;
+    },
     isWarming,
     /** The layer's own status text for an empty result, e.g. "Fly below 400 km". */
     getEmptyNote(layerKey) {
@@ -5934,8 +6085,11 @@ const ANALYST_CANONICAL_FIELDS = new Set([
 
 /**
  * Compact one analyst record for the voice payload: identity, position (so a
- * follow-up can fly to it), distance, and that layer's manifest fields with
- * times as ISO text. The full record set stays engine-side for follow-ups.
+ * follow-up can fly to it), distance, and that layer's manifest fields. The layer's
+ * `timeField` (on a layer without one, any time field) comes back as ISO `time`.
+ * Other timestamps keep their own keys,
+ * as ISO text except for numeric `lastContactAtMs`. The full record set
+ * stays engine-side for follow-ups.
  *
  * `icao24`/`vesselId`/`mmsi` ride along because the tool instructions tell the model to
  * hand this result straight to track_entity, and `id` is a DISPLAY label
@@ -5955,7 +6109,8 @@ function compactAnalystItem(r) {
     compact.lon = Math.round(r.lon * 1e4) / 1e4;
   }
   if (present(r.distanceKm)) compact.distanceKm = r.distanceKm;
-  const fields = voiceLayer(r.layerKey)?.query?.fields || {};
+  const query = voiceLayer(r.layerKey)?.query;
+  const fields = query?.fields || {};
   for (const [key, spec] of Object.entries(fields)) {
     if (!present(r[key]) || key in compact) continue;
     if (spec.type === 'time') {
@@ -5964,7 +6119,9 @@ function compactAnalystItem(r) {
       const time = new Date(ms);
       if (Number.isFinite(time.getTime())) {
         if (key === 'lastContactAtMs') compact.lastContactAtMs = ms;
-        else compact.time = time.toISOString();
+        else if (key === (query.timeField ?? key))
+          compact.time = time.toISOString();
+        else compact[key] = time.toISOString();
       }
     } else compact[key] = r[key];
   }
@@ -6005,28 +6162,41 @@ function effectiveAnalystScopeKind(args, coverage) {
   return args.followUp ? 'anywhere' : 'view';
 }
 
+/** Scope kinds that count inside an outline, which may lie outside the view. */
+const AREA_SCOPE_KINDS = new Set(['region', 'area', 'drawn', 'annotation']);
+
+/**
+ * Whether a layer's count in this scope holds only what its viewport loaded:
+ * a radius or view count, or an area one for a layer that says so.
+ */
+function isViewportLimited(query, scopeKind) {
+  if (!query?.viewportLoaded) return false;
+  if (scopeKind === 'radius' || scopeKind === 'view') return true;
+  return query.viewportAreas === true && AREA_SCOPE_KINDS.has(scopeKind);
+}
+
 /** Add the viewport qualification without replacing retained provenance. */
-function withViewportCoverageNote(coverage) {
+function withViewportCoverageNote(coverage, scopeKind) {
   if (!coverage) return coverage;
   const current = typeof coverage.note === 'string' ? coverage.note : '';
-  if (current.includes(VIEWPORT_COVERAGE_NOTE)) return coverage;
-  const separator = current ? '; ' : '';
-  return {
-    ...coverage,
-    note: current
-      ? `${current}${separator}${VIEWPORT_COVERAGE_NOTE}`
-      : VIEWPORT_COVERAGE_NOTE,
-  };
+  const notes = new Set();
+  for (const { layerKey } of coverage.layersQueried || []) {
+    const query = voiceLayer(layerKey)?.query;
+    if (isViewportLimited(query, scopeKind)) {
+      const note = query.viewportNote || VIEWPORT_COVERAGE_NOTE;
+      if (!current.includes(note)) notes.add(note);
+    }
+  }
+  return notes.size
+    ? { ...coverage, note: [current, ...notes].filter(Boolean).join('; ') }
+    : coverage;
 }
 
 /** Whether this query counts records from a viewport-loaded layer. */
 function isViewportScopedAnalystResult(args, coverage) {
   const scopeKind = effectiveAnalystScopeKind(args, coverage);
-  return (
-    (scopeKind === 'radius' || scopeKind === 'view') &&
-    (coverage?.layersQueried || []).some(
-      (layer) => voiceLayer(layer.layerKey)?.query?.viewportLoaded,
-    )
+  return (coverage?.layersQueried || []).some((layer) =>
+    isViewportLimited(voiceLayer(layer.layerKey)?.query, scopeKind),
   );
 }
 
@@ -6064,7 +6234,10 @@ async function runAnalystQuery(
           projected?.memory &&
           isViewportScopedAnalystResult(args, projected.answer.coverage)
         ) {
-          const coverage = withViewportCoverageNote(projected.answer.coverage);
+          const coverage = withViewportCoverageNote(
+            projected.answer.coverage,
+            effectiveAnalystScopeKind(args, projected.answer.coverage),
+          );
           projected.answer.coverage = coverage;
           projected.memory.coverage = coverage;
         }
@@ -6100,15 +6273,38 @@ async function runAnalystQuery(
       ? `${note}; ${result.display.caveat}`
       : note;
   }
+  // A network still discovering the stations in view (the layer card's
+  // "loading stations, n of m"): counts and rankings are a floor until done.
+  const discovering = (result.coverage?.layersQueried || []).flatMap(
+    ({ layerKey }) => {
+      const stats = dataManager.layers?.get(layerKey)?.module?.getStats?.();
+      return Array.isArray(stats?.discovery) ? stats.discovery : [];
+    },
+  );
+  if (discovering.length) {
+    const note = discovering
+      .map(
+        ({ network, checked, eligible }) =>
+          `${network}: loading stations, ${checked.toLocaleString('en-US')} of ${eligible.toLocaleString('en-US')}`,
+      )
+      .join('; ');
+    result.display.caveat = result.display.caveat
+      ? `${note}; ${result.display.caveat}`
+      : note;
+  }
   // A radius/view count over a viewport-loaded layer counts what is LOADED, and
   // the flights layer reloads as the camera moves — so this number can sit well
-  // under the Contacts cohort without either being wrong.
+  // under the Contacts cohort without either being wrong. Air quality says the
+  // same of its region and area counts.
   const scopeKind = effectiveAnalystScopeKind(args, result.coverage);
   const viewportScoped = isViewportScopedAnalystResult(args, result.coverage);
   if (viewportScoped && result.coverage) {
     // The engine's follow-up memory retains this same object, so update its
     // note in place after deriving the qualified copy.
-    result.coverage.note = withViewportCoverageNote(result.coverage).note;
+    result.coverage.note = withViewportCoverageNote(
+      result.coverage,
+      scopeKind,
+    ).note;
   }
   // ENTITY-CENTRED NEARBY: answered by the SAME engine that fills the Contacts
   // panel, so the spoken number and the panel readout for one centre cannot
@@ -6149,8 +6345,9 @@ async function runAnalystQuery(
     ok: true,
     action: 'analyst_query',
     count: result.count,
-    // False when a layer was capped: the count is a floor ("at least").
-    complete: result.complete !== false,
+    // False when a layer was capped or is still discovering: the count is a
+    // floor ("at least").
+    complete: result.complete !== false && !discovering.length,
     ...(result.partial
       ? { partial: true, unanswered: result.unanswered || [] }
       : {}),

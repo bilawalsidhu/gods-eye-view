@@ -14,7 +14,6 @@ import {
   RAIL_POSITION_SOURCES,
 } from '../../data/railFeeds.js';
 import { displayMotion } from '../transit/movement.js';
-import { FIX_FLAGS, readFix } from '../../data/contactPlayback.js';
 import { roundHeadingDegrees } from '../../data/headingDegrees.js';
 import {
   stopClock,
@@ -178,11 +177,6 @@ export const ROUTE_TRAVELLED_ALPHA = 0.3;
 export const ROUTE_SPLIT_INTERVAL_MS = 250;
 /** How often the selected train's stops, labels and card are refreshed. */
 export const STOP_REFRESH_MS = 1_000;
-/**
- * How long the follow camera glides to another feed's copy of the selected
- * train when the selection moves to it (ms), so it neither jumps nor lets go.
- */
-export const FOLLOW_HANDOVER_MS = 1_200;
 
 /**
  * Category palette. Warm to cool with distance served, and none of the colours
@@ -292,67 +286,6 @@ export function playbackModeFor(railMode) {
     : railMode === 'tram'
       ? 'tram'
       : 'rail';
-}
-
-/** Two reports closer than this are one place: a parked train's jitter (m). */
-export const FOLLOW_MIN_MOVE_M = 15;
-
-const lastFix = {};
-const priorFix = {};
-
-/** How far apart a track's last two reports are (m), 0 with fewer. */
-function lastReportsApartM(track) {
-  if (!track || track.count < 2) return 0;
-  const to = readFix(track, track.count - 1, lastFix);
-  const from = readFix(track, track.count - 2, priorFix);
-  if (from.epoch !== to.epoch || to.flags & FIX_FLAGS.BREAK) return 0;
-  const kx = 111_320 * Math.cos((((from.lat + to.lat) / 2) * Math.PI) / 180);
-  const dLon = ((((to.lon - from.lon + 180) % 360) + 360) % 360) - 180;
-  return Math.hypot(dLon * kx, (to.lat - from.lat) * 111_320);
-}
-
-/**
- * Whether the camera follows a train once it is selected, as it follows a
- * tracked aircraft: its reports are recent, and it is moving on its playback
- * now, waits at a stop with its next move already reported, or is between
- * reports (playback waiting for the next one) after its last two reports
- * moved it. Any other train (parked, known from a single report, or not
- * heard from lately) gets one fly-to.
- * @param {{sample?: object, track?: object}|null} entry Runtime entry with
- *   playback state.
- * @returns {boolean}
- */
-export function railTrainFollowable(entry) {
-  const sample = entry?.sample;
-  if (!sample || displayMotion(entry, 0).word === 'NO FIX') return false;
-  if (sample.phase === 'playing' && sample.segmentSpeedMps > 0) return true;
-  if (
-    sample.phase === 'playing' &&
-    sample.motion === 'stopped' &&
-    Number.isFinite(sample.nextMotionT) &&
-    sample.nextMotionT > sample.displayT
-  )
-    return true;
-  return lastReportsApartM(entry.track) >= FOLLOW_MIN_MOVE_M;
-}
-
-/**
- * The follow camera's offset from the train in east-north-up metres: the
- * shared world-focus framing for a train (its range and pitch) seen along the
- * camera's current heading, so taking the train does not swing the view round.
- * @param {{rangeM: number, pitchDeg: number}} framing
- * @param {number} headingRad
- * @returns {{x: number, y: number, z: number}}
- */
-export function railFollowOffset(framing, headingRad) {
-  const heading = Number.isFinite(headingRad) ? headingRad : 0;
-  const pitch = (framing.pitchDeg * Math.PI) / 180;
-  const across = framing.rangeM * Math.cos(pitch);
-  return {
-    x: -Math.sin(heading) * across,
-    y: -Math.cos(heading) * across,
-    z: -Math.sin(pitch) * framing.rangeM,
-  };
 }
 
 // Tools and the server may import this module, so no catalogue here: the

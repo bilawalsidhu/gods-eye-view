@@ -1,5 +1,8 @@
 import { h, render as renderVue } from 'vue';
 import NewsFeed from './news/NewsFeed.vue';
+import { watchDisplayed } from './displayWatch.js';
+import { onPanelOpening } from './rail/panelContent.js';
+import { getLocale } from '../i18n/index.js';
 
 const LAYER_ID = 'news';
 const LOAD_MORE_MARGIN_PX = 160;
@@ -7,6 +10,15 @@ const LOAD_MORE_MARGIN_PX = 160;
 const appearedPanels = new WeakSet();
 const set = (node, key, value) => {
   if (node[key] !== value) node[key] = value;
+};
+// What a render shows: its template translates labels too, so the locale is
+// part of it. Null for a view that cannot be compared.
+const viewKey = (view) => {
+  try {
+    return `${getLocale()}\u0000${JSON.stringify(view)}`;
+  } catch {
+    return null;
+  }
 };
 
 /**
@@ -27,11 +39,39 @@ export function createNewsPanel({ container, setLayerParams = () => {} } = {}) {
   let destroyed = false;
   let requestedAt = -1;
   let shownFilters = '';
+  // The feed is not repainted while its body is not displayed (the panel
+  // collapsed or hidden); it repaints once when the body is displayed again:
+  // at once when the panel is presented open or shown open, otherwise when a
+  // ResizeObserver reports the body displayed.
+  let owed = false;
+  // The view the feed shows: an equal one is not rendered again.
+  let shownKey;
+  const body = watchDisplayed(container, () => {
+    if (owed) render();
+  });
+  const offOpening = onPanelOpening(panel, ({ displayedOnly = false } = {}) => {
+    if (!owed) return;
+    if (displayedOnly && !(container.getClientRects?.().length > 0)) return;
+    // The body is being shown: a later render paints it rather than owing it.
+    body.assumeShown();
+    render({ force: true });
+  });
 
-  function render() {
+  function render({ force = false } = {}) {
     if (destroyed) return;
-    renderVue(h(NewsFeed, { view, onParams }), container);
     const hidden = !view;
+    // A panel this render shows open displays its body before a size report.
+    const showsOpen =
+      Boolean(panel?.hidden) &&
+      !hidden &&
+      !panel.classList?.contains('collapsed');
+    owed = !force && !showsOpen && !body.shown();
+    if (!owed) {
+      const key = viewKey(view);
+      if (force || key === null || key !== shownKey)
+        renderVue(h(NewsFeed, { view, onParams }), container);
+      shownKey = key;
+    }
     if (panel) set(panel, 'hidden', hidden);
     // The count is the shown section's: Local's list, else the feed.
     const shown =
@@ -80,6 +120,8 @@ export function createNewsPanel({ container, setLayerParams = () => {} } = {}) {
     },
     destroy() {
       destroyed = true;
+      body.disconnect();
+      offOpening();
       container.removeEventListener?.('scroll', onScroll);
       renderVue(null, container);
       if (panel) set(panel, 'hidden', true);

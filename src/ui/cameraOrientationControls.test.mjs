@@ -666,7 +666,6 @@ test('orientation navigation preserves follow and selection; new navigation canc
     tracking: {},
     isCockpitActive: () => cockpit,
     cancelOrientation: () => calls.push('cancel-orientation'),
-    clearLocation: () => calls.push('clear-location'),
     cancelShareSelection: () => calls.push('clear-selection'),
     interruptCameraMotion: () => calls.push('interrupt-motion'),
     stopOrbit: () => calls.push('stop-orbit'),
@@ -685,7 +684,7 @@ test('orientation navigation preserves follow and selection; new navigation canc
   ]);
   calls.length = 0;
   navigation._stampNavigation({ cancelPendingSelection: false });
-  assert.deepEqual(calls, ['cancel-orientation', 'clear-location']);
+  assert.deepEqual(calls, ['cancel-orientation']);
   calls.length = 0;
   cockpit = true;
   assert.equal(

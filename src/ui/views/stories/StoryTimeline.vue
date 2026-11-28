@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { t } from '../../../i18n/index.js';
 import { useStoriesStore } from '../../stores/stories.js';
+import UiButton from '../../kit/UiButton.vue';
 import { chapterAt } from '../../../stories/format.js';
 import {
   chapterTitle,
@@ -318,10 +319,9 @@ defineExpose({ goChapter });
 
 <template>
   <div id="timeline" class="timeline">
-    <button
+    <UiButton
       id="tlPlay"
       class="tl-play"
-      type="button"
       :aria-label="playMode === 'pause' ? t('Pause') : t('Play')"
       @click="togglePlay"
     >
@@ -331,7 +331,7 @@ defineExpose({ goChapter });
         fill="currentColor"
         v-html="ICON[playMode]"
       ></svg>
-    </button>
+    </UiButton>
     <div
       id="tlTrack"
       ref="track"
@@ -377,10 +377,9 @@ defineExpose({ goChapter });
         <span id="tlHeadTime">{{ headTime }}</span>
       </div>
       <div id="tlPips" role="group" :aria-label="t('Key moments')">
-        <button
+        <UiButton
           v-for="(ev, i) in events"
           :key="i"
-          type="button"
           class="tl-pip"
           :class="{ snap: snap === -2 - i }"
           :data-e="i"
@@ -396,7 +395,7 @@ defineExpose({ goChapter });
           @keydown.enter.stop
         >
           <i :style="{ background: ev.color }"></i>
-        </button>
+        </UiButton>
       </div>
       <div
         v-if="tip"
@@ -439,12 +438,11 @@ defineExpose({ goChapter });
     <span id="tlTime" class="tl-time" aria-hidden="true">
       <span class="tt-c">{{ headTime }}</span>
     </span>
-    <button
+    <UiButton
       id="stExpand"
       class="tl-vol"
-      type="button"
       :aria-label="expanded ? t('Exit expanded map') : t('Expand map')"
-      :aria-pressed="expanded"
+      :pressed="expanded"
       @click="toggleExpand"
     >
       <svg
@@ -457,6 +455,6 @@ defineExpose({ goChapter });
       >
         <path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" />
       </svg>
-    </button>
+    </UiButton>
   </div>
 </template>

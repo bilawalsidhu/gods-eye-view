@@ -3,6 +3,7 @@ import { t, msg, onLocaleChange } from '../i18n/index.js';
 import { sceneButtonsDisabled, scenePercent } from './scenePresentation.js';
 import { useSceneStore } from './stores/scenes.js';
 import { applicationPinia } from './vueRuntime.js';
+import { flushAllPanelContent } from './rail/panelContent.js';
 
 export class SceneControls {
   /**
@@ -48,6 +49,8 @@ export class SceneControls {
         this.run('renameShot', sceneId, shotId, title),
       load: (sceneId, shotId) => this.run('load', sceneId, shotId),
       remove: (sceneId, shotId) => this.deleteShot(sceneId, shotId),
+      move: (sceneId, shotId, index) =>
+        this.run('moveShot', sceneId, shotId, index),
       create: () => this.createScene(),
       deleteScene: () => this.deleteSelectedScene(),
       stories: () => this.run('stories'),
@@ -110,6 +113,7 @@ export class SceneControls {
         'shot-captured',
         'shot-updated',
         'shot-renamed',
+        'shot-moved',
         'shot-deleted',
         'project-imported',
       ].includes(type)
@@ -272,6 +276,8 @@ export class SceneControls {
   setPlaybackActive(active) {
     if (this.destroyed && active) return;
     document.body.classList.toggle('scene-playback-mode', active);
+    // Leaving playback shows the panels again: repaint what they owe first.
+    if (!active) flushAllPanelContent();
   }
 
   setPlaybackKeyboardEnabled(enabled) {

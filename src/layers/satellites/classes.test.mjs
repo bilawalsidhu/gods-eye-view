@@ -292,13 +292,15 @@ function recordingRendering(state) {
       if (point) point.show = show;
     },
     _setPointsShown() {},
+    _startPace() {},
+    _stopPace() {},
     _setOrbitPathShown(noradId, show) {
       if (state._orbitPaths.has(noradId)) rings.set(noradId, show);
     },
   };
 }
 
-test('turning Stations off takes the ISS ring and label with its point', async () => {
+test('turning Stations off takes the ISS label with its point and leaves rings alone', async () => {
   const { createControls } = await import('./controls.js');
   let overlaySyncs = 0;
   const state = {
@@ -326,11 +328,9 @@ test('turning Stations off takes the ISS ring and label with its point', async (
   });
   controls._applyClassVisibility();
   assert.equal(state._points.get(25544).show, false);
-  assert.equal(rendering.rings.get(25544), false, 'the ring goes with the class');
   assert.ok(overlaySyncs >= 1, 'the label is re-synced');
-  state._params.classes = { ...DEFAULT_SATELLITE_CLASSES };
-  controls._applyClassVisibility();
-  assert.equal(rendering.rings.get(25544), true, 'and comes back with it');
+  // The ISS's ring is drawn only while it is tracked, like any satellite's.
+  assert.equal(rendering.rings.has(25544), false, 'no ring is shown or hidden');
 });
 
 test('a failed Starlink load hides the core catalog Starlink points again', async () => {
@@ -395,9 +395,8 @@ test('every ingested group names the class its unnamed members fall back to', ()
   );
 });
 
-test('enabling the layer leaves a hidden Stations class without its ISS ring', async () => {
+test('enabling the layer shows every built ring by showOrbits, the ISS\'s too', async () => {
   const { createLifecycle } = await import('./lifecycle.js');
-  let issVisible = false;
   const state = {
     _params: { showPoints: true, showOrbits: true },
     _orbitPaths: new Map([
@@ -418,7 +417,6 @@ test('enabling the layer leaves a hidden Stations class without its ISS ring', a
     parts: {
       controls: {
         satelliteVisualsVisible: (enabled, on) => enabled && on !== false,
-        _issOrbitVisible: () => issVisible,
       },
       labels: { _syncIssOverlay() {} },
       interaction: { _installClickHandler() {} },
@@ -427,11 +425,8 @@ test('enabling the layer leaves a hidden Stations class without its ISS ring', a
     },
   });
   methods.enable(null);
-  assert.equal(rendering.rings.get(25544), false, 'the ISS ring follows its class');
-  assert.equal(rendering.rings.get(90001), true, 'other rings follow showOrbits');
-  issVisible = true;
-  methods.enable(null);
-  assert.equal(rendering.rings.get(25544), true);
+  assert.equal(rendering.rings.get(25544), true, 'the ISS ring has no rules of its own');
+  assert.equal(rendering.rings.get(90001), true, 'rings follow showOrbits');
 });
 
 test('a mission group outranks an orbit group, and an Unknown UCS purpose is no evidence', () => {
@@ -459,36 +454,4 @@ test('a mission group outranks an orbit group, and an Unknown UCS purpose is no 
     }),
     'imaging',
   );
-});
-
-test('a tracked ISS keeps its ring while Stations is hidden', async () => {
-  const { createControls } = await import('./controls.js');
-  const state = {
-    _enabled: true,
-    _params: {
-      catalog: 'core',
-      showOrbits: true,
-      classes: { ...DEFAULT_SATELLITE_CLASSES, stations: false },
-    },
-    _catalog: new Map([[25544, { satelliteClass: 'stations' }]]),
-    _points: new Map([[25544, { show: true }]]),
-    _orbitPaths: new Map([[25544, {}]]),
-    _detectionObjects: new Map(),
-    _trackedNorad: null,
-  };
-  const rendering = recordingRendering(state);
-  const controls = createControls({
-    state,
-    services: { layerState: { isExplicitLayerStateOrigin: () => false } },
-    parts: { labels: { _syncIssOverlay() {} }, rendering },
-    source: {},
-  });
-  controls._syncIssOrbit();
-  assert.equal(rendering.rings.get(25544), false);
-  state._trackedNorad = 25544;
-  controls._syncIssOrbit();
-  assert.equal(rendering.rings.get(25544), true, 'tracked, it keeps its ring');
-  state._params.showOrbits = false;
-  controls._syncIssOrbit();
-  assert.equal(rendering.rings.get(25544), false, 'orbits off still hides it');
 });

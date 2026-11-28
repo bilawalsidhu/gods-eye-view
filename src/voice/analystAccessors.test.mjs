@@ -119,7 +119,7 @@ test('mapped installations flatten latitude/longitude', () => {
   const { methods } = installationControls({ state, parts: {} });
   const [row] = methods.getAnalystRecords();
   assert.deepEqual(row, {
-    id: 'Fort Example',
+    id: 'node/1',
     name: 'Fort Example',
     class: 'military_land',
     kind: 'installation',
@@ -194,7 +194,6 @@ test('cyclones flatten the storm position and stay empty while off', async () =>
       ownsPickId: () => false,
       getDiagnostics: () => ({}),
     }),
-    hitTestOverlay: () => null,
   });
   const viewer = {
     scene: { canvas: new EventTarget(), pick: () => null },

@@ -1,19 +1,31 @@
 import { cameraOf } from '../../render/rendererOf.js';
-import { entityFollowTarget, stopFollowing } from '../../data/followed.js';
+import {
+  entityFollowTarget,
+  followedOf,
+  stopFollowing,
+} from '../../data/followed.js';
+import {
+  centerOnClick,
+  claimSelection,
+  releaseSelection,
+} from '../../data/clickSelect.js';
 import { satelliteClassText } from '../../data/satelliteClass.js';
-import { fromDegreesInto } from '../../geo/ellipsoid.js';
-import { clone, scale } from '../../geo/vector.js';
+import { fromDegrees, fromDegreesInto } from '../../geo/ellipsoid.js';
+import { clone, distance, scale } from '../../geo/vector.js';
 import { t } from '../../i18n/index.js';
 import { formatQuantity, unitLabel } from '../../ui/unitLabels.js';
 import {
-  ISS_NORAD,
   CONTEXT_REFRESH_INTERVAL_MS,
+  DESELECT_GLOBE_VIEW,
   HIGH_ORBIT_ALTITUDE_M,
+  ISS_NORAD,
+  STATIONS,
   TRACK_VIEW_FROM_HIGH_SCALE,
   TRACK_VIEW_FROM_LEO,
   TRACKED_ORBIT_COLOR,
 } from './policy.js';
 import { entityRecord, readEntityRecord } from '../../data/entityRecords.js';
+import { modelFor } from './stationModels.js';
 
 export function createTracking({ state: layerState, services, parts, source }) {
   const { clearFocusTarget } = services.focus;
@@ -72,11 +84,14 @@ export function createTracking({ state: layerState, services, parts, source }) {
    *   the follow-camera (viewer.trackedEntityChanged), tear down our own state
    *   but do NOT clear viewer.trackedEntity — the new owner controls it now,
    *   and clearing it would yank the camera off their target (mirror of flights).
+   * @param {{origin?: string, globeView?: boolean}} [options] With
+   *   `globeView`, a camera that was following the satellite flies to the
+   *   globe view over its ground point (`_flyToGlobeViewOver`) once it lets go.
    */
 
   function _clearTracking(
     skipViewerUntrack = false,
-    { origin = 'programmatic' } = {},
+    { origin = 'programmatic', globeView = false } = {},
   ) {
     // Untracking dissolves the cluster: every companion returns to its own
     // ambient label on the next collection.
@@ -88,37 +103,45 @@ export function createTracking({ state: layerState, services, parts, source }) {
       return;
     }
     const clearedNorad = layerState._trackedNorad;
-    clearFocusTarget('satellites', layerState._trackedNorad);
+    // Read before the follow ends: whether the camera rode the satellite, and
+    // where it is over the ground now.
+    const ground =
+      globeView && !skipViewerUntrack && _trackedIsFollowed()
+        ? _groundPointNow(clearedNorad)
+        : null;
+    clearFocusTarget('satellites', clearedNorad);
 
     // Re-show the dot (hidden while the tracked dot drew it) and
     // restore the original group palette from the shared style table (WS-D3)
     parts.rendering._restorePoint(
-      layerState._trackedNorad,
+      clearedNorad,
       parts.controls._pointStyleFor(
-        layerState._trackedNorad,
-        layerState._catalog.get(layerState._trackedNorad)?.group,
+        clearedNorad,
+        layerState._catalog.get(clearedNorad)?.group,
       ),
       // Back to its class's visibility: a hidden class stays hidden.
-      parts.controls._classVisible(layerState._trackedNorad),
+      parts.controls._classVisible(clearedNorad),
     );
 
     // Invalidate the per-frame tracked-position cache (WS-D2)
     layerState._trackedFrameNumber = -1;
     layerState._trackedFrameGeo = null;
 
-    // Remove the tracked dot and orbit path (unless ISS — keep its path)
-    if (layerState._trackedNorad !== ISS_NORAD) {
-      parts.rendering._hideOrbitPath(layerState._trackedNorad);
-    }
+    // Remove the tracked dot and orbit path
+    parts.rendering._hideOrbitPath(clearedNorad);
+    // Released before the camera hears of it: a follow listener that reads
+    // the tracked position mid-release must find nothing, or it would publish
+    // the focus rectangle again after it was cleared above.
+    layerState._trackedNorad = null;
     if (layerState._viewer && !skipViewerUntrack)
       stopFollowing(layerState._viewer);
+    if (ground) _flyToGlobeViewOver(ground);
     layerState._followTarget = null;
     if (layerState._trackedEntity) {
       parts.rendering._removeTrackedEntity(layerState._trackedEntity);
       layerState._trackedEntity = null;
     }
-    layerState._trackedNorad = null;
-    parts.controls._syncIssOrbit?.();
+    layerState._trackedDockedToStation = null;
     // A held Cockpit subject that stops being tracked gets its marks back.
     if (layerState._cockpitSubjectNorad !== null)
       parts.cockpit?._syncCockpitSubjectVisuals();
@@ -130,6 +153,96 @@ export function createTracking({ state: layerState, services, parts, source }) {
       id: clearedNorad,
       origin,
     });
+    releaseSelection('satellites', clearedNorad);
+  }
+
+  /**
+   * Where satellite `noradId` is over the ground now (degrees), or null:
+   * propagated at the world clock's time, else the last frame's sample.
+   */
+  function _groundPointNow(noradId) {
+    const sat = layerState._catalog.get(noradId);
+    const now = sat
+      ? parts.orbits.propagatePosition(sat.satrec, new Date(layerState.now()))
+      : null;
+    const pos = now ?? layerState._trackedFrameGeo;
+    if (!Number.isFinite(pos?.longitude) || !Number.isFinite(pos?.latitude))
+      return null;
+    return { lon: pos.longitude, lat: pos.latitude };
+  }
+
+  /**
+   * Let go of a followed satellite into the globe view: a flight to straight
+   * down over its ground point, north up and level, so the whole Earth is
+   * centred. The follow leaves the eye wherever its own frame had it, often
+   * tilted with the Earth at the edge of the screen. The height is the globe
+   * view's (`DESELECT_GLOBE_VIEW`), or the eye's own when it is already
+   * farther out, so letting go never pulls a far eye in.
+   * @param {{lon: number, lat: number}} ground Degrees.
+   */
+  function _flyToGlobeViewOver(ground) {
+    if (!layerState._viewer) return;
+    const camera = cameraOf(layerState._viewer);
+    const height = camera.pose().height;
+    camera.cancelFlight();
+    camera.flyTo(
+      {
+        lon: ground.lon,
+        lat: ground.lat,
+        height: Math.max(
+          DESELECT_GLOBE_VIEW.heightM,
+          Number.isFinite(height) ? height : 0,
+        ),
+      },
+      {
+        orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+        durationS: DESELECT_GLOBE_VIEW.durationS,
+        endFrame: 'world',
+      },
+    );
+  }
+
+  /** Have the camera follow the tracked satellite (an explicit follow). */
+  function _followTracked() {
+    if (!layerState._followTarget || !layerState._viewer) return false;
+    const camera = cameraOf(layerState._viewer);
+    camera.cancelFlight();
+    camera.follow(layerState._followTarget);
+    return true;
+  }
+
+  /** Whether the camera follows the tracked satellite now. */
+  function _trackedIsFollowed() {
+    return (
+      Boolean(layerState._followTarget) &&
+      followedOf(layerState._viewer) === layerState._followTarget
+    );
+  }
+
+  /**
+   * Centre the tracked satellite once, as a click does: the camera keeps its
+   * distance and angle and meets the satellite where its orbit has it on
+   * arrival.
+   */
+  function _centerTracked() {
+    const noradId = layerState._trackedNorad;
+    const sat = noradId ? layerState._catalog.get(noradId) : null;
+    if (!sat) return false;
+    return centerOnClick(
+      layerState._viewer,
+      (aheadMs) => {
+        const p = sat.satrec
+          ? parts.orbits.propagatePosition(
+              sat.satrec,
+              new Date(layerState.now() + aheadMs),
+            )
+          : null;
+        return p
+          ? fromDegrees(p.longitude, p.latitude, p.altitude)
+          : parts.rendering._pointPosition(noradId);
+      },
+      { clockId: 'satellites' },
+    );
   }
 
   /**
@@ -384,11 +497,27 @@ export function createTracking({ state: layerState, services, parts, source }) {
           : t('DOCKED · {name}', { name: companions[0] }),
       );
     }
+    // While a station's model shows, the card keeps clear of it: the gap
+    // follows the station's size on screen, in steps so the card is not
+    // republished every frame.
+    const clearPx =
+      modelFor(parts, layerState._trackedNorad)?._cardClearPx?.() ?? null;
     const current = readEntityRecord(layerState._trackedEntity)?.labelModel;
+    // The overlay's gap is twice the anchor radius, so half the clearance,
+    // in 4 px steps. The step kept stands until the clearance has moved a
+    // pixel past the step's edge: at an edge, sub-pixel jitter in the range
+    // would otherwise flip it, and republish the card, every frame.
+    const kept = current?.anchorRadiusPx ?? null;
+    const anchorRadiusPx = !clearPx
+      ? null
+      : kept !== null && Math.abs(clearPx / 2 - kept) < 3
+        ? kept
+        : Math.round(clearPx / 8) * 4;
     // Compare the WHOLE detail array: comparing only `details[0]` swallowed any
     // change confined to the companions line, so the card would never republish.
     const unchanged =
       current?.title === title &&
+      (current?.anchorRadiusPx ?? null) === anchorRadiusPx &&
       current?.details?.length === details.length &&
       details.every((line, index) => current.details[index] === line);
     if (unchanged) return;
@@ -396,11 +525,52 @@ export function createTracking({ state: layerState, services, parts, source }) {
       title,
       details,
       accent: '#ffd84d',
+      ...(anchorRadiusPx ? { anchorRadiusPx, anchorRadiusScale: null } : {}),
     };
     refreshTrackedReadout(layerState._trackedEntity);
   }
 
-  function _trackSatellite(noradId, { origin = 'programmatic' } = {}) {
+  /**
+   * The station a satellite is docked to: both orbits, propagated to one
+   * instant, within the station's companion radius (dots are moved at
+   * different moments, so their spacing cannot say). A station is docked to
+   * nothing, and the dense group never is.
+   * @param {number} noradId
+   * @returns {number|null} The station's NORAD number, or null.
+   */
+  function _dockedToStation(noradId) {
+    if (STATIONS.some((station) => station.norad === noradId)) return null;
+    const sat = layerState._catalog.get(noradId);
+    if (!sat?.satrec || sat.group === 'dense') return null;
+    const date = new Date(layerState.now());
+    const at = (p) => fromDegrees(p.longitude, p.latitude, p.altitude);
+    let own = null;
+    for (const station of STATIONS) {
+      const entry = layerState._catalog.get(station.norad);
+      if (!entry?.satrec) continue;
+      own ??= parts.orbits.propagatePosition(sat.satrec, date);
+      if (!own) return null;
+      const there = parts.orbits.propagatePosition(entry.satrec, date);
+      if (there && distance(at(own), at(there)) <= station.companionRadiusM)
+        return station.norad;
+    }
+    return null;
+  }
+
+  /**
+   * Select a satellite: its tracked dot, orbit ring and card.
+   * @param {number} noradId
+   * @param {{origin?: string, follow?: boolean, center?: boolean}} [options] `follow: false`
+   *   (a click on it) centres it once, keeping the camera's distance and
+   *   angle, and follows nothing (src/data/clickSelect.js); anything else
+   *   (Follow, voice, a share link) follows it.
+   *   `center: false` (a pick from a list, which the caller frames)
+   *   selects it without moving the camera.
+   */
+  function _trackSatellite(
+    noradId,
+    { origin = 'programmatic', follow = true, center = true } = {},
+  ) {
     _clearTracking(false, { origin });
 
     const sat = layerState._catalog.get(noradId);
@@ -414,9 +584,19 @@ export function createTracking({ state: layerState, services, parts, source }) {
     // Hide the dot — the tracked dot draws it, larger and over everything.
     parts.rendering._hidePoint(noradId);
 
-    // Show orbital path
+    // Show its orbital path, as for every satellite: a station's ring is
+    // drawn only while the station is tracked, so its docked objects keep
+    // their own.
+    layerState._trackedDockedToStation = _dockedToStation(noradId);
     parts.rendering._showOrbitPath(noradId, TRACKED_ORBIT_COLOR);
-    if (noradId === ISS_NORAD) parts.controls._syncIssOrbit?.();
+    // Built, it follows the Orbits toggle like every other ring.
+    parts.rendering._setOrbitPathShown(
+      noradId,
+      parts.controls.satelliteVisualsVisible(
+        layerState._enabled,
+        layerState._params.showOrbits,
+      ),
+    );
 
     // The tracked position propagates per evaluation through the per-frame
     // cache (WS-D2) — dot, host readout, and camera share one SGP4 epoch per frame.
@@ -445,12 +625,19 @@ export function createTracking({ state: layerState, services, parts, source }) {
 
     layerState._trackedEntity = parts.rendering._addTrackedEntity({
       position: trackedPosition,
+      // Its own dot's colour: tracking never recolours a satellite.
+      color: parts.controls._pointStyleFor(noradId, sat.group).color,
       viewFrom,
     });
     entityRecord(layerState._trackedEntity).selectionOrigin = origin;
     entityRecord(layerState._trackedEntity).trackedId = `satellites:${noradId}`;
     entityRecord(layerState._trackedEntity).displayPosition =
       _trackedDisplayCached;
+    // Up close a station is a 3D model: the card welds to where it is drawn.
+    // So does the card of an object docked to it, which the model stands in
+    // for.
+    entityRecord(layerState._trackedEntity).visualPosition = () =>
+      modelFor(parts, noradId)?._visualPosition?.() ?? null;
     _updateTrackedSatelliteLabelModel(initialPos?.altitude ?? null);
 
     const dotPosition = parts.rendering._pointPosition(noradId);
@@ -464,15 +651,22 @@ export function createTracking({ state: layerState, services, parts, source }) {
     selectTrackedSubjectContext(_contextSubjectMetadata(noradId, initialPos));
     layerState._contextRefreshedAtMs = Date.now();
 
-    // The renderer's own frame for a fast mover (autodetect), as the tracked
-    // entity had; no close-range rules at orbital distances. The carrier is
-    // what the tracked card reads (its entity record).
+    // What the camera follows when asked to: the renderer's own frame for a
+    // fast mover (autodetect), as the tracked entity had; no close-range
+    // rules at orbital distances. The carrier is what the tracked card reads
+    // (its entity record).
     layerState._followTarget = entityFollowTarget(layerState._trackedEntity, {
       position: trackedPosition,
       frame: 'autodetect',
       viewFrom,
     });
-    cameraOf(layerState._viewer).follow(layerState._followTarget);
+    // The one selection: any other layer's selected thing lets go.
+    claimSelection('satellites', noradId, {
+      subject: layerState._followTarget,
+      origin,
+    });
+    if (follow) _followTracked();
+    else if (center) _centerTracked();
     console.log(`[Data:Satellites] Tracking ${name} (NORAD ${noradId})`);
   }
   return {
@@ -488,5 +682,8 @@ export function createTracking({ state: layerState, services, parts, source }) {
     _refreshTrackedSubjectContext,
     _updateTrackedSatelliteLabelModel,
     _trackSatellite,
+    _followTracked,
+    _trackedIsFollowed,
+    _centerTracked,
   };
 }

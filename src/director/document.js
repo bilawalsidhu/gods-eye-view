@@ -36,7 +36,7 @@ function visual(value, path, legacy) {
   const specs = {
     bloom: { enabled: 'boolean', intensity: [-100, 10000], version: [1, 100] },
     sharpen: { enabled: 'boolean', intensity: [0, 100] },
-    hud: { visible: 'boolean', variant: 'string' },
+    hud: { visible: 'boolean', variant: 'string', sonar: 'boolean' },
     detection: {
       mode: 'string',
       density: [0, 100],

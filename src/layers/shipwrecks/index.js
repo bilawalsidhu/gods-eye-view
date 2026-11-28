@@ -97,7 +97,8 @@ export function createShipwrecksLayer({
   let _deadline = null;
   let _lastError = null;
   let _clickHandler = null;
-  let _rowListener = null;
+  /** @type {{ invalidate: () => void } | null} the panels' handle, from init */
+  let _panel = null;
   let _selectedId = null;
   let _selectedCardId = null;
   let _selectedLink = null;
@@ -112,7 +113,7 @@ export function createShipwrecksLayer({
     flushPins();
     if (_viewer) findFrame(_viewer)?.requestRender('shipwrecks');
   };
-  const notifyRow = () => _rowListener?.();
+  const notifyRow = () => _panel?.invalidate();
   const canSelect = () => overlayHost && picking;
   /** Pins whose marker changed since the set was last written. */
   const changedPins = new Set();
@@ -277,12 +278,18 @@ export function createShipwrecksLayer({
     if (!clicks) return;
     _clickHandler = clicks.onClick((click) => {
       if (pointer && !pointer.isPointerFree()) return;
-      const at = click.screenPosition;
-      const cardHit = overlayHost.hitTest?.(at?.x, at?.y, {
-        sourceId: SHIPWRECKS_OVERLAY_SOURCE_ID,
-      });
-      if (cardHit && cardHit.entryId === _selectedCardId) {
-        if (_selectedLink) openExternal(_selectedLink);
+      // The card or label painted on top takes the click, read once per
+      // click so every layer agrees: ours opens its source whatever is drawn
+      // under it; another layer's is that layer's click, so the markers
+      // under it do not act and the selection stays.
+      const cardHit = picking.clickCard?.(click) ?? null;
+      if (cardHit) {
+        if (
+          cardHit.sourceId === SHIPWRECKS_OVERLAY_SOURCE_ID &&
+          cardHit.entryId === _selectedCardId &&
+          _selectedLink
+        )
+          openExternal(_selectedLink);
         return;
       }
       // A marker's item id is its pick id, `shipwreck:<id>`. Read from what is
@@ -373,9 +380,10 @@ export function createShipwrecksLayer({
     // The proxy refreshes once a day; this only notices a new snapshot.
     updateInterval: 6 * 60 * 60 * 1000,
 
-    init(viewer) {
+    init(viewer, { panel = null } = {}) {
       if (_viewer) throw new Error('Shipwrecks layer is already initialized');
       _viewer = viewer;
+      _panel = panel;
       // One set for every wreck marker (thousands of them), under the other
       // sprite layers (`SPRITE_LAYER_ORDER`).
       _markers = drawOf(viewer).icons({
@@ -464,7 +472,7 @@ export function createShipwrecksLayer({
       _snapshot = null;
       _deadline = null;
       _viewer = null;
-      _rowListener = null;
+      _panel = null;
     },
 
     /** The period filter: `from` and `to` are years (null = oldest / latest in the data). */
@@ -479,10 +487,6 @@ export function createShipwrecksLayer({
       _range = periodRange(_period, _extent);
       applyFilter();
       return true;
-    },
-
-    setRowControlsListener(listener) {
-      _rowListener = listener;
     },
 
     getRowControls() {

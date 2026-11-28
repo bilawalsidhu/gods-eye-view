@@ -36,7 +36,9 @@ export const UNIT_TEST_ROOTS = Object.freeze(['src', 'server']);
 
 /** Discover repository unit tests in stable path order. */
 export function discoverUnitTestFiles(root = process.cwd()) {
-  const files = [];
+  const files = readdirSync(root, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.test.mjs'))
+    .map((entry) => entry.name);
   const visit = (directory) => {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
       const absolute = path.join(directory, entry.name);
@@ -76,6 +78,8 @@ export function allocationTestArgs(file) {
 export const UNIT_TEST_NODE_FLAGS = Object.freeze([
   // Single-file components compile on import.
   '--import=./build/registerVue.js',
+  // Every translation catalog is loaded, so a test's setLocale applies at once.
+  '--import=./src/testSupport/loadCatalogs.mjs',
 ]);
 
 function runTests(args) {

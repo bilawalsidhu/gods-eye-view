@@ -4,19 +4,6 @@ import {
   contextModeWord,
 } from '../contextModePolicy.js';
 
-/** Why a Space Missions entry failed: its mission index never loaded, and
- * the error is no older than `since` (an earlier attempt's is not the cause). */
-export function spaceMissionsIndexFailure(dataManager, since = 0) {
-  const stats = dataManager?.layers
-    ?.get('rocket-launches')
-    ?.module?.getStats?.();
-  return stats?.error && stats.lastUpdate == null && stats.errorAt >= since
-    ? t(
-        'Space Missions unavailable: the mission index could not load. Try again later.',
-      )
-    : null;
-}
-
 export async function _runUserFacingContextAction(
   operation,
   message = t('Context could not restore every layer; try again'),
@@ -71,7 +58,6 @@ export function getContextModeState() {
     changing: Boolean(this._contextModeChanging),
     entering: this._contextModeEntering || null,
     canContact: !this._contextMode || this._contextMode === 'flights',
-    canMission: !this._contextMode || this._contextMode === 'space-missions',
     snapshotCaptured: Boolean(this._contextSessionSnapshot),
   };
 }
@@ -127,7 +113,7 @@ export async function setContextMode(
       };
     }
     const canonical = mode === 'contacts' ? 'flights' : mode;
-    if (!['flights', 'space-missions'].includes(canonical)) {
+    if (canonical !== 'flights') {
       return {
         ok: false,
         action: 'set_context_mode',
@@ -222,8 +208,6 @@ export function clearSelectedLayers() {
   this._contextModeChanging = true;
   this._contextMode = null;
   this._contextModeEntering = null;
-  this._contextModeEntryIntent = null;
-  this._contextModeReplacementIntent = null;
   this._contextSessionSnapshot = null;
   this._contextRestoreState = null;
   this._preservePanelStateDuringLayerClear = true;

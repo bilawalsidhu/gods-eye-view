@@ -43,67 +43,6 @@ export const ACARTIA_CREDIT = Object.freeze({
     '<a href="https://www.bewhalewise.org" target="_blank" rel="noopener">Be Whale Wise</a>',
 });
 
-const osmDisplays = new WeakMap();
-
-/** The short inline OSM credits, as the renderer's credits port takes them. */
-const OSM_INLINE_CREDITS = Object.freeze({
-  osm: Object.freeze({
-    text: '© OpenStreetMap',
-    href: 'https://www.openstreetmap.org/copyright',
-    inline: true,
-  }),
-  tiles: Object.freeze({
-    text: '© OpenMapTiles',
-    href: 'https://openmaptiles.org',
-    inline: true,
-  }),
-});
-
-function updateOsmDisplay(viewer, state) {
-  const osm = state.owners.size > 0;
-  let tiles = false;
-  for (const usesTiles of state.owners.values()) tiles ||= usesTiles;
-  for (const [key, visible] of [
-    ['osm', osm],
-    ['tiles', tiles],
-  ]) {
-    if (Boolean(state.offs[key]) === visible) continue;
-    if (visible) {
-      // Looked up each time: a renderer bound later takes over.
-      const credits = findCredits(viewer);
-      if (credits) state.offs[key] = credits.addStatic(OSM_INLINE_CREDITS[key]);
-    } else {
-      state.offs[key]();
-      state.offs[key] = null;
-    }
-  }
-}
-
-/**
- * Keep one short inline credit, through the renderer's credits port, while
- * an OSM display owner has visible data.
- */
-export function showOsmCredit(viewer, owner, { openMapTiles = false } = {}) {
-  if (!owner || !findCredits(viewer)) return false;
-  let state = osmDisplays.get(viewer);
-  if (!state) {
-    state = { owners: new Map(), offs: { osm: null, tiles: null } };
-    osmDisplays.set(viewer, state);
-  }
-  if (state.owners.get(owner) === openMapTiles) return false;
-  state.owners.set(owner, openMapTiles);
-  updateOsmDisplay(viewer, state);
-  return true;
-}
-
-/** Release only this owner's credit; other displayed OSM sources retain theirs. */
-export function hideOsmCredit(viewer, owner) {
-  const state = osmDisplays.get(viewer);
-  if (!state?.owners.delete(owner)) return false;
-  updateOsmDisplay(viewer, state);
-  return true;
-}
-
 /** NYC DOT asks every application that uses its data to carry this
  * disclaimer verbatim (nyc.gov/html/dot/html/about/datafeeds.shtml). */
 export const NYC_DOT_DISCLAIMER =
@@ -165,6 +104,30 @@ export const DATA_CREDITS = [
       'Satellites (TLEs and SATCAT): CelesTrak ' +
       '(<a href="https://celestrak.org" target="_blank" rel="noopener">celestrak.org</a>), ' +
       'Dr. T.S. Kelso',
+  },
+  {
+    key: 'nasa-iss-model',
+    html:
+      'ISS model: ' +
+      '<a href="https://science.nasa.gov/3d-resources/international-space-station-iss-d-igoal/" target="_blank" rel="noopener">NASA 3D Resources</a> (JSC IGOAL)',
+  },
+  {
+    key: 'tiangong-model',
+    html:
+      "Tiangong model: made for God's Eye View; dimensions from " +
+      '<a href="https://doi.org/10.34133/space.0035" target="_blank" rel="noopener">Wang, Zhang &amp; Wang 2023</a> ' +
+      '(CC BY 4.0) and eoPortal',
+  },
+  {
+    key: 'nasa-iss-telemetry',
+    html: 'ISS joint telemetry (where switched on): NASA ISSLive, via Lightstreamer',
+  },
+  {
+    key: 'nasa-iss-live',
+    html:
+      'ISS live video (LIVE section): NASA, via YouTube ' +
+      '(<a href="https://www.youtube.com/watch?v=ROboUHfPUrU" target="_blank" rel="noopener">exterior cameras</a>, ' +
+      '<a href="https://www.youtube.com/watch?v=M3HKLzjvKPc" target="_blank" rel="noopener">live video and audio</a>)',
   },
   {
     key: 'ucs-satellite-database',
@@ -235,11 +198,19 @@ export const DATA_CREDITS = [
   OSM_CREDIT,
   OPENMAPTILES_CREDIT,
   {
-    key: 'eccc-aqhi',
+    key: 'openaq',
+    html: 'Air-quality observations: <a href="https://openaq.org/" target="_blank" rel="noopener">OpenAQ</a> and originating networks. The originating network and its licence are named in each station’s details.',
+  },
+  {
+    key: 'eea-aqi-bands',
     html:
-      'Air quality (AQHI): Environment and Climate Change Canada — MSC GeoMet ' +
-      '(<a href="https://eccc-msc.github.io/open-data/" target="_blank" rel="noopener">eccc-msc.github.io/open-data</a>) ' +
-      '· <a href="https://eccc-msc.github.io/open-data/licence/readme_en/" target="_blank" rel="noopener">ECCC Data Servers End-use Licence</a>',
+      'Air quality. Pollutant bands: ' +
+      '<a href="https://airindex.eea.europa.eu/AQI/" target="_blank" rel="noopener">European Air Quality Index (EEA)</a> · CC BY 4.0 · colours adapted by GEV · ' +
+      'Carbon monoxide: WHO air quality guidelines',
+  },
+  {
+    key: 'us-aqi',
+    html: "US AQI: computed by GEV from station readings with the US EPA's breakpoints and colours; not an official reading.",
   },
   {
     key: 'overture-military-names',
@@ -303,9 +274,9 @@ export const DATA_CREDITS = [
     key: 'ontario-511-cctv',
     html:
       'CCTV cameras &amp; frames (Ontario): ' +
-      '<a href="https://511on.ca/" target="_blank" rel="noopener">Ontario 511</a> ' +
-      '(<a href="https://www.ontario.ca/page/open-government-licence-ontario" target="_blank" rel="noopener">Open Government Licence - Ontario</a>) ' +
-      '· provided as is, without warranty; actual road conditions may differ',
+      '<a href="https://511on.ca/" target="_blank" rel="noopener">Ontario 511</a>. ' +
+      'Contains information licensed under the <a href="https://www.ontario.ca/page/open-government-licence-ontario" target="_blank" rel="noopener">Open Government Licence – Ontario</a>. ' +
+      'Provided as is, without warranty; actual road conditions may differ.',
   },
   {
     key: 'fintraffic-cctv',
@@ -539,7 +510,7 @@ export const DATA_CREDITS = [
   },
   {
     key: 'weather-cyclones',
-    html: 'Cyclone advisories: <a href="https://www.nhc.noaa.gov/" target="_blank" rel="noopener">NOAA/NWS NHC / CPHC</a> · Atlantic and eastern/central North Pacific. Forecast center uncertainty, not storm size.',
+    html: 'Cyclone advisories: <a href="https://www.nhc.noaa.gov/" target="_blank" rel="noopener">NOAA/NWS NHC / CPHC</a> · Atlantic and eastern/central North Pacific; <a href="https://www.metoc.navy.mil/jtwc/jtwc.html" target="_blank" rel="noopener">Joint Typhoon Warning Center</a> · western North Pacific, North Indian Ocean, Southern Hemisphere. The NHC cone is forecast center uncertainty, not storm size.',
   },
   {
     key: 'weather-lightning',
@@ -897,4 +868,30 @@ export function registerDynamicCredit(viewer, credit) {
 export function registerDataCredits(viewer, credits = DATA_CREDITS) {
   if (!viewer) return;
   for (const credit of credits) addDataCredit(viewer, credit);
+}
+
+/** The credits registered under each replaceable key: viewer, markup, and their removers. */
+const _replaceableCredits = new WeakMap();
+/**
+ * Register `credit`, replacing what an earlier call registered under its
+ * key (a source whose wording changes, such as a model run's year).
+ * @returns {boolean} True when the credit is (now) registered.
+ */
+export function replaceDynamicCredit(viewer, credit) {
+  if (!viewer || !credit?.key || !credit?.html) return false;
+  const credits = findCredits(viewer);
+  if (!credits) return false;
+  let byKey = _replaceableCredits.get(viewer);
+  if (!byKey) {
+    byKey = new Map();
+    _replaceableCredits.set(viewer, byKey);
+  }
+  const held = byKey.get(credit.key);
+  if (held?.html === credit.html) return true;
+  if (held) for (const off of held.offs) off?.();
+  const offs = creditsFromMarkup(credit.html).map((one) =>
+    credits.addStatic(one),
+  );
+  byKey.set(credit.key, { html: credit.html, offs });
+  return true;
 }

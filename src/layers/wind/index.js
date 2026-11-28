@@ -4,8 +4,13 @@ import {
   formatWindReading,
   windReadingResult,
   windUnitChips,
+  windValueText,
 } from './presentation.js';
-import { inspectWindAtCenter, WIND_UNITS } from './inspection.js';
+import {
+  inspectWindAtCenter,
+  sampleWindReading,
+  WIND_UNITS,
+} from './inspection.js';
 import { createWindInspectionMarker } from './inspectionMarker.js';
 import { canvasOf, findQuery } from '../../render/rendererOf.js';
 import { t, msg, translateKnown } from '../../i18n/index.js';
@@ -100,19 +105,28 @@ export function createWindLayer({
     sampledPosition = reading.position || position || null;
     inspectionMarker?.show(sampledPosition);
   };
+  const forecastDetail = (valid) =>
+    t('{model} forecast · {time}', {
+      model: model === 'ifs' ? 'ECMWF IFS' : 'GFS',
+      time: valid || t('Unavailable'),
+    });
   const requestedScalar = () =>
     ['temperature', 'pressure'].includes(overlay) ? overlay : 'none';
   let generation = 0;
-  let rowControlsListener = null;
-  const notify = () => rowControlsListener?.();
-  const unsubscribeClock = clock?.subscribe(notify);
+  /** @type {{ invalidate: () => void } | null} the panels' handle, from init */
+  let _panel = null;
+  const notify = () => _panel?.invalidate();
   const layer = {
     id: 'wind',
     name: 'Wind',
     icon: '🌬',
     source: 'GFS / ECMWF IFS · FORECAST',
     updateInterval: 3600_000,
-    init(nextViewer) {
+    // The row and the Weather readout read the scene time; the panel reads
+    // them again when it moves.
+    panelFollowsTime: true,
+    init(nextViewer, { panel = null } = {}) {
+      _panel = panel;
       viewer = nextViewer;
       rendering = createRendering({
         container: container ?? nextViewer.container,
@@ -257,6 +271,23 @@ export function createWindLayer({
     getParams() {
       return { model, overlay, paused, units };
     },
+    /**
+     * The forecast surface wind at a point, from the field already loaded:
+     * `{value: "12,0 km/h from NW", detail, at}` in the active language,
+     * or null while the layer is off or has no field.
+     */
+    getValueAt(lat, lon) {
+      if (!enabled || !Number.isFinite(lat) || !Number.isFinite(lon))
+        return null;
+      const sample = sampleWindReading(manifest, lon, lat);
+      if (!sample) return null;
+      const valid = Date.parse(manifest.cycle?.validIso);
+      return {
+        value: windValueText(sample.speed, sample.from, units),
+        detail: forecastDetail(formatWindValidTime(manifest.cycle?.validIso)),
+        ...(Number.isFinite(valid) ? { at: valid } : {}),
+      };
+    },
     getRowControls() {
       // A source that follows the timeline shows the wind at its time.
       const historyStatus =
@@ -315,10 +346,7 @@ export function createWindLayer({
           coverage: t('Global · 1° grid'),
           validTime: manifest?.cycle?.validIso,
           issuedTime: manifest?.cycle?.runIso,
-          detail: t('{model} forecast · {time}', {
-            model: model === 'ifs' ? 'ECMWF IFS' : 'GFS',
-            time: valid || t('Unavailable'),
-          }),
+          detail: forecastDetail(valid),
           status: loading
             ? t('Loading forecast')
             : preparing
@@ -430,17 +458,13 @@ export function createWindLayer({
       return controls;
     },
 
-    setRowControlsListener(listener) {
-      rowControlsListener = typeof listener === 'function' ? listener : null;
-    },
     destroy() {
       layer.disable();
-      unsubscribeClock?.();
       rendering?.destroy();
       rendering = null;
       imageryHost = null;
       viewer = null;
-      rowControlsListener = null;
+      _panel = null;
       inspectionMarker?.destroy();
       inspectionMarker = null;
     },

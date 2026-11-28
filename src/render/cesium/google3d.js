@@ -7,6 +7,45 @@ export { selectMapStartupRoute } from '../../maps/startupRoute.js';
 
 const clean = (value) => String(value || '').trim();
 
+const MIB = 1024 * 1024;
+
+/**
+ * The photorealistic tileset's memory budget for a device. Desktops keep
+ * the cache Cesium's Google helper sets (1536 MiB, 1024 MiB over it while
+ * tiles in view need it). Phones and tablets (touch only: a coarse pointer
+ * and no fine one) and devices reporting 4 GB of memory or less get 384 MiB
+ * and 128 MiB over: iOS Safari closes a tab at around 0.5 to 1.5 GB, and
+ * the desktop cache grows past that as the view moves from city to city,
+ * while a street-level view still draws at full detail within the smaller
+ * one.
+ *
+ * @param {{touchOnly?: boolean, deviceMemory?: number}} [device]
+ *   `deviceMemory` is `navigator.deviceMemory` in GB, where the browser
+ *   reports it.
+ * @returns {{cacheBytes: number, maximumCacheOverflowBytes: number}}
+ */
+export function photorealCacheBudget({ touchOnly = false, deviceMemory } = {}) {
+  const lowMemory = Number.isFinite(deviceMemory) && deviceMemory <= 4;
+  return touchOnly || lowMemory
+    ? { cacheBytes: 384 * MIB, maximumCacheOverflowBytes: 128 * MIB }
+    : { cacheBytes: 1536 * MIB, maximumCacheOverflowBytes: 1024 * MIB };
+}
+
+/**
+ * What `photorealCacheBudget` reads of this browser: touch only as the
+ * quality port's probe takes it, and the memory the browser reports.
+ * @returns {{touchOnly: boolean, deviceMemory?: number}}
+ */
+export function browserMemoryClass() {
+  const media = (query) => globalThis.matchMedia?.(query).matches === true;
+  return {
+    touchOnly: media('(pointer: coarse)') && !media('(any-pointer: fine)'),
+    deviceMemory: globalThis.navigator?.deviceMemory,
+  };
+}
+
+const browserBudget = () => photorealCacheBudget(browserMemoryClass());
+
 /**
  * Load Google Photorealistic 3D Tiles through direct Google access when
  * configured, otherwise through Cesium ion's hosted Google asset. Direct
@@ -14,13 +53,18 @@ const clean = (value) => String(value || '').trim();
  * server (see googleTokens.js). If direct access fails and an ion token is
  * available, ion is the recovery path.
  *
+ * Every route caches tiles within `photorealCacheBudget` for this device.
+ *
  * @param {object} Cesium
  * @param {{googleApiKey?: string, cesiumToken?: string, googleTokens?: {token: Function}|null}} credentials
+ * @param {{budget?: {cacheBytes: number, maximumCacheOverflowBytes: number}}} [options]
+ *   `budget` defaults to this browser's; tests pass their own.
  * @returns {Promise<{tileset: object|null, route: 'google-direct'|'google-token'|'google-ion'|'osm', errors: Error[]}>}
  */
 export async function loadPhotorealisticTileset(
   Cesium,
   { googleApiKey = '', cesiumToken = '', googleTokens = null } = {},
+  { budget = browserBudget() } = {},
 ) {
   const googleKey = clean(googleApiKey);
   const ionToken = clean(cesiumToken);
@@ -30,17 +74,17 @@ export async function loadPhotorealisticTileset(
   if (googleKey)
     attempts.push({
       route: 'google-direct',
-      create: () => createGoogleDirectTileset(Cesium, googleKey),
+      create: () => createGoogleDirectTileset(Cesium, googleKey, { budget }),
     });
   else if (googleTokens)
     attempts.push({
       route: 'google-token',
-      create: () => createGoogleTokenTileset(Cesium, googleTokens),
+      create: () => createGoogleTokenTileset(Cesium, googleTokens, { budget }),
     });
   if (ionToken)
     attempts.push({
       route: 'google-ion',
-      create: () => createGoogleIonTileset(Cesium, ionToken),
+      create: () => createGoogleIonTileset(Cesium, ionToken, { budget }),
     });
 
   for (const attempt of attempts) {
@@ -56,14 +100,18 @@ export async function loadPhotorealisticTileset(
 }
 
 /** Pass credentials to the source instead of changing SDK-wide defaults. */
-export function createGoogleDirectTileset(Cesium, key) {
+export function createGoogleDirectTileset(
+  Cesium,
+  key,
+  { budget = browserBudget() } = {},
+) {
   key = clean(key);
   if (!key) throw new Error('Google 3D requires an explicit browser key');
   // Tiles keep drawing their own texture while draped weather loads, and
   // clamped marks land on them, as on the token routes' tiles.
   return Cesium.createGooglePhotorealistic3DTileset(
     { key, onlyUsingWithGoogleGeocoder: true },
-    { asynchronouslyLoadImagery: true, enableCollision: true },
+    { ...budget, asynchronouslyLoadImagery: true, enableCollision: true },
   );
 }
 
@@ -72,7 +120,11 @@ export function createGoogleDirectTileset(Cesium, key) {
  * carries the token as a header; a tile refused for an expired token gets
  * the renewed one and is tried once more.
  */
-export async function createGoogleTokenTileset(Cesium, tokens) {
+export async function createGoogleTokenTileset(
+  Cesium,
+  tokens,
+  { budget = browserBudget() } = {},
+) {
   const token = await tokens.token();
   if (!token) throw new Error('Google 3D tokens are not offered');
   const credit = Cesium.GoogleMaps.getDefaultCredit?.();
@@ -90,10 +142,9 @@ export async function createGoogleTokenTileset(Cesium, tokens) {
       return true;
     },
   });
-  // The settings Cesium's Google helper applies to the key route.
+  // The settings the key route gives Cesium's Google helper.
   return Cesium.Cesium3DTileset.fromUrl(resource, {
-    cacheBytes: 1536 * 1024 * 1024,
-    maximumCacheOverflowBytes: 1024 * 1024 * 1024,
+    ...budget,
     enableCollision: true,
     // Tiles keep drawing their own texture while draped weather loads.
     asynchronouslyLoadImagery: true,
@@ -103,7 +154,7 @@ export async function createGoogleTokenTileset(Cesium, tokens) {
 export async function createGoogleIonTileset(
   Cesium,
   accessToken,
-  { signal } = {},
+  { signal, budget = browserBudget() } = {},
 ) {
   accessToken = clean(accessToken);
   if (!accessToken)
@@ -113,10 +164,9 @@ export async function createGoogleIonTileset(
     accessToken,
   });
   signal?.throwIfAborted();
-  // Match the installed SDK's Google helper rendering/cache defaults.
+  // The settings the key route gives Cesium's Google helper.
   return Cesium.Cesium3DTileset.fromUrl(resource, {
-    cacheBytes: 1536 * 1024 * 1024,
-    maximumCacheOverflowBytes: 1024 * 1024 * 1024,
+    ...budget,
     enableCollision: true,
     // Tiles keep drawing their own texture while draped weather loads.
     asynchronouslyLoadImagery: true,

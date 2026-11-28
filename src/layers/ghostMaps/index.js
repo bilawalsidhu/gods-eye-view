@@ -197,7 +197,8 @@ export function createGhostMapsLayer({
   let _stream = 'closed';
   let _queue = Promise.resolve();
   let _clickSubscription = null;
-  let _rowListener = null;
+  /** @type {{ invalidate: () => void } | null} the panels' handle, from init */
+  let _panel = null;
   let _selectedKey = null;
   let _selectedCardId = null;
   let _selectedLink = null;
@@ -212,7 +213,7 @@ export function createGhostMapsLayer({
   /** productId → error text */
   const _failed = new Map();
 
-  const notifyRow = () => _rowListener?.();
+  const notifyRow = () => _panel?.invalidate();
   const render = () =>
     _viewer && findFrame(_viewer)?.requestRender?.('ghostmaps');
   /** This layer's draw sets' ids start with this; one set per edition. */
@@ -707,13 +708,19 @@ export function createGhostMapsLayer({
         typeof pickedId === 'string' && pickedId.startsWith(PICK_PREFIX),
     );
     _clickSubscription = inputFor(_viewer).onClick((event) => {
-      const cardHit = overlayHost.hitTest?.(
-        event.screenPosition?.x,
-        event.screenPosition?.y,
-        { sourceId: GHOSTMAPS_OVERLAY_SOURCE_ID },
-      );
-      if (cardHit && cardHit.entryId === _selectedCardId) {
-        if (_selectedLink && openExternal) openExternal(_selectedLink);
+      // The card or label painted on top takes the click, read once per
+      // click so every layer agrees: ours opens its source whatever is drawn
+      // under it; another layer's is that layer's click, so the maps under
+      // it do not act and the selection stays.
+      const cardHit = picking.clickCard?.(event) ?? null;
+      if (cardHit) {
+        if (
+          cardHit.sourceId === GHOSTMAPS_OVERLAY_SOURCE_ID &&
+          cardHit.entryId === _selectedCardId &&
+          _selectedLink &&
+          openExternal
+        )
+          openExternal(_selectedLink);
         return;
       }
       const picked = event.topHit;
@@ -757,9 +764,10 @@ export function createGhostMapsLayer({
     // the backstop if the stream is down.
     updateInterval: 300000,
 
-    init(viewer) {
+    init(viewer, { panel = null } = {}) {
       if (_viewer) throw new Error('GhostMaps layer is already initialized');
       _viewer = viewer;
+      _panel = panel;
     },
 
     enable() {
@@ -820,11 +828,7 @@ export function createGhostMapsLayer({
       layer.disable();
       _viewer = null;
       _catalog = null;
-      _rowListener = null;
-    },
-
-    setRowControlsListener(listener) {
-      _rowListener = listener;
+      _panel = null;
     },
 
     getRowControls() {

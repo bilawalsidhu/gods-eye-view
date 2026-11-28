@@ -14,7 +14,7 @@ import { applicationServices } from './services/application.js';
  * on independent fixed cadences.
  *
  * The HUD auto-activates when a military-style shader (NVG, FLIR, CRT) is
- * selected and supports the layout variants: tactical, minimal, cyber.
+ * selected and supports the layout variants: tactical, minimal.
  *
  * Color theming is driven by the active shader mode via CSS custom properties.
  */
@@ -30,7 +30,11 @@ import { worldTimeFor } from './time/worldClock.js';
 const hudTime = worldTimeFor('hud');
 const skyTime = worldTimeFor('sky');
 import { composeLocalityTag } from './hudLocality.js';
-import { hudQuantity, LOCALIZED_LOCALITY } from './hudLocalityFormat.js';
+import {
+  hudAltitude,
+  hudQuantity,
+  LOCALIZED_LOCALITY,
+} from './hudLocalityFormat.js';
 import {
   ellipsoidalToMslDisplayM,
   ensureGeoidReady,
@@ -50,11 +54,7 @@ import {
   provenanceLine,
   provenanceTag,
 } from './data/layerSnapshot.js';
-import {
-  applyHudUiTheme,
-  DEFAULT_HUD_LAYOUT,
-  normalizeHudLayout,
-} from './hudLayouts.js';
+import { DEFAULT_HUD_LAYOUT, normalizeHudLayout } from './hudLayouts.js';
 import {
   formatNumber,
   getLocale,
@@ -65,6 +65,7 @@ import {
 import { isRtlLocale } from './i18n/locale.js';
 import { localizeLayerName } from './ui/layerPanel.js';
 import { isEmbeddedInline } from './app/embed.js';
+import { openingPlaying } from './app/openingIntro.js';
 import { subscribeSelectedVessel } from './hudReadouts.js';
 
 /** Color palettes keyed by shader mode; applied as CSS custom properties. */
@@ -231,6 +232,17 @@ const NEARBY_POINTS = Object.values(CITY_POIS).flatMap((city) =>
  * and the altitude-scaled GSD/NIIRS figures. Readouts update on independent
  * fixed cadences.
  */
+/**
+ * The view's attributes on #intel-hud itself: shown or not, layout variant
+ * and style colors. Stylesheets and layout elsewhere on the page read them.
+ */
+const HUD_FRAME_KEYS = Object.freeze(['active', 'variant', 'colors']);
+
+/** @param {object} view @returns {object} Its {@link HUD_FRAME_KEYS}. */
+function pickFrame(view) {
+  return Object.fromEntries(HUD_FRAME_KEYS.map((key) => [key, view[key]]));
+}
+
 export class IntelHUD {
   /**
    * @param {object} viewer - The scene the HUD sits over.
@@ -258,6 +270,19 @@ export class IntelHUD {
     this.placeSearch = placeSearch;
     this.viewer = viewer;
     this._visible = false;
+    // Whether the HUD's view is on screen (setDisplayed). While it is not,
+    // no timer runs and no readout is worked out or published; what was
+    // skipped is caught up when it is back.
+    this._displayed = true;
+    this._unseen = { settle: false, show: false, summary: false };
+    /** Summary updates under way; one still running when the view goes is
+     *  dropped and asked again when it is back. */
+    this._summaryRuns = 0;
+    /** The text the typewriter is typing out, while it types. */
+    this._summaryTypingText = null;
+    /** When the view stopped being displayed (Date.now()), or null. */
+    this._undisplayedAt = null;
+    this._destroyed = false;
     this._autoMode = true; // auto show/hide based on style
     this._currentStyle = 'normal';
     /** The presented HUD; see {@link IntelHUD#_initView}. */
@@ -324,20 +349,8 @@ export class IntelHUD {
     };
     this._onCameraMoveEnd = () => {
       this._markSummaryDirty();
-      // The 250 ms telemetry timer and 15 s semantic-summary timer must not
-      // leave the prior city on-screen after a long CCTV focus flight.
-      // Refresh deterministic camera context synchronously on settle; the AI
-      // summary can still upgrade it on its normal cadence.
-      if (this._visible) {
-        this._updateCameraData();
-        this._setSummaryText(this._composeSummary(), false);
-      }
-      // First settled view: request the AI summary now rather than waiting for
-      // the periodic tick (saves up to ~15s of "Awaiting telemetry...").
-      if (!this._firstSummaryKicked && this._visible && this._latestMetrics) {
-        this._firstSummaryKicked = true;
-        void this._updateSummary(true, true);
-      }
+      if (this._displayed) this._settle();
+      else this._unseen.settle = true;
     };
 
     // Session-consistent pseudorandom identifiers (generated once at construction)
@@ -362,6 +375,33 @@ export class IntelHUD {
     this._startTimers();
   }
 
+  /**
+   * The camera has settled: show the readouts and the plain summary for the
+   * view it settled on.
+   */
+  _settle() {
+    // The 250 ms telemetry timer and 15 s semantic-summary timer must not
+    // leave the prior city on-screen after a long CCTV focus flight.
+    // Refresh deterministic camera context synchronously on settle; the AI
+    // summary can still upgrade it on its normal cadence.
+    if (this._visible) {
+      this._updateCameraData();
+      this._setSummaryText(this._composeSummary(), false);
+    }
+    // First settled view: request the AI summary now rather than waiting for
+    // the periodic tick (saves up to ~15s of "Awaiting telemetry...").
+    // The opening's frames are not that view: it lands with a moveEnd.
+    if (
+      !this._firstSummaryKicked &&
+      !openingPlaying() &&
+      this._visible &&
+      this._latestMetrics
+    ) {
+      this._firstSummaryKicked = true;
+      void this._updateSummary(true, true);
+    }
+  }
+
   /** Show the HUD's words in the new locale; drop AI text in the old one. */
   _relocalize() {
     this._markSummaryDirty();
@@ -378,7 +418,8 @@ export class IntelHUD {
         ? {}
         : { vessel: { active: false, text: t('AIS: --') } }),
     });
-    if (this._visible && this._latestMetrics) this._updateCameraData();
+    if (this._visible && this._displayed && this._latestMetrics)
+      this._updateCameraData();
     this._setSummaryText(this._composeSummary(), false);
   }
 
@@ -421,10 +462,17 @@ export class IntelHUD {
    */
   _present(patch) {
     Object.assign(this._view, patch);
-    const signature = JSON.stringify(this._view);
+    // Not displayed: only the view's own attributes are published, which the
+    // page's stylesheets and layout read from #intel-hud while it is hidden
+    // too; the readouts wait until it is displayed again.
+    const view = this._displayed
+      ? this._view
+      : { ...this._shown, ...pickFrame(this._view) };
+    const signature = JSON.stringify(view);
     if (signature === this._viewSignature) return;
     this._viewSignature = signature;
-    this._publish(Object.freeze({ ...this._view }));
+    this._shown = Object.freeze({ ...view });
+    this._publish(this._shown);
   }
 
   /**
@@ -433,6 +481,7 @@ export class IntelHUD {
    * cadences and are cleaned up in {@link destroy}.
    */
   _startTimers() {
+    this._stopTimers();
     // Timestamp — every second
     this._timestampInterval = setInterval(() => {
       this._present({ timestamp: this._formatUTC() });
@@ -457,6 +506,18 @@ export class IntelHUD {
       if (!this._visible) return;
       void this._updateSummary(true);
     }, HUD_SUMMARY_INTERVAL_MS);
+  }
+
+  /** Stop the periodic timers {@link _startTimers} started. */
+  _stopTimers() {
+    clearInterval(this._timestampInterval);
+    clearInterval(this._recBlinkInterval);
+    clearInterval(this._updateInterval);
+    clearInterval(this._summaryInterval);
+    this._timestampInterval = null;
+    this._recBlinkInterval = null;
+    this._updateInterval = null;
+    this._summaryInterval = null;
   }
 
   /**
@@ -563,7 +624,7 @@ export class IntelHUD {
     const altMslM = ellipsoidalToMslDisplayM(altM, geoidN);
     const sunEl = this._estimateSunElevation(latDeg, lonDeg);
     // i18n-ignore: sensor codes
-    readouts.alt = `ALT: ${Math.round(altMslM)}m   SUN: ${sunEl.toFixed(1)}° EL`;
+    readouts.alt = `ALT: ${Math.round(altMslM)}m   SUN: ${(Number(sunEl.toFixed(1)) + 0).toFixed(1)}° EL`;
 
     // Collection timestamp
     const now = new Date(hudTime());
@@ -808,10 +869,7 @@ export class IntelHUD {
     const altDisplayM = Number.isFinite(m.altMslM) ? m.altMslM : m.altM;
     // Display only: the AI summary request carries its own context, so this
     // line is built in the active language.
-    const altTag =
-      altDisplayM >= 1000
-        ? hudQuantity(altDisplayM / 1000, 'km', 1)
-        : hudQuantity(Math.round(altDisplayM), 'm');
+    const altTag = hudAltitude(altDisplayM);
     const winTag = window
       ? `${hudQuantity(Math.max(1, Math.round(window.widthKm)), '')}x${hudQuantity(Math.max(1, Math.round(window.heightKm)), 'km')}`
       : t('N/A');
@@ -836,7 +894,7 @@ export class IntelHUD {
         region: REGION_LABELS[region] ? t(REGION_LABELS[region]) : region,
         alt: altTag,
         window: winTag,
-        sun: formatNumber(Math.round(m.sunEl)),
+        sun: formatNumber(Math.round(m.sunEl) + 0), // + 0: never "-0"
         ona: formatNumber(Math.round(m.ona)),
         zone: localTag,
       },
@@ -848,6 +906,7 @@ export class IntelHUD {
   _stopSummaryTyping() {
     clearInterval(this._summaryTypingInterval);
     this._summaryTypingInterval = null;
+    this._summaryTypingText = null;
   }
 
   /**
@@ -857,6 +916,7 @@ export class IntelHUD {
    */
   _typeSummary(text) {
     clearInterval(this._summaryTypingInterval);
+    this._summaryTypingText = text;
     let index = 0;
     this._present({ summary: '' });
     this._summaryTypingInterval = setInterval(() => {
@@ -865,6 +925,7 @@ export class IntelHUD {
         this._present({ summary: text });
         clearInterval(this._summaryTypingInterval);
         this._summaryTypingInterval = null;
+        this._summaryTypingText = null;
         return;
       }
       this._present({ summary: text.slice(0, index) });
@@ -877,6 +938,16 @@ export class IntelHUD {
    *   by character; otherwise sets it instantly.
    */
   async _updateSummary(animate = false, force = false) {
+    this._summaryRuns += 1;
+    try {
+      await this._runSummaryUpdate(animate, force);
+    } finally {
+      this._summaryRuns -= 1;
+    }
+  }
+
+  /** {@link _updateSummary}'s work. */
+  async _runSummaryUpdate(animate, force) {
     const fallbackText = this._composeSummary();
     if (!this._latestMetrics) {
       this._setSummaryText(fallbackText, animate);
@@ -1006,7 +1077,8 @@ export class IntelHUD {
   }
 
   _setSummaryText(text, animate) {
-    if (animate) {
+    // Nothing types out off screen: the text is there when the view is back.
+    if (animate && this._displayed) {
       this._typeSummary(text);
       return;
     }
@@ -1127,9 +1199,61 @@ export class IntelHUD {
   show() {
     this._visible = true;
     this._present({ active: true });
+    if (this._displayed) this._refreshShown();
+    else this._unseen.show = true;
+  }
+
+  /** Readouts and a fresh summary for a HUD just shown. */
+  _refreshShown() {
     this._updateCameraData(); // immediate update
     this._markSummaryDirty();
     void this._updateSummary(false, true);
+  }
+
+  /**
+   * Whether the HUD's view is on screen. A stylesheet can give the view
+   * `display: none`, or the view can be unmounted; until it is displayed
+   * again no timer runs, a summary being worked out is dropped and only the
+   * view's own attributes ({@link HUD_FRAME_KEYS}) are published. Then the
+   * timers start again and current readouts show at once.
+   * @param {boolean} displayed
+   */
+  setDisplayed(displayed) {
+    displayed = Boolean(displayed);
+    if (this._destroyed || displayed === this._displayed) return;
+    this._displayed = displayed;
+    if (!displayed) {
+      this._undisplayedAt = Date.now();
+      this._stopTimers();
+      // A reply still typing is finished: the view shows all of it when it
+      // is back, not the rest of it typing out.
+      const typing = this._summaryTypingText;
+      this._stopSummaryTyping();
+      if (typing !== null) this._present({ summary: typing });
+      // A summary being worked out is dropped, and asked again when the
+      // view is back.
+      if (this._summaryRuns > 0) {
+        this._unseen.summary = true;
+        this._markSummaryDirty();
+        this._summaryRequest?.abort();
+      }
+      return;
+    }
+    const { settle, show } = this._unseen;
+    // The summary refresh that would have come round while it was away.
+    const summary =
+      this._unseen.summary ||
+      Date.now() - (this._undisplayedAt ?? Date.now()) >=
+        HUD_SUMMARY_INTERVAL_MS;
+    this._unseen = { settle: false, show: false, summary: false };
+    this._undisplayedAt = null;
+    this._startTimers();
+    // Publishes the whole view: what changed while it was not displayed.
+    this._present({ timestamp: this._formatUTC() });
+    if (settle) this._settle();
+    if (show && this._visible) this._refreshShown();
+    else if (!settle && this._visible) this._updateCameraData();
+    if (summary && !show && this._visible) void this._updateSummary(true);
   }
 
   /** Hide the HUD overlay. */
@@ -1168,14 +1292,12 @@ export class IntelHUD {
 
   /**
    * Switch the HUD layout variant. Falls back to `'tactical'` if the
-   * name is unrecognized. Cyber also applies a coordinated skin to the full
-   * application shell; leaving Cyber restores the standard shell tokens.
-   * @param {string} variantName - One of `'tactical'`, `'minimal'`, `'cyber'`.
+   * name is unrecognized.
+   * @param {string} variantName - One of `'tactical'`, `'minimal'`.
    */
   setVariant(variantName) {
     this._variant = normalizeHudLayout(variantName);
     this._present({ variant: this._variant });
-    applyHudUiTheme(document.documentElement, this._variant);
   }
 
   /**
@@ -1220,10 +1342,8 @@ export class IntelHUD {
 
   /** Tear down all running intervals. Call when discarding the HUD instance. */
   destroy() {
-    clearInterval(this._updateInterval);
-    clearInterval(this._recBlinkInterval);
-    clearInterval(this._timestampInterval);
-    clearInterval(this._summaryInterval);
+    this._destroyed = true;
+    this._stopTimers();
     clearInterval(this._summaryTypingInterval);
     for (const off of this._offCamera.splice(0)) off();
     this._dataManagerUnsubscribe?.();

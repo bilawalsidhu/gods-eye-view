@@ -21,6 +21,9 @@ import {
   windowText,
 } from '../../../stories/storyMeta.js';
 import StoriesHeader from './StoriesHeader.vue';
+import UiButton from '../../kit/UiButton.vue';
+import UiCheckbox from '../../kit/UiCheckbox.vue';
+import UiSelect from '../../kit/UiSelect.js';
 
 /**
  * Explore (prototype `.scr-explore`): the feed beside GEV's Cesium globe,
@@ -129,12 +132,13 @@ function resetAll() {
   filterOpen.value = false;
 }
 const filterEl = ref(null);
+// The Filter button is a UiButton; its root is the button.
 const filterBtn = ref(null);
 function onDocDown(e) {
   if (
     filterOpen.value &&
     !filterEl.value?.contains(e.target) &&
-    !filterBtn.value?.contains(e.target)
+    !filterBtn.value?.$el?.contains(e.target)
   )
     filterOpen.value = false;
 }
@@ -420,13 +424,12 @@ defineExpose({
             @pointerup="onHeadUp"
             @pointercancel="onHeadUp"
           >
-            <button
+            <UiButton
               id="feedGrip"
               class="feed-grip"
-              type="button"
               :aria-label="t('Story list size. Drag, or press to change')"
               @keydown="onGripKey"
-            ></button>
+            ></UiButton>
             <h1>{{ t('GEV Stories') }}</h1>
             <span
               id="exCount"
@@ -444,15 +447,14 @@ defineExpose({
             >
             <div class="fh-tools">
               <label class="sr" for="exSort">{{ t('Sort stories') }}</label>
-              <select id="exSort" v-model="sort" class="fh-sort">
+              <UiSelect id="exSort" v-model="sort" class="fh-sort">
                 <option value="new">{{ t('Newest') }}</option>
                 <option value="long">{{ t('Longest') }}</option>
                 <option value="az">{{ t('A–Z') }}</option>
-              </select>
-              <button
+              </UiSelect>
+              <UiButton
                 id="exFilterBtn"
                 ref="filterBtn"
-                type="button"
                 class="fh-filter"
                 :class="{ on: filterCount }"
                 :aria-expanded="filterOpen"
@@ -476,7 +478,7 @@ defineExpose({
                   <path d="M4 6h16M7 12h10M10 18h4" />
                 </svg>
                 <b v-if="filterCount" id="exFilterN">{{ filterCount }}</b>
-              </button>
+              </UiButton>
             </div>
           </div>
           <div id="exTools" class="ex-tools" @pointerdown.stop @wheel.stop>
@@ -503,9 +505,8 @@ defineExpose({
                 autocomplete="off"
                 @keydown="onSearchKey"
               />
-              <button
+              <UiButton
                 v-if="query"
-                type="button"
                 class="ex-qx"
                 :aria-label="t('Clear search')"
                 @click="
@@ -523,7 +524,7 @@ defineExpose({
                 >
                   <path d="M6 6l12 12M18 6 6 18" />
                 </svg>
-              </button>
+              </UiButton>
               <kbd class="hide-m">/</kbd>
             </div>
             <div class="fh-row">
@@ -533,21 +534,19 @@ defineExpose({
                 role="group"
                 :aria-label="t('Topics')"
               >
-                <button
-                  type="button"
+                <UiButton
                   class="chip"
-                  :aria-pressed="!chips.length"
+                  :pressed="!chips.length"
                   @click="toggleChip('')"
-                  >{{ t('All') }}</button
+                  >{{ t('All') }}</UiButton
                 >
-                <button
+                <UiButton
                   v-for="c in topics"
                   :key="c"
-                  type="button"
                   class="chip"
-                  :aria-pressed="chips.includes(c)"
+                  :pressed="chips.includes(c)"
                   @click="toggleChip(c)"
-                  >{{ t(c) }}</button
+                  >{{ t(c) }}</UiButton
                 >
               </div>
             </div>
@@ -561,25 +560,25 @@ defineExpose({
             >
               <fieldset v-for="[key, label, opts] in filterGroups" :key="key">
                 <legend>{{ t(label) }}</legend>
-                <label v-for="[value, text] in opts" :key="value" class="fopt">
-                  <input
-                    type="checkbox"
-                    :checked="filters[key]?.includes(value)"
-                    @change="toggleFilter(key, value, $event.target.checked)"
-                  />
+                <UiCheckbox
+                  v-for="[value, text] in opts"
+                  :key="value"
+                  class="fopt"
+                  :model-value="Boolean(filters[key]?.includes(value))"
+                  @change="toggleFilter(key, value, $event.target.checked)"
+                >
                   <span>{{ t(text) }}</span>
-                </label>
+                </UiCheckbox>
               </fieldset>
               <div class="fact">
-                <button type="button" class="tbtn" @click="clearFilters">{{
+                <UiButton class="tbtn" @click="clearFilters">{{
                   t('Clear')
-                }}</button>
-                <button
-                  type="button"
+                }}</UiButton>
+                <UiButton
                   class="tbtn solid"
                   @click="
                     filterOpen = false;
-                    filterBtn?.focus();
+                    filterBtn?.$el?.focus();
                   "
                 >
                   {{
@@ -589,7 +588,7 @@ defineExpose({
                       'Show {count} stories',
                     )
                   }}
-                </button>
+                </UiButton>
               </div>
             </div>
           </div>
@@ -598,9 +597,9 @@ defineExpose({
           <li v-if="!shown.length" class="feed-empty">
             <b>{{ t('No stories match') }}</b>
             <span>{{ t('Try another word or clear the filters.') }}</span>
-            <button type="button" class="tbtn" @click="resetAll">{{
+            <UiButton class="tbtn" @click="resetAll">{{
               t('Clear all')
-            }}</button>
+            }}</UiButton>
           </li>
           <li v-for="s in shown" :key="s.id">
             <div
@@ -623,16 +622,15 @@ defineExpose({
                   s.draft ? t('DRAFT') : t('STORY')
                 }}</span>
                 <span class="dur">{{ fmtDur(s.durationMs) }}</span>
-                <button
+                <UiButton
                   class="thumb-play"
-                  type="button"
                   :aria-label="t('Play {title}', { title: titleOf(s) })"
                   @click.stop="play(s.id, $event.currentTarget.parentElement)"
                 >
                   <svg viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M9 6.5v11l9-5.5z" fill="currentColor" />
                   </svg>
-                </button>
+                </UiButton>
               </span>
               <span class="c-title">{{ titleOf(s) }}</span>
               <span class="c-meta">{{ s.creator }} · {{ windowText(s) }}</span>
@@ -640,9 +638,8 @@ defineExpose({
                 ><span v-for="l in layerNames(s)" :key="l">{{ l }}</span></span
               >
               <span class="c-play">
-                <button
+                <UiButton
                   class="tbtn solid"
-                  type="button"
                   @click.stop="
                     play(
                       s.id,
@@ -655,7 +652,7 @@ defineExpose({
                   <svg viewBox="0 0 24 24" fill="currentColor">
                     <path d="M7 4.5v15l12.5-7.5z" /></svg
                   >{{ t('Play story') }}
-                </button>
+                </UiButton>
               </span>
             </div>
           </li>
@@ -664,14 +661,13 @@ defineExpose({
       <div class="ex-map">
         <div class="map-slot"></div>
         <div id="pins" class="pins">
-          <button
+          <UiButton
             v-for="p in placedPins"
             :key="p.id"
             class="pin"
             :class="{ out: !shownIds.has(p.id), hidden: !p.visible }"
-            type="button"
             :data-id="p.id"
-            :aria-pressed="picked === p.id"
+            :pressed="picked === p.id"
             :aria-label="t('Preview {title}', { title: titleOf(p.story) })"
             :style="p.style"
             @click="onPin($event, p.id)"
@@ -686,7 +682,7 @@ defineExpose({
             /></span>
             <span class="pin-lbl">{{ titleOf(p.story).split(':')[0] }}</span>
             <span class="pin-dot"></span>
-          </button>
+          </UiButton>
         </div>
         <div class="ex-msearch glass" role="search">
           <label class="sr" for="exQ">{{ t('Search stories') }}</label>
@@ -710,9 +706,8 @@ defineExpose({
             autocomplete="off"
             @keydown="onSearchKey"
           />
-          <button
+          <UiButton
             v-if="query"
-            type="button"
             class="ex-qx"
             :aria-label="t('Clear search')"
             @click="query = ''"
@@ -727,7 +722,7 @@ defineExpose({
             >
               <path d="M6 6l12 12M18 6 6 18" />
             </svg>
-          </button>
+          </UiButton>
           <kbd>/</kbd>
         </div>
         <div
@@ -746,15 +741,11 @@ defineExpose({
               l
             }}</span></span
           >
-          <button
-            class="tbtn solid"
-            type="button"
-            @click="play(pickedStory.id, null)"
-          >
+          <UiButton class="tbtn solid" @click="play(pickedStory.id, null)">
             <svg viewBox="0 0 24 24" fill="currentColor">
               <path d="M7 4.5v15l12.5-7.5z" /></svg
             >{{ t('Play story') }}
-          </button>
+          </UiButton>
         </div>
         <div v-else class="ex-hint glass">{{
           t('Pick a story or a pin to preview it here')

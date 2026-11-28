@@ -11,7 +11,6 @@ export function createLifecycle({
 }) {
   const { clearFocusTarget } = services.focus;
   const { onMilitaryLayerActiveChange } = services.militaryRegistry;
-  const { holdContinuousRender, releaseContinuousRender } = services.render;
   const { ensureGeoidReady } = services.geoid;
   const { registerPickOwner, unregisterPickOwner } = services.picking;
 
@@ -56,6 +55,7 @@ export function createLifecycle({
       flightState._floorPinned.clear();
       flightState._iconFocusActive = 0;
       flightState._detectionObjects = new Map();
+      flightState._detectionResult.length = 0;
       flightState.records.data = new Map();
       forgetPlacedAircraft(
         services.placement,
@@ -112,7 +112,8 @@ export function createLifecycle({
      */
     enable(viewer) {
       if (flightState._icons) flightState._icons.show = true;
-      holdContinuousRender('flights'); // per-frame animator (perf wave 2)
+      // Drawn as often as the fleet moves on screen (renderPace.js).
+      parts.rendering._startPace();
       parts.rendering._setModelsShown(true);
       parts.tracking._setCockpitContactMode(
         document.body.classList.contains('cockpit-mode'),
@@ -168,7 +169,7 @@ export function createLifecycle({
       parts.controller._abortActiveUpdates();
       parts.tracking._cancelPendingTrackingRestore();
       if (flightState._icons) flightState._icons.show = false;
-      releaseContinuousRender('flights');
+      parts.rendering._stopPace();
       parts.rendering._releaseModels();
       parts.rendering._setModelsShown(false);
       parts.tracking._clearTracking();
@@ -208,7 +209,7 @@ export function createLifecycle({
       flightState._enrichActive = 0;
       flightState._enrichLastDispatchMs = 0;
       parts.controller._abortActiveUpdates();
-      releaseContinuousRender('flights'); // direct-destroy path (perf wave 2 fix)
+      parts.rendering._stopPace(); // direct-destroy path (perf wave 2 fix)
       parts.tracking._clearTracking();
       parts.tracking._destroyTrail();
       parts.tracking._cancelPendingTrackingRestore();
@@ -251,6 +252,7 @@ export function createLifecycle({
       flightState._floorPinned.clear();
       flightState._iconFocusActive = 0;
       flightState._detectionObjects.clear();
+      flightState._detectionResult.length = 0;
       flightState.records.data.clear();
       forgetPlacedAircraft(
         services.placement,

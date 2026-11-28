@@ -97,6 +97,10 @@ export function createFlightState({ source, services }) {
 
   flightState._detectionObjects = new Map();
 
+  /** The array getDetectableObjects fills and returns on every call. */
+
+  flightState._detectionResult = [];
+
   /** DEV-only explicit-position contacts used by qa-focus-evidence.mjs. */
 
   flightState._focusEvidenceIds = new Set();
@@ -265,6 +269,18 @@ export function createFlightState({ source, services }) {
    *  previous display course instead of chasing noise). */
 
   flightState._drSpeedMps = null;
+
+  /** Sibling scratch: whether `_drSpeedMps` is a host-supplied placement's,
+   *  the speed it is drawn at (0 while it waits for its fixes), for motion
+   *  only; panels show the reported ground speed (`displayedKinematics`). */
+
+  flightState._drSpeedPlaced = false;
+
+  /** Sibling of `_cachedDRPosition`: whether a host-supplied placement placed
+   *  it (`_drSpeedPlaced` as the tracked aircraft was drawn), so its trail
+   *  ends where it is drawn rather than at the layer's display delay. */
+
+  flightState._cachedDRPlaced = false;
 
   flightState._drCourseHold = false;
 

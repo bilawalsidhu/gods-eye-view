@@ -1,6 +1,12 @@
 import { selectModelEligible } from './modelEligibility.js';
+import {
+  FLEET_HEADING_OFFSET_DEG,
+  fleetAxisScale,
+  fleetColor,
+  fleetModelTilt,
+} from './fleetModelDraw.js';
 import { AIRCRAFT_ENVIRONMENT_MAP_OPTIONS } from './aircraftModelLighting.js';
-import { fleetModelSet } from './fleetModels.js';
+import { fleetModelSet, fleetPartTable } from './fleetModels.js';
 import { findCamera, findDraw } from '../render/rendererOf.js';
 import { fromDegrees, toLonLatH } from '../geo/ellipsoid.js';
 import { horizonFrom } from '../geo/horizon.js';
@@ -17,39 +23,18 @@ import {
  * and Rail layers share.
  */
 
-/** Every fleet GLB is nose -X: opposite the draw contract's heading 0. */
-export const FLEET_HEADING_OFFSET_DEG = 180;
+export {
+  FLEET_HEADING_OFFSET_DEG,
+  fleetAxisScale,
+  fleetColor,
+  fleetModelTilt,
+} from './fleetModelDraw.js';
 
 /** How long (ms) a model whose load failed waits before it loads again. */
 const RETRY_MS = 5000;
 
 /** A white tint: what a model under the NVG/FLIR styles draws with. */
 const WHITE = Object.freeze([1, 1, 1, 1]);
-
-/**
- * A colour as the draw contract takes it: a CSS string or `[r, g, b, a]`
- * as given, `{red, green, blue, alpha}` as an array; null for none.
- */
-export function fleetColor(color) {
-  if (color === undefined || color === null) return null;
-  if (typeof color === 'string' || Array.isArray(color)) return color;
-  if (typeof color.red === 'number')
-    return [color.red, color.green, color.blue, color.alpha ?? 1];
-  return null;
-}
-
-/**
- * The per-axis stretch a fleet spec draws with on top of its length scale,
- * along the model's glTF axes (`x` its length, `y` its height, `z` its
- * beam), or undefined when it keeps its proportions.
- * @param {object} spec `fleetModelSpec`.
- * @returns {[number, number, number]|undefined}
- */
-export function fleetAxisScale(spec) {
-  const [length, beam, height] = spec?.scaleXYZ ?? [];
-  if (!(length > 0) || (beam === length && height === length)) return;
-  return [1, height / length, beam / length];
-}
 
 /**
  * Whether `point` is inside the eye's view cone (`pose`), a metre's slack.
@@ -111,10 +96,23 @@ let instances = 0;
  * @param {object} options.viewer The scene host.
  * @param {() => object|null} [options.display] `{models3d, models3dMode,
  *   irBoost}`.
- * @param {object} options.policy `{altitudeCeilingM, minimumPixelSize,
- *   cap, capAll, addM, addAllM, keepM, keepAllM, intervalMs}`.
+ * @param {object} options.policy `{altitudeCeilingM, cap, capAll, addM,
+ *   keepM, intervalMs}`: both 3D modes share the add/keep radii and differ
+ *   by their caps. Models are drawn at their true size.
  * @param {(url: string) => string} [options.resolveAsset]
  * @param {boolean} [options.waterline] Clip each model at its waterline.
+ * @param {(item: object, table: object) => object|undefined} [options.partState]
+ *   The moving parts a vehicle's model is posed with (`ModelItem.parts`),
+ *   from its item and its model's part table (`modelPartDrivers.js`); asked
+ *   only for a model that has a part table.
+ * @param {() => ((lon: number, lat: number) => ({heightM: number,
+ *   slope: {east: number, north: number}}|null))|null} [options.seaSurface]
+ *   A moving sea surface the models float on, asked once a frame: for each
+ *   model, the surface's height above the model's point (metres) and its
+ *   slope (rise per metre east and north) at its longitude and latitude, or
+ *   null where the sea is flat. Each model is raised by that height and
+ *   tilted to lie on that slope (`fleetModelTilt`); without one, or where it
+ *   answers null, models stand level on their point.
  * @param {object} [options.draw] Stands in for the viewer's draw port (tests).
  * @returns {object}
  */
@@ -124,6 +122,8 @@ export function createFleetModelLayer({
   policy,
   waterline = false,
   resolveAsset = (url) => url,
+  partState = null,
+  seaSurface = null,
   draw,
 }) {
   const port = draw ?? findDraw(viewer);
@@ -202,8 +202,7 @@ export function createFleetModelLayer({
   function refreshEligibility(items, prefs, eye) {
     const all = prefs.models3dMode === 'all';
     const cap = all ? policy.capAll : policy.cap;
-    const addM = all ? policy.addAllM : policy.addM;
-    const keepM = all ? policy.keepAllM : policy.keepM;
+    const { addM, keepM } = policy;
     const candidates = [];
     for (const [id, item] of items) {
       if (!item.position || item.show === false || !item.spec?.url) continue;
@@ -221,17 +220,39 @@ export function createFleetModelLayer({
     for (const id of eligible) admit(id, items.get(id), cap);
   }
 
-  /** Where the model's origin stands: the item's point raised by the spec's elevation. */
-  function placement(item) {
-    const lift = (item.spec.elevationM || 0) - (item.groundLiftM || 0);
+  /** The sea surface under `item` this frame (`seaSurface`), or null. */
+  function waveUnder(item, surface) {
+    if (!surface || !item.position) return null;
+    const at = toLonLatH(item.position);
+    if (!at) return null;
+    const wave = surface(at.lon, at.lat);
+    return wave && Number.isFinite(wave.heightM) ? wave : null;
+  }
+
+  /**
+   * Where the model's origin stands: the item's point raised by the spec's
+   * elevation and by the sea surface's height under it.
+   */
+  function placement(item, wave) {
+    const lift =
+      (item.spec.elevationM || 0) -
+      (item.groundLiftM || 0) +
+      (wave?.heightM || 0);
     if (!lift) return item.position;
     const at = toLonLatH(item.position);
     if (!at) return item.position;
     return fromDegrees(at.lon, at.lat, at.height + lift);
   }
 
+  /** The part state an item's model is posed with, or undefined. */
+  function partsOf(item) {
+    if (!partState) return undefined;
+    const table = fleetPartTable(fleetModelSet(), item.spec?.model);
+    return table ? partState(item, table) : undefined;
+  }
+
   /** The draw item for an admitted model, as the set draws it, at `at`. */
-  function itemOf(id, record, item, show, boost, at = placement(item)) {
+  function itemOf(id, record, item, show, boost, at, parts, tilt) {
     const mask = item.spec.tinted && !boost ? fleetColor(item.tint) : null;
     return {
       id,
@@ -242,14 +263,13 @@ export function createFleetModelLayer({
         heading:
           ((item.headingDeg || 0) + FLEET_HEADING_OFFSET_DEG) *
           RADIANS_PER_DEGREE,
-        pitch: 0,
-        roll: 0,
+        pitch: tilt.pitch,
+        roll: tilt.roll,
       },
       scale: item.spec.scale,
       ...(fleetAxisScale(item.spec)
         ? { axisScale: fleetAxisScale(item.spec) }
         : {}),
-      minPixelSize: policy.minimumPixelSize,
       environmentMap: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS.enabled,
       ...(boost
         ? {
@@ -260,6 +280,7 @@ export function createFleetModelLayer({
         : { shading: 'pbr' }),
       ...(mask ? { maskColor: mask } : {}),
       ...(waterline ? { clip: 'belowOrigin' } : {}),
+      ...(parts ? { parts } : {}),
       meta: item.pickId ?? id,
       show,
     };
@@ -271,11 +292,15 @@ export function createFleetModelLayer({
    * is built only when something did (a fleet passes every model each
    * frame, and most of what it draws stays).
    */
-  function changed(id, record, item, show, boost) {
-    const at = placement(item);
+  function changed(id, record, item, show, boost, surface) {
+    const wave = waveUnder(item, surface);
+    const at = placement(item, wave);
     const heading = item.headingDeg || 0;
+    const tilt = fleetModelTilt(heading, wave?.slope);
     const mask = item.spec.tinted && !boost ? fleetColor(item.tint) : null;
     const meta = item.pickId ?? id;
+    const parts = partsOf(item);
+    const partsKey = parts ? JSON.stringify(parts) : '';
     const sent = record.sent;
     if (
       sent !== null &&
@@ -283,11 +308,14 @@ export function createFleetModelLayer({
       sent.y === at.y &&
       sent.z === at.z &&
       sent.heading === heading &&
+      sent.pitch === tilt.pitch &&
+      sent.roll === tilt.roll &&
       sent.specKey === item.spec.key &&
       sameColor(sent.mask, mask) &&
       sent.boost === boost &&
       sent.show === show &&
-      sent.meta === meta
+      sent.meta === meta &&
+      sent.partsKey === partsKey
     )
       return null;
     const next = (record.sent ??= {});
@@ -295,13 +323,16 @@ export function createFleetModelLayer({
     next.y = at.y;
     next.z = at.z;
     next.heading = heading;
+    next.pitch = tilt.pitch;
+    next.roll = tilt.roll;
     next.specKey = item.spec.key;
     // A colour array is kept as a copy: the layer may change its own.
     next.mask = Array.isArray(mask) ? [...mask] : mask;
     next.boost = boost;
     next.show = show;
     next.meta = meta;
-    return itemOf(id, record, item, show, boost, at);
+    next.partsKey = partsKey;
+    return itemOf(id, record, item, show, boost, at, parts, tilt);
   }
 
   return {
@@ -336,6 +367,7 @@ export function createFleetModelLayer({
       }
       for (const item of items.values()) item.modelOwnsVisual = false;
       const horizon = horizonFrom(eye.position);
+      const surface = seaSurface?.() ?? null;
       const writes = [];
       let drawn = false;
       settling = 0;
@@ -364,14 +396,14 @@ export function createFleetModelLayer({
           horizon.isPointVisible(item.position);
         if (!visible) {
           if (record.sent !== null) {
-            const write = changed(id, record, item, false, boost);
+            const write = changed(id, record, item, false, boost, surface);
             if (write) writes.push(write);
           }
           continue;
         }
         // Placed before the readiness test: its first drawn frame is here.
         const show = record.ready;
-        const write = changed(id, record, item, show, boost);
+        const write = changed(id, record, item, show, boost, surface);
         if (write) writes.push(write);
         if (!show) {
           if (!record.failedAt) settling += 1;

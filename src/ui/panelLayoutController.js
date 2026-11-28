@@ -1,7 +1,8 @@
-/** Own rail measurement, layout scheduling and dock tray observation. */
+/** Own rail measurement and layout scheduling. */
 import { layoutLeftPanelRail, layoutRightPanelRail } from './panelRails.js';
 import { syncRadioPanelPlacement } from './radioPanelPlacement.js';
 import { isPanelRailMutation } from './panelRailCatalog.js';
+import { flushDisplayedPanelContent } from './rail/panelContent.js';
 const COCKPIT_LAYOUT_SETTLE_MS = 240;
 /**
  * Fixed UI regions that can occupy the left accordion's vertical lane.
@@ -28,8 +29,6 @@ const LEFT_STACK_OBSTACLE_SELECTOR = [
   '#cesium-credits .cesium-credit-logoContainer',
   '#cesium-credits .cesium-credit-textContainer',
   '#gev-credits',
-  '#location-bar',
-  '#control-panel',
   '#gev-voice-control',
   '#pp-toggles',
   '#param-slider-panel',
@@ -57,6 +56,9 @@ const RIGHT_STACK_OBSTACLE_SELECTOR = [
   '#intel-hud .hud-right-edge',
   '#cockpit-context',
   '#cockpit-signal-stream',
+  // The "NEW: GEV Stories" card under the Stories button: panels start below
+  // it while it is up, so its buttons never sit over a panel's controls.
+  '#hPop',
   '#cesium-credits .cesium-credit-logoContainer',
   '#cesium-credits .cesium-credit-textContainer',
   '#gev-credits',
@@ -64,6 +66,29 @@ const RIGHT_STACK_OBSTACLE_SELECTOR = [
   '#gev-voice-control',
   '#world-timeline',
 ].join(', ');
+/** The body class the welcome sets while BROWSE STORIES loads. */
+const OPENING_STORIES = 'first-run-opening-stories';
+/**
+ * True when a mutation can show or hide the Stories card (`#hPop`): the card
+ * itself coming or going, or the welcome that hides it (`#first-run-launcher`,
+ * and the body class it sets while BROWSE STORIES loads) ending.
+ */
+export function movesStoriesCard(record) {
+  if (record.type === 'attributes')
+    return (
+      (record.oldValue || '').split(/\s+/).includes(OPENING_STORIES) !==
+      record.target.classList.contains(OPENING_STORIES)
+    );
+  for (const list of [record.addedNodes, record.removedNodes])
+    for (const node of list)
+      if (
+        ['hPop', 'first-run-launcher'].includes(node.id) ||
+        node.querySelector?.('#hPop, #first-run-launcher')
+      )
+        return true;
+  return false;
+}
+
 export class PanelLayoutController {
   constructor({
     readHud,
@@ -77,7 +102,6 @@ export class PanelLayoutController {
     this.readDisplayScrollTop = readDisplayScrollTop;
     this.destroyed = false;
     this._adaptivePanelSettleTimer = null;
-    this._commandDockTrayObserver = null;
     this._leftStackCockpitModeHandler = null;
     this._leftStackCollapsedHeights = new Map();
     this._leftStackHudTransitionHandler = null;
@@ -92,6 +116,9 @@ export class PanelLayoutController {
     this._rightStackPreferredPanelId = null;
     this._rightStackReconsiderAutoCollapse = false;
     this._rightStackResizeObserver = null;
+    this._storiesCardObserver = null;
+    this._storiesCardShownHandler = null;
+    this._storiesHost = null;
     this._cockpitLayoutFrame = null;
     this._cockpitLayoutTimer = null;
     this._leftPanelStack = document.getElementById('left-panel-stack');
@@ -117,73 +144,6 @@ export class PanelLayoutController {
       this._scheduleRightPanelLayout({ reconsiderAutoCollapse: true });
       this.scheduleCockpitLayout();
     }, COCKPIT_LAYOUT_SETTLE_MS);
-  }
-
-  _initCommandDockTrayMetrics() {
-    if (this.destroyed) return;
-    const dock = document.getElementById('command-dock');
-    if (!dock) return;
-    this._commandDockTrayObserver?.disconnect?.();
-    if (typeof ResizeObserver === 'function') {
-      this._commandDockTrayObserver = new ResizeObserver(() =>
-        this._updateCommandDockTrayStack(),
-      );
-      dock.querySelectorAll('.dock-popover-content').forEach((tray) => {
-        this._commandDockTrayObserver.observe(tray);
-      });
-    }
-    this._updateCommandDockTrayStack();
-  }
-
-  _updateCommandDockTrayStack() {
-    if (this.destroyed) return;
-    const dock = document.getElementById('command-dock');
-    if (!dock) return;
-    const locationPanel = dock.querySelector(
-      '#location-bar.dock-pinned:not(.collapsed)',
-    );
-    const presetsPanel = dock.querySelector(
-      '#control-panel.dock-pinned:not(.collapsed)',
-    );
-    const locationHeight =
-      locationPanel
-        ?.querySelector('.dock-popover-content')
-        ?.getBoundingClientRect().height || 0;
-    const presetsHeight =
-      presetsPanel
-        ?.querySelector('.dock-popover-content')
-        ?.getBoundingClientRect().height || 0;
-    const pinnedCount = Number(locationHeight > 0) + Number(presetsHeight > 0);
-    const locationHeightPx = Math.ceil(locationHeight);
-    const presetsHeightPx = Math.ceil(presetsHeight);
-    const topPinnedPanel = dock.querySelector(
-      '.dock-pinned-top.dock-pinned:not(.collapsed)',
-    );
-    const lowerPinnedPanel =
-      topPinnedPanel?.id === 'location-bar' ? presetsPanel : locationPanel;
-    const lowerPinnedHeight =
-      lowerPinnedPanel
-        ?.querySelector('.dock-popover-content')
-        ?.getBoundingClientRect().height || 0;
-    const stackHeight =
-      pinnedCount > 1
-        ? `calc(${locationHeightPx}px + ${presetsHeightPx}px + 1.2rem)`
-        : `${locationHeightPx + presetsHeightPx}px`;
-    dock.style.setProperty(
-      '--dock-location-pinned-height',
-      `${locationHeightPx}px`,
-    );
-    dock.style.setProperty(
-      '--dock-presets-pinned-height',
-      `${presetsHeightPx}px`,
-    );
-    dock.style.setProperty(
-      '--dock-lower-pinned-height',
-      `${Math.ceil(lowerPinnedHeight)}px`,
-    );
-    dock.style.setProperty('--dock-pinned-stack-height', stackHeight);
-    dock.classList.toggle('dock-has-pinned-tray', pinnedCount > 0);
-    dock.classList.toggle('dock-has-two-pinned-trays', pinnedCount > 1);
   }
 
   _initRightPanelAdaptiveLayout() {
@@ -223,6 +183,7 @@ export class PanelLayoutController {
         this._recentImageryPanel,
         this._streetLevelPanel,
         globalContextPanel,
+        document.getElementById('space-missions-panel'),
         document.getElementById('radio-panel'),
       ]) {
         if (panel) this._rightStackResizeObserver.observe(panel);
@@ -246,6 +207,41 @@ export class PanelLayoutController {
         attributes: true,
         attributeFilter: ['class', 'hidden', 'data-variant'],
       });
+      // The Stories card comes and goes inside the Stories view; only its
+      // arrival or departure moves the rail, not the view's other changes.
+      // It fades in from transparent, which the layout skips, so the end of
+      // that fade (also replayed when the card is shown again after being
+      // hidden) lays the rail out once more.
+      const storiesHost = document.getElementById('gev-stories-host');
+      if (storiesHost) {
+        this._storiesHost = storiesHost;
+        this._storiesCardObserver = new MutationObserver((records) => {
+          if (records.some(movesStoriesCard)) this._scheduleRightPanelLayout();
+        });
+        this._storiesCardObserver.observe(storiesHost, {
+          subtree: true,
+          childList: true,
+        });
+        const welcomeHost = document.querySelector('[data-gev-view="welcome"]');
+        if (welcomeHost)
+          this._storiesCardObserver.observe(welcomeHost, {
+            subtree: true,
+            childList: true,
+          });
+        if (document.body)
+          this._storiesCardObserver.observe(document.body, {
+            attributes: true,
+            attributeFilter: ['class'],
+            attributeOldValue: true,
+          });
+        this._storiesCardShownHandler = (event) => {
+          if (event.target?.id === 'hPop') this._scheduleRightPanelLayout();
+        };
+        storiesHost.addEventListener(
+          'animationend',
+          this._storiesCardShownHandler,
+        );
+      }
       const hud = document.getElementById('intel-hud');
       if (hud) {
         this._rightStackMutationObserver.observe(hud, {
@@ -282,6 +278,9 @@ export class PanelLayoutController {
     this._rightStackLayoutFrame = requestAnimationFrame(() => {
       if (this.destroyed) return;
       this._rightStackLayoutFrame = null;
+      // Whatever showed a panel since (a mode, a class), its content is
+      // current before this pass measures it.
+      flushDisplayedPanelContent();
       if (this._rightStackReconsiderAutoCollapse) {
         this._rightStackReconsiderAutoCollapse = false;
         for (const panel of this._rightPanelStack.querySelectorAll(
@@ -418,6 +417,9 @@ export class PanelLayoutController {
     this._leftStackLayoutFrame = requestAnimationFrame(() => {
       if (this.destroyed) return;
       this._leftStackLayoutFrame = null;
+      // Whatever showed a panel since (a mode, a class), its content is
+      // current before this pass measures it.
+      flushDisplayedPanelContent();
       if (this._leftStackReconsiderAutoCollapse) {
         this._leftStackReconsiderAutoCollapse = false;
         for (const panel of this._leftPanelStack.querySelectorAll(
@@ -459,15 +461,20 @@ export class PanelLayoutController {
     clearTimeout(this._cockpitLayoutTimer);
     this._adaptivePanelSettleTimer = this._cockpitLayoutTimer = null;
     for (const field of [
-      '_commandDockTrayObserver',
       '_leftStackResizeObserver',
       '_leftStackMutationObserver',
       '_rightStackResizeObserver',
       '_rightStackMutationObserver',
+      '_storiesCardObserver',
     ]) {
       this[field]?.disconnect();
       this[field] = null;
     }
+    this._storiesHost?.removeEventListener(
+      'animationend',
+      this._storiesCardShownHandler,
+    );
+    this._storiesHost = this._storiesCardShownHandler = null;
     for (const field of [
       '_leftStackHudTransitionHandler',
       '_rightStackHudTransitionHandler',

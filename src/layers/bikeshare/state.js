@@ -19,13 +19,23 @@ export function createState({ services }) {
 
   layerState._viewer = null;
 
-  /** @type {{ refreshLayerStats?: (layerId?: string) => void }|null} Manager that repaints the layer's row. */
-
-  layerState._dataManager = null;
+  /** @type {{ invalidate: () => void } | null} the panels' handle, from init */
+  layerState._panel = null;
 
   /** Draw set of the station dots (`drawOf(viewer).points`), or null. */
 
   layerState._stationSet = null;
+
+  /**
+   * Draw set of the covered cities' markers, shown above the activation
+   * height so the globe says where bike share is, or null.
+   */
+
+  layerState._coverageSet = null;
+
+  /** The shell's camera action for a marker's flight (`attachShellServices`), or null. */
+
+  layerState._runNavigation = null;
 
   /** Draw set of the selected station's highlight dot, or null. */
 

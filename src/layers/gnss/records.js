@@ -291,18 +291,23 @@ export function gnssIntegrityLevel(total, degraded) {
  * vertices in order (six for a hexagon, five for a pentagon), with
  * longitudes in -180..180; `gnssCellRing` gives the ring to draw.
  *
- * @returns {{id: string, lat: number, lon: number, boundary: {lat: number, lon: number}[], aircraft: number, degraded: number, percentDegraded: number, level: 'low'|'medium'|'high', state: string, interpretation: string|null}[]}
+ * @returns {{id: string, lat: number, lon: number, boundary: {lat: number, lon: number}[], observedAt: number, aircraft: number, degraded: number, percentDegraded: number, level: 'low'|'medium'|'high', state: string, interpretation: string|null}[]}
  */
 export function binGnssCells(store) {
   const tallies = new Map();
-  for (const { cell, degradedAt } of store.values()) {
-    const tally = tallies.get(cell) || { aircraft: 0, degraded: 0 };
+  for (const { cell, seenAt, degradedAt } of store.values()) {
+    const tally = tallies.get(cell) || {
+      aircraft: 0,
+      degraded: 0,
+      observedAt: seenAt,
+    };
+    tally.observedAt = Math.max(tally.observedAt, seenAt);
     tally.aircraft += 1;
     if (degradedAt != null) tally.degraded += 1;
     tallies.set(cell, tally);
   }
   const cells = [];
-  for (const [id, { aircraft, degraded }] of tallies) {
+  for (const [id, { aircraft, degraded, observedAt }] of tallies) {
     const [lat, lon] = cellToLatLng(id);
     const { percent, level, state, interpretation } = gnssIntegrityLevel(
       aircraft,
@@ -315,6 +320,7 @@ export function binGnssCells(store) {
       boundary: cellToBoundary(id).map(([lat, lon]) => ({ lat, lon })),
       aircraft,
       degraded,
+      observedAt,
       percentDegraded: Math.round(percent * 10) / 10,
       level,
       state,

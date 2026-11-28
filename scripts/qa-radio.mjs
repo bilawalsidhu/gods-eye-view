@@ -432,7 +432,7 @@ async function main() {
         enabled: true,
         uncertain: true,
       });
-      gev.dataManager.refreshLayerStats();
+      entry.panel.invalidate();
       const staticResult = module.setTuningStatic(true);
       const filterBefore = module.getUIState().filter;
       const filterControl = document.getElementById('radio-filter');
@@ -462,6 +462,10 @@ async function main() {
         stationIds: module.getTunerStations(3).map(({ id }) => id),
       });
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      // The Data Layers rows repaint while the panel is displayed; it starts collapsed.
+      const dataPanel = document.getElementById('data-panel');
+      if (dataPanel?.classList.contains('collapsed'))
+        dataPanel.querySelector('[data-collapse-target="data-panel"]')?.click();
       const result = {
         presentationActive: module.getUIState().presentationActive,
         markerSourceVisible: (window.__qaRadioRows('stations')[0]?.setShown ?? false),
@@ -501,7 +505,7 @@ async function main() {
         enabled: true,
         uncertain: false,
       });
-      gev.dataManager.refreshLayerStats();
+      entry.panel.invalidate();
       module.cancelTuning();
       camera.flyTo = originalFlyTo;
       return result;
@@ -845,7 +849,7 @@ async function main() {
             params: {},
           };
           let failureUsed = false;
-          const entryLayerId = mode === 'flights' ? 'military-awareness' : 'rocket-launches';
+          const entryLayerId = 'military-awareness';
           dataManager.setEnabled = async (layerId, shouldEnable) => {
             const failsIsolation = phase === 'isolation' && layerId === 'local-datacenters' && !shouldEnable;
             const failsActivation = phase === 'activation' && layerId === entryLayerId && shouldEnable;
@@ -872,7 +876,6 @@ async function main() {
             priorLayerRestored: enabled.has('local-datacenters'),
             entryEnabled: enabled.has(entryLayerId),
             flightsButtonDisabled: document.getElementById('global-context-flights-btn').disabled,
-            missionsButtonDisabled: document.getElementById('global-context-missions-btn').disabled,
             message: document.getElementById('toast').textContent,
           };
         };
@@ -893,7 +896,7 @@ async function main() {
           }
         };
         const contextFailures = [];
-        for (const mode of ['flights', 'space-missions']) {
+        for (const mode of ['flights']) {
           for (const phase of ['isolation', 'activation']) {
             for (const outcome of ['false', 'reject']) {
               contextFailures.push(await runContextFailure(mode, phase, outcome));
@@ -902,7 +905,7 @@ async function main() {
         }
 
         const directEntryFailures = [];
-        for (const layerId of ['military-awareness', 'rocket-launches']) {
+        for (const layerId of ['military-awareness']) {
           for (const outcome of ['false', 'reject']) {
             enabled.clear();
             enabled.add('local-datacenters');
@@ -971,7 +974,7 @@ async function main() {
         styleManager._showToast = originalShowToast;
 
         const directActivationFailures = [];
-        for (const layerId of ['military-awareness', 'rocket-launches']) {
+        for (const layerId of ['military-awareness']) {
           enabled.clear();
           styleManager._contextControls._contextMode = null;
           styleManager._contextControls._contextSessionSnapshot = {
@@ -1001,7 +1004,7 @@ async function main() {
         }
 
         const directActivationRollbackFailures = [];
-        for (const layerId of ['military-awareness', 'rocket-launches']) {
+        for (const layerId of ['military-awareness']) {
           enabled.clear();
           styleManager._contextControls._contextMode = null;
           styleManager._contextControls._contextSessionSnapshot = {
@@ -1211,7 +1214,7 @@ async function main() {
     check(
       'user-facing chip, real Context entry rollback, and installation Search failures settle safely',
       userFacingFailures.semanticFalseMessage === 'Radio could not stop cleanly'
-        && userFacingFailures.contextFailures.length === 8
+        && userFacingFailures.contextFailures.length === 4
         && userFacingFailures.contextFailures.every((failure) => (
           failure.result === false
           && failure.visibleMode === null
@@ -1219,10 +1222,9 @@ async function main() {
           && failure.priorLayerRestored
           && !failure.entryEnabled
           && !failure.flightsButtonDisabled
-          && !failure.missionsButtonDisabled
           && failure.message.includes('QA transition failed')
         ))
-        && userFacingFailures.directEntryFailures.length === 4
+        && userFacingFailures.directEntryFailures.length === 2
         && userFacingFailures.directEntryFailures.every((failure) => (
           failure.reason.includes('could not start')
           && failure.retryReason === null
@@ -1233,14 +1235,14 @@ async function main() {
           && failure.priorLayerRestored
           && !failure.modeChanging
         ))
-        && userFacingFailures.directActivationFailures.length === 2
+        && userFacingFailures.directActivationFailures.length === 1
         && userFacingFailures.directActivationFailures.every((failure) => (
           failure.mode === null
           && failure.snapshotCleared
           && failure.priorLayerRestored
           && failure.failedLayerDisabled
         ))
-        && userFacingFailures.directActivationRollbackFailures.length === 2
+        && userFacingFailures.directActivationRollbackFailures.length === 1
         && userFacingFailures.directActivationRollbackFailures.every((failure) => (
           failure.toastMessages.length === 1
           && failure.toastMessages[0] === `${failure.layerId} could not start cleanly`
@@ -1756,8 +1758,6 @@ async function main() {
           const has = (name) => panel.classList.contains(name);
           manager._presentPanel(panel, {
             collapsed: has('collapsed'),
-            pinned: has('dock-pinned'),
-            pinnedTop: has('dock-pinned-top'),
             auto: has('layout-auto-collapsed') ? 'layout' : has('accordion-collapsed') ? 'accordion' : null,
           });
         }
@@ -2333,8 +2333,6 @@ async function main() {
           const has = (name) => panel.classList.contains(name);
           manager._presentPanel(panel, {
             collapsed: has('collapsed'),
-            pinned: has('dock-pinned'),
-            pinnedTop: has('dock-pinned-top'),
             auto: has('layout-auto-collapsed') ? 'layout' : has('accordion-collapsed') ? 'accordion' : null,
           });
         }

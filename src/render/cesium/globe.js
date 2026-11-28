@@ -20,9 +20,8 @@ import { provideUnboundGlobe } from '../rendererOf.js';
 import { isBaseTileset, markBaseTileset } from '../baseTilesets.js';
 import { listenerList, uncaught } from './common.js';
 import { createCesiumImagery } from './imagery.js';
-import { attributionText } from './vectorBase.js';
-import { loadVectorStyle } from '../vectorBase/index.js';
 import { createTerrainRetryPolicy } from '../../maps/terrainRetry.js';
+import { tileFetchResource, trackTileRequests } from './terrainTiles.js';
 
 // The base marks live outside the adapter, so code that is not Cesium's can
 // mark a base; they are re-exported here for the code that still is.
@@ -68,15 +67,26 @@ async function terrainProvider(spec, { worldDataToken }) {
           );
       },
     });
-    const resource = new Cesium.Resource({
+    const options = {
       url: spec.url,
       retryCallback: policy.retryCallback,
       retryAttempts: policy.retryAttempts,
-    });
-    return Cesium.CesiumTerrainProvider.fromUrl(resource, {
+    };
+    if (spec.fetchTile !== undefined && typeof spec.fetchTile !== 'function')
+      throw new TypeError('Quantized-mesh terrain fetchTile is a function');
+    // With `fetchTile`, Cesium still reads `layer.json` at the url; each
+    // tile's bytes come from `fetchTile`.
+    const tiles = new WeakMap();
+    const resource = spec.fetchTile
+      ? tileFetchResource(options, spec.fetchTile, (request) =>
+          request ? tiles.get(request) : undefined,
+        )
+      : new Cesium.Resource(options);
+    const provider = await Cesium.CesiumTerrainProvider.fromUrl(resource, {
       requestVertexNormals: spec.requestVertexNormals ?? false,
       requestWaterMask: false,
     });
+    return spec.fetchTile ? trackTileRequests(provider, tiles) : provider;
   }
   throw new TypeError(`Unknown terrain kind: ${spec.kind}`);
 }
@@ -170,11 +180,7 @@ export function createCesiumGlobe(
   let baseGen = 0;
   /** The `setBase` call whose base is drawn now (a failed one changes none). */
   let drawnGen = 0;
-  /** Aborts the style load of the `setBase` in flight, if any. */
-  let baseLoad = null;
   let baseCredit = null;
-  // The vector base's sources' credits.
-  const vectorCredits = [];
 
   /**
    * Every 3D tileset the scene holds, into `found` (emptied first): the
@@ -328,45 +334,16 @@ export function createCesiumGlobe(
     // The last call wins: one superseded (or disposed) before its base
     // changes changes nothing and resolves with the base as it stands.
     const gen = ++baseGen;
-    baseLoad?.abort();
-    baseLoad = null;
-    const current = () => gen === baseGen && !disposed;
     const superseded = () => ({
       photoreal: photorealStatus,
       imagery: [],
       settled: false,
     });
     if (disposed) return superseded();
-    // The style loads before the base changes: one that fails changes
-    // nothing.
-    let style = null;
-    if (base.vector) {
-      const load = new AbortController();
-      baseLoad = load;
-      try {
-        style = await loadVectorStyle(base.vector.styleUrl, undefined, {
-          signal: load.signal,
-        });
-      } catch (error) {
-        if (!current()) return superseded();
-        throw error;
-      } finally {
-        if (baseLoad === load) baseLoad = null;
-      }
-      if (!current()) return superseded();
-    }
     drawnGen = gen;
     for (const handle of imagery.list()) handle.remove();
     baseCredit?.();
     baseCredit = base.credit && credits ? credits.addStatic(base.credit) : null;
-    for (const off of vectorCredits.splice(0)) off();
-    if (style) {
-      // Under any imagery the base also gives.
-      imagery.add({ kind: 'vectorStyle', style }, undefined, { base: true });
-      if (credits)
-        for (const text of style.attribution.map(attributionText))
-          if (text) vectorCredits.push(credits.addStatic({ text }));
-    }
     const loads = [];
     if (base.photoreal !== undefined) loads.push(setPhotoreal(base.photoreal));
     if (base.terrain !== undefined) loads.push(setTerrain(base.terrain));
@@ -379,9 +356,8 @@ export function createCesiumGlobe(
     return {
       photoreal: photorealStatus,
       imagery: layers,
-      // Settled when its base is still the one drawn: a later call changes
-      // the base only once its style loads, and one whose style fails never
-      // does (see the contract's setBase).
+      // Settled when its base is still the one drawn (see the contract's
+      // setBase).
       settled: gen === drawnGen && !disposed && isSettled('base'),
     };
   }
@@ -698,8 +674,6 @@ export function createCesiumGlobe(
       }
       terrainGen += 1;
       baseGen += 1;
-      baseLoad?.abort();
-      baseLoad = null;
       for (const off of removers) off();
       shading = null;
       dropShadingMaterial();
@@ -708,7 +682,6 @@ export function createCesiumGlobe(
       imagery.dispose();
       baseCredit?.();
       baseCredit = null;
-      for (const off of vectorCredits.splice(0)) off();
     },
   };
 }

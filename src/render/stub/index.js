@@ -10,6 +10,7 @@
  * loop on a virtual clock, one frame at a time, in the contract's order.
  */
 import { horizonFrom } from '../../geo/horizon.js';
+import { headingPitchRollFrame } from '../../geo/quaternion.js';
 import { alongLength } from '../../geo/polyline.js';
 import { clusterScreenPoints } from '../../geo/screenCluster.js';
 import { createInputRouter } from '../input/router.js';
@@ -22,10 +23,10 @@ import {
 } from '../recession.js';
 import { CLEAR_WEATHER, mergeWeather } from '../weather.js';
 import { CAPABILITIES, CONTRACT_VERSION } from '../contract/index.js';
+import { isViewRef, viewLayout } from '../../data/viewSheet.js';
 import { createStubCamera } from './camera.js';
 import { motionPosition } from '../motion/iconMotion.js';
 import { computeViewRectangle } from './viewRectangle.js';
-import { loadVectorStyle } from '../vectorBase/index.js';
 import {
   add,
   dot,
@@ -189,6 +190,16 @@ export function createStubRenderer(options = {}) {
   let holdSeq = 0;
   // Told when the first hold is taken and the last released.
   const heldListeners = new Set();
+  const holdsListeners = new Set();
+  function tellHolds() {
+    for (const entry of [...holdsListeners])
+      if (holdsListeners.has(entry))
+        try {
+          entry.cb();
+        } catch (error) {
+          report(error);
+        }
+  }
   function tellHeld(held) {
     for (const entry of [...heldListeners])
       try {
@@ -261,6 +272,8 @@ export function createStubRenderer(options = {}) {
   camera.setViewRectangle(viewRectangle);
   if (capabilities.has('followFrame'))
     camera.port.followFrame = camera.eyeFrame;
+  if (capabilities.has('pointVisibility'))
+    camera.port.visiblePoints = () => null;
   camera.port.setView({
     destination: { lon: -97.7431, lat: 30.2672, height: 15000000 },
   });
@@ -356,9 +369,11 @@ export function createStubRenderer(options = {}) {
       const key = ++holdSeq;
       continuous.set(key, String(reason));
       if (continuous.size === 1) tellHeld(true);
+      tellHolds();
       return () => {
         if (!continuous.delete(key)) return;
         if (continuous.size === 0) tellHeld(false);
+        tellHolds();
       };
     },
     onHeldChange(cb) {
@@ -366,6 +381,15 @@ export function createStubRenderer(options = {}) {
       heldListeners.add(entry);
       return () => heldListeners.delete(entry);
     },
+    ...(capabilities.has('holdChanges')
+      ? {
+          onHoldsChange(cb) {
+            const entry = { cb };
+            holdsListeners.add(entry);
+            return () => holdsListeners.delete(entry);
+          },
+        }
+      : {}),
     mode: () => 'demand',
     diagnostics: () => ({
       mode: 'demand',
@@ -701,6 +725,26 @@ export function createStubRenderer(options = {}) {
       };
     },
   };
+  const viewSheets = new Set();
+  if (capabilities.has('viewSheets'))
+    draw.views = (id, sheet) => {
+      const layout = viewLayout(sheet); // refused as a renderer refuses it
+      if (viewSheets.has(id))
+        for (const record of sets.values())
+          for (const item of record.kind === 'icons'
+            ? record.items.values()
+            : [])
+            if (
+              isViewRef(item.image) &&
+              item.image.views === id &&
+              item.image.first + layout.frames > layout.columns * layout.rows
+            )
+              throw new RangeError(
+                `a live view's frames run past the new layout of sheet '${id}'`,
+              );
+      viewSheets.add(id);
+      log('draw', 'views', [id]);
+    };
   if (capabilities.has('models'))
     draw.models = (spec) => makeSet('models', spec);
   if (capabilities.has('quads')) draw.quads = (spec) => makeSet('quads', spec);
@@ -808,6 +852,7 @@ export function createStubRenderer(options = {}) {
   function itemPosition(set, item, aheadMs = 0) {
     if (!item.pos) return null;
     const base = toEcef(item.pos);
+    if (set.kind === 'models') return posedModelPosition(item, base);
     const p =
       set.kind === 'icons' && item.motion && capabilities.has('motionSegments')
         ? motionPosition(item.motion, base, motionTime(set) + aheadMs)
@@ -819,6 +864,46 @@ export function createStubRenderer(options = {}) {
     return c
       ? toEcef({ lon: toDegrees(c.lon), lat: toDegrees(c.lat), height: 0 })
       : p;
+  }
+
+  /**
+   * Where the stub draws a model. A stub model is one node, named after its
+   * file (`/models/c172.glb` is `c172`, `stub:model.glb` is `model`): with
+   * `modelNodes`, an item's
+   * `nodes` entry for that name moves it by the matrix's translation, on the
+   * model's axes and at its scale; any other name is one the model lacks.
+   */
+  function posedModelPosition(item, base) {
+    if (!capabilities.has('modelNodes') || !item.nodes) return base;
+    const file = String(item.url ?? '')
+      .split(/[?#]/)[0]
+      .split(/[/:]/)
+      .pop();
+    const name = file.replace(/\.[^.]*$/, '');
+    const m = name ? item.nodes[name] : null;
+    if (!m || m.length < 16) return base;
+    const k = item.scale ?? 1;
+    const frame = headingPitchRollFrame(base, {
+      heading: item.orientation?.heading ?? 0,
+      pitch: item.orientation?.pitch ?? 0,
+      roll: item.orientation?.roll ?? 0,
+    });
+    const along = (axis, t) => ({
+      x: axis.x * t * k,
+      y: axis.y * t * k,
+      z: axis.z * t * k,
+    });
+    let p = base;
+    for (const [axis, t] of [
+      [frame.x, m[12]],
+      [frame.y, m[13]],
+      [frame.z, m[14]],
+    ])
+      if (t) {
+        const d = along(axis, t);
+        p = { x: p.x + d.x, y: p.y + d.y, z: p.z + d.z };
+      }
+    return p;
   }
 
   /**
@@ -1287,8 +1372,18 @@ export function createStubRenderer(options = {}) {
   }
 
   /**
+   * The positions that start a run of a line in runs (`lineBreaks`), or
+   * null: nothing is drawn between two runs.
+   */
+  const runStarts = (item) =>
+    capabilities.has('lineBreaks') && item.breaks?.length
+      ? new Set(item.breaks)
+      : null;
+
+  /**
    * A line's positions as ECEF, cut at its `revealFraction` of length (as
-   * drawn straight between its positions).
+   * drawn straight between its positions, along its runs, the gaps between
+   * them having none).
    */
   function revealedLine(item) {
     const flat = item.positions instanceof Float64Array;
@@ -1306,7 +1401,10 @@ export function createStubRenderer(options = {}) {
       );
     const fraction = item.revealFraction;
     if (fraction === undefined || fraction >= 1) return points;
-    const at = alongLength(points, fraction);
+    const starts = runStarts(item);
+    const at = starts
+      ? alongRuns(points, starts, fraction)
+      : alongLength(points, fraction);
     if (!at) return [];
     const { index, t } = at;
     return [
@@ -1316,16 +1414,42 @@ export function createStubRenderer(options = {}) {
   }
 
   /**
+   * `alongLength` for a line in runs: the segment a fraction of its runs'
+   * length ends on, and how far along it, the segments between runs
+   * measuring nothing.
+   */
+  function alongRuns(points, starts, fraction) {
+    if (!(fraction > 0) || points.length < 2) return null;
+    const lengths = [];
+    for (let i = 0; i + 1 < points.length; i++)
+      lengths.push(
+        starts.has(i + 1) ? 0 : magnitude(sub(points[i + 1], points[i])),
+      );
+    const total = lengths.reduce((sum, length) => sum + length, 0);
+    if (!(total > 0)) return null;
+    let left = fraction * total;
+    for (let i = 0; i < lengths.length; i++) {
+      if (lengths[i] > 0 && left <= lengths[i])
+        return { index: i, t: left / lengths[i] };
+      left -= lengths[i];
+    }
+    return { index: lengths.length - 1, t: 1 };
+  }
+
+  /**
    * Where a line is under the pixel `(x, y)`: the nearest point of a
    * drawn segment within half its width (and `slack`) of it, or null.
    */
   function lineHit(item, x, y, slack) {
     const points = revealedLine(item);
+    const starts = runStarts(item);
     const reach = (item.widthPx ?? 1) / 2 + slack;
     let best = null;
     let bestDistance = Infinity;
     for (let i = 0; i + 1 < points.length; i++) {
       if (item.segmentShow?.[i] === false) continue;
+      // Nothing is drawn between two runs.
+      if (starts?.has(i + 1)) continue;
       const a = points[i];
       const b = points[i + 1];
       if (isOccluded(a) && isOccluded(b)) continue;
@@ -1524,6 +1648,10 @@ export function createStubRenderer(options = {}) {
   let globeVisible = true;
 
   function addImagery(spec, index) {
+    if (spec.image !== undefined && spec.kind !== 'single-image')
+      throw new TypeError('image is supported for single-image imagery only');
+    if (spec.image !== undefined && spec.url)
+      throw new TypeError('single-image takes url or image, not both');
     if (
       !capabilities.has('imageHooks') &&
       (spec.tileTransform || spec.admit || spec.kind === 'canvas')
@@ -1566,6 +1694,8 @@ export function createStubRenderer(options = {}) {
       remove() {
         const i = imageryLayers.indexOf(layer);
         if (i >= 0) imageryLayers.splice(i, 1);
+        creditOff?.();
+        creditOff = null;
         sceneFrameLayers.delete(layer);
         frameFlushes.delete(layer);
         requestRender('imagery');
@@ -1574,8 +1704,12 @@ export function createStubRenderer(options = {}) {
     if (capabilities.has('imageryFrames')) {
       let source = null;
       let clockKind = 'scene';
-      /** The time the source shows for `ms`: the nearest frame, or within the videos. */
+      /** The time the source shows for `ms`: the nearest frame, within the videos, or a decoded source's slot. */
       const shownTime = (ms) => {
+        if (source?.kind === 'decoded') {
+          const slot = Number.isFinite(ms) ? source.slotAt(ms) : null;
+          return Number.isFinite(slot) ? slot : null;
+        }
         if (source?.kind === 'video') {
           let best = null;
           let bestOff = Infinity;
@@ -1609,10 +1743,22 @@ export function createStubRenderer(options = {}) {
         deliver(listeners.frameReady, drawnTime);
       });
       layer.setFrames = (next, opts = {}) => {
+        if (next.kind === 'decoded' && !capabilities.has('imageryDecoded'))
+          throw new TypeError('decoded imagery needs imageryDecoded');
+        if (
+          next.kind === 'decoded' &&
+          (typeof next.slotAt !== 'function' || typeof next.tile !== 'function')
+        )
+          throw new TypeError('a decoded source needs slotAt and tile');
         source =
-          next.kind === 'video'
-            ? { kind: 'video', segments: next.segments.map((s) => ({ ...s })) }
-            : { kind: 'frames', frames: next.frames.slice() };
+          next.kind === 'decoded'
+            ? next
+            : next.kind === 'video'
+              ? {
+                  kind: 'video',
+                  segments: next.segments.map((s) => ({ ...s })),
+                }
+              : { kind: 'frames', frames: next.frames.slice() };
         wanted = null;
         drawnTime = null;
         clockKind = opts.clock ?? 'scene';
@@ -1629,6 +1775,8 @@ export function createStubRenderer(options = {}) {
         requestRender('imagery');
       };
     }
+    // The layer's credit is owed while the layer is on (the credits port).
+    let creditOff = spec.credit ? credits.addStatic(spec.credit) : null;
     if (index === undefined) imageryLayers.push(layer);
     else imageryLayers.splice(index, 0, layer);
     log('globe', 'imagery.add', [spec, index]);
@@ -1662,15 +1810,24 @@ export function createStubRenderer(options = {}) {
         settled: false,
       });
       if (destroyed) return superseded();
-      // The style is loaded, as a renderer drawing it loads it, so one that
-      // fails changes nothing; the stub paints none of it.
+      // The style document is fetched, as a renderer drawing it would, so
+      // one that fails changes nothing; the stub paints none of it.
       if (base.vector) {
         const load = new AbortController();
         baseLoad = load;
         try {
-          await loadVectorStyle(base.vector.styleUrl, undefined, {
+          const response = await fetch(base.vector.styleUrl, {
             signal: load.signal,
           });
+          if (!response.ok)
+            throw new Error(`The style answered ${response.status}`);
+          const style = await response.json();
+          if (
+            style?.version !== 8 ||
+            !Array.isArray(style.layers) ||
+            typeof style.sources !== 'object'
+          )
+            throw new TypeError('The document is not a MapLibre style');
         } catch (error) {
           if (!current()) return superseded();
           throw error;

@@ -1,7 +1,9 @@
 import { h, render as renderVue } from 'vue';
-import { formatUtcDayMonth, t } from '../i18n/index.js';
+import { formatUtcDayMonth, getLocale, t } from '../i18n/index.js';
 import { utcClock } from './rail/utcClock.js';
 import WeatherReadout from './weather/WeatherReadout.vue';
+import { watchDisplayed } from './displayWatch.js';
+import { onPanelOpening } from './rail/panelContent.js';
 
 // Remounting controls must not reopen a panel the user already collapsed.
 // Keyed by the page's Weather panel, which outlives remounted controls.
@@ -85,6 +87,7 @@ export function createWeatherPanel({
   const count = panel?.querySelector('#weather-panel-count');
   let entries = [];
   let destroyed = false;
+  const selections = new Map();
   let previousIds = null;
   let hasAppeared = false;
   const page = panel || document;
@@ -100,8 +103,20 @@ export function createWeatherPanel({
     },
   };
   // The readout patches synchronously, so a newly opened card can be measured.
-  const paint = (view) =>
+  // A view equal to the one shown is not rendered again.
+  let shownView = null;
+  const paint = (view) => {
+    let key = null;
+    try {
+      // Its template translates labels too: a new locale renders again.
+      key = `${getLocale()}\u0000${JSON.stringify(view)}`;
+    } catch {
+      // A view that cannot be compared is always rendered.
+    }
+    if (key !== null && key === shownView) return;
+    shownView = key;
     renderVue(h(WeatherReadout, { view, ...handlers }), container);
+  };
   paint({
     hidden: true,
     observed: false,
@@ -110,7 +125,23 @@ export function createWeatherPanel({
     cards: [],
     observedCards: [],
   });
-  const render = () => {
+  // The readout is not repainted while its body is not displayed (the panel
+  // collapsed or hidden); it repaints once when the body is displayed again:
+  // at once when the panel is presented open or shown open, otherwise when a
+  // ResizeObserver reports the body displayed.
+  let owed = false;
+  const body = watchDisplayed(container, () => {
+    if (owed) render();
+  });
+  const flush = ({ displayedOnly = false } = {}) => {
+    if (!owed) return;
+    if (displayedOnly && !(container.getClientRects?.().length > 0)) return;
+    // The body is being shown: a later render paints it rather than owing it.
+    body.assumeShown();
+    render({ force: true });
+  };
+  const offOpening = onPanelOpening(panel, flush);
+  const render = ({ force = false } = {}) => {
     if (destroyed) return;
     const state = clock?.getState() || {
       mode: 'latest',
@@ -146,8 +177,8 @@ export function createWeatherPanel({
           : historyTime(shownTime)
         : '';
     const models = active.map((entry) => {
-      const { id, icon, summary, legend = [], list } = entry;
-      // Discrete classes (storm geometry, AQHI bands) list swatches, not a ramp.
+      const { id, icon, summary, legend = [], list, sublists = [] } = entry;
+      // Discrete classes (storm geometry) list swatches, not a ramp.
       const categorical = entry.legendCategorical === true;
       let detail = summary.detail;
       const product = state.products.find((item) => item.id === id);
@@ -198,17 +229,61 @@ export function createWeatherPanel({
           zeroIndex: legend.findIndex(({ label }) => label === '0'),
         },
       };
+      // A titled list says what it ranks in a muted line above it.
+      const listBlocks = list?.items?.length
+        ? [
+            ...(list.title
+              ? [
+                  {
+                    id: 'list-title',
+                    type: 'lines',
+                    lines: [
+                      { id: 'list-title', text: list.title, muted: true },
+                    ],
+                  },
+                ]
+              : []),
+            { id: 'list', type: 'list', list },
+          ]
+        : [];
+      // Groups of Globe-view tiles (each a choice with its value), and
+      // switches, each one row.
+      const tileBlocks = sublists
+        .filter((group) => group?.tiles?.length)
+        .map((group) => ({
+          id: `tiles-${group.id}`,
+          type: 'tiles',
+          title: group.title,
+          subtitle: group.subtitle,
+          tiles: group.tiles,
+        }));
+      const toggleBlocks = (summary.toggles || []).map((toggle) => ({
+        ...toggle,
+        id: `toggle-${toggle.id}`,
+        type: 'toggle',
+      }));
+      // A result marked `lead` (a selected station) heads the card.
+      const lead = summary.result?.lead === true;
+      const resultBlocks = summary.result
+        ? [{ ...summary.result, type: 'result' }]
+        : [];
       const blocks = [
-        ...(list?.items?.length ? [{ id: 'list', type: 'list', list }] : []),
+        ...(lead ? resultBlocks : []),
+        // A card with tiles reads top down: what it shows, its scale, the
+        // tiles, then what stands out in view.
+        ...(tileBlocks.length ? [] : listBlocks),
         { id: 'details', type: 'lines', lines },
+        ...toggleBlocks,
         ...(legend.length ? [legendBlock] : []),
+        ...tileBlocks,
+        ...(tileBlocks.length ? listBlocks : []),
         ...(summary.settings?.length
           ? [{ id: 'settings', type: 'settings', settings: summary.settings }]
           : []),
         ...(actions.length
           ? [{ id: 'actions', type: 'actions', actions }]
           : []),
-        ...(summary.result ? [{ ...summary.result, type: 'result' }] : []),
+        ...(lead ? [] : resultBlocks),
       ];
       return {
         id,
@@ -227,20 +302,29 @@ export function createWeatherPanel({
       };
     });
     const hidden = active.length === 0;
-    paint({
-      hidden,
-      observed: showObserved,
-      scope: observed.map(({ id }) => names[id]).join(' · '),
-      frameTime,
-      cards: models.filter(({ id }) => !OBSERVED.has(id)),
-      observedCards: models.filter(({ id }) => OBSERVED.has(id)),
-    });
-    // Only a change of open card moves the scroll position; refreshes leave it.
-    if (shownOpenId !== null && openId !== shownOpenId) {
-      const open = [
-        ...container.querySelectorAll('.weather-cards > [data-card-id]'),
-      ].find((node) => node.dataset.cardId === openId);
-      revealCard(container, open);
+    // A panel this render shows open displays its body before a size report.
+    const showsOpen =
+      Boolean(panel?.hidden) &&
+      !hidden &&
+      !panel.classList?.contains('collapsed');
+    owed = !force && !showsOpen && !body.shown();
+    if (!owed) {
+      paint({
+        hidden,
+        observed: showObserved,
+        scope: observed.map(({ id }) => names[id]).join(' · '),
+        frameTime,
+        cards: models.filter(({ id }) => !OBSERVED.has(id)),
+        observedCards: models.filter(({ id }) => OBSERVED.has(id)),
+      });
+      // Only a change of open card moves the scroll position; refreshes
+      // leave it.
+      if (shownOpenId !== null && openId !== shownOpenId) {
+        const open = [
+          ...container.querySelectorAll('.weather-cards > [data-card-id]'),
+        ].find((node) => node.dataset.cardId === openId);
+        revealCard(container, open);
+      }
     }
     shownOpenId = active.length ? openId : null;
     if (count) set(count, 'textContent', String(active.length));
@@ -257,7 +341,8 @@ export function createWeatherPanel({
         panel.querySelector('[data-collapse-target="weather-panel"]')?.click();
     }
   };
-  const unsubscribe = clock?.subscribe(render);
+  // The scene time is read here, never followed: the layer panel calls
+  // `update` again when the time moves (see LayerPanel.invalidate).
   return {
     update(nextEntries) {
       entries = nextEntries.filter(({ summary }) => summary);
@@ -281,13 +366,27 @@ export function createWeatherPanel({
           ordered[0]?.id ||
           null;
       }
+      // A new selection on the map (a lead result) opens its card, even over
+      // another open one; refreshes of the same selection leave the open card.
+      for (const id of selections.keys())
+        if (!ids.has(id)) selections.delete(id);
+      for (const { id, summary } of entries) {
+        const result = summary.result?.lead === true ? summary.result : null;
+        const key = result ? String(result.key ?? result.label ?? '') : null;
+        if (key !== null && key !== (selections.get(id) ?? null)) {
+          openId = id;
+          openPanels.set(page, id);
+        }
+        selections.set(id, key);
+      }
       if (ids.size) hasAppeared = true;
       previousIds = ids;
       render();
     },
     destroy() {
       destroyed = true;
-      unsubscribe?.();
+      body.disconnect();
+      offOpening();
       renderVue(null, container);
       if (panel) set(panel, 'hidden', true);
       if (count) set(count, 'textContent', '0');

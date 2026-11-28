@@ -94,6 +94,8 @@ export class ShareLinkManager {
     this._bloomVersion = BLOOM_SCALE_VERSION;
     this._sharpenIntensity = 49;
     this._hudVariant = 'tactical';
+    // Sonar on beside a layout whose code cannot say so (Minimal); `hs`.
+    this._hudSonar = false;
     this._hudVisible = false;
     this._detectionMode = 'OFF';
     this._detectionDensity = 50;
@@ -124,6 +126,8 @@ export class ShareLinkManager {
     this._panelStateProvider = null;
     this._styleParamStateProvider = null;
     this._initialRestorePending = false;
+    // Who holds the hash writes (holdWrites).
+    this._writeHolds = new Set();
     // Each incoming share (start-up or a later hash navigation) gets a token;
     // only the newest one may release URL-write suppression.
     this._restoreToken = 0;
@@ -260,6 +264,9 @@ export class ShareLinkManager {
       bloomVersion: parseOr(params.get('bv'), 1),
       sharpenIntensity: parseOr(params.get('si'), 49),
       hudVariant: params.get('hud') || 'tactical',
+      // Absent in links made before it, which restore Sonar from `hud=cyber`
+      // alone.
+      hudSonar: params.get('hs') === '1',
       hudVisible: params.get('hv') === '1',
       detectionMode: restoredDetection.enabled
         ? restoredDetection.profile
@@ -477,6 +484,7 @@ export class ShareLinkManager {
         bloomVersion: visualCurrent ? state.bloomVersion : undefined,
         sharpenIntensity: visualCurrent ? state.sharpenIntensity : undefined,
         hudVariant: visualCurrent ? state.hudVariant : undefined,
+        hudSonar: visualCurrent ? state.hudSonar : undefined,
         hudVisible: visualCurrent ? state.hudVisible : undefined,
         detectionMode: visualCurrent ? state.detectionMode : undefined,
         detectionDensity: visualCurrent ? state.detectionDensity : undefined,
@@ -557,7 +565,7 @@ export class ShareLinkManager {
 
   /**
    * Install the source of the entity the camera follows, used for share links:
-   * `({ nowMs }) => ({ kind, id, offset, lastKnown }) | null`, in the share
+   * `({ nowMs }) => ({ kind, id, offset, lastKnown, followed? }) | null`, in the share
    * format's terms (src/share/follow.js), with the fix as of `nowMs`.
    */
   setFollowSubjectProvider(provider) {
@@ -627,6 +635,7 @@ export class ShareLinkManager {
       this._sharpenIntensity = extras.sharpenIntensity;
     if (typeof extras.hudVariant === 'string')
       this._hudVariant = extras.hudVariant;
+    if (typeof extras.hudSonar === 'boolean') this._hudSonar = extras.hudSonar;
     if (typeof extras.hudVisible === 'boolean')
       this._hudVisible = extras.hudVisible;
     if (typeof extras.detectionMode === 'string')
@@ -699,6 +708,7 @@ export class ShareLinkManager {
         entity: { kind: subject.kind, id: subject.id },
         offset: subject.offset ?? null,
         lastKnown: subject.lastKnown ?? null,
+        followed: subject.followed === true,
       };
     }
     return shareLinkUrl(encodeShareView(state), window.location.href);
@@ -719,10 +729,12 @@ export class ShareLinkManager {
   /**
    * Hold the address's hash writes, for an owner that covers the view and
    * keeps the person's camera and layers out of the address while it does
-   * (Stories). Releasing writes the current view again.
+   * (Stories, the opening's flight). Each `owner` holds and releases its own
+   * hold; once none holds, the current view is written again.
    * @param {boolean} held
+   * @param {string} [owner]
    */
-  holdWrites(held) {
+  holdWrites(held, owner = 'stories') {
     if (held && !this._writesHeld && this._debounceTimer) {
       // A view change still waiting for its debounce is written first, so
       // the address the owner saves is the live view.
@@ -730,9 +742,14 @@ export class ShareLinkManager {
       this._debounceTimer = null;
       this._updateHash();
     }
-    this._writesHeld = !!held;
-    if (!held) this._scheduleUpdate();
+    if (held) this._writeHolds.add(owner);
+    else this._writeHolds.delete(owner);
+    if (!this._writesHeld) this._scheduleUpdate();
     else clearTimeout(this._debounceTimer);
+  }
+
+  get _writesHeld() {
+    return this._writeHolds.size > 0;
   }
 
   _scheduleUpdate() {
@@ -786,6 +803,8 @@ export class ShareLinkManager {
     params.set('bv', Math.round(this._bloomVersion).toString());
     params.set('si', Math.round(this._sharpenIntensity).toString());
     params.set('hud', this._hudVariant);
+    // Only written when on, so a link without Sonar keeps its old form.
+    if (this._hudSonar) params.set('hs', '1');
     params.set('hv', this._hudVisible ? '1' : '0');
     params.set('dm', this._detectionMode);
     params.set('dd', Math.round(this._detectionDensity).toString());

@@ -1,17 +1,25 @@
 import { h, render as renderVue } from 'vue';
+import {
+  createLayerFinder,
+  filterLayerRows,
+  layerFinderFor,
+} from './layerFinderFilter.js';
 import LayerRows from './layerPanel/LayerRows.vue';
 import { layerFeedState } from '../data/feedState.js';
+import { FEED_STATE_LABEL_KEYS } from './layerRowState.js';
 export { layerFeedState } from '../data/feedState.js';
 import { GUIDANCE_STATUSES } from '../loadingFeedback.js';
-import { keyGuidanceText, keyRequirementText } from './keyGuidance.js';
+import { keyGuidanceText, keysRequirementText } from './keyGuidance.js';
 import {
   LAYER_NAME_KEYS,
   PANEL_LABEL_KEYS as PANEL_LABELS,
-  sourceLabel,
+  layerSourceText,
 } from './layerNames.js';
 export { localizeLayerName } from './layerNames.js';
 import { createWeatherPanel } from './weatherPanel.js';
 import { createNewsPanel } from './newsPanel.js';
+import { watchDisplayed } from './displayWatch.js';
+import { onPanelOpening } from './rail/panelContent.js';
 import {
   translateFeedError,
   translateStatusLine,
@@ -24,18 +32,6 @@ import {
   onLocaleChange,
   t,
 } from '../i18n/index.js';
-
-// Feed-state values are machine ids (QA hooks, CSS feed-* classes); only the
-// label translates.
-const FEED_STATE_LABEL_KEYS = Object.freeze({
-  nominal: msg('ON'),
-  loading: msg('LOADING'),
-  degraded: msg('DEGRADED'),
-  stale: msg('STALE'),
-  partial: msg('PARTIAL'),
-  fallback: msg('FALLBACK'),
-  unavailable: msg('UNAVAILABLE'),
-});
 
 function lifecycleStateLabel(lifecycleState) {
   return t(lifecycleState === 'enabling' ? msg('ENABLING') : msg('DISABLING'));
@@ -149,7 +145,8 @@ function panelLabel(layer) {
  * The key registry already owns what each key is called and which environment
  * variables enable it, so a layer only declares WHICH key it needs
  * (`requiresKeyId`) and reports `stats.keyRequired` while that key is absent.
- * Naming the variable turns an unexplained dead control into a next step.
+ * Naming the variable turns an unexplained dead control into a next step. A
+ * layer reading several keyed networks may name each key it lacks (an array).
  *
  * An unnamed or unknown key returns '' rather than guessing: guidance naming
  * the wrong variable sends the operator to the wrong provider.
@@ -159,10 +156,13 @@ function panelLabel(layer) {
  */
 export function layerKeyRequirementTooltip(layer = {}) {
   if (layer?.stats?.keyRequired !== true) return '';
-  const requiresKeyId = String(layer.requiresKeyId || '').trim();
+  const ids = [layer.requiresKeyId]
+    .flat()
+    .map((id) => String(id || '').trim())
+    .filter(Boolean);
   // A layer with several sources also names the ones it could use instead.
   return keyGuidanceText(
-    requiresKeyId ? keyRequirementText(requiresKeyId) : '',
+    keysRequirementText(ids),
     layer.stats.keyAlternatives || [],
   );
 }
@@ -271,7 +271,23 @@ export function presentLayerToggle(layer) {
   };
 }
 
-/** Layer row presentation over supplied state and actions; no layer imports. */
+/** The layers the Weather rail readout shows. */
+const WEATHER_PANEL_IDS = Object.freeze([
+  'wind',
+  'weather-radar',
+  'weather-satellite',
+  'weather-lightning',
+  'weather-cyclones',
+  'air-quality',
+]);
+const RECENT_IMAGERY_ID = 'recent-imagery';
+/** Marks the scene time as moved among the dirty layer ids. */
+const TIME = Symbol('time');
+
+/**
+ * Layer rows over supplied state and actions. The standard row container's Finder
+ * takes precedence over an explicit Finder or the private default.
+ */
 export class LayerPanel {
   constructor({
     getLayers,
@@ -280,10 +296,11 @@ export class LayerPanel {
     setLayerParams,
     getRowControls,
     hasRowControls,
-    subscribeRowControls,
-    onHiddenRefresh = () => {},
     weatherClock,
+    finder,
   }) {
+    this._ownFinder = finder ?? createLayerFinder();
+    this.finder = this._ownFinder;
     this.weatherClock = weatherClock;
     this.getAll = getLayers;
     this.isEnabled = isEnabled;
@@ -291,19 +308,37 @@ export class LayerPanel {
     this.setLayerParams = setLayerParams;
     this._rowControlsFor = getRowControls;
     this.hasRowControls = hasRowControls;
-    this.subscribeRowControls = subscribeRowControls;
-    this.onHiddenRefresh = onHiddenRefresh;
     this._generation = 0;
     this._removers = [];
     this._destroyed = false;
     /** @type {Map<string, HTMLElement>} lists of their own, by element id */
     this._groupContainers = new Map();
-    this._cancelRowControlsRefresh = null;
+    // The scheduler: layers whose row or readout may have changed since the
+    // last paint (`invalidate`), painted together on the next frame.
+    /** @type {Set<string | symbol>} */
+    this._dirty = new Set();
+    this._dirtyAll = false;
+    /** @type {(() => void) | null} cancels the frame asked for */
+    this._cancelFrame = null;
+    /** @type {Set<string> | 'all' | null} ids a skipped paint left unpresented */
+    this._stale = null;
+    /** @type {string[]} layers whose row text follows the scene time */
+    this._timeFollowers = [];
+    this._offTime = null;
     this._recentImageryFactory = null;
     this._recentImageryPanel = null;
     this._rows = [];
     this._rowViews = new Map();
+    this._finderRows = [];
     this._pending = new Set();
+    /** @type {Map<HTMLElement, ReturnType<typeof watchDisplayed>>} */
+    this._displayWatches = new Map();
+    /** @type {Array<() => void>} releases the panels' opening flushes */
+    this._openingRemovers = [];
+    /** @type {Map<HTMLElement, string | null>} the rows each list shows */
+    this._paintedRows = new Map();
+    // Row lists a refresh skipped while they were not displayed.
+    this._owedLists = new Set();
   }
   mount(container) {
     if (this._destroyed) return;
@@ -315,6 +350,7 @@ export class LayerPanel {
     // The rows replace whatever the container held before.
     if (container && !container._vnode) container.replaceChildren();
     this._toggleContainer = container;
+    this.finder = layerFinderFor(container) ?? this._ownFinder;
     // A group with a list of its own (Directions in Utilities) renders there;
     // without that list it stays in Data Layers under its heading.
     this._groupContainers = new Map();
@@ -325,6 +361,12 @@ export class LayerPanel {
       if (!element._vnode) element.replaceChildren();
       this._groupContainers.set(containerId, element);
     }
+    this._watchRowLists();
+    // The panel follows the scene time once, for every layer that declares
+    // its row or readout follows it; no layer pushes a repaint per time step.
+    this._offTime?.();
+    this._offTime =
+      this.weatherClock?.subscribe?.(() => this._onTimeMoved()) ?? null;
     this._weatherPanel?.destroy();
     this._weatherPanel = createWeatherPanel({
       clock: this.weatherClock,
@@ -360,16 +402,167 @@ export class LayerPanel {
     if (container && this._recentImageryFactory)
       this._recentImageryPanel = this._recentImageryFactory(container) || null;
   }
+  /**
+   * A refresh skips a row list its panel does not display (collapsed or
+   * hidden) and repaints it once when it is displayed again: at once when the
+   * panel chrome presents its panel open, so nothing lays out, measures or
+   * reads old rows, and otherwise when a ResizeObserver reports it displayed.
+   */
+  _watchRowLists() {
+    this._unwatchRowLists();
+    const panels = new Set();
+    for (const element of [
+      this._toggleContainer,
+      ...this._groupContainers.values(),
+    ]) {
+      if (!element || this._displayWatches.has(element)) continue;
+      this._displayWatches.set(
+        element,
+        watchDisplayed(element, () => {
+          if (this._owedLists.has(element) && !this._destroyed)
+            this._paint({ whileShown: true });
+        }),
+      );
+      const panel = element.closest?.('[data-panel-id]');
+      if (panel && !panels.has(panel)) {
+        panels.add(panel);
+        this._openingRemovers.push(
+          onPanelOpening(panel, (options) =>
+            this.flushOwedRows({ ...options, panel }),
+          ),
+        );
+      }
+    }
+  }
+  _unwatchRowLists() {
+    for (const watch of this._displayWatches.values()) watch.disconnect();
+    this._displayWatches = new Map();
+    for (const remove of this._openingRemovers.splice(0)) remove();
+  }
+  /**
+   * Paint now what a panel being shown owes: the rows a refresh skipped while
+   * their list was not displayed, and whatever a frame was about to paint.
+   * Whatever shows a panel calls this first (see `rail/panelContent.js`); a
+   * no-op when nothing concerned is owed or pending. Only the lists inside
+   * `panel` count as shown, or with `displayedOnly` only the owed lists that
+   * have a layout box now; the others stay owed.
+   * @param {{ displayedOnly?: boolean, panel?: Element | null }} [options]
+   */
+  flushOwedRows({ displayedOnly = false, panel = null } = {}) {
+    if (this._destroyed) return;
+    const pending = this._hasPending();
+    const shown = displayedOnly
+      ? [...this._owedLists].filter(
+          (element) => element.getClientRects?.().length > 0,
+        )
+      : [...this._displayWatches.keys()].filter(
+          (element) =>
+            (pending || this._owedLists.has(element)) &&
+            (!panel || panel.contains(element)),
+        );
+    if (shown.length === 0) return;
+    // These lists are being shown: a paint before the observer's next report
+    // paints them rather than owing them again.
+    for (const element of shown)
+      this._displayWatches.get(element)?.assumeShown();
+    this._dirtyAll = true;
+    this.paintPending();
+  }
+
+  /**
+   * A layer's row or rail readout may have changed. Nothing paints now: the
+   * changes made before the next frame are painted together then, only on
+   * the surfaces that are displayed, and a surface that is not keeps them
+   * owed until it is. With no id, every layer.
+   * @param {string} [layerId]
+   */
+  invalidate(layerId) {
+    if (this._destroyed) return;
+    if (typeof layerId === 'string' || layerId === TIME)
+      this._dirty.add(layerId);
+    else this._dirtyAll = true;
+    if (this._cancelFrame) return;
+    const frame = () => {
+      this._cancelFrame = null;
+      this.paintPending();
+    };
+    if (typeof requestAnimationFrame === 'function') {
+      const id = requestAnimationFrame(frame);
+      this._cancelFrame = () => cancelAnimationFrame(id);
+    } else {
+      const id = setTimeout(frame, 0);
+      this._cancelFrame = () => clearTimeout(id);
+    }
+  }
+
+  /**
+   * Paint now what was invalidated since the last paint. While the page is
+   * hidden it stays pending; the page's return calls this again.
+   */
+  paintPending() {
+    if (this._destroyed) return;
+    this._cancelFrame?.();
+    this._cancelFrame = null;
+    if (!this._hasPending() || !this._toggleContainer) return;
+    if (typeof document !== 'undefined' && document.hidden) return;
+    const only = this._dirtyAll ? null : new Set(this._dirty);
+    this._dirtyAll = false;
+    this._dirty.clear();
+    this._paint({ whileShown: true, only });
+    if (!only || WEATHER_PANEL_IDS.some((id) => only.has(id)) || only.has(TIME))
+      this._refreshWeatherPanel();
+    if (!only || only.has('news')) this._refreshNewsPanel();
+    if (!only || only.has(RECENT_IMAGERY_ID))
+      this._recentImageryPanel?.update?.();
+  }
+
+  _hasPending() {
+    return this._dirtyAll || this._dirty.size > 0;
+  }
+
+  /** Every layer's row and readout, painted now (a remount, a test). */
+  _refreshTogglePanel() {
+    this._dirtyAll = true;
+    this.paintPending();
+  }
+
+  /** The scene time moved: the rows and readouts that follow it are dirty. */
+  _onTimeMoved() {
+    if (this._destroyed) return;
+    let dirty = false;
+    for (const id of this._timeFollowers)
+      if (this.isEnabled(id)) {
+        this._dirty.add(id);
+        dirty = true;
+      }
+    // The Weather readout's frame time and ages are read from the time.
+    if (WEATHER_PANEL_IDS.some((id) => this.isEnabled(id))) dirty = true;
+    if (dirty) this.invalidate(TIME);
+  }
+  _isDisplayed(element) {
+    return this._displayWatches.get(element)?.shown() ?? true;
+  }
   _releaseBindings() {
     this._generation++;
-    this._cancelRowControlsRefresh?.();
-    this._cancelRowControlsRefresh = null;
+    // New bindings render every list again. What was invalidated stays
+    // pending, with its frame: a rebuild repaints the rows, and the frame
+    // still updates every surface the invalidations were for.
+    this._paintedRows = new Map();
+    this._stale = null;
     for (const remove of this._removers.splice(0)) remove();
   }
   destroy() {
     if (this._destroyed) return;
     this._destroyed = true;
     this._releaseBindings();
+    this._cancelFrame?.();
+    this._cancelFrame = null;
+    this._dirty.clear();
+    this._dirtyAll = false;
+    this._unwatchRowLists();
+    this._owedLists.clear();
+    this._offTime?.();
+    this._offTime = null;
     this._weatherPanel?.destroy();
     this._weatherPanel = null;
     this._newsPanel?.destroy();
@@ -382,6 +575,7 @@ export class LayerPanel {
       renderVue(null, element);
     this._groupContainers = new Map();
     this._toggleContainer = null;
+    this._finderRows = [];
   }
   /** Rebuild the rows after the layer set changed (a Data Library add/remove). */
   rerender() {
@@ -398,6 +592,7 @@ export class LayerPanel {
       .sort((a, b) => panelPosition(a) - panelPosition(b));
     this._rows = [];
     this._rowViews = new Map();
+    this._timeFollowers = [];
     let previousGroup = '';
     for (const layer of layers) {
       if (!layer.showInTogglePanel) continue;
@@ -413,15 +608,7 @@ export class LayerPanel {
       previousGroup = container ? '' : group;
       const readout = Boolean(this._rowControlsFor(layer.id)?.readout);
       const controls = this.hasRowControls(layer.id);
-      if (controls) {
-        // A layer whose controls settle asynchronously (a chunked catalog load
-        // that can also fail) pushes a re-render through this; nothing else
-        // would repaint the row before its next scheduled refresh.
-        const unsubscribe = this.subscribeRowControls(layer.id, () =>
-          this._scheduleRowControlsRefresh(),
-        );
-        if (unsubscribe) this._removers.push(unsubscribe);
-      }
+      if (layer.followsTime) this._timeFollowers.push(layer.id);
       this._rows.push({
         key: layer.id,
         id: layer.id,
@@ -440,13 +627,36 @@ export class LayerPanel {
       }),
     );
     this._paint();
+    this._removers.push(this.finder.onInputs(() => this._onFinderInputs()));
     this._refreshWeatherPanel();
     this._refreshNewsPanel();
   }
 
-  /** Present every row from the layers' current state and render them. */
-  _paint() {
+  /**
+   * Present every row from the layers' current state and render them. A list
+   * whose rows are the ones it already shows is not rendered again. With
+   * `whileShown`, a list that is not displayed is left as it is and owed a
+   * repaint for when it is displayed again.
+   */
+  _paint({ whileShown = false, only = null } = {}) {
     if (this._destroyed || !this._toggleContainer) return;
+    const containers = [
+      this._toggleContainer,
+      ...this._groupContainers.values(),
+    ];
+    // Rows a skipped paint did not present are presented with these.
+    const stale = this._stale;
+    const present =
+      !only || stale === 'all' ? null : new Set([...only, ...(stale ?? [])]);
+    if (
+      whileShown &&
+      !containers.some((element) => this._isDisplayed(element))
+    ) {
+      for (const element of containers) this._owedLists.add(element);
+      this._stale = present ?? 'all';
+      return;
+    }
+    this._stale = null;
     const layers = new Map(this.getAll().map((layer) => [layer.id, layer]));
     // Each list renders its own rows: Data Layers, and any group's own list.
     const lists = new Map([[null, []]]);
@@ -456,28 +666,90 @@ export class LayerPanel {
       if (row.heading) item = { key: row.key, heading: t(row.heading) };
       else {
         const layer = layers.get(row.id);
-        if (layer) this._rowViews.set(row.id, this._presentRow(row, layer));
+        if (
+          layer &&
+          (!present || present.has(row.id) || !this._rowViews.has(row.id))
+        )
+          this._rowViews.set(row.id, this._presentRow(row, layer));
         item = this._rowViews.get(row.id);
       }
       if (item) lists.get(row.container ?? null).push(item);
     }
+    this._finderRows = lists.get(null);
+    if (
+      this._listNeedsRender(this._toggleContainer, this._finderRows, whileShown)
+    )
+      this._paintFinder();
+    for (const [id, container] of this._groupContainers) {
+      const items = lists.get(id);
+      if (this._listNeedsRender(container, items, whileShown))
+        this._renderRows(container, items);
+    }
+  }
+
+  /**
+   * Whether a list must be rendered: not while it is not displayed (with
+   * `whileShown`), which leaves it owed a repaint, nor when it already shows
+   * these rows. Row handlers re-read the live descriptor, so only the
+   * presented values, never their functions, are compared.
+   */
+  _listNeedsRender(container, items, whileShown) {
+    if (whileShown && !this._isDisplayed(container)) {
+      this._owedLists.add(container);
+      return false;
+    }
+    this._owedLists.delete(container);
+    let rows = null;
+    try {
+      rows = JSON.stringify(items);
+    } catch {
+      // Rows that cannot be compared are always rendered.
+    }
+    if (rows !== null && this._paintedRows.get(container) === rows)
+      return false;
+    this._paintedRows.set(container, rows);
+    return true;
+  }
+
+  /**
+   * Filter the rows anew. Rows a refresh left owed are presented anew first,
+   * and the Data Layers list renders even when its rows are unchanged.
+   */
+  _onFinderInputs() {
+    if (!this._owedLists.has(this._toggleContainer)) return this._paintFinder();
+    this._paintedRows.delete(this._toggleContainer);
+    this._paint();
+  }
+
+  /** Finder input changes only visibility, not the layer state or controls. */
+  _paintFinder() {
+    if (this._destroyed || !this._toggleContainer) return;
+    const { filtered, groups, shown } = filterLayerRows(
+      this._finderRows,
+      this.finder.inputs(),
+    );
+    this.finder.publish(groups, shown);
+    this._renderRows(this._toggleContainer, this._finderRows, filtered);
+  }
+
+  _renderRows(container, items, filtered) {
     const generation = this._generation;
-    for (const [id, items] of lists)
-      renderVue(
-        h(LayerRows, {
-          items,
-          onToggle: (layerId) => this._toggle(layerId, generation),
-          onChip: (layerId, chipId) =>
-            this._selectChip(layerId, chipId, generation),
-          onListItem: (layerId, itemId) =>
-            this._selectListItem(layerId, itemId, generation),
-          onSlider: (layerId, sliderId, value) =>
-            this._moveSlider(layerId, sliderId, value, generation),
-          onRange: (layerId, rangeId, end, value) =>
-            this._pickRangeEnd(layerId, rangeId, end, value, generation),
-        }),
-        id === null ? this._toggleContainer : this._groupContainers.get(id),
-      );
+    renderVue(
+      h(LayerRows, {
+        items,
+        filtered,
+        onToggle: (layerId) => this._toggle(layerId, generation),
+        onChip: (layerId, chipId) =>
+          this._selectChip(layerId, chipId, generation),
+        onListItem: (layerId, itemId) =>
+          this._selectListItem(layerId, itemId, generation),
+        onSlider: (layerId, sliderId, value) =>
+          this._moveSlider(layerId, sliderId, value, generation),
+        onRange: (layerId, rangeId, end, value) =>
+          this._pickRangeEnd(layerId, rangeId, end, value, generation),
+      }),
+      container,
+    );
   }
 
   _presentRow(row, layer) {
@@ -525,7 +797,12 @@ export class LayerPanel {
       row.controls = false;
       return null;
     }
-    const chips = controls?.chips || [];
+    // A chip's count is shortened as the row's is.
+    const chips = (controls?.chips || []).map((chip) =>
+      Number.isFinite(chip.count)
+        ? { ...chip, countText: formatCount(chip.count) }
+        : chip,
+    );
     const legend = (controls?.legend || []).map((item) => ({
       color: item.color,
       blurb: item.blurb,
@@ -640,43 +917,11 @@ export class LayerPanel {
       this.setLayerParams(id, item.params, { origin: 'user' });
   }
 
-  _scheduleRowControlsRefresh() {
-    if (this._destroyed || this._cancelRowControlsRefresh) return;
-    const refresh = () => {
-      this._cancelRowControlsRefresh = null;
-      if (!this._destroyed) this._refreshTogglePanel();
-    };
-    if (typeof requestAnimationFrame === 'function') {
-      const frame = requestAnimationFrame(refresh);
-      this._cancelRowControlsRefresh = () => cancelAnimationFrame(frame);
-    } else {
-      const timer = setTimeout(refresh, 0);
-      this._cancelRowControlsRefresh = () => clearTimeout(timer);
-    }
-  }
-
-  /** Synchronously flush a pending row-controls refresh, including in tests. */
-  _flushRowControlsRefresh() {
-    if (this._destroyed || !this._cancelRowControlsRefresh) return;
-    this._cancelRowControlsRefresh();
-    this._cancelRowControlsRefresh = null;
-    this._refreshTogglePanel();
-  }
-
   _refreshWeatherPanel() {
     this._weatherPanel?.update(
       this.getAll()
         .filter(
-          (layer) =>
-            layer.enabled &&
-            [
-              'wind',
-              'weather-radar',
-              'weather-satellite',
-              'weather-lightning',
-              'weather-cyclones',
-              'air-quality',
-            ].includes(layer.id),
+          (layer) => layer.enabled && WEATHER_PANEL_IDS.includes(layer.id),
         )
         .map((layer) => ({
           id: layer.id,
@@ -684,19 +929,6 @@ export class LayerPanel {
           ...this._rowControlsFor(layer.id),
         })),
     );
-  }
-
-  _refreshTogglePanel() {
-    if (this._destroyed || !this._toggleContainer) return;
-    // Skip DOM churn while hidden; visibilitychange (main.js) triggers one
-    // refresh on return. (perf wave 2)
-    if (typeof document !== 'undefined' && document.hidden) {
-      this.onHiddenRefresh();
-      return;
-    }
-    this._paint();
-    this._refreshWeatherPanel();
-    this._refreshNewsPanel();
   }
 
   /** Feed the News rail panel the view the news layer publishes while on. */
@@ -712,10 +944,7 @@ export class LayerPanel {
     const feedState = layerFeedState(stats);
     const stateLabel = t(FEED_STATE_LABEL_KEYS[feedState]);
     // A layer marks source text that is data rather than a catalog name.
-    const source =
-      stats.sourceVerbatim === true && stats.source
-        ? stats.source
-        : sourceLabel(stats.source || layer.source);
+    const source = layerSourceText(layer);
     const lifecycleState =
       layer.lifecycleState || (layer.enabled ? 'enabled' : 'disabled');
     if (lifecycleState === 'enabling' || lifecycleState === 'disabling') {

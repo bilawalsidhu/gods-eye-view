@@ -11,6 +11,12 @@ import {
 import { BHOTE_KOSHI_FLOOD_PATH } from './bhoteKoshiFloodPath.js';
 import * as Cesium from 'cesium';
 import { setLocale } from '../i18n/index.js';
+import { describeEntity } from './entityContext.js';
+import {
+  registerPickOwner,
+  setClickCardHitTest,
+  unregisterPickOwner,
+} from './pickRegistry.js';
 import { SceneDirector } from '../scenes/director.js';
 import { createPlaybackClock } from '../director/clock.js';
 import { createDefaultScenePacks } from '../scenes/packs/defaults.js';
@@ -29,6 +35,19 @@ import {
   NEPAL_CONTEXT_PRESENTATION,
   revealLengthFraction,
 } from './bhoteKoshiLocator.js';
+
+function checkLocatorCardHeight(module, record, position) {
+  const id = 'bhote-koshi-locator';
+  const manager = { layers: new Map([[id, { id, module }]]) };
+  const card = describeEntity(manager, { layerId: id, id: record.id });
+  assert.equal(record.elevationM, undefined);
+  assert.equal(card.altitudeM, null);
+  assert.ok(
+    !card.facts.some(({ field }) => ['elevationM', 'pinHeightM'].includes(field)),
+  );
+  const drawn = Cesium.Cartographic.fromCartesian(position);
+  assert.ok(Math.abs(card.pinHeightM - drawn.height) < 1e-3);
+}
 
 /**
  * A viewer with a fake draw port bound; with `camera`, the Cesium camera
@@ -673,6 +692,15 @@ test('Bhote Koshi trigger-record presentation reveals sourced incident details',
   assert.equal(record.sourceAlpha(), 1);
   assert.equal(viewer._test.item('nepal-border-highlight'), undefined);
   assert.equal(layer.getStats().coverage, 'Bhote Koshi · Trigger record');
+  const [initialReport, ...rest] = layer.getAnalystRecords();
+  assert.deepEqual(rest, []);
+  assert.equal(initialReport.id, 'us7000tbwb');
+  assert.equal(initialReport.name, record.title);
+  checkLocatorCardHeight(layer, initialReport, record.position);
+  assert.deepEqual([initialReport.lat, initialReport.lon], [28.271, 85.515]);
+  assert.equal(initialReport.source, 'USGS');
+  assert.match(initialReport.website, /^https:\/\/earthquake\.usgs\.gov\/.*\/us7000tbwb\//);
+  assert.deepEqual(layer.getAnalystRecords(0), []);
   assert.deepEqual(layer.getParams(), {
     presentation: BHOTE_KOSHI_TRIGGER_RECORD_PRESENTATION,
   });
@@ -900,9 +928,27 @@ test('Bhote Koshi locator keeps the regional context settled while nearby cities
   nowMs = 1300;
   assert.equal(dhulikhel.sourceAlpha(), 1);
   assert.equal(layer.getStats().coverage, 'Bhote Koshi · Nearby cities');
+  const cities = layer.getAnalystRecords();
+  assert.deepEqual(
+    cities.map(({ id, name }) => [id, name]),
+    [
+      ['kathmandu', 'Kathmandu'],
+      ['bhaktapur', 'Bhaktapur'],
+      ['dhulikhel', 'Dhulikhel'],
+    ],
+  );
+  assert.deepEqual(layer.getAnalystRecords(1), [cities[0]]);
+  checkLocatorCardHeight(layer, cities[0], kathmandu.position);
+  const point = Cesium.Cartographic.fromCartesian(kathmandu.position);
+  assert.ok(
+    Math.abs(Cesium.Math.toDegrees(point.latitude) - cities[0].lat) < 1e-6 &&
+      Math.abs(Cesium.Math.toDegrees(point.longitude) - cities[0].lon) < 1e-6,
+  );
   assert.deepEqual(layer.getParams(), {
     presentation: BHOTE_KOSHI_CITY_CONTEXT_PRESENTATION,
   });
+  layer.setParams({ presentation: BHOTE_KOSHI_REGIONAL_PRESENTATION });
+  assert.deepEqual(layer.getAnalystRecords(), []);
   await layer.destroy();
 });
 
@@ -1048,4 +1094,75 @@ test('Bhote Koshi locator layers draw sets of their own, and halos only as they 
   assert.equal(viewer._test.live().length, 3, 'the other layer keeps its sets');
   assert.equal(await second.disable(), true);
   assert.equal(viewer._test.live().length, 0);
+});
+
+// The trigger record's callout is an actionable card: the layers under it
+// stand aside for it, so a click on it opens its source, as its keyboard
+// action does; anything else on top is left alone.
+test('a click on the locator callout runs its action', async () => {
+  const viewer = viewerFixture();
+  let onClick = null;
+  let top = null;
+  const activated = [];
+  const layer = createBhoteKoshiLocatorLayer({
+    overlayHost: overlayHostFixture(),
+    requestRender() {},
+    ...nonRunningAnimation(),
+    input: () => ({
+      onClick(callback) {
+        onClick = callback;
+        return () => {
+          onClick = null;
+        };
+      },
+    }),
+  });
+  // The card on top at a click, as the host answers the pick registry.
+  setClickCardHitTest(() => top);
+  await layer.init(viewer);
+  await layer.enable(viewer);
+  const click = (extra = {}) =>
+    onClick?.({
+      screenPosition: { x: 5, y: 5 },
+      gesture: { travelPx: 0, durationMs: 80 },
+      topHit: null,
+      hit: null,
+      ...extra,
+    });
+  top = {
+    sourceId: BHOTE_KOSHI_LOCATOR_OVERLAY_SOURCE_ID,
+    entryId: 'bhote-koshi-trigger-record-callout',
+    entry: { activate: () => activated.push('trigger') },
+  };
+  click();
+  assert.deepEqual(activated, ['trigger']);
+  top = {
+    sourceId: 'earthquake-card',
+    entry: { activate: () => activated.push('other') },
+  };
+  click();
+  assert.deepEqual(activated, ['trigger'], 'another layer on top is its own');
+  // A drag that ends on it is not a click on it.
+  top = {
+    sourceId: BHOTE_KOSHI_LOCATOR_OVERLAY_SOURCE_ID,
+    entry: { activate: () => activated.push('trigger') },
+  };
+  click({ gesture: { travelPx: 30, durationMs: 80 } });
+  assert.deepEqual(activated, ['trigger'], 'a drag does not open it');
+  // On top, it takes the click over an aircraft or a camera under it, exact
+  // or a touch contact: those layers stand aside under a card.
+  registerPickOwner('test-planes', (id) => id === 'plane:1');
+  try {
+    const plane = { set: 'planes:1', id: 'plane:1' };
+    const cam = { set: 'cams:1', id: 'cam:1' };
+    click({ topHit: plane, hit: plane });
+    click({ topHit: null, hit: plane });
+    click({ topHit: cam, hit: cam });
+    assert.equal(activated.length, 4, 'the callout on top acts each time');
+  } finally {
+    unregisterPickOwner('test-planes');
+    setClickCardHitTest(null);
+  }
+  await layer.disable();
+  assert.equal(onClick, null, 'disable removes the click handler');
 });

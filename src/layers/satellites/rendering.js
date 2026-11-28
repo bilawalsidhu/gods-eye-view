@@ -3,6 +3,11 @@ import { distance } from '../../geo/vector.js';
 import { gstime } from 'satellite.js';
 import { reckonEarthFixed, sampleOrbit } from './motion.js';
 import {
+  createRenderPace,
+  createScreenSpeed,
+  paceHzForSpeed,
+} from '../../renderPace.js';
+import {
   ISS_NORAD,
   ORBIT_REBAKE_MS,
   ORBIT_RECKON_LIMIT_MS,
@@ -34,12 +39,11 @@ const POINT_SCALE_BY_DISTANCE = Object.freeze({
 });
 
 /**
- * The tracked satellite's dot: 14 px yellow with a white outline, drawn
- * over everything.
+ * The tracked satellite's dot: 14 px in the satellite's own colour with a
+ * white outline, drawn over everything. Tracking never recolours it.
  */
 const TRACKED_DOT = Object.freeze({
   pixelSize: 14,
-  color: Object.freeze([1, 1, 0, 1]),
   outlineColor: Object.freeze([1, 1, 1, 1]),
   outlineWidth: 2,
   disableDepthTest: Number.POSITIVE_INFINITY,
@@ -48,12 +52,21 @@ const TRACKED_DOT = Object.freeze({
 /** An orbit ring's colour when none is given (cyan). */
 const DEFAULT_RING_COLOR = Object.freeze([0, 1, 1, 1]);
 
-/** Rings: this alpha in front of the globe, the dimmer one behind it. */
+/**
+ * Rings draw at this alpha where they are in sight; the Earth hides the
+ * part behind it (no `depthFail` style).
+ */
 const RING_ALPHA = 0.6;
-const RING_BEHIND_ALPHA = 0.35;
 
 /** An RGBA colour with another alpha. */
 const withAlpha = (color, alpha) => [color[0], color[1], color[2], alpha];
+
+/** Whether two display ranges are the same: both none, or the same bounds. */
+const sameRange = (a, b) =>
+  a && b ? a[0] === b[0] && a[1] === b[1] : !a && !b;
+
+/** A display range as the item's own copy, or undefined for none. */
+const rangeOf = (range) => (range ? [range[0], range[1]] : undefined);
 
 /** Layer instances so far: set ids unique to each. */
 let instances = 0;
@@ -97,6 +110,49 @@ export function createRendering({
   let trackedDrawnThisTick = false;
   /** The frame the tick last ran in: the tracked sample's cache key. */
   let renderedFrame = -1;
+
+  // The pace: how often the dots are drawn while nothing else draws. A dot
+  // in low orbit crosses under half a pixel a second on the whole globe and
+  // hundreds of pixels a second from close by, so the rate follows the
+  // fastest dot in view (renderPace.js) instead of holding the loop at the
+  // display's rate.
+  const pace = createRenderPace({
+    owner: 'satellites',
+    render: services.render,
+  });
+  const screenSpeed = createScreenSpeed();
+  /** While dots fade for a focus change, they are drawn this often. */
+  const PACE_FADE_HZ = 20;
+  /** The least time a reading spans: shorter, and the clock's jitter shows. */
+  const PACE_READ_MS = 100;
+  /** Wall time of the last reading of the dots' speed, and its result. */
+  let paceWallMs = 0;
+  let pacePxPerSec = 0;
+  /** Where the eye was at the last reading: a dot's move is taken from it. */
+  const paceEye = { x: 0, y: 0, z: 0 };
+  const paceEyeMove = { x: 0, y: 0, z: 0 };
+  let paceFading = false;
+  /** Whether the layer is on and paced: its dots' speed is read. */
+  let pacing = false;
+
+  /** Set the rate from the fastest dot seen; called once a drawn frame. */
+  function _applyPace() {
+    let hz = paceHzForSpeed(pacePxPerSec);
+    if (paceFading && hz < PACE_FADE_HZ) hz = PACE_FADE_HZ;
+    pace.set(hz);
+  }
+
+  function _startPace() {
+    pacing = true;
+    paceWallMs = 0;
+    pacePxPerSec = 0;
+    pace.start();
+  }
+
+  function _stopPace() {
+    pacing = false;
+    pace.stop();
+  }
 
   /**
    * Build the rigid ECEF transform that keeps an orbit path baked at one GMST
@@ -207,7 +263,7 @@ export function createRendering({
 
   function _setOrbitPathShown(noradId, show) {
     const path = layerState._orbitPaths.get(noradId);
-    if (!path) return;
+    if (!path || path.item.show === show) return;
     path.item.show = show;
     sets?.rings.upsert([path.item]);
   }
@@ -231,10 +287,6 @@ export function createRendering({
       kind: 'solid',
       color: withAlpha(path.color, RING_ALPHA * factor),
     };
-    path.item.depthFail = {
-      kind: 'solid',
-      color: withAlpha(path.color, RING_BEHIND_ALPHA * factor),
-    };
     sets?.rings.upsert([path.item]);
     return true;
   }
@@ -257,6 +309,46 @@ export function createRendering({
     if (!trackedDot || trackedDot.item.show === show) return;
     trackedDot.item.show = show;
     if (trackedDot.drawn) sets?.tracked.upsert([trackedDot.item]);
+  }
+
+  /**
+   * Draw one satellite's dot only at eye distances in `range` (`[near, far)`,
+   * metres), or at every distance for null, apart from whether it is shown:
+   * a station's model stands in for its dot, and for the dots of the objects
+   * docked to it, within the model's range (stationModel.js). A dot added
+   * again (a catalog rebuild) arrives with no range.
+   * @param {number} noradId
+   * @param {readonly [number, number]|null} range
+   * @returns {boolean} Whether the satellite has a dot.
+   */
+  function _setPointDisplayRange(noradId, range) {
+    const point = layerState._points.get(noradId);
+    if (!point) return false;
+    if (sameRange(point.displayRange, range)) return true;
+    point.displayRange = rangeOf(range);
+    _markDirty(noradId);
+    return true;
+  }
+
+  /** The eye distances a dot is drawn at, or null for every distance. */
+  function _pointDisplayRange(noradId) {
+    return layerState._points.get(noradId)?.displayRange ?? null;
+  }
+
+  /**
+   * The tracked satellite's dot likewise; a dot drawn is redrawn at once. A
+   * new tracked dot (tracking another satellite) arrives with no range.
+   * @param {readonly [number, number]|null} range
+   */
+  function _setTrackedDotDisplayRange(range) {
+    if (!trackedDot || sameRange(trackedDot.item.displayRange, range)) return;
+    trackedDot.item.displayRange = rangeOf(range);
+    if (trackedDot.drawn) sets?.tracked.upsert([trackedDot.item]);
+  }
+
+  /** The eye distances the tracked dot is drawn at, or null for every distance. */
+  function _trackedDotDisplayRange() {
+    return trackedDot?.item.displayRange ?? null;
   }
 
   /** Remove every orbit ring. */
@@ -386,12 +478,13 @@ export function createRendering({
   /**
    * Draw the tracked satellite's dot and make the carrier the follow target
    * and the tracked card read (its entity record holds the card).
-   * @param {{position: () => object, viewFrom: {x: number, y: number,
-   *   z: number}}} options `position` is read as the follow camera reads
-   *   it, once each frame before the tick moves the sample on.
+   * @param {{position: () => object, color: number[], viewFrom: {x: number,
+   *   y: number, z: number}}} options `position` is read as the follow
+   *   camera reads it, once each frame before the tick moves the sample on;
+   *   `color` is the satellite's own dot colour.
    * @returns {object} The carrier.
    */
-  function _addTrackedEntity({ position }) {
+  function _addTrackedEntity({ position, color }) {
     const noradId = layerState._trackedNorad;
     const carrier = { noradId };
     trackedDot = {
@@ -400,6 +493,7 @@ export function createRendering({
         id: String(noradId),
         pos: { x: 0, y: 0, z: 0 },
         ...TRACKED_DOT,
+        color,
         meta: { noradId },
       },
       drawn: false,
@@ -461,8 +555,8 @@ export function createRendering({
 
   /**
    * Show orbital path for a satellite: the ring over one orbit, baked once
-   * in ECEF at the current GMST, bright in front of the globe and dimmed
-   * behind it (`depthFail`), and turned with the Earth each
+   * in ECEF at the current GMST, drawn where it is in front of the globe and
+   * hidden by the Earth behind it, and turned with the Earth each
    * `RING_ROTATION_MS` (`_updateOrbitPathRotations`).
    */
 
@@ -492,14 +586,11 @@ export function createRendering({
     path.item = {
       id: String(noradId),
       positions: _ringPositions(path, path.gmstAtBake),
-      widthPx: noradId === ISS_NORAD ? 2.5 : 2.0,
+      widthPx: 2.0,
       // Along the ellipsoid between samples, as the ring always ran.
       mode: 'geodesic',
       style: { kind: 'solid', color: withAlpha(pathColor, RING_ALPHA) },
-      depthFail: {
-        kind: 'solid',
-        color: withAlpha(pathColor, RING_BEHIND_ALPHA),
-      },
+      // No `depthFail` style: the part behind the Earth is hidden by it.
       show: true,
     };
     layerState._orbitPaths.set(noradId, path);
@@ -525,8 +616,8 @@ export function createRendering({
    * likewise harmless. No unwrapping needed.
    *
    * No SGP4 here: WGS84 is rotationally symmetric about Z, so rotating the
-   * baked curve rigidly equals rebaking from rotated points. A ring with a
-   * `depthFail` style is built at once where it now runs, so it never blinks.
+   * baked curve rigidly equals rebaking from rotated points. A ring's
+   * positions are written in place where it now runs, so it never blinks.
    * @param {Date} nowDate Epoch used for current GMST.
    */
 
@@ -606,6 +697,26 @@ export function createRendering({
 
   function _reckonPoints(nowMs) {
     const gmst = gstime(new Date(nowMs));
+    // The pace's reading, at most every PACE_READ_MS: how far the fastest
+    // dot in view moved on screen since the last one.
+    const wallMs = performance.now();
+    const sinceS = (wallMs - paceWallMs) / 1000;
+    const reading = pacing && wallMs - paceWallMs >= PACE_READ_MS;
+    const camera = reading ? findCamera(layerState._viewer) : null;
+    const view = camera?.pose?.() ?? null;
+    const eye = view?.position;
+    // The eye's own move since the last reading: a camera riding one
+    // satellite sees its neighbours nearly still.
+    if (eye) {
+      paceEyeMove.x = eye.x - paceEye.x;
+      paceEyeMove.y = eye.y - paceEye.y;
+      paceEyeMove.z = eye.z - paceEye.z;
+    }
+    const measure =
+      reading &&
+      sinceS < 5 &&
+      screenSpeed.begin(view, camera?.viewport?.().height, paceEyeMove);
+    const lastWallMs = paceWallMs;
     for (const [noradId, point] of layerState._points) {
       if (!point.show || noradId === layerState._trackedNorad) continue;
       const sat = layerState._catalog.get(noradId);
@@ -621,7 +732,24 @@ export function createRendering({
       reckonEarthFixed(sample, nowMs, gmst, point.pos);
       _markDirty(noradId);
       sat.reckonedAtMs = nowMs;
+      if (!reading) continue;
+      // Where the dot was at the last reading, kept on its satellite. One
+      // not read then (hidden, or just loaded) is not measured: it jumps.
+      const from = (sat.paceFrom ??= { x: 0, y: 0, z: 0, atMs: -1 });
+      if (measure && from.atMs === lastWallMs) screenSpeed.add(from, point.pos);
+      from.x = point.pos.x;
+      from.y = point.pos.y;
+      from.z = point.pos.z;
+      from.atMs = wallMs;
     }
+    if (!reading) return;
+    if (eye) {
+      paceEye.x = eye.x;
+      paceEye.y = eye.y;
+      paceEye.z = eye.z;
+    }
+    if (measure) pacePxPerSec = screenSpeed.pxPerSec(sinceS);
+    paceWallMs = wallMs;
   }
 
   /**
@@ -643,6 +771,7 @@ export function createRendering({
     renderedFrame = Number.isFinite(t?.frame) ? t.frame : renderedFrame + 1;
     if (layerState._enabled) _tickAfterFrame();
     _flushPoints();
+    _applyPace();
   }
 
   /** The tick's part read before the frame's own sample is taken. */
@@ -665,6 +794,11 @@ export function createRendering({
   function _tickAfterFrame() {
     const now = focusNowMs(Date.now());
 
+    // The stations as 3D models up close. First, before the tracked sample
+    // below is refreshed: the follow camera and the tracked dot were placed
+    // this frame from the sample still cached, and a model must sit on it too.
+    for (const model of parts.stationModels ?? []) model._updateStationModel();
+
     const interval = layerState._trackedNorad ? 200 : POSITION_UPDATE_MS;
     // Space Missions keeps this layer enabled for TLE lookup while deliberately
     // hiding its standalone fleet. Do not rebuild hidden point buffers on the
@@ -680,9 +814,17 @@ export function createRendering({
 
     if (layerState._params.showPoints) {
       const worldMs = layerState.now();
-      parts.catalog._propagateDenseChunk(worldMs - layerState._lastReckonMs);
-      layerState._lastReckonMs = worldMs;
-      _reckonPoints(worldMs);
+      // The dots move at the pace, not on every drawn frame: moving them
+      // asks for the next frame, so a frame drawn for any reason would keep
+      // the loop drawing; and a drag over the whole globe need not send
+      // every dot to the GPU sixty times a second to move it a hair.
+      if (pace.take()) {
+        parts.catalog._propagateDenseChunk(worldMs - layerState._lastReckonMs);
+        layerState._lastReckonMs = worldMs;
+        _reckonPoints(worldMs);
+      }
+    } else {
+      pacePxPerSec = 0;
     }
 
     // Keep the tracked satellite's (hidden) dot on the per-frame epoch shared
@@ -698,6 +840,9 @@ export function createRendering({
     // While the Cockpit rides the tracked satellite, keep its marks hidden.
     if (layerState._cockpitSubjectNorad !== null)
       parts.cockpit?._syncCockpitSubjectVisuals();
+
+    // NASA's live video beside the card while the ISS is selected.
+    parts.stationPanel?._syncStationPanel();
 
     _updatePointFocus(now);
 
@@ -725,8 +870,10 @@ export function createRendering({
     if (
       !layerState._params.showPoints ||
       !focusPassIsNeeded(target, layerState._activeFocusCount)
-    )
+    ) {
+      paceFading = false;
       return;
+    }
     if (nowMs - layerState._lastFocusUpdate < 80) return;
     layerState._lastFocusUpdate = nowMs;
     const query = findQuery(layerState._viewer);
@@ -781,6 +928,7 @@ export function createRendering({
         ).color,
     });
     layerState._activeFocusCount = result.activeCount;
+    paceFading = Boolean(result.transitioning);
   }
 
   /**
@@ -860,6 +1008,10 @@ export function createRendering({
     _setPointStyle,
     _pointShown,
     _setTrackedDotShown,
+    _setPointDisplayRange,
+    _pointDisplayRange,
+    _setTrackedDotDisplayRange,
+    _trackedDotDisplayRange,
     _clearOrbitPaths,
     _addPoint,
     _movePoint,
@@ -879,6 +1031,9 @@ export function createRendering({
     _propagateAll,
     _reckonPoints,
     _preRenderTick,
+    _startPace,
+    _stopPace,
+    _paceForTest: () => ({ ...pace.state(), pxPerSec: pacePxPerSec }),
     _updatePointFocus,
     applySatellitePointFocusDeemphasis,
     _flushPoints,

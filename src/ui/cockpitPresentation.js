@@ -118,6 +118,11 @@ export function formatCockpitCoordinate(value, positive, negative) {
   }
 }
 
+/** A latitude and longitude as the card shows them: "30.272°N  97.743°W". */
+export function formatCockpitCoordinatePair(lat, lon) {
+  return `${formatCockpitCoordinate(lat, 'N', 'S')}  ${formatCockpitCoordinate(lon, 'E', 'W')}`;
+}
+
 /**
  * A contact distance such as `4.2 KM` / `44 KM` in the active language
  * (`4,2 КМ`): one decimal under 10 km, whole kilometres beyond.

@@ -42,7 +42,46 @@ export function createQueries({
     high: t('High confidence detections only'),
   });
 
+  function contextRecord(fire, withDetectionKey = true) {
+    const record = components.model.mapAnalystRecord(fire);
+    if (withDetectionKey) record.key = fireDetectionKey(fire);
+    return record;
+  }
+
   const methods = {
+    // Nearby needs every shown position, even when many stronger fires lie
+    // elsewhere. Only its retained rows and text matches need analyst fields.
+    getNearbyContextPoints() {
+      return {
+        points: layerState._enabled ? layerState._firesByFrp.values() : [],
+        recordForPoint: contextRecord,
+      };
+    },
+
+    // FIRE- indices can change between snapshots. A Context detection key
+    // identifies the observed fire even when another fire shares its position.
+    getContextRecord(key) {
+      const sprite = key.startsWith('firms-');
+      if (!sprite && !key.startsWith('firms:')) return undefined;
+      if (!layerState._enabled) return null;
+      if (sprite) {
+        const fire = layerState._pickIndexById.get(key);
+        return fire ? contextRecord(fire) : null;
+      }
+      const [, lat, lon] = key.split(':', 3);
+      const latitude = Number(lat);
+      const longitude = Number(lon);
+      for (const fire of layerState._firesByFrp) {
+        if (
+          Math.abs(fire.lat - latitude) > 0.0001 ||
+          Math.abs(fire.lon - longitude) > 0.0001
+        )
+          continue;
+        if (fireDetectionKey(fire) === key) return contextRecord(fire);
+      }
+      return null;
+    },
+
     /** Return the selected detection as a plain record for application consumers. */
     getSelectedInfo() {
       const fire = layerState._selectedFire;
@@ -116,7 +155,7 @@ export function createQueries({
         components.selection.clearFireSelection();
       }
       if (layerState._enabled) components.rendering.renderCurrentLod(true);
-      layerState._rowControlsListener?.();
+      layerState._panel?.invalidate();
       return true;
     },
 
@@ -173,17 +212,6 @@ export function createQueries({
             })
           : '',
       };
-    },
-
-    /**
-     * Install the panel's "row controls changed" callback: a load or a filter
-     * change moves the counter, and nothing else repaints the row before the
-     * next scheduled refresh.
-     * @param {(() => void)|null} listener
-     */
-    setRowControlsListener(listener) {
-      layerState._rowControlsListener =
-        typeof listener === 'function' ? listener : null;
     },
 
     /**

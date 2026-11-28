@@ -171,7 +171,6 @@ export function createLifecycle({
      */
     disable(viewer) {
       layerState._enabled = false;
-      services.credits?.hideOsmCredit?.(layerState._viewer, 'traffic');
       parts.animation.syncRenderDemand();
       clearTimeout(layerState._fetchTimeout);
       clearInterval(layerState._enableKickTimer);

@@ -900,8 +900,8 @@ export function createDirectionsLayer({ services, source }) {
   let _selectedStep = null;
   let _clickSubscription = null;
   let _renderHeld = false;
-  let _rowControlsListener = null;
-  let _dataManager = null;
+  /** @type {{ invalidate: () => void } | null} the panels' handle, from init */
+  let _panel = null;
   /**
    * What `claimPointer` handed back for the claim this layer currently holds, or
    * null. Held rather than re-derived so the release names THIS claim: a claim
@@ -954,12 +954,7 @@ export function createDirectionsLayer({ services, source }) {
   }
 
   function notifyRow() {
-    try {
-      _rowControlsListener?.();
-    } catch {
-      /* listener is best-effort */
-    }
-    _dataManager?.refreshLayerStats?.();
+    _panel?.invalidate();
   }
 
   function syncRenderHold() {
@@ -1071,7 +1066,6 @@ export function createDirectionsLayer({ services, source }) {
   }
 
   function clearRouteGraphics() {
-    services.credits?.hideOsmCredit?.(_viewer, 'directions');
     _clearStepSelection();
     stopStepAnchoring();
     _sets?.route.clear();
@@ -1193,7 +1187,6 @@ export function createDirectionsLayer({ services, source }) {
       dots.push(stepDotItem(index, dot));
     }
     _sets.steps.set(dots);
-    services.credits?.showOsmCredit?.(_viewer, 'directions');
     services.ground.warmGroundFloor(cells);
     _anchorAttempts = 0;
     _anchorStartedAt = Date.now();
@@ -1584,6 +1577,9 @@ export function createDirectionsLayer({ services, source }) {
     // yields the moment a tool (this one included) owns the click.
     const offSelect = input.onClick((event) => {
       if (!_enabled) return;
+      // Another layer's card or label painted on top takes the click: the item
+      // under it does not act, and the click is not empty space either.
+      if (services.picking?.isUnderOtherCard?.(event)) return;
       let hit = null;
       try {
         hit = event.drawHit;
@@ -1629,8 +1625,9 @@ export function createDirectionsLayer({ services, source }) {
      * bootstrap.
      * @param {object} viewer
      */
-    init(viewer) {
+    init(viewer, { panel = null } = {}) {
       _viewer = viewer;
+      _panel = panel;
       detachSets();
       const draw = drawOf(viewer);
       const prefix = `directions:${++_instances}`;
@@ -1739,25 +1736,8 @@ export function createDirectionsLayer({ services, source }) {
       return directionsRowControls(state());
     },
 
-    /**
-     * Install the manager's row re-render callback (placement and routing land
-     * outside any manager tick).
-     * @param {(() => void)|null} listener
-     */
-    setRowControlsListener(listener) {
-      _rowControlsListener = typeof listener === 'function' ? listener : null;
-    },
-
     getStats() {
       return directionsStats(state());
-    },
-
-    /**
-     * Keep a manager handle so placement and routing can repaint the row.
-     * @param {object} dataManager DataLayerManager instance.
-     */
-    attachDataManager(dataManager) {
-      _dataManager = dataManager;
     },
 
     /**
@@ -1784,8 +1764,7 @@ export function createDirectionsLayer({ services, source }) {
       stopStepAnchoring();
       disarm();
       _shellSeams = null;
-      _dataManager = null;
-      _rowControlsListener = null;
+      _panel = null;
       detachSets();
       void viewer;
       _overlayHost.clearSource(DIRECTIONS_STEP_OVERLAY_SOURCE_ID);

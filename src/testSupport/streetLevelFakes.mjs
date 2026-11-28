@@ -202,7 +202,9 @@ export function fakeCesiumViewer({ view = false } = {}) {
     },
     camera,
     creditDisplay: {
-      addStaticCredit: (credit) => credits.push(credit),
+      // The renderer's own CesiumJS credit aside.
+      addStaticCredit: (credit) =>
+        credit.html.includes('CesiumJS') || credits.push(credit),
       removeStaticCredit: (credit) => {
         // Cesium ignores a credit it does not hold.
         const at = credits.indexOf(credit);

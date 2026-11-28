@@ -1,4 +1,6 @@
 <script setup>
+import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { useLayerFinderStore } from '../stores/layerFinder.js';
 import { storeToRefs } from 'pinia';
 import { t } from '../../i18n/index.js';
 import UiButton from '../kit/UiButton.vue';
@@ -7,17 +9,27 @@ import { useSceneSharingStore } from '../stores/sceneSharing.js';
 import { useSceneStore } from '../stores/scenes.js';
 import { STORY_TAG_LIMIT, STORY_TAGS } from '../../scenes/storyTags.js';
 import { vClassToggle } from '../rail/classToggle.js';
+import { followRootClass } from '../rail/rootClass.js';
 import SceneDialog from './panels/SceneDialog.vue';
 import SceneOptions from './SceneOptions.vue';
 import SceneShotList from './SceneShotList.vue';
 import CctvPanel from './panels/CctvPanel.vue';
 import StreetLevelPanel from './panels/StreetLevelPanel.vue';
+import StreetLevelPhotoViewer from './panels/StreetLevelPhotoViewer.vue';
 import DrawControls from './panels/DrawControls.vue';
 import GeoImport from './panels/GeoImport.vue';
 import UiSelect from '../kit/UiSelect.js';
 import LayerSectionIndex from './panels/LayerSectionIndex.vue';
 import LayerFinder from './panels/LayerFinder.vue';
 import DataLibraryBrowse from './panels/DataLibraryBrowse.vue';
+
+const finder = useLayerFinderStore();
+const toggleList = ref(null);
+let detachFinderControls;
+onMounted(() => {
+  detachFinderControls = finder.attachControls(toggleList.value);
+});
+onBeforeUnmount(() => detachFinderControls?.());
 
 // Scene sharing (src/scenes/sharing.js) offers its authoring bar and presents
 // its dialog through this store; without this view, neither is drawn.
@@ -46,15 +58,39 @@ async function importChosen(event) {
   await scenes.act('importFile', file);
   if (scenes.attached) input.value = '';
 }
+// The Cockpit's pitch ladder gives way while a panel in the stack is open
+// (cockpit.css), through a class on the page root (src/ui/rail/rootClass.js).
+// Panels move in and out of the stack at run time, so its children are
+// followed as they come and go.
+const stack = ref(null);
+let stopOpenClass = null;
+onMounted(() => {
+  const el = stack.value;
+  stopOpenClass = followRootClass(
+    el.ownerDocument,
+    'left-panel-open',
+    () =>
+      el.isConnected &&
+      [...el.children].some((child) =>
+        child.matches('.panel-collapsible:not(.collapsed)'),
+      ),
+    (observer) => {
+      observer.observe(el, { childList: true });
+      for (const child of el.children)
+        observer.observe(child, { attributes: true, attributeFilter: ['class'] });
+    },
+  );
+});
+onBeforeUnmount(() => stopOpenClass?.());
 </script>
 
 <template>
-  <div id="left-panel-stack" class="ui-scroll">
+  <div id="left-panel-stack" ref="stack" class="ui-scroll">
   <!-- Data Layer Toggle Panel -->
   <RailPanel id="data-panel" start-collapsed class="active" :title="t('DATA LAYERS')">
     <template #actions><LayerFinder part="buttons" /></template>
     <LayerFinder part="bar" />
-    <div id="data-toggles" class="data-toggle-list ui-scroll"></div>
+    <div id="data-toggles" ref="toggleList" class="data-toggle-list ui-scroll"></div>
     <LayerSectionIndex />
     <!-- Data Library: Browse and its dialog (src/ui/libraryBrowser.js). -->
     <DataLibraryBrowse />
@@ -71,6 +107,7 @@ async function importChosen(event) {
 
   <!-- Street Level Panel (moved into #right-context-rail at runtime) -->
   <StreetLevelPanel />
+  <StreetLevelPhotoViewer />
 
   <!-- Scene Director Panel -->
   <RailPanel id="scene-panel" start-collapsed v-class-toggle="{ running: scene?.running, 'has-shots': scene?.hasShots }" :title="t('AUTHORING')" :hint="t('Create and edit scenes')" scroll>
@@ -78,7 +115,7 @@ async function importChosen(event) {
       <div class="scene-controls">
         <UiSelect class="gev-field" id="scene-select" :aria-label="t('Scene')" :disabled="off('select')" @update:model-value="scenes.act('selectScene', $event)"><SceneOptions /></UiSelect>
         <UiButton id="scene-new-btn" type="button" :disabled="off('new')" @click="scenes.act('create')" class="gev-action-button scene-btn" :title="t('Start a new, empty scene')">{{ t('NEW SCENE') }}</UiButton>
-        <UiButton tone="alert" id="scene-delete-btn" type="button" :disabled="off('delete')" @click="scenes.act('deleteScene')" class="gev-action-button gev-action-button--danger scene-btn scene-btn-danger" :title="t('Delete this scene and all of its shots')">{{ t('DELETE') }}</UiButton>
+        <UiButton tone="danger" id="scene-delete-btn" type="button" :disabled="off('delete')" @click="scenes.act('deleteScene')" class="gev-action-button gev-action-button--danger scene-btn scene-btn-danger" :title="t('Delete this scene and all of its shots')">{{ t('DELETE') }}</UiButton>
       </div>
       <p class="scene-step-heading">{{ t('SHOTS') }}</p>
       <div class="scene-controls">
@@ -86,11 +123,11 @@ async function importChosen(event) {
         <UiButton id="scene-update-shot-btn" type="button" :disabled="off('update')" @click="scenes.act('update')" class="gev-action-button scene-btn" :title="t('Replace the selected shot with the current view')">{{ t('UPDATE SHOT') }}</UiButton>
       </div>
       <SceneShotList />
-      <p class="scene-shot-hint">{{ t('Click a shot to select it, double-click to rename.') }}</p>
+      <p class="scene-shot-hint">{{ t('Click a shot to go to it, double-click to rename.') }}</p>
       <p class="scene-step-heading">{{ t('PREVIEW') }}</p>
       <div class="scene-controls">
         <UiButton variant="primary" id="scene-start-btn" type="button" class="gev-action-button scene-btn scene-btn-primary" :title="t('Play from this scene through the rest of the project')" :disabled="off('start')" @click="scenes.act('start')">{{ scene?.playLabel ?? t('PLAY', { context: 'scene' }) }}</UiButton>
-        <UiButton tone="alert" id="scene-stop-btn" type="button" :disabled="off('stop')" @click="scenes.act('stop')" class="gev-action-button gev-action-button--danger scene-btn scene-btn-danger" :title="t('Stop playback (Esc)')">{{ t('STOP') }}</UiButton>
+        <UiButton tone="danger" id="scene-stop-btn" type="button" :disabled="off('stop')" @click="scenes.act('stop')" class="gev-action-button gev-action-button--danger scene-btn scene-btn-danger" :title="t('Stop playback (Esc)')">{{ t('STOP') }}</UiButton>
         <UiButton id="scene-next-btn" type="button" :disabled="off('next')" @click="scenes.act('next')" class="gev-action-button scene-btn" :title="t('Play the shot after the selected one, moving on to the next scene when needed')">{{ t('NEXT') }}</UiButton>
       </div>
       <p class="scene-step-heading">{{ t('SAVE & SHARE') }}</p>

@@ -9,6 +9,11 @@ import {
   mergeClassVisibility,
 } from './classes.js';
 import { ISS_NORAD, POINT_STYLES, classPointStyle } from './policy.js';
+import { modelFor, trackedStation } from './stationModels.js';
+
+/** satelliteClassText's options, made once rather than per satellite per paint. */
+const ISS_CLASS_TEXT = Object.freeze({ isIss: true });
+const OTHER_CLASS_TEXT = Object.freeze({ isIss: false });
 
 export function createControls({ state: layerState, services, parts, source }) {
   const { isExplicitLayerStateOrigin } = services.layerState;
@@ -49,7 +54,7 @@ export function createControls({ state: layerState, services, parts, source }) {
   /**
    * Show or hide every point by its class. The tracked satellite's point
    * stays hidden (its entity draws the dot), as do points a Cockpit hold hid.
-   * The ISS's ring and label go with its class.
+   * The ISS's label goes with its class.
    */
   function _applyClassVisibility() {
     for (const noradId of layerState._points.keys()) {
@@ -57,28 +62,8 @@ export function createControls({ state: layerState, services, parts, source }) {
       if (layerState._cockpitHiddenPoints?.has(noradId)) continue;
       parts.rendering._setPointShown(noradId, _classVisible(noradId));
     }
-    _syncIssOrbit();
     parts.labels?._syncIssOverlay?.();
     layerState._detectionObjects.clear();
-  }
-
-  /**
-   * Whether the ISS's ring shows: orbits on, the layer drawing, and its
-   * class on or the ISS tracked (a tracked satellite keeps its ring).
-   */
-  function _issOrbitVisible() {
-    return (
-      satelliteVisualsVisible(
-        layerState._enabled,
-        layerState._params.showOrbits,
-      ) &&
-      (_classVisible(ISS_NORAD) || layerState._trackedNorad === ISS_NORAD)
-    );
-  }
-
-  /** Show or hide the ISS's ring by _issOrbitVisible, if it is built. */
-  function _syncIssOrbit() {
-    parts.rendering._setOrbitPathShown(ISS_NORAD, _issOrbitVisible());
   }
 
   /**
@@ -101,18 +86,18 @@ export function createControls({ state: layerState, services, parts, source }) {
     };
   }
 
-  /** Tell the manager to re-render this layer's row (chip state / legend counts). */
+  /** Tell the manager to re-render this layer's row (chip state and counts). */
 
   function _notifyRowControls() {
     try {
-      layerState._rowControlsListener?.();
+      layerState._panel?.invalidate();
     } catch (error) {
       console.warn('[Data:Satellites] row-controls listener failed:', error);
     }
   }
 
   /**
-   * Per-class tally for the row legend, cached against the catalog revision.
+   * Per-class tally for the row's class chips, cached against the catalog revision.
    * Without the cache this scans ~10.7k entries in dense mode on every panel
    * refresh, and any layer polling on the 1s stats timer refreshes the panel.
    * @returns {Record<string, number>} Class key → count.
@@ -219,7 +204,12 @@ export function createControls({ state: layerState, services, parts, source }) {
     refreshInterval: 5 * 60 * 1000,
 
     getDetectableObjects(options = {}) {
-      if (!parts.rendering._pointsShown()) return [];
+      // Read on every detection paint: one result array and each satellite's
+      // own object, so a paint allocates nothing here. The result is valid
+      // until the next call.
+      const result = (layerState._detectionResult ??= []);
+      result.length = 0;
+      if (!parts.rendering._pointsShown()) return result;
       // Dense extras are points-only: excluded from the detection overlay.
       const eligibleCount = Math.max(
         1,
@@ -232,7 +222,6 @@ export function createControls({ state: layerState, services, parts, source }) {
       const stride = Math.max(1, Math.ceil(eligibleCount / maxCount));
       const start = seed % stride;
 
-      const result = [];
       let idx = 0;
       for (const noradId of layerState._points.keys()) {
         if (
@@ -253,6 +242,9 @@ export function createControls({ state: layerState, services, parts, source }) {
         // that card instead. Only members of the tracked cluster are affected —
         // unrelated nearby satellites are never suppressed.
         if (!isTracked && layerState._dockedCompanions.has(noradId)) continue;
+        // Up close a station is its 3D model: no mark on it, nor on what is
+        // docked to it.
+        if (modelFor(parts, noradId)?._visualPosition?.()) continue;
         // The Cockpit camera rides a held subject; a bracket on it would sit
         // on the lens.
         if (isTracked && parts.cockpit?._cockpitHeld()) continue;
@@ -270,9 +262,11 @@ export function createControls({ state: layerState, services, parts, source }) {
         // ("GPS-OPS"). The detection canvas composites ABOVE the post-FX
         // chain, so this is how class survives NVG/FLIR once the dot colors
         // are collapsed. Read each time: SATCAT can reclassify a satellite.
-        object.klass = satelliteClassText(cat?.satelliteClass, cat?.group, {
-          isIss: noradId === ISS_NORAD,
-        });
+        object.klass = satelliteClassText(
+          cat?.satelliteClass,
+          cat?.group,
+          noradId === ISS_NORAD ? ISS_CLASS_TEXT : OTHER_CLASS_TEXT,
+        );
         object.position = position;
         object.skipLabel = isTracked;
         result.push(object);
@@ -434,6 +428,47 @@ export function createControls({ state: layerState, services, parts, source }) {
     },
 
     /**
+     * The keys the LIVE section matches streams by for the tracked
+     * satellite: a station is `station:<key>` (`station:iss`,
+     * `station:tiangong`) whichever of its entries is tracked (the station,
+     * a module, a docked vehicle).
+     * @returns {string[]}
+     */
+    getLiveSubjectKeys() {
+      const station = trackedStation(layerState, parts);
+      return station ? [`station:${station.key}`] : [];
+    },
+
+    /**
+     * Select a satellite by NORAD id as a click on its dot does: selected
+     * with its orbit and card, centred once, not followed
+     * (src/data/clickSelect.js).
+     * @param {string|number} noradId NORAD catalog number.
+     * @param {{origin?: string, center?: boolean}} [options] `center: false`
+     *   selects it and leaves the camera to the caller (a pick from a list
+     *   frames it).
+     * @returns {boolean} True if the satellite was selected.
+     */
+    pickById(noradId, { origin = 'user', center = true } = {}) {
+      const id = Number(noradId);
+      if (
+        !Number.isFinite(id) ||
+        !layerState._viewer ||
+        !layerState._catalog.has(id) ||
+        !layerState._points.has(id)
+      )
+        return false;
+      parts.tracking._cancelPendingTrackingRestore();
+      if (layerState._trackedNorad === id) {
+        if (center && !parts.tracking._trackedIsFollowed())
+          parts.tracking._centerTracked();
+        return true;
+      }
+      parts.tracking._trackSatellite(id, { origin, follow: false, center });
+      return layerState._trackedNorad === id;
+    },
+
+    /**
      * Track a satellite by NORAD id (camera follow + orbit path + highlight),
      * same path as clicking its point.
      * @param {string|number} noradId NORAD catalog number.
@@ -532,12 +567,15 @@ export function createControls({ state: layerState, services, parts, source }) {
     },
 
     /**
-     * Stop tracking the currently tracked satellite (no-op if none).
+     * Stop tracking the currently tracked satellite (no-op if none). With
+     * `globeView` (a person letting go of it), a camera that was following
+     * it flies to the globe view over its ground point.
+     * @param {{origin?: string, globeView?: boolean}} [options]
      * @returns {boolean} Always true.
      */
-    stopTracking({ origin = 'programmatic' } = {}) {
+    stopTracking({ origin = 'programmatic', globeView = false } = {}) {
       parts.tracking._cancelPendingTrackingRestore();
-      parts.tracking._clearTracking(false, { origin });
+      parts.tracking._clearTracking(false, { origin, globeView });
       return true;
     },
 
@@ -626,12 +664,10 @@ export function createControls({ state: layerState, services, parts, source }) {
         for (const noradId of layerState._orbitPaths.keys())
           parts.rendering._setOrbitPathShown(
             noradId,
-            noradId === ISS_NORAD
-              ? _issOrbitVisible()
-              : satelliteVisualsVisible(
-                  layerState._enabled,
-                  layerState._params.showOrbits,
-                ),
+            satelliteVisualsVisible(
+              layerState._enabled,
+              layerState._params.showOrbits,
+            ),
           );
         parts.labels._syncIssOverlay();
       }
@@ -693,8 +729,10 @@ export function createControls({ state: layerState, services, parts, source }) {
 
     /**
      * Layer-row sub-controls (DataLayerManager row-controls contract): one
-     * toggle chip per satellite class (src/layers/satellites/classes.js), and a legend
-     * of the classes on screen so the point colours are learnable.
+     * toggle chip per satellite class (src/layers/satellites/classes.js). A
+     * class that is on carries its point colour (`swatch`) and, once any of
+     * it is loaded, its count, so the point colours are learnable; a class
+     * that is off carries only its name.
      *
      * Chips are stateless — each declares the params to apply and the manager
      * owns the write, so the Space Missions snapshot/restore path (which drives
@@ -704,60 +742,41 @@ export function createControls({ state: layerState, services, parts, source }) {
      * STARLINK is the dense catalog (chip id `catalog`) and reports the dense
      * LOAD state, not the param: the param flips synchronously while the shell
      * takes seconds to arrive and frequently 502s, so ACTIVE means "Starlink
-     * points are on screen" and nothing less. The legend tally is cached
+     * points are on screen" and nothing less. The class tally is cached
      * against the catalog revision. While SATCAT is stale or unavailable the
      * info line says the classes may lag (see `classEvidenceNotice`).
-     * @returns {{ chips: Array<object>, legend: Array<object>, info: string,
-     *   infoTitle: string }} Row controls.
+     * @returns {{ chips: Array<object>, info: string, infoTitle: string }}
+     *   Row controls.
      */
     getRowControls() {
       // A dependency owner (Space Missions) borrows this layer for TLE lookup
-      // with showPoints:false. Nothing is rendered, so a legend would describe an
+      // with showPoints:false. Nothing is rendered, so a count would describe an
       // empty sky and a chip write would be silently reverted by that owner's
       // restore. Surrender the row rather than lie about it.
-      if (!layerState._params.showPoints) return { chips: [], legend: [] };
+      if (!layerState._params.showPoints) return { chips: [] };
 
       const classes = _classes();
-      const chips = SATELLITE_CLASS_IDS.map((id) =>
-        id === 'starlink'
-          ? _starlinkChip()
-          : {
-              id: `class-${id}`,
-              label: t(SATELLITE_CLASS_DISPLAY[id].label),
-              active: classes[id] === true,
-              state: classes[id] === true ? 'active' : 'idle',
-              title: t(SATELLITE_CLASS_DISPLAY[id].blurb),
-              params: { classes: { [id]: classes[id] !== true } },
-            },
-      );
       const counts = _classTally();
-      const legend = [];
-      for (const id of SATELLITE_CLASS_IDS) {
-        const shown =
+      const chips = SATELLITE_CLASS_IDS.map((id) => {
+        const chip =
           id === 'starlink'
-            ? layerState._params.catalog === 'dense'
-            : classes[id] === true;
-        if (!shown || !(counts[id] > 0)) continue;
-        legend.push({
-          klass: id,
-          label: t(SATELLITE_CLASS_DISPLAY[id].label),
-          color: SATELLITE_CLASS_DISPLAY[id].color,
-          blurb: t(SATELLITE_CLASS_DISPLAY[id].blurb),
-          count: counts[id],
-        });
-      }
-      return { chips, legend, ...classEvidenceNotice() };
-    },
-
-    /**
-     * Install the manager's "row controls changed" callback. The dense load is
-     * asynchronous, so completion and failure have to push a re-render — nothing
-     * else would repaint this row before the 5-minute catalog refresh.
-     * @param {(() => void)|null} listener Callback, or null to detach.
-     */
-    setRowControlsListener(listener) {
-      layerState._rowControlsListener =
-        typeof listener === 'function' ? listener : null;
+            ? _starlinkChip()
+            : {
+                id: `class-${id}`,
+                label: t(SATELLITE_CLASS_DISPLAY[id].label),
+                active: classes[id] === true,
+                state: classes[id] === true ? 'active' : 'idle',
+                title: t(SATELLITE_CLASS_DISPLAY[id].blurb),
+                params: { classes: { [id]: classes[id] !== true } },
+              };
+        // The colour key and count ride on a class that is on; an off
+        // class is its name alone.
+        if (!chip.active) return chip;
+        chip.swatch = SATELLITE_CLASS_DISPLAY[id].color;
+        if (counts[id] > 0) chip.count = counts[id];
+        return chip;
+      });
+      return { chips, ...classEvidenceNotice() };
     },
 
     getStats() {
@@ -788,8 +807,6 @@ export function createControls({ state: layerState, services, parts, source }) {
     _classTally,
     _classVisible,
     _applyClassVisibility,
-    _issOrbitVisible,
-    _syncIssOrbit,
     satelliteVisualsVisible,
     satelliteCatalogModeChanged,
     methods,

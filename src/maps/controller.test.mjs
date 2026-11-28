@@ -139,6 +139,36 @@ test('an additional imagery source needs no controller branch and owns its cache
   assert.equal(destroys, 1);
 });
 
+test('a stack with no imagery (the plain globe) shows the globe with no imagery layer', async () => {
+  const terrain = {
+    id: 'keyless',
+    create: async () => ({ provider: { id: 'terrain' } }),
+  };
+  const registry = {
+    defaultId: 'sat',
+    sources: [
+      {
+        descriptor: descriptor('sat'),
+        imagery: async () => ({ id: 'sat' }),
+        terrain,
+      },
+      { descriptor: descriptor('none'), imagery: async () => null, terrain },
+    ],
+  };
+  const env = fixture(registry);
+  await env.controller.setStack('sat');
+  assert.equal(env.imagery.length, 1);
+  await env.controller.setStack('none');
+  assert.equal(env.controller.getActiveId(), 'none');
+  assert.equal(env.imagery.length, 0, 'the plain globe has no imagery layer');
+  assert.equal(env.viewer.scene.globe.show, true);
+  await env.controller.setStack('none');
+  assert.equal(env.imagery.length, 0);
+  await env.controller.setStack('sat');
+  assert.equal(env.imagery.length, 1);
+  env.controller.destroy();
+});
+
 test('repeated Esri shot handoffs retain imagery and keep tile fallback live', async () => {
   const env = publicFixture();
   await env.controller.setStack('esri-imagery');
@@ -276,10 +306,8 @@ test('Esri construction fallback reports and attributes the source actually rend
 test('one Esri tile failure stays put, two fall back, and stale errors cannot replace a selection', async () => {
   const env = publicFixture();
   await env.controller.setStack('esri-imagery');
-  assert.deepEqual(
-    [...env.credits],
-    [{ text: 'Powered by Esri', href: 'https://www.esri.com', inline: true }],
-  );
+  // Esri is credited once, by its imagery layer; the source adds none.
+  assert.equal(env.credits.size, 0);
   const errorEvent = env.providers.get('esri-imagery').errorEvent;
   errorEvent.raise();
   await settle();

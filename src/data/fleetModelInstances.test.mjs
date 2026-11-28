@@ -7,10 +7,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import * as Cesium from 'cesium';
 import {
   createFleetModelLayer,
   fleetAxisScale,
   fleetColor,
+  fleetModelTilt,
   FLEET_HEADING_OFFSET_DEG,
 } from './fleetModelInstances.js';
 import {
@@ -19,6 +21,7 @@ import {
   vesselModelSpec,
 } from './fleetModels.js';
 import { fetchPublicFile } from '../testSupport/fleetGlb.mjs';
+import { FLEET_MODEL_POLICY } from '../layers/flights/policy.js';
 import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
 import { eastNorthUp } from '../geo/frames.js';
 import { fromDegrees, toLonLatH } from '../geo/ellipsoid.js';
@@ -29,15 +32,11 @@ console.info = () => {};
 const set = await loadFleetModelSet({ fetchImpl: fetchPublicFile });
 console.info = realInfo;
 
+// The layers' own policy (3 km add, about 3.6 km keep), with small caps.
 const POLICY = Object.freeze({
-  altitudeCeilingM: 800_000,
-  minimumPixelSize: 16,
+  ...FLEET_MODEL_POLICY,
   cap: 2,
   capAll: 4,
-  addM: 5_000,
-  addAllM: 20_000,
-  keepM: 6_000,
-  keepAllM: 24_000,
   intervalMs: 80,
 });
 
@@ -117,7 +116,7 @@ test('the icon stays the visual until the model is ready; only the nearest are d
   );
   const near = models.items.get('near');
   assert.equal(near.scale, spec.scale, 'drawn life size');
-  assert.equal(near.minPixelSize, POLICY.minimumPixelSize);
+  assert.equal(near.minPixelSize ?? 0, 0, 'at its true size: no pixel floor');
   assert.equal(near.meta, 'near', 'picked as its vehicle');
   assert.equal(near.show, false, 'hidden until ready');
 
@@ -156,6 +155,38 @@ test('the icon stays the visual until the model is ready; only the nearest are d
   for (const item of items.values()) assert.equal(item.modelOwnsVisual, false);
   layer.destroy();
   assert.equal(models.disposed, true);
+});
+
+test('vehicles draw as models within 3 km in either mode, and keep them to about 3.6 km', () => {
+  // The camera 1 km up: a vehicle `metres` east is sqrt(1 km² + metres²) away.
+  const at = (km) => Math.sqrt(km * km - 1) * 1_000;
+  for (const mode of ['proximity', 'all']) {
+    const { viewer, draw } = fakeViewer();
+    const layer = createFleetModelLayer({
+      viewer,
+      display: () => ({ models3d: true, models3dMode: mode }),
+      policy: POLICY,
+    });
+    const spec = transitModelSpec(set, { mode: 'tram' });
+    const items = new Map([
+      ['in', itemAt(at(2.9), spec, { pickId: 'in' })],
+      ['out', itemAt(at(3.1), spec, { pickId: 'out' })],
+    ]);
+    layer.frame(items, 0);
+    const models = modelSet(draw);
+    assert.deepEqual(
+      [...models.items.keys()],
+      ['in'],
+      `${mode}: 2.9 km, not 3.1 km`,
+    );
+    items.set('in', itemAt(at(3.5), spec, { pickId: 'in' }));
+    layer.frame(items, 100);
+    assert.ok(models.items.has('in'), `${mode}: kept at 3.5 km`);
+    items.set('in', itemAt(at(3.7), spec, { pickId: 'in' }));
+    layer.frame(items, 200);
+    assert.equal(models.items.size, 0, `${mode}: released at 3.7 km`);
+    layer.destroy();
+  }
 });
 
 test('models stay off above the altitude ceiling', () => {
@@ -297,13 +328,14 @@ test('Vessels, Transit and Rail draw fleet models under the shared 3D toggle', (
 });
 
 /** A layer whose models are all ready as soon as they are written. */
-function readyLayer({ display, waterline = false } = {}) {
+function readyLayer({ display, waterline = false, seaSurface = null } = {}) {
   const { viewer, draw } = fakeViewer();
   const layer = createFleetModelLayer({
     viewer,
     display: () => display,
     policy: POLICY,
     waterline,
+    seaSurface,
   });
   const frame = (items, nowMs) => {
     layer.frame(items, nowMs);
@@ -463,11 +495,127 @@ test('a vehicle drawn as its model keeps its card and its detection entry', () =
   );
   assert.match(
     read('src/layers/vessels/queries.js'),
-    /if \(!visual\.visible\) continue;/,
+    /if \(!visual\.visible\) return null;/,
   );
   assert.match(
     read('src/layers/transit/rendering.js'),
     /entry\.mode === 'unknown'/,
     'a vehicle of unknown mode keeps its icon',
   );
+});
+
+test("a tilt lays a vessel's deck on the sea surface's slope as the draw contract turns it", () => {
+  const RAD = Math.PI / 180;
+  const origin = Cesium.Cartesian3.fromDegrees(-122.5, 37.8, 0);
+  const toLocal = Cesium.Matrix4.inverseTransformation(
+    Cesium.Transforms.eastNorthUpToFixedFrame(origin),
+    new Cesium.Matrix4(),
+  );
+  for (const heading of [0, 37, 90, 145, 200, 300])
+    for (const slope of [
+      { east: 0.1, north: 0 },
+      { east: 0, north: 0.1 },
+      { east: -0.07, north: 0.05 },
+      { east: 0.5, north: 0.5 },
+      { east: -1, north: 0.8 },
+    ]) {
+      const tilt = fleetModelTilt(heading, slope);
+      // As the Cesium draw port turns a model (drawModels.js matrixOf).
+      const frame = Cesium.Transforms.headingPitchRollToFixedFrame(
+        origin,
+        new Cesium.HeadingPitchRoll(
+          (heading + FLEET_HEADING_OFFSET_DEG) * RAD,
+          tilt.pitch,
+          tilt.roll,
+        ),
+      );
+      const deckUp = Cesium.Matrix4.multiplyByPointAsVector(
+        toLocal,
+        Cesium.Matrix4.multiplyByPointAsVector(
+          frame,
+          Cesium.Cartesian3.UNIT_Z,
+          new Cesium.Cartesian3(),
+        ),
+        new Cesium.Cartesian3(),
+      );
+      const surfaceUp = Cesium.Cartesian3.normalize(
+        new Cesium.Cartesian3(-slope.east, -slope.north, 1),
+        new Cesium.Cartesian3(),
+      );
+      const degrees = Cesium.Cartesian3.angleBetween(deckUp, surfaceUp) / RAD;
+      assert.ok(
+        degrees < 1e-6,
+        `heading ${heading}, ${JSON.stringify(slope)}: ${degrees}°`,
+      );
+    }
+  assert.deepEqual(fleetModelTilt(90, null), { pitch: 0, roll: 0 });
+  assert.deepEqual(fleetModelTilt(90, { east: NaN, north: 0 }), {
+    pitch: 0,
+    roll: 0,
+  });
+});
+
+test('models float on a sea surface: raised by its height, tilted by its slope', () => {
+  let wave = { heightM: 1.25, slope: { east: 0.05, north: -0.02 } };
+  const asked = [];
+  let surfaceFrames = 0;
+  const { layer, frame } = readyLayer({
+    display: { models3d: true },
+    waterline: true,
+    seaSurface: () => {
+      surfaceFrames += 1;
+      return (lon, lat) => {
+        asked.push([lon, lat]);
+        return wave;
+      };
+    },
+  });
+  const ship = vesselModelSpec(set, { type: '70', length: 200, beam: 32 });
+  const item = itemAt(10, ship, { pickId: 's', headingDeg: 40 });
+  const items = new Map([['s', item]]);
+  const models = frame(items, 0);
+  const placed = models.items.get('s');
+  const rise = toLonLatH(placed.pos).height - toLonLatH(item.position).height;
+  assert.ok(Math.abs(rise - (ship.elevationM || 0) - 1.25) < 1e-3, `${rise}`);
+  const tilt = fleetModelTilt(40, wave.slope);
+  assert.equal(placed.orientation.pitch, tilt.pitch);
+  assert.equal(placed.orientation.roll, tilt.roll);
+  assert.ok(placed.orientation.pitch !== 0 && placed.orientation.roll !== 0);
+  const at = toLonLatH(item.position);
+  assert.ok(Math.abs(asked.at(-1)[0] - at.lon) < 1e-9);
+  assert.ok(Math.abs(asked.at(-1)[1] - at.lat) < 1e-9);
+  assert.ok(surfaceFrames >= 2, 'asked once a frame');
+
+  // A still surface writes nothing more; a moving one is written.
+  const writes = models.writes;
+  layer.frame(items, 2);
+  assert.equal(models.writes, writes);
+  wave = { heightM: 0.5, slope: { east: -0.03, north: 0.01 } };
+  layer.frame(items, 3);
+  assert.equal(models.writes, writes + 1);
+
+  // Where the sea is flat the model stands level on its point.
+  wave = null;
+  layer.frame(items, 4);
+  const level = models.items.get('s');
+  assert.equal(level.orientation.pitch, 0);
+  assert.equal(level.orientation.roll, 0);
+  const flat = toLonLatH(level.pos).height - toLonLatH(item.position).height;
+  assert.ok(Math.abs(flat - (ship.elevationM || 0)) < 1e-3, `${flat}`);
+  layer.destroy();
+});
+
+test('without a sea surface models stand level, as before', () => {
+  const { layer, frame } = readyLayer({
+    display: { models3d: true },
+    waterline: true,
+  });
+  const ship = vesselModelSpec(set, { type: '70', length: 200, beam: 32 });
+  const item = itemAt(10, ship, { pickId: 's' });
+  const placed = frame(new Map([['s', item]]), 0).items.get('s');
+  assert.equal(placed.orientation.pitch, 0);
+  assert.equal(placed.orientation.roll, 0);
+  const rise = toLonLatH(placed.pos).height - toLonLatH(item.position).height;
+  assert.ok(Math.abs(rise - (ship.elevationM || 0)) < 1e-3);
+  layer.destroy();
 });

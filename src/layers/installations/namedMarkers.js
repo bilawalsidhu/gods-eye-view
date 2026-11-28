@@ -221,6 +221,11 @@ export function createNamedMarkers({ state, services, parts, overlayHost }) {
           // What `visit` hands out: the marker's id, position and whether
           // it is on this side of the horizon.
           point: { id: { installationId: record.id }, position, show: false },
+          // Not an interactive overlay entry: those are cards that take every
+          // click from what is drawn under them, and an aircraft or vessel
+          // under a base's label must stay selectable. The label box still
+          // finds the site through its painted box (labelAt), which the
+          // layer's click claim reads where nothing else is drawn.
           entry: createInfrastructureOverlayEntry({
             id: record.id,
             source: LAYER_ID,
@@ -273,6 +278,32 @@ export function createNamedMarkers({ state, services, parts, overlayHost }) {
         const marker = ordered[i];
         visitor(marker.recordId, marker.point);
       }
+    },
+    /**
+     * The site whose label box the shared overlay painted at a canvas
+     * position in its last frame, or null: what a click lands on from far
+     * out, where the dot is 7 px.
+     * @param {{x: number, y: number}|null|undefined} position Canvas CSS px.
+     * @returns {string|null} The installation id.
+     */
+    labelAt(position) {
+      if (!state.enabled) return null;
+      const x = position?.x;
+      const y = position?.y;
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+      for (let i = ordered.length - 1; i >= 0; i--) {
+        const { recordId } = ordered[i];
+        const box = overlayHost.paintRect?.(LAYER_ID, recordId);
+        if (
+          box &&
+          x >= box.x &&
+          x <= box.x + box.w &&
+          y >= box.y &&
+          y <= box.y + box.h
+        )
+          return recordId;
+      }
+      return null;
     },
     refresh,
     enable,

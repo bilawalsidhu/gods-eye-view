@@ -134,7 +134,7 @@ export const ACTION_DESCRIPTIONS = {
   },
   set_panel_open: {
     description:
-      'Visual Presets/styles/filters=control-panel; Scenes/saved scenes=scene-panel; Voice Settings=voice-settings; voice control/Preview=voice-preview; Provider Settings/API keys=provider-settings. Voice panels exit Cockpit directly.',
+      'Visual/Visual Presets/styles/filters/map sources=pp-toggles; Scenes/saved scenes=scene-panel; Voice Settings=voice-settings; voice control/Preview=voice-preview; Provider Settings/API keys=provider-settings. Voice panels exit Cockpit directly.',
     $position: 1,
   },
   set_voice_inactivity_timeout: {
@@ -225,7 +225,7 @@ export const ACTION_DESCRIPTIONS = {
   },
   set_cyber_sonar: {
     description:
-      'Adjust Cyber-only sonar controls. Requires the Cyber HUD layout; never switches layout or HUD visibility. Omitted fields stay unchanged. Returns actual settings and separate map/contact sweep activity. A saved setting does not mean the effect is active.',
+      'Adjust the Sonar visual style, which works over any HUD layout. Never switches layout or HUD visibility. Omitted fields stay unchanged. Returns actual settings and separate map/contact sweep activity. A saved setting does not mean the effect is active.',
     $position: 1,
     parameters: {
       properties: {

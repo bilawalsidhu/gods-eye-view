@@ -28,6 +28,8 @@ export function createState({ services }) {
   /** Stable lightweight records reused by the detection overlay between updates. */
 
   state._detectionObjects = new Map();
+  /** The array getDetectableObjects fills and returns on every call. */
+  state._detectionResult = [];
 
   // noradId → { base, gmstAtBake, item }, owned by the rendering part: base
   // is the ring baked in ECEF at gmstAtBake; the preRender tick turns it to
@@ -80,6 +82,11 @@ export function createState({ services }) {
   // Click-to-track state
 
   state._trackedNorad = null;
+  /**
+   * The station the tracked satellite is docked to, by both orbits compared
+   * when tracking began (tracking.js): its NORAD number, or null.
+   */
+  state._trackedDockedToStation = null;
 
   state._pendingTrackingRestore = null;
 
@@ -157,7 +164,8 @@ export function createState({ services }) {
 
   /** @type {(() => void)|null} Manager callback: "this layer's row controls changed". */
 
-  state._rowControlsListener = null;
+  /** @type {{ invalidate: () => void } | null} the panels' handle, from init */
+  state._panel = null;
 
   /** @type {Set<number>} NORAD ids co-located with the tracked satellite. */
 

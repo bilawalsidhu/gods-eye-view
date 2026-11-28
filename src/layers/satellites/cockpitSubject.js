@@ -9,14 +9,15 @@ import {
   tleEpochMs,
 } from './classes.js';
 import { ISS_NORAD } from './policy.js';
+import { trackedStation } from './stationModels.js';
 
 /** The layer id a satellite subject carries through Cockpit events and state. */
 export const SATELLITE_COCKPIT_LAYER_ID = 'satellites';
 
 /**
- * While the Cockpit rides a satellite, every other orbit ring (the ISS ring
- * included) draws at this fraction of its normal alpha, so the rings stay
- * legible without competing with the nadir picture.
+ * While the Cockpit rides a satellite, every other orbit ring draws at this
+ * fraction of its normal alpha, so the rings stay legible without competing
+ * with the nadir picture.
  */
 export const COCKPIT_ORBIT_DIM_FACTOR = 0.3;
 
@@ -186,9 +187,7 @@ export function createCockpitSubject({ state: layerState, parts }) {
     const hiddenPath = layerState._cockpitHiddenPath;
     if (hiddenPath !== null && (!held || hiddenPath !== tracked)) {
       const hasPath = layerState._orbitPaths.has(hiddenPath);
-      // The ISS's ring also follows its class (and its tracking).
-      if (hasPath && hiddenPath === ISS_NORAD) parts.controls._syncIssOrbit();
-      else if (hasPath)
+      if (hasPath)
         parts.rendering._setOrbitPathShown(
           hiddenPath,
           parts.controls.satelliteVisualsVisible(
@@ -259,6 +258,29 @@ export function createCockpitSubject({ state: layerState, parts }) {
       out.y = y;
       out.z = z;
       return out;
+    },
+
+    /**
+     * Where the Cockpit camera sits and looks when the subject is the
+     * station: a view from a point on the ISS model (issMounts.js) in place
+     * of the straight-down picture. The station offers several (from Nauka,
+     * from Zarya, from a docked vehicle), whichever of its entries is ridden.
+     * @param {string|null} [key] The view asked for; the first on offer when
+     *   it is not given or not on offer.
+     * @returns {{position: object, direction: object, up: object,
+     *   right: object, key: string, label: string,
+     *   views: Array<{key: string, label: string}>}|null} Earth-fixed
+     *   `{x, y, z}` vectors, the view shown and the views on offer; null for
+     *   any other satellite, outside the Cockpit, or until the model has
+     *   loaded.
+     */
+    getCockpitMount(key = null) {
+      if (!_cockpitHeld()) return null;
+      // The station the subject belongs to; a station without views on its
+      // model (Tiangong) answers null, and the Cockpit keeps the nadir picture.
+      return (
+        trackedStation(layerState, parts)?.model?._cockpitMount?.(key) ?? null
+      );
     },
 
     /**

@@ -36,7 +36,7 @@ import {
   displayShotTitle,
   getSceneAppendRecipeById,
 } from './recipes.js';
-import { sceneLayerPlan, sceneRequiresContextModeExit } from './scenePolicy.js';
+import { sceneLayerPlan } from './scenePolicy.js';
 import { t, tn, msg, onLocaleChange } from '../i18n/index.js';
 import { createSceneDataPacks } from './dataPacks/controller.js';
 import { createSceneInteractions } from './interactions.js';
@@ -492,6 +492,8 @@ export class SceneDirector {
         download: () => this.downloadLastRunMetadata(),
         load: (sceneId, shotId) => this.loadShot(sceneId, shotId),
         deleteShot: (sceneId, shotId) => this.deleteShot(sceneId, shotId),
+        moveShot: (sceneId, shotId, index) =>
+          this.moveShot(sceneId, shotId, index),
       },
     });
   }
@@ -709,13 +711,14 @@ export class SceneDirector {
   }
 
   /**
-   * Snapshot the current enabled/params state of every registered data layer.
+   * Snapshot the current enabled/params state of every registered data layer,
+   * with the params a layer keeps for scene shots.
    * @returns {Object.<string, { enabled: boolean, params?: Object }>}
    */
   _captureLayerStates() {
     const layers = {};
     for (const layer of this.dataManager.getAll()) {
-      const params = this.dataManager.getLayerParams(layer.id);
+      const params = this.dataManager.getLayerParams(layer.id, { scene: true });
       layers[layer.id] = {
         enabled: !!layer.enabled,
         ...(params ? { params } : {}),
@@ -1223,6 +1226,31 @@ export class SceneDirector {
     this._saveProject();
     this._shotOutcome('shot-deleted', scene, shot, index);
     if (inStories) this._publish({ type: 'stories-changed' });
+  }
+
+  /**
+   * Move a shot to another place in its scene's playback order, the shots
+   * between shifting over (the shot list's up and down buttons swap it with
+   * its neighbour). Not while the scene plays.
+   * @param {string} sceneId
+   * @param {string} shotId
+   * @param {number} index Its new place, kept within the scene's shots.
+   * @returns {boolean} Whether it moved.
+   */
+  moveShot(sceneId, shotId, index) {
+    if (this._running || !Number.isInteger(index)) return false;
+    const { scene, shot } = this._getShot(sceneId, shotId);
+    if (!scene || !shot) return false;
+    const from = scene.shots.indexOf(shot);
+    const to = Math.max(0, Math.min(scene.shots.length - 1, index));
+    if (from === to) return false;
+    const shots = scene.shots.filter((item) => item !== shot);
+    shots.splice(to, 0, shot);
+    scene.shots = shots;
+    this._saveProject();
+    this._shotOutcome('shot-moved', scene, shot, to);
+    if (scene.stories) this._publish({ type: 'stories-changed' });
+    return true;
   }
 
   /**
@@ -1792,7 +1820,7 @@ export class SceneDirector {
       const layerResult = await this._applyLayerStates(
         staleStates,
         this._loadToken(generation, controller.signal, seekGeneration),
-        { stopOnRefusal: true, exitContextMode: false },
+        { stopOnRefusal: true },
       );
       if (this._loadAbort === controller) this._loadAbort = null;
       if (this._seekAbort === controller) this._seekAbort = null;
@@ -1941,7 +1969,6 @@ export class SceneDirector {
   _setCameraView(cameraState) {
     const camera = findCamera(this.viewer);
     if (!cameraState || !camera) return false;
-    this.styleManager?.clearSearchedLocation?.();
     camera.cancelFlight();
     camera.setView({
       destination: {
@@ -2605,13 +2632,9 @@ export class SceneDirector {
    * Only layers the shot declares are touched — see src/scenes/scenePolicy.js
    * for why undeclared layers are left alone.
    *
-   * Two things this pass owes the operator:
-   *  - An isolating Context mode is left FIRST. Space Missions refuses every
-   *    unrelated enable, so a shot applied inside it composes a scene nobody
-   *    authored (see _exitIsolatingContextMode).
-   *  - A refused layer is reported. setEnabled() answers false when a guard
-   *    vetoes the transition; swallowing that answer is how playback came to
-   *    claim success over a scene it never assembled.
+   * A refused layer is reported. setEnabled() answers false when a guard
+   * vetoes the transition; swallowing that answer is how playback came to
+   * claim success over a scene it never assembled.
    *
    * The token's signal is handed to every transition, so a stop or a newer
    * request cancels the layer that is CURRENTLY moving rather than only the
@@ -2632,21 +2655,12 @@ export class SceneDirector {
   async _applyLayerStates(
     targetStates,
     token = null,
-    { stopOnRefusal = false, exitContextMode = true } = {},
+    { stopOnRefusal = false } = {},
   ) {
     const applied = [];
     const refused = [];
     const abort = () => ({ applied, refused, cancelled: true });
     if (token?.cancelled) return abort();
-
-    // Deliberately NOT aborted: leaving an isolating mode IS the restore to
-    // the operator's pre-mode state, which is exactly where a stopped scene
-    // should come to rest. Tearing that transaction in half would strand
-    // Context, so it completes and cancellation is honoured immediately after.
-    if (exitContextMode) {
-      await this._exitIsolatingContextMode();
-      if (token?.cancelled) return abort();
-    }
 
     const signal = token?.signal;
     const registered = new Set(
@@ -2776,53 +2790,6 @@ export class SceneDirector {
   }
 
   /**
-   * Leave a Context mode that isolates the globe, before a shot's layers land.
-   *
-   * Space Missions is the shipped case. It is a destructive-exclusive mode: a
-   * guard refuses every enable outside its own replay bundle, so a recipe that
-   * declares flights/satellites/earthquakes/traffic gets all four refused —
-   * and Orbital Watch, whose satellites the guard does permit, would still
-   * play over the mode's rocket-launches replay it never declared. Either way
-   * the shot is not the composition it describes.
-   *
-   * The old full-registry reconcile dismantled the mode by accident, as part
-   * of forcing every undeclared layer off. Declaring the exit is the honest
-   * version of that: the decision is read off the policy guard itself, so a
-   * future isolating mode is covered without being named here.
-   *
-   * @returns {Promise<boolean>} Whether a mode was exited.
-   */
-  async _exitIsolatingContextMode() {
-    // Older/headless style managers may predate the Context facade.
-    if (typeof this.styleManager?.getContextModeState !== 'function')
-      return false;
-    if (typeof this.styleManager?.setContextMode !== 'function') return false;
-
-    const state = this.styleManager.getContextModeState() || {};
-    // A mode still being entered already owns the guard, so it counts.
-    const mode = state.entering || state.mode || null;
-    if (!sceneRequiresContextModeExit(mode)) return false;
-
-    const result = await this.styleManager.setContextMode('off');
-    if (result && result.ok === false) {
-      console.warn(
-        `[Scenes] Could not exit ${mode}:`,
-        result.error || 'unknown reason',
-      );
-      this._updateStatus(() =>
-        t('Could not exit {mode} — scene layers may be refused', { mode }),
-      );
-      this._logEvent('context_mode_exit_failed', {
-        mode,
-        error: result.error || null,
-      });
-      return false;
-    }
-    this._logEvent('context_mode_exited', { mode });
-    return true;
-  }
-
-  /**
    * Use the authored sampler only for explicit moves; ordinary shots keep their
    * existing flights. A resumed shot (`fromProgress` > 0) continues along the
    * path a seek samples, so it goes on from exactly where the seek framed it.
@@ -2891,11 +2858,6 @@ export class SceneDirector {
    */
   async _flyCamera(cameraState, durationSec, token) {
     if (!cameraState || token.cancelled) return;
-
-    // Scene playback drives the camera itself rather than through the shared
-    // navigation seam, so the LOCATION readout would otherwise keep reporting
-    // a free-text search the shot has already flown away from.
-    this.styleManager?.clearSearchedLocation?.();
 
     const duration = Math.max(
       0.2,

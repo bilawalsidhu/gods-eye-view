@@ -29,11 +29,16 @@
  * short stable strings ('flights', 'traffic', 'style-anim', …) so the
  * diagnostics read like a story.
  *
- * Frame rate: while the loop is held it draws at the display's own refresh
- * rate; while nothing holds it, the governor caps it at IDLE_FRAME_RATE,
- * because Cesium still ticks the clock, data sources and every
- * pre/post-update listener once per animation frame even when it skips the
- * draw. The frame port says when its first hold is taken and its last
+ * Frame rate: a hold may say the most frames a second it needs
+ * (`holdContinuousRender(owner, { maxFps })`); while held the loop draws at
+ * the highest rate its holders asked for, and at the display's own refresh
+ * rate as soon as one holder asked for none. Moving layers hold through
+ * their pace (renderPace.js) at 15 to 30; a followed target counts as
+ * FOLLOW_FRAME_RATE unless a pointer or the wheel is steering the camera.
+ * While nothing holds it, the loop ticks at the display's rate too, drawing
+ * only what is asked for. Every rate is capped by the frame rate the user
+ * sets in the Display panel (`setFrameRateCap`, DEFAULT_FRAME_RATE until
+ * then; 0, unlimited, leaves the display's). The frame port says when its first hold is taken and its last
  * released (`onHeldChange`), the renderer's own holds included (animated
  * visual styles), so those draw at the full rate too. Camera movement takes
  * a 'camera' hold from `moveStart` to `moveEnd`, so drags and flights run at
@@ -42,11 +47,22 @@
  * The governor is O(1) passive: no per-frame work of its own, ever.
  */
 
+import { PACE_MAX_HZ } from './renderPace.js';
+
 /** @typedef {import('./render/contract/frame').FramePort} FramePort */
 /** @typedef {import('./render/contract/camera').CameraPort} CameraPort */
 
-/** Frames a second the loop ticks while nothing moves. */
-export const IDLE_FRAME_RATE = 60;
+/** The most frames a second drawn until the user sets their own (the Display
+ *  panel's Frame rate, ./viewFrameRate.js). */
+export const DEFAULT_FRAME_RATE = 60;
+/** The most frames a second drawn, whatever moves; 0: the display's rate. */
+let _frameRateCap = DEFAULT_FRAME_RATE;
+/**
+ * Frames a second for a camera that only rides along with what it follows:
+ * the most a moving layer draws (renderPace.js), leaving room in the frame
+ * for everything else. The person steering it still gets the display's rate.
+ */
+export const FOLLOW_FRAME_RATE = PACE_MAX_HZ;
 
 let _frame = null;
 /** Owners holding, each with the frame port's release once installed. */
@@ -56,10 +72,131 @@ let _removeCameraListeners = null;
 /** Stops hearing the installed port's holds. */
 let _offHeldChange = null;
 
-/** The loop's rate: the display's while held, IDLE_FRAME_RATE while not. */
-function applyRate(held) {
-  _frame?.setTargetFps(held ? 0 : IDLE_FRAME_RATE);
+/** The most frames a second each owner said its hold needs; none: the display's. */
+const _rateOf = new Map();
+/**
+ * Whether a pointer is down, or the wheel turned in the last moment: the
+ * person is steering the camera. Kept apart, so the wheel's moment ending
+ * never ends a drag.
+ */
+const _pointersDown = new Set();
+let _wheeling = false;
+let _steeringTimer = null;
+const steering = () => _pointersDown.size > 0 || _wheeling;
+
+/**
+ * The camera's own moves (a drag, a zoom, a flight) draw at the display's
+ * rate. A camera carried by what it follows needs only the follow rate,
+ * unless the person is steering it at the same time.
+ */
+function cameraRate() {
+  return !steering() && _holds.has('tracked-entity') ? FOLLOW_FRAME_RATE : 0;
 }
+
+/**
+ * The rate while held: the highest any holder asked for, and the display's
+ * (0) as soon as one holder asked for none. The renderer's own holds
+ * (animated styles) ask for none; a frame port with `onHoldsChange` says
+ * when one is taken or let go, and one without it is heard at the loop's
+ * first hold and last release only.
+ */
+function heldRate() {
+  let rate = 0;
+  for (const owner of _frame.diagnostics().holds) {
+    const asked = owner === 'camera' ? cameraRate() : _rateOf.get(owner);
+    if (!asked) return 0;
+    if (asked > rate) rate = asked;
+  }
+  return rate;
+}
+
+/** `rate` under the user's cap (0 for either: no limit from it). */
+function capped(rate) {
+  if (!_frameRateCap) return rate;
+  return rate > 0 ? Math.min(rate, _frameRateCap) : _frameRateCap;
+}
+
+/** The loop's rate: the holders' while held, the display's while not, both
+ *  under the user's cap. */
+function applyRate(held = (_frame?.diagnostics().holds.length ?? 0) > 0) {
+  _frame?.setTargetFps(capped(held ? heldRate() : 0));
+}
+
+/**
+ * The most frames a second the loop draws, whatever moves: the Display
+ * panel's Frame rate. 0 (or less, or not a number) is unlimited: the
+ * display's own rate.
+ * @param {number} fps
+ */
+export function setFrameRateCap(fps) {
+  const value = Number(fps);
+  _frameRateCap = Number.isFinite(value) && value > 0 ? value : 0;
+  applyRate();
+}
+
+/** The cap `setFrameRateCap` set; 0 is unlimited. */
+export function frameRateCap() {
+  return _frameRateCap;
+}
+
+/** Change the steering inputs, and the rate if steering changed. */
+function changeSteering(change) {
+  const was = steering();
+  change();
+  if (steering() !== was) applyRate();
+}
+
+/**
+ * Pointer and wheel input on the page: the person is steering the camera.
+ * A release the page never hears (the pointer let go over another window)
+ * ends when the page loses focus or is hidden.
+ */
+function watchSteering(target, { schedule, unschedule }) {
+  if (typeof target?.addEventListener !== 'function') return null;
+  // Every pointer down counts (a pinch is two), until it is let go.
+  const down = (event) =>
+    changeSteering(() => _pointersDown.add(event?.pointerId ?? 0));
+  const up = (event) =>
+    changeSteering(() => _pointersDown.delete(event?.pointerId ?? 0));
+  const allUp = () => changeSteering(() => _pointersDown.clear());
+  // The window's own blur, not an element's inside the page.
+  const blur = (event) => {
+    if (!event || event.target === target) allUp();
+  };
+  const wheel = () => {
+    changeSteering(() => (_wheeling = true));
+    if (_steeringTimer !== null) unschedule(_steeringTimer);
+    _steeringTimer = schedule(() => {
+      _steeringTimer = null;
+      changeSteering(() => (_wheeling = false));
+    }, 300);
+  };
+  const hidden = () => {
+    if (globalThis.document?.visibilityState === 'hidden') allUp();
+  };
+  const options = { passive: true, capture: true };
+  target.addEventListener('pointerdown', down, options);
+  target.addEventListener('pointerup', up, options);
+  target.addEventListener('pointercancel', up, options);
+  target.addEventListener('blur', blur, options);
+  target.addEventListener('wheel', wheel, options);
+  const doc = globalThis.document;
+  doc?.addEventListener?.('visibilitychange', hidden);
+  return () => {
+    target.removeEventListener('pointerdown', down, options);
+    target.removeEventListener('pointerup', up, options);
+    target.removeEventListener('pointercancel', up, options);
+    target.removeEventListener('blur', blur, options);
+    target.removeEventListener('wheel', wheel, options);
+    doc?.removeEventListener?.('visibilitychange', hidden);
+    if (_steeringTimer !== null) unschedule(_steeringTimer);
+    _steeringTimer = null;
+    _pointersDown.clear();
+    _wheeling = false;
+  };
+}
+/** Stops hearing the pointer and the wheel. */
+let _removeSteeringListeners = null;
 
 /** Debug trail of the most recent one-shot render requests (idle mode only). */
 const _recentRequests = [];
@@ -185,11 +322,21 @@ export function installRenderGovernor(
     if (_frame) releaseFrameHolds();
     _offHeldChange?.();
     _frame = frame;
-    _offHeldChange = frame.onHeldChange(applyRate);
+    const offHeld = frame.onHeldChange(applyRate);
+    const offHolds = frame.onHoldsChange?.(() => applyRate()) ?? null;
+    _offHeldChange = () => {
+      offHeld();
+      offHolds?.();
+    };
     applyRate(frame.diagnostics().holds.length > 0);
     for (const ownerId of _holds.keys()) holdOnFrame(ownerId);
   }
   _removeCameraListeners = watchCameraMotion(camera, { schedule, unschedule });
+  _removeSteeringListeners?.();
+  _removeSteeringListeners = watchSteering(globalThis.window, {
+    schedule,
+    unschedule,
+  });
 }
 
 function releaseFrameHolds() {
@@ -206,10 +353,15 @@ function releaseFrameHolds() {
  * @param {string} ownerId Short stable id, e.g. 'flights', 'traffic'.
  * @returns {void}
  */
-export function holdContinuousRender(ownerId) {
+export function holdContinuousRender(ownerId, { maxFps = 0 } = {}) {
   if (!ownerId) return;
+  if (maxFps > 0) _rateOf.set(ownerId, maxFps);
+  else _rateOf.delete(ownerId);
   if (!_holds.has(ownerId)) _holds.set(ownerId, null);
   holdOnFrame(ownerId);
+  // A second holder, or a new rate, changes the rate without changing
+  // whether the loop is held.
+  applyRate();
 }
 
 /**
@@ -223,7 +375,9 @@ export function releaseContinuousRender(ownerId) {
   if (!ownerId || !_holds.has(ownerId)) return;
   const release = _holds.get(ownerId);
   _holds.delete(ownerId);
+  _rateOf.delete(ownerId);
   release?.();
+  applyRate();
 }
 
 /**
@@ -262,21 +416,28 @@ export function uninstallRenderGovernor(frame) {
   if (!_frame || _frame !== frame) return;
   _removeCameraListeners?.();
   _removeCameraListeners = null;
+  _removeSteeringListeners?.();
+  _removeSteeringListeners = null;
   releaseFrameHolds();
   _offHeldChange?.();
   _offHeldChange = null;
   _frame = null;
   _holds.clear();
+  _rateOf.clear();
   _recentRequests.length = 0;
 }
 
 /** Test seam: reset module state between unit tests. */
 export function _resetRenderGovernorForTest() {
+  _frameRateCap = DEFAULT_FRAME_RATE;
   _removeCameraListeners?.();
   _removeCameraListeners = null;
+  _removeSteeringListeners?.();
+  _removeSteeringListeners = null;
   _offHeldChange?.();
   _offHeldChange = null;
   _frame = null;
   _holds.clear();
+  _rateOf.clear();
   _recentRequests.length = 0;
 }

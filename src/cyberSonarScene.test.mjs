@@ -45,7 +45,7 @@ test('frame sampler matches reference without per-contact settings access', () =
 });
 
 test('removed CSS mode cannot disable GPU contacts; unsupported renderers fail closed', () => {
-  const root = { dataset: { uiTheme: 'cyber' }, style: { setProperty() {} } };
+  const root = { dataset: { cyberSonar: 'on' }, style: { setProperty() {} } };
   const options = {
     root,
     body: { classList: { contains: () => false } },
@@ -97,7 +97,7 @@ function fixture({ modulation = true, lists = true } = {}) {
     document: globalThis.document,
     matchMedia: globalThis.matchMedia,
   };
-  const root = { dataset: { uiTheme: 'cyber', cyberSonar: 'on' } };
+  const root = { dataset: { cyberSonar: 'on' } };
   const status = { textContent: '' };
   const state = { cockpit: false, reducedMotion: false };
   globalThis.document = {
@@ -232,36 +232,47 @@ test('the sweep sets its sector on drawing ticks and at the cadence, and changes
     f.tick(false);
     assert.equal(f.sets.length, 4, 'a resize sets it at once');
     assert.deepEqual(f.sets[3].center, { x: 300, y: 400 });
-    f.root.dataset.cyberSonar = 'off';
+    f.root.dataset.cyberSonarOpacity = '50';
     f.tick(false);
-    assert.equal(f.sets[4].radius, 0, 'Sonar OFF rests every contact');
+    assert.equal(f.sets.length, 5, 'a setting change sets it at once');
+    assert.equal(
+      f.sets[4].floor,
+      0.5,
+      'while sweeping the floor is the opacity',
+    );
+    f.state.reducedMotion = true;
+    f.tick(false);
+    assert.equal(f.sets[5].radius, 0, 'reduced motion rests the sweep');
+    assert.equal(f.sets[5].floor, 0.5 + 0.5 * 0.46, 'at rest it lifts');
     clock += 1000;
     f.tick(true);
     f.tick(false);
-    assert.equal(f.sets.length, 5, 'at rest only changes set it');
-    f.root.dataset.cyberSonarOpacity = '50';
-    f.tick(false);
-    assert.equal(f.sets.length, 6);
-    assert.equal(f.sets[5].floor, 0.5 + 0.5 * 0.46);
+    assert.equal(f.sets.length, 6, 'at rest only changes set it');
+    f.state.reducedMotion = false;
     f.state.cockpit = true;
     f.tick(false);
-    assert.equal(f.sets[6], null, 'out of the map theme it clears');
+    assert.equal(f.sets[6], null, 'out of the map it clears');
     f.tick(true);
     assert.equal(f.sets.length, 7, 'cleared once');
     f.state.cockpit = false;
+    f.root.dataset.cyberSonar = 'off';
+    f.tick(false);
+    assert.equal(f.sets.length, 7, 'Sonar OFF leaves contacts untreated');
     f.root.dataset.cyberSonar = 'on';
-    f.state.reducedMotion = true;
     f.tick(false);
-    assert.equal(f.sets[7].radius, 0, 'reduced motion rests the sweep');
-    f.state.reducedMotion = false;
-    f.root.dataset.uiTheme = 'tactical';
+    assert.ok(f.sets[7]?.radius > 0, 'Sonar ON sweeps at once');
+    f.root.dataset.cyberSonar = 'off';
     f.tick(false);
-    assert.equal(f.sets[8], null, 'another HUD style clears it');
+    assert.equal(f.sets[8], null, 'Sonar OFF clears it');
     f.tick(true);
     assert.equal(f.sets.length, 9);
+    // The removed Cyber theme attribute alone does nothing.
     f.root.dataset.uiTheme = 'cyber';
     f.tick(false);
-    assert.ok(f.sets[9]?.radius > 0, 'back in Cyber it sweeps at once');
+    assert.equal(f.sets.length, 9);
+    f.root.dataset.cyberSonar = 'on';
+    f.tick(false);
+    assert.ok(f.sets[9]?.radius > 0, 'back on, it sweeps at once');
     assert.deepEqual(f.requests, [], 'the scene itself never asks for frames');
     dispose();
     assert.equal(f.sets[10], null, 'disposal clears it');

@@ -76,7 +76,6 @@ The `many` form is the `other` text with «de» after the number: «{count} de c
 | E/C Pacific (NHC/CPHC coverage)               | Pacífico Leste/Central (no «L/C»)                            |
 | weather (layer, card) / weather satellite     | clima / meteorologia, meteorológico                          |
 | FOG / cloud unknown                           | NEVOEIRO / nebulosidade desconhecida                         |
-| AQHI bands Low … Very High                    | Risco baixo … Risco muito alto                               |
 | radio station / broadcaster                   | estação de rádio / emissora                                  |
 | Oldies / World (radio tags)                   | Flashback / Músicas do mundo                                 |
 | radio genre tags agree with «música»          | Alternativa, Clássica, Eletrônica, Latina                    |
@@ -91,7 +90,6 @@ The `many` form is the `other` text with «de» after the number: «{count} de c
 | feather / fade                                | suavização / esmaecimento                                    |
 | detection overlay                             | sobreposição de detecção                                     |
 | pin (Draw tool) / box (Recent Imagery)        | marcador / área                                              |
-| Cyber (HUD layout, effect)                    | Ciber                                                        |
 | heading / course / altitude / ground speed    | rumo / curso (a ship's course: rumo) / altitude / velocidade solo (VELOC. SOLO) |
 | map heading / bearing (compass, north up)     | orientação (do mapa)                                         |
 | HDG / BRG / CRS / FOV / DEST / SPD / RANGE    | HDG / BRG / CRS / FOV / DEST / SPD / RANGE (unchanged)       |

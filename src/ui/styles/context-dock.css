@@ -17,14 +17,17 @@ body.context-docked #right-context-rail {
 }
 
 /* The map credits stay readable beside the column: their row ends short of
-   it. creditAttribution.test.mjs pins this. */
+   it. creditAttribution.test.mjs pins this. `.hud-minimal-active` is a
+   page-root class (src/ui/rail/rootClass.js). */
 body.context-docked:not(.ui-clean-view):not(.recording-mode) #cesium-credits,
 body.context-docked:not(.ui-clean-view):not(.recording-mode) #gev-credits,
-body.context-docked:not(.ui-clean-view):not(.recording-mode):has(
+body.context-docked:not(.ui-clean-view):not(.recording-mode):is(
+    .hud-minimal-active *,
     #intel-hud[data-variant='minimal'].active
   )
   #cesium-credits,
-body.context-docked:not(.ui-clean-view):not(.recording-mode):has(
+body.context-docked:not(.ui-clean-view):not(.recording-mode):is(
+    .hud-minimal-active *,
     #intel-hud[data-variant='minimal'].active
   )
   #gev-credits {
@@ -35,8 +38,10 @@ body.context-docked #right-context-rail > .gev-panel-rail {
   display: none;
 }
 
+/* The Bhote Koshi panel stays beside the expanded column while open so its
+   evidence controls remain accessible. */
 body.context-docked
-  #right-context-rail
+  #right-context-rail:not(.bhote-event-active)
   > :not(#global-context-panel):not(.gev-panel-rail) {
   display: none !important;
 }
@@ -97,14 +102,13 @@ body.mobile-shell .context-dock-btn {
 
 /* Context's own search field, under the header: narrows what the panel shows.
    Sized and framed like the tab bar beneath it. */
+/* A UiSearchField (search-field.css). */
 .context-search {
   position: sticky;
   top: 0;
   z-index: 2;
-  display: flex;
   flex: none;
   box-sizing: border-box;
-  align-items: center;
   gap: 8px;
   min-height: 34px;
   margin: 0 0 0.5rem;
@@ -132,15 +136,12 @@ body.mobile-shell .context-dock-btn {
 
 .context-search__input {
   flex: 1;
-  min-width: 0;
   height: 100%;
   padding: 0;
   color: var(--text-primary, #e8eaed);
   font: inherit;
   font-size: 0.74rem;
   line-height: 32px;
-  background: transparent;
-  border: 0;
   outline: 0;
 }
 
@@ -148,18 +149,15 @@ body.mobile-shell .context-dock-btn {
   display: none;
 }
 
+/* A UiCloseButton (close-button.css). */
 .context-search__clear {
   display: grid;
   flex: none;
   place-items: center;
   width: 24px;
   height: 24px;
-  padding: 0;
   color: rgba(199, 214, 222, 0.65);
-  background: transparent;
-  border: 0;
   border-radius: 50%;
-  cursor: pointer;
 }
 
 .context-search__clear:hover,
@@ -179,19 +177,20 @@ body.mobile-shell .context-dock-btn {
   box-shadow: none;
 }
 
-/* While a search is typed, what cannot match steps aside so the matches lead:
-   the weather, the view's own figures, the route and altitude graph, and the
-   layer switches. The radius stays: it sets how far the search looks. */
+/* During a search, keep the radius and matching rows in view. A matching
+   globe group keeps its layer name and loaded total. The Data Layers pointer stays. */
 .context-searching
   :is(
     .spot-conditions__weather,
     .spot-conditions__loading,
     .spot-conditions__source,
-    .view-context__facts,
-    .view-context__live,
-    .view-context__total,
-    .view-context__actions,
-    .view-context__towns:has(.view-context__chip--layer),
+    .view-context__tiles,
+    .view-context__label,
+    .view-context__hint,
+    .view-context__problem,
+    .view-context__suggest,
+    .view-context__bar,
+    .view-context__bar-key,
     .altitude-graph,
     .entity-card__route,
     .entity-card__route-stats,
@@ -204,7 +203,8 @@ body.mobile-shell .context-dock-btn {
 
 /* With the minimal HUD the credits sit at the bottom right, where the
    column is: they move out to its left. */
-body.context-docked:not(.ui-clean-view):not(.recording-mode):has(
+body.context-docked:not(.ui-clean-view):not(.recording-mode):is(
+    .hud-minimal-active *,
     #intel-hud[data-variant='minimal'].active
   )
   :is(#cesium-credits, #gev-credits) {
@@ -220,7 +220,8 @@ html[dir='rtl']
 }
 
 html[dir='rtl']
-  body.context-docked:not(.ui-clean-view):not(.recording-mode):has(
+  body.context-docked:not(.ui-clean-view):not(.recording-mode):is(
+    .hud-minimal-active *,
     #intel-hud[data-variant='minimal'].active
   )
   :is(#cesium-credits, #gev-credits) {

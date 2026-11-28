@@ -1,7 +1,9 @@
 import { toLonLatH } from '../geo/ellipsoid.js';
-import { followedOf } from '../data/followed.js';
+import { findMatch } from './entityLookup.js';
+import { worldClock } from '../time/worldClock.js';
 import { readEntityRecord } from '../data/entityRecords.js';
-import { nextTick } from 'vue';
+import { nextTick, watch } from 'vue';
+import { getConfiguredLayerCounts } from '../services/application.js';
 import { resolveImageryHost } from '../layers/weather/imageryHost.js';
 import { ShellFacade } from './shellFacade.js';
 import { AircraftDisplay } from './aircraftDisplay.js';
@@ -26,12 +28,13 @@ import { CctvControls } from './cctv.js';
 import { StreetLevelControls } from './streetLevelControls.js';
 import { createWildlifeSightingCard } from './wildlifeSightingCard.js';
 import { RadioControls } from './radio.js';
+import { LiveControls } from './liveControls.js';
 import { LocalSdrControls } from './localSdrControls.js';
 import { LocationNavigation } from './locationNavigation.js';
 import { bindCameraOrientationControls } from './cameraOrientationControls.js';
 import { createMapSourceControls } from './mapSource.js';
 import { STYLES } from './effects.js';
-import { isHudLayout } from '../hudLayouts.js';
+import { isHudLayout, isLegacySonarHudLayout } from '../hudLayouts.js';
 import {
   getCyberSonarControlState,
   setCyberSonarControls,
@@ -55,20 +58,17 @@ import {
   readShareFollowSubject,
 } from './shareFollow.js';
 
-import { runCctvLayerEnableTransition } from '../cctvFocusPolicy.js';
-
-import {
-  getLocale,
-  onLocaleChange,
-  persistLocale,
-  setLocale,
-  t,
-} from '../i18n/index.js';
-import { applyLocaleChoice } from './localePicker.js';
+import { getLocale, onLocaleChange, t } from '../i18n/index.js';
+import { switchLocale } from '../i18n/page.js';
 import { PanelNavigation } from './panelNavigation.js';
 import { applicationPinia, createUiRuntime } from './vueRuntime.js';
 import { useContextStore } from './stores/context.js';
+import { useLiveStore } from './stores/live.js';
+import { useStationStore } from './stores/station.js';
+import { useSpaceMissionsStore } from './stores/spaceMissions.js';
+import { SpaceMissionsControls } from './spaceMissionsControls.js';
 import { useMissionReplayStore } from './stores/missionReplay.js';
+import { useStreetLevelPhotoStore } from './stores/streetLevelPhoto.js';
 import { useCelestialRingStore } from './stores/celestialRing.js';
 import { icrfToFixedAxes } from '../sky/icrf.js';
 import { useWorldOverlayActionsStore } from './stores/worldOverlayActions.js';
@@ -78,14 +78,22 @@ import { useDisplayStore } from './stores/display.js';
 import { useLocaleStore } from './stores/locale.js';
 import { useLocationStore } from './stores/location.js';
 import { useOmnibarStore } from './stores/omnibar.js';
+import { useEntityCardStore } from './stores/entityCard.js';
+import { useLayerCountsStore } from './stores/layerCounts.js';
 import { installEntityContext } from './entityContextBridge.js';
+import { createLayerCounts } from './layerCounts.js';
 import { installRailEdgeScroll } from './railEdgeScroll.js';
 import { useCockpitStore } from './stores/cockpit.js';
 import { useGlobeActionsStore } from './stores/globeActions.js';
 import { useRecordingStore } from './stores/recording.js';
 import { onPlacePacksLoadingChange } from '../data/placeBelow.js';
+import {
+  registerDynamicCredit,
+  WIKIDATA_PLACES_CREDIT,
+} from '../data/dataCredits.js';
 import { withPlacePacks } from './placePacksLoading.js';
 import { preloadOwnerFlags } from './ownerFlag.js';
+import { flushAllPanelContent } from './rail/panelContent.js';
 
 /**
  * Central UI orchestrator for the God's Eye View application.
@@ -96,7 +104,7 @@ import { preloadOwnerFlags } from './ownerFlag.js';
  * - Collapsible rail panels with their collapsed state kept in localStorage.
  * - CCTV panel: camera selection, coverage toggle, projection, calibration
  *   sliders, auto-hop, and summary typewriter effect.
- * - Location bar with city/POI preset pills, QWERTY key navigation,
+ * - Preset cities and landmarks (the Omnibar's chips), QWERTY landmark keys,
  *   geocoding search, and inter-city world-jump transitions.
  * - Orbit controller integration for POI fly-around.
  * - Recording mode with safe-frame overlay and HUD mode switching.
@@ -112,16 +120,27 @@ export class StyleManager extends ShellFacade {
    * @param {object} [options]
    * @param {boolean} [options.localePicker=true] - false removes the language
    *   picker, for a host that offers its own language choice.
+   * @param {{lon: number, lat: number, height: number, heading?: number,
+   *   pitch?: number}|null} [options.homeView] - where the title's logo goes
+   *   back to (degrees): the view the app started from.
+   * @param {string[]} [options.startLayers] - the layers a bare address (one
+   *   that carries no link) starts with; none by default.
+   * @param {?Function} [options.entityLookup] - the host's lookup of things
+   *   anywhere for the search box (createApplicationControls in
+   *   src/app/controls.js).
    */
   constructor(
     viewer,
     {
       mapStackController = null,
       placeSearch,
+      entityLookup = null,
       services,
       requestServices,
       initialShareCode = null,
       localePicker = true,
+      homeView = null,
+      startLayers = [],
     } = {},
   ) {
     super();
@@ -163,10 +182,10 @@ export class StyleManager extends ShellFacade {
         _rightPanelStack: this._rightPanelStack,
       },
       operations: {
-        _closeLocationSearch: () => this._locationNavigation?.closeSearch(),
         _syncCctvPanelViewport: (...args) =>
           this._syncCctvPanelViewport(...args),
         _showToast: (...args) => this._showToast(...args),
+        _revealPanel: (panelId) => this.revealPanel(panelId),
       },
       readHud: () => this.hud,
       readCockpit: () => this.cockpitView,
@@ -184,6 +203,35 @@ export class StyleManager extends ShellFacade {
       layers: () => this._dataManager?.getAll?.() || [],
       setLayer: (id, enabled) =>
         this._dataManager?.setEnabled(id, enabled, { origin: 'user' }),
+      // The Omnibar shows names from the bundled Wikidata packs.
+      creditPlaces: () =>
+        registerDynamicCredit(this.viewer, WIKIDATA_PLACES_CREDIT),
+      // Things anywhere, from the host's lookup when it gives one.
+      lookupEntities:
+        typeof entityLookup === 'function'
+          ? (request) => entityLookup(request)
+          : null,
+      // A looked-up thing found in its layer, its layer switched on if need
+      // be (src/ui/entityLookup.js); the search box picks it.
+      findLookedUp: (match, { signal } = {}) =>
+        findMatch({
+          match,
+          dataManager: this._dataManager,
+          setLayer: (id, enabled) =>
+            this._dataManager?.setEnabled(id, enabled, { origin: 'user' }),
+          centre: (lat, lon) =>
+            this.runImmediateNavigation('target', () =>
+              this.services.flyToLandmark?.(this.viewer, lat, lon, {
+                range: 6000,
+                pitch: -45,
+                heading: 0,
+                buildingHeight: 0,
+                duration: 2.0,
+              }),
+            ),
+          seek: (ms) => worldClock.seek(ms),
+          signal,
+        }),
     });
     // Scrolling at a screen edge steps through that side's rail panels.
     this._removeRailEdgeScroll = installRailEdgeScroll();
@@ -199,13 +247,25 @@ export class StyleManager extends ShellFacade {
     );
     this.viewer = viewer;
     // A click on anything a layer can identify opens its card in Context.
+    const pinia = applicationPinia();
+    const cards = useEntityCardStore(pinia);
+    const layerCounts = useLayerCountsStore(pinia);
     this._removeEntityContext = installEntityContext({
       viewer,
+      navigateToSelection: (fly) => this.runImmediateNavigation('target', fly),
       getDataManager: () => this._dataManager,
-      pinia: applicationPinia(),
+      pinia,
       pickWorld: services.pickWorldFromScreen,
       regionalBrief: services.fetchRegionalBrief,
-      overlayHit: services.hitTestWorldOverlay,
+      spotWeather: services.fetchSpotWeather,
+      inspector: {
+        counts: createLayerCounts({
+          getCounts: getConfiguredLayerCounts,
+          readState: () => layerCounts.state,
+          writeState: layerCounts.publish,
+          readShown: () => cards.inspector.shown,
+        }),
+      },
     });
     this.mapStackController = mapStackController;
     this.placeSearch = placeSearch;
@@ -220,12 +280,10 @@ export class StyleManager extends ShellFacade {
         militaryAwarenessLayer,
         rocketLaunchesLayer: services.rocketLaunchesLayer,
       },
-      settleSearch: (options) =>
-        this._locationNavigation?.settleSearch(options),
+      settleSearch: () => this._locationNavigation?.settleSearch(),
       interruptCameraMotion: services.interruptCameraMotion,
       interruptGlobeRotation: services.interruptGlobeRotation,
       isCockpitActive: () => !!this.cockpitView?.active,
-      clearLocation: () => this.clearSearchedLocation(),
       cancelShareSelection: () => this._shareRestoration.cancelSelection(),
       getDataManager: () => this._dataManager,
       stopOrbit: () => this._stopOrbit(),
@@ -243,6 +301,7 @@ export class StyleManager extends ShellFacade {
       updateFeedback: () => this._updateGlobalLoadingFeedback(),
       applyFollowOffset: (followed, offset) =>
         applyShareFollowOffset(viewer, followed, offset),
+      startLayers,
     });
 
     this._visualSettings = new VisualSettings({
@@ -314,11 +373,13 @@ export class StyleManager extends ShellFacade {
       readControls: () => ({
         hud: this.hud,
         _contextControls: this._contextControls,
+        _spaceMissionsControls: this._spaceMissionsControls,
         _cctvControls: this._cctvControls,
         _radioControls: this._radioControls,
         _streetLevelControls: this._streetLevelControls,
       }),
       operations: {
+        _syncContextDataManager: cards.syncDataManager,
         _updateTrafficSyncChip: (...args) =>
           this._updateTrafficSyncChip(...args),
         _updateGlobalLoadingFeedback: (...args) =>
@@ -347,6 +408,7 @@ export class StyleManager extends ShellFacade {
     this._locationNavigation = new LocationNavigation({
       viewer,
       placeSearch,
+      homeView,
       navigation: this._navigation,
       readCockpit: () => this.cockpitView,
       services: {
@@ -369,9 +431,6 @@ export class StyleManager extends ShellFacade {
         aisLiveVesselsLayer: services.aisLiveVesselsLayer,
         militaryAwarenessLayer: services.militaryAwarenessLayer,
         rocketLaunchesLayer: services.rocketLaunchesLayer,
-      },
-      elements: {
-        _locationSearch: this._locationSearch,
       },
       operations: {
         _publishLocation: (view) =>
@@ -403,6 +462,9 @@ export class StyleManager extends ShellFacade {
       summaryService: requestServices?.summary,
       publish: (view) => hudStore.publish(view),
     });
+    // The view says whether it is on screen; off screen the HUD does no
+    // readout work.
+    hudStore.connect(this.hud);
     this._recording.hud = this.hud;
     this._cockpitCoordinator = new CockpitCoordinator({
       viewer,
@@ -610,18 +672,14 @@ export class StyleManager extends ShellFacade {
         cycleDetectionMode: services.cycleDetectionMode,
         isScopeMaskEnabled: services.isScopeMaskEnabled,
       },
-      elements: {
-        _locationSearch: this._locationSearch,
-      },
       operations: {
-        _closeLocationSearch: (options) =>
-          this._locationNavigation?.closeSearch(options),
         setStyle: (...args) => this.setStyle(...args),
         _updateHudButtonState: (...args) => this._updateHudButtonState(...args),
         _syncShareState: (...args) => this._syncShareState(...args),
         _toggleOrbit: (...args) => this._toggleOrbit(...args),
         toggleCleanView: (...args) => this.toggleCleanView(...args),
         _toggleCctvEnabled: (...args) => this._toggleCctvEnabled(...args),
+        _togglePanel: (panelId) => this._panelChrome._togglePanel(panelId),
         _setBloomEnabled: (...args) => this._setBloomEnabled(...args),
         _setBloomIntensity: (...args) => this._setBloomIntensity(...args),
         _setSharpenEnabled: (...args) => this._setSharpenEnabled(...args),
@@ -676,7 +734,8 @@ export class StyleManager extends ShellFacade {
     this._initStreetLevelPanel();
     this._initWildlifeSightingCard();
     this._initGlobalContextPanel();
-    this._initLocationBar();
+    this._initSpaceMissionsPanel();
+    this._initLocationControls();
     this._initMobileShell();
     this._initShareButton();
     this._initCameraOrientationControls();
@@ -689,7 +748,6 @@ export class StyleManager extends ShellFacade {
     this._startAnimationLoop();
     this._startTrafficChipTicker();
     this._publishActiveStyle();
-    this._updateLocationMiniStatus();
 
     this._shareRestoration.start();
 
@@ -713,10 +771,7 @@ export class StyleManager extends ShellFacade {
   // Compatibility reads for existing controls, scene snapshots and Cockpit.
 
   /** Advance camera authority and settle any older search UI immediately. */
-  _stampNavigation({
-    cancelPendingSelection = true,
-    clearSearchedLocation = true,
-  } = {}) {
+  _stampNavigation({ cancelPendingSelection = true } = {}) {
     return this._navigation._stampNavigation(...arguments);
   }
 
@@ -832,22 +887,28 @@ export class StyleManager extends ShellFacade {
   }
 
   /**
-   * Switch to `locale`: nothing for the active language, otherwise store it
-   * and apply it to the page.
+   * Switch to `locale` once its catalog is loaded: nothing for the active
+   * language, otherwise store it and apply it to the page. Choices made
+   * while a catalog loads replace it: the last one wins. A catalog that
+   * fails to load keeps the current language.
    * @param {string} locale
-   * @returns {'unchanged'|'switched'}
+   * @returns {Promise<'unchanged'|'switched'|'superseded'|'failed'>}
    */
-  _chooseLocale(locale) {
-    return applyLocaleChoice(locale, {
-      current: getLocale(),
-      switchLocale: (next) => {
-        setLocale(persistLocale(next));
-        // Focus once, as the redrawn picker mounts; a later remount leaves
-        // focus where it is.
-        this._publishLocalePicker({ focus: true });
-        void nextTick(() => this._publishLocalePicker());
-      },
-    });
+  async _chooseLocale(locale) {
+    let result;
+    try {
+      result = await switchLocale(locale);
+    } catch (error) {
+      console.error(`[i18n] the ${locale} catalog failed to load`, error);
+      return 'failed';
+    }
+    if (result === 'switched') {
+      // Focus once, as the redrawn picker mounts; a later remount leaves
+      // focus where it is.
+      this._publishLocalePicker({ focus: true });
+      void nextTick(() => this._publishLocalePicker());
+    }
+    return result;
   }
 
   /**
@@ -883,41 +944,12 @@ export class StyleManager extends ShellFacade {
         this._panelChrome.setPanelCollapsed(panelId, collapsed, options),
       readPanel: (panel) => this._panelChrome._shownPanel(panel),
       onSheetsClosed: () => this._syncShareState(),
-      onTabOpened: (sheet) => {
-        void this._onMobileTabOpened(sheet);
-      },
       publish: (view) =>
         useDisplayStore(applicationPinia()).publishPhoneShell(view),
       afterPublish: (callback) => {
         void nextTick(callback);
       },
     });
-  }
-
-  /** Reveal a tracked aircraft through Contacts when its phone tab is opened. */
-  async _onMobileTabOpened(sheet) {
-    const context = this.getContextModeState();
-    if (
-      sheet !== 'context' ||
-      this._disposed ||
-      !context ||
-      context.mode ||
-      context.changing ||
-      context.entering ||
-      !this.getAircraftTrackingTarget()
-    )
-      return false;
-    try {
-      const result = await this.setContextMode('contacts');
-      if (result?.ok) return true;
-      if (result?.cancelled || this._disposed) return false;
-    } catch {
-      if (this._disposed) return false;
-    }
-    this._showToast(
-      t('Contacts could not complete the requested transition; try again'),
-    );
-    return false;
   }
 
   /**
@@ -993,36 +1025,17 @@ export class StyleManager extends ShellFacade {
     return this._panelChrome._setCommandDockPanelPinState(...arguments);
   }
 
-  /**
-   * Configures intentional hover-expand / leave-collapse behavior on a panel.
-   * Uses separate open/close timers to prevent accidental flicker from fast
-   * mouse passes. Wheel events cancel pending opens to avoid surprise expansion
-   * during scroll-through.
-   * @param {string} panelId - DOM id of the panel element.
-   * @param {object} [options]
-   * @param {number} [options.openDelayMs=850] - Hover dwell time before auto-expanding.
-   * @param {number} [options.closeDelayMs=1000] - Delay after pointer leaves before collapsing.
-   * @returns {void}
-   */
-  _initAutoHoverPanel(
-    panelId,
-    { openDelayMs = 850, closeDelayMs = 1000 } = {},
-  ) {
-    return this._panelChrome._initAutoHoverPanel(...arguments);
-  }
-
   _initGlobalContextPanel() {
     const {
       radioLayer,
       militaryInstallationsLayer,
       militaryAwarenessLayer,
-      rocketLaunchesLayer,
+      satellitesLayer,
     } = this.services;
     const contextStore = useContextStore(applicationPinia());
     this._contextControls = new ContextControls({
       elements: {
         _globalContextFlightsBtn: this._globalContextFlightsBtn,
-        _globalContextMissionsBtn: this._globalContextMissionsBtn,
         _installationsSearchBtn: this._installationsSearchBtn,
       },
       installations: militaryInstallationsLayer,
@@ -1058,13 +1071,57 @@ export class StyleManager extends ShellFacade {
       militaryAwarenessLayer?.subscribeDirectionOverlay?.((view) =>
         awarenessDirectionStore.publish(view),
       );
-    // The Space Missions layer publishes its roster and selected mission.
-    contextStore.connectMissions(rocketLaunchesLayer);
-    this._missionsPanelUnsubscribe?.();
-    contextStore.publishMissions(null);
-    this._missionsPanelUnsubscribe = rocketLaunchesLayer?.subscribePanel?.(
-      (view) => contextStore.publishMissions(view),
+    // The STATION section: the selected space station's moving parts, as
+    // the satellites layer presents them; its controls reach the layer.
+    const stationStore = useStationStore(applicationPinia());
+    this._stationPanelUnsubscribe?.();
+    if (this._stationOwner) stationStore.detach(this._stationOwner);
+    this._stationOwner = null;
+    stationStore.publish(null);
+    if (satellitesLayer?.getStationActions)
+      this._stationOwner = stationStore.connect(
+        satellitesLayer.getStationActions(),
+      );
+    this._stationPanelUnsubscribe = satellitesLayer?.subscribeStationPanel?.(
+      (view) => stationStore.publish(view),
     );
+    // The LIVE section: streams attached to whatever the tracking layers
+    // select, in the platform's own player, loaded only once Play is pressed.
+    this._liveControls?.destroy();
+    const liveStore = useLiveStore(applicationPinia());
+    this._liveControls = new LiveControls({
+      store: liveStore,
+      actions: {
+        getLayer: (layerId) =>
+          this._dataManager?.layers?.get(layerId)?.module ?? null,
+        scheduleLayout: () => this._scheduleRightPanelLayout(),
+      },
+    });
+    // The Cockpit briefing offers its LIVE page while a stream is on offer.
+    this._liveOfferedUnwatch?.();
+    this._liveOfferedUnwatch = watch(
+      () => liveStore.view !== null,
+      (offered) => this.cockpitView?.setBriefLiveOffered?.(offered),
+      { immediate: true },
+    );
+  }
+
+  _initSpaceMissionsPanel() {
+    const { rocketLaunchesLayer } = this.services;
+    // The Space Missions layer publishes its roster and selected mission.
+    this._spaceMissionsControls?.destroy();
+    this._spaceMissionsControls = new SpaceMissionsControls({
+      layer: rocketLaunchesLayer,
+      store: useSpaceMissionsStore(applicationPinia()),
+      actions: {
+        setPanelCollapsed: (...args) => this.setPanelCollapsed(...args),
+        isCockpitActive: () => Boolean(this.cockpitView?.active),
+        // After the panel has rendered as shown: the phone shell will not
+        // open the Missions sheet over a hidden panel.
+        revealPanel: () =>
+          nextTick(() => this.revealPanel('space-missions-panel')),
+      },
+    });
     // And its replay vehicle overlay, which the scene chrome renders.
     const missionReplayStore = useMissionReplayStore(applicationPinia());
     this._missionReplayUnsubscribe?.();
@@ -1177,7 +1234,18 @@ export class StyleManager extends ShellFacade {
     const { streetLevelLayer } = this.services;
     this._streetLevelControls?.destroy();
     this._streetLevelControls = null;
+    // The photo viewer (KartaView, Panoramax), which the layer panels draw
+    // into the viewer host. A viewer left by an earlier shell must
+    // not outlive its layer.
+    const streetLevelPhotoStore = useStreetLevelPhotoStore(applicationPinia());
+    this._streetLevelPhotoUnsubscribe?.();
+    this._streetLevelPhotoUnsubscribe = null;
+    streetLevelPhotoStore.publish(null);
     if (!this._streetLevelPanel || !streetLevelLayer) return;
+    this._streetLevelPhotoUnsubscribe =
+      streetLevelLayer.subscribePhotoViewer?.((view) =>
+        streetLevelPhotoStore.publish(view),
+      ) ?? null;
     // Photo framing yields to newer navigation and releases tracking like
     // any deferred flight.
     streetLevelLayer.attachNavigation?.({
@@ -1286,13 +1354,11 @@ export class StyleManager extends ShellFacade {
   }
 
   /**
-   * Toggles the CCTV layer enabled state. When enabling and no camera is active,
-   * auto-focuses on the nearest camera.
+   * Toggles the CCTV layer without moving the globe.
    * @param {boolean} [forceState] - Explicit on/off. Omit to toggle.
-   * @returns {Promise<boolean>} True if the layer is now in the requested state.
+   * @returns {Promise<boolean>} False if the shell is disposed or the layer is unavailable.
    */
   async _toggleCctvEnabled(forceState) {
-    const { cctvLayer } = this.services;
     if (this._disposed) return false;
     if (!this._dataManager || !this._dataManager.layers?.has('cctv')) {
       this._showToast(t('CCTV layer unavailable'));
@@ -1301,25 +1367,7 @@ export class StyleManager extends ShellFacade {
     const enabled = this._dataManager.isEnabled('cctv');
     const target = typeof forceState === 'boolean' ? forceState : !enabled;
     if (target === enabled) return true;
-    await runCctvLayerEnableTransition({
-      target,
-      setEnabled: (next) =>
-        this._dataManager.setEnabled('cctv', next, { origin: 'user' }),
-      readOwnership: () => ({
-        followed: followedOf(this.viewer),
-        cockpitActive: !!this.cockpitView?.active,
-      }),
-      shouldFocus: () =>
-        !this._disposed &&
-        this._dataManager.isEnabled('cctv') &&
-        !this._cctvControls?.getState()?.activeCameraId,
-      activate: () => this._cctvControls?.selectNearestDiscoveredCamera(),
-      fly: (cameraId) =>
-        this._runExplicitCctvFocus(
-          () => cameraId,
-          (selectedId) => cctvLayer.focusCamera(selectedId, 1.6),
-        ),
-    });
+    await this._dataManager.setEnabled('cctv', target, { origin: 'user' });
     return true;
   }
 
@@ -1370,6 +1418,8 @@ export class StyleManager extends ShellFacade {
         ? forceEnabled
         : !document.body.classList.contains('ui-clean-view');
     document.body.classList.toggle('ui-clean-view', shouldEnable);
+    // Leaving clean view shows the panels again: repaint what they owe first.
+    if (!shouldEnable) flushAllPanelContent();
     if (this._cleanViewBtn) {
       this._cleanViewBtn.classList.toggle('active', shouldEnable);
     }
@@ -1404,17 +1454,18 @@ export class StyleManager extends ShellFacade {
   }
 
   /**
-   * Switches the HUD layout variant.
+   * Switches the HUD layout variant. The removed Cyber layout is accepted
+   * as an alias: it opens Tactical with the Sonar style on.
    * @param {'tactical'|'minimal'|'cyber'} variantName - Layout variant.
    * @returns {{ok: boolean, layout?: string, visible?: boolean, error?: string}}
    */
   setHudLayout(variantName) {
     const variant = String(variantName ?? '').toLowerCase();
-    if (!isHudLayout(variant)) {
+    if (!isHudLayout(variant) && !isLegacySonarHudLayout(variant)) {
       return { ok: false, error: `Unknown HUD layout: ${variantName}` };
     }
     this.shareLinkManager?.claimRestoreLane?.('visual');
-    this._setHudVariant(variant, { applyVisualDefaults: true });
+    this._setHudVariant(variant);
     return {
       ok: true,
       layout: this.hud.getVariant(),
@@ -1533,7 +1584,7 @@ export class StyleManager extends ShellFacade {
     };
   }
 
-  /** Apply Cyber-only sonar settings through the shared visual controls. */
+  /** Apply sonar visual-style settings through the shared visual controls. */
   setCyberSonar(settings) {
     return setCyberSonarControls(this, settings);
   }
@@ -1669,8 +1720,6 @@ export class StyleManager extends ShellFacade {
    * @param {string} styleName - Target style ('normal'|'retro'|'surveillance'|'thermal'|'anime'|'noir').
    * @param {object} [options]
    * @param {boolean} [options.applyPreset=true] - Whether to apply STYLE_PRESET_DEFAULTS for the new style.
-   * @param {boolean} [options.userInitiated=false] - Whether a direct user preset choice owns the Cyber exit style.
-   * @param {boolean} [options.preserveCyberRestore=false] - Whether an automatic style update keeps the Cyber entry snapshot.
    * @returns {void}
    */
   setStyle(
@@ -1750,7 +1799,12 @@ export class StyleManager extends ShellFacade {
     const store = useGlobeActionsStore(applicationPinia());
     if (this._resetToken) store.detach(this._resetToken);
     this._resetToken = controls
-      ? store.connect({ reset: () => controls.reset() })
+      ? store.connect({
+          reset: () => controls.reset(),
+          home: () => {
+            if (!this._disposed) void this.returnToStart();
+          },
+        })
       : null;
     // A reset under way as the controls are replaced stays on the buttons.
     if (this._resetToken && this._globeResetting != null)
@@ -1959,22 +2013,31 @@ export class StyleManager extends ShellFacade {
     this.services?.streetLevelLayer?.attachNavigation?.(null);
     this._streetLevelControls?.destroy();
     this._radioControls?.destroy();
+    this._liveControls?.destroy();
+    this._liveOfferedUnwatch?.();
+    this._liveOfferedUnwatch = null;
+    this._stationPanelUnsubscribe?.();
+    this._stationPanelUnsubscribe = null;
+    if (this._stationOwner)
+      useStationStore(applicationPinia()).detach(this._stationOwner);
+    this._stationOwner = null;
     this._localSdrControls?.destroy();
     this._awarenessPanelUnsubscribe?.();
     this._awarenessPanelUnsubscribe = null;
     this._awarenessDirectionUnsubscribe?.();
     this._awarenessDirectionUnsubscribe = null;
     useAwarenessDirectionStore(applicationPinia()).publish(null);
-    this._missionsPanelUnsubscribe?.();
-    this._missionsPanelUnsubscribe = null;
+    this._spaceMissionsControls?.destroy();
+    this._spaceMissionsControls = null;
     this._missionReplayUnsubscribe?.();
     this._missionReplayUnsubscribe = null;
+    this._streetLevelPhotoUnsubscribe?.();
+    this._streetLevelPhotoUnsubscribe = null;
     useMissionReplayStore(applicationPinia()).publish(null);
+    useStreetLevelPhotoStore(applicationPinia()).publish(null);
     const contextStore = useContextStore(applicationPinia());
     contextStore.connectAwareness(null);
     contextStore.publishAwareness(null);
-    contextStore.connectMissions(null);
-    contextStore.publishMissions(null);
     this._cockpitCoordinator.stop();
     this._visualSettings.stop();
     this.shareLinkManager?.destroy();

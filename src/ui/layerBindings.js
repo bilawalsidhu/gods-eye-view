@@ -50,6 +50,9 @@ export class LayerBindings {
   get _contextControls() {
     return this.readControls()._contextControls;
   }
+  get _spaceMissionsControls() {
+    return this.readControls()._spaceMissionsControls;
+  }
   get _cctvControls() {
     return this.readControls()._cctvControls;
   }
@@ -132,10 +135,13 @@ export class LayerBindings {
       'weather-satellite',
       'weather-lightning',
       'weather-cyclones',
+      'air-quality',
     ]) {
       const layer = this._dataManager?.layers?.get(id)?.module;
       if (typeof layer?.attachShellServices !== 'function') continue;
-      const noun = id === 'weather-cyclones' ? 'cyclone' : 'weather';
+      let noun = 'weather';
+      if (id === 'weather-cyclones') noun = 'cyclone';
+      if (id === 'air-quality') noun = 'air quality';
       layer.attachShellServices({
         runNavigation: (navigate) =>
           this.runImmediateNavigation(noun, navigate),
@@ -157,6 +163,15 @@ export class LayerBindings {
           this.runImmediateNavigation('news', navigate),
       });
       this._weatherShellModules.push(news);
+    }
+    // Bike share flies into a covered city from its marker the same way.
+    const bikeshare = this._dataManager?.layers?.get('bikeshare')?.module;
+    if (typeof bikeshare?.attachShellServices === 'function') {
+      bikeshare.attachShellServices({
+        runNavigation: (navigate) =>
+          this.runImmediateNavigation('bike share', navigate),
+      });
+      this._weatherShellModules.push(bikeshare);
     }
   }
 
@@ -238,6 +253,7 @@ export class LayerBindings {
   attachDataManager(dataManager) {
     if (this._disposed) return;
     this._dataManager = dataManager || null;
+    this._syncContextDataManager?.();
     this.hud.attachDataManager(this._dataManager);
     this._updateTrafficSyncChip();
     if (this._dataManagerUnsubscribe) {
@@ -245,6 +261,7 @@ export class LayerBindings {
       this._dataManagerUnsubscribe = null;
     }
     this._contextControls.connect(this._dataManager);
+    this._spaceMissionsControls?.connect(this._dataManager);
     if (typeof this._dataManager?.subscribe === 'function') {
       this._dataManagerUnsubscribe = this._dataManager.subscribe((change) => {
         this._feedback._loadingFeedbackEvent = change;
@@ -310,6 +327,7 @@ export class LayerBindings {
     this._directionsShellModule?.attachShellServices?.(null);
     this._directionsShellModule = null;
     this._dataManager = null;
+    this._spaceMissionsControls?.connect(null);
     this._connectWeatherCamera();
   }
 }

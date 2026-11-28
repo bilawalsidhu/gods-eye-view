@@ -284,6 +284,7 @@ test('a /share/<code> address opens its place view through the start-up restore'
   const result = await restore(page);
   assert.equal(result.status, 'settled');
   assert.equal(result.share.camera, 'applied');
+  assert.equal(result.thing, false, 'a view, not a thing');
   assert.equal(page.restores[0].style, 'noir');
   assert.deepEqual(page.restores[0].panelState.specs, [
     { id: 'data-panel', collapsed: false, pinned: null },
@@ -398,7 +399,7 @@ test('a thing view turns its layer on, follows by id and frames the shared offse
     parsed.layerState.options.flights.selectedFlightsTrackingId,
     'a1b2c3',
   );
-  await restore(page);
+  assert.equal((await restore(page)).thing, true, 'a share of a thing');
   // The opening flight goes where following the fix puts the camera.
   const camera = followCameraFor(FIX, OFFSET);
   const destination = Cesium.Cartographic.fromCartesian(
@@ -802,6 +803,100 @@ test('a selected vessel is the subject when the camera follows nothing', (t) => 
     readShareFollowSubject({ viewer, nowMs: NOW_MS, readSelectedVessel }),
     null,
   );
+});
+
+test('a link made following a vessel opens following it; one with it only selected, and an old link, select it', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: NOW_MS });
+  const offset = { range: 2600, heading: 40, pitch: -30 };
+  const { vessel, camera } = cameraAround(offset);
+  installPage(t, 'https://gev.example/');
+  const viewer = bindFakeCesiumCamera(fakeViewer());
+  viewer.camera.positionWC = camera;
+  followingPort(viewer);
+  const MMSI = '366999712';
+  const vesselTarget = (id) => ({
+    key: `ais-live-vessels:${id}`,
+    position: () => vessel,
+    displayPosition: () => vessel,
+  });
+  const manager = new ShareLinkManager(viewer);
+  t.after(() => manager.destroy());
+  let selectedVessel = null;
+  manager.setFollowSubjectProvider(({ nowMs }) =>
+    readShareFollowSubject({
+      viewer,
+      nowMs,
+      readSelectedVessel: () => selectedVessel,
+    }),
+  );
+  const linkView = () => {
+    const href = manager.buildLink({ nowMs: NOW_MS });
+    const { code } = parseSharePath(new URL(href).pathname);
+    return decodeShareView(code, { nowMs: NOW_MS }).state.view;
+  };
+
+  // The app the links open in, with the vessel in its feed.
+  const page = openPage(t, 'http://localhost/');
+  const calls = [];
+  page.owner._dataManager = {
+    layers: new Map([
+      [
+        'ais-live-vessels',
+        {
+          module: {
+            hasContact: (id) => id === MMSI,
+            selectById: (id) => calls.push(['select', id]) > 0,
+            trackById: (id) => {
+              calls.push(['follow', id]);
+              rendererOf(page.viewer).camera.follow(vesselTarget(id));
+              return true;
+            },
+          },
+        },
+      ],
+    ]),
+  };
+  const offsets = [];
+  page.owner.applyFollowOffset = (followed, shared) => {
+    offsets.push([followed.key, shared]);
+    return () => {};
+  };
+  const open = async (view) => {
+    calls.length = 0;
+    offsets.length = 0;
+    rendererOf(page.viewer).camera.follow(null);
+    return page.owner._restoreSharedVessel(view, () => true);
+  };
+
+  // Followed: the link says so, and opens following it from its offset.
+  rendererOf(viewer).camera.follow(vesselTarget(MMSI));
+  const followedView = linkView();
+  assert.deepEqual(followedView.entity, { kind: 'vessel', id: MMSI });
+  assert.equal(followedView.followed, true);
+  assert.equal(await open(followedView), true);
+  assert.deepEqual(calls, [['follow', MMSI]]);
+  assert.equal(followedOf(page.viewer)?.key, `ais-live-vessels:${MMSI}`);
+  assert.deepEqual(offsets, [
+    [`ais-live-vessels:${MMSI}`, followedView.offset],
+  ]);
+
+  // Only selected: the link does not say so, and opens selecting it.
+  rendererOf(viewer).camera.follow(null);
+  selectedVessel = { id: MMSI, position: vessel, observedAtMs: NOW_MS };
+  const selectedView = linkView();
+  assert.deepEqual(selectedView.entity, { kind: 'vessel', id: MMSI });
+  assert.equal(selectedView.followed, undefined);
+  assert.equal(await open(selectedView), true);
+  assert.deepEqual(calls, [['select', MMSI]]);
+  assert.equal(followedOf(page.viewer), null);
+
+  // A link made before links said so only selects.
+  const old = decodeShareView('AUCAw4sZahUYoPH_rgEoqBQwFDg7QLioJEi3snRz', {
+    nowMs: NOW_MS,
+  });
+  assert.equal(await open(old.state.view), true);
+  assert.deepEqual(calls, [['select', MMSI]]);
+  assert.equal(followedOf(page.viewer), null);
 });
 
 test('a followed aircraft or satellite keeps priority over a selected vessel', () => {

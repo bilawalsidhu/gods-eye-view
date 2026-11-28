@@ -5,6 +5,11 @@ import * as Cesium from 'cesium';
 import { MAP_STACKS } from '../mapStackController.js';
 import { fromDegrees, toLonLatH } from '../geo/ellipsoid.js';
 import { bindRenderer } from '../render/rendererOf.js';
+import {
+  _resetSelectionForTest,
+  claimSelection,
+  currentSelection,
+} from './clickSelect.js';
 // A viewer with no renderer bound reads its globe through the unbound port.
 import '../render/cesium/globe.js';
 import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
@@ -634,8 +639,8 @@ function createCableHarness({
     advanceClock(ms) {
       clockMs += ms;
     },
-    click(drawHit) {
-      clickHandler?.({ drawHit, pick: null });
+    click(drawHit, ground = null) {
+      clickHandler?.({ drawHit, pick: null, ground: () => ground });
     },
     async load() {
       layer.enable(viewer);
@@ -649,6 +654,20 @@ function createCableHarness({
       assert.equal(layer.getStats().error, null, 'harness load must succeed');
     },
   };
+}
+
+/**
+ * Where the name card of the last click stands, in degrees (rounded), or
+ * null when no card shows. The harness's clicks carry no ground point, so
+ * the card stands at the clicked feature's reference.
+ */
+function namedAt(env) {
+  const entries = env.hostCalls.filter(([type]) => type === 'entries').at(-1);
+  const card = entries?.[2].find((entry) => entry.selected);
+  if (!card) return null;
+  const { lon, lat } = toLonLatH(card.position);
+  const round = (value) => Math.round(value * 1e9) / 1e9;
+  return { lon: round(lon), lat: round(lat) };
 }
 
 /** A loaded harness over the fixtures (or `source`). */
@@ -724,10 +743,15 @@ test('cables, landing pins and references draw as their entities did', async () 
 
   const [line] = env.set('lines').items.values();
   assert.equal(line.mode, 'draped');
-  assert.equal(line.widthPx, 2.5);
+  // A pipe: the cable's colour between darker edges, wide enough to click.
+  assert.equal(line.widthPx, 8);
   assert.deepEqual(line.style, {
     kind: 'solid',
     color: [0x39 / 255, 0xd5 / 255, 1, 0.92],
+    outline: {
+      color: [(0x39 / 255) * 0.35, (0xd5 / 255) * 0.35, 0.35, 0.95],
+      widthPx: 3,
+    },
   });
   assert.equal(line.clampTo, undefined, 'cable lines follow the stack');
   // Along the rhumb line, as GeoJSON lines were, in steps under 10 km.
@@ -805,32 +829,29 @@ test('a map-stack change re-drapes the cable lines once, and destroy detaches th
   );
 });
 
-test('a click on a cable, pin, stem or reference flies to its reference; others do nothing', async () => {
+test('a click on a cable, pin, stem or reference names it and centres it; others do nothing', async () => {
   const env = await loadedHarness();
   const [lineId] = env.set('lines').items.keys();
   const [pinId] = env.set('pins').items.keys();
   const [cableRef, landingRef] = env.set('references').items.keys();
-  const flyTargets = () =>
-    env.flights
-      .filter((flight) => flight !== 'cancel')
-      .map((flight) => flight.destination);
-
-  env.click({ set: env.set('lines').spec.id, id: lineId });
-  env.click({ set: env.set('pins').spec.id, id: pinId });
-  env.click({ set: env.set('stems').spec.id, id: cableRef });
-  env.click({ set: env.set('references').spec.id, id: landingRef });
-  assert.deepEqual(flyTargets(), [
-    { lon: -35, lat: 37.5, height: 6500 },
-    { lon: -9.1, lat: 38.7, height: 6500 },
-    { lon: -35, lat: 37.5, height: 6500 },
-    { lon: -9.1, lat: 38.7, height: 6500 },
-  ]);
-  const flight = env.flights.find((entry) => entry !== 'cancel');
-  assert.deepEqual(flight.options, {
-    orientation: { heading: 0.25, pitch: (-52 * Math.PI) / 180, roll: 0 },
-    durationS: 1.35,
-    easing: 'cubicInOut',
+  const clicks = [
+    { set: env.set('lines').spec.id, id: lineId },
+    { set: env.set('pins').spec.id, id: pinId },
+    { set: env.set('stems').spec.id, id: cableRef },
+    { set: env.set('references').spec.id, id: landingRef },
+  ];
+  const named = clicks.map((hit) => {
+    env.click(hit);
+    return namedAt(env);
   });
+  assert.deepEqual(named, [
+    { lon: -35, lat: 37.5 },
+    { lon: -9.1, lat: 38.7 },
+    { lon: -35, lat: 37.5 },
+    { lon: -9.1, lat: 38.7 },
+  ]);
+  const flights = env.flights.filter((flight) => flight !== 'cancel');
+  assert.equal(flights.length, 4, 'each click centres the camera once');
   assert.equal(env.flights[0], 'cancel', 'a running flight is cancelled');
 
   env.flights.length = 0;
@@ -841,6 +862,93 @@ test('a click on a cable, pin, stem or reference flies to its reference; others 
   env.click({ set: env.set('lines').spec.id, id: lineId });
   assert.deepEqual(env.flights, [], 'foreign, stale and disabled clicks');
   env.layer.destroy();
+});
+
+test('a click names its cable or landing point in a card until a click lands elsewhere', async () => {
+  const env = await loadedHarness();
+  env.raiseSweep();
+  const lastEntries = () =>
+    env.hostCalls.filter(([type]) => type === 'entries').at(-1)[2];
+  const cards = () => lastEntries().filter((entry) => entry.selected);
+  assert.deepEqual(cards(), [], 'nothing is named before a click');
+
+  const [lineId] = env.set('lines').items.keys();
+  env.click({ set: env.set('lines').spec.id, id: lineId });
+  let [card] = cards();
+  assert.equal(card.title, 'CABLE · Atlantic Crossing-1');
+  assert.equal(card.priority, Number.MAX_SAFE_INTEGER, 'ahead of every label');
+  assert.equal(card.interactive, false);
+  assert.equal(
+    lastEntries().filter((entry) => entry.variant === 'label').length,
+    2,
+    'the nearest labels still show beside it',
+  );
+
+  // Far past the labels' reach, the named cable keeps its card.
+  env.setEye(120, -30, 20_000_000);
+  env.moveEnd();
+  env.raiseSweep();
+  assert.equal(cards().length, 1, 'the card shows at any distance');
+
+  const [pinId] = env.set('pins').items.keys();
+  env.click({ set: env.set('pins').spec.id, id: pinId });
+  [card] = cards();
+  assert.equal(card.title, 'LANDING POINT · Lisbon, Portugal');
+  assert.equal(cards().length, 1, 'one card at a time');
+
+  env.click(null);
+  assert.deepEqual(cards(), [], 'a click on nothing puts the card away');
+
+  env.click({ set: env.set('lines').spec.id, id: lineId });
+  env.layer.disable();
+  env.layer.enable(env.viewer);
+  await settle();
+  env.raiseSweep();
+  assert.deepEqual(cards(), [], 'turning the layer off forgets the card');
+  env.layer.destroy();
+});
+
+test('the card stands where a line is clicked, and at the reference above a stem', async () => {
+  _resetSelectionForTest();
+  const env = await loadedHarness();
+  const [lineId] = env.set('lines').items.keys();
+  const [cableRef] = env.set('references').items.keys();
+  const ground = fromDegrees(-30, 39, 0);
+  env.click({ set: env.set('lines').spec.id, id: lineId }, ground);
+  assert.deepEqual(namedAt(env), { lon: -30, lat: 39 }, 'on the line');
+  env.click({ set: env.set('stems').spec.id, id: cableRef }, ground);
+  assert.deepEqual(
+    namedAt(env),
+    { lon: -35, lat: 37.5 },
+    'a stem stands above the ground: its reference, not the ground behind it',
+  );
+  env.layer.destroy();
+});
+
+test('the name card is the one map selection: it takes it, and gives it up', async () => {
+  _resetSelectionForTest();
+  const env = await loadedHarness();
+  const [lineId] = env.set('lines').items.keys();
+  env.click({ set: env.set('lines').spec.id, id: lineId });
+  assert.equal(currentSelection()?.layerId, 'telegeography-submarine-cables');
+  // Named by its record's id, as Nearby and search know it.
+  assert.equal(currentSelection()?.id, 'cable:ac1');
+  const [pinId] = env.set('pins').items.keys();
+  env.click({ set: env.set('pins').spec.id, id: pinId });
+  assert.equal(currentSelection()?.id, 'landing:lisbon');
+  claimSelection('flights', 'abc123');
+  assert.equal(namedAt(env), null, "another layer's selection puts it away");
+  assert.equal(currentSelection()?.layerId, 'flights');
+
+  env.click({ set: env.set('lines').spec.id, id: lineId });
+  env.click(null);
+  assert.equal(currentSelection(), null, 'putting it away lets it go');
+
+  env.click({ set: env.set('lines').spec.id, id: lineId });
+  env.layer.destroy();
+  assert.equal(currentSelection(), null, 'destroy lets it go');
+  claimSelection('flights', 'abc123');
+  _resetSelectionForTest();
 });
 
 test('stems never redraw mid-drag; exactly one redraw lands on moveEnd', async () => {
@@ -951,12 +1059,35 @@ test('an unchanged cohort never republishes, so a parked camera stays governor-i
 
 test('a toggle-off clears every set and a toggle-on redraws them without refetching', async () => {
   let reads = 0;
+  const [cable] = CABLE_FIXTURE.features;
+  const secondPiece = {
+    ...cable,
+    geometry: {
+      type: 'GeometryCollection',
+      geometries: [
+        {
+          type: 'LineString',
+          coordinates: [
+            [-30, 40],
+            [-12, 39],
+          ],
+        },
+      ],
+    },
+  };
+  const collected = {
+    ...secondPiece,
+    properties: { id: 'reference-less', name: 'Reference-less cable' },
+  };
   const source = {
     label: 'Test cable directory',
     async fetch(signal) {
       signal.throwIfAborted();
       reads += 1;
-      return { cables: CABLE_FIXTURE, landingPoints: LANDING_FIXTURE };
+      return {
+        cables: { ...CABLE_FIXTURE, features: [cable, secondPiece, collected] },
+        landingPoints: LANDING_FIXTURE,
+      };
     },
   };
   const env = createCableHarness({ source });
@@ -964,14 +1095,23 @@ test('a toggle-off clears every set and a toggle-on redraws them without refetch
   assert.equal(env.layer.source, source.label);
   assert.equal(reads, 1);
   const before = env.layer.getStats().count;
-  assert.equal(before, 2);
+  assert.equal(before, 3);
+  const records = new Map(
+    env.layer.getAnalystRecords().map((record) => [record.id, record]),
+  );
+  assert.ok(
+    records
+      .get('cable:ac1')
+      .parts.some(({ lon, lat }) => lon === -12 && lat === 39),
+  );
+  assert.ok(records.has('cable:reference-less'));
   env.layer.disable();
   assert.equal(env.set('lines').items.size, 0);
   env.layer.enable(env.viewer);
   await settle();
   assert.equal(reads, 1, 'the redraw must not touch the network');
   assert.equal(env.layer.getStats().count, before);
-  assert.equal(env.set('lines').items.size, 1);
+  assert.equal(env.set('lines').items.size, 3, 'all pieces are redrawn');
   assert.equal(env.set('references').items.size, 2, 'references are redrawn');
   env.layer.destroy();
 });
@@ -1133,11 +1273,9 @@ function multipartCableFixture() {
 /** What a click on each item of a set names. */
 const picksOf = (env, name) =>
   [...env.set(name).items.keys()].map((id) => {
-    let info = null;
-    const before = env.flights.length;
+    env.click(null);
     env.click({ set: env.set(name).spec.id, id });
-    if (env.flights.length > before) info = env.flights.at(-1).destination;
-    return info;
+    return namedAt(env);
   });
 
 test('multipart cables keep their own styling, picking and culling on every segment', async () => {
@@ -1156,13 +1294,13 @@ test('multipart cables keep their own styling, picking and culling on every segm
       (hex & 255) / 255,
       0.92,
     ]);
-    assert.equal(line.widthPx, 2.5);
+    assert.equal(line.widthPx, 8);
   }
   assert.deepEqual(picksOf(env, 'lines'), [
-    { lon: -40, lat: 35, height: 6500 },
-    { lon: -40, lat: 35, height: 6500 },
-    { lon: -40, lat: 35, height: 6500 },
-    { lon: 140, lat: -35, height: 6500 },
+    { lon: -40, lat: 35 },
+    { lon: -40, lat: 35 },
+    { lon: -40, lat: 35 },
+    { lon: 140, lat: -35 },
   ]);
   // Culled by the feature's reference: Beta is on the far side.
   assert.deepEqual(
@@ -1331,10 +1469,10 @@ test('every bundled cable segment is drawn with its source feature', async () =>
   assert.equal(lineSet.items.size, expandedFeatures.length);
   const destinations = picksOf(env, 'lines');
   for (const [index, feature] of expandedFeatures.entries()) {
+    const round = (value) => Math.round(value * 1e9) / 1e9;
     assert.deepEqual(destinations[index], {
-      lon: feature.properties.coordinates[0],
-      lat: feature.properties.coordinates[1],
-      height: 6500,
+      lon: round(feature.properties.coordinates[0]),
+      lat: round(feature.properties.coordinates[1]),
     });
   }
   assert.equal(env.set('references').items.size, features.length);

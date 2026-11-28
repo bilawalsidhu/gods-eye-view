@@ -53,10 +53,6 @@ export function createVesselState({ source, services }) {
 
   vesselState._geoidReady = false;
 
-  /** @type {Map<string, string>} `${cssColor}:${variant}` -> chevron SVG data URL */
-
-  vesselState.shipIconCache = new Map();
-
   /** Row ids for unkeyed (no-id) records, which are rebuilt every poll. */
 
   vesselState._unkeyedIconSequence = 0;
@@ -91,6 +87,8 @@ export function createVesselState({ source, services }) {
     activeFocusCount: 0,
     activeLabelCount: 0,
     selectedRecord: null,
+    /** What the camera follows the selected ship with, while asked to (`followSelected`). */
+    followTarget: null,
     /** @type {string|null} Id of the vessel whose bridge the Cockpit camera occupies; its sprite and card stay hidden. */
     cockpitSubjectId: null,
     /** @type {{setPositions: Function, clear: Function, destroy: Function}|null} Selected-vessel fading trail */

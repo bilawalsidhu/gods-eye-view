@@ -4,33 +4,24 @@ import {
   findCamera,
   findDraw,
   findFrame,
-  findGlobe,
   rendererOf,
 } from '../../render/rendererOf.js';
 import { acquireWeatherImage } from './infraredImage.js';
 import { imageryHostStatus } from './imageryHost.js';
+import { WEATHER_IMAGERY_SHOWS } from './imageryOrder.js';
 import { WEATHER_DETAIL_SIZE, WEATHER_IMAGE_SIZES } from './source.js';
 import { msg } from '../../i18n/index.js';
+import { followShellLift, WEATHER_SHELL_HEIGHTS } from './shellPlacement.js';
 
-/**
- * The viewer's own globe imagery, as a weather imagery host: where a layer
- * drapes when the application shell names no host of its own. Its globe
- * port's imagery stands for it, one object per port.
- * @param {object|null|undefined} viewer The scene object the layer holds.
- * @returns {{collection: object|null, kind: 'globe'}}
- */
-export function globeImageryHost(viewer) {
-  return { collection: findGlobe(viewer)?.imagery ?? null, kind: 'globe' };
-}
+// The host, heights and lift live in shellPlacement.js, light enough for a
+// layer that drapes a field of its own; re-exported here for current importers.
+export {
+  followShellLift,
+  globeImageryHost,
+  shellLift,
+  WEATHER_SHELL_HEIGHTS,
+} from './shellPlacement.js';
 
-/** Metres above the ellipsoid. Lower shells draw first, so lightning draws last. */
-export const WEATHER_SHELL_HEIGHTS = Object.freeze({
-  wind: 5_000,
-  clouds: 5_500,
-  'clouds-regional': 5_800,
-  radar: 6_200,
-  lightning: 6_600,
-});
 // Decoded canvases per renderer, full-extent and detail images alike: the shown
 // frame and the warmed next frame, each full-extent and detail (four 4096×2048
 // canvases); nothing older survives them. The renderer holds the shown
@@ -40,49 +31,12 @@ const MAX_IMAGE_BYTES = 16 * 1024 * 1024;
 // Detail windows, in degrees.
 const DETAIL_MIN_WIDTH = 6;
 const DETAIL_GRID = 0.5;
-// From far away Google's coarse 3D tiles rise tens of kilometres above the
-// ground and hide the shells, so the shells rise with the camera: 4 m per
-// kilometre of camera height, at most 60 km, in 500 m steps.
-const LIFT_PER_METRE = 0.004;
-const MAX_LIFT = 60_000;
-const LIFT_STEP = 500;
 
 const sameEdges = (a, b) =>
   a.west === b.west &&
   a.south === b.south &&
   a.east === b.east &&
   a.north === b.north;
-
-/** Metres every shell rises for a camera this high above the ellipsoid. */
-export function shellLift(cameraHeight) {
-  if (!(cameraHeight > 0)) return 0;
-  const lift = Math.min(MAX_LIFT, cameraHeight * LIFT_PER_METRE);
-  return Math.round(lift / LIFT_STEP) * LIFT_STEP;
-}
-
-/**
- * Tell `apply` the shell lift for the camera's height now and, each frame
- * before it draws, whenever it changes.
- * @param {object} viewer
- * @param {(liftM: number) => void} apply
- * @param {{cameraOf?: Function, frameOf?: Function}} [ports]
- * @returns {() => void} Stops.
- */
-export function followShellLift(
-  viewer,
-  apply,
-  { cameraOf = findCamera, frameOf = findFrame } = {},
-) {
-  let lift = null;
-  const read = () => {
-    const next = shellLift(cameraOf(viewer)?.pose?.().height);
-    if (next === lift) return;
-    lift = next;
-    apply(next);
-  };
-  read();
-  return frameOf(viewer)?.on('preRender', read) ?? (() => {});
-}
 
 function fitTexture({ width, height }, limit) {
   // Halve, down to 1024 px wide, on devices with a smaller texture limit.
@@ -177,13 +131,20 @@ export function createWeatherShell({
   drawOf = findDraw,
   cameraOf = findCamera,
   frameOf = findFrame,
-  maxTextureSize = rendererOf(viewer)?.quality?.device?.().maxTextureSize ?? 0,
+  maxTextureSize,
   frameSource = null,
 }) {
   if (!Object.hasOwn(WEATHER_IMAGE_SIZES, product))
     throw new TypeError('Unknown weather product');
-  const size = fitTexture(WEATHER_IMAGE_SIZES[product], maxTextureSize);
-  const detailSize = fitTexture(WEATHER_DETAIL_SIZE, maxTextureSize);
+  // Read in the body, not as the parameter's default: an optional method call
+  // in a default parameter is compiled for older browsers into code that
+  // throws (esbuild).
+  const textureLimit =
+    maxTextureSize === undefined
+      ? (rendererOf(viewer)?.quality?.device?.().maxTextureSize ?? 0)
+      : maxTextureSize;
+  const size = fitTexture(WEATHER_IMAGE_SIZES[product], textureLimit);
+  const detailSize = fitTexture(WEATHER_DETAIL_SIZE, textureLimit);
   const infrared = product === 'clouds' || product === 'clouds-regional';
   // Global infrared contrast depends on the requested extent, so a window would
   // not match the image around it; the globe host also shows one mosaic.
@@ -250,6 +211,7 @@ export function createWeatherShell({
       heightM: height,
       alpha,
       detail: null,
+      shows: WEATHER_IMAGERY_SHOWS[product],
     });
     fieldAlpha = alpha;
     owed = true;

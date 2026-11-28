@@ -144,6 +144,9 @@ test('track_entity runner narrates a callsign-less aircraft by its registration'
       `${layerId} narration must speak the registration, not the ICAO hex`,
     );
     assert.equal(trackedId, 'ae1fa4', `${layerId} must still TRACK by icao24`);
+    // The result names what it tracked, so Context can show it.
+    assert.equal(result.id, 'ae1fa4');
+    assert.equal(result.layerId, layerId);
   }
 });
 
@@ -340,7 +343,9 @@ test('opening Stories only admits current requests and can stop its own session'
   assert.equal(admitted, 1);
 
   let finishLoading;
-  loaded = new Promise((resolve) => { finishLoading = resolve; });
+  loaded = new Promise((resolve) => {
+    finishLoading = resolve;
+  });
   const second = new AbortController();
   const pending = runner('open_stories', {}, { signal: second.signal });
   assert.equal(admitted, 2);
@@ -395,7 +400,11 @@ test('dependent voice navigation waits for the destination viewport to arrive', 
 // Run at once, the tilt's navigation cancelled the flight; with a geocoded
 // place, the late flight replaced the tilt.
 function tiltAfterFlightHarness() {
-  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
   const harness = createVoiceNavigationHarness();
   const { viewer, styleManager } = harness;
   const flights = [];
@@ -403,15 +412,16 @@ function tiltAfterFlightHarness() {
     harness.order.push('fly');
     flights.push(options);
   };
-  styleManager.runImmediateLocationNavigation = (navigate) => (
-    styleManager.runImmediateNavigation('location', navigate)
-  );
+  styleManager.runImmediateLocationNavigation = (navigate) =>
+    styleManager.runImmediateNavigation('location', navigate);
   return { ...harness, flights };
 }
 
 const settledYet = (promise) => {
   let settled = false;
-  promise.then(() => { settled = true; });
+  promise.then(() => {
+    settled = true;
+  });
   return () => settled;
 };
 
@@ -447,12 +457,13 @@ test('a tilt waits through a geocoded fly-to search, then for its flight', async
     viewer,
     styleManager,
     dataManager: { layers: new Map(), getAll: () => [] },
-    searchNavigation: (_viewer, query, options) => new Promise((resolve) => {
-      finishSearch = () => {
-        landFlight = options.onComplete;
-        resolve({ label: query, navigationMode: 'city-overview' });
-      };
-    }),
+    searchNavigation: (_viewer, query, options) =>
+      new Promise((resolve) => {
+        finishSearch = () => {
+          landFlight = options.onComplete;
+          resolve({ label: query, navigationMode: 'city-overview' });
+        };
+      }),
   });
   const fly = runner('fly_to_location', { query: 'Somewhere Far' });
   const tilt = runner('move_camera', { motion: 'tilt', pitchDeg: -45 });
@@ -498,7 +509,10 @@ test('a tilt beside a fly-to that found nothing is not run', async () => {
   assert.equal(result.ok, false);
   assert.match(result.error, /did not arrive/);
   // A later, separate tilt is not held by the failed lookup.
-  assert.equal((await runner('move_camera', { motion: 'tilt', pitchDeg: -45 })).ok, true);
+  assert.equal(
+    (await runner('move_camera', { motion: 'tilt', pitchDeg: -45 })).ok,
+    true,
+  );
 });
 
 test('a tilt with no voice flight pending runs at once', async () => {
@@ -529,11 +543,18 @@ for (const motion of [
       styleManager,
       dataManager: { layers: new Map(), getAll: () => [] },
     });
-    assert.equal((await runner('fly_to_location', { locationId: 'austin' })).ok, true);
+    assert.equal(
+      (await runner('fly_to_location', { locationId: 'austin' })).ok,
+      true,
+    );
     const moved = runner('move_camera', motion);
     const movedDone = settledYet(moved);
     await new Promise((resolve) => setTimeout(resolve, 0));
-    assert.equal(movedDone(), false, `the ${motion.motion} must wait while the camera flies`);
+    assert.equal(
+      movedDone(),
+      false,
+      `the ${motion.motion} must wait while the camera flies`,
+    );
     assert.equal(
       order.slice(order.indexOf('fly')).includes('cancel'),
       false,
@@ -554,23 +575,36 @@ for (const motion of [
       viewer,
       styleManager,
       dataManager: { layers: new Map(), getAll: () => [] },
-      searchNavigation: (_viewer, query, options) => new Promise((resolve) => {
-        finishSearch = () => {
-          landFlight = options.onComplete;
-          resolve({ label: query, navigationMode: 'city-overview' });
-        };
-      }),
+      searchNavigation: (_viewer, query, options) =>
+        new Promise((resolve) => {
+          finishSearch = () => {
+            landFlight = options.onComplete;
+            resolve({ label: query, navigationMode: 'city-overview' });
+          };
+        }),
     });
     const fly = runner('fly_to_location', { query: 'Somewhere Far' });
     const moved = runner('move_camera', motion);
     const movedDone = settledYet(moved);
     await new Promise((resolve) => setTimeout(resolve, 0));
-    assert.equal(movedDone(), false, `the ${motion.motion} must wait for the place lookup`);
-    assert.equal(getActiveCameraMotion(), null, 'nothing moves before the flight');
+    assert.equal(
+      movedDone(),
+      false,
+      `the ${motion.motion} must wait for the place lookup`,
+    );
+    assert.equal(
+      getActiveCameraMotion(),
+      null,
+      'nothing moves before the flight',
+    );
     finishSearch();
     assert.equal((await fly).ok, true);
     await new Promise((resolve) => setTimeout(resolve, 0));
-    assert.equal(movedDone(), false, `the ${motion.motion} must wait for the flight too`);
+    assert.equal(
+      movedDone(),
+      false,
+      `the ${motion.motion} must wait for the flight too`,
+    );
     landFlight();
     assert.equal((await moved).ok, true);
     assert.equal(getActiveCameraMotion()?.kind, motion.motion);
@@ -589,17 +623,17 @@ for (const motion of [
     const result = await moved;
     assert.equal(result.ok, false);
     assert.equal(result.motion, motion.motion);
-    assert.match(result.error, new RegExp(`this ${motion.motion} was waiting for did not arrive`));
+    assert.match(
+      result.error,
+      new RegExp(`this ${motion.motion} was waiting for did not arrive`),
+    );
     assert.equal(getActiveCameraMotion(), null);
   });
 }
 
 // Cesium lands a flight even when the user grabs the globe mid-flight, so the
 // motion queued behind it must not then take the camera back.
-for (const motion of [
-  { motion: 'orbit' },
-  { motion: 'tilt', pitchDeg: -45 },
-]) {
+for (const motion of [{ motion: 'orbit' }, { motion: 'tilt', pitchDeg: -45 }]) {
   test(`${motion.motion} queued behind a fly-to is dropped when the user drags mid-flight`, async () => {
     const { viewer, styleManager, flights } = tiltAfterFlightHarness();
     const canvasListeners = new Map();
@@ -611,7 +645,10 @@ for (const motion of [
       styleManager,
       dataManager: { layers: new Map(), getAll: () => [] },
     });
-    assert.equal((await runner('fly_to_location', { locationId: 'austin' })).ok, true);
+    assert.equal(
+      (await runner('fly_to_location', { locationId: 'austin' })).ok,
+      true,
+    );
     const moved = runner('move_camera', motion);
     canvasListeners.get('pointerdown')();
     flights[0].complete();
@@ -634,9 +671,15 @@ test('a drag during the first of two chained fly-tos still drops the queued moti
     styleManager,
     dataManager: { layers: new Map(), getAll: () => [] },
   });
-  assert.equal((await runner('fly_to_location', { locationId: 'austin' })).ok, true);
+  assert.equal(
+    (await runner('fly_to_location', { locationId: 'austin' })).ok,
+    true,
+  );
   canvasListeners.get('touchstart')();
-  assert.equal((await runner('fly_to_location', { locationId: 'austin' })).ok, true);
+  assert.equal(
+    (await runner('fly_to_location', { locationId: 'austin' })).ok,
+    true,
+  );
   const moved = runner('move_camera', { motion: 'orbit' });
   flights.at(-1).complete();
   const result = await moved;
@@ -657,7 +700,10 @@ test('input before a fly-to does not drop the motion queued behind it', async (t
     dataManager: { layers: new Map(), getAll: () => [] },
   });
   canvasListeners.get('wheel')();
-  assert.equal((await runner('fly_to_location', { locationId: 'austin' })).ok, true);
+  assert.equal(
+    (await runner('fly_to_location', { locationId: 'austin' })).ok,
+    true,
+  );
   const moved = runner('move_camera', { motion: 'orbit' });
   flights[0].complete();
   assert.equal((await moved).ok, true);
@@ -671,10 +717,16 @@ test('a motion follows a later fly-to in the same reply that cancels its flight'
     styleManager,
     dataManager: { layers: new Map(), getAll: () => [] },
   });
-  assert.equal((await runner('fly_to_location', { locationId: 'austin' })).ok, true);
+  assert.equal(
+    (await runner('fly_to_location', { locationId: 'austin' })).ok,
+    true,
+  );
   const moved = runner('move_camera', { motion: 'orbit' });
   const movedDone = settledYet(moved);
-  assert.equal((await runner('fly_to_location', { locationId: 'austin' })).ok, true);
+  assert.equal(
+    (await runner('fly_to_location', { locationId: 'austin' })).ok,
+    true,
+  );
   // The second flight supersedes the first, as Cesium's flyTo does.
   flights[0].cancel();
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -693,9 +745,10 @@ test('a motion follows a later fly-to whose start cancels its geocode', async (t
     viewer,
     styleManager,
     dataManager: { layers: new Map(), getAll: () => [] },
-    searchNavigation: (_viewer, query, options) => new Promise((resolve) => {
-      searches.push({ query, options, resolve });
-    }),
+    searchNavigation: (_viewer, query, options) =>
+      new Promise((resolve) => {
+        searches.push({ query, options, resolve });
+      }),
   });
   const flyA = runner('fly_to_location', { query: 'Place A' });
   const moved = runner('move_camera', { motion: 'orbit' });
@@ -723,11 +776,15 @@ test('a motion does not run at a flight that lands while the next place is looke
     viewer,
     styleManager,
     dataManager: { layers: new Map(), getAll: () => [] },
-    searchNavigation: (_viewer, query, options) => new Promise((resolve) => {
-      searches.push({ query, options, resolve });
-    }),
+    searchNavigation: (_viewer, query, options) =>
+      new Promise((resolve) => {
+        searches.push({ query, options, resolve });
+      }),
   });
-  assert.equal((await runner('fly_to_location', { locationId: 'austin' })).ok, true);
+  assert.equal(
+    (await runner('fly_to_location', { locationId: 'austin' })).ok,
+    true,
+  );
   const moved = runner('move_camera', { motion: 'tilt', pitchDeg: -45 });
   const movedDone = settledYet(moved);
   const flyB = runner('fly_to_location', { query: 'Place B' });
@@ -762,11 +819,15 @@ for (const order of ['lands first', 'not found first']) {
       viewer,
       styleManager,
       dataManager: { layers: new Map(), getAll: () => [] },
-      searchNavigation: (_viewer, query, options) => new Promise((resolve) => {
-        searches.push({ query, options, resolve });
-      }),
+      searchNavigation: (_viewer, query, options) =>
+        new Promise((resolve) => {
+          searches.push({ query, options, resolve });
+        }),
     });
-    assert.equal((await runner('fly_to_location', { locationId: 'austin' })).ok, true);
+    assert.equal(
+      (await runner('fly_to_location', { locationId: 'austin' })).ok,
+      true,
+    );
     const moved = runner('move_camera', { motion: 'tilt', pitchDeg: -45 });
     const flyB = runner('fly_to_location', { query: 'Nowhere' });
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -780,19 +841,23 @@ for (const order of ['lands first', 'not found first']) {
   });
 }
 
-test('a motion beside a fly-to that finds nothing never acts at an earlier reply\'s flight', async () => {
+test("a motion beside a fly-to that finds nothing never acts at an earlier reply's flight", async () => {
   const { viewer, styleManager, flights } = tiltAfterFlightHarness();
   const searches = [];
   const runner = createGevActionRunner({
     viewer,
     styleManager,
     dataManager: { layers: new Map(), getAll: () => [] },
-    searchNavigation: (_viewer, query, options) => new Promise((resolve) => {
-      searches.push({ query, options, resolve });
-    }),
+    searchNavigation: (_viewer, query, options) =>
+      new Promise((resolve) => {
+        searches.push({ query, options, resolve });
+      }),
   });
   // Reply 1: "fly to Austin", still flying.
-  assert.equal((await runner('fly_to_location', { locationId: 'austin' })).ok, true);
+  assert.equal(
+    (await runner('fly_to_location', { locationId: 'austin' })).ok,
+    true,
+  );
   // Reply 2: "fly to Nowhere and tilt".
   const flyB = runner('fly_to_location', { query: 'Nowhere' });
   const moved = runner('move_camera', { motion: 'tilt', pitchDeg: -45 });
@@ -816,11 +881,15 @@ for (const first of [0, 1]) {
       viewer,
       styleManager,
       dataManager: { layers: new Map(), getAll: () => [] },
-      searchNavigation: (_viewer, query, options) => new Promise((resolve) => {
-        searches.push({ query, options, resolve });
-      }),
+      searchNavigation: (_viewer, query, options) =>
+        new Promise((resolve) => {
+          searches.push({ query, options, resolve });
+        }),
     });
-    assert.equal((await runner('fly_to_location', { locationId: 'austin' })).ok, true);
+    assert.equal(
+      (await runner('fly_to_location', { locationId: 'austin' })).ok,
+      true,
+    );
     const moved = runner('move_camera', { motion: 'orbit' });
     const flyB = runner('fly_to_location', { query: 'Nowhere B' });
     const flyC = runner('fly_to_location', { query: 'Nowhere C' });
@@ -843,11 +912,15 @@ test('a lookup cancelled by a newer one that finds nothing does not hide the fli
     viewer,
     styleManager,
     dataManager: { layers: new Map(), getAll: () => [] },
-    searchNavigation: (_viewer, query, options) => new Promise((resolve) => {
-      searches.push({ query, options, resolve });
-    }),
+    searchNavigation: (_viewer, query, options) =>
+      new Promise((resolve) => {
+        searches.push({ query, options, resolve });
+      }),
   });
-  assert.equal((await runner('fly_to_location', { locationId: 'austin' })).ok, true);
+  assert.equal(
+    (await runner('fly_to_location', { locationId: 'austin' })).ok,
+    true,
+  );
   const moved = runner('move_camera', { motion: 'tilt', pitchDeg: -45 });
   const flyB = runner('fly_to_location', { query: 'Place B' });
   const flyC = runner('fly_to_location', { query: 'Nowhere C' });
@@ -872,8 +945,14 @@ test('a motion sent after a fly-to that found nothing still waits for the flight
     dataManager: { layers: new Map(), getAll: () => [] },
     searchNavigation: async () => null,
   });
-  assert.equal((await runner('fly_to_location', { locationId: 'austin' })).ok, true);
-  assert.equal((await runner('fly_to_location', { query: 'Nowhere' })).ok, false);
+  assert.equal(
+    (await runner('fly_to_location', { locationId: 'austin' })).ok,
+    true,
+  );
+  assert.equal(
+    (await runner('fly_to_location', { query: 'Nowhere' })).ok,
+    false,
+  );
   const before = order.length;
   const moved = runner('move_camera', { motion: 'tilt', pitchDeg: -45 });
   const movedDone = settledYet(moved);
@@ -893,9 +972,18 @@ test('two lookups that found nothing in a row still leave the motion waiting for
     dataManager: { layers: new Map(), getAll: () => [] },
     searchNavigation: async () => null,
   });
-  assert.equal((await runner('fly_to_location', { locationId: 'austin' })).ok, true);
-  assert.equal((await runner('fly_to_location', { query: 'Nowhere' })).ok, false);
-  assert.equal((await runner('fly_to_location', { query: 'Nowhere 2' })).ok, false);
+  assert.equal(
+    (await runner('fly_to_location', { locationId: 'austin' })).ok,
+    true,
+  );
+  assert.equal(
+    (await runner('fly_to_location', { query: 'Nowhere' })).ok,
+    false,
+  );
+  assert.equal(
+    (await runner('fly_to_location', { query: 'Nowhere 2' })).ok,
+    false,
+  );
   const before = order.length;
   const moved = runner('move_camera', { motion: 'orbit' });
   const movedDone = settledYet(moved);
@@ -915,13 +1003,17 @@ test('a motion acts at a landed flight that a later failed lookup replaced', asy
     viewer,
     styleManager,
     dataManager: { layers: new Map(), getAll: () => [] },
-    searchNavigation: (_viewer, query, options) => new Promise((resolve) => {
-      searches.push({ query, options, resolve });
-    }),
+    searchNavigation: (_viewer, query, options) =>
+      new Promise((resolve) => {
+        searches.push({ query, options, resolve });
+      }),
   });
   const flyA = runner('fly_to_location', { query: 'Slow A' });
   const moved = runner('move_camera', { motion: 'orbit' });
-  assert.equal((await runner('fly_to_location', { locationId: 'austin' })).ok, true);
+  assert.equal(
+    (await runner('fly_to_location', { locationId: 'austin' })).ok,
+    true,
+  );
   flights[0].complete();
   const flyC = runner('fly_to_location', { query: 'Nowhere C' });
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -941,18 +1033,25 @@ test('a motion refuses when the flight a later failed lookup replaced was cancel
     viewer,
     styleManager,
     dataManager: { layers: new Map(), getAll: () => [] },
-    searchNavigation: (_viewer, query, options) => new Promise((resolve) => {
-      searches.push({ query, options, resolve });
-    }),
+    searchNavigation: (_viewer, query, options) =>
+      new Promise((resolve) => {
+        searches.push({ query, options, resolve });
+      }),
   });
-  assert.equal((await runner('fly_to_location', { locationId: 'austin' })).ok, true);
+  assert.equal(
+    (await runner('fly_to_location', { locationId: 'austin' })).ok,
+    true,
+  );
   const moved = runner('move_camera', { motion: 'orbit' });
   const flyA = runner('fly_to_location', { query: 'Slow A' });
   await new Promise((resolve) => setTimeout(resolve, 0));
   // The motion sees Austin land, then follows A's lookup.
   flights[0].complete();
   await new Promise((resolve) => setTimeout(resolve, 0));
-  assert.equal((await runner('fly_to_location', { locationId: 'austin' })).ok, true);
+  assert.equal(
+    (await runner('fly_to_location', { locationId: 'austin' })).ok,
+    true,
+  );
   flights[1].cancel();
   const flyC = runner('fly_to_location', { query: 'Nowhere C' });
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -965,7 +1064,7 @@ test('a motion refuses when the flight a later failed lookup replaced was cancel
   assert.match(result.error, /did not arrive/);
 });
 
-test('a stale motion does not follow a newer reply\'s fly-to', async () => {
+test("a stale motion does not follow a newer reply's fly-to", async () => {
   const { viewer, styleManager, flights } = tiltAfterFlightHarness();
   const runner = createGevActionRunner({
     viewer,
@@ -973,11 +1072,21 @@ test('a stale motion does not follow a newer reply\'s fly-to', async () => {
     dataManager: { layers: new Map(), getAll: () => [] },
   });
   let live = true;
-  assert.equal((await runner('fly_to_location', { locationId: 'austin' })).ok, true);
-  const moved = runner('move_camera', { motion: 'orbit' }, { isCurrent: () => live });
+  assert.equal(
+    (await runner('fly_to_location', { locationId: 'austin' })).ok,
+    true,
+  );
+  const moved = runner(
+    'move_camera',
+    { motion: 'orbit' },
+    { isCurrent: () => live },
+  );
   // A newer reply takes over and flies elsewhere; this reply is stale.
   live = false;
-  assert.equal((await runner('fly_to_location', { locationId: 'austin' })).ok, true);
+  assert.equal(
+    (await runner('fly_to_location', { locationId: 'austin' })).ok,
+    true,
+  );
   flights[0].cancel();
   // The newer flight never lands here: following it would hold this answer.
   const result = await Promise.race([
@@ -996,7 +1105,10 @@ test('a motion gives up on a flight that has not landed in 15 s', async (t) => {
     styleManager,
     dataManager: { layers: new Map(), getAll: () => [] },
   });
-  assert.equal((await runner('fly_to_location', { locationId: 'austin' })).ok, true);
+  assert.equal(
+    (await runner('fly_to_location', { locationId: 'austin' })).ok,
+    true,
+  );
   t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
   const moved = runner('move_camera', { motion: 'orbit' });
   const movedDone = settledYet(moved);
@@ -1024,10 +1136,17 @@ test('a motion follows a newer fly-to that lands while its own lookup stalls', a
   runner('fly_to_location', { query: 'Place A' });
   const moved = runner('move_camera', { motion: 'orbit' });
   const movedDone = settledYet(moved);
-  assert.equal((await runner('fly_to_location', { locationId: 'austin' })).ok, true);
+  assert.equal(
+    (await runner('fly_to_location', { locationId: 'austin' })).ok,
+    true,
+  );
   t.mock.timers.tick(2_000);
   await Promise.resolve();
-  assert.equal(movedDone(), false, 'the orbit must wait for the newer flight to land');
+  assert.equal(
+    movedDone(),
+    false,
+    'the orbit must wait for the newer flight to land',
+  );
   flights[0].complete();
   for (let i = 0; i < 5 && !movedDone(); i += 1) await Promise.resolve();
   assert.equal(movedDone(), true, 'the orbit must not wait out A');
@@ -1043,7 +1162,7 @@ test('a motion follows a newer fly-to that lands while its own lookup stalls', a
 // Gemini runs one reply's calls one after another: by the time "pan left"
 // runs, "fly to Xyzzyville" has already found nothing, so there is no flight
 // to wait on, and the pan moved the old view with ok: true.
-test('a motion run after its reply\'s fly-to found nothing is not run', async (t) => {
+test("a motion run after its reply's fly-to found nothing is not run", async (t) => {
   t.after(() => interruptCameraMotion('test-cleanup'));
   const { viewer, styleManager } = tiltAfterFlightHarness();
   const runner = createGevActionRunner({
@@ -1053,7 +1172,11 @@ test('a motion run after its reply\'s fly-to found nothing is not run', async (t
     searchNavigation: async () => null,
   });
   const reply = { turn: 1 };
-  const fly = await runner('fly_to_location', { query: 'Xyzzyville' }, { reply });
+  const fly = await runner(
+    'fly_to_location',
+    { query: 'Xyzzyville' },
+    { reply },
+  );
   assert.equal(fly.ok, false);
   const pan = await runner(
     'move_camera',
@@ -1065,7 +1188,11 @@ test('a motion run after its reply\'s fly-to found nothing is not run', async (t
   assert.equal(getActiveCameraMotion(), null);
   // The same holds for OpenAI's reply identity.
   const group = 'response-1';
-  await runner('fly_to_location', { query: 'Xyzzyville' }, { authorityGroup: group });
+  await runner(
+    'fly_to_location',
+    { query: 'Xyzzyville' },
+    { authorityGroup: group },
+  );
   const tilt = await runner(
     'move_camera',
     { motion: 'tilt', pitchDeg: -45 },
@@ -1084,7 +1211,11 @@ test('a motion in a later reply runs after a fly-to that found nothing', async (
     dataManager: { layers: new Map(), getAll: () => [] },
     searchNavigation: async () => null,
   });
-  await runner('fly_to_location', { query: 'Xyzzyville' }, { reply: { turn: 1 } });
+  await runner(
+    'fly_to_location',
+    { query: 'Xyzzyville' },
+    { reply: { turn: 1 } },
+  );
   const pan = await runner(
     'move_camera',
     { motion: 'pan', direction: 'left' },
@@ -1104,7 +1235,10 @@ test('a motion runs at a flight of its reply that landed after another lookup fo
   });
   const reply = { turn: 1 };
   await runner('fly_to_location', { query: 'Xyzzyville' }, { reply });
-  assert.equal((await runner('fly_to_location', { locationId: 'austin' }, { reply })).ok, true);
+  assert.equal(
+    (await runner('fly_to_location', { locationId: 'austin' }, { reply })).ok,
+    true,
+  );
   flights[0].complete();
   const pan = await runner(
     'move_camera',
@@ -1123,7 +1257,10 @@ test('a motion queued behind a fly-to yields to a search started during the flig
     styleManager,
     dataManager: { layers: new Map(), getAll: () => [] },
   });
-  assert.equal((await runner('fly_to_location', { locationId: 'austin' })).ok, true);
+  assert.equal(
+    (await runner('fly_to_location', { locationId: 'austin' })).ok,
+    true,
+  );
   const moved = runner('move_camera', { motion: 'orbit' });
   await new Promise((resolve) => setTimeout(resolve, 0));
   const search = panelSearch();
@@ -1143,9 +1280,10 @@ test('a motion behind a geocoded fly-to yields to a search started while it flie
     viewer,
     styleManager,
     dataManager: { layers: new Map(), getAll: () => [] },
-    searchNavigation: (_viewer, query, options) => new Promise((resolve) => {
-      searches.push({ query, options, resolve });
-    }),
+    searchNavigation: (_viewer, query, options) =>
+      new Promise((resolve) => {
+        searches.push({ query, options, resolve });
+      }),
   });
   const fly = runner('fly_to_location', { query: 'Place A' });
   const moved = runner('move_camera', { motion: 'orbit' });
@@ -1162,14 +1300,18 @@ test('a motion behind a geocoded fly-to yields to a search started while it flie
 
 test('a search before the fly-to does not drop the motion queued behind it', async (t) => {
   t.after(() => interruptCameraMotion('test-cleanup'));
-  const { viewer, styleManager, flights, panelSearch } = tiltAfterFlightHarness();
+  const { viewer, styleManager, flights, panelSearch } =
+    tiltAfterFlightHarness();
   const runner = createGevActionRunner({
     viewer,
     styleManager,
     dataManager: { layers: new Map(), getAll: () => [] },
   });
   panelSearch();
-  assert.equal((await runner('fly_to_location', { locationId: 'austin' })).ok, true);
+  assert.equal(
+    (await runner('fly_to_location', { locationId: 'austin' })).ok,
+    true,
+  );
   const moved = runner('move_camera', { motion: 'tilt', pitchDeg: -45 });
   await new Promise((resolve) => setTimeout(resolve, 0));
   flights[0].complete();
@@ -1187,7 +1329,10 @@ test('a fly-to that stops a running motion says so', async (t) => {
     dataManager: { layers: new Map(), getAll: () => [] },
   });
   // The model sent the orbit first, so it ran at once.
-  const orbit = await runner('move_camera', { motion: 'orbit', mode: 'continuous' });
+  const orbit = await runner('move_camera', {
+    motion: 'orbit',
+    mode: 'continuous',
+  });
   assert.equal(orbit.ok, true);
   const fly = await runner('fly_to_location', { locationId: 'austin' });
   assert.equal(fly.ok, true);
@@ -1203,7 +1348,10 @@ test('bad move_camera arguments are refused without waiting for a flight', async
     styleManager,
     dataManager: { layers: new Map(), getAll: () => [] },
   });
-  assert.equal((await runner('fly_to_location', { locationId: 'austin' })).ok, true);
+  assert.equal(
+    (await runner('fly_to_location', { locationId: 'austin' })).ok,
+    true,
+  );
   const moved = runner('move_camera', { motion: 'pan' });
   const movedDone = settledYet(moved);
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -1710,6 +1858,47 @@ test('tracked aircraft yields to strongest-fire and vessel voice flights before 
     if (kind === 'vessel') assert.equal(order[3], 'select:123456789');
     assert.equal(order.at(-1), 'fly:released');
   }
+});
+
+test('track_entity on a vessel follows it through its layer instead of flying to it', async () => {
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
+  const { order, viewer, styleManager } = createVoiceNavigationHarness();
+  const tracked = [];
+  const module = {
+    findByQuery: () => ({
+      id: 'v1',
+      mmsi: '123456789',
+      name: 'Test vessel',
+      latitude: 29.75,
+      longitude: -95.35,
+    }),
+    selectById(id) {
+      order.push(`select:${id}`);
+      return true;
+    },
+    trackById(id, options) {
+      tracked.push([id, options?.origin]);
+      return true;
+    },
+  };
+  const dataManager = {
+    layers: new Map([['ais-live-vessels', { module }]]),
+    isEnabled: (id) => id === 'ais-live-vessels',
+    getAll: () => [],
+  };
+  const runner = createGevActionRunner({ viewer, styleManager, dataManager });
+  const result = await runner('track_entity', {
+    query: 'Test vessel',
+    layerId: 'ais-live-vessels',
+  });
+  assert.equal(result.ok, true);
+  assert.deepEqual(tracked, [['v1', 'voice']]);
+  assert.ok(!order.some((step) => step.startsWith('fly:')), 'no fly-to');
+  assert.ok(!order.includes('select:v1'));
 });
 
 test('move_camera and fly_route validate first, then use the shared camera authority seam', async () => {
@@ -2829,7 +3018,7 @@ test('control_cockpit resolves spoken TR-3B spellings to the tr3b class id', asy
   }
 });
 
-test('control_cockpit delegates selected-flight adoption to the canonical cockpit owner', async () => {
+test('control_cockpit delegates selected-flight adoption to the canonical cockpit owner and leaves Context alone', async () => {
   globalThis.window = globalThis.window || {
     clearTimeout,
     setTimeout,
@@ -2850,16 +3039,7 @@ test('control_cockpit delegates selected-flight adoption to the canonical cockpi
         changing: false,
       };
     },
-    async setContextMode(mode) {
-      calls.push({ action: 'context', mode });
-      contextActive = mode === 'flights';
-      return {
-        ok: contextActive,
-        mode,
-        active: contextActive,
-        changing: false,
-      };
-    },
+    setContextMode: () => assert.fail('Cockpit entry must not open Contacts'),
     controlCockpit(action, options) {
       calls.push({ action, selectedTarget: options.selectedTarget });
       return {
@@ -2895,52 +3075,11 @@ test('control_cockpit delegates selected-flight adoption to the canonical cockpi
   const result = await runner('control_cockpit', { action: 'enter' });
   assert.equal(result.ok, true);
   assert.deepEqual(calls, [
-    { action: 'context', mode: 'flights' },
     {
       action: 'enter',
       selectedTarget: { layerId: 'flights', id: 'abc123' },
     },
   ]);
-});
-
-test('control_cockpit does not mutate selection when Contacts entry fails', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
-  const styleManager = {
-    getContextModeState: () => ({ mode: null, active: false, changing: false }),
-    setContextMode: async () => ({
-      ok: false,
-      mode: null,
-      active: false,
-      changing: false,
-      error: 'Contacts activation failed',
-    }),
-    controlCockpit: () =>
-      assert.fail('Cockpit must not run after failed Contacts entry'),
-    getCockpitState: () => ({ active: false }),
-  };
-  const viewer = {
-    clock: { onTick: { addEventListener: () => () => {} } },
-    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
-    camera: { moveEnd: { addEventListener() {} } },
-  };
-  const runner = createGevActionRunner({
-    viewer,
-    styleManager,
-    dataManager: {
-      layers: new Map(),
-      isEnabled: () => false,
-      getAll: () => [],
-    },
-  });
-
-  const result = await runner('control_cockpit', { action: 'enter' });
-  assert.equal(result.ok, false);
-  assert.equal(result.error, 'Contacts activation failed');
-  assert.deepEqual(result.state, { active: false });
 });
 
 test('control_cockpit cancellation is inert when Contacts is already active', async () => {
@@ -2989,77 +3128,7 @@ test('control_cockpit cancellation is inert when Contacts is already active', as
   assert.deepEqual(result.state, { active: false });
 });
 
-test('control_cockpit rolls Contacts back when the turn becomes stale at commit', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
-  const calls = [];
-  let requestCurrent = true;
-  let contextMode = null;
-  const styleManager = {
-    getContextModeState: () => ({
-      mode: contextMode,
-      active: Boolean(contextMode),
-      changing: false,
-    }),
-    async setContextMode(mode, options) {
-      calls.push({ mode, options: options || null });
-      contextMode = mode;
-      if (mode === 'flights') requestCurrent = false;
-      return { ok: true, mode, active: Boolean(mode), changing: false };
-    },
-    controlCockpit: () => assert.fail('stale turn must not enter Cockpit'),
-    getCockpitState: () => ({ active: false }),
-  };
-  const viewer = {
-    clock: { onTick: { addEventListener: () => () => {} } },
-    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
-    camera: { moveEnd: { addEventListener() {} } },
-  };
-  const runner = createGevActionRunner({
-    viewer,
-    styleManager,
-    dataManager: {
-      layers: new Map(),
-      isEnabled: () => false,
-      getAll: () => [],
-    },
-  });
-
-  const result = await runner(
-    'control_cockpit',
-    { action: 'enter' },
-    {
-      isCurrent: () => requestCurrent,
-    },
-  );
-  assert.equal(result.ok, false);
-  assert.equal(result.cancelled, true);
-  assert.equal(contextMode, null);
-  assert.deepEqual(
-    calls.map(({ mode }) => mode),
-    ['flights', null],
-  );
-  assert.equal(
-    calls[1].options?.signal ?? null,
-    null,
-    'rollback must not inherit stale cancellation authority',
-  );
-  assert.equal(
-    calls[1].options?.isCurrent ?? null,
-    null,
-    'rollback must not inherit a stale currency probe',
-  );
-  assert.equal(
-    calls[1].options?.claimVisualAuthority,
-    false,
-    'rollback is cockpit choreography and must not claim the visual lane',
-  );
-});
-
-test('control_cockpit adopts the newest selection after Contacts settles', async () => {
+test('control_cockpit enters on the current selection and keeps the prior track for rollback', async () => {
   globalThis.window = globalThis.window || {
     clearTimeout,
     setTimeout,
@@ -3084,16 +3153,15 @@ test('control_cockpit adopts the newest selection after Contacts settles', async
   );
   contextStore.selectedEntityId = first.id;
   contextStore.selectedAt = Date.now();
+  // A newer selection before the turn runs is the one entered.
+  contextStore.selectedEntityId = second.id;
+  contextStore.selectedAt = Date.now();
   let receivedTarget = null;
   let receivedRollbackTarget = null;
   const styleManager = {
     getAircraftTrackingTarget: () => ({ layerId: 'military', id: 'prior' }),
     getContextModeState: () => ({ mode: null, active: false, changing: false }),
-    async setContextMode() {
-      contextStore.selectedEntityId = second.id;
-      contextStore.selectedAt = Date.now();
-      return { ok: true, mode: 'flights', active: true, changing: false };
-    },
+    setContextMode: () => assert.fail('Cockpit entry must not open Contacts'),
     controlCockpit(_action, options) {
       receivedTarget = options.selectedTarget;
       receivedRollbackTarget = options.rollbackTarget;
@@ -3132,25 +3200,16 @@ test('control_cockpit adopts the newest selection after Contacts settles', async
   });
 });
 
-test('control_cockpit restores the prior Context mode after Cockpit entry fails', async () => {
+test('a failed voice Cockpit entry leaves the Context mode as it was', async () => {
   globalThis.window = globalThis.window || {
     clearTimeout,
     setTimeout,
     requestIdleCallback: null,
   };
   const calls = [];
-  let contextMode = null;
   const styleManager = {
-    getContextModeState: () => ({
-      mode: contextMode,
-      active: Boolean(contextMode),
-      changing: false,
-    }),
-    async setContextMode(mode) {
-      contextMode = mode;
-      calls.push(`context:${mode || 'off'}`);
-      return { ok: true, mode, active: Boolean(mode), changing: false };
-    },
+    getContextModeState: () => ({ mode: null, active: false, changing: false }),
+    setContextMode: () => assert.fail('Cockpit entry must not open Contacts'),
     controlCockpit() {
       calls.push('cockpit:enter');
       return {
@@ -3177,31 +3236,21 @@ test('control_cockpit restores the prior Context mode after Cockpit entry fails'
 
   const result = await runner('control_cockpit', { action: 'enter' });
   assert.equal(result.ok, false);
-  assert.deepEqual(calls, ['context:flights', 'cockpit:enter', 'context:off']);
-  assert.equal(contextMode, null);
-  assert.equal(result.contextRollback.ok, true);
+  assert.equal(result.error, 'Cockpit entry was unavailable');
+  assert.deepEqual(calls, ['cockpit:enter']);
+  assert.equal(result.contextRollback, undefined);
 });
-
-test('control_cockpit contains entry exceptions and still restores the prior Context mode', async () => {
+test('control_cockpit contains entry exceptions and passes the prior track for rollback', async () => {
   globalThis.window = globalThis.window || {
     clearTimeout,
     setTimeout,
     requestIdleCallback: null,
   };
   const calls = [];
-  let contextMode = null;
   const styleManager = {
     getAircraftTrackingTarget: () => ({ layerId: 'military', id: 'prior' }),
-    getContextModeState: () => ({
-      mode: contextMode,
-      active: Boolean(contextMode),
-      changing: false,
-    }),
-    async setContextMode(mode) {
-      contextMode = mode;
-      calls.push(`context:${mode || 'off'}`);
-      return { ok: true, mode, active: Boolean(mode), changing: false };
-    },
+    getContextModeState: () => ({ mode: null, active: false, changing: false }),
+    setContextMode: () => assert.fail('Cockpit entry must not open Contacts'),
     controlCockpit(_action, options) {
       calls.push(['cockpit:enter', options.rollbackTarget]);
       throw new Error('entry exploded');
@@ -3226,15 +3275,11 @@ test('control_cockpit contains entry exceptions and still restores the prior Con
   const result = await runner('control_cockpit', { action: 'enter' });
   assert.equal(result.ok, false);
   assert.equal(result.error, 'entry exploded');
-  assert.equal(result.contextRollback.ok, true);
-  assert.equal(contextMode, null);
+  assert.deepEqual(result.state, { active: false });
   assert.deepEqual(calls, [
-    'context:flights',
     ['cockpit:enter', { layerId: 'military', id: 'prior' }],
-    'context:off',
   ]);
 });
-
 test('set_context_mode forwards cancellation authority and reports a stale turn', async () => {
   globalThis.window = globalThis.window || {
     clearTimeout,
@@ -3393,11 +3438,7 @@ test('control_cockpit enter skips selected non-flight context', async () => {
       active: contextActive,
       changing: false,
     }),
-    async setContextMode(mode) {
-      contextActive = mode === 'flights';
-      calls.push(`context:${mode}`);
-      return { ok: true, mode, active: true, changing: false };
-    },
+    setContextMode: () => assert.fail('Cockpit entry must not open Contacts'),
     controlCockpit(action) {
       calls.push(`cockpit:${action}`);
       return {
@@ -3432,7 +3473,7 @@ test('control_cockpit enter skips selected non-flight context', async () => {
 
   const result = await runner('control_cockpit', { action: 'enter' });
   assert.equal(result.ok, true);
-  assert.deepEqual(calls, ['context:flights', 'cockpit:enter']);
+  assert.deepEqual(calls, ['cockpit:enter']);
 });
 
 test('voice CCTV select, next, prev, and nearest report tracking-refused flights after selection', async () => {
@@ -4398,6 +4439,66 @@ test('voice Radio Pause while disabled is a truthful playback-only no-op', async
 // THE TWO APART, which a claim-count-only assertion cannot.
 // ---------------------------------------------------------------------------
 
+test('voice Cockpit entry, entered or failed, never changes the Context mode', async () => {
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
+  for (const entered of [true, false]) {
+    const calls = [];
+    const styleManager = {
+      getContextModeState: () => ({
+        mode: null,
+        active: false,
+        changing: false,
+      }),
+      setPanelCollapsed() {},
+      setContextMode: async (mode) => {
+        calls.push(mode);
+        return { ok: true, mode, active: true };
+      },
+      controlCockpit: async () =>
+        entered
+          ? { ok: true, action: 'control_cockpit', state: { active: true } }
+          : {
+              ok: false,
+              action: 'control_cockpit',
+              error: 'entry failed',
+              state: { active: false },
+            },
+      getCockpitState: () => ({ active: false }),
+      getAircraftTrackingTarget: () => null,
+    };
+    const layerCalls = [];
+    const viewer = {
+      clock: { onTick: { addEventListener: () => () => {} } },
+      scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+      camera: { moveEnd: { addEventListener() {} } },
+    };
+    const runner = createGevActionRunner({
+      viewer,
+      styleManager,
+      dataManager: {
+        layers: new Map([
+          ['flights', { module: {} }],
+          ['military', { module: {} }],
+        ]),
+        isEnabled: (layerId) => layerId === 'flights',
+        setEnabled: async (...args) => {
+          layerCalls.push(args);
+          return true;
+        },
+        getAll: () => [],
+      },
+    });
+    const result = await runner('control_cockpit', { action: 'enter' });
+    assert.equal(result.ok, entered);
+    assert.deepEqual(calls, [], 'no Context mode change');
+    assert.deepEqual(layerCalls, [], 'no layer change');
+  }
+});
+
 function contextClaimProbe({
   entrySucceeds = true,
   cockpitSucceeds = true,
@@ -4445,48 +4546,6 @@ function contextClaimProbe({
   });
   return { runner, calls };
 }
-
-test('Cockpit entry establishes Contacts WITHOUT claiming the visual lane', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
-  const probe = contextClaimProbe();
-  await probe.runner('control_cockpit', { action: 'enter' });
-
-  assert.ok(probe.calls.length >= 1, 'Cockpit entry must establish Contacts');
-  for (const call of probe.calls) {
-    assert.equal(
-      call.claimVisualAuthority,
-      false,
-      `cockpit choreography must not claim (mode=${call.mode})`,
-    );
-  }
-});
-
-test('Cockpit entry rollback also stays inert on the visual lane', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
-  const probe = contextClaimProbe({ cockpitSucceeds: false });
-  await probe.runner('control_cockpit', { action: 'enter' });
-
-  // Establish + roll back: BOTH are this action's own choreography.
-  assert.ok(
-    probe.calls.length >= 2,
-    `expected an entry and a rollback, saw ${probe.calls.length}`,
-  );
-  for (const call of probe.calls) {
-    assert.equal(
-      call.claimVisualAuthority,
-      false,
-      `rollback must not claim (mode=${call.mode})`,
-    );
-  }
-});
 
 test('a genuine set_context_mode request DOES claim the visual lane', async () => {
   globalThis.window = globalThis.window || {
@@ -4742,7 +4801,7 @@ test('a lost cross-mode switch reports every mode field in the shared vocabulary
     styleManager,
     dataManager: { layers: new Map(), getAll: () => [] },
   });
-  const result = await runner('set_context_mode', { mode: 'space-missions' });
+  const result = await runner('set_context_mode', { mode: 'contacts' });
   assert.equal(result.mode, 'off');
   assert.equal(result.modeInternal, null);
   assert.equal(
@@ -4758,6 +4817,141 @@ test('a lost cross-mode switch reports every mode field in the shared vocabulary
     /"(mode|priorMode|entering)":"flights"/,
     'no model-readable mode field may carry the internal id',
   );
+});
+
+/** A runner over one Space Missions layer whose switch answers `enable`. */
+function spaceMissionsVoiceRig({
+  enable = true,
+  cockpit = false,
+  missionsOn = false,
+  contextMode = null,
+} = {}) {
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
+  const calls = { setEnabled: [], panels: [], contextModes: [], waits: 0 };
+  let satellitesOn = true;
+  const missions = {
+    id: 'rocket-launches',
+    name: 'Space Missions (30d)',
+    async waitForSatelliteIntents() {
+      calls.waits += 1;
+      missionsOn = false;
+      return true;
+    },
+  };
+  const dataManager = {
+    layers: new Map([
+      ['rocket-launches', { module: missions }],
+      ['satellites', { module: { id: 'satellites', name: 'Satellites' } }],
+    ]),
+    getAll: () => [
+      { id: 'rocket-launches', name: missions.name, enabled: missionsOn },
+      { id: 'satellites', name: 'Satellites', enabled: satellitesOn },
+    ],
+    isEnabled: (id) => (id === 'rocket-launches' ? missionsOn : satellitesOn),
+    async setEnabled(id, enabled, options) {
+      calls.setEnabled.push([id, enabled, options?.origin]);
+      if (id === 'rocket-launches') missionsOn = enable && enabled;
+      else satellitesOn = enabled;
+      return id === 'rocket-launches' ? enable || !enabled : true;
+    },
+  };
+  const styleManager = {
+    getContextModeState: () => ({
+      mode: contextMode,
+      active: Boolean(contextMode),
+    }),
+    getCockpitState: () => ({ active: cockpit }),
+    setPanelCollapsed: (...args) => calls.panels.push(args),
+    async setContextMode(mode) {
+      calls.contextModes.push(mode);
+      return { ok: true, mode };
+    },
+  };
+  const runner = createGevActionRunner({
+    viewer: {
+      clock: { onTick: { addEventListener: () => () => {} } },
+      scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+      camera: { moveEnd: { addEventListener() {} } },
+    },
+    styleManager,
+    dataManager,
+  });
+  return { calls, runner };
+}
+
+test('set_context_mode space-missions switches the layer on and opens its panel', async () => {
+  for (const mode of ['space-missions', 'missions', 'space mission']) {
+    const { calls, runner } = spaceMissionsVoiceRig();
+    const result = await runner('set_context_mode', { mode });
+    assert.equal(result.ok, true, mode);
+    assert.equal(result.action, 'set_context_mode');
+    assert.equal(result.mode, 'space-missions');
+    assert.equal(result.layerId, 'rocket-launches');
+    assert.deepEqual(
+      calls.contextModes,
+      [],
+      'Space Missions is not a Context mode',
+    );
+    assert.deepEqual(calls.setEnabled, [['rocket-launches', true, 'voice']]);
+    assert.deepEqual(calls.panels, [
+      ['space-missions-panel', false, { explicit: true }],
+    ]);
+  }
+});
+
+test('set_context_mode off leaves Space Missions when no Context mode is on', async () => {
+  const { calls, runner } = spaceMissionsVoiceRig({ missionsOn: true });
+  const result = await runner('set_context_mode', { mode: 'off' });
+  assert.equal(result.ok, true);
+  assert.equal(result.mode, 'off');
+  assert.deepEqual(calls.setEnabled, [['rocket-launches', false, 'voice']]);
+  assert.deepEqual(calls.contextModes, [], 'Context is not asked to change');
+});
+
+test('set_context_mode off still ends Contacts first and leaves Space Missions on', async () => {
+  const { calls, runner } = spaceMissionsVoiceRig({
+    missionsOn: true,
+    contextMode: 'flights',
+  });
+  await runner('set_context_mode', { mode: 'off' });
+  assert.deepEqual(calls.contextModes, [null]);
+  assert.deepEqual(calls.setEnabled, []);
+});
+
+test('set_context_mode space-missions leaves the panel shut under the Cockpit', async () => {
+  const { calls, runner } = spaceMissionsVoiceRig({ cockpit: true });
+  const result = await runner('set_context_mode', { mode: 'space-missions' });
+  assert.equal(result.ok, true, 'the layer still switches on');
+  assert.deepEqual(calls.setEnabled, [['rocket-launches', true, 'voice']]);
+  assert.deepEqual(
+    calls.panels,
+    [],
+    'no panel write while the Cockpit owns the screen',
+  );
+});
+
+test('a Space Missions start that fails opens no panel and says so', async () => {
+  const { calls, runner } = spaceMissionsVoiceRig({ enable: false });
+  const result = await runner('set_context_mode', { mode: 'space-missions' });
+  assert.equal(result.ok, false);
+  assert.equal(result.action, 'set_context_mode');
+  assert.match(result.error, /Could not enable/);
+  assert.deepEqual(calls.panels, []);
+  assert.deepEqual(calls.contextModes, []);
+});
+
+test('a voice Satellites OFF waits for Space Missions to finish reacting', async () => {
+  const { calls, runner } = spaceMissionsVoiceRig();
+  const result = await runner('set_layer_visibility', {
+    layerId: 'satellites',
+    enabled: false,
+  });
+  assert.equal(result.ok, true);
+  assert.equal(calls.waits, 1);
 });
 
 test('an absent secondary mode stays absent instead of claiming to be off', async () => {
@@ -4800,71 +4994,6 @@ test('an absent secondary mode stays absent instead of claiming to be off', asyn
     result.entering,
     null,
     'nothing is entering — calling that "off" would assert a transition that is not happening',
-  );
-});
-
-test('a nested Cockpit rollback result is translated too', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
-  // The prior mode is Contacts, whose INTERNAL id is 'flights' — the id that
-  // must not reach the model. `active: false` keeps Contacts from reading as
-  // ready, so entry runs and the failed Cockpit rolls back to it.
-  let contextMode = 'flights';
-  const styleManager = {
-    getContextModeState: () => ({
-      mode: contextMode,
-      active: false,
-      changing: false,
-    }),
-    getCockpitState: () => ({ active: false }),
-    getAircraftTrackingTarget: () => null,
-    async setContextMode(mode) {
-      // Entry to Contacts succeeds; Cockpit then fails and the prior mode is
-      // rolled back — the rollback result is what the model reads.
-      contextMode = mode;
-      return {
-        ok: true,
-        action: 'set_context_mode',
-        mode,
-        active: true,
-        changing: false,
-      };
-    },
-    controlCockpit: () => ({
-      ok: false,
-      error: 'Cockpit entry failed',
-      state: { active: false },
-    }),
-  };
-  const viewer = {
-    clock: { onTick: { addEventListener: () => () => {} } },
-    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
-    camera: { moveEnd: { addEventListener() {} } },
-  };
-  const runner = createGevActionRunner({
-    viewer,
-    styleManager,
-    dataManager: {
-      layers: new Map(),
-      isEnabled: () => false,
-      getAll: () => [],
-    },
-  });
-  const result = await runner('control_cockpit', { action: 'enter' });
-  assert.equal(result.ok, false);
-  assert.equal(
-    result.contextRollback?.mode,
-    'contacts',
-    'the rollback names the mode the tools name',
-  );
-  assert.equal(result.contextRollback?.modeInternal, 'flights');
-  assert.doesNotMatch(
-    JSON.stringify(result.contextRollback || {}),
-    /"mode":"flights"/,
-    'a nested rollback result must not leak the internal id either',
   );
 });
 
@@ -5014,7 +5143,6 @@ function analystRunner(awareness, { getAll } = {}) {
     },
   });
 }
-
 test('front5: a nearby ask centres on the Contacts SUBJECT, not the selected datacenter', async () => {
   globalThis.window = globalThis.window || {
     clearTimeout,
@@ -5774,7 +5902,10 @@ test('general satellite pass resolves once, refuses ambiguity, and preserves ISS
   assert.equal(iss.action, 'next_iss_pass');
 });
 
-function manifestRunner(modules, { enabled = Object.keys(modules) } = {}) {
+function manifestRunner(
+  modules,
+  { enabled = Object.keys(modules), areaOptions = null } = {},
+) {
   const viewer = {
     clock: { onTick: { addEventListener: () => () => {} } },
     scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
@@ -5808,6 +5939,7 @@ function manifestRunner(modules, { enabled = Object.keys(modules) } = {}) {
         return true;
       },
     },
+    ...(areaOptions ? { areaOptions } : {}),
   });
   return { runner, toggles };
 }
@@ -5927,6 +6059,54 @@ test('analyst_query keeps its answer when one record has an out-of-range time', 
   const r = result.items.find((item) => item.id === 'r');
   assert.ok(r, 'the record is still listed');
   assert.equal(r.time, undefined, 'an unrepresentable time is omitted');
+});
+
+test("analyst_query keeps a fire's discovery time apart from its last growth", async (t) => {
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
+  const T = Date.parse('2026-09-04T00:00:00Z');
+  t.mock.method(Date, 'now', () => T);
+  const records = [
+    {
+      id: 'fire-a',
+      name: 'Alpha Fire',
+      lat: 35.2,
+      lon: -108.1,
+      discoveredTime: Date.parse('2026-09-01T00:00:00Z'),
+      lastGrowthTime: Date.parse('2026-09-02T00:00:00Z'),
+    },
+    {
+      id: 'fire-b',
+      name: 'Bravo Fire',
+      lat: 35.3,
+      lon: -108.2,
+      discoveredTime: Date.parse('2026-09-01T00:00:00Z'),
+      lastGrowthTime: null,
+    },
+  ];
+  const module = {
+    getStats: () => ({ count: records.length, lastUpdate: T }),
+    getAnalystRecords: () => records,
+  };
+  const { runner } = manifestRunner(
+    { 'fire-perimeters': module },
+    { enabled: ['fire-perimeters'] },
+  );
+  const result = await runner('analyst_query', {
+    layers: ['fire-perimeters'],
+    scope: { kind: 'anywhere' },
+    limit: 5,
+  });
+  assert.equal(result.ok, true, JSON.stringify(result));
+  const a = result.items.find((item) => item.id === 'fire-a');
+  const b = result.items.find((item) => item.id === 'fire-b');
+  assert.equal(a.time, '2026-09-01T00:00:00.000Z');
+  assert.equal(a.lastGrowthTime, '2026-09-02T00:00:00.000Z');
+  assert.equal(b.time, '2026-09-01T00:00:00.000Z');
+  assert.equal('lastGrowthTime' in b, false);
 });
 
 test('spoken layer names from the manifest reach the newer layers', async () => {
@@ -6834,12 +7014,16 @@ function createStreetLevelHarness({
   const lookups = [];
   const origins = [];
   const revealed = [];
-  const { viewer, styleManager, currentGeneration, panelSearch } = createVoiceNavigationHarness();
+  const { viewer, styleManager, currentGeneration, panelSearch } =
+    createVoiceNavigationHarness();
   // Who owns the camera: the shell's navigation stamps and globe gestures.
   Object.defineProperty(styleManager, '_navigationGeneration', {
     get: () => currentGeneration(),
   });
-  viewer.scene.canvas = Object.assign(new EventTarget(), { clientWidth: 1200, clientHeight: 800 });
+  viewer.scene.canvas = Object.assign(new EventTarget(), {
+    clientWidth: 1200,
+    clientHeight: 800,
+  });
   let completeFlight = null;
   viewer.camera.lookAt = () => {};
   viewer.camera.flyToBoundingSphere = (_sphere, options) => {
@@ -6874,7 +7058,11 @@ function createStreetLevelHarness({
             configured,
             keyRequired: keyRequired || keyRejected,
             keyRejected,
-            error: keyRejected ? KEY_REJECTED_MESSAGE : keyRequired ? `${names[id]} needs its key` : null,
+            error: keyRejected
+              ? KEY_REJECTED_MESSAGE
+              : keyRequired
+                ? `${names[id]} needs its key`
+                : null,
             groundClick: id === 'google',
             billed: id === 'google',
             available: id !== 'google' || stack === 'photoreal',
@@ -6882,7 +7070,9 @@ function createStreetLevelHarness({
         : null,
     getUIState: () => ({
       providers: ['mapillary', 'google']
-        .filter((id) => id !== 'google' || (stack === 'photoreal' && listGoogle))
+        .filter(
+          (id) => id !== 'google' || (stack === 'photoreal' && listGoogle),
+        )
         .map((id) => ({
           id,
           name: id === 'google' ? 'Google Street View' : 'Mapillary',
@@ -6899,14 +7089,23 @@ function createStreetLevelHarness({
     }),
     closeViewer() {
       order.push('close');
-      Object.assign(street, { open: false, imageId: null, error: null, nearestOutcome: null });
+      Object.assign(street, {
+        open: false,
+        imageId: null,
+        error: null,
+        nearestOutcome: null,
+      });
     },
     armNearest(point, options) {
-      order.push(`arm:${options.providerIds.join('+')}:${options.radiusM ?? 'default'}:${point ? `${point.lat},${point.lon}` : 'view-centre'}`);
+      order.push(
+        `arm:${options.providerIds.join('+')}:${options.radiusM ?? 'default'}:${point ? `${point.lat},${point.lon}` : 'view-centre'}`,
+      );
     },
     async openNearest(point, options) {
       lookups.push({ point, ...options });
-      order.push(`open:${options.providerIds.join('+')}:${options.radiusM ?? 'default'}:${options.frame}${point ? '' : ':view-centre'}`);
+      order.push(
+        `open:${options.providerIds.join('+')}:${options.radiusM ?? 'default'}:${options.frame}${point ? '' : ':view-centre'}`,
+      );
       if (options.signal?.aborted) return false;
       if (duringLookup) {
         const effect = duringLookup();
@@ -6934,7 +7133,8 @@ function createStreetLevelHarness({
       }
       if (!nearest) {
         closeReplaced();
-        street.nearestOutcome = options.aim === 'screen-centre' && sky ? 'sky' : 'empty';
+        street.nearestOutcome =
+          options.aim === 'screen-centre' && sky ? 'sky' : 'empty';
         street.error = `No street-level imagery within ${options.radiusM ?? 50} m of ${point ? 'that point' : 'the view centre'}`;
         return false;
       }
@@ -6951,7 +7151,12 @@ function createStreetLevelHarness({
     getLayerParams: () => ({ ...params }),
     setLayerParams(id, next, { origin }) {
       origins.push(origin);
-      order.push(`params:${Object.entries(next).filter(([, on]) => on).map(([k]) => k).join('+')}:${origin}`);
+      order.push(
+        `params:${Object.entries(next)
+          .filter(([, on]) => on)
+          .map(([k]) => k)
+          .join('+')}:${origin}`,
+      );
       if (paramsAccepted === false) return false;
       if (!lightFails) params = { ...params, ...next };
       return true;
@@ -6966,7 +7171,8 @@ function createStreetLevelHarness({
     },
     getAll: () => [{ id: 'street-level', name: 'Street Level', enabled }],
   };
-  styleManager.setPanelCollapsed = (id, collapsed) => revealed.push(`collapse:${id}:${collapsed}`);
+  styleManager.setPanelCollapsed = (id, collapsed) =>
+    revealed.push(`collapse:${id}:${collapsed}`);
   styleManager.revealPanel = (id) => revealed.push(`reveal:${id}`);
   const runner = createGevActionRunner({ viewer, styleManager, dataManager });
   return {
@@ -6990,7 +7196,8 @@ function createStreetLevelHarness({
 function withCamera(harness) {
   harness.dataManager.layers.set('cctv', {
     module: {
-      findByQuery: (id) => (id === 'cam-9' ? { latitude: 38.58, longitude: -121.5 } : null),
+      findByQuery: (id) =>
+        id === 'cam-9' ? { latitude: 38.58, longitude: -121.5 } : null,
     },
   });
   const wasEnabled = harness.dataManager.isEnabled;
@@ -6999,11 +7206,23 @@ function withCamera(harness) {
 }
 
 test('show_street_level flies first, then switches the map, lights the source, turns the layer on and opens the nearest photo', async () => {
-  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
   const { runner, order, finishFlight } = createStreetLevelHarness();
-  const pending = runner('show_street_level', { latitude: 38.5799, longitude: -121.4937, provider: 'google' });
+  const pending = runner('show_street_level', {
+    latitude: 38.5799,
+    longitude: -121.4937,
+    provider: 'google',
+  });
   await new Promise((resolve) => setImmediate(resolve));
-  assert.deepEqual(order, ['fly'], 'nothing changes until the place is reached');
+  assert.deepEqual(
+    order,
+    ['fly'],
+    'nothing changes until the place is reached',
+  );
   finishFlight();
   const result = await pending;
   assert.equal(result.ok, true, result.error);
@@ -7022,7 +7241,10 @@ test('show_street_level flies first, then switches the map, lights the source, t
   // A name given with its coordinates is what the answer says.
   const named = createStreetLevelHarness();
   const naming = named.runner('show_street_level', {
-    query: 'Capitol Mall', latitude: 38.5799, longitude: -121.4937, provider: 'google',
+    query: 'Capitol Mall',
+    latitude: 38.5799,
+    longitude: -121.4937,
+    provider: 'google',
   });
   await new Promise((resolve) => setImmediate(resolve));
   named.finishFlight();
@@ -7030,8 +7252,15 @@ test('show_street_level flies first, then switches the map, lights the source, t
 });
 
 test('show_street_level on Mapillary keeps the map, searches at the default radius and skips what is already on', async () => {
-  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
-  const { runner, order } = createStreetLevelHarness({ enabled: true, activeStack: 'osm' });
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
+  const { runner, order } = createStreetLevelHarness({
+    enabled: true,
+    activeStack: 'osm',
+  });
   const result = await runner('show_street_level', {
     latitude: 38.58,
     longitude: -121.49,
@@ -7039,68 +7268,126 @@ test('show_street_level on Mapillary keeps the map, searches at the default radi
     fly: false,
   });
   assert.equal(result.ok, true, result.error);
-  assert.deepEqual(order, ['params:mapillary:voice', 'open:mapillary:default:false']);
+  assert.deepEqual(order, [
+    'params:mapillary:voice',
+    'open:mapillary:default:false',
+  ]);
   assert.equal(result.flew, false);
 });
 
 test('show_street_level without a source uses the one lit in the panel', async () => {
-  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
   const { runner, order } = createStreetLevelHarness({
     activeStack: 'photoreal',
     lit: { mapillary: false, google: true },
     enabled: true,
   });
-  const result = await runner('show_street_level', { latitude: 1, longitude: 2, fly: false });
+  const result = await runner('show_street_level', {
+    latitude: 1,
+    longitude: 2,
+    fly: false,
+  });
   assert.equal(result.ok, true, result.error);
   assert.equal(result.provider, 'google');
   assert.deepEqual(order, ['params:google:voice', 'open:google:250:false']);
 });
 
 test('show_street_level reports each stage it could not pass', async () => {
-  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
-  const centre = createStreetLevelHarness({ enabled: true, activeStack: 'photoreal' });
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
+  const centre = createStreetLevelHarness({
+    enabled: true,
+    activeStack: 'photoreal',
+  });
   const none = await centre.runner('show_street_level', { provider: 'google' });
   assert.equal(none.ok, true, 'no place at all means the view centre');
   assert.equal(none.label, 'the view centre');
-  assert.deepEqual(centre.order, ['params:google:voice', 'open:google:250:false:view-centre']);
+  assert.deepEqual(centre.order, [
+    'params:google:voice',
+    'open:google:250:false:view-centre',
+  ]);
 
-  const offGlobe = createStreetLevelHarness({ enabled: true, activeStack: 'photoreal' });
-  const outOfRange = await offGlobe.runner('show_street_level', { latitude: 95, longitude: 2, provider: 'google' });
+  const offGlobe = createStreetLevelHarness({
+    enabled: true,
+    activeStack: 'photoreal',
+  });
+  const outOfRange = await offGlobe.runner('show_street_level', {
+    latitude: 95,
+    longitude: 2,
+    provider: 'google',
+  });
   assert.deepEqual([outOfRange.ok, outOfRange.stage], [false, 'location']);
   assert.deepEqual(offGlobe.order, [], 'nothing flies, switches or looks up');
 
   const unknown = await createStreetLevelHarness().runner('show_street_level', {
-    latitude: 1, longitude: 2, provider: 'openstreetcam', fly: false,
+    latitude: 1,
+    longitude: 2,
+    provider: 'openstreetcam',
+    fly: false,
   });
   assert.deepEqual([unknown.ok, unknown.stage], [false, 'provider']);
   assert.match(unknown.error, /openstreetcam/);
 
-  const keylessHarness = createStreetLevelHarness({ enabled: true, keyRequired: true });
+  const keylessHarness = createStreetLevelHarness({
+    enabled: true,
+    keyRequired: true,
+  });
   const keyless = await keylessHarness.runner('show_street_level', {
-    latitude: 1, longitude: 2, provider: 'google', fly: false,
+    latitude: 1,
+    longitude: 2,
+    provider: 'google',
+    fly: false,
   });
   assert.deepEqual([keyless.ok, keyless.stage], [false, 'key']);
   assert.match(keyless.error, /needs its key/);
   assert.equal(keyless.providerName, 'Google Street View');
-  assert.deepEqual(keylessHarness.order, [], 'a keyless source changes nothing: no flight, no map, no switch');
-
-  const refusedSwitch = await createStreetLevelHarness({ enabled: true, paramsAccepted: false }).runner(
-    'show_street_level',
-    { latitude: 1, longitude: 2, provider: 'google', fly: false },
+  assert.deepEqual(
+    keylessHarness.order,
+    [],
+    'a keyless source changes nothing: no flight, no map, no switch',
   );
-  assert.deepEqual([refusedSwitch.ok, refusedSwitch.stage], [false, 'provider']);
+
+  const refusedSwitch = await createStreetLevelHarness({
+    enabled: true,
+    paramsAccepted: false,
+  }).runner('show_street_level', {
+    latitude: 1,
+    longitude: 2,
+    provider: 'google',
+    fly: false,
+  });
+  assert.deepEqual(
+    [refusedSwitch.ok, refusedSwitch.stage],
+    [false, 'provider'],
+  );
   assert.match(refusedSwitch.error, /could not be switched on/);
 
-  const empty = await createStreetLevelHarness({ enabled: true, nearest: null }).runner(
-    'show_street_level',
-    { latitude: 1, longitude: 2, provider: 'google', fly: false },
-  );
+  const empty = await createStreetLevelHarness({
+    enabled: true,
+    nearest: null,
+  }).runner('show_street_level', {
+    latitude: 1,
+    longitude: 2,
+    provider: 'google',
+    fly: false,
+  });
   assert.deepEqual([empty.ok, empty.stage], [false, 'imagery']);
   assert.match(empty.error, /within 250 m/);
 });
 
 test('show_street_level stops at the map when the source’s map is refused, before touching the panel', async () => {
-  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
   const { layer, order } = createStreetLevelHarness({ enabled: true });
   const reason = 'Google 3D needs GOOGLE_MAPS_API_KEY';
   const dataManager = {
@@ -7112,21 +7399,47 @@ test('show_street_level stops at the map when the source’s map is refused, bef
   };
   const { viewer, styleManager } = createVoiceNavigationHarness();
   styleManager.mapStackController = { getActiveId: () => 'osm' };
-  styleManager.setMapStack = async () => ({ ok: false, activeStack: 'osm', error: reason });
+  styleManager.setMapStack = async () => ({
+    ok: false,
+    activeStack: 'osm',
+    error: reason,
+  });
   const runner = createGevActionRunner({ viewer, styleManager, dataManager });
-  const result = await runner('show_street_level', { latitude: 1, longitude: 2, provider: 'google', fly: false });
-  assert.deepEqual([result.ok, result.stage, result.error], [false, 'map', reason]);
-  assert.deepEqual(order, [], 'the source is not switched when its map is refused');
+  const result = await runner('show_street_level', {
+    latitude: 1,
+    longitude: 2,
+    provider: 'google',
+    fly: false,
+  });
+  assert.deepEqual(
+    [result.ok, result.stage, result.error],
+    [false, 'map', reason],
+  );
+  assert.deepEqual(
+    order,
+    [],
+    'the source is not switched when its map is refused',
+  );
 });
 
 test('show_street_level opens photos of a numbered item or a pointed spot through its entity', async () => {
-  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
   const { runner, order, finishFlight } = withCamera(
     createStreetLevelHarness({ enabled: true, activeStack: 'photoreal' }),
   );
   const pending = runner('show_street_level', {
     provider: 'google',
-    entity: { layerId: 'cctv', id: 'cam-9', label: 'Camera 9', lat: 38.58, lon: -121.5 },
+    entity: {
+      layerId: 'cctv',
+      id: 'cam-9',
+      label: 'Camera 9',
+      lat: 38.58,
+      lon: -121.5,
+    },
   });
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(order, ['fly'], 'the entity position is flown to');
@@ -7134,14 +7447,25 @@ test('show_street_level opens photos of a numbered item or a pointed spot throug
   const result = await pending;
   assert.equal(result.ok, true, result.error);
   assert.equal(result.label, 'Camera 9');
-  assert.deepEqual(order, ['fly', 'params:google:voice', 'open:google:250:false']);
+  assert.deepEqual(order, [
+    'fly',
+    'params:google:voice',
+    'open:google:250:false',
+  ]);
 });
 
 test('show_street_level hands the point from a named place, a preset and a curated POI to the lookup', async () => {
-  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
   const points = [];
   const make = () => {
-    const harness = createStreetLevelHarness({ enabled: true, activeStack: 'osm' });
+    const harness = createStreetLevelHarness({
+      enabled: true,
+      activeStack: 'osm',
+    });
     const open = harness.layer.openNearest;
     harness.layer.openNearest = async (point, options) => {
       points.push(point);
@@ -7154,7 +7478,10 @@ test('show_street_level hands the point from a named place, a preset and a curat
   const viewerFor = () => ({ ...createVoiceNavigationHarness().viewer });
   const runnerWithSearch = createGevActionRunner({
     viewer: viewerFor(),
-    styleManager: { mapStackController: { getActiveId: () => 'osm' }, setMapStack: async () => ({ ok: true }) },
+    styleManager: {
+      mapStackController: { getActiveId: () => 'osm' },
+      setMapStack: async () => ({ ok: true }),
+    },
     dataManager: {
       layers: new Map([['street-level', { module: named.layer }]]),
       isEnabled: () => true,
@@ -7164,16 +7491,28 @@ test('show_street_level hands the point from a named place, a preset and a curat
     },
     searchNavigation: async (_viewer, query, options) => {
       options.onComplete?.();
-      return { label: `${query}, CA`, latitude: 38.5799, longitude: -121.4937, navigationMode: 'precise-place', rangeM: 250 };
+      return {
+        label: `${query}, CA`,
+        latitude: 38.5799,
+        longitude: -121.4937,
+        navigationMode: 'precise-place',
+        rangeM: 250,
+      };
     },
   });
-  const geocoded = await runnerWithSearch('show_street_level', { query: '10th Street, Sacramento', provider: 'mapillary' });
+  const geocoded = await runnerWithSearch('show_street_level', {
+    query: '10th Street, Sacramento',
+    provider: 'mapillary',
+  });
   assert.equal(geocoded.ok, true, geocoded.error);
   assert.equal(geocoded.label, '10th Street, Sacramento, CA');
   assert.deepEqual(points.at(-1), { lat: 38.5799, lon: -121.4937 });
   // A curated POI and a city preset fly to their hand-tuned poses and report them.
   for (const [args, expected] of [
-    [{ query: 'Golden Gate Bridge', provider: 'mapillary' }, { lat: 37.8199, lon: -122.4783 }],
+    [
+      { query: 'Golden Gate Bridge', provider: 'mapillary' },
+      { lat: 37.8199, lon: -122.4783 },
+    ],
     [{ query: 'austin', provider: 'mapillary' }, null],
   ]) {
     const harness = make();
@@ -7184,13 +7523,24 @@ test('show_street_level hands the point from a named place, a preset and a curat
     assert.equal(result.ok, true, `${args.query}: ${result.error}`);
     const point = points.at(-1);
     if (expected) assert.deepEqual(point, expected);
-    else assert.ok(Number.isFinite(point.lat) && Number.isFinite(point.lon), 'a preset flight reports its point');
+    else
+      assert.ok(
+        Number.isFinite(point.lat) && Number.isFinite(point.lon),
+        'a preset flight reports its point',
+      );
   }
 });
 
 test('show_street_level retires its lookup when the turn is superseded, and says so', async () => {
-  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
-  const { runner, order, layer } = createStreetLevelHarness({ enabled: true, activeStack: 'photoreal' });
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
+  const { runner, order, layer } = createStreetLevelHarness({
+    enabled: true,
+    activeStack: 'photoreal',
+  });
   const controller = new AbortController();
   let currentTurn = true;
   layer.openNearest = async (_point, options) => {
@@ -7204,33 +7554,68 @@ test('show_street_level retires its lookup when the turn is superseded, and says
     { latitude: 1, longitude: 2, provider: 'google', fly: false },
     { signal: controller.signal, isCurrent: () => currentTurn },
   );
-  assert.deepEqual([result.ok, result.cancelled, result.stage], [false, true, 'imagery']);
+  assert.deepEqual(
+    [result.ok, result.cancelled, result.stage],
+    [false, true, 'imagery'],
+  );
   assert.doesNotMatch(result.error, /No .* imagery/);
-  assert.ok(order.includes('open:signal:true'), 'the lookup gets the turn signal');
+  assert.ok(
+    order.includes('open:signal:true'),
+    'the lookup gets the turn signal',
+  );
 });
 
 test('show_street_level with autoOpen:false arms a billed source and leaves the load to a click; a free source still opens', async () => {
-  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
-  const armedHarness = createStreetLevelHarness({ enabled: true, activeStack: 'osm' });
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
+  const armedHarness = createStreetLevelHarness({
+    enabled: true,
+    activeStack: 'osm',
+  });
   const armed = await armedHarness.runner('show_street_level', {
-    latitude: 38.5799, longitude: -121.4937, provider: 'google', fly: false, autoOpen: false,
+    latitude: 38.5799,
+    longitude: -121.4937,
+    provider: 'google',
+    fly: false,
+    autoOpen: false,
   });
   assert.equal(armed.ok, true, armed.error);
   assert.equal(armed.armed, true);
   assert.equal(armed.imageId, undefined);
   assert.deepEqual(
     armedHarness.order,
-    ['map:photoreal', 'params:google:voice', 'arm:google:250:38.5799,-121.4937'],
+    [
+      'map:photoreal',
+      'params:google:voice',
+      'arm:google:250:38.5799,-121.4937',
+    ],
     'map and source are ready, the lookup is armed at the point, nothing is loaded',
   );
   assert.match(armed.say, /^Google Street View is ready at .*press OPEN/);
   assert.deepEqual(
     { ...armed, say: undefined, display: undefined },
-    { ok: true, action: 'show_street_level', provider: 'google', providerName: 'Google Street View', label: '38.5799, -121.4937', armed: true, flew: false, say: undefined, display: undefined },
+    {
+      ok: true,
+      action: 'show_street_level',
+      provider: 'google',
+      providerName: 'Google Street View',
+      label: '38.5799, -121.4937',
+      armed: true,
+      flew: false,
+      say: undefined,
+      display: undefined,
+    },
   );
   const free = createStreetLevelHarness({ enabled: true, activeStack: 'osm' });
   const opened = await free.runner('show_street_level', {
-    latitude: 38.5799, longitude: -121.4937, provider: 'mapillary', fly: false, autoOpen: false,
+    latitude: 38.5799,
+    longitude: -121.4937,
+    provider: 'mapillary',
+    fly: false,
+    autoOpen: false,
   });
   assert.equal(opened.ok, true, opened.error);
   assert.equal(opened.armed, undefined);
@@ -7238,38 +7623,81 @@ test('show_street_level with autoOpen:false arms a billed source and leaves the 
 });
 
 test('show_street_level tells a failed enable, a delisted source, a key refused mid-lookup and a layer switched off apart', async () => {
-  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
   const at = { latitude: 1, longitude: 2, provider: 'google', fly: false };
-  const notEnabled = await createStreetLevelHarness({ activeStack: 'photoreal', enableResult: false }).runner('show_street_level', at);
-  assert.deepEqual([notEnabled.ok, notEnabled.stage, notEnabled.cancelled], [false, 'layer', false]);
+  const notEnabled = await createStreetLevelHarness({
+    activeStack: 'photoreal',
+    enableResult: false,
+  }).runner('show_street_level', at);
+  assert.deepEqual(
+    [notEnabled.ok, notEnabled.stage, notEnabled.cancelled],
+    [false, 'layer', false],
+  );
   assert.match(notEnabled.say, /Couldn't turn on Street Level/);
 
-  const delisted = await createStreetLevelHarness({ enabled: true, activeStack: 'photoreal', listGoogle: false }).runner('show_street_level', at);
+  const delisted = await createStreetLevelHarness({
+    enabled: true,
+    activeStack: 'photoreal',
+    listGoogle: false,
+  }).runner('show_street_level', at);
   assert.deepEqual([delisted.ok, delisted.stage], [false, 'provider']);
   assert.equal(delisted.error, 'not on this map');
 
-  const refused = await createStreetLevelHarness({ enabled: true, activeStack: 'photoreal', duringLookup: () => 'key-rejected' }).runner('show_street_level', at);
-  assert.deepEqual([refused.ok, refused.stage, refused.keyRejected], [false, 'key', true]);
+  const refused = await createStreetLevelHarness({
+    enabled: true,
+    activeStack: 'photoreal',
+    duringLookup: () => 'key-rejected',
+  }).runner('show_street_level', at);
+  assert.deepEqual(
+    [refused.ok, refused.stage, refused.keyRejected],
+    [false, 'key', true],
+  );
   assert.equal(refused.say, 'Google Street View refused its key.');
 
-  const switchedOff = await createStreetLevelHarness({ enabled: true, activeStack: 'photoreal', duringLookup: () => 'layer-off' }).runner('show_street_level', at);
-  assert.deepEqual([switchedOff.ok, switchedOff.stage, switchedOff.cancelled], [false, 'imagery', true]);
-  assert.equal(switchedOff.say, undefined, 'a request the user withdrew is not spoken');
+  const switchedOff = await createStreetLevelHarness({
+    enabled: true,
+    activeStack: 'photoreal',
+    duringLookup: () => 'layer-off',
+  }).runner('show_street_level', at);
+  assert.deepEqual(
+    [switchedOff.ok, switchedOff.stage, switchedOff.cancelled],
+    [false, 'imagery', true],
+  );
+  assert.equal(
+    switchedOff.say,
+    undefined,
+    'a request the user withdrew is not spoken',
+  );
 
   // A source whose status call says it is not configured is key-gated even
   // before its coverage reports a missing key.
-  const unconfigured = createStreetLevelHarness({ enabled: true, activeStack: 'photoreal', configured: false });
+  const unconfigured = createStreetLevelHarness({
+    enabled: true,
+    activeStack: 'photoreal',
+    configured: false,
+  });
   const gated = await unconfigured.runner('show_street_level', at);
   assert.deepEqual([gated.ok, gated.stage], [false, 'key']);
   assert.deepEqual(unconfigured.order, [], 'nothing changed');
 });
 
 test('show_street_level reports a geocoder that throws as its location stage', async () => {
-  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
   const h = createStreetLevelHarness({ enabled: true, activeStack: 'osm' });
   const runner = createGevActionRunner({
     viewer: createVoiceNavigationHarness().viewer,
-    styleManager: { mapStackController: { getActiveId: () => 'osm' }, setMapStack: async () => ({ ok: true }) },
+    styleManager: {
+      mapStackController: { getActiveId: () => 'osm' },
+      setMapStack: async () => ({ ok: true }),
+    },
     dataManager: h.dataManager,
     placeSearch: {
       geocode: async () => {
@@ -7277,76 +7705,157 @@ test('show_street_level reports a geocoder that throws as its location stage', a
       },
     },
   });
-  const result = await runner('show_street_level', { query: 'Capitol Mall', provider: 'mapillary' });
+  const result = await runner('show_street_level', {
+    query: 'Capitol Mall',
+    provider: 'mapillary',
+  });
   assert.deepEqual([result.ok, result.stage], [false, 'location']);
   assert.equal(result.error, 'Could not arrive at Capitol Mall');
-  assert.deepEqual(h.order.filter((step) => /^(params|open|arm)/.test(step)), [], 'nothing switched or looked up');
+  assert.deepEqual(
+    h.order.filter((step) => /^(params|open|arm)/.test(step)),
+    [],
+    'nothing switched or looked up',
+  );
 });
 
 test('show_street_level reports a flight that lands without a position', async () => {
-  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
   const hit = createStreetLevelHarness({ enabled: true, activeStack: 'osm' });
   // A flight that reports no coordinates cannot be followed by a lookup.
   const noPoint = createGevActionRunner({
     viewer: createVoiceNavigationHarness().viewer,
-    styleManager: { mapStackController: { getActiveId: () => 'osm' }, setMapStack: async () => ({ ok: true }) },
+    styleManager: {
+      mapStackController: { getActiveId: () => 'osm' },
+      setMapStack: async () => ({ ok: true }),
+    },
     dataManager: hit.dataManager,
     searchNavigation: async (_viewer, query, options) => {
       options.onComplete?.();
       return { label: query, navigationMode: 'city-overview', rangeM: null };
     },
   });
-  const unplaced = await noPoint('show_street_level', { query: 'Somewhere', provider: 'mapillary' });
+  const unplaced = await noPoint('show_street_level', {
+    query: 'Somewhere',
+    provider: 'mapillary',
+  });
   assert.deepEqual([unplaced.ok, unplaced.stage], [false, 'location']);
   assert.match(unplaced.error, /no position/);
 });
 
 test('fly_to_location reports the overview centre for a city framed as a whole, and the first POI for a close view', async () => {
-  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
   const { viewer, styleManager } = createVoiceNavigationHarness();
   viewer.camera.lookAt = () => {};
   viewer.camera.flyTo = (options) => options.complete?.();
   viewer.camera.flyToBoundingSphere = (_s, options) => options.complete?.();
-  styleManager.runImmediateLocationNavigation = (navigate) => styleManager.runImmediateNavigation('location', navigate);
-  const runner = createGevActionRunner({ viewer, styleManager, dataManager: { layers: new Map(), getAll: () => [] } });
+  styleManager.runImmediateLocationNavigation = (navigate) =>
+    styleManager.runImmediateNavigation('location', navigate);
+  const runner = createGevActionRunner({
+    viewer,
+    styleManager,
+    dataManager: { layers: new Map(), getAll: () => [] },
+  });
   const overview = await runner('fly_to_location', { locationId: 'austin' });
   assert.equal(overview.ok, true);
-  assert.ok(Math.abs(overview.latitude - 30.31) < 0.001, String(overview.latitude));
-  assert.ok(Math.abs(overview.longitude - -97.75) < 0.001, String(overview.longitude));
-  const close = await runner('fly_to_location', { locationId: 'austin', viewMode: 'close' });
+  assert.ok(
+    Math.abs(overview.latitude - 30.31) < 0.001,
+    String(overview.latitude),
+  );
+  assert.ok(
+    Math.abs(overview.longitude - -97.75) < 0.001,
+    String(overview.longitude),
+  );
+  const close = await runner('fly_to_location', {
+    locationId: 'austin',
+    viewMode: 'close',
+  });
   assert.deepEqual([close.latitude, close.longitude], [30.2747, -97.7403]);
 });
 
 test('show_street_level arms the view centre when a billed link names no place, and keeps the flight label when it flew', async () => {
-  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
-  const centre = createStreetLevelHarness({ enabled: true, activeStack: 'photoreal' });
-  const armed = await centre.runner('show_street_level', { provider: 'google', autoOpen: false });
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
+  const centre = createStreetLevelHarness({
+    enabled: true,
+    activeStack: 'photoreal',
+  });
+  const armed = await centre.runner('show_street_level', {
+    provider: 'google',
+    autoOpen: false,
+  });
   assert.equal(armed.ok, true, armed.error);
   assert.equal(armed.armed, true);
-  assert.deepEqual(centre.order, ['params:google:voice', 'arm:google:250:view-centre'], 'armed at the view centre, nothing opened');
-  const flown = createStreetLevelHarness({ enabled: true, activeStack: 'photoreal' });
-  const pending = flown.runner('show_street_level', { latitude: 38.5799, longitude: -121.4937, provider: 'google', autoOpen: false });
+  assert.deepEqual(
+    centre.order,
+    ['params:google:voice', 'arm:google:250:view-centre'],
+    'armed at the view centre, nothing opened',
+  );
+  const flown = createStreetLevelHarness({
+    enabled: true,
+    activeStack: 'photoreal',
+  });
+  const pending = flown.runner('show_street_level', {
+    latitude: 38.5799,
+    longitude: -121.4937,
+    provider: 'google',
+    autoOpen: false,
+  });
   await new Promise((resolve) => setImmediate(resolve));
   flown.finishFlight();
   const result = await pending;
   assert.equal(result.armed, true);
   assert.equal(result.flew, true);
   assert.equal(result.location, '38.5799, -121.4937');
-  assert.ok(!flown.order.some((entry) => entry.startsWith('open:')), 'no load after the flight');
+  assert.ok(
+    !flown.order.some((entry) => entry.startsWith('open:')),
+    'no load after the flight',
+  );
 });
 
 test('show_street_level says "refused its key" when Google already refused it, and fails when the source will not light', async () => {
-  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
-  const refusedHarness = createStreetLevelHarness({ enabled: true, keyRejectedAtStart: true });
-  const refused = await refusedHarness.runner('show_street_level', { latitude: 1, longitude: 2, provider: 'google', fly: false });
-  assert.deepEqual([refused.ok, refused.stage, refused.keyRejected], [false, 'key', true]);
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
+  const refusedHarness = createStreetLevelHarness({
+    enabled: true,
+    keyRejectedAtStart: true,
+  });
+  const refused = await refusedHarness.runner('show_street_level', {
+    latitude: 1,
+    longitude: 2,
+    provider: 'google',
+    fly: false,
+  });
+  assert.deepEqual(
+    [refused.ok, refused.stage, refused.keyRejected],
+    [false, 'key', true],
+  );
   assert.equal(refused.error, KEY_REJECTED_MESSAGE);
   assert.equal(refused.say, 'Google Street View refused its key.');
   assert.deepEqual(refusedHarness.order, [], 'nothing changed');
-  const dark = await createStreetLevelHarness({ enabled: true, activeStack: 'photoreal', lightFails: true }).runner(
-    'show_street_level',
-    { latitude: 1, longitude: 2, provider: 'google', fly: false },
-  );
+  const dark = await createStreetLevelHarness({
+    enabled: true,
+    activeStack: 'photoreal',
+    lightFails: true,
+  }).runner('show_street_level', {
+    latitude: 1,
+    longitude: 2,
+    provider: 'google',
+    fly: false,
+  });
   assert.deepEqual([dark.ok, dark.stage], [false, 'provider']);
   assert.match(dark.error, /could not be switched on/);
 });
@@ -7354,18 +7863,39 @@ test('show_street_level says "refused its key" when Google already refused it, a
 test('activeImageryFilter reports only the narrowing filters the lit source honours', async () => {
   const { activeImageryFilter } = await import('./gevActions.js');
   const both = { pano: true, since: true };
-  assert.equal(activeImageryFilter({ filter: { pano: 'all', sinceDays: 0 }, filterControls: both }), null);
-  assert.deepEqual(activeImageryFilter({ filter: { pano: 'pano', sinceDays: 0 }, filterControls: both }), {
-    pano: 'pano',
-    label: '360° filter',
-  });
-  assert.deepEqual(activeImageryFilter({ filter: { pano: 'flat', sinceDays: 365 }, filterControls: both }), {
-    pano: 'flat',
-    sinceDays: 365,
-    label: 'flat-photo and SINCE filters',
-  });
   assert.equal(
-    activeImageryFilter({ filter: { pano: 'pano', sinceDays: 365 }, filterControls: { pano: false, since: false } }),
+    activeImageryFilter({
+      filter: { pano: 'all', sinceDays: 0 },
+      filterControls: both,
+    }),
+    null,
+  );
+  assert.deepEqual(
+    activeImageryFilter({
+      filter: { pano: 'pano', sinceDays: 0 },
+      filterControls: both,
+    }),
+    {
+      pano: 'pano',
+      label: '360° filter',
+    },
+  );
+  assert.deepEqual(
+    activeImageryFilter({
+      filter: { pano: 'flat', sinceDays: 365 },
+      filterControls: both,
+    }),
+    {
+      pano: 'flat',
+      sinceDays: 365,
+      label: 'flat-photo and SINCE filters',
+    },
+  );
+  assert.equal(
+    activeImageryFilter({
+      filter: { pano: 'pano', sinceDays: 365 },
+      filterControls: { pano: false, since: false },
+    }),
     null,
     'Street View honours neither',
   );
@@ -7373,19 +7903,46 @@ test('activeImageryFilter reports only the narrowing filters the lit source hono
 });
 
 test('analyst item display strings are single-line and bounded for voice', async () => {
-  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
-  const rows = [{ id: 'stable-id', name: 'Şehir\n' + 'x'.repeat(3000), label: 'Town\tStation', operator: 'City\nPD', lat: 30, lon: -97 }];
-  const { runner } = manifestRunner({ bikeshare: { getStats: () => ({ count: 1, lastUpdate: Date.now() }), getAnalystRecords: () => rows } });
-  const result = await runner('analyst_query', { layers: ['bikeshare'], scope: { kind: 'anywhere' }, limit: 1 });
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
+  const rows = [
+    {
+      id: 'stable-id',
+      name: 'Şehir\n' + 'x'.repeat(3000),
+      label: 'Town\tStation',
+      operator: 'City\nPD',
+      lat: 30,
+      lon: -97,
+    },
+  ];
+  const { runner } = manifestRunner({
+    bikeshare: {
+      getStats: () => ({ count: 1, lastUpdate: Date.now() }),
+      getAnalystRecords: () => rows,
+    },
+  });
+  const result = await runner('analyst_query', {
+    layers: ['bikeshare'],
+    scope: { kind: 'anywhere' },
+    limit: 1,
+  });
   assert.equal(result.ok, true);
   assert.equal(result.items[0].name.length, 180);
   assert.equal(result.items[0].label, 'Town Station');
   assert.equal(result.items[0].id, 'stable-id');
-  for (const value of Object.values(result.items[0])) if (typeof value === 'string') assert.doesNotMatch(value, /[\r\n\t]/);
+  for (const value of Object.values(result.items[0]))
+    if (typeof value === 'string') assert.doesNotMatch(value, /[\r\n\t]/);
 });
 
 test('analyst_query keeps canonical IDs raw so numbered references still fly to the station', async () => {
-  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
   const { viewer, styleManager } = createVoiceNavigationHarness();
   const referents = createReferentRegistry();
   const longName = 'Station ' + 'é'.repeat(200);
@@ -7394,51 +7951,97 @@ test('analyst_query keeps canonical IDs raw so numbered references still fly to 
     { id: spaced, name: spaced, lat: 30.2672, lon: -97.7431 },
     { id: longName, name: longName, lat: 30.2711, lon: -97.7437 },
   ];
-  const bikeshare = { getStats: () => ({ count: stations.length, lastUpdate: Date.now() }), getAnalystRecords: () => stations };
+  const bikeshare = {
+    getStats: () => ({ count: stations.length, lastUpdate: Date.now() }),
+    getAnalystRecords: () => stations,
+  };
   const runner = createActionRunner({
-    viewer, styleManager,
+    viewer,
+    styleManager,
     dataManager: {
       layers: new Map([['bikeshare', { module: bikeshare }]]),
       isEnabled: () => true,
-      getAll: () => [{ id: 'bikeshare', name: 'bikeshare', enabled: true, stats: bikeshare.getStats() }],
+      getAll: () => [
+        {
+          id: 'bikeshare',
+          name: 'bikeshare',
+          enabled: true,
+          stats: bikeshare.getStats(),
+        },
+      ],
     },
     deixis: { referents },
   });
-  const listed = await runner('analyst_query', { layers: ['bikeshare'], scope: { kind: 'anywhere' }, limit: 2 });
+  const listed = await runner('analyst_query', {
+    layers: ['bikeshare'],
+    scope: { kind: 'anywhere' },
+    limit: 2,
+  });
   assert.equal(listed.ok, true);
   const bySpaced = listed.items.find((item) => item.id === spaced);
   const byLong = listed.items.find((item) => item.id === longName);
   assert.ok(bySpaced && byLong, 'compact items keep the raw station-name IDs');
-  assert.equal(bySpaced.name, 'Congress Ave & 2nd', 'display name is still normalized');
+  assert.equal(
+    bySpaced.name,
+    'Congress Ave & 2nd',
+    'display name is still normalized',
+  );
   assert.equal(byLong.name.length, 180, 'display name is still bounded');
   assert.equal(byLong.id.length, longName.length);
   const registered = referents.list();
-  assert.equal(registered.length, 2, 'the analyst result became the numbered list');
+  assert.equal(
+    registered.length,
+    2,
+    'the analyst result became the numbered list',
+  );
   for (const ref of registered) {
     const station = stations.find((row) => row.id === ref.id);
     assert.ok(station, `referent ${ref.n} keeps the canonical ID`);
     const flown = await runner('fly_to_location', { referent: ref.n });
-    assert.equal(flown.ok, true, `referent ${ref.n} resolves instead of "no longer loaded"`);
+    assert.equal(
+      flown.ok,
+      true,
+      `referent ${ref.n} resolves instead of "no longer loaded"`,
+    );
     assert.equal(flown.latitude, station.lat);
     assert.equal(flown.longitude, station.lon);
   }
 });
 
 test('analyst_query keeps transit route IDs raw so a follow-up filter still matches', async () => {
-  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
   for (const routeId of ['Route  17', 'R'.repeat(181)]) {
     const { viewer, styleManager } = createVoiceNavigationHarness();
     const vehicles = [{ id: 'bus-1', routeId, lat: 30, lon: -97 }];
-    const transit = { getStats: () => ({ count: 1, lastUpdate: Date.now() }), getAnalystRecords: () => vehicles };
+    const transit = {
+      getStats: () => ({ count: 1, lastUpdate: Date.now() }),
+      getAnalystRecords: () => vehicles,
+    };
     const runner = createActionRunner({
-      viewer, styleManager,
+      viewer,
+      styleManager,
       dataManager: {
         layers: new Map([['transit', { module: transit }]]),
         isEnabled: () => true,
-        getAll: () => [{ id: 'transit', name: 'transit', enabled: true, stats: transit.getStats() }],
+        getAll: () => [
+          {
+            id: 'transit',
+            name: 'transit',
+            enabled: true,
+            stats: transit.getStats(),
+          },
+        ],
       },
     });
-    const listed = await runner('analyst_query', { layers: ['transit'], scope: { kind: 'anywhere' }, limit: 1 });
+    const listed = await runner('analyst_query', {
+      layers: ['transit'],
+      scope: { kind: 'anywhere' },
+      limit: 1,
+    });
     assert.equal(listed.ok, true);
     assert.equal(listed.items[0].routeId, routeId);
     const followUp = await runner('analyst_query', {
@@ -7446,7 +8049,11 @@ test('analyst_query keeps transit route IDs raw so a follow-up filter still matc
       filters: [{ field: 'routeId', op: 'eq', value: listed.items[0].routeId }],
     });
     assert.equal(followUp.ok, true);
-    assert.equal(followUp.count, 1, 'the returned route ID matches the same vehicle');
+    assert.equal(
+      followUp.count,
+      1,
+      'the returned route ID matches the same vehicle',
+    );
   }
 });
 
@@ -7478,6 +8085,106 @@ test('set_panel_open accepts the Authoring name for the scene panel', async () =
     assert.equal(result.panelId, 'scene-panel');
   }
   assert.deepEqual(calls.at(-1), ['scene-panel', false, { explicit: true }]);
+});
+
+test('set_panel_open reaches the Space Missions panel by its id or name', async () => {
+  const calls = [];
+  const runner = createGevActionRunner({
+    viewer: {
+      clock: { onTick: { addEventListener: () => () => {} } },
+      scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+      camera: {
+        moveEnd: { addEventListener() {} },
+        positionWC: Cesium.Cartesian3.fromDegrees(-97.7, 30.2, 1000),
+      },
+    },
+    styleManager: {
+      setPanelCollapsed: (...args) => calls.push(args),
+    },
+    dataManager: {
+      layers: new Map(),
+      isEnabled: () => false,
+      getAll: () => [],
+    },
+  });
+  for (const panel of ['space-missions-panel', 'space missions panel']) {
+    const result = await runner('set_panel_open', {
+      panelId: panel,
+      open: false,
+    });
+    assert.equal(result.panelId, 'space-missions-panel', panel);
+  }
+  assert.deepEqual(calls.at(-1), [
+    'space-missions-panel',
+    true,
+    { explicit: true },
+  ]);
+});
+
+test('set_panel_open opens the Space Missions panel only while its layer is on', async () => {
+  const calls = [];
+  let missionsOn = false;
+  let starting = false;
+  let cockpit = false;
+  const runner = createGevActionRunner({
+    viewer: {
+      clock: { onTick: { addEventListener: () => () => {} } },
+      scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+      camera: {
+        moveEnd: { addEventListener() {} },
+        positionWC: Cesium.Cartesian3.fromDegrees(-97.7, 30.2, 1000),
+      },
+    },
+    styleManager: {
+      setPanelCollapsed: (...args) => calls.push(args),
+      revealPanel: (id) => calls.push(['reveal', id]),
+      getCockpitState: () => ({ active: cockpit }),
+    },
+    dataManager: {
+      layers: new Map(),
+      isEnabled: (id) => id === 'rocket-launches' && missionsOn,
+      isEffectivelyEnabled: (id) =>
+        id === 'rocket-launches' && (missionsOn || starting),
+      getAll: () => [],
+    },
+  });
+  const refused = await runner('set_panel_open', {
+    panelId: 'space-missions-panel',
+    open: true,
+  });
+  assert.equal(refused.ok, false);
+  assert.equal(refused.applied, false);
+  assert.match(refused.say, /Turn on Space Missions first/);
+  assert.deepEqual(calls, [], 'no right-rail panel is folded for nothing');
+  starting = true;
+  const early = await runner('set_panel_open', {
+    panelId: 'space-missions-panel',
+    open: true,
+  });
+  assert.equal(early.ok, false);
+  assert.match(early.say, /still starting/);
+  assert.deepEqual(calls, []);
+  missionsOn = true;
+  const opened = await runner('set_panel_open', {
+    panelId: 'space-missions-panel',
+    open: true,
+  });
+  assert.equal(opened.ok, true);
+  // On a phone the Missions sheet shows too.
+  assert.deepEqual(calls, [
+    ['space-missions-panel', false, { explicit: true }],
+    ['reveal', 'space-missions-panel'],
+  ]);
+  // The Cockpit owns the screen: nothing opens and no preference is written.
+  calls.length = 0;
+  cockpit = true;
+  const underCockpit = await runner('set_panel_open', {
+    panelId: 'space-missions-panel',
+    open: true,
+  });
+  assert.equal(underCockpit.ok, false);
+  assert.match(underCockpit.say, /leave the cockpit/);
+  assert.deepEqual(calls, []);
 });
 
 test('set_panel_open reaches the Utilities panel by its name, Draw or Import', async () => {
@@ -7532,20 +8239,36 @@ test('a partial analyst card shows one partial chip', () => {
 });
 
 test('show_street_level superseded during its flight switches nothing', async () => {
-  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
   const h = createStreetLevelHarness();
   let current = true;
-  const pending = h.runner('show_street_level', { latitude: 38.5799, longitude: -121.4937, provider: 'google' }, { isCurrent: () => current });
+  const pending = h.runner(
+    'show_street_level',
+    { latitude: 38.5799, longitude: -121.4937, provider: 'google' },
+    { isCurrent: () => current },
+  );
   await new Promise((resolve) => setImmediate(resolve));
   current = false;
   h.finishFlight();
   const result = await pending;
-  assert.deepEqual(h.order.filter((step) => /^(map|params|open|arm|enable)/.test(step)), [], 'the stale turn switched nothing');
+  assert.deepEqual(
+    h.order.filter((step) => /^(map|params|open|arm|enable)/.test(step)),
+    [],
+    'the stale turn switched nothing',
+  );
   assert.equal(result.cancelled, true);
 });
 
 test('show_street_level superseded during its map switch lights no source', async () => {
-  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
   const h = createStreetLevelHarness({ enabled: true });
   let current = true;
   const runner = createGevActionRunner({
@@ -7560,31 +8283,71 @@ test('show_street_level superseded during its map switch lights no source', asyn
     },
     dataManager: h.dataManager,
   });
-  const result = await runner('show_street_level', { latitude: 1, longitude: 2, provider: 'google', fly: false }, { isCurrent: () => current });
-  assert.deepEqual(h.order.filter((step) => /^(params|open|arm)/.test(step)), [], 'the stale turn lit nothing');
+  const result = await runner(
+    'show_street_level',
+    { latitude: 1, longitude: 2, provider: 'google', fly: false },
+    { isCurrent: () => current },
+  );
+  assert.deepEqual(
+    h.order.filter((step) => /^(params|open|arm)/.test(step)),
+    [],
+    'the stale turn lit nothing',
+  );
   assert.deepEqual([result.stage, result.cancelled], ['map', true]);
 });
 
 test('show_street_level goes ahead while a source’s key status is still unknown', async () => {
-  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
   // A freshly loaded sl= link meets the source before its status call answers.
-  const { runner, order } = createStreetLevelHarness({ enabled: true, configured: null });
-  const result = await runner('show_street_level', { latitude: 38.58, longitude: -121.49, provider: 'mapillary', fly: false });
+  const { runner, order } = createStreetLevelHarness({
+    enabled: true,
+    configured: null,
+  });
+  const result = await runner('show_street_level', {
+    latitude: 38.58,
+    longitude: -121.49,
+    provider: 'mapillary',
+    fly: false,
+  });
   assert.equal(result.ok, true);
   assert.ok(order.some((step) => step.startsWith('open:mapillary')));
 });
 
 test('show_street_level in a view that hides its panel stops before anything loads unseen', async () => {
-  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
   const saved = globalThis.document;
-  for (const mode of ['cockpit-mode', 'ui-clean-view', 'recording-mode', 'scene-playback-mode']) {
-    globalThis.document = { body: { classList: { contains: (name) => name === mode } } };
+  for (const mode of [
+    'cockpit-mode',
+    'ui-clean-view',
+    'recording-mode',
+    'scene-playback-mode',
+  ]) {
+    globalThis.document = {
+      body: { classList: { contains: (name) => name === mode } },
+    };
     try {
       const { runner, order } = createStreetLevelHarness({ enabled: true });
-      const result = await runner('show_street_level', { latitude: 38.58, longitude: -121.49, provider: 'google', fly: false });
+      const result = await runner('show_street_level', {
+        latitude: 38.58,
+        longitude: -121.49,
+        provider: 'google',
+        fly: false,
+      });
       assert.deepEqual([result.ok, result.stage], [false, 'view'], mode);
       assert.match(result.error, /hidden in the current view/);
-      assert.deepEqual(order.filter((step) => /^(map|params|open|arm|enable)/.test(step)), [], `${mode}: nothing switched`);
+      assert.deepEqual(
+        order.filter((step) => /^(map|params|open|arm|enable)/.test(step)),
+        [],
+        `${mode}: nothing switched`,
+      );
     } finally {
       globalThis.document = saved;
     }
@@ -7592,10 +8355,16 @@ test('show_street_level in a view that hides its panel stops before anything loa
 });
 
 test('show_street_level checks the panel again after every wait: a mode entered meanwhile loads nothing unseen', async () => {
-  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
   const saved = globalThis.document;
   const classes = new Set();
-  globalThis.document = { body: { classList: { contains: (name) => classes.has(name) } } };
+  globalThis.document = {
+    body: { classList: { contains: (name) => classes.has(name) } },
+  };
   try {
     for (const [mode, when] of [
       ['ui-clean-view', 'duringEnable'],
@@ -7603,9 +8372,18 @@ test('show_street_level checks the panel again after every wait: a mode entered 
     ]) {
       classes.clear();
       const h = createStreetLevelHarness({ [when]: () => classes.add(mode) });
-      const result = await h.runner('show_street_level', { latitude: 38.58, longitude: -121.49, provider: 'google', fly: false });
+      const result = await h.runner('show_street_level', {
+        latitude: 38.58,
+        longitude: -121.49,
+        provider: 'google',
+        fly: false,
+      });
       assert.deepEqual([result.ok, result.stage], [false, 'view'], mode);
-      assert.deepEqual(h.order.filter((step) => /^(open|arm)/.test(step)), [], `${mode}: no billed load`);
+      assert.deepEqual(
+        h.order.filter((step) => /^(open|arm)/.test(step)),
+        [],
+        `${mode}: no billed load`,
+      );
       assert.deepEqual(h.revealed, [], `${mode}: nothing revealed`);
     }
     // Entered while the photo loaded: it is closed again, not reported as shown.
@@ -7617,7 +8395,12 @@ test('show_street_level checks the panel again after every wait: a mode entered 
       classes.add('recording-mode');
       return opened;
     };
-    const result = await late.runner('show_street_level', { latitude: 38.58, longitude: -121.49, provider: 'mapillary', fly: false });
+    const result = await late.runner('show_street_level', {
+      latitude: 38.58,
+      longitude: -121.49,
+      provider: 'mapillary',
+      fly: false,
+    });
     assert.deepEqual([result.ok, result.stage], [false, 'view']);
     assert.equal(late.order.at(-1), 'close');
     assert.deepEqual(late.revealed, []);
@@ -7627,12 +8410,21 @@ test('show_street_level checks the panel again after every wait: a mode entered 
 });
 
 test('show_street_level refuses a hidden panel before the camera leaves a recording', async () => {
-  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
   const saved = globalThis.document;
-  globalThis.document = { body: { classList: { contains: (name) => name === 'recording-mode' } } };
+  globalThis.document = {
+    body: { classList: { contains: (name) => name === 'recording-mode' } },
+  };
   try {
     const { runner, order } = createStreetLevelHarness();
-    const result = await runner('show_street_level', { query: 'Eiffel Tower', provider: 'mapillary' });
+    const result = await runner('show_street_level', {
+      query: 'Eiffel Tower',
+      provider: 'mapillary',
+    });
     assert.deepEqual([result.ok, result.stage], [false, 'view']);
     assert.deepEqual(order, [], 'no flight');
   } finally {
@@ -7641,42 +8433,107 @@ test('show_street_level refuses a hidden panel before the camera leaves a record
 });
 
 test('show_street_level stops once the camera is someone else’s: a navigation or a gesture during the map switch', async () => {
-  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
   for (const take of ['navigate', 'gesture']) {
     let h;
     h = createStreetLevelHarness({ duringMapSwitch: () => h[take]() });
-    const result = await h.runner('show_street_level', { latitude: 38.58, longitude: -121.49, provider: 'mapillary', fly: false });
+    const result = await h.runner('show_street_level', {
+      latitude: 38.58,
+      longitude: -121.49,
+      provider: 'mapillary',
+      fly: false,
+    });
     assert.equal(result.ok, true, `${take}: Mapillary needs no map switch`);
     h = createStreetLevelHarness({ duringMapSwitch: () => h[take]() });
-    const google = await h.runner('show_street_level', { latitude: 38.58, longitude: -121.49, provider: 'google', fly: false });
-    assert.deepEqual([google.ok, google.stage, google.cancelled, google.superseded], [false, 'map', true, true], take);
-    assert.deepEqual(h.order.filter((step) => /^(params|enable|open|arm)/.test(step)), [], `${take}: nothing lit for the old place`);
+    const google = await h.runner('show_street_level', {
+      latitude: 38.58,
+      longitude: -121.49,
+      provider: 'google',
+      fly: false,
+    });
+    assert.deepEqual(
+      [google.ok, google.stage, google.cancelled, google.superseded],
+      [false, 'map', true, true],
+      take,
+    );
+    assert.deepEqual(
+      h.order.filter((step) => /^(params|enable|open|arm)/.test(step)),
+      [],
+      `${take}: nothing lit for the old place`,
+    );
   }
   // During the layer switch-on: the photo lookup never runs.
   let h;
   h = createStreetLevelHarness({ duringEnable: () => h.navigate() });
-  const result = await h.runner('show_street_level', { latitude: 38.58, longitude: -121.49, provider: 'mapillary', fly: false });
-  assert.deepEqual([result.ok, result.stage, result.superseded], [false, 'layer', true]);
+  const result = await h.runner('show_street_level', {
+    latitude: 38.58,
+    longitude: -121.49,
+    provider: 'mapillary',
+    fly: false,
+  });
+  assert.deepEqual(
+    [result.ok, result.stage, result.superseded],
+    [false, 'layer', true],
+  );
   assert.ok(!h.order.some((step) => step.startsWith('open:')));
 });
 
 test('show_street_level loads no photo it found once the camera or the panel moved on during the lookup', async () => {
-  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
   for (const take of ['navigate', 'gesture']) {
     let h;
-    h = createStreetLevelHarness({ enabled: true, activeStack: 'photoreal', duringLookup: () => h[take]() });
-    const result = await h.runner('show_street_level', { latitude: 38.58, longitude: -121.49, provider: 'google', fly: false });
-    assert.deepEqual([result.ok, result.stage, result.superseded], [false, 'imagery', true], take);
+    h = createStreetLevelHarness({
+      enabled: true,
+      activeStack: 'photoreal',
+      duringLookup: () => h[take](),
+    });
+    const result = await h.runner('show_street_level', {
+      latitude: 38.58,
+      longitude: -121.49,
+      provider: 'google',
+      fly: false,
+    });
+    assert.deepEqual(
+      [result.ok, result.stage, result.superseded],
+      [false, 'imagery', true],
+      take,
+    );
     assert.equal(h.lookups.length, 1);
-    assert.equal(h.street.open, false, `${take}: the billed panorama never loads`);
-    assert.ok(!h.order.includes('close'), `${take}: nothing opened, nothing to close`);
+    assert.equal(
+      h.street.open,
+      false,
+      `${take}: the billed panorama never loads`,
+    );
+    assert.ok(
+      !h.order.includes('close'),
+      `${take}: nothing opened, nothing to close`,
+    );
   }
   const saved = globalThis.document;
   const classes = new Set();
-  globalThis.document = { body: { classList: { contains: (name) => classes.has(name) } } };
+  globalThis.document = {
+    body: { classList: { contains: (name) => classes.has(name) } },
+  };
   try {
-    const h = createStreetLevelHarness({ enabled: true, activeStack: 'photoreal', duringLookup: () => classes.add('ui-clean-view') });
-    const result = await h.runner('show_street_level', { latitude: 38.58, longitude: -121.49, provider: 'google', fly: false });
+    const h = createStreetLevelHarness({
+      enabled: true,
+      activeStack: 'photoreal',
+      duringLookup: () => classes.add('ui-clean-view'),
+    });
+    const result = await h.runner('show_street_level', {
+      latitude: 38.58,
+      longitude: -121.49,
+      provider: 'google',
+      fly: false,
+    });
     assert.deepEqual([result.ok, result.stage], [false, 'view']);
     assert.equal(h.street.open, false, 'nothing loads into the hidden panel');
   } finally {
@@ -7685,19 +8542,44 @@ test('show_street_level loads no photo it found once the camera or the panel mov
 });
 
 test('show_street_level replaces an open photo in place: the viewer (and EXPAND) stays up while it looks', async () => {
-  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
-  const h = createStreetLevelHarness({ enabled: true, photoOpen: true, nearest: 'pano-b' });
-  const result = await h.runner('show_street_level', { latitude: 38.58, longitude: -121.49, provider: 'mapillary', fly: false });
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
+  const h = createStreetLevelHarness({
+    enabled: true,
+    photoOpen: true,
+    nearest: 'pano-b',
+  });
+  const result = await h.runner('show_street_level', {
+    latitude: 38.58,
+    longitude: -121.49,
+    provider: 'mapillary',
+    fly: false,
+  });
   assert.equal(result.ok, true);
-  assert.equal(h.lookups[0].replace, true, 'the lookup takes over the open photo');
+  assert.equal(
+    h.lookups[0].replace,
+    true,
+    'the lookup takes over the open photo',
+  );
   assert.ok(!h.order.includes('close'), 'never closed on the way');
   assert.deepEqual([h.street.open, h.street.imageId], [true, 'pano-b']);
 });
 
 test('show_street_level owns the camera from where its own flight lands', async () => {
-  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
   const h = createStreetLevelHarness();
-  const pending = h.runner('show_street_level', { latitude: 38.58, longitude: -121.49, provider: 'mapillary' });
+  const pending = h.runner('show_street_level', {
+    latitude: 38.58,
+    longitude: -121.49,
+    provider: 'mapillary',
+  });
   await new Promise((resolve) => setTimeout(resolve, 0));
   h.finishFlight();
   const result = await pending;
@@ -7710,15 +8592,27 @@ test('show_street_level owns the camera from where its own flight lands', async 
 // press on the globe, which does not cancel a Cesium flight either.
 for (const take of ['navigate', 'gesture']) {
   test(`show_street_level stands down when the camera is taken during its own flight (${take})`, async () => {
-    globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+    globalThis.window = globalThis.window || {
+      clearTimeout,
+      setTimeout,
+      requestIdleCallback: null,
+    };
     const h = createStreetLevelHarness();
-    const pending = h.runner('show_street_level', { latitude: 38.58, longitude: -121.49, provider: 'google' });
+    const pending = h.runner('show_street_level', {
+      latitude: 38.58,
+      longitude: -121.49,
+      provider: 'google',
+    });
     await new Promise((resolve) => setTimeout(resolve, 0));
     assert.deepEqual(h.order, ['fly'], 'the flight is under way');
     h[take]();
     h.finishFlight();
     const result = await pending;
-    assert.deepEqual([result.ok, result.superseded], [false, true], result.error);
+    assert.deepEqual(
+      [result.ok, result.superseded],
+      [false, true],
+      result.error,
+    );
     assert.deepEqual(
       h.order.filter((step) => /^(map|params|open|arm|enable)/.test(step)),
       [],
@@ -7728,32 +8622,88 @@ for (const take of ['navigate', 'gesture']) {
 }
 
 test('show_street_level closes the previous photo, so one that finds nothing leaves no other place on screen', async () => {
-  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
-  const empty = createStreetLevelHarness({ enabled: true, photoOpen: true, nearest: null });
-  const result = await empty.runner('show_street_level', { latitude: 23.4, longitude: 12.5, provider: 'mapillary', fly: false });
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
+  const empty = createStreetLevelHarness({
+    enabled: true,
+    photoOpen: true,
+    nearest: null,
+  });
+  const result = await empty.runner('show_street_level', {
+    latitude: 23.4,
+    longitude: 12.5,
+    provider: 'mapillary',
+    fly: false,
+  });
   assert.deepEqual([result.ok, result.noImagery], [false, true]);
   assert.equal(empty.street.open, false, 'the Paris photo is gone');
-  assert.match(empty.street.error, /No street-level imagery/, 'the panel shows why');
+  assert.match(
+    empty.street.error,
+    /No street-level imagery/,
+    'the panel shows why',
+  );
   // A link that only arms a billed source closes it too.
-  const armed = createStreetLevelHarness({ enabled: true, photoOpen: true, activeStack: 'photoreal' });
-  await armed.runner('show_street_level', { latitude: 23.4, longitude: 12.5, provider: 'google', fly: false, autoOpen: false });
-  assert.deepEqual(armed.order.filter((step) => /^(close|arm)/.test(step)).map((step) => step.split(':')[0]), ['close', 'arm']);
+  const armed = createStreetLevelHarness({
+    enabled: true,
+    photoOpen: true,
+    activeStack: 'photoreal',
+  });
+  await armed.runner('show_street_level', {
+    latitude: 23.4,
+    longitude: 12.5,
+    provider: 'google',
+    fly: false,
+    autoOpen: false,
+  });
+  assert.deepEqual(
+    armed.order
+      .filter((step) => /^(close|arm)/.test(step))
+      .map((step) => step.split(':')[0]),
+    ['close', 'arm'],
+  );
 });
 
 test('show_street_level opens over the clean embedded globe but respects its other exclusive modes', async () => {
-  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
   const saved = globalThis.document;
   try {
-    for (const mode of [null, 'cockpit-mode', 'recording-mode', 'scene-playback-mode']) {
+    for (const mode of [
+      null,
+      'cockpit-mode',
+      'recording-mode',
+      'scene-playback-mode',
+    ]) {
       const classes = new Set(['ui-embed', 'ui-clean-view', mode]);
-      globalThis.document = { body: { classList: { contains: (name) => classes.has(name) } } };
+      globalThis.document = {
+        body: { classList: { contains: (name) => classes.has(name) } },
+      };
       const { runner, order } = createStreetLevelHarness({ enabled: true });
-      const result = await runner('show_street_level', { latitude: 38.58, longitude: -121.49, provider: 'mapillary', fly: false });
+      const result = await runner('show_street_level', {
+        latitude: 38.58,
+        longitude: -121.49,
+        provider: 'mapillary',
+        fly: false,
+      });
       if (mode) {
         assert.deepEqual([result.ok, result.stage], [false, 'view'], mode);
-        assert.deepEqual(order.filter((step) => /^(map|params|open|arm|enable)/.test(step)), [], `${mode}: nothing switched`);
+        assert.deepEqual(
+          order.filter((step) => /^(map|params|open|arm|enable)/.test(step)),
+          [],
+          `${mode}: nothing switched`,
+        );
       } else {
-        assert.equal(result.ok, true, 'embed clean view lifts the photo over the globe');
+        assert.equal(
+          result.ok,
+          true,
+          'embed clean view lifts the photo over the globe',
+        );
         assert.ok(order.some((step) => step.startsWith('open:mapillary')));
       }
     }
@@ -7763,7 +8713,11 @@ test('show_street_level opens over the clean embedded globe but respects its oth
 });
 
 test('show_street_level from a link keeps the recipient’s preferences: its switches are not the user’s', async () => {
-  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
   const link = createStreetLevelHarness();
   const linked = await link.runner(
     'show_street_level',
@@ -7771,48 +8725,120 @@ test('show_street_level from a link keeps the recipient’s preferences: its swi
     { origin: 'programmatic' },
   );
   assert.equal(linked.ok, true, linked.error);
-  assert.deepEqual(link.origins, ['programmatic', 'programmatic'], 'source switch and layer on');
+  assert.deepEqual(
+    link.origins,
+    ['programmatic', 'programmatic'],
+    'source switch and layer on',
+  );
   const asked = createStreetLevelHarness();
-  await asked.runner('show_street_level', { latitude: 1, longitude: 2, provider: 'mapillary', fly: false });
-  assert.deepEqual(asked.origins, ['voice', 'voice'], 'the assistant’s request is the user’s choice');
+  await asked.runner('show_street_level', {
+    latitude: 1,
+    longitude: 2,
+    provider: 'mapillary',
+    fly: false,
+  });
+  assert.deepEqual(
+    asked.origins,
+    ['voice', 'voice'],
+    'the assistant’s request is the user’s choice',
+  );
 });
 
 test('show_street_level with no place looks under the screen centre, not a link’s armed point', async () => {
-  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
   const here = createStreetLevelHarness({ enabled: true });
-  const result = await here.runner('show_street_level', { provider: 'mapillary' });
+  const result = await here.runner('show_street_level', {
+    provider: 'mapillary',
+  });
   assert.equal(result.ok, true, result.error);
   assert.equal(result.atViewCentre, true);
   assert.equal(here.lookups[0].point, null);
   assert.equal(here.lookups[0].aim, 'screen-centre');
   assert.equal(here.lookups[0].armed, false);
   const placed = createStreetLevelHarness({ enabled: true });
-  await placed.runner('show_street_level', { latitude: 1, longitude: 2, provider: 'mapillary', fly: false });
-  assert.equal(placed.lookups[0].aim, undefined, 'a place is looked up where it is');
-  const sky = createStreetLevelHarness({ enabled: true, nearest: null, sky: true });
-  const refused = await sky.runner('show_street_level', { provider: 'mapillary' });
-  assert.deepEqual([refused.ok, refused.stage, refused.aim], [false, 'imagery', 'sky']);
+  await placed.runner('show_street_level', {
+    latitude: 1,
+    longitude: 2,
+    provider: 'mapillary',
+    fly: false,
+  });
+  assert.equal(
+    placed.lookups[0].aim,
+    undefined,
+    'a place is looked up where it is',
+  );
+  const sky = createStreetLevelHarness({
+    enabled: true,
+    nearest: null,
+    sky: true,
+  });
+  const refused = await sky.runner('show_street_level', {
+    provider: 'mapillary',
+  });
+  assert.deepEqual(
+    [refused.ok, refused.stage, refused.aim],
+    [false, 'imagery', 'sky'],
+  );
 });
 
 test('show_street_level tells missing imagery from a failing source', async () => {
-  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
-  const empty = await createStreetLevelHarness({ enabled: true, nearest: null }).runner('show_street_level', {
-    latitude: 1, longitude: 2, provider: 'mapillary', fly: false,
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
+  const empty = await createStreetLevelHarness({
+    enabled: true,
+    nearest: null,
+  }).runner('show_street_level', {
+    latitude: 1,
+    longitude: 2,
+    provider: 'mapillary',
+    fly: false,
   });
-  assert.deepEqual([empty.stage, empty.noImagery, empty.imageryError], ['imagery', true, undefined]);
-  const broken = await createStreetLevelHarness({ enabled: true, imageryError: 'Mapillary graph HTTP 500' }).runner(
-    'show_street_level',
-    { latitude: 1, longitude: 2, provider: 'mapillary', fly: false },
+  assert.deepEqual(
+    [empty.stage, empty.noImagery, empty.imageryError],
+    ['imagery', true, undefined],
   );
-  assert.deepEqual([broken.stage, broken.noImagery, broken.imageryError], ['imagery', undefined, true]);
+  const broken = await createStreetLevelHarness({
+    enabled: true,
+    imageryError: 'Mapillary graph HTTP 500',
+  }).runner('show_street_level', {
+    latitude: 1,
+    longitude: 2,
+    provider: 'mapillary',
+    fly: false,
+  });
+  assert.deepEqual(
+    [broken.stage, broken.noImagery, broken.imageryError],
+    ['imagery', undefined, true],
+  );
   assert.equal(broken.error, 'Mapillary graph HTTP 500');
 });
 
 test('show_street_level shows every photo it opens, also over a panel the user had closed', async () => {
-  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
   const harness = createStreetLevelHarness({ enabled: true });
-  await harness.runner('show_street_level', { latitude: 1, longitude: 2, provider: 'mapillary', fly: false });
-  await harness.runner('show_street_level', { latitude: 3, longitude: 4, provider: 'mapillary', fly: false });
+  await harness.runner('show_street_level', {
+    latitude: 1,
+    longitude: 2,
+    provider: 'mapillary',
+    fly: false,
+  });
+  await harness.runner('show_street_level', {
+    latitude: 3,
+    longitude: 4,
+    provider: 'mapillary',
+    fly: false,
+  });
   assert.deepEqual(harness.revealed, [
     'collapse:street-level-panel:false',
     'reveal:street-level-panel',
@@ -7820,6 +8846,334 @@ test('show_street_level shows every photo it opens, also over a panel the user h
     'reveal:street-level-panel',
   ]);
   const missing = createStreetLevelHarness({ enabled: true, nearest: null });
-  await missing.runner('show_street_level', { latitude: 1, longitude: 2, provider: 'mapillary', fly: false });
+  await missing.runner('show_street_level', {
+    latitude: 1,
+    longitude: 2,
+    provider: 'mapillary',
+    fly: false,
+  });
   assert.deepEqual(missing.revealed, [], 'nothing opened, nothing revealed');
+});
+
+test('a military voice Cockpit entry switches Military Flights on as a plain layer, never Contacts', async () => {
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
+  for (const militaryOn of [false, true]) {
+    const enabled = new Set(militaryOn ? ['flights', 'military'] : ['flights']);
+    const layerCalls = [];
+    const entries = [];
+    const styleManager = {
+      getContextModeState: () => ({
+        mode: null,
+        active: false,
+        changing: false,
+      }),
+      setContextMode: () => assert.fail('Cockpit entry must not open Contacts'),
+      setDetection: () => assert.fail('Cockpit entry must not touch detection'),
+      controlCockpit(action, options) {
+        entries.push([action, options.targetLayer, options.aircraftClass]);
+        return { ok: true, action: 'control_cockpit', state: { active: true } };
+      },
+      getCockpitState: () => ({ active: false }),
+      getAircraftTrackingTarget: () => ({ layerId: 'flights', id: 'civil' }),
+    };
+    const viewer = {
+      clock: { onTick: { addEventListener: () => () => {} } },
+      scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+      camera: { moveEnd: { addEventListener() {} } },
+    };
+    const runner = createGevActionRunner({
+      viewer,
+      styleManager,
+      dataManager: {
+        layers: new Map([
+          ['flights', { module: {} }],
+          ['military', { module: {} }],
+        ]),
+        isEnabled: (layerId) => enabled.has(layerId),
+        async setEnabled(layerId, on, options) {
+          layerCalls.push([layerId, on, options.origin]);
+          if (on) enabled.add(layerId);
+          return true;
+        },
+        getAll: () => [],
+      },
+    });
+    const result = await runner('control_cockpit', {
+      action: 'enter',
+      targetLayer: 'military',
+      aircraftClass: 'helicopter',
+    });
+    assert.equal(result.ok, true, result.error);
+    assert.deepEqual(
+      layerCalls,
+      militaryOn ? [] : [['military', true, 'voice']],
+      'only a Military Flights layer that is off is switched on',
+    );
+    assert.deepEqual(entries, [['enter', 'military', 'helicopter']]);
+  }
+});
+
+// A data manager whose Military Flights layer is off, switches on empty and
+// reports its first data only when the test lands it.
+function militaryOffManager({ militaryOn = false } = {}) {
+  const enabled = new Set(militaryOn ? ['flights', 'military'] : ['flights']);
+  const activity = new Set();
+  const layerCalls = [];
+  let lastUpdate = militaryOn ? 1 : null;
+  const manager = {
+    layers: new Map([
+      ['flights', { module: {} }],
+      ['military', { module: { getStats: () => ({ lastUpdate }) } }],
+    ]),
+    isEnabled: (layerId) => enabled.has(layerId),
+    async setEnabled(layerId, on, options) {
+      layerCalls.push([layerId, on, options.origin]);
+      if (on) enabled.add(layerId);
+      else enabled.delete(layerId);
+      return true;
+    },
+    subscribeActivity(callback) {
+      activity.add(callback);
+      return () => activity.delete(callback);
+    },
+    getAll: () => [],
+  };
+  return {
+    manager,
+    layerCalls,
+    enabled,
+    listening: () => activity.size,
+    landFirstData() {
+      lastUpdate = 2;
+      for (const callback of [...activity])
+        callback({ type: 'data-updated', layerId: 'military' });
+    },
+  };
+}
+
+function militaryEntryRunner(manager, controlCockpit) {
+  return createGevActionRunner({
+    viewer: {
+      clock: { onTick: { addEventListener: () => () => {} } },
+      scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+      camera: { moveEnd: { addEventListener() {} } },
+    },
+    styleManager: {
+      getContextModeState: () => ({
+        mode: null,
+        active: false,
+        changing: false,
+      }),
+      setContextMode: () => assert.fail('Cockpit entry must not open Contacts'),
+      controlCockpit,
+      getCockpitState: () => ({ active: false }),
+      getAircraftTrackingTarget: () => ({ layerId: 'flights', id: 'civil' }),
+    },
+    dataManager: manager,
+  });
+}
+
+test('a military voice entry waits for a just-switched-on layer to report its first data', async () => {
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
+  const fixture = militaryOffManager();
+  let searchedWithData = null;
+  const runner = militaryEntryRunner(fixture.manager, () => {
+    searchedWithData =
+      fixture.manager.layers.get('military').module.getStats().lastUpdate !==
+      null;
+    return { ok: true, action: 'control_cockpit', state: { active: true } };
+  });
+  const pending = runner('control_cockpit', {
+    action: 'enter',
+    targetLayer: 'military',
+    aircraftClass: 'helicopter',
+  });
+  for (let i = 0; i < 10; i++) await Promise.resolve();
+  assert.equal(searchedWithData, null, 'no search on an empty layer');
+  assert.equal(fixture.listening(), 1);
+  fixture.landFirstData();
+  const result = await pending;
+  assert.equal(result.ok, true, result.error);
+  assert.equal(searchedWithData, true);
+  assert.equal(fixture.listening(), 0, 'the wait lets go of the layer');
+});
+
+test('a failed military voice entry switches off only the layer it switched on', async () => {
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
+  for (const militaryOn of [false, true]) {
+    const fixture = militaryOffManager({ militaryOn });
+    const runner = militaryEntryRunner(fixture.manager, () => ({
+      ok: false,
+      action: 'control_cockpit',
+      error: 'No helicopter military contact is available to enter',
+      state: { active: false },
+    }));
+    const pending = runner('control_cockpit', {
+      action: 'enter',
+      targetLayer: 'military',
+      aircraftClass: 'helicopter',
+    });
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+    if (!militaryOn) fixture.landFirstData();
+    const result = await pending;
+    assert.equal(result.ok, false);
+    assert.match(result.error, /No helicopter military contact/);
+    assert.deepEqual(
+      fixture.layerCalls,
+      militaryOn
+        ? []
+        : [
+            ['military', true, 'voice'],
+            ['military', false, 'voice'],
+          ],
+    );
+    assert.equal(fixture.enabled.has('military'), militaryOn);
+  }
+});
+
+test('a radius count over air quality describes its viewport coverage', async () => {
+  const { runner } = manifestRunner({
+    'air-quality': {
+      getStats: () => ({ count: 0, lastUpdate: Date.now() }),
+      getAnalystRecords: () => [],
+    },
+  });
+  const result = await runner('analyst_query', {
+    layers: ['air-quality'],
+    scope: { kind: 'radius', lat: 30, lon: -97, radiusKm: 20 },
+    operation: 'count',
+  });
+  assert.match(
+    result.coverage.note,
+    /air-quality loads OpenAQ stations by viewport/,
+  );
+  assert.doesNotMatch(result.coverage.note, /flights layer loads by viewport/);
+});
+
+test('region and area counts over air quality describe its viewport coverage', async () => {
+  const ring = [
+    [129, 31],
+    [146, 31],
+    [146, 46],
+    [129, 46],
+    [129, 31],
+  ];
+  const japan = {
+    kind: 'country',
+    name: 'Japan',
+    source: 'natural-earth',
+    polygons: [[ring]],
+  };
+  // The camera is over the central US: no station in Japan is loaded.
+  const { runner } = manifestRunner(
+    {
+      'air-quality': {
+        getStats: () => ({ count: 0, lastUpdate: Date.now() }),
+        getAnalystRecords: () => [],
+      },
+    },
+    {
+      areaOptions: {
+        findRegion: async () => null,
+        findAdminCandidates: async (q) => (/^japan$/i.test(q) ? [japan] : []),
+      },
+    },
+  );
+  const viewportNote = /air-quality loads OpenAQ stations by viewport/;
+  const region = await runner('analyst_query', {
+    layers: ['air-quality'],
+    scope: { kind: 'region', name: 'Japan' },
+  });
+  assert.equal(region.ok, true, region.error);
+  assert.equal(region.scopeLabel, 'over Japan');
+  assert.match(region.coverage.note, viewportNote);
+  const followUp = await runner('analyst_query', {
+    layers: ['air-quality'],
+    followUp: true,
+    sortBy: 'pm25',
+  });
+  assert.equal(followUp.ok, true, followUp.error);
+  assert.match(followUp.coverage.note, viewportNote);
+  const area = await runner('resolve_area', { query: 'Japan' });
+  assert.equal(area.ok, true, area.error);
+  const inside = await runner('analyst_query', {
+    layers: ['air-quality'],
+    scope: { kind: 'area', areaId: area.areaId },
+  });
+  assert.equal(inside.ok, true, inside.error);
+  assert.match(inside.coverage.note, viewportNote);
+});
+
+test('an air-quality count while OpenAQ is still finding stations is a floor naming its progress', async () => {
+  let discovery = [{ network: 'OpenAQ', checked: 4, eligible: 100 }];
+  const rows = [40, 30, 20, 10].map((pm25, i) => ({
+    id: String(i),
+    lat: 1,
+    lon: 2,
+    parameter: 'aqi',
+    pm25,
+  }));
+  const { runner } = manifestRunner({
+    'air-quality': {
+      getStats: () => ({ count: rows.length, lastUpdate: Date.now(), discovery }),
+      getAnalystRecords: () => rows,
+    },
+  });
+  const progress = /^OpenAQ: loading stations, 4 of 100(;|$)/;
+  const counted = await runner('analyst_query', {
+    layers: ['air-quality'],
+    scope: { kind: 'anywhere' },
+  });
+  assert.equal(counted.count, 4);
+  assert.equal(counted.complete, false);
+  assert.match(counted.display.caveat, progress);
+  // A ranking of that set stays a floor until discovery completes.
+  const ranked = await runner('analyst_query', {
+    layers: ['air-quality'],
+    followUp: true,
+    sortBy: 'pm25',
+  });
+  assert.equal(ranked.complete, false);
+  assert.match(ranked.display.caveat, progress);
+  discovery = [];
+  const done = await runner('analyst_query', {
+    layers: ['air-quality'],
+    scope: { kind: 'anywhere' },
+  });
+  assert.equal(done.complete, true);
+  assert.doesNotMatch(done.display.caveat || '', /loading stations/);
+});
+
+test('AQI station concentrations can be filtered by pollutant', async () => {
+  const rows = [40, 10].map((pm25, i) => ({
+    id: String(i),
+    lat: 1,
+    lon: 2,
+    parameter: 'aqi',
+    pm25,
+  }));
+  const { runner } = manifestRunner({
+    'air-quality': {
+      getStats: () => ({ count: 2, lastUpdate: Date.now() }),
+      getAnalystRecords: () => rows,
+    },
+  });
+  const result = await runner('analyst_query', {
+    layers: ['air-quality'],
+    scope: { kind: 'anywhere' },
+    filters: [{ field: 'pm25', op: 'gt', value: 35 }],
+  });
+  assert.equal(result.count, 1);
 });

@@ -142,6 +142,73 @@ test('a cable split into several features is listed once', async () => {
   assert.deepEqual(west.data.rows, [{ id: '2africa', name: '2Africa' }]);
 });
 
+test('a cable and a landing point carry the facts their data gives', async () => {
+  const withFacts = {
+    async fetch() {
+      return {
+        cables: {
+          features: [
+            {
+              properties: {
+                id: 'kunoa',
+                name: 'Kunoa',
+                facts: {
+                  owners: 'Kunoa Telecom, Nybor Net',
+                  length: '2,400 km',
+                  inService: true,
+                  parts: [1, 2],
+                  nested: { no: 1 },
+                },
+              },
+              geometry: {
+                type: 'LineString',
+                coordinates: [
+                  [10, 55],
+                  [12, 56],
+                ],
+              },
+            },
+          ],
+        },
+        landingPoints: {
+          features: [
+            {
+              properties: {
+                id: 'nybor',
+                name: 'Nybor, Denmark',
+                facts: { cables: 'Kunoa' },
+              },
+              geometry: { type: 'Point', coordinates: [10.8, 55.3] },
+            },
+          ],
+        },
+      };
+    },
+  };
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: { cables: withFacts },
+  });
+  const found = await catalog.call('find_submarine_cables', {
+    area: { bbox: [9, 54, 13, 57] },
+  });
+  // Plain values only: lists and objects are left out.
+  assert.deepEqual(found.data.rows, [
+    {
+      id: 'kunoa',
+      name: 'Kunoa',
+      facts: {
+        owners: 'Kunoa Telecom, Nybor Net',
+        length: '2,400 km',
+        inService: true,
+      },
+    },
+  ]);
+  assert.deepEqual(found.data.landing_points.rows[0].facts, {
+    cables: 'Kunoa',
+  });
+});
+
 test('the local fetch serves bundled data files and nothing outside them', async () => {
   const fetchImpl = createApiFetch({
     apiBase: 'http://127.0.0.1:1',

@@ -32,7 +32,12 @@ import aisLiveVesselsLayer from './aisLiveVessels.js';
 import { registerEntityContext, selectEntityContext } from './contextStore.js';
 import { WORLD_FOCUS_REQUEST_EVENT } from '../worldFocus.js';
 import { ensureGeoidReady, geoidHeight } from './geoid.js';
-import { registerPickOwner, unregisterPickOwner } from './pickRegistry.js';
+import {
+  isUnderOtherCard,
+  registerPickOwner,
+  setClickCardHitTest,
+  unregisterPickOwner,
+} from './pickRegistry.js';
 import { applyVesselOverlayPolicy } from './vesselLabels.js';
 import { fakeInput } from '../input/testDoubles.mjs';
 import { layerFeedState } from './manager.js';
@@ -43,6 +48,7 @@ import {
 import { createVesselIconBook } from '../layers/vessels/iconBook.js';
 import { bindRenderer } from '../render/rendererOf.js';
 import { entityFollowTarget } from '../data/followed.js';
+import { _resetSelectionForTest, claimSelection } from './clickSelect.js';
 
 test('open feed with vessels is healthy (null)', () => {
   assert.equal(
@@ -490,7 +496,7 @@ test('first accepted position ends grace and warm data survives later open silen
   const clock = makeFakeAisRuntime(7000);
   const record = makeRecord();
   _setAisRuntimeForTest(clock.runtime);
-  _setVesselOverlayHostForTest({
+  useVesselHost({
     setEntries() {},
     setVisible() {},
     clearSource() {},
@@ -540,7 +546,7 @@ test('first accepted position ends grace and warm data survives later open silen
     assert.equal(feed.error, 'awaiting usable AIS positions…');
   } finally {
     _setVesselStateForTest({ enabled: false });
-    _setVesselOverlayHostForTest();
+    useVesselHost();
     _setAisRuntimeForTest();
   }
 });
@@ -669,8 +675,16 @@ test('superseded AIS response cannot mutate or finalize a replacement request', 
     );
     await oldLoad;
     let feed = _getVesselFeedStateForTest();
-    assert.equal(feed.loading, true, 'old finally must not clear replacement loading ownership');
-    assert.equal(feed.lastUpdate, 200, 'old response must not advance replacement freshness');
+    assert.equal(
+      feed.loading,
+      true,
+      'old finally must not clear replacement loading ownership',
+    );
+    assert.equal(
+      feed.lastUpdate,
+      200,
+      'old response must not advance replacement freshness',
+    );
     assert.equal(feed.selectedId, replacement.mmsi);
 
     second.resolve(
@@ -919,7 +933,11 @@ test('vessel selection: empty-space click requests deselection', () => {
 
 test('vessel selection: no selection plus empty-space click is a no-op', () => {
   assert.deepEqual(
-    reduceVesselSelection({ selectedId: null, pickedId: null, gesture: 'click' }),
+    reduceVesselSelection({
+      selectedId: null,
+      pickedId: null,
+      gesture: 'click',
+    }),
     { action: 'none' },
   );
 });
@@ -1012,7 +1030,12 @@ function makeCesiumEvent() {
   };
 }
 
-function installWireHarness(picked, stateOverrides = {}) {
+function installWireHarness(
+  picked,
+  stateOverrides = {},
+  sceneExtras = {},
+  firstClick = null,
+) {
   const hadWindow = Object.hasOwn(globalThis, 'window');
   const hadDocument = Object.hasOwn(globalThis, 'document');
   const priorWindow = globalThis.window;
@@ -1038,15 +1061,18 @@ function installWireHarness(picked, stateOverrides = {}) {
     },
   };
   const viewer = {
-    scene: { pick: () => picked },
+    scene: { pick: () => picked, ...sceneExtras },
   };
   const input = fakeInput(viewer);
+  // A subscriber that runs before the layer's own (an aircraft layer).
+  if (firstClick) input.input.onClick(firstClick);
   // The camera port other layers follow through, with no pose to read; its
   // followChanged event counts who listens.
   const followChanged = makeCesiumEvent();
   const camera = {
     pose: () => null,
     followed: null,
+    cancelFlight() {},
     follow(target) {
       this.followed = target;
       followChanged.raise();
@@ -1090,6 +1116,10 @@ function installWireHarness(picked, stateOverrides = {}) {
     ...stateOverrides,
   });
   _bindVesselInteractionForTest(viewer, keyTarget);
+  // A vessel set selected is the one selection, as a click leaves it.
+  _resetSelectionForTest();
+  const selected = aisLiveVesselsLayer.getSelectedInfo();
+  if (selected?.id) claimSelection('ais-live-vessels', selected.id);
 
   return {
     handler,
@@ -1105,6 +1135,7 @@ function installWireHarness(picked, stateOverrides = {}) {
     cleanup() {
       stopReadout();
       aisLiveVesselsLayer.destroy();
+      _resetSelectionForTest();
       unbindRenderer();
       if (hadWindow) globalThis.window = priorWindow;
       else delete globalThis.window;
@@ -1113,6 +1144,45 @@ function installWireHarness(picked, stateOverrides = {}) {
     },
   };
 }
+
+test('trackById selects a vessel and has the camera follow it, keyed by the vessel; deselecting ends the follow', () => {
+  const harness = installWireHarness(undefined, { selectedRecord: null });
+  try {
+    const id = harness.record.id;
+    assert.equal(aisLiveVesselsLayer.isFollowed(), false);
+    assert.equal(aisLiveVesselsLayer.trackById(harness.record.mmsi), true);
+    assert.equal(aisLiveVesselsLayer.getSelectedInfo()?.id, id);
+    assert.equal(harness.camera.followed?.key, `ais-live-vessels:${id}`);
+    assert.equal(aisLiveVesselsLayer.isFollowed(), true);
+    // The one followed stays followed.
+    const followed = harness.camera.followed;
+    assert.equal(aisLiveVesselsLayer.trackById(id), true);
+    assert.equal(harness.camera.followed, followed);
+    aisLiveVesselsLayer.clearSelection();
+    assert.equal(harness.camera.followed, null);
+    assert.equal(aisLiveVesselsLayer.trackById('no-such-vessel'), false);
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test('a ship keyed by a catalog UUID, with no MMSI, is followed by a second click on its icon', () => {
+  const uuid = 'a9bc01b8-28d8-e116-1e73-1be093830bb3';
+  const record = makeRecord({ id: uuid, mmsi: '', name: 'EVER GIVEN' });
+  const harness = installWireHarness(
+    { id: uuid },
+    { records: [record], selectedRecord: null },
+  );
+  try {
+    harness.handler.click({ position: { x: 10, y: 20 } });
+    assert.equal(aisLiveVesselsLayer.getSelectedInfo()?.id, uuid);
+    assert.equal(harness.camera.followed, null);
+    harness.handler.click({ position: { x: 10, y: 20 } });
+    assert.equal(harness.camera.followed?.key, `ais-live-vessels:${uuid}`);
+  } finally {
+    harness.cleanup();
+  }
+});
 
 test('vessel interaction wire: trail pick does not deselect', () => {
   const harness = installWireHarness({ id: 'gev-trail:71' });
@@ -1134,7 +1204,10 @@ test('vessel interaction wire: a click on open water keeps the ship the bridge r
   try {
     aisLiveVesselsLayer.setCockpitSubject(harness.record.mmsi);
     harness.handler.click({ position: { x: 10, y: 20 } });
-    assert.equal(aisLiveVesselsLayer.getSelectedInfo()?.mmsi, harness.record.mmsi);
+    assert.equal(
+      aisLiveVesselsLayer.getSelectedInfo()?.mmsi,
+      harness.record.mmsi,
+    );
     assert.equal(harness.trail.clearCalls, 0);
     // Released, the same click deselects as it always has.
     aisLiveVesselsLayer.setCockpitSubject(null);
@@ -1461,6 +1534,36 @@ test('enable owns one grace timer and disable/re-enable starts a new session', a
   }
 });
 
+test('the layer turns on and off when its feed fails', async () => {
+  const harness = installWireHarness(undefined, { enabled: false });
+  const priorFetch = globalThis.fetch;
+  const priorWarn = console.warn;
+  const clock = makeFakeAisRuntime();
+  _setAisRuntimeForTest(clock.runtime);
+  globalThis.fetch = async () => ({
+    ok: false,
+    status: 503,
+    json: async () => ({
+      status: 'missing-key',
+      error: 'AISSTREAM_API_KEY is not set',
+    }),
+  });
+  console.warn = () => {};
+  try {
+    // Turning it on succeeds; the failure is shown on the layer.
+    assert.notEqual(await aisLiveVesselsLayer.enable(harness.viewer), false);
+    const feed = _getVesselFeedStateForTest();
+    assert.equal(feed.status, 'unavailable');
+    assert.equal(feed.error, 'AISSTREAM_API_KEY not set');
+    assert.notEqual(aisLiveVesselsLayer.disable(), false);
+  } finally {
+    globalThis.fetch = priorFetch;
+    console.warn = priorWarn;
+    harness.cleanup();
+    _setAisRuntimeForTest();
+  }
+});
+
 test('vessel trail lifecycle: deselect clears the selected-vessel trail', () => {
   const harness = installWireHarness(undefined);
   try {
@@ -1636,7 +1739,7 @@ test('vessel host publication preserves the shipped grid winner and separation s
       },
     },
   });
-  _setVesselOverlayHostForTest({
+  useVesselHost({
     setEntries(sourceId, entries, options) {
       publications.push({ sourceId, entries, options });
     },
@@ -1660,7 +1763,7 @@ test('vessel host publication preserves the shipped grid winner and separation s
   } finally {
     unbind();
     _setVesselStateForTest({ enabled: false });
-    _setVesselOverlayHostForTest();
+    useVesselHost();
   }
 });
 
@@ -1687,7 +1790,7 @@ test('vessel real layer lifecycle publishes protected selection and leaves no st
   globalThis.window.addEventListener('gev:world-request-focus', (event) => {
     focusRequests.push(event.detail);
   });
-  _setVesselOverlayHostForTest(host);
+  useVesselHost(host);
   _setVesselStateForTest({
     viewer: {
       get canvas() {
@@ -1736,7 +1839,7 @@ test('vessel real layer lifecycle publishes protected selection and leaves no st
     );
   } finally {
     _setVesselStateForTest({ enabled: false });
-    _setVesselOverlayHostForTest();
+    useVesselHost();
     if (hadWindow) globalThis.window = priorWindow;
     else delete globalThis.window;
     globalThis.document = priorDocument;
@@ -1827,9 +1930,8 @@ test('vessel interaction wire: a vessel with an id and no MMSI is selected by cl
     { records: [idOnly], selectedRecord: null, trailId: null },
   );
   const requests = [];
-  harness.windowTarget.addEventListener(
-    WORLD_FOCUS_REQUEST_EVENT,
-    (event) => requests.push(event.detail),
+  harness.windowTarget.addEventListener(WORLD_FOCUS_REQUEST_EVENT, (event) =>
+    requests.push(event.detail),
   );
   try {
     harness.handler.click({ position: { x: 10, y: 20 } });
@@ -1843,16 +1945,30 @@ test('vessel interaction wire: a vessel with an id and no MMSI is selected by cl
 });
 
 /**
+ * Hand the vessel layer an overlay host, and answer the pick registry's
+ * card-on-top question from the same host, as the application does.
+ */
+function useVesselHost(host) {
+  _setVesselOverlayHostForTest(host);
+  setClickCardHitTest(host ? (x, y) => host.hitTest(x, y) : null);
+}
+
+/**
  * Overlay-host recorder whose hitTest answers with one card id. The real host
  * only publishes rects for `interactive` entries, so a stub returning a hit is
  * the same contract a painted, actionable card presents.
  */
-function hostWithCardHit(entryId) {
+function hostWithCardHit(entryId, topHit) {
   return {
     setEntries() {},
     setVisible() {},
     clearSource() {},
-    hitTest: () => (entryId ? { sourceId: 'ais-live-vessels', entryId } : null),
+    hitTest: (_x, _y, { sourceId } = {}) =>
+      !sourceId && topHit
+        ? topHit
+        : entryId
+          ? { sourceId: 'ais-live-vessels', entryId }
+          : null,
   };
 }
 
@@ -1868,9 +1984,7 @@ test('vessel interaction wire: clicking a card selects and transfers, like the s
   harness.windowTarget.addEventListener(WORLD_FOCUS_REQUEST_EVENT, (event) =>
     requests.push(event.detail),
   );
-  _setVesselOverlayHostForTest(
-    hostWithCardHit(`vessel:${harness.record.mmsi}`),
-  );
+  useVesselHost(hostWithCardHit(`vessel:${harness.record.mmsi}`));
   try {
     harness.handler.click({ position: { x: 10, y: 20 } });
     assert.equal(
@@ -1881,12 +1995,12 @@ test('vessel interaction wire: clicking a card selects and transfers, like the s
     assert.equal(requests[0].kind, 'vessel');
     assert.equal(requests[0].id, harness.record.mmsi);
   } finally {
-    _setVesselOverlayHostForTest(null);
+    useVesselHost(null);
     harness.cleanup();
   }
 });
 
-test('vessel interaction wire: clicking the selected vessel card refocuses exactly once', () => {
+test('vessel interaction wire: clicking the selected vessel card follows it, one camera command', () => {
   const harness = installWireHarness({
     primitive: {},
     content: {},
@@ -1896,21 +2010,54 @@ test('vessel interaction wire: clicking the selected vessel card refocuses exact
   harness.windowTarget.addEventListener(WORLD_FOCUS_REQUEST_EVENT, (event) =>
     requests.push(event.detail),
   );
-  _setVesselOverlayHostForTest(
-    hostWithCardHit(`vessel:${harness.record.mmsi}`),
-  );
+  useVesselHost(hostWithCardHit(`vessel:${harness.record.mmsi}`));
   try {
     harness.handler.click({ position: { x: 10, y: 20 } });
     assert.equal(
       aisLiveVesselsLayer.getSelectedInfo()?.mmsi,
       harness.record.mmsi,
     );
-    assert.equal(requests.length, 1);
-    assert.equal(requests[0].id, harness.record.mmsi);
+    // A second click on the selected vessel follows it: no centring flight.
+    assert.equal(requests.length, 0);
+    assert.equal(
+      harness.camera.followed?.key,
+      `ais-live-vessels:${harness.record.id}`,
+    );
     assert.equal(harness.trail.clearCalls, 0);
   } finally {
-    _setVesselOverlayHostForTest(null);
+    useVesselHost(null);
     harness.cleanup();
+  }
+});
+
+// Another layer's card on top takes the click from the vessel card under it
+// and from a vessel icon under it alike.
+test('vessel interaction wire: a covered card and a covered vessel pick both yield', () => {
+  for (const ownPick of [false, true]) {
+    const harness = installWireHarness(
+      ownPick ? { id: makeRecord().mmsi } : null,
+    );
+    const requests = [];
+    harness.windowTarget.addEventListener(WORLD_FOCUS_REQUEST_EVENT, (event) =>
+      requests.push(event.detail),
+    );
+    useVesselHost(
+      hostWithCardHit(`vessel:${harness.record.mmsi}`, {
+        sourceId: 'earthquakes',
+        entryId: 'quake:cover',
+      }),
+    );
+    try {
+      harness.handler.click({ position: { x: 10, y: 20 } });
+      assert.equal(requests.length, 0, `own pick: ${ownPick}`);
+      assert.equal(
+        aisLiveVesselsLayer.getSelectedInfo()?.mmsi,
+        harness.record.mmsi,
+      );
+    } finally {
+      useVesselHost(null);
+      harness.cleanup();
+    }
   }
 });
 
@@ -1925,7 +2072,7 @@ test('vessel interaction wire: an unknown card id preserves selection and never 
     requests.push(event.detail),
   );
   // An evicted vessel's card id resolves to no live record.
-  _setVesselOverlayHostForTest(hostWithCardHit('vessel:999999999'));
+  useVesselHost(hostWithCardHit('vessel:999999999'));
   try {
     harness.handler.click({ position: { x: 10, y: 20 } });
     assert.equal(
@@ -1934,34 +2081,137 @@ test('vessel interaction wire: an unknown card id preserves selection and never 
     );
     assert.equal(requests.length, 0);
   } finally {
-    _setVesselOverlayHostForTest(null);
+    useVesselHost(null);
     harness.cleanup();
   }
 });
 
-test('vessel interaction wire: a sibling-owned pick wins without selection mutation', () => {
-  // Another layer is already acting on this click; two camera commands is the
-  // worse failure, so the card is not consulted.
+test('vessel interaction wire: the vessel card on top wins over a sibling-owned pick', () => {
+  // The card painted on top takes the click; the sibling (an aircraft)
+  // stands aside under it, so there is one camera command, not two.
   registerPickOwner('flights', (pickedId) => pickedId === 'a1b2c3');
   const harness = installWireHarness({ id: 'a1b2c3' });
   const requests = [];
   harness.windowTarget.addEventListener(WORLD_FOCUS_REQUEST_EVENT, (event) =>
     requests.push(event.detail),
   );
-  _setVesselOverlayHostForTest(
-    hostWithCardHit(`vessel:${harness.record.mmsi}`),
-  );
+  useVesselHost(hostWithCardHit(`vessel:${harness.record.mmsi}`));
   try {
     harness.handler.click({ position: { x: 10, y: 20 } });
     assert.equal(
       aisLiveVesselsLayer.getSelectedInfo()?.mmsi,
       harness.record.mmsi,
     );
+    // The card's vessel, selected, is followed: one camera command.
     assert.equal(requests.length, 0);
+    assert.equal(
+      harness.camera.followed?.key,
+      `ais-live-vessels:${harness.record.id}`,
+    );
   } finally {
-    _setVesselOverlayHostForTest(null);
+    useVesselHost(null);
     harness.cleanup();
     unregisterPickOwner('flights');
+  }
+});
+
+// The aircraft layer runs first. Under the vessel's card it stands aside, so
+// the card takes the click: one action.
+test('vessel interaction wire: a card over an aircraft takes the click; the aircraft does not track', (t) => {
+  let tracked = null;
+  registerPickOwner('test-planes', (pickedId) => pickedId === 'plane:9');
+  t.after(() => unregisterPickOwner('test-planes'));
+  const harness = installWireHarness(
+    { id: 'plane:9' },
+    { selectedRecord: null },
+    {},
+    (event) => {
+      if (isUnderOtherCard(event)) return;
+      if (event.hit?.id === 'plane:9') tracked = 'plane:9';
+    },
+  );
+  const requests = [];
+  harness.windowTarget.addEventListener(WORLD_FOCUS_REQUEST_EVENT, (event) =>
+    requests.push(event.detail),
+  );
+  useVesselHost(hostWithCardHit(`vessel:${harness.record.mmsi}`));
+  try {
+    harness.handler.click({ position: { x: 10, y: 20 } });
+    assert.equal(tracked, null, 'the aircraft does not track');
+    assert.equal(requests.length, 1, 'the vessel card acts');
+    assert.equal(
+      aisLiveVesselsLayer.getSelectedInfo()?.mmsi,
+      harness.record.mmsi,
+    );
+  } finally {
+    useVesselHost(null);
+    harness.cleanup();
+  }
+});
+
+// A trail acts for nobody: the vessel's card painted over it still selects,
+// and a bare trail pick stays a no-op that keeps the selection.
+test('vessel interaction wire: a card over a trail selects; a bare trail is a no-op', () => {
+  for (const carded of [true, false]) {
+    const harness = installWireHarness(
+      { id: 'gev-trail:fl-a1b2c3:head' },
+      { selectedRecord: null },
+    );
+    const requests = [];
+    harness.windowTarget.addEventListener(WORLD_FOCUS_REQUEST_EVENT, (event) =>
+      requests.push(event.detail),
+    );
+    useVesselHost(
+      hostWithCardHit(carded ? `vessel:${harness.record.mmsi}` : null),
+    );
+    try {
+      harness.handler.click({ position: { x: 10, y: 20 } });
+      assert.equal(requests.length, carded ? 1 : 0, `card: ${carded}`);
+      assert.equal(
+        aisLiveVesselsLayer.getSelectedInfo()?.mmsi ?? null,
+        carded ? harness.record.mmsi : null,
+      );
+    } finally {
+      useVesselHost(null);
+      harness.cleanup();
+    }
+  }
+});
+
+// A coarse tap on the vessel's card over a fire, nearby or exact: the card on
+// top keeps the tap.
+test('vessel interaction wire: the card keeps a tap over a nearby or exact fire', (t) => {
+  const previous = globalThis.matchMedia;
+  globalThis.matchMedia = () => ({ matches: true });
+  t.after(() => {
+    if (previous) globalThis.matchMedia = previous;
+    else delete globalThis.matchMedia;
+  });
+  const fire = 'fire:near-miss';
+  registerPickOwner('test-exact-fires', (pickedId) => pickedId === fire);
+  t.after(() => unregisterPickOwner('test-exact-fires'));
+  for (const exact of [false, true]) {
+    const harness = installWireHarness(
+      exact ? { id: fire } : null,
+      { selectedRecord: null },
+      { drillPick: () => [{ id: fire }] },
+    );
+    const requests = [];
+    harness.windowTarget.addEventListener(WORLD_FOCUS_REQUEST_EVENT, (event) =>
+      requests.push(event.detail),
+    );
+    useVesselHost(hostWithCardHit(`vessel:${harness.record.mmsi}`));
+    try {
+      harness.handler.click({ position: { x: 10, y: 20 } });
+      assert.equal(requests.length, 1, `exact fire: ${exact}`);
+      assert.equal(
+        aisLiveVesselsLayer.getSelectedInfo()?.mmsi,
+        harness.record.mmsi,
+      );
+    } finally {
+      useVesselHost(null);
+      harness.cleanup();
+    }
   }
 });
 
@@ -1990,16 +2240,21 @@ for (const card of ['live', 'stale', 'absent', 'covered']) {
         );
         return { sourceId: 'cctv', entryId: 'vessel:999999999' };
       };
-    _setVesselOverlayHostForTest(host);
+    useVesselHost(host);
     try {
       harness.handler.click({ position: { x: 10, y: 20 } });
       assert.equal(
         aisLiveVesselsLayer.getSelectedInfo()?.mmsi,
         harness.record.mmsi,
       );
-      assert.equal(requests.length, card === 'live' ? 1 : 0);
+      // The live card is the selected vessel's: the click follows it.
+      assert.equal(requests.length, 0);
+      assert.equal(
+        harness.camera.followed?.key ?? null,
+        card === 'live' ? `ais-live-vessels:${harness.record.id}` : null,
+      );
     } finally {
-      _setVesselOverlayHostForTest(null);
+      useVesselHost(null);
       harness.cleanup();
       unregisterPickOwner('weather-cyclones');
     }
@@ -2009,10 +2264,20 @@ for (const card of ['live', 'stale', 'absent', 'covered']) {
 test('vessel card policy: only keyed cards publish a hit rect', () => {
   const keyed = applyVesselOverlayPolicy(buildVesselCard(makeRecord()));
   assert.equal(keyed.interactive, true);
-  const unkeyed = applyVesselOverlayPolicy(buildVesselCard(makeRecord({ mmsi: '' })));
-  assert.equal(unkeyed.interactive, false, 'an unkeyed card has no record to select');
+  const unkeyed = applyVesselOverlayPolicy(
+    buildVesselCard(makeRecord({ mmsi: '' })),
+  );
+  assert.equal(
+    unkeyed.interactive,
+    false,
+    'an unkeyed card has no record to select',
+  );
   const idOnly = buildVesselCard(makeRecord({ id: 'provider-7', mmsi: '' }));
-  assert.equal(applyVesselOverlayPolicy(idOnly).interactive, true, 'a source id is a key');
+  assert.equal(
+    applyVesselOverlayPolicy(idOnly).interactive,
+    true,
+    'a source id is a key',
+  );
   assert.equal(idOnly.id, 'vessel:provider-7');
 });
 
@@ -2026,7 +2291,11 @@ test('vessel cards are keyed by id and show the MMSI only when known', () => {
   );
   assert.equal(unknown.actionable, true);
   assert.match(unknown.details.at(-1), /^MMSI -- · /);
-  assert.equal(unknown.title, 'VESSEL', 'a name that is only the id is no name');
+  assert.equal(
+    unknown.title,
+    'VESSEL',
+    'a name that is only the id is no name',
+  );
 });
 
 test('vessel interaction wire: deselecting never moves the camera', () => {
@@ -2188,6 +2457,43 @@ test('detection objects name the vessel card their callout gives way to', () => 
       .map((object) => object.id);
     assert.deepEqual(ids, ['NO MMSI']);
     aisLiveVesselsLayer.setCockpitSubject(null);
+  } finally {
+    _setVesselStateForTest({ enabled: false });
+  }
+});
+
+test('the selected vessel is a detection object first, even when a cap samples the list', () => {
+  const vessel = (mmsi, visible = true) => ({
+    name: `SHIP ${mmsi}`,
+    mmsi,
+    type: 'Cargo',
+    speed: 9.5,
+    course: 80,
+    heading: 80,
+    position: POS,
+    visible,
+  });
+  const records = Array.from({ length: 40 }, (_, i) =>
+    vessel(String(100 + i), i !== 3),
+  );
+  const selected = records[17];
+  _setVesselStateForTest({ viewer: {}, records, selectedRecord: selected });
+  try {
+    const all = aisLiveVesselsLayer.getDetectableObjects();
+    assert.equal(all.length, 39, 'every drawn vessel, none past the horizon');
+    assert.equal(all[0].sourceId, selected.id, 'the selected vessel first');
+    assert.equal(all[0].skipLabel, true);
+    assert.equal(
+      new Set(all.map((object) => object.sourceId)).size,
+      all.length,
+      'the selected vessel once',
+    );
+    // A stride of 4 from index 0 never lands on index 17.
+    const sampled = aisLiveVesselsLayer.getDetectableObjects({ maxCount: 10 });
+    assert.equal(sampled.length, 10);
+    assert.equal(sampled[0].sourceId, selected.id);
+    // The same vessel is the same object from paint to paint.
+    assert.equal(aisLiveVesselsLayer.getDetectableObjects()[0], all[0]);
   } finally {
     _setVesselStateForTest({ enabled: false });
   }

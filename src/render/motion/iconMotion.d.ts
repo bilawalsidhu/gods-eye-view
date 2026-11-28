@@ -17,12 +17,16 @@ export const LERP_STEP_MS: number;
 export function norm180(deg: number): number;
 /** An angle in degrees, wrapped into [0, 360). */
 export function norm360(deg: number): number;
-/** Where `segment` puts an icon at `t` (epoch ms), from its own `pos`. */
-export function motionPosition(
+/**
+ * Where `segment` puts an icon at `t` (epoch ms), from its own `pos`:
+ * written into `result` when given, allocating nothing.
+ */
+export function motionPosition<T extends Ecef = Ecef>(
   segment: MotionSegment | undefined,
   pos: Position,
   t: number,
-): Ecef;
+  result?: T,
+): T;
 /** How far, degrees in (-180, 180], a glide starts from its segment's course. */
 export function glideOffset(
   segment: MotionSegment | undefined,
@@ -37,10 +41,11 @@ export function motionCourse(
   glide?: CourseGlide,
 ): number;
 /** Where an icon item is drawn at `t` (epoch ms on its set's motion clock). */
-export function iconPosition(
+export function iconPosition<T extends Ecef = Ecef>(
   item: { pos: Position; motion?: MotionSegment },
   t: number,
-): Ecef;
+  result?: T,
+): T;
 /** The course an icon item is drawn with at `t`. */
 export function iconCourse(
   item: { course?: number; motion?: MotionSegment; courseGlide?: CourseGlide },

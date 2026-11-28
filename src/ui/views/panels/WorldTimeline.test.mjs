@@ -93,6 +93,27 @@ test('the timeline hides while no layer with time to show is on', async (t) => {
   assert.equal(bar() === null, true, 'the layer went off');
 });
 
+test('the hidden timeline does not redraw as the world time moves', async (t) => {
+  const bar = mount(t);
+  await nextTick();
+  assert.equal(bar(), null, 'hidden with no layer that has time to show');
+  // Count the view's renders from here on.
+  const view = document.body.querySelector('div').__vue_app__._instance;
+  let renders = 0;
+  const run = view.effect.run;
+  view.effect.run = function (...args) {
+    renders += 1;
+    return run.apply(this, args);
+  };
+  const at = Date.UTC(2026, 9, 30, 6, 15, 42);
+  for (let i = 0; i < 5; i += 1) {
+    worldClock.seek(at + i * 60_000);
+    await nextTick();
+  }
+  assert.equal(bar(), null);
+  assert.equal(renders, 0, 'nothing drawn, nothing redrawn');
+});
+
 test('the track runs over the time the layers show, to now, and scrubs', async (t) => {
   const bar = mount(t);
   const now = Date.now();
@@ -186,7 +207,7 @@ test('on a track that runs over years, only the last minutes are near now', asyn
   assert.equal(worldClock.isLive(), true, 'a minute back goes live');
 });
 
-test('play runs in real time, from the start of the track when at live', async (t) => {
+test('play does nothing at live, and runs in real time from a time in the past', async (t) => {
   const bar = mount(t);
   const now = Date.now();
   const start = now - 10 * 86_400_000;
@@ -207,12 +228,23 @@ test('play runs in real time, from the start of the track when at live', async (
     pause: () => stepped.push('pause'),
   });
   t.after(() => driver.detach());
+  assert.equal(worldClock.isLive(), true);
+  bar().querySelector('.world-timeline-play').click();
+  await nextTick();
+  assert.equal(worldClock.isLive(), true, 'play at live stays live');
+  assert.equal(worldClock.isPlaying(), false, 'and plays nothing');
+  assert.ok(Math.abs(worldClock.now() - Date.now()) < 60_000, 'still at now');
+
+  // Paused in the past, play runs from there.
+  const from = start + 86_400_000;
+  worldClock.seek(from);
+  await nextTick();
   bar().querySelector('.world-timeline-play').click();
   worldClock.pause();
   await nextTick();
   assert.deepEqual(stepped, []);
   const rate = worldClock.getRate();
-  assert.ok(worldClock.now() - start < rate * 1_000, 'from the start of the track');
+  assert.ok(Math.abs(worldClock.now() - from) < rate * 1_000, 'from where it was');
   assert.equal(rate, 1, 'real time to start with');
   worldClock.play({ continuous: true });
 
@@ -275,6 +307,8 @@ test('the speed chosen sets how fast play runs, at once while playing', async (t
   );
   select.value = 'week';
   select.dispatchEvent(new Event('change'));
+  // Play runs from a time in the past (at live it does nothing).
+  worldClock.seek(now - 5 * 86_400_000);
   await nextTick();
   bar().querySelector('.world-timeline-play').click();
   assert.equal(worldClock.getRate(), 604_800, 'a week a second');
@@ -763,6 +797,9 @@ test('the speed shown follows the world clock, and Play runs at its rate', async
   worldClock.setRate(5_000);
   await nextTick();
   assert.equal(select().value, 'hour');
+  // Play runs from a time in the past (at live it does nothing).
+  worldClock.seek(now - 5 * 86_400_000);
+  await nextTick();
   bar().querySelector('.world-timeline-play').click();
   assert.equal(worldClock.isPlaying(), true);
   assert.equal(worldClock.getRate(), 5_000, 'Play runs at the clock\'s own rate');
