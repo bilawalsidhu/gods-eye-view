@@ -253,7 +253,7 @@ test('the rendering part draws the dots, the tracked dot and the rings through t
     assert.deepEqual(ring.style, { kind: 'solid', color: [1, 1, 0, 0.6] });
     // The Earth hides the part of the ring behind it: no depth-fail style.
     assert.equal(ring.depthFail, undefined, 'no ring draws through the Earth');
-    assert.equal(ring.widthPx, 2.5, 'the ISS ring is wider');
+    assert.equal(ring.widthPx, 2, 'the ISS ring is as wide as any');
     assert.equal(ring.mode, 'geodesic');
     assert.deepEqual([...ring.positions.slice(0, 3)], [7e6, 0, 0]);
     // Turned with the Earth: by minus the GMST elapsed since its bake.

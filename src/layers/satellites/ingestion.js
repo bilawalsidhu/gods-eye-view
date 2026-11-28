@@ -2,7 +2,7 @@ import { twoline2satrec } from 'satellite.js';
 import { msg } from '../../i18n/index.js';
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { noradIdFromSatnum, tleLineLaunchYear } from '../../sources/tle.js';
-import { CATALOG_GROUPS, ISS_NORAD, POINT_STYLES } from './policy.js';
+import { CATALOG_GROUPS, ISS_NORAD } from './policy.js';
 import { classifySatellite, parseSatcatCsv } from './classes.js';
 import { matchImagingSensor } from './sensors.js';
 
@@ -372,13 +372,7 @@ export function createIngestion({
           );
         }
 
-        // Show ISS orbital path by default
-        if (layerState._catalog.has(ISS_NORAD)) {
-          parts.rendering._showOrbitPath(ISS_NORAD, POINT_STYLES.iss.color);
-          parts.controls._syncIssOrbit();
-
-          parts.labels._syncIssOverlay();
-        }
+        if (layerState._catalog.has(ISS_NORAD)) parts.labels._syncIssOverlay();
 
         layerState._coreStale = coreStale;
         layerState._count = layerState._points.size;

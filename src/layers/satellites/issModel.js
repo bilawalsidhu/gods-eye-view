@@ -69,7 +69,7 @@ export function issIsModule(noradId, entry) {
  * The ISS as the station model factory describes it: NASA's model at the
  * real 109 m span, its joints on the Sun or NASA's telemetry, the Cockpit's
  * views from mounts on the model (so the model stays drawn in the Cockpit),
- * and its orbit ring, which has rules of its own (`_syncIssOrbit`).
+ * and its orbit ring, drawn only while the ISS is tracked.
  * @param {{parts: object}} context
  * @returns {import('./stationModel.js').StationModelSpec}
  */
@@ -119,7 +119,7 @@ export function issModelSpec({ parts }) {
     // The Cockpit rides the station from a mount on the model, so the model
     // stays while it does.
     hideInCockpit: false,
-    syncOrbit: () => parts.controls._syncIssOrbit?.(),
+    syncOrbit: null,
   };
 }
 

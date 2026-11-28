@@ -127,10 +127,8 @@ export function createTracking({ state: layerState, services, parts, source }) {
     layerState._trackedFrameNumber = -1;
     layerState._trackedFrameGeo = null;
 
-    // Remove the tracked dot and orbit path (unless ISS — keep its path)
-    if (clearedNorad !== ISS_NORAD) {
-      parts.rendering._hideOrbitPath(clearedNorad);
-    }
+    // Remove the tracked dot and orbit path
+    parts.rendering._hideOrbitPath(clearedNorad);
     // Released before the camera hears of it: a follow listener that reads
     // the tracked position mid-release must find nothing, or it would publish
     // the focus rectangle again after it was cleared above.
@@ -144,8 +142,6 @@ export function createTracking({ state: layerState, services, parts, source }) {
       layerState._trackedEntity = null;
     }
     layerState._trackedDockedToStation = null;
-    layerState._trackedDockedToIss = false;
-    parts.controls._syncIssOrbit?.();
     // A held Cockpit subject that stops being tracked gets its marks back.
     if (layerState._cockpitSubjectNorad !== null)
       parts.cockpit?._syncCockpitSubjectVisuals();
@@ -588,18 +584,19 @@ export function createTracking({ state: layerState, services, parts, source }) {
     // Hide the dot — the tracked dot draws it, larger and over everything.
     parts.rendering._hidePoint(noradId);
 
-    // Show orbital path. An object docked to the ISS (Nauka, a Progress…)
-    // flies the station's orbit under elements of its own: its ring would
-    // run beside the ISS's, a second line through the same station. The
-    // ISS's ring stands for it instead. Another station's ring is drawn only
-    // while that station is tracked, so its docked objects keep their own.
+    // Show its orbital path, as for every satellite: a station's ring is
+    // drawn only while the station is tracked, so its docked objects keep
+    // their own.
     layerState._trackedDockedToStation = _dockedToStation(noradId);
-    layerState._trackedDockedToIss =
-      layerState._trackedDockedToStation === ISS_NORAD;
-    if (!layerState._trackedDockedToIss)
-      parts.rendering._showOrbitPath(noradId, TRACKED_ORBIT_COLOR);
-    if (noradId === ISS_NORAD || layerState._trackedDockedToIss)
-      parts.controls._syncIssOrbit?.();
+    parts.rendering._showOrbitPath(noradId, TRACKED_ORBIT_COLOR);
+    // Built, it follows the Orbits toggle like every other ring.
+    parts.rendering._setOrbitPathShown(
+      noradId,
+      parts.controls.satelliteVisualsVisible(
+        layerState._enabled,
+        layerState._params.showOrbits,
+      ),
+    );
 
     // The tracked position propagates per evaluation through the per-frame
     // cache (WS-D2) — dot, host readout, and camera share one SGP4 epoch per frame.

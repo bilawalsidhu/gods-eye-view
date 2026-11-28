@@ -586,7 +586,7 @@ export function createRendering({
     path.item = {
       id: String(noradId),
       positions: _ringPositions(path, path.gmstAtBake),
-      widthPx: noradId === ISS_NORAD ? 2.5 : 2.0,
+      widthPx: 2.0,
       // Along the ellipsoid between samples, as the ring always ran.
       mode: 'geodesic',
       style: { kind: 'solid', color: withAlpha(pathColor, RING_ALPHA) },

@@ -509,12 +509,19 @@ export function createStationModel(
     const companion =
       near && tracked !== norad && _trackedOnStation() ? tracked : null;
     if (companionRingHidden !== null && companionRingHidden !== companion) {
-      // A tracked satellite's ring shows; untracking has already hidden it.
+      // A tracked satellite's ring follows the Orbits toggle; untracking has
+      // already hidden it.
       if (
         tracked === companionRingHidden &&
         layerState._cockpitHiddenPath !== companionRingHidden
       )
-        parts.rendering._setOrbitPathShown(companionRingHidden, true);
+        parts.rendering._setOrbitPathShown(
+          companionRingHidden,
+          parts.controls.satelliteVisualsVisible(
+            layerState._enabled,
+            layerState._params.showOrbits,
+          ),
+        );
       companionRingHidden = null;
     }
     if (companion !== null) {

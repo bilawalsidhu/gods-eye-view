@@ -15,9 +15,9 @@ import { trackedStation } from './stationModels.js';
 export const SATELLITE_COCKPIT_LAYER_ID = 'satellites';
 
 /**
- * While the Cockpit rides a satellite, every other orbit ring (the ISS ring
- * included) draws at this fraction of its normal alpha, so the rings stay
- * legible without competing with the nadir picture.
+ * While the Cockpit rides a satellite, every other orbit ring draws at this
+ * fraction of its normal alpha, so the rings stay legible without competing
+ * with the nadir picture.
  */
 export const COCKPIT_ORBIT_DIM_FACTOR = 0.3;
 
@@ -187,9 +187,7 @@ export function createCockpitSubject({ state: layerState, parts }) {
     const hiddenPath = layerState._cockpitHiddenPath;
     if (hiddenPath !== null && (!held || hiddenPath !== tracked)) {
       const hasPath = layerState._orbitPaths.has(hiddenPath);
-      // The ISS's ring also follows its class (and its tracking).
-      if (hasPath && hiddenPath === ISS_NORAD) parts.controls._syncIssOrbit();
-      else if (hasPath)
+      if (hasPath)
         parts.rendering._setOrbitPathShown(
           hiddenPath,
           parts.controls.satelliteVisualsVisible(
