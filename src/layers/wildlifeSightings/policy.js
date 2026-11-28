@@ -1,7 +1,7 @@
 import { msg } from '../../i18n/marker.js';
 
-export const WILDLIFE_UNKNOWN_COLOR = '#9aa7b3';
-export const WILDLIFE_ACCENT = '#7bd88f';
+const WILDLIFE_UNKNOWN_COLOR = '#9aa7b3';
+const WILDLIFE_ACCENT = '#7bd88f';
 export const ICONIC_TINTS = Object.freeze({
   Aves: '#9fa8ff',
   Mammalia: '#e0a96d',
@@ -77,9 +77,9 @@ export const WILDLIFE_RETRY_AFTER_MAX_SEC = 86_400;
 // Faster polling would reread the proxy's five-minute cache.
 export const WILDLIFE_UPDATE_INTERVAL_MS = 5 * 60_000;
 
-export const WILDLIFE_CARD_SCALE_FULL_METERS = 20_000;
-export const WILDLIFE_CARD_SCALE_MID_METERS = 120_000;
-export const WILDLIFE_CARD_SCALE_END_METERS = 125_000;
+const WILDLIFE_CARD_SCALE_FULL_METERS = 20_000;
+const WILDLIFE_CARD_SCALE_MID_METERS = 120_000;
+const WILDLIFE_CARD_SCALE_END_METERS = 125_000;
 // Separate entry and exit thresholds prevent churn during small zooms.
 export const WILDLIFE_CARD_SHOW_MAX_METERS = 110_000;
 export const WILDLIFE_CARD_HIDE_MAX_METERS = 125_000;

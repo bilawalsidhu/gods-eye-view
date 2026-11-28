@@ -17,8 +17,8 @@ import { parseRetryAfterSeconds } from '../../sources/retryAfter.js';
 // Leave room for projected observations while bounding malformed proxy replies.
 const SNAPSHOT_MAX_BYTES = 2 * 1024 * 1024;
 // The proxy owns upstream pacing; observation requests precede these workers.
-export const WILDLIFE_GRID_CONCURRENCY = 4;
-export const WILDLIFE_GRID_CACHE_MAX = 400;
+const WILDLIFE_GRID_CONCURRENCY = 4;
+const WILDLIFE_GRID_CACHE_MAX = 400;
 export const WILDLIFE_GRID_TTL_MS = 15 * 60_000;
 // Match the proxy's one-hour stale allowance. Keep the original data time so
 // repeated refresh failures never extend a tile's usable life.
@@ -103,7 +103,7 @@ function wildlifeFailureStatus(error) {
 }
 
 /** Whether a failure asks clients to wait before the next request. */
-export function wildlifeFailureRetryable(error) {
+function wildlifeFailureRetryable(error) {
   const status = wildlifeFailureStatus(error);
   return status === 429 || status >= 500;
 }
