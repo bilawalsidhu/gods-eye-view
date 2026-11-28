@@ -74,11 +74,11 @@ try {
           guardWrites: qa.guardWrites,
         };
       },
-      reset(height = 1_000_000, pitch = -35) {
+      reset(height = 1_000_000, pitch = -35, lon = 0, lat = 0) {
         viewer.camera.cancelFlight();
         viewer.camera.lookAtTransform(C.Matrix4.IDENTITY);
         original({
-          destination: C.Cartesian3.fromDegrees(0, 0, height),
+          destination: C.Cartesian3.fromDegrees(lon, lat, height),
           orientation: { heading: 0, pitch: C.Math.toRadians(pitch), roll: 0 },
         });
         qa.frame();
@@ -108,6 +108,64 @@ try {
   const reset = (height, pitch) =>
     page.evaluate((h, p) => window.__zoomGuardQa.reset(h, p), height, pitch);
   const session = await page.createCDPSession();
+  // A wheel notch on the centre of a straight-down whole-globe view can ask
+  // camera.rotate for a turn about a zero axis, which the app's camera skips.
+  await page.setViewport({ width: 1440, height: 900 });
+  await page.evaluate(() => window.__zoomGuardQa.viewer.resize());
+  const skipped = await page.evaluate(async () => {
+    const C = await import('/node_modules/cesium/Build/Cesium/index.js');
+    const qa = window.__zoomGuardQa;
+    const camera = qa.viewer.camera;
+    qa.reset(22_000_000, -90);
+    const before = C.Cartesian3.clone(camera.position);
+    camera.rotate(C.Cartesian3.ZERO, 0.01);
+    const unmoved = C.Cartesian3.equals(camera.position, before);
+    qa.frame();
+    // Count the zero-axis turns the wheel asks for below, on top of the guard.
+    qa.zeroTurns = 0;
+    const guarded = camera.rotate;
+    camera.rotate = function (axis, angle) {
+      if (!(C.Cartesian3.magnitudeSquared(axis) > 0)) qa.zeroTurns++;
+      return guarded.call(this, axis, angle);
+    };
+    return unmoved;
+  });
+  assert.ok(skipped, 'the app camera skips a turn about a zero axis');
+  for (const [lat, lon] of [
+    [-13.37, -41.11],
+    [27.78, 72.34],
+    [-40.75, -117.25],
+  ]) {
+    await page.evaluate(
+      (lon, lat) => window.__zoomGuardQa.reset(22_000_000, -90, lon, lat),
+      lon,
+      lat,
+    );
+    await page.mouse.move(720, 450);
+    await page.evaluate(() => {
+      window.__zoomGuardQa.viewer.canvas.dispatchEvent(
+        new WheelEvent('wheel', {
+          deltaY: -120,
+          clientX: 720,
+          clientY: 450,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
+    const after = await frame(3);
+    assert.ok(
+      Number.isFinite(after.height) && after.height < 22_000_000,
+      `a centre wheel notch at ${lat}, ${lon} zooms in: ${JSON.stringify(after)}`,
+    );
+  }
+  console.log(
+    `[INFO] zero-axis turns asked for: ${await page.evaluate(() => window.__zoomGuardQa.zeroTurns)}`,
+  );
+  assert.deepEqual(errors, [], 'no page errors after centre wheel notches');
+  console.log(
+    '[PASS] a centre wheel notch at nadir zooms in and keeps rendering',
+  );
   for (const viewport of [
     { width: 1200, height: 800 },
     { width: 390, height: 844 },

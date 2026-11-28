@@ -3,7 +3,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import { limitZoomOut, zoomOutLimit } from './applicationViewer.js';
+import {
+  guardDegenerateRotation,
+  limitZoomOut,
+  zoomOutLimit,
+} from './applicationViewer.js';
+import { headlessCamera } from './cameraGoldens.js';
 
 // The share of the screen's height the globe spans from `altitude`.
 function globeShare(altitude, fovy) {
@@ -85,4 +90,40 @@ test('the viewer options take multisampling, by default 4, and keep the drawing 
   assert.equal(given.msaaSamples, 1, 'Cesium’s 1 is off');
   assert.equal(given.contextOptions.webgl.preserveDrawingBuffer, true);
   assert.equal(applicationViewerOptions(credits, { msaa: 8 }).msaaSamples, 8);
+});
+
+const cameraFixture = () => headlessCamera().camera;
+
+const pose = (camera) =>
+  [camera.position, camera.direction, camera.up, camera.right].map((v) =>
+    Cesium.Cartesian3.clone(v),
+  );
+
+test('a turn about a zero axis is skipped instead of thrown', () => {
+  const unguarded = cameraFixture();
+  assert.throws(
+    () => unguarded.rotate(Cesium.Cartesian3.ZERO, 0.01),
+    /not a number/,
+  );
+  const camera = cameraFixture();
+  const before = pose(camera);
+  guardDegenerateRotation(camera);
+  assert.doesNotThrow(() => camera.rotate(Cesium.Cartesian3.ZERO, 0.01));
+  assert.deepEqual(pose(camera), before);
+});
+
+test('an ordinary rotation is exactly what Cesium does unguarded', () => {
+  const axis = new Cesium.Cartesian3(0.2, -0.5, 0.84);
+  const plain = cameraFixture();
+  const camera = cameraFixture();
+  guardDegenerateRotation(camera);
+  for (const turn of [
+    (c) => c.rotate(axis, 0.37),
+    // No angle: Cesium's default amount applies.
+    (c) => c.rotate(Cesium.Cartesian3.UNIT_Z),
+  ]) {
+    turn(plain);
+    turn(camera);
+    assert.deepEqual(pose(camera), pose(plain));
+  }
 });

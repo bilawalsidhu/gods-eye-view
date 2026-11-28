@@ -46,6 +46,23 @@ export function limitZoomOut(viewer) {
   });
 }
 
+/**
+ * Make `camera.rotate` skip a turn about a zero (or NaN) axis. With the
+ * pointer on the centre of a whole-globe view, Cesium's wheel zoom
+ * (`ScreenSpaceCameraController` `handleZoom`) can ask for one: a debug
+ * build of Cesium throws from `Scene.initializeFrame`, stopping the render
+ * loop, and a production build writes NaN into the camera's pose. The zoom
+ * still goes on in the wheel's direction after the skipped turn.
+ * @param {Cesium.Camera} camera
+ */
+export function guardDegenerateRotation(camera) {
+  const rotate = camera.rotate;
+  camera.rotate = function (axis, angle) {
+    if (!(Cesium.Cartesian3.magnitudeSquared(axis) > 0)) return;
+    return rotate.call(this, axis, angle);
+  };
+}
+
 // Dev convenience: expose the app's Cesium instance for console/preview probing
 // (single shared module instance — avoids dual-Cesium state bugs when testing).
 if (typeof window !== 'undefined' && !window.__CESIUM__)
@@ -121,6 +138,8 @@ export function createApplicationViewer({
     if (globalThis.matchMedia?.('(pointer: coarse)').matches)
       viewer.scene.screenSpaceCameraController.zoomFactor *= 3;
     limitZoomOut(viewer);
+    // Cesium's wheel zoom can ask for a turn about a zero axis.
+    guardDegenerateRotation(viewer.camera);
     // A narrow view carried along an orbit outruns the imagery under it.
     preloadImageryAhead(viewer);
     // Before any tile builds a draw command: Cesium's per-vertex model
