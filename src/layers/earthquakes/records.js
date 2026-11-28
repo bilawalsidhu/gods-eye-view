@@ -12,6 +12,7 @@ export function normalizeEarthquakeSnapshot(geojson) {
       !properties ||
       typeof properties !== 'object' ||
       Array.isArray(properties) ||
+      (properties.type != null && typeof properties.type !== 'string') ||
       (feature.geometry.type != null && feature.geometry.type !== 'Point')
     )
       return null;
@@ -26,6 +27,8 @@ export function normalizeEarthquakeSnapshot(geojson) {
       (mag != null && (!Number.isFinite(mag) || mag > 10))
     )
       return null;
+    // all_day also carries explosions, quarry blasts etc.; a missing type falls back to magnitude alone.
+    if (properties.type != null && properties.type !== 'earthquake') continue;
     // A missing magnitude cannot establish that this event meets M2.5+.
     if (mag == null || mag < 2.5) continue;
     // An id-less event is named by what it is (time, position, depth and
