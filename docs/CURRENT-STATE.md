@@ -9506,8 +9506,7 @@ reception does not interrupt internet radio.
   output and audio from retired sessions are refused. FM audio starts after an
   80 ms prebuffer and retains at most 256 ms, dropping the oldest frames on
   overflow. FM signal display updates are coalesced to at most four per second;
-  spectra are computed only while seeking. Optional `decoderDiagnostics` adds
-  bounded timing samples and overload snapshots without recording audio or IQ.
+  spectra are computed only while seeking.
 - **Modes.** FM (87.5–108 MHz, tune, seek, volume) or ADS-B at 1090 MHz.
   With a receiver open, selecting ADS-B enables the Local ADS-B layer;
   selecting FM disables it.

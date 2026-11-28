@@ -1063,7 +1063,6 @@
   "src/layers/weather/display.test.mjs",
   "src/sdr/adsbDecoder.test.mjs",
   "src/sdr/controller.test.mjs",
-  "src/sdr/decoderDiagnostics.test.mjs",
   "src/sdr/gain.test.mjs",
   "src/sdr/sdrAudioWorklet.test.mjs",
   "src/sdr/spectrum.test.mjs",
