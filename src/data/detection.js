@@ -50,6 +50,7 @@ import {
 } from './detectionPolicy.js';
 import { detectionBracketOpacity } from './detectionPresentation.js';
 import { SurfaceOcclusion } from './detectionOcclusion.js';
+import { createDetectionPaintCache } from './detectionPaintCache.js';
 import { rendererOf } from '../render/rendererOf.js';
 import {
   createCyberSonarSampler,
@@ -109,7 +110,7 @@ const THEME_MAP = DETECTION_THEME_MAP;
 
 /** @constant {number} SPARSE_ZONE_FRACTION - Fraction of viewport half-extent used as sparse focus ring radius */
 const SPARSE_ZONE_FRACTION = 0.5;
-/** Solve cadence for membership/collision; accepted identities still reproject every frame. */
+/** Solve cadence for membership/collision; between solves, accepted identities reproject whenever the view or a contact changes. */
 const LABEL_SOLVE_INTERVAL_MS = 125;
 /** Own-card opacity that fully hides a callout; below it the callout fades in. */
 const CARD_ALPHA_HIDING_CALLOUT = 0.5;
@@ -251,6 +252,9 @@ let _hostLane = null;
 let _calloutLane = null;
 let _transitBracketPaths = new Map();
 let _transitBracketAlpha = 1;
+const _paintCache = createDetectionPaintCache();
+/** Paints since `initDetection` that reused a kept sweep (diagnostics). */
+let _paintReuseCount = 0;
 /**
  * Callouts solved by the sensor lane this frame, replayed by the callout lane.
  * The array and its rows are POOLED — `_calloutCount` is the live length — so a
@@ -334,8 +338,12 @@ const _uncappedQuery = {
 /** Per-paint containers, emptied and refilled rather than made per paint. */
 const _selectedIdentities = new Map();
 const _renderIdentities = new Map();
-const _candidateMap = new Map();
 const _renderEntries = [];
+/**
+ * The last sweep's callout candidates. A paint that reuses that sweep reads
+ * them, so only a sweep or `_releaseKeptPaintState` empties the map.
+ */
+const _candidateMap = new Map();
 let _surfaceDepthFallbackReported = false;
 let _lastLabelSolveAt = 0;
 let _labelSolveDirty = true;
@@ -418,11 +426,14 @@ export function initDetection(viewer, layers, onModeChange) {
  * Empty the containers kept between paints. They hold the last paint's
  * contacts (the layers' own objects and the candidates made from them), so
  * whenever no paint will refill them — detection off, torn down, or a paint
- * that found nothing — they are emptied rather than keeping those alive.
+ * that found nothing — they are emptied rather than keeping those alive. The
+ * kept paint reads the candidates and transit paths, so it goes with them.
  */
 function _releaseKeptPaintState() {
   _collected.length = 0;
   _candidateMap.clear();
+  _transitBracketPaths.clear();
+  _paintCache.clear();
   _renderEntries.length = 0;
   _selectedIdentities.clear();
   _renderIdentities.clear();
@@ -445,7 +456,7 @@ export function destroyDetection() {
   _hostLane = null;
   _calloutLane?.unregister?.();
   _calloutLane = null;
-  _transitBracketPaths.clear();
+  _paintReuseCount = 0;
   _calloutCount = 0;
   _layers = [];
   _onModeChange = null;
@@ -710,6 +721,7 @@ function _publishDiagnostics() {
   dataset.solveMs = String(_lastDiagnostics.solveMs ?? 0);
   dataset.frameTotalMs = String(_lastDiagnostics.frameTotalMs ?? 0);
   dataset.throttleSkipCount = String(_lastDiagnostics.throttleSkipCount ?? 0);
+  dataset.paintReuseCount = String(_lastDiagnostics.paintReuseCount ?? 0);
 }
 
 /**
@@ -1353,14 +1365,51 @@ function _materializeCandidate(
 }
 
 /**
- * Paint detection against the shared host frame. Brackets remain broad and
- * per-frame; rich placements rebuild only for selected/fading identities and
- * for a bounded cohort on solve ticks.
+ * Every view value the object sweep and its callout candidates read, in a
+ * fixed order, for `detectionPaintCache`; a value the sweep starts to read
+ * belongs here.
+ */
+function _paintViewOf(frame, keyholeOutsideOpacity, cyberMapActive) {
+  const view = [];
+  const { keyhole, cameraPosition, viewProjectionMatrix, uiRects } = frame;
+  let n = 0;
+  view[n++] = _mode;
+  view[n++] = _theme;
+  view[n++] = frame.width;
+  view[n++] = frame.height;
+  view[n++] = keyholeOutsideOpacity;
+  view[n++] = cyberMapActive;
+  view[n++] = keyhole.centerX;
+  view[n++] = keyhole.centerY;
+  view[n++] = keyhole.radius;
+  view[n++] = keyhole.featherPx;
+  view[n++] = cameraPosition.x;
+  view[n++] = cameraPosition.y;
+  view[n++] = cameraPosition.z;
+  for (let i = 0; i < 16; i++) view[n++] = viewProjectionMatrix[i];
+  view[n++] = uiRects.length;
+  for (let i = 0; i < uiRects.length; i++) {
+    const rect = uiRects[i];
+    view[n++] = rect.x;
+    view[n++] = rect.y;
+    view[n++] = rect.w;
+    view[n++] = rect.h;
+  }
+  return view;
+}
+
+/**
+ * Paint detection against the shared host frame. Brackets are stroked on
+ * every paint, but a paint whose view and contacts match the last kept
+ * sweep rebuilds neither their paths nor any placement (`_paintCache`). A
+ * sweep rebuilds placements for selected/fading identities, and for a
+ * bounded cohort on solve ticks.
  */
 function _drawOverlay(frame) {
-  _transitBracketPaths.clear();
   const { width, height } = frame;
   if (!_ctx || width <= 0 || height <= 0) {
+    _transitBracketPaths.clear();
+    _paintCache.forget();
     return {
       didSolve: false,
       solveMs: 0,
@@ -1432,6 +1481,7 @@ function _drawOverlay(frame) {
       selectedCount: 0,
       fadingCount: 0,
       didSolve: false,
+      paintReuseCount: _paintReuseCount,
     };
     // With nothing detectable there is nothing to place, so the solve is
     // VACUOUSLY complete — settle it here rather than carrying the dirty flag
@@ -1457,6 +1507,9 @@ function _drawOverlay(frame) {
   // every host lane. Detection retains the manual scalar projection below.
   const occluder = frame.occluder;
   const camPos = frame.cameraPosition;
+  const camX = camPos.x;
+  const camY = camPos.y;
+  const camZ = camPos.z;
   // Answers to the occlusion tests started on earlier frames land here.
   _surfaceOcclusion.beginFrame(now);
   _occlusionProbe.beginFrame(_surfaceOcclusion.now);
@@ -1486,12 +1539,25 @@ function _drawOverlay(frame) {
   if (!_charWidth) _charWidth = _ctx.measureText('0000000000').width / 10 || 6;
   const tiers = _theme.tiers || null;
   const colorFor = (key) => (tiers && tiers[key]) || _theme.line;
-  const bracketPaths = new Map();
   // Global Context sonar echoes: a second bracket, banded by strength, around
   // each flight or vessel a pulse front has just crossed.
   // Resting pulses light nothing, so the per-contact echo work is skipped.
   const echoField = awarenessEchoActive(now) ? getAwarenessEchoField() : null;
   const echoPaths = echoField ? new Array(ECHO_ALPHA_STEPS + 1) : null;
+  // A paint whose view and objects are what the last kept sweep read reuses
+  // its paths and counts, and the candidates it left (see
+  // detectionPaintCache and docs/CURRENT-STATE.md). The sweep also reads the
+  // render identities, but between solves they only shrink and callouts are
+  // placed from the arbiter's own rows, so a kept candidate map stays valid.
+  const paintKeepable = !sonarActive && !echoField;
+  const paintView = paintKeepable
+    ? _paintViewOf(frame, keyholeOutsideOpacity, cyberMapActive)
+    : null;
+  const kept =
+    paintKeepable && !shouldSolve
+      ? _paintCache.reuse(paintView, objects)
+      : null;
+  const bracketPaths = kept ? kept.bracketPaths : new Map();
   const pathFor = (map, color, alpha) => {
     const band = Math.max(
       1,
@@ -1510,16 +1576,28 @@ function _drawOverlay(frame) {
     return entry.path;
   };
 
-  let visibleCount = 0;
-  const bracketOpacityCounts = { full: 0, partial: 0, hidden: 0 };
-  const aircraftBracketSectors = { left: 0, front: 0, right: 0 };
-  let protectedVisibleCount = 0;
+  let visibleCount = kept ? kept.visibleCount : 0;
+  const bracketOpacityCounts = kept
+    ? kept.bracketOpacityCounts
+    : { full: 0, partial: 0, hidden: 0 };
+  const aircraftBracketSectors = kept
+    ? kept.aircraftBracketSectors
+    : { left: 0, front: 0, right: 0 };
+  let protectedVisibleCount = kept ? kept.protectedVisibleCount : 0;
   const candidateMap = _candidateMap;
-  candidateMap.clear();
   const cohortBuilders = shouldSolve ? new Map() : null;
   const demandByLayer = shouldSolve ? new Map() : null;
   let placementBuildCount = 0;
-  for (let i = 0; i < objects.length; i++) {
+  let depthTestedSwept = false;
+  // A reused paint reads the callout candidates and transit paths its kept
+  // sweep left, so whatever else empties them clears `_paintCache` with them
+  // (`_releaseKeptPaintState` does).
+  if (!kept) {
+    _transitBracketPaths.clear();
+    candidateMap.clear();
+  }
+  const sweepCount = kept ? 0 : objects.length;
+  for (let i = 0; i < sweepCount; i++) {
     const obj = objects[i];
     if (!obj.position) continue;
     // Skip objects occluded by the ellipsoid (behind the horizon)
@@ -1547,9 +1625,9 @@ function _drawOverlay(frame) {
     let halfW;
     let halfH;
     if (obj.type === 'AIR') {
-      const dx = camPos.x - obj.position.x;
-      const dy = camPos.y - obj.position.y;
-      const dz = camPos.z - obj.position.z;
+      const dx = camX - px;
+      const dy = camY - py;
+      const dz = camZ - pz;
       const bscale = nearFarScale(
         Math.sqrt(dx * dx + dy * dy + dz * dz),
         BILL_NEAR,
@@ -1577,6 +1655,7 @@ function _drawOverlay(frame) {
     // Something the scene drew in front of a depth-tested contact hides its
     // bracket and callout too, on every frame, not only on solves.
     if (obj.depthTested === true) {
+      depthTestedSwept = true;
       const testedLayerId = obj._layerId || 'unknown';
       const testedSourceId = obj.sourceId ?? obj.id ?? i;
       const hidden = _surfaceOcclusion.isHidden(
@@ -1699,6 +1778,19 @@ function _drawOverlay(frame) {
   }
   // Start this frame's occlusion tests; nothing here waits for them.
   _occlusionProbe.endFrame();
+  if (kept) {
+    _paintReuseCount++;
+  } else if (paintKeepable && !depthTestedSwept) {
+    _paintCache.keep(paintView, objects, {
+      bracketPaths,
+      visibleCount,
+      bracketOpacityCounts,
+      aircraftBracketSectors,
+      protectedVisibleCount,
+    });
+  } else {
+    _paintCache.forget();
+  }
 
   const altitude = _eyeHeight(frame) ?? 1e9;
   const collectiveBudget = labelBudgetFor(altitude, _densityPct);
@@ -1886,6 +1978,7 @@ function _drawOverlay(frame) {
       // drawing them cost it.
       surfaceProbeTests: _occlusionProbe.lastFrameTests,
       surfaceProbeMs: _occlusionProbe.lastFrameMs,
+      paintReuseCount: _paintReuseCount,
     };
   } else {
     const selectedCount = _labelArbiter.selectedKeys.size;
@@ -1899,6 +1992,7 @@ function _drawOverlay(frame) {
     _lastDiagnostics.aircraftBracketSectors = aircraftBracketSectors;
     _lastDiagnostics.bracketPresentationOpacity = bracketPresentationOpacity;
     _lastDiagnostics.protectedVisibleCount = protectedVisibleCount;
+    _lastDiagnostics.paintReuseCount = _paintReuseCount;
   }
 
   _drawScanlines(width, height, now);

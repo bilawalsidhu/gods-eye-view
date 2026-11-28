@@ -9194,6 +9194,26 @@ apply to `public/` assets or built-preview serving.
     holds the way it stripped detection's would take bracket promptness with it, silently.
   - Known, pre-existing, and deliberately out of scope here: the overlay's backing store does not
     re-derive on a DPR change mid-session (`worldOverlay` sizing — untouched by this work).
+- **A detection paint reuses the sweep before it when nothing it reads has changed
+  (`src/data/detectionPaintCache.js`).** Each paint compares the contacts the layers return (the
+  same objects in the same order, the same coordinates, the same value in every field of
+  `PAINTED_OBJECT_FIELDS`) and the view (`_paintViewOf`) with what the kept sweep read; on a match
+  its bracket paths, counts and callout candidates are used again. No layer announces a change, so
+  none can leave a stale picture behind. A sweep that reads a new object field must add it to
+  `PAINTED_OBJECT_FIELDS`, `sameFields` and `recordFields`; a new view value goes into
+  `_paintViewOf`. Each contact of a layer needs its own `sourceId`: two under one detection key can
+  get another callout on a reused paint than on a full sweep (an AIS vessel with neither id nor MMSI
+  uses its card identity). `detectionHost.test.mjs` compares 41 frames against a full sweep, canvas
+  call for canvas call.
+  - A solve always sweeps (it gathers the cohort) and is kept. Never reused or kept: a paint while
+    the Cyber sonar sweep or a Global Context echo is live (brackets change with the clock), and a
+    sweep that reaches a depth-tested contact (its answer comes from the scene).
+  - It pays only when the scene repaints more often than its contacts move: a held camera over
+    contacts that move in steps. At a still camera over Live Flights some aircraft move before
+    almost every paint, so nearly every paint there is a full sweep, as is every paint of a layer
+    that hands back new objects on every poll (CCTV does).
+  - `getDetectionDiagnostics().paintReuseCount` (and `data-paint-reuse-count`) counts reused
+    paints since `initDetection`; `placementBuildCount` is 0 on a reused paint.
 - The detection MODE BANNER (`DENSE VIS:… SRC:… DENS:…% ELASTIC …ms`) is
   developer telemetry and is HIDDEN by default. It paints only under
   `?detectDebug=1` (the `trafficDebug` convention), resolved once per
