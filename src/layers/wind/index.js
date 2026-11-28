@@ -69,7 +69,6 @@ export function windStats(manifest) {
 export function createWindLayer({
   feed,
   clock,
-  container,
   createRendering = createWindRendering,
 } = {}) {
   if (typeof feed?.getSnapshot !== 'function')
@@ -139,7 +138,7 @@ export function createWindLayer({
       _panel = panel;
       viewer = nextViewer;
       rendering = createRendering({
-        container: container ?? nextViewer.container,
+        container: nextViewer.container,
         getViewer: () => viewer,
         // Without a host from the shell, the rendering drapes on the globe.
         getHost: () => imageryHost?.(),
@@ -147,7 +146,7 @@ export function createWindLayer({
       });
       rendering.attach();
       rendering.setOptions?.({ overlay, paused });
-      const target = container ?? nextViewer.container;
+      const target = nextViewer.container;
       inspectionMarker = createWindInspectionMarker({
         container: target,
         viewer,
@@ -492,9 +491,6 @@ export function createWindLayer({
     },
     getDiagnostics() {
       return rendering?.getDiagnostics?.() || {};
-    },
-    getParticleCount() {
-      return rendering?.getParticleCount() || 0;
     },
   };
   return layer;
