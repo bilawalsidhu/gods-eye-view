@@ -1065,9 +1065,17 @@ export function portChecks() {
         };
         const readsPixels = h.pixels !== false;
         const empty = readsPixels ? await middle() : null;
-        const svg = (fill) => ({
-          svg: `<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8" fill="${fill}"/></svg>`,
+        const svg = (fill, opacity = 1) => ({
+          svg: `<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8" fill="${fill}" fill-opacity="${opacity}"/></svg>`,
         });
+        // Average change per pixel from the empty frame, summed over RGB.
+        const change = (now, was) => {
+          let sum = 0;
+          for (let i = 0; i < now.length; i += 4)
+            for (let c = 0; c < 3; c++)
+              sum += Math.abs(now[i + c] - was[i + c]);
+          return sum / (now.length / 4);
+        };
         const errors = [];
         const offError = r.on('error', (e) => errors.push(e));
         const field = r.draw.field({
@@ -1111,6 +1119,29 @@ export function portChecks() {
           equal(drawnCount, 4, 'drawn once shown again');
           await drawn(h, r, 4);
           equal(drawnCount, 4, 'and only once');
+          // The brightest channel, (0xa0 / 255) ** 2.2, is below 0.40.
+          const keyed = async (patch, want) => {
+            field.update(patch);
+            await until(want);
+            equal(drawnCount, want, 'drawn after a new cloud key');
+            return readsPixels ? change(await middle(), empty) : null;
+          };
+          const unkeyed = await keyed(
+            { image: svg('#a000a0'), alpha: 1, cloudKey: 0 },
+            5,
+          );
+          const part = await keyed({ cloudKey: 0.4 }, 6);
+          const none = await keyed({ cloudKey: 1 }, 7);
+          const half = await keyed(
+            { image: svg('#a000a0', 0.5), cloudKey: 0.4 },
+            8,
+          );
+          if (readsPixels) {
+            ok(unkeyed > 20, 'a dark image shows without the key');
+            near(part / unkeyed, 0.6, 0.1, 'a 0.4 key keeps 60 % of it');
+            near(none / unkeyed, 0, 0.1, 'the whole key hides it');
+            near(half / unkeyed, 0.3, 0.1, 'half its source alpha halves that');
+          }
           deepEqual(errors, [], 'no errors');
           await listenerRules(
             r,

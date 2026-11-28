@@ -37,7 +37,9 @@ const shellHeights = new WeakMap();
 // Cesium binds a 1×1 white texture to an image uniform until its first upload:
 // draw nothing until the full-extent image has arrived, and sample the detail
 // image only once it has arrived. The window is west, south, east, north in the
-// full-extent image's texture coordinates.
+// full-extent image's texture coordinates. The cloud key's 0.40 and 0.70 copy
+// INFRARED_ALPHA_T0/T1 (src/layers/weather/infraredAlpha.js), which the
+// renderer may not import. drawFields.test.mjs keeps them equal.
 const MATERIAL_SOURCE = `czm_material czm_getMaterial(czm_materialInput materialInput)
 {
   czm_material material = czm_getDefaultMaterial(materialInput);
@@ -48,7 +50,8 @@ const MATERIAL_SOURCE = `czm_material czm_getMaterial(czm_materialInput material
   float useDetail = inside * step(1.5, float(detailDimensions.x));
   vec4 c = mix(coarse, texture(detail, clamp(dst, 0.0, 1.0)), useDetail);
   material.diffuse = czm_gammaCorrect(c.rgb);
-  material.alpha = c.a * alpha * step(1.5, float(imageDimensions.x));
+  float key = smoothstep(0.40, 0.70, pow(max(c.r, max(c.g, c.b)), 2.2));
+  material.alpha = c.a * mix(1.0, key, cloudKey) * alpha * step(1.5, float(imageDimensions.x));
   return material;
 }
 `;
@@ -65,6 +68,7 @@ function registerMaterial(cesium) {
         image: cesium.Material.DefaultImageId,
         detail: cesium.Material.DefaultImageId,
         alpha: 1,
+        cloudKey: 0,
         window: { type: 'vec4', x: 0, y: 0, z: -1, w: -1 },
       },
       // Diffuse and alpha share these samples, so one source, not components.
@@ -243,6 +247,11 @@ export function createShellSurface({
     setAlpha(value) {
       if (destroyed || material.uniforms.alpha === value) return;
       material.uniforms.alpha = value;
+      ask();
+    },
+    setCloudKey(value) {
+      if (destroyed || material.uniforms.cloudKey === value) return;
+      material.uniforms.cloudKey = value;
       ask();
     },
     /** Metres the surface rises, by a uniform scale about the Earth's centre. */
@@ -427,6 +436,7 @@ export function createCesiumFields({
     };
     let liftM = Number(spec.liftM) || 0;
     let alpha = spec.alpha ?? 1;
+    let cloudKey = spec.cloudKey ?? 0;
     let shown = true;
     let disposed = false;
     // The surface drawn, and one being built for a new rectangle or height.
@@ -456,6 +466,7 @@ export function createCesiumFields({
         onWake: () => watch(),
       });
       entry.surface.setLift(liftM);
+      entry.surface.setCloudKey(cloudKey);
       // Staged surfaces draw, invisibly, even while the field is hidden, so
       // the new content is ready when it shows.
       return entry;
@@ -638,6 +649,11 @@ export function createCesiumFields({
         if ('alpha' in patch) {
           alpha = patch.alpha ?? 1;
           drawing?.surface.setAlpha(alpha);
+        }
+        if ('cloudKey' in patch) {
+          cloudKey = patch.cloudKey ?? 0;
+          drawing?.surface.setCloudKey(cloudKey);
+          staged?.surface.setCloudKey(cloudKey);
         }
         owed = true;
         content = next;

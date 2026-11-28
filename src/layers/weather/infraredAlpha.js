@@ -1,18 +1,23 @@
 export const INFRARED_ALPHA_T0 = 0.4;
 export const INFRARED_ALPHA_T1 = 0.7;
 
+/** How much of the cloud key applies, 0–1, for a display mode or a 0–100
+ * strength. */
+export function infraredAmount(strength) {
+  return strength === 'full'
+    ? 0
+    : strength === 'filtered' || !Number.isFinite(strength)
+      ? 1
+      : Math.max(0, Math.min(100, strength)) / 100;
+}
+
 /** Scale each pixel's alpha in place by a 256-entry table indexed by its
  * brightest channel; RGB is unchanged. A table, not `** 2.2` per pixel:
  * 4096×2048 is 8.4 M pixels. `strength` is 0–100: 0 is the full image, 100
  * the cloud key.
  */
 export function applyInfraredAlpha(pixels, strength = 'filtered') {
-  const amount =
-    strength === 'full'
-      ? 0
-      : strength === 'filtered' || !Number.isFinite(strength)
-        ? 1
-        : Math.max(0, Math.min(100, strength)) / 100;
+  const amount = infraredAmount(strength);
   if (amount === 0) return pixels;
   const scale = new Float64Array(256);
   for (let value = 0; value < 256; value++) {

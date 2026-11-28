@@ -707,9 +707,10 @@ export type FieldSpec =
       /**
        * A raster on a sphere raised above the ground. Shells draw in
        * ascending `heightM`, alpha-blended and unlit; they are never picked
-       * and never in height queries. Changing `liftM` or `alpha` never
-       * rebuilds. An `update` that changes `image`, `rectangle` or `detail`
-       * keeps drawing what it drew until the new content can be drawn whole.
+       * and never in height queries. Changing `liftM`, `alpha` or
+       * `cloudKey` never rebuilds. An `update` that changes `image`,
+       * `rectangle` or `detail` keeps drawing what it drew until the new
+       * content can be drawn whole.
        */
       kind: 'rasterShell';
       id: string;
@@ -723,6 +724,14 @@ export type FieldSpec =
        */
       detail?: { image: ImageRef; rectangle: GeoRect } | null;
       alpha?: number;
+      /**
+       * 0..1, default 0. With stored sRGB channels r, g, b and source alpha a
+       * in 0..1, the drawn alpha is
+       * a * mix(1, smoothstep(0.40, 0.70, max(r, g, b) ** 2.2), cloudKey)
+       * times the field's `alpha`. The power converts sRGB to linear. A
+       * renderer that samples linear RGB omits it.
+       */
+      cloudKey?: number;
       /** What the raster shows, as imagery's `shows`. */
       shows?: string;
     };

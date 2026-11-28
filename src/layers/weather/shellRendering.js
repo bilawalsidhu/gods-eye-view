@@ -7,6 +7,7 @@ import {
   rendererOf,
 } from '../../render/rendererOf.js';
 import { acquireWeatherImage } from './infraredImage.js';
+import { infraredAmount } from './infraredAlpha.js';
 import { imageryHostStatus } from './imageryHost.js';
 import { WEATHER_IMAGERY_SHOWS } from './imageryOrder.js';
 import { WEATHER_DETAIL_SIZE, WEATHER_IMAGE_SIZES } from './source.js';
@@ -159,6 +160,7 @@ export function createWeatherShell({
   let fieldRect = null;
   let fieldDetail = null;
   let fieldAlpha = 0;
+  let fieldCloudKey = 0;
   // What its 'drawn' has told: anything yet, the image and the detail it
   // was last given, and whether a change waits for it.
   let everDrawn = false;
@@ -185,10 +187,12 @@ export function createWeatherShell({
   const visible = () => !hidden && !suspended();
   const boundsKey = ({ west, south, east, north }) =>
     `${west},${south},${east},${north}`;
-  const cacheKey = (time, mode, box = null) =>
-    `${time}|${infrared ? mode : 'none'}${box ? `|${boundsKey(box)}` : ''}`;
+  // One image per time and window, whatever the strength (`cloudKey`).
+  const cacheKey = (time, box = null) =>
+    box ? `${time}|${boundsKey(box)}` : time;
   const wantedDetail = () =>
-    current && view ? cacheKey(current.time, current.infrared, view) : null;
+    current && view ? cacheKey(current.time, view) : null;
+  const cloudKeyOf = (mode) => (infrared ? infraredAmount(mode) : 0);
   const imageRef = (canvas, key) => ({ canvas, key });
 
   function update(patch) {
@@ -202,7 +206,7 @@ export function createWeatherShell({
     detailDrawn = fieldDetail !== null;
     if (incoming?.staged) commit(incoming);
   }
-  function makeField(rectangle, image) {
+  function makeField(rectangle, image, cloudKey) {
     field = drawOf(viewer).field({
       kind: 'rasterShell',
       id: `weather-shell:${product}:${(weatherShells += 1)}`,
@@ -210,10 +214,12 @@ export function createWeatherShell({
       rectangle,
       heightM: height,
       alpha,
+      cloudKey,
       detail: null,
       shows: WEATHER_IMAGERY_SHOWS[product],
     });
     fieldAlpha = alpha;
+    fieldCloudKey = cloudKey;
     owed = true;
     field.on('drawn', onDrawn);
     offLift = followShellLift(viewer, (liftM) => update({ liftM }), {
@@ -268,12 +274,11 @@ export function createWeatherShell({
   }
   async function acquire(
     time,
-    mode,
     signal,
     { box = null, keep = [], onFetched } = {},
   ) {
     signal.throwIfAborted();
-    const key = cacheKey(time, mode, box);
+    const key = cacheKey(time, box);
     const entry = images.get(key);
     if (entry) {
       images.delete(key);
@@ -282,7 +287,7 @@ export function createWeatherShell({
     }
     const result = await acquireWeatherImage(product, time, {
       signal,
-      mode,
+      mode: 'full', // drawn as decoded; see cacheKey
       size: box ? detailSize : size,
       bbox: box,
       maxBytes: MAX_IMAGE_BYTES,
@@ -386,9 +391,7 @@ export function createWeatherShell({
     const job = { key, box: view, controller: new AbortController() };
     detailJob = job;
     job.timeout = setTimeout(() => job.controller.abort(), timeoutMs);
-    void acquire(current.time, current.infrared, job.controller.signal, {
-      box: view,
-    })
+    void acquire(current.time, job.controller.signal, { box: view })
       .then(({ texture }) => installDetail(job, texture))
       .catch(() => failDetail(job));
   }
@@ -492,6 +495,11 @@ export function createWeatherShell({
       fieldAlpha = alpha;
       update({ alpha });
     }
+    const cloudKey = cloudKeyOf(frame.infrared);
+    if (fieldCloudKey !== cloudKey) {
+      fieldCloudKey = cloudKey;
+      update({ cloudKey });
+    }
     applyVisibility();
     lastError = null;
     evict();
@@ -521,7 +529,7 @@ export function createWeatherShell({
     const rectangle = { west, south, east, north };
     frame.staged = true;
     imageDrawn = false;
-    if (!field) makeField(rectangle, frame.image);
+    if (!field) makeField(rectangle, frame.image, cloudKeyOf(frame.infrared));
     else {
       frame.keptDetail = fieldDetail;
       fieldDetail = null;
@@ -550,7 +558,7 @@ export function createWeatherShell({
       return changed;
     },
     cancelPrefetch,
-    async prefetch(snapshot, time, { infrared: mode = 'filtered' } = {}) {
+    async prefetch(snapshot, time) {
       let job;
       try {
         if (
@@ -564,8 +572,8 @@ export function createWeatherShell({
         // Warm the next frame's detail window too while the window stays put.
         const box =
           view && viewBounds === boundsKey(snapshot.bounds) ? view : null;
-        const coarse = cacheKey(time, mode);
-        const key = box ? cacheKey(time, mode, box) : coarse;
+        const coarse = cacheKey(time);
+        const key = cacheKey(time, box);
         if (prefetchJob?.key === key || prefetchedKey === key) return false;
         cancelPrefetch();
         job = { key, controller: new AbortController() };
@@ -574,8 +582,8 @@ export function createWeatherShell({
         job.timeout = setTimeout(() => job.controller.abort(), timeoutMs);
         // Both images at once: one after the other would outlast playback's step.
         await Promise.all([
-          acquire(time, mode, signal, { keep: box ? [key] : [] }),
-          box ? acquire(time, mode, signal, { box, keep: [coarse] }) : null,
+          acquire(time, signal, { keep: box ? [key] : [] }),
+          box ? acquire(time, signal, { box, keep: [coarse] }) : null,
         ]);
         signal.throwIfAborted();
         if (prefetchJob === job) prefetchedKey = key;
@@ -617,7 +625,7 @@ export function createWeatherShell({
         infrared: mode,
         bounds,
         product: snapshot.product,
-        key: cacheKey(time, mode),
+        key: cacheKey(time),
         mosaic: { fetched: false, decodeMs: null, cached: false },
         controller: new AbortController(),
         startedAt: now(),
@@ -634,7 +642,7 @@ export function createWeatherShell({
       });
       watch(frame, signal);
       frame.timeout = setTimeout(() => fail(frame), timeoutMs);
-      void acquire(time, mode, frame.controller.signal, {
+      void acquire(time, frame.controller.signal, {
         onFetched: () => {
           frame.mosaic.fetched = true;
         },

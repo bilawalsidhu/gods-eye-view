@@ -1431,9 +1431,12 @@ image proxy accepts `bbox=west,south,east,north` for every product: inside the
 product bounds, 2:1 within 1 %, rounded to 0.25°, up to 4096×2048 (the
 default), cached by product, time, size and bbox. Diagnostics report
 `shell.detail` (`bbox`, `size`, `ready`, `enabled`).
-Clouds only applies a soft brightness ramp to decoded pixels once, using
-Cesium's sRGB-to-linear conversion (`channel ** 2.2`) and smoothstep from 0.40
-to 0.70. The old 0.55 threshold is the ramp midpoint. RGB and source alpha are
+Clouds only applies a soft brightness ramp, using Cesium's sRGB-to-linear
+conversion (`channel ** 2.2`) and smoothstep from 0.40 to 0.70. Globe hosts
+apply it to decoded pixels once. A shell hands the strength to its raster-shell
+field as `cloudKey`, which the renderer applies as it draws, so a strength
+change neither fetches nor rewrites an image. The old 0.55 threshold is the
+ramp midpoint. RGB and source alpha are
 preserved in Full image mode; both modes use the chosen layer opacity. This
 is a display filter, not a cloud mask. The cloud-filter slider is a continuous
 0–100% strength: 0% is Full, 100% is the existing Clouds only key, and
@@ -1444,22 +1447,23 @@ Satellite share links carry the filter
 strength; legacy `f`/`a` values keep their Clouds only / Full meanings. Soft and
 Vivid remain layer-opacity presets (40%/70%). A link made away from Live opens
 at its world time, paused.
-Global infrared fetches one capped 4 MiB, 2048×1024 mosaic per frame and decodes
-and processes it before staging. Globe hosts crop that canvas into 256 px tiles
-to maximum level 3 on a geographic 2×1 root grid bounded to the manifest extent,
-avoiding request-dependent contrast seams. On globe hosts, a feed that supplies
+Global infrared fetches one 2048×1024 mosaic per frame. Globe hosts cap it at
+4 MiB, decode and process it before staging, and crop that canvas into 256 px
+tiles to maximum level 3 on a geographic 2×1 root grid bounded to the manifest
+extent, avoiding request-dependent contrast seams. A shell hands the decoded
+mosaic to its shader. On globe hosts, a feed that supplies
 tiles and names a level for global infrared instead has it drawn from its tiles
 to that level,
 each tile given the same display transfer as regional infrared tiles, and no
 mosaic is read.
 On globe hosts, regional infrared retains network tiles and processes each
-decoded tile once; shells process each whole frame once.
+decoded tile once.
 Exact-time tile and image responses are immutable for 24 hours; manifests and
 errors remain uncached. Each globe renderer retains up to 6 processed global
 mosaics in a least-recently-used cache keyed by observation time and infrared
 mode (up to 48 MiB of canvas pixels). Each shell keeps decoded full-extent and
 detail images in one least-recently-used cache bounded at 128 MiB, keyed by
-time, mode and window: the shown frame and the warmed next frame, each
+time and window: the shown frame and the warmed next frame, each
 full-extent and detail; nothing older survives them. Disable clears the caches.
 Cache hits skip
 fetch/decode and report `mosaic.cached: true` with zero decode time.

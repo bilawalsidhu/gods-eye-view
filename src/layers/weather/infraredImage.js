@@ -6,7 +6,7 @@ import {
   drawWeatherPixels,
   closeWeatherPixels,
 } from './source.js';
-import { applyInfraredAlpha } from './infraredAlpha.js';
+import { applyInfraredAlpha, infraredAmount } from './infraredAlpha.js';
 
 export const MAX_MOSAIC_BYTES = 4 * 1024 * 1024;
 
@@ -30,10 +30,22 @@ export function processInfraredImage(
 }
 
 function applyInfraredTransfer(context, canvas, mode) {
+  if (infraredAmount(mode) === 0) return;
   const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
   // In place: a copy of a 4096×2048 image is 33 MB, made and written back.
   applyInfraredAlpha(pixels.data, mode);
   context.putImageData(pixels, 0, 0);
+}
+
+/** Reject tainted pixels while acquiring the frame, before WebGL uploads it. */
+function assertSameOrigin(pixels, createCanvas) {
+  if (typeof ImageData !== 'undefined' && pixels instanceof ImageData) return;
+  const probe = createCanvas();
+  probe.width = 1;
+  probe.height = 1;
+  const context = probe.getContext('2d');
+  context.drawImage(pixels, 0, 0, 1, 1, 0, 0, 1, 1);
+  context.getImageData(0, 0, 1, 1);
 }
 
 /** Draw pixels a frame source supplied into a new canvas, with the display
@@ -44,6 +56,7 @@ function drawSuppliedImage(pixels, product, mode, size, signal, createCanvas) {
     const { width, height } = weatherPixelSize(pixels);
     if (width !== size.width || height !== size.height)
       throw new Error('Invalid weather image dimensions');
+    assertSameOrigin(pixels, createCanvas);
     const texture = createCanvas();
     texture.width = width;
     texture.height = height;

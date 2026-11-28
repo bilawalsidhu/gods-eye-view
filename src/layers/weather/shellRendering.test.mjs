@@ -466,12 +466,12 @@ test('prefetch warms a decoded frame without staging and cancels cleanly', async
   h.shell.clear();
 });
 
-test('infrared frames get the display transfer; radar and lightning keep their pixels', async () => {
-  for (const [product, transfer] of [
-    ['clouds-regional', true],
-    ['clouds', true],
-    ['radar', false],
-    ['lightning', false],
+test('infrared frames reach the renderer as decoded, with the cloud key as a uniform; radar and lightning get none', async () => {
+  for (const [product, amount] of [
+    ['clouds-regional', 1],
+    ['clouds', 1],
+    ['radar', 0],
+    ['lightning', 0],
   ]) {
     const h = harness({ product });
     const pending = h.shell.setFrame(snapshot(product), times[0]);
@@ -479,11 +479,10 @@ test('infrared frames get the display transfer; radar and lightning keep their p
     const image = h.material().uniforms.image;
     assert.equal(image.source, h.decoded[0], 'drawn into a canvas');
     assert.equal(h.decoded[0].closed, true);
-    assert.equal(image.pixels !== undefined, transfer, product);
-    if (transfer)
-      assert.deepEqual([...image.pixels], [194, 0, 0, 98], 'clouds only');
+    assert.equal(image.pixels, undefined, `${product}: pixels never rewritten`);
     h.render();
     assert.equal(await pending, true);
+    assert.equal(h.material().uniforms.cloudKey, amount, product);
     assert.equal(
       h.shell.getDiagnostics().height,
       WEATHER_SHELL_HEIGHTS[product],
@@ -492,20 +491,30 @@ test('infrared frames get the display transfer; radar and lightning keep their p
   }
 });
 
-test('an infrared mode change restages the same time with its own cached canvas', async () => {
+test('an infrared mode change is a uniform on the same image: no fetch, no new canvas', async () => {
   const h = harness({ product: 'clouds' });
   assert.equal(await show(h, times[0]), true);
-  const filtered = h.material().uniforms.image;
+  const image = h.material().uniforms.image;
+  assert.equal(h.material().uniforms.cloudKey, 1);
   assert.equal(await show(h, times[0]), true, 'same frame is a no-op');
   assert.equal(h.fetches.length, 1);
+  const renders = h.scene.renders;
   assert.equal(await show(h, times[0], { infrared: 'full' }), true);
-  const full = h.material().uniforms.image;
-  assert.notEqual(full, filtered);
-  assert.deepEqual([...full.pixels], [194, 0, 0, 200]);
+  assert.equal(h.material().uniforms.image, image);
+  assert.equal(h.material().uniforms.cloudKey, 0);
   assert.equal(h.shell.getDiagnostics().infrared, 'full');
+  assert.ok(h.scene.renders > renders, 'the new strength is drawn');
+  assert.equal(await show(h, times[0], { infrared: 40 }), true);
+  assert.equal(h.material().uniforms.cloudKey, 0.4);
+  assert.equal(h.shell.getDiagnostics().infrared, 40);
   assert.equal(await show(h, times[0], { infrared: 'filtered' }), true);
-  assert.equal(h.material().uniforms.image, filtered, 'cache hit');
-  assert.equal(h.fetches.length, 2);
+  assert.equal(h.material().uniforms.image, image);
+  assert.equal(h.material().uniforms.cloudKey, 1);
+  assert.equal(h.fetches.length, 1);
+  assert.equal(h.decoded.length, 1);
+  assert.equal(h.shell.getDiagnostics().cache.mosaics, 1);
+  h.primitives().forEach((p) => assert.equal(p.destroyed, false));
+  assert.equal(h.primitives().length, 1, 'never rebuilt');
   h.shell.clear();
 });
 
@@ -1159,6 +1168,32 @@ test('full-extent and detail images share one byte budget; prefetch warms both',
   assert.equal(wide.fetches.length, 2, 'no window, no detail prefetch');
   assert.ok(wide.fetches.every(({ url }) => !url.includes('bbox=')));
   wide.shell.clear();
+});
+
+test('a warmed infrared frame and its detail fit any filter strength', async () => {
+  const h = harness({
+    product: 'clouds-regional',
+    camera: camera(-100, 35, -98, 36),
+  });
+  assert.equal(await show(h, times[0], { infrared: 100 }), true);
+  await flush();
+  h.render();
+  assert.equal(h.fetches.length, 2);
+  assert.equal(
+    await h.shell.prefetch(snapshot('clouds-regional'), times[1]),
+    true,
+  );
+  assert.equal(h.fetches.length, 4);
+  assert.equal(h.decoded.length, 4);
+  assert.equal(await show(h, times[1], { infrared: 40 }), true);
+  await flush();
+  h.render();
+  assert.equal(h.fetches.length, 4, 'neither image is fetched again');
+  assert.equal(h.decoded.length, 4, 'nor decoded again');
+  assert.equal(h.shell.getDiagnostics().mosaic.cached, true);
+  assert.equal(h.shell.getDiagnostics().shell.detail.ready, true);
+  assert.equal(h.material().uniforms.cloudKey, 0.4);
+  h.shell.clear();
 });
 
 test('global infrared keeps one full-extent image; detail images halve for small texture limits', async () => {

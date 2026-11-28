@@ -11,6 +11,10 @@ import {
   createShellScene,
   renderShells,
 } from '../../layers/weather/shellFixture.mjs';
+import {
+  INFRARED_ALPHA_T0,
+  INFRARED_ALPHA_T1,
+} from '../../layers/weather/infraredAlpha.js';
 
 // The detail window uniform; NONE is the empty window.
 const NONE = { x: 0, y: 0, z: -1, w: -1 };
@@ -35,12 +39,13 @@ test('surface builds a flat raised rectangle drawn in primitive order without de
     image: Cesium.Material.DefaultImageId,
     detail: Cesium.Material.DefaultImageId,
     alpha: 1,
+    cloudKey: 0,
     window: { type: 'vec4', x: 0, y: 0, z: -1, w: -1 },
   });
   const { source } = template.fabric;
   assert.match(
     source,
-    /material\.alpha = c\.a \* alpha \* step\(1\.5, float\(imageDimensions\.x\)\);/,
+    /material\.alpha = c\.a \* mix\(1\.0, key, cloudKey\) \* alpha \* step\(1\.5, float\(imageDimensions\.x\)\);/,
     'nothing draws before the full-extent image',
   );
   assert.match(
@@ -298,6 +303,7 @@ test('real Cesium builds the two-texture material, the opaque-pass appearance an
     /uniform sampler2D image_\d+;/,
     /uniform sampler2D detail_\d+;/,
     /uniform float alpha_\d+;/,
+    /uniform float cloudKey_\d+;/,
     /uniform vec4 window_\d+;/,
     /uniform ivec3 imageDimensions_\d+;/,
     /uniform ivec3 detailDimensions_\d+;/,
@@ -309,8 +315,15 @@ test('real Cesium builds the two-texture material, the opaque-pass appearance an
   assert.match(shader, /step\(1\.5, float\(detailDimensions_\d+\.x\)\)/);
   assert.match(
     shader,
-    /material\.alpha = c\.a \* alpha_\d+ \* step\(1\.5, float\(imageDimensions_\d+\.x\)\);/,
+    /material\.alpha = c\.a \* mix\(1\.0, key, cloudKey_\d+\) \* alpha_\d+ \* step\(1\.5, float\(imageDimensions_\d+\.x\)\);/,
     'the uniform is renamed, the material field is not',
+  );
+  // The renderer may not import src/layers, so the shader copies
+  // INFRARED_ALPHA_T0/T1. This keeps them equal.
+  assert.ok(
+    shader.includes(
+      `float key = smoothstep(${INFRARED_ALPHA_T0.toFixed(2)}, ${INFRARED_ALPHA_T1.toFixed(2)}, pow(max(c.r, max(c.g, c.b)), 2.2));`,
+    ),
   );
   assert.match(shader, /float useDetail = inside \* step/, 'locals keep names');
   const detail = { width: 4096, height: 2048 };
@@ -433,10 +446,16 @@ test("a raster shell tells 'drawn' once its content is drawn, once per change", 
   assert.equal(drawn, 1);
   assert.equal(uniforms.alpha, 0.5);
   assert.equal(h.scene.postRender.size, 0, 'no frames once drawn');
-  field.update({ alpha: 0.3, liftM: 1_000 });
+  assert.equal(uniforms.cloudKey, 0, 'no cloud key by default');
+  field.update({ alpha: 0.3, liftM: 1_000, cloudKey: 0.4 });
   assert.equal(uniforms.alpha, 0.3);
+  assert.equal(uniforms.cloudKey, 0.4);
   assert.notEqual(primitive.modelMatrix, undefined, 'lifted');
-  assert.deepEqual(h.live(), [primitive], 'alpha and lift never rebuild');
+  assert.deepEqual(
+    h.live(),
+    [primitive],
+    'alpha, lift and cloud key never rebuild',
+  );
   h.render();
   assert.equal(drawn, 2);
   field.show = false;
@@ -462,11 +481,13 @@ test('a raster shell keeps drawing its rectangle until a new one is drawn whole'
     image: first,
     rectangle: RECT,
     heightM: 6_000,
+    cloudKey: 0.6,
   });
   let drawn = 0;
   field.on('drawn', () => (drawn += 1));
   h.render();
   const [old] = h.live();
+  assert.equal(old.appearance.material.uniforms.cloudKey, 0.6);
   const second = h.image();
   field.update({
     image: second,
@@ -476,10 +497,19 @@ test('a raster shell keeps drawing its rectangle until a new one is drawn whole'
   assert.equal(old.appearance.material.uniforms.alpha, 1, 'the old one draws');
   assert.equal(staged.appearance.material.uniforms.alpha, 0);
   assert.equal(staged.appearance.material.uniforms.image, second.canvas);
+  assert.equal(
+    staged.appearance.material.uniforms.cloudKey,
+    0.6,
+    'a new rectangle keeps the cloud key',
+  );
+  field.update({ cloudKey: 0.2 });
+  assert.equal(old.appearance.material.uniforms.cloudKey, 0.2);
+  assert.equal(staged.appearance.material.uniforms.cloudKey, 0.2);
   h.render();
   assert.equal(old.destroyed, true, 'swapped in one frame');
   assert.deepEqual(h.live(), [staged]);
   assert.equal(staged.appearance.material.uniforms.alpha, 1);
+  assert.equal(staged.appearance.material.uniforms.cloudKey, 0.2);
   assert.equal(drawn, 2);
   // Back to the drawn rectangle before a staged one is drawn: it goes.
   field.update({ rectangle: RECT });
