@@ -11,7 +11,6 @@
  * marks the active option.
  */
 
-import { t } from '../i18n/index.js';
 import { LOCALES, LOCALE_NAMES } from '../i18n/locale.js';
 
 /** Above this many languages the list gets a search field. */
