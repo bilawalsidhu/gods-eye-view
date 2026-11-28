@@ -190,7 +190,7 @@ renderer answers no `surface` or `tiles` height; `now` still answers
 
 The app reaches private Cesium fields only through
 `src/render/cesium/internals.js`, one named helper per field (the main and
-offscreen pick views, a billboard's collection, a cluster's point collection,
+offscreen pick views, a cluster's point collection,
 the widget's render-loop latch, the WebGL context and whether a camera flight
 is under way). `internals.test.mjs` fails when the installed Cesium stops
 declaring one of them, and when a private field is reached anywhere else.

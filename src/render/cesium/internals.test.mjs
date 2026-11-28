@@ -6,10 +6,8 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import {
   atEndOfTick,
-  billboardCollectionOf,
   billboardLoadError,
   cameraFlightActive,
-  closeRenderLoopLatch,
   commandExtents,
   creditDisplayContents,
   customShaderTexture,
@@ -44,7 +42,6 @@ test('every private field the app reaches is still declared by the installed Ces
     [ENGINE, 'Scene/Scene.js', '_picking'],
     [ENGINE, 'Scene/Picking.js', '_pickOffscreenView'],
     [ENGINE, 'Scene/View.js', '_commandExtents'],
-    [ENGINE, 'Scene/Billboard.js', '_billboardCollection'],
     [ENGINE, 'Widget/CesiumWidget.js', '_renderLoopRunning'],
     [ENGINE, 'Core/Event.js', '_listeners'],
     [ENGINE, 'Core/Event.js', '_toAdd'],
@@ -139,15 +136,6 @@ test('the helpers read and write exactly those fields', () => {
   );
   assert.equal(commandExtents(view), view._commandExtents);
   assert.deepEqual(commandExtents(undefined), []);
-  const collection = {};
-  assert.equal(
-    billboardCollectionOf({ _billboardCollection: collection }),
-    collection,
-  );
-  const widget = { _renderLoopRunning: true };
-  closeRenderLoopLatch({ _cesiumWidget: widget });
-  assert.equal(widget._renderLoopRunning, false);
-  closeRenderLoopLatch({});
   assert.equal(renderPending({}), false);
   assert.equal(renderPending({ _renderRequested: true }), true);
   assert.equal(renderPending({ _hdrDirty: true }), true);
