@@ -107,8 +107,7 @@ export function layoutLeftPanelRail({
     documentRef,
     onCollapse,
   });
-  const exclusive =
-    !isMobile && !documentRef?.body?.classList?.contains('cockpit-mode');
+  const exclusive = !documentRef?.body?.classList?.contains('cockpit-mode');
   stack.classList.toggle('layout-exclusive', exclusive);
   const laidOutPanels = panels.filter(
     (panel) => !exclusive || !panel.classList.contains('collapsed'),
@@ -257,7 +256,6 @@ export function layoutLeftPanelRail({
   const centeredTailTop = viewportMidpoint - tailRequiredHeight * 0.5;
   const tailLayoutTop = Math.min(centeredTailTop, safeTop);
   const tailLayoutBottom = tailLayoutTop + tailRequiredHeight;
-  const tailAvailableHeight = Math.max(0, obstacleSafeBottom - obstacleSafeTop);
   const tailTolerance = wasTail ? stabilityBand : -stabilityBand;
   // Data Layers has a scrollable list and a fixed footer. Give it the full
   // desktop lane while short control panels keep their natural height.
@@ -360,24 +358,7 @@ export function layoutLeftPanelRail({
       : 'normal';
   stack.dataset.safeTopPct = topPct.toFixed(2);
   stack.dataset.safeBottomPct = (100 - bottomPct).toFixed(2);
-  stack.dataset.availableHeightPct = (
-    (availableHeight / viewportHeight) *
-    100
-  ).toFixed(2);
-  stack.dataset.requiredHeightPct = (
-    (requiredHeight / viewportHeight) *
-    100
-  ).toFixed(2);
-  stack.dataset.tailAvailableHeightPct = (
-    (tailAvailableHeight / viewportHeight) *
-    100
-  ).toFixed(2);
   stack.dataset.expandedCount = String(expandedPanels.length);
-
-  // Cockpit Display/Radio live in the opposite margin and no longer borrow
-  // this corridor: the left accordion's top is solved against left-lane
-  // obstacles, which put the strip straight through the briefing card.
-  // CockpitView.syncSignalLayout() owns `--cockpit-utility-top` instead.
 
   for (const panel of panels) {
     if (exclusive && panel.classList.contains('collapsed'))
