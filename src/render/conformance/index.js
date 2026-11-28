@@ -74,7 +74,7 @@ export const DEFAULT_TOLERANCE = Object.freeze({
 });
 
 /** Every check, in run order. */
-export function conformanceChecks() {
+function conformanceChecks() {
   return [...portChecks(), ...cameraChecks()];
 }
 

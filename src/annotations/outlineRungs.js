@@ -87,7 +87,7 @@ export function nominatimKindFor({ scope, groundsLike, pointLike, around }) {
  * not pick the part the ask is about; with no part holding the anchor, the
  * order is kept.
  */
-export function anchorPartFirst(polygons, points) {
+function anchorPartFirst(polygons, points) {
   for (const { lat, lon } of points) {
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
     const at = polygons.findIndex((polygon) =>

@@ -104,7 +104,7 @@ export const blobUrl = createBlobUrls();
  * per metre of distance from the Earth's centre, and the cosine's shortfall
  * from 1 for the unit vectors.
  */
-export const ROUNDING = 1e-12;
+const ROUNDING = 1e-12;
 
 /** Whether Cesium's `world` vectors are the `written` eye, up to rounding. */
 export function sameEye(world, written) {

@@ -54,7 +54,7 @@ const ZOOM_BINDINGS = Object.freeze({
 });
 
 /** A Cesium zoom binding's contract name, or null when it has none. */
-export function zoomInputName(binding) {
+function zoomInputName(binding) {
   const type = binding?.eventType ?? binding;
   const modifier = binding?.modifier;
   if (modifier === undefined) {
@@ -67,7 +67,7 @@ export function zoomInputName(binding) {
 }
 
 /** Cesium's event-type setting, which may be one binding, as a list. */
-export const bindingList = (types) =>
+const bindingList = (types) =>
   Array.isArray(types) ? types : types === undefined ? [] : [types];
 
 /** Coast seconds as a Cesium inertia coefficient, and back. */

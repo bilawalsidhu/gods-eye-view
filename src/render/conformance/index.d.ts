@@ -142,8 +142,6 @@ export interface ReferenceScene {
 }
 
 export const DEFAULT_TOLERANCE: Readonly<ConformanceTolerance>;
-/** Every check, in run order. */
-export function conformanceChecks(): ConformanceCheck[];
 export function runConformance(
   harness: ConformanceHarness,
   options?: { only?: (id: string) => boolean },
@@ -227,7 +225,6 @@ export function tracePose(pose: CameraPose): object;
 
 /** The suite's assertions. */
 export namespace expect {
-  class ConformanceError extends Error {}
   function ok(value: unknown, message: string): void;
   function equal(actual: unknown, expected: unknown, message: string): void;
   function deepEqual(actual: unknown, expected: unknown, message: string): void;

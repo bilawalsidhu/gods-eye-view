@@ -11,9 +11,9 @@ import { cameraFlightActive } from './internals.js';
 /** Whole-Earth input limit; explicit camera destinations can go farther. */
 export const MAXIMUM_ZOOM_DISTANCE_M = 40_000_000;
 /** Below this, oblique browsing is left alone. */
-export const PITCH_CLAMP_MIN_HEIGHT_M = 300_000;
+const PITCH_CLAMP_MIN_HEIGHT_M = 300_000;
 /** Look this far below the Earth's limb, so the globe stays on screen. */
-export const LIMB_MARGIN_RAD = Cesium.Math.toRadians(8);
+const LIMB_MARGIN_RAD = Cesium.Math.toRadians(8);
 const PITCH_EASE = 0.35;
 const PITCH_SNAP_RAD = Cesium.Math.toRadians(0.1);
 const HEIGHT_EPSILON_M = 0.0001;

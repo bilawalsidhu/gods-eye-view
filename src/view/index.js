@@ -162,7 +162,7 @@ export async function groundedLookAt(camera, terrain, signal) {
 }
 
 /** Annotation kinds the app draws, as in its annotate_map action. */
-export const VIEW_ANNOTATION_TYPES = Object.freeze([
+const VIEW_ANNOTATION_TYPES = Object.freeze([
   'pin',
   'highlight',
   'area',

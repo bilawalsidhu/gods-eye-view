@@ -76,7 +76,7 @@ export const MODEL_RETRY_MS = 5000;
  * colour is written again: an eye in motion would otherwise write every
  * model's colour every frame.
  */
-export const RECEDE_WRITE_EPSILON = 0.005;
+const RECEDE_WRITE_EPSILON = 0.005;
 
 /**
  * Each model's posed nodes (`ModelItem.nodes`): name → the 16 numbers last

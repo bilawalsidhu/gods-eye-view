@@ -13,9 +13,9 @@
  */
 
 /** Pixels a wheel line stands for: the reference renderer's own count. */
-export const WHEEL_PX_PER_LINE = 40;
+const WHEEL_PX_PER_LINE = 40;
 /** Lines a wheel page stands for: the reference's 120 px a page. */
-export const WHEEL_LINES_PER_PAGE = 3;
+const WHEEL_LINES_PER_PAGE = 3;
 
 /**
  * Lines scrolled by a DOM wheel event, down positive (as `deltaY`).

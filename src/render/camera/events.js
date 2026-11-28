@@ -20,7 +20,7 @@ const TWO_PI = Math.PI * 2;
 export const MOVE_END_WAIT_MS = 500;
 
 /** The contract's camera events. */
-export const CAMERA_EVENTS = Object.freeze([
+const CAMERA_EVENTS = Object.freeze([
   'changed',
   'moveStart',
   'moveEnd',

@@ -47,7 +47,7 @@ export const EASINGS = Object.freeze({
 });
 
 /** A contract destination as Cesium's: a Cartesian3, or a Rectangle. */
-export function toDestination(d) {
+function toDestination(d) {
   if ('rect' in d) {
     const r = d.rect;
     return Cesium.Rectangle.fromDegrees(r.west, r.south, r.east, r.north);
@@ -59,7 +59,7 @@ export function toDestination(d) {
  * A contract orientation as Cesium's; omitted angles are heading 0, pitch
  * straight down and roll 0, as the contract says.
  */
-export function toOrientation(o = {}) {
+function toOrientation(o = {}) {
   if ('direction' in o)
     return { direction: toCartesian(o.direction), up: toCartesian(o.up) };
   return {

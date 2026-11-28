@@ -13,7 +13,7 @@
 import * as Cesium from 'cesium';
 
 /** Delay before a deferred terrain tile is asked for again. */
-export const TERRAIN_RETRY_DELAY_MS = 250;
+const TERRAIN_RETRY_DELAY_MS = 250;
 
 /** A tile `fetchTile` says is not there; Cesium draws the parent's instead. */
 export class MissingTerrainTile extends Error {

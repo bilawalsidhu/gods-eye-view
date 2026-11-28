@@ -58,7 +58,7 @@ const tilingOf = (name) =>
     : new Cesium.WebMercatorTilingScheme();
 
 /** A contract credit as Cesium's, or undefined. */
-export const cesiumCredit = (credit) =>
+const cesiumCredit = (credit) =>
   credit
     ? new Cesium.Credit(creditMarkup(credit), credit.inline === true)
     : undefined;

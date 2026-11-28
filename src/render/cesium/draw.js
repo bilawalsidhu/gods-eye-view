@@ -91,7 +91,7 @@ export function toImage(image) {
 }
 
 /** Cesium's height reference for an item's `height` and `clampTo`. */
-export function heightReferenceOf(height, clampTo = 'both') {
+function heightReferenceOf(height, clampTo = 'both') {
   const H = Cesium.HeightReference;
   if (height === 'clampGround')
     return (
@@ -250,7 +250,7 @@ export const OVERLAY_GRANULARITY = Cesium.Math.RADIANS_PER_DEGREE / 10;
 
 /** The appearance overlay fills draw with: their colour, unlit, alpha
  *  blended, no depth test or depth writes, culled at the horizon. */
-export const overlayFillAppearance = () =>
+const overlayFillAppearance = () =>
   new Cesium.PerInstanceColorAppearance({
     flat: true,
     translucent: true,
@@ -303,7 +303,7 @@ const displayConditionOf = (range) =>
  * @param {import('../contract/draw').Columns} columns
  * @param {Map<string, object>} items
  */
-export function columnRows(columns, items) {
+function columnRows(columns, items) {
   const {
     positions: p,
     courses,
@@ -484,7 +484,7 @@ export function pulseAlpha(pulse, now) {
  * sky's frame are draped again where the sky has turned to (the Earth turns
  * about 465 m at the equator in a second).
  */
-export const DRAPED_INERTIAL_STEP_MS = 1000;
+const DRAPED_INERTIAL_STEP_MS = 1000;
 
 /** The line styles the port drapes. */
 const DRAPED_STYLES = new Set([
