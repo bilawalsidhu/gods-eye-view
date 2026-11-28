@@ -43,13 +43,6 @@
   color: rgba(225, 236, 242, 0.85);
 }
 
-.entity-card__layer {
-  overflow: hidden;
-  color: rgba(199, 214, 222, 0.5);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .entity-card__status {
   flex: none;
   padding: 0.12rem 0.45rem;
@@ -175,12 +168,6 @@
   white-space: nowrap;
 }
 
-.entity-card__empty {
-  margin: 0 0 0.55rem;
-  color: rgba(199, 214, 222, 0.55);
-  font-size: 0.68rem;
-}
-
 .entity-card__links,
 .entity-card__attribution-links {
   display: flex;
@@ -252,72 +239,6 @@
   border-color: rgba(255, 159, 67, 0.5);
 }
 
-.entity-card__nearby {
-  margin-top: 0.65rem;
-}
-
-.entity-card__nearby h4 {
-  margin: 0 0 0.25rem;
-  color: rgba(199, 214, 222, 0.5);
-  font-size: 0.56rem;
-  font-weight: 500;
-  letter-spacing: 0.06rem;
-  text-transform: uppercase;
-}
-
-.entity-card__nearby ul {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.entity-card__nearby button {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  width: 100%;
-  padding: 0.3rem 0.35rem;
-  color: rgba(225, 236, 242, 0.85);
-  font-size: 0.68rem;
-  text-align: left;
-  background: none;
-  border: 0;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.entity-card__nearby button:hover,
-.entity-card__nearby button:focus-visible {
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.entity-card__nearby .material-symbols-outlined {
-  color: rgba(199, 214, 222, 0.6);
-  font-size: 0.95rem;
-}
-
-.entity-card__row-title {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.entity-card__row-title small {
-  color: rgba(199, 214, 222, 0.45);
-  font-size: 0.56rem;
-}
-
-.entity-card__row-meta {
-  flex: none;
-  color: rgba(199, 214, 222, 0.55);
-  font-family: var(--font-mono);
-  font-size: 0.6rem;
-}
-
 .entity-card-enter-active,
 .entity-card-leave-active {
   transition:
@@ -365,27 +286,6 @@
 
 #global-context-panel .global-context-actions:has(#tr3b-toggle:not([hidden])) {
   grid-template-columns: minmax(0, 1fr) auto;
-}
-
-.context-empty {
-  display: grid;
-  justify-items: start;
-  gap: 6px;
-  padding: 14px 4px 6px;
-  color: var(--text-secondary);
-  font: 12px/1.45 var(--font-sans);
-}
-
-.context-empty .material-symbols-outlined {
-  color: var(--accent);
-  font-size: 22px;
-}
-
-.context-empty strong {
-  color: var(--text-primary);
-  font: 600 11px/1.2 var(--font-mono);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
 }
 
 /* A warning leads the card, above the name: an emergency, a tsunami flag. */
@@ -618,8 +518,7 @@
   margin-top: 0.75rem;
 }
 
-.entity-card__section > h4,
-#entity-card .entity-card__nearby h4 {
+.entity-card__section > h4 {
   display: flex;
   align-items: center;
   gap: 0.4rem;
@@ -780,8 +679,7 @@
 
 /* ── Context refinements: one heading style, one tile style, even rhythm ── */
 .spot-conditions__block h4,
-.entity-card__section h4,
-.entity-card__nearby h4 {
+.entity-card__section h4 {
   margin: 0 0 0.4rem;
   color: rgba(199, 214, 222, 0.55);
   font-family: var(--font-mono);
@@ -820,8 +718,7 @@
   border-radius: 8px;
 }
 
-.cctv-preview__frame img,
-.cctv-preview__live {
+.cctv-preview__frame img {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -856,12 +753,6 @@
   font-family: var(--font-mono);
   font-size: 0.58rem;
   letter-spacing: 0.06rem;
-}
-
-.cctv-preview__name {
-  margin: 0;
-  color: rgba(236, 244, 248, 0.94);
-  font-size: 0.78rem;
 }
 
 .cctv-preview__facts {
@@ -1565,24 +1456,6 @@
   height: 100% !important;
 }
 
-.route-globe__codes {
-  position: absolute;
-  top: 8px;
-  left: 10px;
-  display: flex;
-  gap: 0.4rem;
-  align-items: baseline;
-  color: rgba(199, 214, 222, 0.6);
-  font-family: var(--font-mono);
-  font-size: 0.62rem;
-  pointer-events: none;
-}
-
-.route-globe__codes strong {
-  color: #e8fbff;
-  font-size: 0.8rem;
-}
-
 .entity-card__preview-switch {
   display: inline-flex;
   gap: 2px;
@@ -1608,36 +1481,6 @@
 .entity-card__preview-switch button.active {
   color: #36dcff;
   background: rgba(54, 220, 255, 0.12);
-}
-.route-globe__codes {
-  align-items: flex-start;
-  gap: 0.5rem;
-  padding: 0.3rem 0.5rem 0.35rem;
-  background: rgba(6, 12, 16, 0.62);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 6px;
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-}
-
-.route-globe__end {
-  display: grid;
-  gap: 1px;
-}
-
-.route-globe__end small {
-  max-width: 7.5rem;
-  overflow: hidden;
-  color: rgba(199, 214, 222, 0.7);
-  font-family: var(--font-sans, inherit);
-  font-size: 0.56rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.route-globe__arrow {
-  padding-top: 0.05rem;
-  color: rgba(54, 220, 255, 0.8);
 }
 .route-globe__compass {
   position: absolute;
