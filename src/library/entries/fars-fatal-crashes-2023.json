@@ -1,0 +1,64 @@
+{
+  "id": "fars-fatal-crashes-2023",
+  "kind": "dataset",
+  "family": "events",
+  "title": "US fatal motor vehicle crashes, 2023 (FARS)",
+  "provider": "NHTSA FARS",
+  "description": "Every fatal motor vehicle crash on US public roads in 2023, about 38,000, coloured by light condition. Loads the crashes in view below 50 km.",
+  "icon": "✚",
+  "maintainer": "github:Tricky454",
+  "coverage": {
+    "countries": ["US", "PR"]
+  },
+  "source": {
+    "format": "arcgis",
+    "url": "https://services.arcgis.com/xOi1kZaI0eWDREZv/arcgis/rest/services/NTAD_Fatality_Analysis_Reporting_System_FinalRelease_Accidents/FeatureServer/0",
+    "query": {
+      "outFields": "TWAY_ID,FATALS,LGT_CONDNAME,WEATHERNAME,HARM_EVNAME,MONTHNAME,HOURNAME"
+    },
+    "fetch": "browser-direct",
+    "view": {
+      "maxAltitudeM": 50000,
+      "sample": [-85.95, 33.55, -85.45, 33.75]
+    },
+    "cacheSeconds": 86400,
+    "maxBytes": 8388608,
+    "maxFeatures": 2000,
+    "maxPages": 1
+  },
+  "display": {
+    "color": "#d03b3b",
+    "label": "TWAY_ID",
+    "fields": ["FATALS", "HARM_EVNAME", "WEATHERNAME", "HOURNAME"],
+    "rank": { "field": "FATALS", "order": "desc" },
+    "colorBy": {
+      "field": "LGT_CONDNAME",
+      "colors": {
+        "Daylight": "#fab219",
+        "Dawn": "#f08c3a",
+        "Dusk": "#f08c3a",
+        "Dark - Lighted": "#4a90e2",
+        "Dark - Not Lighted": "#8e44ad",
+        "Dark - Unknown Lighting": "#6b5b95"
+      },
+      "labels": {
+        "Daylight": "Daylight",
+        "Dawn": "Dawn",
+        "Dusk": "Dusk",
+        "Dark - Lighted": "Dark, lit road",
+        "Dark - Not Lighted": "Dark, unlit road",
+        "Dark - Unknown Lighting": "Dark, lighting unknown"
+      }
+    }
+  },
+  "licence": {
+    "name": "U.S. government work: unrestricted public use",
+    "url": "https://www.bts.gov/ntad"
+  },
+  "attribution": {
+    "text": "NHTSA Fatality Analysis Reporting System via USDOT BTS National Transportation Atlas Database",
+    "url": "https://www.nhtsa.gov/research-data/fatality-analysis-reporting-system-fars"
+  },
+  "status": "community",
+  "reviewed": "2026-11-27"
+}

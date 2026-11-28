@@ -28,6 +28,7 @@ import eiaPowerPlants from './entries/eia-power-plants.json' with { type: 'json'
 import epaSuperfundSites from './entries/epa-superfund-sites.json' with { type: 'json' };
 import epaToxicReleaseFacilities from './entries/epa-toxic-release-facilities.json' with { type: 'json' };
 import epcEnglandWales from './entries/epc-england-wales.json' with { type: 'json' };
+import farsFatalCrashes2023 from './entries/fars-fatal-crashes-2023.json' with { type: 'json' };
 import femaUsaStructures from './entries/fema-usa-structures.json' with { type: 'json' };
 import gbifOccurrenceDensity from './entries/gbif-occurrence-density.json' with { type: 'json' };
 import gdacsDisasterAlerts from './entries/gdacs-disaster-alerts.json' with { type: 'json' };
@@ -127,6 +128,7 @@ export const LIBRARY_MANIFESTS = Object.freeze([
   epaSuperfundSites,
   epaToxicReleaseFacilities,
   epcEnglandWales,
+  farsFatalCrashes2023,
   femaUsaStructures,
   gbifOccurrenceDensity,
   gdacsDisasterAlerts,
