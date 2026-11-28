@@ -1305,7 +1305,6 @@
   "src/hudSummaryGate.test.mjs",
   "src/hudSummaryLine.test.mjs",
   "src/testSupport/stubMgrs.mjs",
-  "src/tools/queries/hud-caption-feed-state.test.mjs",
   "src/voice/hudPlaceLabels.test.mjs",
   "src/voice/panel/preferences.test.mjs",
   "src/voice/panel/preferencesView.test.mjs",

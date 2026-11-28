@@ -55,7 +55,7 @@ as `structuredContent`, for clients that read only one of them.
 `src/tools/surfaces.js` lists which tools MCP and voice offer. A tool is on
 both unless `TOOL_SURFACES` turns it off; edit an entry to turn a tool on or
 off for one surface. MCP leaves out place search, routing, plain
-weather and wind, the regional brief, the HUD caption, radio, bike share and
+weather and wind, the regional brief, radio, bike share and
 transit, which assistants already cover or which add little without the
 globe. `catalogForSurface(catalog, surface, overrides)` is the
 view a surface exposes: it lists and calls only the tools it offers, while
@@ -316,6 +316,5 @@ and the development server's internal routes. See SECURITY.md.
 | `get_map_features` | `features` | Administrative areas, named places or monuments at a location (needs Overpass) |
 | `situation_brief` | `weather` | Weather, earthquakes, fires, aircraft, ships and cyclones for an area, by section |
 | `military_awareness` | `military` | Military and other aircraft, ships and military installations within 250 km of a point, by section |
-| `get_hud_caption` | `weather`, `summary` | The app's heads-up display caption for an area |
 | `show_in_gods_eye_view` | `app` | A view in God's Eye View: the live panel in clients with MCP Apps, and a link everywhere; takes another answer's view or an area or camera, layers, style, map, marks, something to follow, or street-level photos (Street View or Mapillary) at a place |
 | `panel_request` | `app` | Panel only: loads a path from the app's server for the God's Eye View panel |

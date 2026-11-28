@@ -26,12 +26,7 @@ test('each surface offers the tools the table does not turn off', () => {
     'aircraft_in_area',
   ])
     assert.ok(mcp.includes(name), name);
-  for (const name of [
-    'search_places',
-    'plan_route',
-    'get_weather',
-    'get_hud_caption',
-  ])
+  for (const name of ['search_places', 'plan_route', 'get_weather'])
     assert.ok(!mcp.includes(name), name);
   const voice = names(toolsForSurface(coreTools, 'voice'));
   assert.ok(voice.includes('get_weather'));
