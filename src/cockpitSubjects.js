@@ -8,9 +8,6 @@ import { projectGroundArcLatLon } from './data/motionModel.js';
 /** Bridge cameras look along the horizon; a ship's eye is already high. */
 export const VESSEL_BRIDGE_PITCH_DEG = -2;
 
-/** The AIS antenna usually sits on the bridge, so the eye is not moved forward. */
-const VESSEL_BRIDGE_FORWARD_OFFSET_M = 0;
-
 /** Clearance over the shared ground floor for a camera that floats on water. */
 export const VESSEL_BRIDGE_MIN_CLEARANCE_M = 2;
 
@@ -100,7 +97,8 @@ export function vesselWaterlineM(seaSurfaceM, sampleHeightsM) {
  */
 export function vesselCameraProfile(info) {
   return {
-    forwardM: VESSEL_BRIDGE_FORWARD_OFFSET_M,
+    // The AIS antenna usually sits on the bridge, so the eye is not moved forward.
+    forwardM: 0,
     upM: Number.isFinite(info?.eyeHeightM)
       ? info.eyeHeightM
       : VESSEL_DEFAULT_EYE_HEIGHT_M,

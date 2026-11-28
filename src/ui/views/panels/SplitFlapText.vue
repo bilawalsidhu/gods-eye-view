@@ -4,7 +4,6 @@ import {
   FLAP_BLANK,
   FLAP_CHAR_MS,
   FLAP_SETTLE_SLACK_MS,
-  SPLIT_FLAP_ENABLED,
   isOnScreen,
   planSplitFlap,
   visibleGlyphs,
@@ -113,13 +112,7 @@ watch(
     const beforeWidth = measure();
     sizing.value = null;
     rest();
-    if (
-      !SPLIT_FLAP_ENABLED ||
-      props.immediate ||
-      props.stopped ||
-      prefersReducedMotion()
-    )
-      return;
+    if (props.immediate || props.stopped || prefersReducedMotion()) return;
     await nextTick();
     if (change !== run || !isOnScreen(root.value)) return;
     const plan = planSplitFlap(displayed, next);
