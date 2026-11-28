@@ -5142,11 +5142,11 @@ Scene playback lives in `src/scenes/director.js`, with the pure decisions in
    captured while following a contact would otherwise hand the camera straight
    back to the follow loop it was just taken from, recreating the two-writer
    jitter. The keys stay in the STORED capture; only the apply path drops them.
-   A unit pin sweeps every layer's `getParams()` for the whole selection naming
-   family (`SCENE_SELECTION_PARAM_PATTERN` — `selected…`/`tracked…`, `…TrackingId`,
+   A unit pin (`scenePolicy.test.mjs`) sweeps every layer's `getParams()` for
+   the whole selection naming family (`selected…`/`tracked…`, `…TrackingId`,
    `…Mmsi`/`…Norad`/`…Icao`), and each match must be on the strip list or on
-   `SCENE_KEPT_SELECTION_PARAM_KEYS`; a name like `trackedVesselMmsi` therefore
-   cannot slip through. CCTV's
+   the test's kept list; a name like `trackedVesselMmsi` therefore cannot slip
+   through. CCTV's
    `selectedCameraId` is the one recorded keep: it raises a monitor plane and
    never writes `viewer.trackedEntity` or the camera.
 4. Playback leaves every Context mode alone. No mode isolates the globe
