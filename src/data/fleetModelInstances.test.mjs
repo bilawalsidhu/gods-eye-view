@@ -7,10 +7,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import * as Cesium from 'cesium';
 import {
   createFleetModelLayer,
   fleetAxisScale,
   fleetColor,
+  fleetModelTilt,
   FLEET_HEADING_OFFSET_DEG,
 } from './fleetModelInstances.js';
 import {
@@ -326,13 +328,14 @@ test('Vessels, Transit and Rail draw fleet models under the shared 3D toggle', (
 });
 
 /** A layer whose models are all ready as soon as they are written. */
-function readyLayer({ display, waterline = false } = {}) {
+function readyLayer({ display, waterline = false, seaSurface = null } = {}) {
   const { viewer, draw } = fakeViewer();
   const layer = createFleetModelLayer({
     viewer,
     display: () => display,
     policy: POLICY,
     waterline,
+    seaSurface,
   });
   const frame = (items, nowMs) => {
     layer.frame(items, nowMs);
@@ -499,4 +502,120 @@ test('a vehicle drawn as its model keeps its card and its detection entry', () =
     /entry\.mode === 'unknown'/,
     'a vehicle of unknown mode keeps its icon',
   );
+});
+
+test("a tilt lays a vessel's deck on the sea surface's slope as the draw contract turns it", () => {
+  const RAD = Math.PI / 180;
+  const origin = Cesium.Cartesian3.fromDegrees(-122.5, 37.8, 0);
+  const toLocal = Cesium.Matrix4.inverseTransformation(
+    Cesium.Transforms.eastNorthUpToFixedFrame(origin),
+    new Cesium.Matrix4(),
+  );
+  for (const heading of [0, 37, 90, 145, 200, 300])
+    for (const slope of [
+      { east: 0.1, north: 0 },
+      { east: 0, north: 0.1 },
+      { east: -0.07, north: 0.05 },
+      { east: 0.5, north: 0.5 },
+      { east: -1, north: 0.8 },
+    ]) {
+      const tilt = fleetModelTilt(heading, slope);
+      // As the Cesium draw port turns a model (drawModels.js matrixOf).
+      const frame = Cesium.Transforms.headingPitchRollToFixedFrame(
+        origin,
+        new Cesium.HeadingPitchRoll(
+          (heading + FLEET_HEADING_OFFSET_DEG) * RAD,
+          tilt.pitch,
+          tilt.roll,
+        ),
+      );
+      const deckUp = Cesium.Matrix4.multiplyByPointAsVector(
+        toLocal,
+        Cesium.Matrix4.multiplyByPointAsVector(
+          frame,
+          Cesium.Cartesian3.UNIT_Z,
+          new Cesium.Cartesian3(),
+        ),
+        new Cesium.Cartesian3(),
+      );
+      const surfaceUp = Cesium.Cartesian3.normalize(
+        new Cesium.Cartesian3(-slope.east, -slope.north, 1),
+        new Cesium.Cartesian3(),
+      );
+      const degrees = Cesium.Cartesian3.angleBetween(deckUp, surfaceUp) / RAD;
+      assert.ok(
+        degrees < 1e-6,
+        `heading ${heading}, ${JSON.stringify(slope)}: ${degrees}°`,
+      );
+    }
+  assert.deepEqual(fleetModelTilt(90, null), { pitch: 0, roll: 0 });
+  assert.deepEqual(fleetModelTilt(90, { east: NaN, north: 0 }), {
+    pitch: 0,
+    roll: 0,
+  });
+});
+
+test('models float on a sea surface: raised by its height, tilted by its slope', () => {
+  let wave = { heightM: 1.25, slope: { east: 0.05, north: -0.02 } };
+  const asked = [];
+  let surfaceFrames = 0;
+  const { layer, frame } = readyLayer({
+    display: { models3d: true },
+    waterline: true,
+    seaSurface: () => {
+      surfaceFrames += 1;
+      return (lon, lat) => {
+        asked.push([lon, lat]);
+        return wave;
+      };
+    },
+  });
+  const ship = vesselModelSpec(set, { type: '70', length: 200, beam: 32 });
+  const item = itemAt(10, ship, { pickId: 's', headingDeg: 40 });
+  const items = new Map([['s', item]]);
+  const models = frame(items, 0);
+  const placed = models.items.get('s');
+  const rise = toLonLatH(placed.pos).height - toLonLatH(item.position).height;
+  assert.ok(Math.abs(rise - (ship.elevationM || 0) - 1.25) < 1e-3, `${rise}`);
+  const tilt = fleetModelTilt(40, wave.slope);
+  assert.equal(placed.orientation.pitch, tilt.pitch);
+  assert.equal(placed.orientation.roll, tilt.roll);
+  assert.ok(placed.orientation.pitch !== 0 && placed.orientation.roll !== 0);
+  const at = toLonLatH(item.position);
+  assert.ok(Math.abs(asked.at(-1)[0] - at.lon) < 1e-9);
+  assert.ok(Math.abs(asked.at(-1)[1] - at.lat) < 1e-9);
+  assert.ok(surfaceFrames >= 2, 'asked once a frame');
+
+  // A still surface writes nothing more; a moving one is written.
+  const writes = models.writes;
+  layer.frame(items, 2);
+  assert.equal(models.writes, writes);
+  wave = { heightM: 0.5, slope: { east: -0.03, north: 0.01 } };
+  layer.frame(items, 3);
+  assert.equal(models.writes, writes + 1);
+
+  // Where the sea is flat the model stands level on its point.
+  wave = null;
+  layer.frame(items, 4);
+  const level = models.items.get('s');
+  assert.equal(level.orientation.pitch, 0);
+  assert.equal(level.orientation.roll, 0);
+  const flat = toLonLatH(level.pos).height - toLonLatH(item.position).height;
+  assert.ok(Math.abs(flat - (ship.elevationM || 0)) < 1e-3, `${flat}`);
+  layer.destroy();
+});
+
+test('without a sea surface models stand level, as before', () => {
+  const { layer, frame } = readyLayer({
+    display: { models3d: true },
+    waterline: true,
+  });
+  const ship = vesselModelSpec(set, { type: '70', length: 200, beam: 32 });
+  const item = itemAt(10, ship, { pickId: 's' });
+  const placed = frame(new Map([['s', item]]), 0).items.get('s');
+  assert.equal(placed.orientation.pitch, 0);
+  assert.equal(placed.orientation.roll, 0);
+  const rise = toLonLatH(placed.pos).height - toLonLatH(item.position).height;
+  assert.ok(Math.abs(rise - (ship.elevationM || 0)) < 1e-3);
+  layer.destroy();
 });
