@@ -1,4 +1,5 @@
 import { classifyAircraft } from '../../data/aircraftClass.js';
+import { brazilianTail } from '../../data/aircraftRegistry.js';
 import { findCamera } from '../../render/rendererOf.js';
 import { frustumPlanes, sphereOutside } from '../../geo/frustum.js';
 import { horizonFrom } from '../../geo/horizon.js';
@@ -150,9 +151,17 @@ export function createEnrichment({
 
   function _requestTypeEnrichment(icao24, priority = false) {
     if (!/^[0-9a-f]{6}$/i.test(icao24)) return;
+    // A Brazilian mark flown as callsign rides along for the ANAC lookup; it
+    // is part of the key so a callsign that arrives later still gets its turn.
+    const tail = brazilianTail(
+      icao24,
+      flightState.records.data.get(icao24)?.callsign,
+    );
     _enqueueEnrich(
-      `t:${icao24}`,
-      { kind: 'type', id: icao24.toLowerCase() },
+      tail ? `t:${icao24}:${tail}` : `t:${icao24}`,
+      tail
+        ? { kind: 'type', id: icao24.toLowerCase(), tail }
+        : { kind: 'type', id: icao24.toLowerCase() },
       (data) => {
         const meta = flightState.records.data.get(icao24);
         if (!meta) return; // evicted while the lookup was in flight
@@ -163,6 +172,7 @@ export function createEnrichment({
         }
         meta.typeName = data.typeName || meta.typeName;
         meta.registration = data.registration || meta.registration;
+        meta.rab = data.rab || meta.rab || null;
         if (meta.typeCode) {
           const klass = classifyAircraft({
             typeCode: meta.typeCode,

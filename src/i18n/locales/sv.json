@@ -3599,6 +3599,15 @@
     "other": "Visar {shown} av {total}"
   },
   "BROWSE DATA LIBRARY": "BLÄDDRA I DATABIBLIOTEKET",
+  "aircraft operation|Airline": "Flygbolag",
+  "aircraft operation|Air taxi": "Taxiflyg",
+  "aircraft operation|Government": "Statlig",
+  "aircraft operation|Private": "Privat",
+  "Built {year}": "Byggd {year}",
+  "{count} seats": {
+    "one": "{count} säte",
+    "other": "{count} säten"
+  },
   "Atmosphere": "Atmosfär",
   "Day and night": "Dag och natt",
   "Sun": "Sol",
