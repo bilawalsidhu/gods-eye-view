@@ -593,6 +593,8 @@ export function createRendering({
       resolveAsset: fleet.resolveAsset,
       // A hull below the waterline would show through a plain globe.
       waterline: true,
+      // The models float on a moving sea surface when one is drawn.
+      seaSurface: fleet.seaSurface ?? null,
       // Its radar sweeps while it is under way (speed in knots).
       partState: (item, table) =>
         vesselPartState(table, {

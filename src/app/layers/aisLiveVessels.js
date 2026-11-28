@@ -17,6 +17,8 @@ import { fleetModelServices } from './fleetModels.js';
  * source. `displayParams` reads the Flights layer's DISPLAY-rail 3D
  * preference, under which nearby vessels are drawn as fleet models.
  * `placement`: a host-supplied placement for its live vessels, or null.
+ * `seaSurface`: a moving sea surface the vessels' models float on, or null
+ * (`seaSurface` in ../../data/fleetModelInstances.js).
  */
 export function createApplicationVessels({
   source,
@@ -24,6 +26,7 @@ export function createApplicationVessels({
   options = {},
   displayParams = null,
   resolveAsset,
+  seaSurface = null,
 }) {
   return createVesselLayer({
     source,
@@ -44,6 +47,7 @@ export function createApplicationVessels({
       fleet: fleetModelServices({
         display: displayParams,
         ...(resolveAsset ? { resolveAsset } : {}),
+        seaSurface,
       }),
     },
   });

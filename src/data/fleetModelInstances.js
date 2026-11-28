@@ -3,6 +3,7 @@ import {
   FLEET_HEADING_OFFSET_DEG,
   fleetAxisScale,
   fleetColor,
+  fleetModelTilt,
 } from './fleetModelDraw.js';
 import { AIRCRAFT_ENVIRONMENT_MAP_OPTIONS } from './aircraftModelLighting.js';
 import { fleetModelSet, fleetPartTable } from './fleetModels.js';
@@ -26,6 +27,7 @@ export {
   FLEET_HEADING_OFFSET_DEG,
   fleetAxisScale,
   fleetColor,
+  fleetModelTilt,
 } from './fleetModelDraw.js';
 
 /** How long (ms) a model whose load failed waits before it loads again. */
@@ -103,6 +105,14 @@ let instances = 0;
  *   The moving parts a vehicle's model is posed with (`ModelItem.parts`),
  *   from its item and its model's part table (`modelPartDrivers.js`); asked
  *   only for a model that has a part table.
+ * @param {() => ((lon: number, lat: number) => ({heightM: number,
+ *   slope: {east: number, north: number}}|null))|null} [options.seaSurface]
+ *   A moving sea surface the models float on, asked once a frame: for each
+ *   model, the surface's height above the model's point (metres) and its
+ *   slope (rise per metre east and north) at its longitude and latitude, or
+ *   null where the sea is flat. Each model is raised by that height and
+ *   tilted to lie on that slope (`fleetModelTilt`); without one, or where it
+ *   answers null, models stand level on their point.
  * @param {object} [options.draw] Stands in for the viewer's draw port (tests).
  * @returns {object}
  */
@@ -113,6 +123,7 @@ export function createFleetModelLayer({
   waterline = false,
   resolveAsset = (url) => url,
   partState = null,
+  seaSurface = null,
   draw,
 }) {
   const port = draw ?? findDraw(viewer);
@@ -209,9 +220,24 @@ export function createFleetModelLayer({
     for (const id of eligible) admit(id, items.get(id), cap);
   }
 
-  /** Where the model's origin stands: the item's point raised by the spec's elevation. */
-  function placement(item) {
-    const lift = (item.spec.elevationM || 0) - (item.groundLiftM || 0);
+  /** The sea surface under `item` this frame (`seaSurface`), or null. */
+  function waveUnder(item, surface) {
+    if (!surface || !item.position) return null;
+    const at = toLonLatH(item.position);
+    if (!at) return null;
+    const wave = surface(at.lon, at.lat);
+    return wave && Number.isFinite(wave.heightM) ? wave : null;
+  }
+
+  /**
+   * Where the model's origin stands: the item's point raised by the spec's
+   * elevation and by the sea surface's height under it.
+   */
+  function placement(item, wave) {
+    const lift =
+      (item.spec.elevationM || 0) -
+      (item.groundLiftM || 0) +
+      (wave?.heightM || 0);
     if (!lift) return item.position;
     const at = toLonLatH(item.position);
     if (!at) return item.position;
@@ -226,7 +252,7 @@ export function createFleetModelLayer({
   }
 
   /** The draw item for an admitted model, as the set draws it, at `at`. */
-  function itemOf(id, record, item, show, boost, at, parts) {
+  function itemOf(id, record, item, show, boost, at, parts, tilt) {
     const mask = item.spec.tinted && !boost ? fleetColor(item.tint) : null;
     return {
       id,
@@ -237,8 +263,8 @@ export function createFleetModelLayer({
         heading:
           ((item.headingDeg || 0) + FLEET_HEADING_OFFSET_DEG) *
           RADIANS_PER_DEGREE,
-        pitch: 0,
-        roll: 0,
+        pitch: tilt.pitch,
+        roll: tilt.roll,
       },
       scale: item.spec.scale,
       ...(fleetAxisScale(item.spec)
@@ -266,9 +292,11 @@ export function createFleetModelLayer({
    * is built only when something did (a fleet passes every model each
    * frame, and most of what it draws stays).
    */
-  function changed(id, record, item, show, boost) {
-    const at = placement(item);
+  function changed(id, record, item, show, boost, surface) {
+    const wave = waveUnder(item, surface);
+    const at = placement(item, wave);
     const heading = item.headingDeg || 0;
+    const tilt = fleetModelTilt(heading, wave?.slope);
     const mask = item.spec.tinted && !boost ? fleetColor(item.tint) : null;
     const meta = item.pickId ?? id;
     const parts = partsOf(item);
@@ -280,6 +308,8 @@ export function createFleetModelLayer({
       sent.y === at.y &&
       sent.z === at.z &&
       sent.heading === heading &&
+      sent.pitch === tilt.pitch &&
+      sent.roll === tilt.roll &&
       sent.specKey === item.spec.key &&
       sameColor(sent.mask, mask) &&
       sent.boost === boost &&
@@ -293,6 +323,8 @@ export function createFleetModelLayer({
     next.y = at.y;
     next.z = at.z;
     next.heading = heading;
+    next.pitch = tilt.pitch;
+    next.roll = tilt.roll;
     next.specKey = item.spec.key;
     // A colour array is kept as a copy: the layer may change its own.
     next.mask = Array.isArray(mask) ? [...mask] : mask;
@@ -300,7 +332,7 @@ export function createFleetModelLayer({
     next.show = show;
     next.meta = meta;
     next.partsKey = partsKey;
-    return itemOf(id, record, item, show, boost, at, parts);
+    return itemOf(id, record, item, show, boost, at, parts, tilt);
   }
 
   return {
@@ -335,6 +367,7 @@ export function createFleetModelLayer({
       }
       for (const item of items.values()) item.modelOwnsVisual = false;
       const horizon = horizonFrom(eye.position);
+      const surface = seaSurface?.() ?? null;
       const writes = [];
       let drawn = false;
       settling = 0;
@@ -363,14 +396,14 @@ export function createFleetModelLayer({
           horizon.isPointVisible(item.position);
         if (!visible) {
           if (record.sent !== null) {
-            const write = changed(id, record, item, false, boost);
+            const write = changed(id, record, item, false, boost, surface);
             if (write) writes.push(write);
           }
           continue;
         }
         // Placed before the readiness test: its first drawn frame is here.
         const show = record.ready;
-        const write = changed(id, record, item, show, boost);
+        const write = changed(id, record, item, show, boost, surface);
         if (write) writes.push(write);
         if (!show) {
           if (!record.failedAt) settling += 1;
