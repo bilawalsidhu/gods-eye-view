@@ -48,6 +48,10 @@ export function createState({ sweepClock, overlayHost }) {
 
   state._surfaceItems = [];
 
+  /** Landing pins drawn but not in their set yet, in view first. */
+
+  state._pendingLandingReveals = [];
+
   /**
    * Fetched cable/landing JSON kept across disable/enable. A disable CLEARS
    * the draw sets (see releaseDrawing) instead of hiding them, so a

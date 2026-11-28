@@ -4,7 +4,12 @@ import { horizonFrom } from '../../geo/horizon.js';
 import { densifyRhumb } from '../../geo/rhumb.js';
 import { distance, toRadians } from '../../geo/vector.js';
 import { cssColor } from '../../render/color.js';
-import { cameraOf, canvasOf, drawOf } from '../../render/rendererOf.js';
+import {
+  cameraOf,
+  canvasOf,
+  drawOf,
+  findFrame,
+} from '../../render/rendererOf.js';
 import {
   clampLabel,
   createCableNameCard,
@@ -16,6 +21,7 @@ import {
 import { featureLabel, featureReference, geometryParts } from './geometry.js';
 import { cablePinImage } from './pin.js';
 import {
+  CABLE_LANDING_REVEALS_PER_FRAME,
   CABLE_LAYER_ID,
   CABLE_LINE_GRANULARITY_M,
   CABLE_PIN_SIZE_PX,
@@ -197,6 +203,7 @@ export function createRendering({ state }) {
   function releaseDrawing({ clearSets = true } = {}) {
     state._referenceRecords = [];
     state._surfaceItems = [];
+    state._pendingLandingReveals = [];
     state._referenceLabelCount = 0;
     state._publishScratch.length = 0;
     state._loaded = false;
@@ -389,6 +396,7 @@ export function createRendering({ state }) {
   /**
    * Draw both sources' features, replacing what was drawn. Items start
    * culled for the camera as it is, so the first sweep has nothing to redo.
+   * Landing pins go in one batch now and the rest over the next frames.
    */
   function drawFeatures(cableFeatures, landingFeatures) {
     // Redrawn features are new records: a card from before puts itself away.
@@ -421,9 +429,39 @@ export function createRendering({ state }) {
     }
     sets.lines.set(out.lines);
     sets.fills.set(out.fills);
-    sets.pins.set(out.pins);
+    state._pendingLandingReveals = inViewFirst(out.pins);
+    sets.pins.set(
+      state._pendingLandingReveals.splice(0, CABLE_LANDING_REVEALS_PER_FRAME),
+    );
     sets.stems.set(out.references.map((record) => record.stem));
     sets.references.set(out.references.map((record) => record.point));
+  }
+
+  /** In view first, judged once from the camera at draw time; later moves do not reorder. */
+  function inViewFirst(pins) {
+    const eye = state._viewer && cameraOf(state._viewer).pose()?.position;
+    if (!eye) return pins;
+    const horizon = horizonFrom(eye);
+    const near = [];
+    const far = [];
+    for (const pin of pins) {
+      const base = fromDegrees(pin.pos.lon, pin.pos.lat, 0);
+      (horizon.isPointVisible(base) ? near : far).push(pin);
+    }
+    return near.concat(far);
+  }
+
+  /**
+   * Add the next few landing pins to their set, once per rendered frame. The
+   * scene renders on demand, so while any are left this asks for the next
+   * frame; otherwise a parked camera would stop the reveal.
+   */
+  function revealLandingMarkers() {
+    const pending = state._pendingLandingReveals;
+    if (!pending.length || !state._sets) return;
+    state._sets.pins.upsert(pending.splice(0, CABLE_LANDING_REVEALS_PER_FRAME));
+    if (pending.length)
+      findFrame(state._viewer)?.requestRender('submarine-cables');
   }
 
   /**
@@ -591,6 +629,7 @@ export function createRendering({ state }) {
     drawFeatures,
     onSurface,
     pickInfo,
+    revealLandingMarkers,
     select,
     updateReferenceVisibility,
   };

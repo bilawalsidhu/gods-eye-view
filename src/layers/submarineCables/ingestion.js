@@ -50,8 +50,8 @@ export function createIngestion({ state, parts, source }) {
       const cableFeatures = normalizeFeatures(cableJson, 'cable');
       const landingFeatures = normalizeFeatures(landingJson, 'landing');
 
-      // Await-free from here: this load still owns the lifecycle, and the
-      // items go into the layer's own sets in one pass.
+      // Await-free from here, so this load still owns the lifecycle. Landing
+      // pins go into their set over the next frames (revealLandingMarkers).
       parts.rendering.attach(viewer);
       parts.rendering.drawFeatures(cableFeatures, landingFeatures);
 

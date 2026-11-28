@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as Cesium from 'cesium';
 import { MAP_STACKS } from '../mapStackController.js';
+import { CABLE_LANDING_REVEALS_PER_FRAME } from '../layers/submarineCables/policy.js';
 import { fromDegrees, toLonLatH } from '../geo/ellipsoid.js';
 import { bindRenderer } from '../render/rendererOf.js';
 import {
@@ -1476,5 +1477,73 @@ test('every bundled cable segment is drawn with its source feature', async () =>
     });
   }
   assert.equal(env.set('references').items.size, features.length);
+  env.layer.destroy();
+});
+
+test('landing pins go into their set a few per frame, those in view first', async () => {
+  // The camera looks down on the North Atlantic (-40°, 35°): the far-side
+  // pins come first in the source, so only the in-view ordering puts them
+  // last.
+  const batch = CABLE_LANDING_REVEALS_PER_FRAME;
+  const far = batch;
+  const near = batch + 10;
+  const point = (i, lon, lat) => ({
+    type: 'Feature',
+    id: `landing-${i}`,
+    properties: { id: `landing-${i}`, name: `Landing ${i}` },
+    geometry: { type: 'Point', coordinates: [lon, lat] },
+  });
+  const landingPoints = [
+    ...Array.from({ length: far }, (_, i) =>
+      point(i, 140 + (i % 10) * 0.5, -35 + Math.floor(i / 10)),
+    ),
+    ...Array.from({ length: near }, (_, i) =>
+      point(far + i, -45 + (i % 20) * 0.5, 30 + Math.floor(i / 20)),
+    ),
+  ];
+  const env = createCableHarness({ source: geometrySource([], landingPoints) });
+  let renderRequests = 0;
+  env.viewer.scene.requestRender = () => {
+    renderRequests++;
+  };
+  // In view first, each group in source order.
+  const order = [
+    ...Array.from({ length: near }, (_, i) => far + i),
+    ...Array.from({ length: far }, (_, i) => i),
+  ];
+  const pins = env.set('pins');
+  // Pin ids are `landing-point:<feature index>:pin:<part>`.
+  const drawn = () =>
+    [...pins.items.keys()].map((id) => Number(id.split(':')[1]));
+
+  await env.load();
+  assert.deepEqual(drawn(), order.slice(0, batch), 'pins in view go first');
+  renderRequests = 0;
+  env.raiseSweep();
+  assert.deepEqual(drawn(), order.slice(0, batch * 2));
+  assert.ok(renderRequests > 0, 'another frame is asked for');
+  renderRequests = 0;
+  env.raiseSweep();
+  assert.deepEqual(drawn(), order, 'every pin ends up drawn');
+  assert.equal(
+    renderRequests,
+    0,
+    'the frame that drains the queue asks for no more',
+  );
+
+  // A disable mid-reveal empties the set and reveals nothing more; the next
+  // enable (from the cached JSON) starts over.
+  env.layer.disable();
+  env.layer.enable(env.viewer);
+  assert.deepEqual(drawn(), order.slice(0, batch));
+  env.layer.disable();
+  assert.equal(pins.items.size, 0);
+  env.raiseSweep();
+  assert.equal(pins.items.size, 0);
+  env.layer.enable(env.viewer);
+  assert.deepEqual(drawn(), order.slice(0, batch), 'only pins in view again');
+  env.raiseSweep();
+  env.raiseSweep();
+  assert.deepEqual(drawn(), order, 'every pin drawn again');
   env.layer.destroy();
 });

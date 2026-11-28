@@ -68,6 +68,15 @@ export const CABLE_LABEL_DEPTH_DECISION = Object.freeze({
 });
 
 /**
+ * Landing pins added to their set per rendered frame. A pin without a
+ * height is a ground-clamped billboard, and Cesium reads the terrain height
+ * synchronously as it creates one, so adding every pin at once is one long
+ * task. The bundled ~1,900 pins take about 40 frames.
+ */
+
+export const CABLE_LANDING_REVEALS_PER_FRAME = 48;
+
+/**
  * `MAP_STACKS` ids that render imagery on the SHOWN Cesium globe (the ion
  * Bing stacks + OSM). Deliberately an explicit allowlist, not "anything that
  * is not photoreal": an id this module has never heard of is UNKNOWN, and
