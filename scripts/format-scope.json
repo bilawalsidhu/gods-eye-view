@@ -99,7 +99,6 @@
   "src/standalone/application.js",
   "src/standalone/controls.js",
   "src/standalone/data.js",
-  "src/standalone/errors.js",
   "src/standalone/scene.js",
   "src/standalone/startupChrome.js",
   "src/app/startupChrome.test.mjs",

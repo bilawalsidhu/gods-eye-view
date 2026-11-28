@@ -1,5 +1,5 @@
 import { createStandaloneApplication } from './standalone/application.js';
-import { describeError } from './standalone/errors.js';
+import { describeError } from './app/errors.js';
 import { t } from './i18n/index.js';
 import { PHOTON_SETTING as photonSetting } from './search/photonSetting.js';
 
