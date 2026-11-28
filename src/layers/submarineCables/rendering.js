@@ -46,8 +46,22 @@ const propColor = (value) =>
 const given = (value) => value !== undefined && value !== null;
 
 /**
+ * A cable is drawn as a pipe: its colour between dark edges, wide enough to
+ * click.
+ */
+const CABLE_WIDTH_PX = 8;
+const CABLE_EDGE_PX = 3;
+const darker = (color) => [
+  color[0] * 0.35,
+  color[1] * 0.35,
+  color[2] * 0.35,
+  0.95,
+];
+
+/**
  * How a line draws. A cable with a reference takes the cable's own colour
- * (or the base colour) and one width, whatever the feature asks; every other
+ * (or the base colour), dark edges and one width, whatever the feature
+ * asks; every other
  * line keeps the GeoJSON styling it always had: the source's colour,
  * overridable by the feature's simplestyle `stroke`, `stroke-opacity` and
  * `stroke-width`, draped on every surface.
@@ -56,8 +70,12 @@ function lineStyle(props, cable, styled, baseColor) {
   if (cable && styled) {
     const color = propColor(props.color) ?? baseColor;
     return {
-      widthPx: 2.5,
-      style: { kind: 'solid', color: withAlpha(color, 0.92) },
+      widthPx: CABLE_WIDTH_PX,
+      style: {
+        kind: 'solid',
+        color: withAlpha(color, 0.92),
+        outline: { color: darker(color), widthPx: CABLE_EDGE_PX },
+      },
     };
   }
   return {

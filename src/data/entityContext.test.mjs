@@ -397,6 +397,27 @@ test('selected-card nearby rows open a cable at the point used for its distance'
   }
 });
 
+test('a cable card names its kind once, not again as a fact', () => {
+  const layerId = 'telegeography-submarine-cables';
+  const landing = {
+    id: 'landing:example',
+    name: 'Example Beach',
+    feature: 'landing point',
+    country: 'Example',
+    lat: 21,
+    lon: -150,
+  };
+  const card = describeEntity(
+    manager({ [layerId]: { name: 'Cables', records: [landing] } }),
+    { layerId, id: landing.id },
+  );
+  assert.equal(card.kind, 'cable landing point');
+  assert.deepEqual(
+    card.facts.map((fact) => fact.field),
+    ['country'],
+  );
+});
+
 test('a rounded GeoJSON pick stays on its selected part when the card refreshes', () => {
   const layerId = 'local-datacenters';
   const part = { lat: 37.12345648, lon: 179.99999972 };

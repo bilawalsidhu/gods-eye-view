@@ -270,7 +270,6 @@ test("a cable's record keeps its data's facts, which describeEntity lists", () =
       ['Length km', '2,400 km'],
       ['Status', 'In service'],
       ['Website', 'www.kunoa.example'],
-      ['Feature', 'Cable'],
     ],
   );
   assert.deepEqual(

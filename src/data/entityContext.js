@@ -383,6 +383,14 @@ const finite = (value) =>
       ? Number(value)
       : null;
 
+/**
+ * The record field that tells a layer's kinds of item apart; the card names
+ * the kind, so the field is not listed as a fact too.
+ */
+const RECORD_KIND_FIELDS = Object.freeze({
+  'telegeography-submarine-cables': 'feature',
+});
+
 /** Items a layer lists beside its main kind, told apart by a record field. */
 const RECORD_KINDS = Object.freeze({
   'telegeography-submarine-cables': (record) =>
@@ -1321,7 +1329,11 @@ export function describeEntity(
     recordPosition(stored) ||
     recordPosition(identity);
   const fromRecord = record
-    ? recordFacts(record, { nowMs, kind: kind.kind })
+    ? recordFacts(record, {
+        nowMs,
+        kind: kind.kind,
+        skip: RECORD_KIND_FIELDS[layerId] ? [RECORD_KIND_FIELDS[layerId]] : [],
+      })
     : null;
   const fromStore = stored ? propertyFacts(stored.properties) : null;
   const facts = [...(fromRecord?.facts || [])];
