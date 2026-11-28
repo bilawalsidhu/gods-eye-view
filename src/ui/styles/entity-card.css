@@ -1247,23 +1247,6 @@
   filter: blur(2px);
 }
 
-@keyframes aircraft-hero-draw {
-  to {
-    stroke-dashoffset: 0;
-  }
-}
-
-@keyframes aircraft-hero-dot {
-  from {
-    opacity: 0;
-    transform: scale(0);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
 @keyframes aircraft-hero-text {
   from {
     opacity: 0;
@@ -1396,32 +1379,10 @@
   }
 }
 
-@keyframes aircraft-hero-breathe {
-  50% {
-    opacity: 0.45;
-  }
-}
-
 @keyframes aircraft-hero-fade-out {
   to {
     opacity: 0;
     transform: translateX(-4px);
-  }
-}
-
-@keyframes aircraft-hero-retract {
-  from {
-    stroke-dashoffset: 0;
-  }
-  to {
-    stroke-dashoffset: 1;
-  }
-}
-
-@keyframes aircraft-hero-dot-out {
-  to {
-    opacity: 0;
-    transform: scale(0);
   }
 }
 
