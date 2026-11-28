@@ -4435,5 +4435,10 @@
   "Reference monitor": "參考監測儀",
   "Needs {envVars} — add one in Provider Settings": "需要 {envVars}，請在服務商設置中添加其中一個",
   "CABLE · {name}": "海纜 · {name}",
-  "LANDING POINT · {name}": "登陸點 · {name}"
+  "LANDING POINT · {name}": "登陸點 · {name}",
+  "NOAA SWPC solar wind": "NOAA SWPC 太陽風",
+  "extrapolated": "外推",
+  "Solar wind feed unavailable": "太陽風數據源不可用",
+  "Field lines not re-traced · previous lines kept": "磁力線未重新追蹤 · 保留先前的磁力線",
+  "Magnetosphere": "磁層"
 }

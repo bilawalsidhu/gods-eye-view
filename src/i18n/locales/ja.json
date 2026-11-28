@@ -4434,6 +4434,11 @@
   "{name} · sensor": "{name} · センサー",
   "Reference monitor": "基準測定器",
   "Needs {envVars} — add one in Provider Settings": "{envVars}のいずれかが必要です。プロバイダー設定で追加してください",
-  "CABLE \u00b7 {name}": "ケーブル · {name}",
-  "LANDING POINT \u00b7 {name}": "陸揚げ地点 · {name}"
+  "CABLE · {name}": "ケーブル · {name}",
+  "LANDING POINT · {name}": "陸揚げ地点 · {name}",
+  "NOAA SWPC solar wind": "NOAA SWPC 太陽風",
+  "extrapolated": "外挿",
+  "Solar wind feed unavailable": "太陽風フィードを利用できません",
+  "Field lines not re-traced · previous lines kept": "磁力線は再追跡されていません · 前の磁力線を保持",
+  "Magnetosphere": "磁気圏"
 }

@@ -274,6 +274,7 @@ export const SHARE_VIEW_FLAGS = freezeAll([
 export const SHARE_VIEW_LAYER_OPTION_ABSENT = Object.freeze({
   'air-quality': Object.freeze({ view: 'aqi' }),
   'local-firms': Object.freeze({ minFrp: 0, confidence: 'all' }),
+  magnetosphere: Object.freeze({ opacity: 'strong' }),
   traffic: Object.freeze({ roadMode: null, lines: false, dots: true }),
   'weather-lightning': Object.freeze({ opacity: 'strong' }),
   'weather-radar': Object.freeze({ opacity: 'strong' }),
