@@ -1,14 +1,18 @@
 /** The Fire Perimeters layer on the stub renderer, for its draw-set tests. */
+import { createFirePerimetersLayer } from '../layers/perimeters/index.js';
 import {
-  createFirePerimetersLayer,
-  PERIMETER_AGE_BANDS,
-} from '../layers/perimeters/index.js';
-import { hexColor } from '../render/color.js';
+  PERIMETER_EDGE,
+  PERIMETER_FILL,
+} from '../layers/perimeters/drawing.js';
 import { bindRenderer } from '../render/rendererOf.js';
 import { createStubRenderer } from '../render/stub/index.js';
 
-/** The draw set sizes of index.js (PERIMETER_SET_SIZES). */
-export const SET_SIZES = Object.freeze({ fills: 8000, lines: 2000 });
+export {
+  FILL_MIN_VERTICES,
+  LINE_MIN_VERTICES,
+} from '../layers/perimeters/drawing.js';
+/** The vertices a square of `piece()` draws: its ring, and its line. */
+export const SQUARE_VERTICES = 5;
 export const HOUR = 3600000;
 export const AT = Date.UTC(2026, 7, 20, 12);
 
@@ -105,5 +109,5 @@ export function harness(read, extra = {}) {
   return { renderer, viewer, layer, writes, items, sets };
 }
 
-export const fillOf = (band) => hexColor(PERIMETER_AGE_BANDS[band].color, 0.35);
-export const lineOf = (band) => hexColor(PERIMETER_AGE_BANDS[band].color, 0.9);
+export const FILL = PERIMETER_FILL;
+export const EDGE = PERIMETER_EDGE;

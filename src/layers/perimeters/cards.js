@@ -1,7 +1,18 @@
 /** Card model for one selected fire-perimeter incident. Pure — no Cesium types. */
 import { formatNumber, t, tn } from '../../i18n/index.js';
+import { PERIMETER_MARKER_FROM_M } from './drawing.js';
 
 export const PERIMETER_OVERLAY_SOURCE_ID = 'fire-perimeters';
+/** The overlay source of the fires' name labels at middle zoom. */
+export const PERIMETER_LABEL_SOURCE_ID = 'fire-perimeter-labels';
+/**
+ * Name labels show between these eye distances, metres: from where the
+ * markers do (drawing.js `PERIMETER_MARKER_FROM_M`).
+ */
+export const PERIMETER_LABEL_RANGE_M = Object.freeze([
+  PERIMETER_MARKER_FROM_M,
+  1_200_000,
+]);
 
 /** CSS accent for a perimeter card by containment progress. */
 export function containmentAccent(containedPct) {
@@ -97,6 +108,41 @@ function formatAge(deltaMs) {
   return t('{count}d', { context: 'age', count: Math.floor(hours / 24) });
 }
 
+/** A fire's size in the UI language: "512 ac". */
+function acresText(value) {
+  const acres = value < 1 ? Math.round(value * 100) / 100 : Math.round(value);
+  return tn(acres, '{acres} ac', '{acres} ac', { acres: formatNumber(acres) });
+}
+
+/**
+ * A fire's name label, "name · acres", standing `gapPx` above its anchor
+ * (clear of its marker); a click on it selects the fire. Bigger fires win
+ * collisions.
+ * @param {Object} row - Snapshot fire.
+ * @param {{gapPx: number}} options
+ * @returns {Object} World-overlay entry without `position`.
+ */
+export function buildFireLabel(row, { gapPx }) {
+  const name = row.name || t('Unnamed incident');
+  return {
+    id: `fire-perimeter-label:${row.id}`,
+    variant: 'label',
+    title: Number.isFinite(row.acres)
+      ? `${name} · ${acresText(row.acres)}`
+      : name,
+    details: [],
+    accent: containmentAccent(row.containedPct),
+    priority: Number.isFinite(row.acres) ? row.acres : 0,
+    interactive: true,
+    accessibilityLabel: t('Select fire {name}', { name }),
+    minDistance: PERIMETER_LABEL_RANGE_M[0],
+    maxDistance: PERIMETER_LABEL_RANGE_M[1],
+    gapPx,
+    verticalOnly: true,
+    placement: 'above',
+  };
+}
+
 /**
  * Build the overlay-host entry for one selected incident. The caller supplies
  * `position` (Cartesian) separately — this model stays JSON-safe for tests.
@@ -110,13 +156,7 @@ export function buildIncidentCard(row, nowMs, { link = null } = {}) {
   // The row keeps WFIGS values as sent (AI tools read them); the card translates
   // the known cause, behavior and complexity values and the wording around them.
   const facts = [];
-  if (Number.isFinite(row.acres)) {
-    const acres =
-      row.acres < 1 ? Math.round(row.acres * 100) / 100 : Math.round(row.acres);
-    facts.push(
-      tn(acres, '{acres} ac', '{acres} ac', { acres: formatNumber(acres) }),
-    );
-  }
+  if (Number.isFinite(row.acres)) facts.push(acresText(row.acres));
   facts.push(
     Number.isFinite(row.containedPct)
       ? t('{percent}% contained', { percent: Math.round(row.containedPct) })

@@ -231,6 +231,78 @@ test('draped lines are ground polylines; a rebuild keeps the old ones until the 
   assert.equal(scene.added.length, 0);
 });
 
+for (const kind of ['lines', 'shapes'])
+  test(`${kind}: the last ready ground draws through rebuilds queued before the next is ready`, () => {
+    const { scene, draw, frame } = drawOver();
+    const set = draw[kind]({ id: `queued-${kind}` });
+    const item = (id, color) =>
+      kind === 'lines'
+        ? {
+            id,
+            positions: [
+              { lon: 0, lat: 0 },
+              { lon: 1, lat: 1 },
+            ],
+            widthPx: 2,
+            mode: 'draped',
+            style: { kind: 'solid', color },
+          }
+        : {
+            id,
+            geometry: {
+              kind: 'ellipse',
+              center: { lon: 0, lat: 0 },
+              semiMajor: 1000,
+              semiMinor: 1000,
+            },
+            fill: color,
+            height: 'clampGround',
+          };
+    const groundsOf = (host) => {
+      const out = [];
+      for (let i = 0; i < host.length; i++) {
+        const part = host.get(i);
+        if (
+          part instanceof Cesium.GroundPrimitive ||
+          part instanceof Cesium.GroundPolylinePrimitive
+        )
+          out.push(part);
+      }
+      return out;
+    };
+    const ready = (host) => {
+      for (const ground of groundsOf(host))
+        Object.defineProperty(ground, 'ready', { value: true });
+    };
+    // Ground drawn now: shown and ready, in a host in the scene.
+    const drawn = () =>
+      scene.added.flatMap(groundsOf).filter((g) => g.show && g.ready);
+
+    set.set([item('a', '#ff0000')]);
+    const first = scene.added[0];
+    ready(first);
+    frame();
+    assert.deepEqual(drawn(), groundsOf(first));
+    // Rebuilds every frame, each before the one before it is ready.
+    set.set([item('a', '#00ff00'), item('b', '#00ff00')]);
+    frame();
+    set.set([item('a', '#0000ff'), item('c', '#0000ff')]);
+    frame();
+    set.upsert([item('d', '#0000ff')]);
+    frame();
+    set.remove(['c']);
+    frame();
+    assert.ok(scene.added.includes(first), 'the ready host stays');
+    assert.deepEqual(drawn(), groundsOf(first), 'and draws, alone');
+    assert.equal(scene.added.length, 2, 'beside the newest build only');
+    const newest = scene.added.find((host) => host !== first);
+    ready(newest);
+    frame();
+    assert.deepEqual(scene.added, [newest], 'gone once the newest is ready');
+    assert.deepEqual(drawn(), groundsOf(newest));
+    set.dispose();
+  });
+
 test('a draped outlined line keeps its outline in its own material', () =>
   withImageClasses(() => {
     const { scene, draw } = drawOver();
@@ -1938,6 +2010,147 @@ test('sprite layers stack flights on top, all under a set at the default order',
   for (const set of [highlight, endpoint, ...sets]) set.dispose();
 });
 
+/** Ground and sprite sets over a real primitive collection, by name. */
+function groundOrderScene() {
+  const scene = fakeScene();
+  scene.primitives = new Cesium.PrimitiveCollection();
+  const { draw, frame } = drawOver(scene);
+  const fill = (id) => ({
+    id,
+    geometry: {
+      kind: 'rectangle',
+      rect: { west: 0, south: 0, east: 1, north: 1 },
+    },
+    fill: '#ff0000',
+    height: 'clampGround',
+  });
+  const line = (id) => ({
+    id,
+    positions: [
+      { lon: 0, lat: 0 },
+      { lon: 1, lat: 1 },
+    ],
+    widthPx: 2,
+    mode: 'draped',
+    style: { kind: 'solid', color: '#ffffff' },
+  });
+  const dot = { id: 'd', pos: { lon: 0, lat: 0 }, pixelSize: 4, color: '#fff' };
+  const order = () => {
+    const out = [];
+    for (let i = 0; i < scene.primitives.length; i++)
+      out.push(scene.primitives.get(i).drawSetId ?? 'other');
+    return out;
+  };
+  return { scene, draw, frame, fill, line, dot, order };
+}
+
+test('ground sets stack by drawOrder, a higher one later, ties where they are', () => {
+  const { scene, draw, fill, line, dot, order } = groundOrderScene();
+  const other = scene.primitives.add(new Cesium.PrimitiveCollection());
+  const fills = draw.shapes({ id: 'fills' });
+  const lines = draw.lines({ id: 'lines', drawOrder: 1 });
+  const sprites = draw.points({ id: 'sprites', drawOrder: 2 });
+  const ground = draw.shapes({ id: 'ground' });
+  fills.set([fill('a')]);
+  lines.set([line('l')]);
+  sprites.set([dot]);
+  ground.set([fill('g')]);
+  // Another layer's ground at 0, drawn after the lines, goes under them,
+  // among the slots the ground sets hold; the sprite set and the scene's
+  // other primitives keep theirs.
+  assert.deepEqual(order(), ['other', 'fills', 'ground', 'sprites', 'lines']);
+  const linesHost = scene.primitives.get(4);
+  // A fill set first drawn after the lines goes under them, at once, and
+  // nothing is destroyed on the way.
+  const more = draw.shapes({ id: 'more' });
+  more.set([fill('m')]);
+  assert.deepEqual(order(), [
+    'other',
+    'fills',
+    'ground',
+    'sprites',
+    'more',
+    'lines',
+  ]);
+  assert.equal(scene.primitives.get(5), linesHost, 'the same host');
+  assert.ok(!linesHost.isDestroyed());
+  // Raised and lowered, by setOptions.
+  more.setOptions({ drawOrder: 3 });
+  assert.deepEqual(order(), [
+    'other',
+    'fills',
+    'ground',
+    'sprites',
+    'lines',
+    'more',
+  ]);
+  fills.setOptions({ drawOrder: 2 });
+  assert.deepEqual(order(), [
+    'other',
+    'ground',
+    'lines',
+    'sprites',
+    'fills',
+    'more',
+  ]);
+  for (const set of [fills, lines, sprites, ground, more]) set.dispose();
+});
+
+test('ground sets all at 0 stay as first drawn, beside sprites with an order', () => {
+  const { draw, fill, dot, order } = groundOrderScene();
+  const early = draw.shapes({ id: 'early' });
+  const late = draw.shapes({ id: 'late' });
+  // Made later, drawn first.
+  late.set([fill('b')]);
+  early.set([fill('a')]);
+  const sprites = draw.points({ id: 'sprites', drawOrder: 2 });
+  sprites.set([dot]);
+  const plain = draw.points({ id: 'plain' });
+  plain.set([dot]);
+  // The sprites stack among their own slots; the ground keeps its own.
+  assert.deepEqual(order(), ['late', 'early', 'sprites', 'plain']);
+  // A set written empty holds no ground: it stacks with the sprites until
+  // it does, then takes its place among the ground sets.
+  const empty = draw.lines({ id: 'empty', drawOrder: -1 });
+  empty.set([]);
+  assert.deepEqual(order(), ['late', 'early', 'sprites', 'plain', 'empty']);
+  empty.set([
+    {
+      id: 'l',
+      positions: [
+        { lon: 0, lat: 0 },
+        { lon: 1, lat: 1 },
+      ],
+      widthPx: 2,
+      mode: 'draped',
+      style: { kind: 'solid', color: '#ffffff' },
+    },
+  ]);
+  assert.deepEqual(order(), ['empty', 'late', 'sprites', 'plain', 'early']);
+  for (const set of [early, late, sprites, plain, empty]) set.dispose();
+});
+
+test('a ground set moved by drawOrder takes the host it still retires with it', () => {
+  const { scene, draw, frame, fill, line, order } = groundOrderScene();
+  const lines = draw.lines({ id: 'lines', drawOrder: 1 });
+  lines.set([line('a')]);
+  const first = scene.primitives.get(0);
+  for (let i = 0; i < first.length; i++)
+    if (first.get(i) instanceof Cesium.GroundPolylinePrimitive)
+      Object.defineProperty(first.get(i), 'ready', { value: true });
+  frame();
+  // Rebuilt: the ready host draws on, under the new one, until it is ready.
+  lines.set([line('a'), line('b')]);
+  const second = scene.primitives.get(1);
+  assert.deepEqual(order(), ['lines', 'lines']);
+  const fills = draw.shapes({ id: 'fills' });
+  fills.set([fill('f')]);
+  assert.deepEqual(order(), ['fills', 'lines', 'lines']);
+  assert.equal(scene.primitives.get(1), first, 'the retiring host, under');
+  assert.equal(scene.primitives.get(2), second, 'the new one');
+  for (const set of [lines, fills]) set.dispose();
+});
+
 test('changing an option rebuilds only the kinds that build it in, in their place', () => {
   const scene = fakeScene();
   scene.primitives = new Cesium.PrimitiveCollection();
@@ -2303,7 +2516,7 @@ test('points show only within their display range', () => {
   set.dispose();
 });
 
-test('the fire perimeters layer draws holed ground fills and draped outlines on a viewer of its own', async () => {
+test('the fire perimeters layer draws holed ground fills and draped edges over halos on a viewer of its own', async () => {
   const { createFirePerimetersLayer } =
     await import('../../layers/perimeters/index.js');
   const scene = fakeScene();
@@ -2353,11 +2566,14 @@ test('the fire perimeters layer draws holed ground fills and draped outlines on 
   const [instance] = fill.geometryInstances;
   assert.equal(instance.id.id, 'fire-perimeter:a:0');
   assert.equal(instance.geometry._polygonHierarchy.holes.length, 1);
-  const [line] = of(Cesium.GroundPolylinePrimitive);
+  // The edge, over its halo, in a set of its own.
+  const [halo, line] = of(Cesium.GroundPolylinePrimitive);
   assert.equal(line.classificationType, Cesium.ClassificationType.BOTH);
   assert.equal(line.geometryInstances.length, 2, 'the hole is outlined too');
-  assert.equal(line.geometryInstances[0].geometry.width, 2);
+  assert.equal(line.geometryInstances[0].geometry.width, 3.5);
   assert.equal(line.geometryInstances[0].id.id, 'fire-perimeter:a:line:0');
+  assert.equal(halo.geometryInstances[0].id.id, 'fire-perimeter:a:halo:0');
+  assert.ok(halo.geometryInstances[0].geometry.width > 3.5);
   layer.destroy();
   assert.equal(scene.added.length, 0);
 });
