@@ -20,6 +20,29 @@ function check(name, passed) {
   console.log(`[${passed ? 'PASS' : 'FAIL'}] ${name}`);
   if (!passed) failures++;
 }
+async function tilesSettled(timeout) {
+  return page
+    .waitForFunction(
+      () => {
+        const { globe, primitives } = window.__godsEyeView.viewer.scene;
+        if (globe.show && !globe.tilesLoaded) return false;
+        for (let i = 0; i < primitives.length; i++) {
+          const primitive = primitives.get(i);
+          if (
+            typeof primitive.tilesLoaded === 'boolean' &&
+            !primitive.tilesLoaded
+          )
+            return false;
+        }
+        return true;
+      },
+      { timeout },
+    )
+    .then(
+      () => true,
+      () => false,
+    );
+}
 try {
   await page.setViewport({ width: 1440, height: 900 });
   const url = new URL(process.env.QA_BASE_URL || 'http://127.0.0.1:4173');
@@ -51,28 +74,15 @@ try {
         requestAnimationFrame(() => requestAnimationFrame(resolve)),
       ),
   );
-  const settled = await page
-    .waitForFunction(
-      () => {
-        const primitives = window.__godsEyeView.viewer.scene.primitives;
-        for (let i = 0; i < primitives.length; i++) {
-          const primitive = primitives.get(i);
-          if (
-            typeof primitive.tilesLoaded === 'boolean' &&
-            !primitive.tilesLoaded
-          )
-            return false;
-        }
-        return true;
-      },
-      { timeout: 60_000 },
-    )
-    .then(
-      () => true,
-      () => false,
-    );
-  check('visible tile content settles before visual captures', settled);
+  check(
+    'visible tile content settles before visual captures',
+    await tilesSettled(60_000),
+  );
   fs.mkdirSync('qa-shots/visual-effects', { recursive: true });
+  // A still scene: NVG and FLIR step at 15 Hz, CRT holds the loop and draws
+  // every tick, the others draw nothing by themselves.
+  const RATES = { surveillance: [8, 25], thermal: [8, 25] };
+  const STEPPED = new Set(['surveillance', 'thermal']);
   for (const style of [
     'normal',
     'retro',
@@ -96,18 +106,7 @@ try {
       const visible = Object.entries(effects.stages)
         .filter(([, stage]) => stage.enabled)
         .map(([name]) => name);
-      const animated = Object.values(effects.stages).some(
-        (stage) =>
-          stage.enabled &&
-          stage.uniforms.time !== undefined &&
-          stage.uniforms.intensity > 0.001,
-      );
-      return {
-        active: manager.activeStyle,
-        visible,
-        clock: effects.frameId !== null,
-        animated,
-      };
+      return { active: manager.activeStyle, visible };
     });
     check(
       `${style}: only the selected style remains visible`,
@@ -115,10 +114,63 @@ try {
         JSON.stringify(state.visible) ===
           JSON.stringify(style === 'normal' ? [] : [style]),
     );
-    check(
-      `${style}: the animation clock follows visible animated stages`,
-      state.clock === state.animated,
-    );
+    if (!(await tilesSettled(30_000)))
+      throw new Error(
+        `${style}: tile loading did not settle before frame sampling`,
+      );
+    const { seconds, times } = await page.evaluate(async (name) => {
+      const scene = window.__godsEyeView.viewer.scene;
+      const stage = scene.postProcessStages.getStageByName(
+        `effects_style_${name}`,
+      );
+      let ticks = 0;
+      let draws = 0;
+      const times = new Set();
+      const offTick = scene.preUpdate.addEventListener(() => (ticks += 1));
+      const offDraw = scene.postRender.addEventListener(() => {
+        draws += 1;
+        if (stage) times.add(stage.uniforms.time);
+      });
+      // Overlay layout can briefly request extra frames on a still scene:
+      // three one-second windows, the median one checked.
+      const seconds = [];
+      for (let i = 0; i < 3; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        seconds.push({ ticks, draws });
+        ticks = 0;
+        draws = 0;
+      }
+      offTick();
+      offDraw();
+      return { seconds, times: [...times] };
+    }, style);
+    const median = (key) => seconds.map((s) => s[key]).sort((a, b) => a - b)[1];
+    const seen = JSON.stringify(seconds);
+    if (style === 'retro') {
+      check(
+        `${style}: the renderer draws every tick on a still scene (${seen})`,
+        seconds.every((s) => s.ticks > 0 && s.draws >= s.ticks - 1),
+      );
+    } else {
+      const [low, high] = RATES[style] ?? [0, 5];
+      check(
+        `${style}: the renderer draws ${low}-${high} frames a second on a still scene (${seen})`,
+        median('draws') >= low && median('draws') <= high,
+      );
+    }
+    if (STEPPED.has(style)) {
+      check(
+        `${style}: time moves in 1/15 s steps (${times.length} values)`,
+        times.length >= 3 * RATES[style][0] &&
+          times.every((t) => Math.abs(t * 15 - Math.round(t * 15)) < 1e-6),
+      );
+      // A loop slower than the steps draws every tick, rightly.
+      if (median('ticks') > 16)
+        check(
+          `${style}: ticks between steps draw nothing (${seen})`,
+          seconds.every((s) => s.draws < s.ticks),
+        );
+    }
     if (['normal', 'surveillance', 'thermal'].includes(style)) {
       await page.screenshot({ path: `qa-shots/visual-effects/${style}.png` });
       if (style === 'surveillance')

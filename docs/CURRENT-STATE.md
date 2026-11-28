@@ -41,11 +41,12 @@ where it is drawn, and a tracked aircraft's trail head ends where it is drawn
 in that frame.
 The render governor (`src/renderGovernor.js`) sets the loop's rate: the
 holders' while anything holds it (the frame port tells it when the loop's
-first hold is taken and its last released, its own holds, animated visual
-styles, included), the display's while nothing does, both capped by the
-Display panel's Frame rate (`src/viewFrameRate.js`): 60 until the user sets
-it, 30 to 240 frames a second, or Unlimited, kept across visits. The viewer
-starts at that cap until the governor is installed. Through the idle
+first hold is taken and its last released, its own holds and those of
+continuously animated visual styles such as CRT included), the display's while
+nothing does, both capped by the Display panel's Frame rate
+(`src/viewFrameRate.js`): 60 until the user sets it, 30 to 240 frames a second,
+or Unlimited, kept across visits. The viewer starts at that cap until the
+governor is installed. Through the idle
 render governor, the camera port holds continuous render from `moveStart` to `moveEnd`, and samples its
 pose every 250 ms in between, so a camera drifting by rounding errors (no
 `moveEnd`) is released after half a second at rest and held again if it moves. The world clock holds continuous render while
@@ -3720,8 +3721,12 @@ remain unchanged.
 VisualEffects keeps the records of the styles, their crossfades, bloom and
 sharpen, and drives them through the renderer's effects port: it defines each
 preset there as a style, and the renderer runs the passes and animates the
-animated ones. Display supplies actions and renders settings; effect execution
-has no DOM dependency. Existing presets and the 500 ms transition remain
+animated ones. NVG and FLIR set `timeHz` to 15. The renderer advances their
+`time` in steps and requests one frame per step. `whenSettled` ignores frames
+only those steps asked for, unless the scene would have drawn that tick
+anyway. CRT holds the loop continuous while it draws.
+Display supplies actions and renders settings; effect execution has no DOM
+dependency. Existing presets and the 500 ms transition remain
 unchanged. Stopping the controller revokes animation before asynchronous UI
 teardown; final destruction removes its styles and turns bloom and sharpen off,
 and the renderer restores the scene's bloom configuration when it goes.

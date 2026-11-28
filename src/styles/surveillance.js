@@ -11,8 +11,49 @@ import { msg } from '../i18n/marker.js';
  *   scanlineStr (0-1) — scanline intensity (kept for compatibility)
  *   pixelation (1-6)  — intensifier tube resolution pixelation
  */
+
+/**
+ * The bloom's 11x11 Gaussian is a row weight times a column weight: this
+ * pass sums each row of 11 samples four texels apart, and the main pass
+ * sums 11 of those read at texel centres, which matches the single pass up
+ * to rounding at texel edges. The sum is packed in red (whole 255ths) and
+ * green (the rest), so the stage keeps the default render target.
+ */
+const NVG_BLOOM_ROWS_SHADER = /* glsl */ `
+    uniform sampler2D colorTexture;
+    uniform vec2 colorTextureDimensions;
+    uniform float gain;
+    in vec2 v_textureCoordinates;
+
+    void main() {
+      vec2 texel = 1.0 / colorTextureDimensions;
+      float gainLevel = mix(0.8, 2.5, gain);
+      float rowSum = 0.0;
+      float rowW = 0.0;
+      for (int x = -5; x <= 5; x++) {
+        vec2 offset = vec2(float(x), 0.0) * texel * 4.0;
+        float sLuma = dot(texture(colorTexture, v_textureCoordinates + offset).rgb, vec3(0.299, 0.587, 0.114));
+        float bright = smoothstep(0.4, 0.9, sLuma * gainLevel);
+        float w = exp(-float(x * x) / 18.0);
+        rowSum += bright * w;
+        rowW += w;
+      }
+      float scaled = rowSum / rowW * 255.0;
+      out_FragColor = vec4(floor(scaled) / 255.0, fract(scaled), 0.0, 1.0);
+    }
+  `;
+
 export const nightVisionShader = {
   name: 'surveillance',
+  // The film grain, scanline drift and clock digits step at this rate, and
+  // the scene is redrawn at it while the style is the only thing moving.
+  timeHz: 15,
+  passes: [
+    {
+      texture: 'bloomRowsTexture',
+      fragmentShader: NVG_BLOOM_ROWS_SHADER,
+    },
+  ],
   uniforms: {
     gain: { default: 0.55, min: 0, max: 1, label: msg('Gain') },
     bloom: { default: 0.3, min: 0, max: 1, label: msg('Bloom') },
@@ -21,6 +62,7 @@ export const nightVisionShader = {
   },
   fragmentShader: /* glsl */ `
     uniform sampler2D colorTexture;
+    uniform sampler2D bloomRowsTexture;
     uniform vec2 colorTextureDimensions;
     uniform float intensity;
     uniform float time;
@@ -189,17 +231,15 @@ export const nightVisionShader = {
 
       // ── Intensifier tube bloom (THE key NVG visual) ─────
       // Bloom around bright sources — wider kernel for realistic halos
+      // The row sums, read at texel centres (Cesium may sample them LINEAR); the columns are summed here.
       float bloomAccum = 0.0;
       float bloomW = 0.0;
       for (int y = -5; y <= 5; y++) {
-        for (int x = -5; x <= 5; x++) {
-          vec2 offset = vec2(float(x), float(y)) * texel * 4.0;
-          float sLuma = dot(texture(colorTexture, distUV + offset).rgb, vec3(0.299, 0.587, 0.114));
-          float bright = smoothstep(0.4, 0.9, sLuma * gainLevel);
-          float w = exp(-float(x * x + y * y) / 18.0);
-          bloomAccum += bright * w;
-          bloomW += w;
-        }
+        vec2 offset = vec2(0.0, float(y)) * texel * 4.0;
+        vec2 rows = texture(bloomRowsTexture, (floor((distUV + offset) * dims) + 0.5) / dims).rg;
+        float w = exp(-float(y * y) / 18.0);
+        bloomAccum += (rows.r + rows.g / 255.0) * w;
+        bloomW += w;
       }
       bloomAccum /= bloomW;
 

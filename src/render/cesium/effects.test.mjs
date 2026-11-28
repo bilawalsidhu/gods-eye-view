@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { bloomUniforms, createCesiumEffects } from './effects.js';
+import {
+  STYLE_STEP_REASON,
+  bloomUniforms,
+  createCesiumEffects,
+} from './effects.js';
 import { findEffects, releaseUnboundEffects } from '../rendererOf.js';
 
 const ALL = new Set(['styles', 'bloom', 'sharpen']);
@@ -36,11 +40,13 @@ function fixture({ capabilities = ALL } = {}) {
   const holds = [];
   const requests = [];
   const preRender = new Set();
+  const preUpdate = new Set();
   const frame = {
     on(phase, cb) {
-      assert.equal(phase, 'preRender');
-      preRender.add(cb);
-      return () => preRender.delete(cb);
+      const phases = { preRender, preUpdate };
+      assert.ok(phase in phases, phase);
+      phases[phase].add(cb);
+      return () => phases[phase].delete(cb);
     },
     holdContinuous(reason) {
       const hold = { reason, live: true };
@@ -69,7 +75,12 @@ function fixture({ capabilities = ALL } = {}) {
     render(now) {
       for (const cb of [...preRender]) cb({ now });
     },
+    /** A tick of the loop, drawn or not. */
+    update(now) {
+      for (const cb of [...preUpdate]) cb({ now });
+    },
     preRender,
+    preUpdate,
   };
 }
 
@@ -227,6 +238,108 @@ test('an animated style holds frames and advances time only while it draws', () 
   assert.equal(f.preRender.size, 0);
 });
 
+test('a style with timeHz steps its clock and asks for one frame a step', (t) => {
+  // Pin the port's start at 0 so a pause during setup cannot shift the
+  // step boundaries.
+  t.mock.method(performance, 'now', () => 0);
+  const f = fixture();
+  f.effects.defineStyle(style('nvg', { animated: true, timeHz: 15 }));
+  f.effects.setStyle('nvg');
+  assert.deepEqual(f.liveHolds(), [], 'no continuous render');
+  assert.equal(f.preUpdate.size, 1);
+  const stage = stageOf(f, 'nvg');
+  const steps = () => f.requests.filter((r) => r === STYLE_STEP_REASON);
+  // From a whole step after the clock started, so the first tick is a step.
+  const at = (ms) => 1000 + ms;
+  f.update(at(0));
+  const first = stage.uniforms.time;
+  assert.equal(first, Math.floor(first * 15) / 15, 'on a step');
+  assert.equal(steps().length, 1);
+  f.update(at(10));
+  assert.equal(stage.uniforms.time, first, 'held between steps');
+  assert.equal(steps().length, 1, 'no frame between steps');
+  f.update(at(1000 / 15 + 1));
+  assert.ok(Math.abs(stage.uniforms.time - (first + 1 / 15)) < 1e-9);
+  assert.equal(steps().length, 2);
+  f.effects.setStyleIntensity('nvg', 0);
+  assert.equal(f.preUpdate.size, 0, 'the clock stops with the style');
+});
+
+test('a stepped style next to a continuous one keeps its steps', () => {
+  const f = fixture();
+  f.effects.defineStyle(style('nvg', { animated: true, timeHz: 15 }));
+  f.effects.defineStyle(style('anim', { animated: true }));
+  f.effects.setStyle('nvg');
+  f.effects.setStyle('anim');
+  assert.deepEqual(f.liveHolds(), ['effects:animated']);
+  f.update(performance.now() + 1234);
+  const time = stageOf(f, 'nvg').uniforms.time;
+  assert.equal(time, Math.floor(time * 15) / 15);
+  assert.ok(time > 0, 'stepped');
+  f.effects.setStyleIntensity('anim', 0);
+  assert.deepEqual(f.liveHolds(), [], 'the hold goes with the continuous one');
+  assert.equal(f.preUpdate.size, 1, 'the fading stepped one keeps stepping');
+});
+
+test('a style with passes is one composite whose uniforms reach every pass', () => {
+  const f = fixture();
+  const rowsGlsl = `uniform float grain; void main() {}`;
+  f.effects.defineStyle(
+    style('nvg', {
+      shader: {
+        glsl: `uniform sampler2D rowsTexture; void main() {}`,
+        passes: [{ texture: 'rowsTexture', glsl: rowsGlsl }],
+      },
+    }),
+  );
+  assert.equal(f.stages.length, 1, 'one pipeline entry for the style');
+  const composite = stageOf(f, 'nvg');
+  assert.equal(composite.length, 2);
+  const [rows, main] = [composite.get(0), composite.get(1)];
+  assert.equal(composite.inputPreviousStageTexture, false);
+  assert.equal(rows.name, 'effects_style_nvg_rowsTexture');
+  assert.equal(main.name, 'effects_style_nvg_main');
+  assert.equal(rows.fragmentShader, rowsGlsl);
+  assert.equal(main.uniforms.rowsTexture, rows.name);
+  assert.deepEqual(Object.keys(rows.uniforms), ['intensity', 'time', 'grain']);
+  assert.equal(composite.enabled, false);
+  f.effects.setStyleParams('nvg', { grain: 0.9 });
+  assert.equal(main.uniforms.grain(), 0.9);
+  assert.equal(rows.uniforms.grain(), 0.9);
+  f.effects.setStyle('nvg');
+  f.effects.setStyleIntensity('nvg', 0.5);
+  assert.equal(main.uniforms.intensity(), 0.5);
+  assert.equal(rows.uniforms.intensity(), 0.5);
+  assert.equal(rows.enabled, true);
+  assert.equal(main.enabled, true);
+  assert.deepEqual(f.effects.diagnostics().passes, ['style:nvg']);
+});
+
+test('a pass with a reserved, repeated or missing texture, or no GLSL, is refused', () => {
+  const f = fixture();
+  const withPasses = (...passes) =>
+    style('bad', {
+      shader: {
+        glsl: 'void main() {}',
+        passes: passes.map((pass) => ({ texture: 't', glsl: '', ...pass })),
+      },
+    });
+  for (const passes of [
+    [{ texture: 'colorTexture' }],
+    [{ texture: 'grain' }],
+    [{ texture: 'main' }],
+    [{ texture: 'a-b' }],
+    [{ texture: undefined }],
+    [{ glsl: undefined }],
+    [{}, {}],
+  ])
+    assert.throws(
+      () => f.effects.defineStyle(withPasses(...passes)),
+      TypeError,
+    );
+  assert.equal(f.stages.length, 0);
+});
+
 test('bloom keeps its dead zone and eased uniforms, and is given back', () => {
   const f = fixture();
   f.effects.bloom({ enabled: true, strength: 0.05 });
@@ -293,11 +406,16 @@ test('without capabilities nothing is defined or drawn', () => {
 test('dispose removes every stage and releases the clock', () => {
   const f = fixture();
   f.effects.defineStyle(style('anim', { animated: true }));
-  f.effects.setStyle('anim');
+  f.effects.defineStyle(style('nvg', { animated: true, timeHz: 15 }));
+  f.effects.setStyle('nvg');
+  f.effects.setStyle('anim'); // nvg fades out under anim, so both draw
   f.effects.sharpen({ enabled: true, amount: 1 });
+  assert.equal(f.preUpdate.size, 1, 'the stepped style steps');
   f.dispose();
   assert.equal(f.stages.length, 0);
   assert.deepEqual(f.liveHolds(), []);
+  assert.equal(f.preRender.size, 0);
+  assert.equal(f.preUpdate.size, 0);
   f.effects.setStyle('anim');
   assert.equal(f.stages.length, 0);
 });

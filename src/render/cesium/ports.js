@@ -19,7 +19,7 @@ import { listenerList, toCartesian, uncaught } from './common.js';
 import { createCesiumCredits } from './credits.js';
 import { createCesiumDraw } from './draw.js';
 import { gpuIconCapabilities } from './gpuIcons.js';
-import { createCesiumEffects } from './effects.js';
+import { createCesiumEffects, STYLE_STEP_REASON } from './effects.js';
 import { renderNow, willDraw } from './frame.js';
 import { createCesiumGlobe } from './globe.js';
 import { createCesiumQuery, queryCapabilities } from './query.js';
@@ -263,13 +263,28 @@ export function createCesiumPorts(
   // given while it draws waits for the next, as Cesium's own request does.
   const pendingReasons = [];
   let answering = 0;
+  // Whether the scene draws the tick a style step asks for anyway (a direct
+  // scene.requestRender(), a camera move): seen when the step asks, before
+  // its own request hides it.
+  let sceneWanted = false;
+  // Reasons the last drawn frame answered, and whether the scene wanted it.
+  // A frame only style steps asked for is not the scene's own work
+  // (whenSettled).
+  let answered = [];
+  let answeredWanted = false;
+  const onlySteps = (reasons, wanted) =>
+    !wanted &&
+    reasons.length > 0 &&
+    reasons.every((r) => r === STYLE_STEP_REASON);
   const drawing = () => {
     settleTick(true);
     answering = pendingReasons.length;
   };
   const drew = () => {
     rendered += 1;
-    pendingReasons.splice(0, answering);
+    answered = pendingReasons.splice(0, answering);
+    answeredWanted = sceneWanted;
+    sceneWanted = false;
     answering = 0;
   };
   let disposed = false;
@@ -366,8 +381,12 @@ export function createCesiumPorts(
     requestRender(reason = 'unspecified') {
       // During a draw the reasons it answers are spoken for: a reason given
       // again waits for the next frame.
-      if (!pendingReasons.includes(reason, answering))
+      if (!pendingReasons.includes(reason, answering)) {
+        if (reason === STYLE_STEP_REASON)
+          sceneWanted =
+            scene.requestRenderMode && willDraw(scene, stampTime ?? undefined);
         pendingReasons.push(reason);
+      }
       scene.requestRender();
     },
     holdContinuous(reason) {
@@ -705,9 +724,9 @@ export function createCesiumPorts(
    * ticks and `IDLE_MS`. Resolves `'idle'` if in that time it drew nothing
    * of its own accord and `busy()` stayed false; `'busy'` as soon as it did;
    * `'ended'` if the ports are disposed or `end` passes first. A draw while
-   * a hold keeps the loop drawing every frame is the hold's, not the
-   * scene's own; `busy` is asked at each tick's start, before Cesium decides
-   * whether it draws.
+   * a hold keeps the loop drawing every frame is the hold's, and one only
+   * a style's step asked for is the style's, not the scene's own. `busy` is
+   * asked at each tick's start, before Cesium decides whether it draws.
    * @param {number} end
    * @param {() => boolean} busy Whether work landed that will draw again.
    */
@@ -716,7 +735,8 @@ export function createCesiumPorts(
       const from = performance.now();
       let ticks = 0;
       const offDraw = scene.postRender.addEventListener(() => {
-        if (scene.requestRenderMode) finish('busy');
+        if (scene.requestRenderMode && !onlySteps(answered, answeredWanted))
+          finish('busy');
       });
       // Each preUpdate also ends the tick before it.
       const offTick = scene.preUpdate.addEventListener(() => {
@@ -820,7 +840,11 @@ export function createCesiumPorts(
      * hold makes anyway is the hold's).
      */
     function idleBlocked() {
-      busy = completed > 0 || (scene.requestRenderMode && renderPending(scene));
+      busy =
+        completed > 0 ||
+        (scene.requestRenderMode &&
+          renderPending(scene) &&
+          !onlySteps(pendingReasons, sceneWanted));
       completed = 0;
       return busy;
     }

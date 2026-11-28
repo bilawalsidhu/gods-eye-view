@@ -6,6 +6,7 @@ import {
   createCesiumPorts,
   listenerList,
 } from './ports.js';
+import { STYLE_STEP_REASON } from './effects.js';
 import { updateCameraChanged } from './internals.js';
 import { createNativeClick } from './nativeClick.js';
 
@@ -1049,6 +1050,80 @@ test('whenSettled settles once shown tiles have loaded under a hidden globe', as
     clearInterval(ticker);
     ports.dispose();
   }
+});
+
+/**
+ * whenSettled while a stepped style asks for a frame every `every` ticks.
+ * Each tick draws, as Cesium's does, when a frame was asked for by its end.
+ * `beforeTick(n, scene)` runs before tick n (from 1); `onStep(ports)` right
+ * after a step asks.
+ */
+async function settleWithSteps({ every, beforeTick, onStep }) {
+  const { widget, scene, raise } = tickingWidget();
+  scene.primitives = listedPrimitives([]);
+  scene.globe = { show: false, tilesLoaded: false };
+  const ports = createCesiumPorts(widget, { capabilities: all });
+  let ticks = 0;
+  const offStep = ports.frame.on('preUpdate', () => {
+    if (++ticks % every !== 0) return;
+    ports.frame.requestRender(STYLE_STEP_REASON);
+    onStep?.(ports);
+  });
+  const ticker = setInterval(() => {
+    beforeTick?.(ticks + 1, scene);
+    raise('preUpdate');
+    if (scene._renderRequested) {
+      scene._renderRequested = false;
+      raise('preRender');
+      raise('postRender');
+    }
+    raise('end');
+  }, 5);
+  try {
+    return await ports.whenSettled({ timeoutMs: 1500 });
+  } finally {
+    clearInterval(ticker);
+    offStep();
+    ports.dispose();
+  }
+}
+
+test('whenSettled settles while a stepped style asks for its frames', async () => {
+  // A step every fourth tick, sooner than the idle wait, as NVG at 15 Hz.
+  assert.deepEqual(await settleWithSteps({ every: 4 }), {
+    state: 'settled',
+    blockers: [],
+  });
+});
+
+test('whenSettled waits on direct redraws between style steps', async () => {
+  const { state } = await settleWithSteps({
+    every: 2,
+    beforeTick: (n, scene) => {
+      // A layer asks the scene directly, as draw.js does.
+      if (n % 2 === 1) scene.requestRender();
+    },
+  });
+  assert.equal(state, 'timeout');
+});
+
+test('whenSettled waits on direct redraws that land on style steps', async () => {
+  const { state } = await settleWithSteps({
+    every: 2,
+    beforeTick: (n, scene) => {
+      // A layer asks the scene directly, as draw.js does.
+      if (n % 2 === 0) scene.requestRender();
+    },
+  });
+  assert.equal(state, 'timeout');
+});
+
+test('whenSettled waits on a style step asked for with another reason', async () => {
+  const { state } = await settleWithSteps({
+    every: 2,
+    onStep: (ports) => ports.frame.requestRender('layer'),
+  });
+  assert.equal(state, 'timeout');
 });
 
 test('releaseUnused trims the tiles caches, the globe after the next drawn frame', () => {

@@ -1,8 +1,9 @@
 /**
  * Full-screen effects: visual styles, bloom, sharpen and screen modulation.
- * Each style is a plain full-screen pass over the frame's colour. The
- * application owns the styles and defines them on the renderer
- * (`defineStyle`); the renderer's own styles are extra ones.
+ * Each style is a full-screen pass over the frame's colour, after any
+ * passes of its own (`StyleShader.passes`). The application owns the
+ * styles and defines them on the renderer (`defineStyle`); the renderer's
+ * own styles are extra ones.
  */
 import type { Off } from './common';
 
@@ -34,9 +35,31 @@ export interface StyleDescriptor {
 export interface StyleShader {
   glsl: string;
   wgsl?: string;
+  /**
+   * GLSL passes drawn before `glsl`, each over the frame's colour. A pass can
+   * declare the same uniforms as `glsl` (`time` moves only for an animated
+   * style); `glsl` reads each pass's output as `uniform sampler2D <texture>`.
+   * A renderer that cannot draw the passes cannot draw the style's GLSL either.
+   */
+  passes?: StylePass[];
+}
+
+export interface StylePass {
+  /**
+   * The sampler `glsl` reads this pass's output as: a GLSL identifier,
+   * unique among the style's passes, never a parameter key or a name the
+   * renderer supplies.
+   */
+  texture: string;
+  glsl: string;
 }
 
 export interface StyleDefinition extends StyleDescriptor {
+  /**
+   * An animated style whose `time` moves in steps of `1 / timeHz` seconds:
+   * the renderer draws one frame a step for it instead of every frame.
+   */
+  timeHz?: number;
   shader: StyleShader;
 }
 

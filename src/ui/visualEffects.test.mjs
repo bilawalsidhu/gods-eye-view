@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { VisualEffects } from './visualEffects.js';
+import { VisualEffects, styleDefinition } from './visualEffects.js';
 import { createCesiumEffects } from '../render/cesium/effects.js';
 import { styleStagesOf } from '../styles/styleStages.js';
 import { createCesiumGlobe } from '../render/cesium/globe.js';
@@ -9,6 +9,7 @@ import {
   GLOBAL_POST_DEFAULTS,
   STYLE_PRESET_DEFAULTS,
   MILITARY_DETECTION_PRESET,
+  STYLES,
 } from './visualPresets.js';
 
 function fixture() {
@@ -383,6 +384,18 @@ test('destroying one instance does not remove another pipeline or clock', () => 
   assert.equal(b.stages.size, 5);
   assert.equal(b.effects.stages.retro.uniforms.intensity, 0.5);
   b.effects.destroy();
+});
+
+test('night vision and FLIR reach the renderer with their passes and 15 Hz clock', () => {
+  for (const name of ['surveillance', 'thermal']) {
+    const shader = STYLES[name];
+    const definition = styleDefinition(name, shader);
+    assert.equal(definition.animated, true);
+    assert.equal(definition.timeHz, 15);
+    assert.deepEqual(definition.shader.passes, [
+      { texture: 'bloomRowsTexture', glsl: shader.passes[0].fragmentShader },
+    ]);
+  }
 });
 
 test('existing baseline and military presets keep one detection default', () => {
