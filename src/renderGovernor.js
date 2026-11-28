@@ -14,7 +14,7 @@
  *
  * - **Continuous mode** (every frame drawn) while ANY hold is registered. Every per-frame animator — fleet
  *   interpolation, traffic sim, satellite motion, tracked-entity follow,
- *   style crossfades, CCTV projection — registers a hold for exactly the
+ *   style crossfades, a playing CCTV video — registers a hold for exactly the
  *   lifetime of its scene-loop listener or animation. While one is active,
  *   behavior is byte-identical to pre-governor main: the locked
  *   interpolation/tracking invariants are preserved by construction.

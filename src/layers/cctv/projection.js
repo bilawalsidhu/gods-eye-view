@@ -33,6 +33,8 @@ export function createProjection({
   source,
 }) {
   const { holdContinuousRender, releaseContinuousRender } = services.render;
+  /** Whether the loop holds continuous rendering for a playing video. */
+  let videoHeld = false;
 
   /**
    * Build the protected label associated with one active monitor plane.
@@ -376,31 +378,52 @@ export function createProjection({
     runtime.planeSource = null;
   }
 
+  /**
+   * Hold continuous rendering while the active video plays on a shown plane,
+   * so another holder's lower rate does not cap it; let go once it pauses,
+   * stalls, hides or leaves.
+   * @param {boolean} playing
+   */
+  function holdForVideo(playing) {
+    if (playing === videoHeld) return;
+    videoHeld = playing;
+    if (playing) holdContinuousRender('cctv-projection');
+    else releaseContinuousRender('cctv-projection');
+  }
+
   function startProjectionLoop() {
     if (layerState._projectionRaf) return;
     if (!parts.model.projectionLoopIsNeeded()) return;
-    // The armed projection loop uploads video textures / runs focus fades per
-    // frame — the scene must render continuously while it runs. Released when
-    // the tick self-stops. (perf wave 2)
-    holdContinuousRender('cctv-projection');
+    // The plane and icon sets request frames for their own updates, and the
+    // video quad the next frame while it plays; a playing video also holds
+    // continuous rendering (holdForVideo).
 
     const tick = () => {
       if (!layerState._viewer || !parts.model.projectionLoopIsNeeded()) {
         layerState._projectionRaf = 0;
-        releaseContinuousRender('cctv-projection');
+        holdForVideo(false);
         return;
       }
 
       parts.rendering.refreshCctvFocusStyles(performance.now());
 
       const active = parts.selection.getActiveRecord();
+      let playing = false;
       if (layerState._enabled && layerState._showProjection && active) {
-        ensureProjectionRuntime(active);
-        if (active.projection && !active.projection.video) {
+        const runtime = ensureProjectionRuntime(active);
+        const video = runtime?.video;
+        if (runtime && !video) {
           parts.frames.drawProjectionFrame(active);
           parts.frames.refreshProjectionTextures(active);
         }
+        playing =
+          !!runtime?.plane?.show &&
+          !!video &&
+          !video.paused &&
+          !video.ended &&
+          video.readyState >= 3;
       }
+      holdForVideo(playing);
 
       layerState._projectionRaf = requestAnimationFrame(tick);
     };
@@ -415,7 +438,7 @@ export function createProjection({
       cancelAnimationFrame(layerState._projectionRaf);
       layerState._projectionRaf = 0;
     }
-    releaseContinuousRender('cctv-projection');
+    holdForVideo(false);
   }
 
   /**

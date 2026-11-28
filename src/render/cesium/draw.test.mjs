@@ -7807,12 +7807,13 @@ test('a video quad keeps frames coming while it plays, read anew at a new size',
       const first = fill.appearance.material;
       assert.equal(first.uniforms.image, video);
       part.beforeRender();
+      // Past the frames a new image needs, a playing video still asks for
+      // the next one, and a paused one for none.
+      part.afterRender();
+      part.afterRender();
       renders = 0;
       part.afterRender();
       assert.ok(renders > 0, 'a playing video asks for the next frame');
-      // Past the frames a new image needs, a paused video asks for none.
-      part.afterRender();
-      part.afterRender();
       video.paused = true;
       renders = 0;
       part.afterRender();
@@ -7859,6 +7860,49 @@ test('a video quad keeps frames coming while it plays, read anew at a new size',
     } finally {
       globalThis.HTMLVideoElement = realVideo;
     }
+  }));
+
+test('a quad given another canvas asks for the frames that bind it, then none', () =>
+  withImageClasses(() => {
+    const scene = fakeScene();
+    // Requests made before a frame draws are one frame, as in Cesium.
+    let pending = false;
+    scene.requestRender = () => (pending = true);
+    const part = createCesiumDraw({
+      scene,
+      report: (error) => assert.fail(error),
+    });
+    const set = part.port.quads({ id: 'monitors' });
+    const quad = (canvas) => ({
+      id: 'q',
+      center: { x: 6378137, y: 0, z: 0 },
+      orientation: { x: 0, y: 0, z: 0, w: 1 },
+      size: [16, 9],
+      source: { canvas },
+      alpha: 0.95,
+    });
+    set.set([quad({ width: 4, height: 4 })]);
+    for (let i = 0; i < 5; i++) {
+      part.beforeRender();
+      part.afterRender();
+    }
+    const next = { width: 4, height: 4 };
+    pending = false;
+    set.upsert([quad(next)]);
+    let drawn = 0;
+    while (pending && drawn < 100) {
+      pending = false;
+      drawn += 1;
+      part.beforeRender();
+      part.afterRender();
+    }
+    assert.equal(
+      scene.added[0].get(0).appearance.material.uniforms.image,
+      next,
+    );
+    assert.ok(drawn >= 2 && drawn <= 4, `${drawn} frames drawn`);
+    assert.equal(pending, false, 'and then it is idle');
+    set.dispose();
   }));
 
 test('meshes draw their triangles in the frame at their origin', () =>
