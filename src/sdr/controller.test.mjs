@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createRememberingWebUsb, SdrController } from './controller.js';
+import { SdrController } from './controller.js';
 import { RTL2832U_Provider } from '@jtarrio/webrtlsdr/rtlsdr.js';
-import { RTL_SDR_USB_FILTERS } from './usbDevices.js';
+import { createRememberingWebUsb, RTL_SDR_USB_FILTERS } from './usbDevices.js';
 import { SDR_GAIN_STORAGE_KEY } from './gain.js';
 import { memoryStorage } from '../testSupport/memoryStorage.mjs';
 

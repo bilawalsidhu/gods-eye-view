@@ -26,8 +26,6 @@ import {
   translateKnown,
 } from '../i18n/index.js';
 
-export { createRememberingWebUsb } from './usbDevices.js';
-
 const FM_MIN_HZ = 87_500_000;
 const FM_MAX_HZ = 108_000_000;
 // Seek frames step around a lap one step longer than the band, so the frames
