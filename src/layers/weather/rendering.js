@@ -1,11 +1,8 @@
 import { weatherTileUrl, closeWeatherPixels } from './source.js';
 import { WEATHER_IMAGERY_SHOWS, WEATHER_IMAGERY_Z } from './imageryOrder.js';
 import { imageryHostStatus } from '../../maps/imageryHost.js';
-import {
-  createPrefetchSlot,
-  createWeatherShell,
-  globeImageryHost,
-} from './shellRendering.js';
+import { createPrefetchSlot, createWeatherShell } from './shellRendering.js';
+import { globeImageryHost } from './shellPlacement.js';
 import {
   drawMosaicTile,
   createFrameTileFetch,

@@ -1,5 +1,5 @@
 import { createWeatherRendering } from './rendering.js';
-import { globeImageryHost } from './shellRendering.js';
+import { globeImageryHost } from './shellPlacement.js';
 import { weatherFrameSource } from './source.js';
 import { imageryHostStatus } from '../../maps/imageryHost.js';
 import { weatherDisplay, weatherSourceName, insideExtent } from './display.js';

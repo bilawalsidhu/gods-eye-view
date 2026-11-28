@@ -1,13 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
+import { createWeatherShell, detailWindow } from './shellRendering.js';
 import {
-  createWeatherShell,
-  detailWindow,
   followShellLift,
   shellLift,
   WEATHER_SHELL_HEIGHTS,
-} from './shellRendering.js';
+} from './shellPlacement.js';
 import { NO_IMAGERY_HOST } from '../../maps/imageryHost.js';
 import {
   bindShellFields,

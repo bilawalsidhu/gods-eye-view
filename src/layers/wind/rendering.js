@@ -2,7 +2,7 @@ import {
   followShellLift,
   globeImageryHost,
   WEATHER_SHELL_HEIGHTS,
-} from '../weather/shellRendering.js';
+} from '../weather/shellPlacement.js';
 import { createWindRelief } from './relief.js';
 import { WEATHER_IMAGERY_Z } from '../weather/imageryOrder.js';
 import {
