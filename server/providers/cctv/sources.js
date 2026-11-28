@@ -127,6 +127,10 @@ import {
   A22_MAX_CATALOG_BYTES,
   A22_GROUND_ELEVATION_BY_KM,
   A22_DEFAULT_GROUND_ELEVATION_M,
+  DEFAULT_BAYERN_CCTV_URL,
+  BAYERN_IMAGE_ORIGIN,
+  BAYERN_MAX_CATALOG_BYTES,
+  DEFAULT_BAYERN_MAX_SOURCES,
   HOUSTON_CAMERAS_URL,
   HOUSTON_IMAGE_URL,
   HOUSTON_CAMERA_ID_RE,
@@ -3915,6 +3919,161 @@ export async function loadA22SourcesFromOpenDataHub() {
     return cameras;
   } catch (error) {
     console.warn('[CCTV] A22 camera download error:', error?.message || error);
+    return [];
+  }
+}
+
+/**
+ * Walk the nested BayernInfo webcam list (categories -> roads -> cameras) and
+ * yield every camera object, ignoring the grouping. A camera can appear under
+ * more than one category, so callers dedupe by id.
+ *
+ * @param {unknown} node - A list node, group node, or array of them.
+ * @param {object[]} out - Accumulator for the camera objects found.
+ * @returns {object[]} The same accumulator.
+ */
+function collectBayernWebcams(node, out) {
+  if (Array.isArray(node)) {
+    for (const child of node) collectBayernWebcams(child, out);
+  } else if (node && typeof node === 'object') {
+    if (Array.isArray(node.webcams)) {
+      for (const cam of node.webcams)
+        if (cam && typeof cam === 'object') out.push(cam);
+    }
+    if (Array.isArray(node.groups)) collectBayernWebcams(node.groups, out);
+  }
+  return out;
+}
+
+/**
+ * Normalize one BayernInfo webcam into a camera source. Keeps only Bavarian
+ * cameras — the ones whose image path resolves under BAYERN_IMAGE_ORIGIN
+ * (`.../cam/bi/`); ASFINAG (Austria) cameras under `.../cam/asfinag/` and any
+ * off-origin or malformed URL are dropped. The feed's `angle` is a numeric
+ * viewing bearing, kept at low confidence.
+ *
+ * @param {object} cam - Raw webcam object from the list.
+ * @returns {object|null} Normalized source, or null when it cannot be trusted.
+ */
+export function bayernWebcamToSource(cam) {
+  if (!cam || typeof cam !== 'object') return null;
+  const id = Number(cam.id);
+  if (!Number.isInteger(id) || id <= 0) return null;
+  const lat = toFiniteNumber(cam.lat);
+  const lon = toFiniteNumber(cam.lon);
+  if (!isPlausibleLatLon(lat, lon)) return null;
+
+  const relative = typeof cam.url === 'string' ? cam.url.trim() : '';
+  if (!relative || /^[a-z]+:/i.test(relative) || relative.startsWith('//'))
+    return null;
+  // The list's image base is `.../cam/`; a Bavarian path is `bi/jpg/<name>.jpg`.
+  // Resolve against that base, then require the result to stay under the pinned
+  // `.../cam/bi/` directory. This drops ASFINAG (`.../cam/asfinag/...`) and any
+  // `../` traversal, which resolve outside the pinned prefix.
+  let candidate;
+  try {
+    candidate = new URL(relative, 'https://map.bayerninfo.de/cam/').href;
+  } catch {
+    return null;
+  }
+  const imageUrl = pinnedCameraUrl(candidate, BAYERN_IMAGE_ORIGIN);
+  if (!imageUrl) return null;
+
+  const route = String(cam.route ?? '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const direction = String(cam.direction ?? '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const place = route || direction || `Kamera ${id}`;
+  const name = direction && route ? `${route} → ${direction}` : place;
+
+  const angle = toFiniteNumber(cam.angle);
+  const hasHeading = Number.isFinite(angle) && angle > 0 && angle <= 360;
+
+  return {
+    id: `de-bayern-${id}`,
+    name,
+    city: 'Bayern',
+    cityId: 'bayern',
+    provider: 'BayernInfo (Bayerische Straßenbauverwaltung)',
+    lat,
+    lon,
+    headingDeg: hasHeading
+      ? angle % 360
+      : fallbackHeadingFromId(`de-bayern-${id}`),
+    headingConfidence: 'low',
+    pitchDeg: -12,
+    fovDeg: 50,
+    rangeM: 180,
+    mountHeightM: 8,
+    feedType: 'image',
+    url: imageUrl,
+    snapshotUrl: imageUrl,
+    sourceKind: 'bayern-vizby',
+    license:
+      'BayernInfo traffic webcams (Bayerische Straßenbauverwaltung / VIZ-BY); reuse terms unconfirmed — opt-in',
+    code: cameraDisplayCode(place.toUpperCase()),
+  };
+}
+
+/**
+ * Load the Bavarian traffic webcams from the public BayernInfo camera list.
+ * Opt-in and off by default: the loader is only reached when the pack is
+ * enabled (CCTV_BAYERN_ENABLED), because the images carry no confirmed reuse
+ * licence. Austrian ASFINAG cameras in the same list are excluded.
+ *
+ * @returns {Promise<Array<object>>} Normalized Bavarian camera sources, or [].
+ */
+export async function loadBayernSourcesFromMap() {
+  try {
+    const endpoint = process.env.CCTV_BAYERN_URL || DEFAULT_BAYERN_CCTV_URL;
+    const resp = await fetch(endpoint, {
+      headers: { Accept: 'application/json' },
+      redirect: 'manual',
+      signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+    });
+    const discard = async () => {
+      try {
+        await resp.body?.cancel();
+      } catch {
+        /* no-op */
+      }
+      return [];
+    };
+    if (resp.status >= 300 && resp.status < 400) {
+      console.warn(
+        '[CCTV] Bayern catalog redirected; redirects are not followed',
+      );
+      return discard();
+    }
+    if (!resp.ok) {
+      console.warn('[CCTV] Bayern camera download failed:', resp.status);
+      return discard();
+    }
+    const payload = await readResponseJsonCapped(
+      resp,
+      BAYERN_MAX_CATALOG_BYTES,
+    );
+    const webcams = collectBayernWebcams(payload?.groups, []);
+    const cameras = [];
+    const seen = new Set();
+    for (const cam of webcams) {
+      const camera = bayernWebcamToSource(cam);
+      if (!camera || seen.has(camera.id)) continue;
+      seen.add(camera.id);
+      cameras.push(camera);
+      if (cameras.length >= DEFAULT_BAYERN_MAX_SOURCES) break;
+    }
+    // North to south, so the picker reads roughly top to bottom on the map.
+    cameras.sort((a, b) => b.lat - a.lat);
+    console.log(`[CCTV] Loaded Bayern camera sources: ${cameras.length}`);
+    return cameras;
+  } catch (error) {
+    console.warn(
+      '[CCTV] Bayern camera download error:',
+      error?.message || error,
+    );
     return [];
   }
 }
