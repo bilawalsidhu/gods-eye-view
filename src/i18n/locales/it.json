@@ -4644,6 +4644,11 @@
   "{name} · sensor": "{name} · sensore",
   "Reference monitor": "Strumento di riferimento",
   "Needs {envVars} — add one in Provider Settings": "Richiede {envVars}: aggiungine una in Impostazioni provider",
-  "CABLE \u00b7 {name}": "CAVO · {name}",
-  "LANDING POINT \u00b7 {name}": "PUNTO DI APPRODO · {name}"
+  "CABLE · {name}": "CAVO · {name}",
+  "LANDING POINT · {name}": "PUNTO DI APPRODO · {name}",
+  "Line Intensity": "Intensità delle linee",
+  "Grid Density": "Densità della griglia",
+  "BLUEPRINT": "CIANOGRAFIA",
+  "Blueprint": "Cianografia",
+  "Render architectural cyan blueprint schematics with technical contour lines.": "Rendering di schemi architettonici ciano con linee di contorno tecniche."
 }

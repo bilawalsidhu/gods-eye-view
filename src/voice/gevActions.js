@@ -108,6 +108,7 @@ const ALLOWED_STYLES = new Set([
   'thermal',
   'anime',
   'noir',
+  'blueprint',
 ]);
 const PANEL_ALIASES = new Map([
   ['data', 'data-panel'],

@@ -495,7 +495,11 @@ test('defaults travel as frozen meanings that match today’s app defaults', () 
     [...HUD_LAYOUTS],
   );
   // Snow is retired; its code stays reserved (see the retired-style test).
-  assert.deepEqual(SHARE_VIEW_ENUMS.style, [...VIEW_STYLES, 'snow']);
+  assert.deepEqual(SHARE_VIEW_ENUMS.style, [
+    ...VIEW_STYLES.filter((s) => s !== 'blueprint'),
+    'snow',
+    'blueprint',
+  ]);
   assert.deepEqual(SHARE_VIEW_ENUMS.mapStack, [...VIEW_MAPS]);
   assert.deepEqual(SHARE_VIEW_ENUMS.detectionAllocation, [
     ...ALLOCATION_STRATEGIES,
@@ -607,6 +611,10 @@ test('the field registry is well formed and permanent', () => {
     noir: {
       ...common,
       styleParams: { contrastAmt: 1.2, grainAmt: 0.5, vignetteAmt: 0.5 },
+    },
+    blueprint: {
+      ...common,
+      styleParams: { lineIntensity: 1.2, gridDensity: 0.5 },
     },
   });
   assert.deepEqual(

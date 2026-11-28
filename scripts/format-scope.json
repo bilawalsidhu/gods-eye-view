@@ -269,6 +269,8 @@
   "src/styles/thermal.js",
   "src/styles/anime.js",
   "src/styles/noir.js",
+  "src/styles/blueprint.js",
+  "src/styles/blueprint.test.mjs",
   "scripts/qa-visual-effects.mjs",
   "scripts/qa-draw-tool.mjs",
   "scripts/qa-geo-import.mjs",

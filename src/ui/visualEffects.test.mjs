@@ -6,6 +6,7 @@ import { styleStagesOf } from '../styles/styleStages.js';
 import { createCesiumGlobe } from '../render/cesium/globe.js';
 import { MILKY_WAY_INTENSITY, StarrySky } from '../render/cesium/starrySky.js';
 import {
+  STYLES,
   GLOBAL_POST_DEFAULTS,
   STYLE_PRESET_DEFAULTS,
   MILITARY_DETECTION_PRESET,
@@ -118,7 +119,7 @@ test('construction is inert and initialization creates one owned pipeline', () =
   assert.equal(f.frames.size, 0);
   f.effects.initStyles();
   f.effects.initPostProcess();
-  assert.equal(f.stages.size, 6);
+  assert.equal(f.stages.size, Object.keys(STYLES).length + 1);
   assert.ok(
     Object.values(f.effects.stages).every(
       (stage) => !stage.enabled && stage.uniforms.intensity === 0,
@@ -126,7 +127,7 @@ test('construction is inert and initialization creates one owned pipeline', () =
   );
   f.effects.initStyles();
   f.effects.initPostProcess();
-  assert.equal(f.stages.size, 6);
+  assert.equal(f.stages.size, Object.keys(STYLES).length + 1);
   assert.ok([...f.stages].every((stage) => !stage.enabled));
   assert.equal(styleStagesOf(f.effects.viewer), f.effects.stages);
   f.effects.destroy();
@@ -347,7 +348,7 @@ test('stop revokes pending work immediately but retains stages until final destr
   assert.equal(f.frames.size, 0);
   assert.equal(
     f.stages.size,
-    6,
+    Object.keys(STYLES).length + 1,
     'Context and Cockpit may still be releasing these stages',
   );
   const intensity = f.effects.stages.retro.uniforms.intensity;
@@ -380,7 +381,7 @@ test('destroying one instance does not remove another pipeline or clock', () => 
   a.effects.destroy();
   b.tick(250);
   assert.equal(a.stages.size, 0);
-  assert.equal(b.stages.size, 5);
+  assert.equal(b.stages.size, Object.keys(STYLES).length);
   assert.equal(b.effects.stages.retro.uniforms.intensity, 0.5);
   b.effects.destroy();
 });

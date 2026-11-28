@@ -4644,6 +4644,11 @@
   "{name} · sensor": "{name} · capteur",
   "Reference monitor": "Appareil de référence",
   "Needs {envVars} — add one in Provider Settings": "Nécessite {envVars} — en ajouter une dans les paramètres des fournisseurs",
-  "CABLE \u00b7 {name}": "CÂBLE · {name}",
-  "LANDING POINT \u00b7 {name}": "POINT D'ATTERRAGE · {name}"
+  "CABLE · {name}": "CÂBLE · {name}",
+  "LANDING POINT · {name}": "POINT D'ATTERRAGE · {name}",
+  "Line Intensity": "Intensité des lignes",
+  "Grid Density": "Densité de la grille",
+  "BLUEPRINT": "PLAN",
+  "Blueprint": "Plan",
+  "Render architectural cyan blueprint schematics with technical contour lines.": "Afficher des plans architecturaux cyan avec des lignes de contour techniques."
 }

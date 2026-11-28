@@ -4434,6 +4434,11 @@
   "{name} · sensor": "{name} · センサー",
   "Reference monitor": "基準測定器",
   "Needs {envVars} — add one in Provider Settings": "{envVars}のいずれかが必要です。プロバイダー設定で追加してください",
-  "CABLE \u00b7 {name}": "ケーブル · {name}",
-  "LANDING POINT \u00b7 {name}": "陸揚げ地点 · {name}"
+  "CABLE · {name}": "ケーブル · {name}",
+  "LANDING POINT · {name}": "陸揚げ地点 · {name}",
+  "Line Intensity": "線の濃さ",
+  "Grid Density": "グリッド密度",
+  "BLUEPRINT": "青写真",
+  "Blueprint": "設計図",
+  "Render architectural cyan blueprint schematics with technical contour lines.": "技術的な輪郭線を持つ建築用シアン青写真をレンダリングします。"
 }

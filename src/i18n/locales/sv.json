@@ -4539,6 +4539,11 @@
   "{name} · sensor": "{name} · sensor",
   "Reference monitor": "Referensinstrument",
   "Needs {envVars} — add one in Provider Settings": "Kräver {envVars} – lägg till en av dem i Leverantörsinställningar",
-  "CABLE \u00b7 {name}": "KABEL · {name}",
-  "LANDING POINT \u00b7 {name}": "LANDNINGSPUNKT · {name}"
+  "CABLE · {name}": "KABEL · {name}",
+  "LANDING POINT · {name}": "LANDNINGSPUNKT · {name}",
+  "Line Intensity": "Linjeintensitet",
+  "Grid Density": "Rutnätdensitet",
+  "BLUEPRINT": "RITNING",
+  "Blueprint": "Ritning",
+  "Render architectural cyan blueprint schematics with technical contour lines.": "Rendera arkitektoniska cyanfärgade ritningsscheman med tekniska konturlinjer."
 }

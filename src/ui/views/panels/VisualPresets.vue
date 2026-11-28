@@ -54,6 +54,13 @@ const STYLES = [
     key: '6',
     title: msg('Apply high-contrast monochrome film-noir grading.'),
   },
+  {
+    name: 'blueprint',
+    icon: '📐',
+    label: msg('Blueprint'),
+    key: '7',
+    title: msg('Render architectural cyan blueprint schematics with technical contour lines.'),
+  },
 ];
 
 function selectMapSource(chip) {

@@ -886,7 +886,7 @@ it sits collapsed in the Layers sheet under Data Layers.
 
 Visual (`#pp-toggles`, `src/ui/views/panels/DisplayPanel.vue`) is headed
 VISUAL, has the edge switch in its header like the other side panels, and is
-grouped from the top: Look, the six style presets with their 1–6 keys, and
+grouped from the top: Look, the seven style presets with their 1–7 keys, and
 Map source, the map source chips (`VisualPresets.vue`); Overlay, the HUD,
 detection, style parameters, 3D aircraft, Scope and Clean UI; Effects,
 Celestial, Bloom and Sharpen; and Reset to default at the foot. Each control

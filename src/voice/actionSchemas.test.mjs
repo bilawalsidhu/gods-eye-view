@@ -49,7 +49,7 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // The Utilities panel (Directions, Draw, Import) adds one panel target.
     // Panel adds named voice targets and timeout; shared Panel/Cockpit guidance
     // is consolidated without changing either feature's arguments.
-    // Snow leaves the set_visual_style enum.
+    // Snow leaves the set_visual_style enum; Blueprint joins it.
     // The Operator HUD layout leaves set_hud's layout enum.
     // The layer alias hint leaves out aliases the layer id already spells.
     // Voice geometry adds resolve_area, find_imagery, osm_query, the analyst
@@ -66,7 +66,7 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // Fire Perimeters queries add lastGrowthTime.
     // The dock's Location and Visual Presets trays leave set_panel_open's
     // targets; Visual (pp-toggles) takes the presets' and map sources' names.
-    '8df28dafaafde3e83e983528e2cc486dc68f282df99f6cde939325a2ee5461a0',
+    '7384d8b00c5303f43dc97864006dae5bc8fbba31ea8d040fe70bbffacdf87ff5',
   );
 });
 
@@ -256,7 +256,9 @@ test('all legacy action arguments are byte-identical after removing the delibera
     'thermal',
     'anime',
     'noir',
+    'blueprint',
   ]);
+  visualStyle.enum = visualStyle.enum.filter((s) => s !== 'blueprint');
   visualStyle.enum = [...visualStyle.enum, 'snow'];
   // Derived by applying the same removals to the 4b56d0e9 actionSchemas.
   assert.equal(

@@ -106,6 +106,7 @@ export const SHARE_VIEW_ENUMS = Object.freeze({
     'anime',
     'noir',
     'snow', // retired (RETIRED_STYLES): decodes as Normal
+    'blueprint',
   ]),
   mapStack: Object.freeze([
     'photoreal',
@@ -238,6 +239,10 @@ export const SHARE_VIEW_STYLE_PARAMS = Object.freeze({
     { key: 'contrastAmt', token: 'c', min: 0, max: 2 },
     { key: 'grainAmt', token: 'g', min: 0, max: 1 },
     { key: 'vignetteAmt', token: 'v', min: 0, max: 1 },
+  ]),
+  blueprint: freezeAll([
+    { key: 'lineIntensity', token: 'l', min: 0, max: 2 },
+    { key: 'gridDensity', token: 'g', min: 0, max: 1 },
   ]),
 });
 

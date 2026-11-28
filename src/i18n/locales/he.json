@@ -4644,6 +4644,11 @@
   "{name} · sensor": "{name} · חיישן",
   "Reference monitor": "מכשיר ניטור ייחוס",
   "Needs {envVars} — add one in Provider Settings": "דורש {envVars} — הוסף אחד מהם בהגדרות הספקים",
-  "CABLE \u00b7 {name}": "כבל · {name}",
-  "LANDING POINT \u00b7 {name}": "נקודת נחיתה · {name}"
+  "CABLE · {name}": "כבל · {name}",
+  "LANDING POINT · {name}": "נקודת נחיתה · {name}",
+  "Line Intensity": "עוצמת קווים",
+  "Grid Density": "צפיפות רשת",
+  "BLUEPRINT": "שרטוט",
+  "Blueprint": "שרטוט",
+  "Render architectural cyan blueprint schematics with technical contour lines.": "רינדור תוכניות אדריכליות בצבע ציאן עם קווי מתאר טכניים."
 }
