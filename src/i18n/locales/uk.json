@@ -4749,6 +4749,30 @@
   "{name} · sensor": "{name} · датчик",
   "Reference monitor": "Еталонний прилад",
   "Needs {envVars} — add one in Provider Settings": "Потрібен {envVars} — додайте будь-який із них у «Налаштуваннях постачальників»",
-  "CABLE \u00b7 {name}": "КАБЕЛЬ · {name}",
-  "LANDING POINT \u00b7 {name}": "ТОЧКА ВИХОДУ НА БЕРЕГ · {name}"
+  "CABLE · {name}": "КАБЕЛЬ · {name}",
+  "LANDING POINT · {name}": "ТОЧКА ВИХОДУ НА БЕРЕГ · {name}",
+  "<1 km": "<1 km",
+  "All cameras": "Усі камери",
+  "CCTV search area": "Область пошуку CCTV",
+  "Filters panel controls only; voice navigation uses the full catalog.": "Фільтрує лише елементи керування панелі; голосова навігація використовує весь каталог.",
+  "In map view": "У видимій області карти",
+  "No cameras in map view. Move the map or choose All cameras.": "У видимій області карти немає камер. Перемістіть карту або виберіть «Усі камери».",
+  "No cameras loaded.": "Камери не завантажено.",
+  "No matching cameras. Try another search or All cameras.": "Відповідних камер немає. Спробуйте інший пошук або «Усі камери».",
+  "Search CCTV cameras": "Пошук камер CCTV",
+  "Search city, camera or provider": "Пошук міста, камери або постачальника",
+  "The selected camera is outside the map view. Choose a camera here, or switch to All cameras.": "Вибрана камера поза видимою областю карти. Виберіть камеру тут або перейдіть до «Усі камери».",
+  "{count} cameras in map view · nearest first": {
+    "one": "{count} камера у видимій області · найближчі спочатку",
+    "few": "{count} камери у видимій області · найближчі спочатку",
+    "many": "{count} камер у видимій області · найближчі спочатку",
+    "other": "{count} камер у видимій області · найближчі спочатку"
+  },
+  "{count} cameras worldwide · nearest first": {
+    "one": "{count} камера у світі · найближчі спочатку",
+    "few": "{count} камери у світі · найближчі спочатку",
+    "many": "{count} камер у світі · найближчі спочатку",
+    "other": "{count} камер у світі · найближчі спочатку"
+  },
+  "{distance} km": "{distance} km"
 }

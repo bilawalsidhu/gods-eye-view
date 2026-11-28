@@ -226,3 +226,16 @@ test('an active id without its camera record leaves the pick alone', async (t) =
   });
   assert.equal(select.value, 'b');
 });
+
+test('map refresh on blur reuses surviving option nodes', async (t) => {
+  const { select, render, values } = fixture(t);
+  await render({ enabled: true, count: 3, cameraIndex: [camera('a'), camera('b')] });
+  const a = select.options[0];
+  select.focus();
+  await render({ enabled: true, count: 3, cameraIndex: [camera('a'), camera('c')] });
+  assert.deepEqual(values(), ['a', 'b', '']);
+  select.blur();
+  await nextTick();
+  assert.deepEqual(values(), ['a', 'c', '']);
+  assert.equal(select.options[0], a);
+});

@@ -3370,6 +3370,36 @@ shown without a fade once it is decoded (or after one second if its decode never
 settles), so a new camera's preview is blank only while its frame loads. Disposal
 releases listeners, subscriptions, image handlers, summary timers and chip-hide timers.
 
+CCTV discovery controls now render in `CctvPanel.vue`, with the controller
+publishing filtered picker options and status through the existing Pinia store.
+The keyed Vue picker preserves surviving option nodes and defers map updates
+while focused; blur catches up without reverting to the removed HTML template.
+
+The CCTV panel defaults to cameras within the current map's geographic bounds,
+refreshing when map movement ends through the renderer camera port. Bounds
+come from that port, and the query port supplies the map-center pick without
+direct engine access. Search matches city, camera name and provider;
+results show distance from the map center and sort nearest first. All cameras
+provides explicit worldwide discovery. Nearest and Previous/Next follow the
+filtered results. When the map contains no cameras, explicit Nearest falls back
+to the closest camera in the full catalog by map-center distance (ignoring search),
+while Previous/Next stay empty. Enabling the panel never triggers this fallback.
+An active camera outside the local view is omitted from the
+panel preview, with an explanation and an empty state when coverage is absent;
+changing the map or search alone does not select a camera or navigate the globe.
+Panning away and back does not reopen a panel the user collapsed when the
+underlying active camera has not changed.
+Enabling retains the layer-owned provisional selection without flying the map;
+the panel hides that selection if it is outside the current view.
+The filter applies to panel controls; voice next/previous, voice nearest and
+layer auto-hop retain their catalog-wide contracts. A scope tooltip makes this
+boundary explicit. Option nodes are reused when distance labels or ordering
+change, including in the worldwide scope. Discovery copy is translated in
+all supported locales. Discovery uses cached lightweight catalog metadata rather
+than building every camera’s media/calibration state. The picker defers list
+changes while focused, catches up on blur, and preserves surviving option nodes.
+Run `node scripts/qa-cctv-discovery.mjs` for the focused gate.
+
 A camera source may give each frame's capture time: one that sets
 `framesCarryTime: true` answers its frame URLs with the time in milliseconds
 since the epoch in an `X-CCTV-Frame-Time` header (listed in

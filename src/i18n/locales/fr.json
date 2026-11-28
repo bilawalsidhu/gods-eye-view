@@ -4644,6 +4644,28 @@
   "{name} · sensor": "{name} · capteur",
   "Reference monitor": "Appareil de référence",
   "Needs {envVars} — add one in Provider Settings": "Nécessite {envVars} — en ajouter une dans les paramètres des fournisseurs",
-  "CABLE \u00b7 {name}": "CÂBLE · {name}",
-  "LANDING POINT \u00b7 {name}": "POINT D'ATTERRAGE · {name}"
+  "CABLE · {name}": "CÂBLE · {name}",
+  "LANDING POINT · {name}": "POINT D'ATTERRAGE · {name}",
+  "<1 km": "<1 km",
+  "All cameras": "Toutes les caméras",
+  "CCTV search area": "Zone de recherche CCTV",
+  "Filters panel controls only; voice navigation uses the full catalog.": "Filtre uniquement les commandes du panneau ; la navigation vocale utilise le catalogue complet.",
+  "In map view": "Dans la vue de la carte",
+  "No cameras in map view. Move the map or choose All cameras.": "Aucune caméra dans la vue. Déplacez la carte ou choisissez Toutes les caméras.",
+  "No cameras loaded.": "Aucune caméra chargée.",
+  "No matching cameras. Try another search or All cameras.": "Aucune caméra correspondante. Essayez une autre recherche ou Toutes les caméras.",
+  "Search CCTV cameras": "Rechercher des caméras CCTV",
+  "Search city, camera or provider": "Rechercher une ville, une caméra ou un fournisseur",
+  "The selected camera is outside the map view. Choose a camera here, or switch to All cameras.": "La caméra sélectionnée est hors de la vue. Choisissez une caméra ici ou passez à Toutes les caméras.",
+  "{count} cameras in map view · nearest first": {
+    "one": "{count} caméra dans la vue · la plus proche en premier",
+    "many": "{count} caméras dans la vue · les plus proches en premier",
+    "other": "{count} caméras dans la vue · les plus proches en premier"
+  },
+  "{count} cameras worldwide · nearest first": {
+    "one": "{count} caméra dans le monde · la plus proche en premier",
+    "many": "{count} caméras dans le monde · les plus proches en premier",
+    "other": "{count} caméras dans le monde · les plus proches en premier"
+  },
+  "{distance} km": "{distance} km"
 }

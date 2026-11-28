@@ -304,7 +304,10 @@
     "{seconds} s",
     "Mode",
     "UTC",
-    "Radius"
+    "Radius",
+    "Cyber",
+    "<1 km",
+    "{distance} km"
   ],
   "es": [
     "1 min/s",
@@ -503,7 +506,10 @@
     "{seconds} s",
     "UTC",
     "{fps} fps",
-    "{name} · sensor"
+    "{name} · sensor",
+    "Error",
+    "<1 km",
+    "{distance} km"
   ],
   "fr": [
     "1 min/s",
@@ -766,7 +772,12 @@
     "train",
     "UTC",
     "air quality monitors|STATIONS",
-    "{count} stations"
+    "{count} stations",
+    "Cyber",
+    "Cyclones · NHC / CPHC",
+    "Style",
+    "<1 km",
+    "{distance} km"
   ],
   "it": [
     "1 min/s",
@@ -1003,7 +1014,10 @@
     "{utc} UTC",
     "{seconds} s",
     "UTC",
-    "{fps} fps"
+    "{fps} fps",
+    "Cyber",
+    "<1 km",
+    "{distance} km"
   ],
   "ja": [
     "1090 MHz",
@@ -1089,7 +1103,9 @@
     "3D",
     "KT",
     "UTC",
-    "{fps} fps"
+    "{fps} fps",
+    "<1 km",
+    "{distance} km"
   ],
   "pt": [
     "1 min/s",
@@ -1288,7 +1304,9 @@
     "Manual",
     "{seconds} s",
     "UTC",
-    "{name} · sensor"
+    "{name} · sensor",
+    "<1 km",
+    "{distance} km"
   ],
   "ru": [
     "1900–1945",
@@ -1532,7 +1550,10 @@
     "{seconds} s",
     "UTC",
     "{count} stations",
-    "{name} · sensor"
+    "{name} · sensor",
+    "Cyber",
+    "<1 km",
+    "{distance} km"
   ],
   "uk": [
     "1900–1945",
@@ -1573,7 +1594,9 @@
     "{kind} {name}",
     "3D",
     "{utc} UTC",
-    "UTC"
+    "UTC",
+    "<1 km",
+    "{distance} km"
   ],
   "zh-CN": [
     "1090 MHz",
@@ -1659,7 +1682,9 @@
     "{n}%",
     "{n} hPa",
     "3D",
-    "UTC"
+    "UTC",
+    "<1 km",
+    "{distance} km"
   ],
   "zh-Hant": [
     "1090 MHz",
@@ -1745,7 +1770,9 @@
     "{n}%",
     "{n} hPa",
     "3D",
-    "UTC"
+    "UTC",
+    "<1 km",
+    "{distance} km"
   ],
   "he": [
     "{speed} kn",

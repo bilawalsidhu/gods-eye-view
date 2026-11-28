@@ -4644,6 +4644,28 @@
   "{name} · sensor": "{name} · חיישן",
   "Reference monitor": "מכשיר ניטור ייחוס",
   "Needs {envVars} — add one in Provider Settings": "דורש {envVars} — הוסף אחד מהם בהגדרות הספקים",
-  "CABLE \u00b7 {name}": "כבל · {name}",
-  "LANDING POINT \u00b7 {name}": "נקודת נחיתה · {name}"
+  "CABLE · {name}": "כבל · {name}",
+  "LANDING POINT · {name}": "נקודת נחיתה · {name}",
+  "<1 km": "פחות מק״מ אחד",
+  "{distance} km": "{distance} ק״מ",
+  "No matching cameras. Try another search or All cameras.": "לא נמצאו מצלמות תואמות. נסו חיפוש אחר או בחרו בכל המצלמות.",
+  "No cameras in map view. Move the map or choose All cameras.": "אין מצלמות בתצוגת המפה. הזיזו את המפה או בחרו בכל המצלמות.",
+  "No cameras loaded.": "לא נטענו מצלמות.",
+  "The selected camera is outside the map view. Choose a camera here, or switch to All cameras.": "המצלמה שנבחרה נמצאת מחוץ לתצוגת המפה. בחרו מצלמה כאן או עברו לכל המצלמות.",
+  "Search city, camera or provider": "חיפוש עיר, מצלמה או ספק",
+  "Search CCTV cameras": "חיפוש מצלמות מעקב",
+  "CCTV search area": "אזור חיפוש מצלמות",
+  "Filters panel controls only; voice navigation uses the full catalog.": "הסינון חל רק על פקדי הלוח; ניווט קולי משתמש בקטלוג המלא.",
+  "In map view": "בתצוגת המפה",
+  "All cameras": "כל המצלמות",
+  "{count} cameras in map view · nearest first": {
+    "one": "{count} מצלמה בתצוגת המפה · הקרובות תחילה",
+    "two": "{count} מצלמות בתצוגת המפה · הקרובות תחילה",
+    "other": "{count} מצלמות בתצוגת המפה · הקרובות תחילה"
+  },
+  "{count} cameras worldwide · nearest first": {
+    "one": "{count} מצלמה ברחבי העולם · הקרובות תחילה",
+    "two": "{count} מצלמות ברחבי העולם · הקרובות תחילה",
+    "other": "{count} מצלמות ברחבי העולם · הקרובות תחילה"
+  }
 }

@@ -4435,5 +4435,23 @@
   "Reference monitor": "參考監測儀",
   "Needs {envVars} — add one in Provider Settings": "需要 {envVars}，請在服務商設置中添加其中一個",
   "CABLE · {name}": "海纜 · {name}",
-  "LANDING POINT · {name}": "登陸點 · {name}"
+  "LANDING POINT · {name}": "登陸點 · {name}",
+  "<1 km": "<1 km",
+  "All cameras": "所有攝像頭",
+  "CCTV search area": "CCTV 搜索區域",
+  "Filters panel controls only; voice navigation uses the full catalog.": "僅篩選面板控件；語音導航使用完整目錄。",
+  "In map view": "地圖視野內",
+  "No cameras in map view. Move the map or choose All cameras.": "地圖視野內沒有攝像頭。請移動地圖或選擇所有攝像頭。",
+  "No cameras loaded.": "尚未加載攝像頭。",
+  "No matching cameras. Try another search or All cameras.": "沒有匹配的攝像頭。請嘗試其他搜索或選擇所有攝像頭。",
+  "Search CCTV cameras": "搜索 CCTV 攝像頭",
+  "Search city, camera or provider": "搜索城市、攝像頭或提供商",
+  "The selected camera is outside the map view. Choose a camera here, or switch to All cameras.": "所選攝像頭位於地圖視野之外。請選擇此處的攝像頭，或切換至所有攝像頭。",
+  "{count} cameras in map view · nearest first": {
+    "other": "地圖視野內 {count} 個攝像頭 · 距離由近到遠"
+  },
+  "{count} cameras worldwide · nearest first": {
+    "other": "全球 {count} 個攝像頭 · 距離由近到遠"
+  },
+  "{distance} km": "{distance} km"
 }

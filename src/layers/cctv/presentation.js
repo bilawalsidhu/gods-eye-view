@@ -299,6 +299,7 @@ export function createPresentation({
       activeCameraReselection: layerState._activeCameraReselection,
       activeCamera: active ? getPublicCameraState(active, activeId) : null,
       cameraIndex: cameraIndex(),
+      discoveryIndex: discoveryIndex(),
       summary: buildSummaryText(),
     };
     // The full per-camera state is built only when a subscriber reads it: a
@@ -317,6 +318,29 @@ export function createPresentation({
       },
     });
     return payload;
+  }
+
+  // Cache only catalog metadata; discovery must never materialize every camera's
+  // media/calibration state on progress notifications or map moves.
+  let discoveryRecords = null;
+  let discoveryList = null;
+  function discoveryIndex() {
+    if (
+      discoveryRecords !== layerState._records ||
+      discoveryList?.length !== layerState._records.length
+    ) {
+      discoveryRecords = layerState._records;
+      discoveryList = discoveryRecords.map(({ camera }) => ({
+        id: camera.id,
+        city: camera.city,
+        name: camera.name,
+        lat: camera.lat,
+        lon: camera.lon,
+        provider: camera.provider,
+        sourceLabel: camera.sourceLabel,
+      }));
+    }
+    return discoveryList;
   }
 
   /**
