@@ -454,6 +454,7 @@ export class StyleManager extends ShellFacade {
     this.hud = new IntelHUD(viewer, {
       placeSearch,
       summaryService: requestServices?.summary,
+      wikipediaService: requestServices?.wikipedia,
       publish: (view) => hudStore.publish(view),
     });
     // The view says whether it is on screen; off screen the HUD does no
@@ -665,6 +666,8 @@ export class StyleManager extends ShellFacade {
       services: {
         cycleDetectionMode: services.cycleDetectionMode,
         isScopeMaskEnabled: services.isScopeMaskEnabled,
+        holdContinuousRender: services.holdContinuousRender,
+        releaseContinuousRender: services.releaseContinuousRender,
       },
       operations: {
         setStyle: (...args) => this.setStyle(...args),
@@ -697,6 +700,7 @@ export class StyleManager extends ShellFacade {
         _setModels3dMode: (...args) => this._setModels3dMode(...args),
       },
       readState: () => ({
+        style: this.activeStyle,
         shareLinkManager: this.shareLinkManager,
         hud: this.hud,
         bloomEnabled: this.bloomEnabled,

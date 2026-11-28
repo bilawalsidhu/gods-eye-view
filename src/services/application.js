@@ -15,6 +15,7 @@ const slots = Object.fromEntries(
     regional: ['getBrief'],
     weather: ['getConditions'],
     summary: ['summarize'],
+    wikipedia: ['fetchNearby', 'fetchSummary', 'search', 'fetchBrief'],
     layerCounts: ['getCounts'],
   }).map(([name, methods]) => [
     name,

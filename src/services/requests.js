@@ -1,9 +1,9 @@
 import { isUnavailableCapability } from '../sources/capability.js';
 import { createOverpassFeatureSource } from '../sources/overpassFeatures.js';
+import { createWikipediaService } from './wikipedia.js';
 import { readResponseJsonCapped } from '../sources/httpBody.js';
 
 const LAYER_COUNTS_MAX_BYTES = 16 * 1024;
-
 /** Parse bounded retry information from a service response. */
 function retryAfterMs(value) {
   if (value == null || String(value).trim() === '') return null;
@@ -240,6 +240,7 @@ export function createApplicationRequestServices({
         });
       },
     },
+    wikipedia: createWikipediaService({ fetchImpl, signal: lifetime }),
   };
   services.features =
     features ??

@@ -257,6 +257,7 @@ export class IntelHUD {
       summaryPolicy = {},
       basemapContext = {},
       summaryService = applicationServices.summary,
+      wikipediaService = applicationServices.wikipedia,
       publish = () => {},
       camera = findCamera(viewer),
     } = {},
@@ -265,6 +266,7 @@ export class IntelHUD {
     this._camera = camera;
     this._publish = publish;
     this.summaryService = summaryService;
+    this.wikipediaService = wikipediaService;
     this.summaryPolicy = summaryPolicy;
     this.basemapContext = basemapContext;
     this.placeSearch = placeSearch;
@@ -1117,6 +1119,38 @@ export class IntelHUD {
     const layerContext = hudSummaryLayerContext(
       this._dataManager?.getAll?.() || [],
     );
+    let wikipediaArticles = [];
+    if (
+      !this._summaryUnconfigured &&
+      this._latestMetrics &&
+      this.wikipediaService?.fetchNearby
+    ) {
+      let timeoutSignal;
+      let timeoutId;
+      if (typeof AbortSignal?.timeout === 'function') {
+        timeoutSignal = AbortSignal.timeout(3000);
+      } else {
+        const timeoutController = new AbortController();
+        timeoutId = setTimeout(() => timeoutController.abort(), 3000);
+        timeoutSignal = timeoutController.signal;
+      }
+      try {
+        const hits = await this.wikipediaService.fetchNearby({
+          latitude: this._latestMetrics.latDeg,
+          longitude: this._latestMetrics.lonDeg,
+          radius: 10000,
+          limit: 3,
+          signal: timeoutSignal,
+        });
+        if (Array.isArray(hits)) {
+          wikipediaArticles = hits.map((entry) => entry.title).filter(Boolean);
+        }
+      } catch {
+        // Non-fatal fallback (timeout, network, or geosearch unavailable)
+      } finally {
+        if (timeoutId) clearTimeout(timeoutId);
+      }
+    }
     // Outside English a layer's state id is left out: the model echoes it,
     // and `overall` already carries the state.
     const named = ({ feedState, ...layer }) => ({
@@ -1130,6 +1164,7 @@ export class IntelHUD {
       placeLabels: labels.placeLabels,
       streetLabels: labels.streetLabels,
       nearbyPlaceLabels: labels.nearbyPlaceLabels,
+      wikipediaArticles,
       // The model sees only the layer names the user sees. The English note
       // goes too: a small model copies its words. `overall` stays the id.
       enabledLayerLabels:
