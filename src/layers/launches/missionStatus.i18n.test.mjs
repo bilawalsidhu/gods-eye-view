@@ -3,11 +3,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { setLocale } from '../../i18n/index.js';
-import {
-  launchStatusAllowsOrbit,
-  normalizeRocketLaunches,
-} from '../../data/rocketLaunches.js';
-import { UNKNOWN_LAUNCH_STATUS } from './model.js';
+import { normalizeRocketLaunches, UNKNOWN_LAUNCH_STATUS } from './model.js';
+import { launchStatusAllowsOrbit } from './policyHelpers.js';
 import { createPanel } from './panel.js';
 
 const NOW = new Date('2026-07-27T00:00:00Z');
@@ -70,37 +67,51 @@ test('the mission panel translates only the fallback status', (t) => {
   assert.equal(shownStatus('Launch Successful'), 'Launch Successful');
 });
 
+function landingPanel(accuracy) {
+  return createPanel({
+    state: {
+      _selectedLaunchId: 'mission-1',
+      _launches: [
+        {
+          id: 'mission-1',
+          name: 'Example',
+          status: 'Launch Successful',
+          payloads: [],
+          recoveryStages: [
+            {
+              name: 'B1080',
+              endpoint: { lat: 28.41, lon: -80.6, accuracy },
+            },
+          ],
+        },
+      ],
+      _replayTracks: new Map(),
+    },
+    parts: {
+      overlays: { shortMissionLabel: (name) => name },
+      policyHelpers: { missionPathPresentation: () => ({}) },
+      replay: { presentReplay: () => ({}) },
+    },
+  });
+}
+
 test('a confirmed landing position is worded apart from the CONFIRMED sightings chip', (t) => {
   t.after(() => setLocale('en'));
-  const position = () =>
-    createPanel({
-      state: {
-        _selectedLaunchId: 'mission-1',
-        _launches: [
-          {
-            id: 'mission-1',
-            name: 'Example',
-            status: 'Launch Successful',
-            payloads: [],
-            recoveryStages: [
-              {
-                name: 'B1080',
-                endpoint: { lat: 28.41, lon: -80.6, accuracy: 'CONFIRMED' },
-              },
-            ],
-          },
-        ],
-        _replayTracks: new Map(),
-      },
-      parts: {
-        overlays: { shortMissionLabel: (name) => name },
-        policyHelpers: { missionPathPresentation: () => ({}) },
-        replay: { presentReplay: () => ({}) },
-      },
-    }).presentMission().stages[0].position;
+  const panel = landingPanel('CONFIRMED');
+  const position = () => panel.presentMission().stages[0].position;
   assert.match(position(), / · CONFIRMED$/);
   // One landing, singular: sv BEKRÄFTAD, where the sightings chip says
   // BEKRÄFTADE.
   setLocale('sv');
   assert.match(position(), / · BEKRÄFTAD$/);
+});
+
+test('a downrange estimate follows a locale change', (t) => {
+  t.after(() => setLocale('en'));
+  setLocale('en');
+  const panel = landingPanel('EST. DOWNRANGE');
+  const position = () => panel.presentMission().stages[0].position;
+  assert.match(position(), / · EST\. DOWNRANGE$/);
+  setLocale('ru');
+  assert.match(position(), / · РАСЧЁТ ПО ТРАССЕ$/);
 });

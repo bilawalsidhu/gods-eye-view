@@ -2,11 +2,10 @@
 // name matching, disambiguation, and pack integrity.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
+import fs, { readFileSync, readdirSync } from 'node:fs';
 import { gunzipSync, gzipSync } from 'node:zlib';
 import {
   CACHE_LIMITS,
-  cachedPackFiles,
   decodePolyline,
   exactPlaceName,
   findNeighborhoodArea,
@@ -14,7 +13,6 @@ import {
   findPlaceArea,
   findPlaceAreaAt,
   normalizePlaceName,
-  packLoads,
   parsePlaceQuery,
 } from './placeBoundaries.js';
 import { decodeRing, geometryOf, polygonsContain } from './adminBoundaries.js';
@@ -32,6 +30,34 @@ const WOF_LICENSES = new URL(
 );
 const readJson = (url) => JSON.parse(readFileSync(url, 'utf8'));
 
+/**
+ * The packs the module reads while `t` runs: under Node every bundled pack is
+ * one readFileSync (src/data/bundledJson.js), in read order.
+ */
+function packReads(t) {
+  const reads = t.mock.method(fs, 'readFileSync');
+  const read = (folder) =>
+    reads.mock.calls
+      .map((call) => String(call.arguments[0]))
+      .filter((url) => url.includes(`/local_data/${folder}/`))
+      .map((url) =>
+        url
+          .split('/')
+          .pop()
+          .replace(/\.json$/, ''),
+      );
+  return () => {
+    const places = read('us_census_places');
+    const hoods = read('wof_neighborhoods');
+    return {
+      placeIndex: places.filter((name) => name === 'index').length,
+      placeStates: places.filter((name) => name !== 'index'),
+      neighborhoodIndex: hoods.filter((name) => name === 'index').length,
+      neighborhoodTiles: hoods.filter((name) => name !== 'index'),
+    };
+  };
+}
+
 const AUSTIN = { lat: 30.2672, lon: -97.7431 };
 const LONDON = { lat: 51.51, lon: -0.13 };
 const PARIS = { lat: 48.857, lon: 2.352 };
@@ -39,33 +65,34 @@ const BROOKLYN = { lat: 40.71, lon: -73.96 };
 
 // Runs first: nothing loads until a lookup needs it, and a lookup loads only
 // the index plus the state files or tiles around its point.
-test('packs load lazily: the index, then only the state or tiles asked about', async () => {
-  assert.deepEqual(packLoads, {
+test('packs load lazily: the index, then only the state or tiles asked about', async (t) => {
+  const loads = packReads(t);
+  assert.deepEqual(loads(), {
     placeIndex: 0,
     placeStates: [],
     neighborhoodIndex: 0,
     neighborhoodTiles: [],
   });
   assert.equal(parsePlaceQuery('Austin, TX').name, 'austin');
-  assert.equal(packLoads.placeIndex, 0, 'parsing is free');
+  assert.equal(loads().placeIndex, 0, 'parsing is free');
   await findPlaceArea('Austin', { near: AUSTIN });
-  assert.equal(packLoads.placeIndex, 1);
-  assert.deepEqual(packLoads.placeStates, ['TX']);
+  assert.equal(loads().placeIndex, 1);
+  assert.deepEqual(loads().placeStates, ['TX']);
   await findPlaceArea('Springfield, Illinois');
   await findPlaceArea('Round Rock', { near: AUSTIN });
-  assert.deepEqual(packLoads.placeStates, ['TX', 'IL'], 'loaded once each');
-  assert.equal(packLoads.neighborhoodIndex, 0, 'a place ask never loads hoods');
+  assert.deepEqual(loads().placeStates, ['TX', 'IL'], 'loaded once each');
+  assert.equal(loads().neighborhoodIndex, 0, 'a place ask never loads hoods');
   // Alaska's box crosses the antimeridian without covering the world.
   assert.equal(await findPlaceArea('Notting Hill', { near: LONDON }), null);
-  assert.deepEqual(packLoads.placeStates, ['TX', 'IL'], 'no state near London');
+  assert.deepEqual(loads().placeStates, ['TX', 'IL'], 'no state near London');
   const adak = await findPlaceArea('Adak', {
     near: { lat: 51.88, lon: -176.65 },
   });
   assert.equal(adak?.regionCode, 'AK');
 
   await findNeighborhoodArea('Notting Hill', { near: LONDON });
-  assert.equal(packLoads.neighborhoodIndex, 1);
-  const londonTiles = packLoads.neighborhoodTiles.length;
+  assert.equal(loads().neighborhoodIndex, 1);
+  const londonTiles = loads().neighborhoodTiles.length;
   assert.ok(londonTiles >= 1 && londonTiles <= 8, `${londonTiles} tiles`);
   const index = readJson(new URL('index.json', WOF));
   assert.ok(index.tiles.length > 100, 'the pack is split');
@@ -130,7 +157,8 @@ test('the view radius bounds a bare name: Richmond city is not over SF', async (
   assert.equal(wide?.regionCode, 'CA', 'a wide view still reaches it');
 });
 
-test('pack caches keep the recently used files and reload evicted ones', async () => {
+test('pack caches keep the recently used files and reload evicted ones', async (t) => {
+  const loads = packReads(t);
   const index = readJson(new URL('index.json', WOF));
   const limit = CACHE_LIMITS.tiles;
   const visited = [];
@@ -142,19 +170,16 @@ test('pack caches keep the recently used files and reload evicted ones', async (
       nearKm: 0.001,
     });
     visited.push(tile.key);
-    assert.ok(cachedPackFiles().tiles.length <= limit, 'bounded');
   }
   const first = visited[0];
-  assert.ok(!cachedPackFiles().tiles.includes(first), 'oldest evicted');
-  const before = packLoads.neighborhoodTiles.filter((k) => k === first).length;
+  const before = loads().neighborhoodTiles.filter((k) => k === first).length;
   const [w, s, e, n] = index.tiles[0].bbox;
   await findNeighborhoodArea('no such neighborhood', {
     near: { lat: (s + n) / 2, lon: (w + e) / 2 },
     nearKm: 0.001,
   });
-  const after = packLoads.neighborhoodTiles.filter((k) => k === first).length;
+  const after = loads().neighborhoodTiles.filter((k) => k === first).length;
   assert.equal(after, before + 1, 'reloaded after eviction');
-  assert.ok(cachedPackFiles().tiles.includes(first));
 });
 
 test('a named place resolves by name and state, or near the view', async () => {

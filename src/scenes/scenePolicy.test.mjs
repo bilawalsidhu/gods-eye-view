@@ -4,8 +4,6 @@ import fs from 'node:fs';
 import test from 'node:test';
 
 import {
-  SCENE_KEPT_SELECTION_PARAM_KEYS,
-  SCENE_SELECTION_PARAM_PATTERN,
   SCENE_TRACKING_PARAM_KEYS,
   sceneLayerPlan,
   stripSceneTrackingParams,
@@ -138,25 +136,33 @@ test('stripping leaves a tracking-free params object untouched', () => {
   assert.ok(SCENE_TRACKING_PARAM_KEYS.length >= 3);
 });
 
+// Selection params deliberately kept: CCTV's `selectedCameraId` raises a
+// monitor plane and never writes viewer.trackedEntity or moves the camera.
+const KEPT_SELECTION_PARAM_KEYS = ['selectedCameraId'];
+// The selection/tracking naming family, deliberately wider than today's names,
+// so a new spelling must be classified as stripped or kept.
+const SELECTION_PARAM_PATTERN =
+  /^(?:selected|tracked)[A-Z0-9]|TrackingId$|(?:Mmsi|Norad|Icao|Callsign)$/;
+
 test('every selection-shaped layer param is classified, whatever its spelling', () => {
   // Forward-compat. The earlier sweep only recognised `selected…TrackingId`,
   // so a param named `trackedVesselMmsi` would have slipped past and a capture
   // taken while following that contact would recreate the two-camera-writer
   // bug. The family pattern is deliberately wider than today's three names:
   // any match must be explicitly stripped or explicitly kept.
-  const classified = new Set([...SCENE_TRACKING_PARAM_KEYS, ...SCENE_KEPT_SELECTION_PARAM_KEYS]);
+  const classified = new Set([...SCENE_TRACKING_PARAM_KEYS, ...KEPT_SELECTION_PARAM_KEYS]);
   const swept = sweepLayerParamKeys();
   assert.ok(swept.size >= 6, `expected the known layer param surfaces, saw ${swept.size}`);
 
   const seen = new Set();
   for (const [file, keys] of swept) {
     for (const key of keys) {
-      if (!SCENE_SELECTION_PARAM_PATTERN.test(key)) continue;
+      if (!SELECTION_PARAM_PATTERN.test(key)) continue;
       seen.add(key);
       assert.ok(
         classified.has(key),
         `${file} publishes selection param "${key}" — strip it (SCENE_TRACKING_PARAM_KEYS) `
-        + 'or record why it is safe (SCENE_KEPT_SELECTION_PARAM_KEYS)',
+        + 'or record why it is safe (KEPT_SELECTION_PARAM_KEYS)',
       );
     }
   }
@@ -168,10 +174,10 @@ test('every selection-shaped layer param is classified, whatever its spelling', 
 
 test('the family pattern catches selection names the old sweep would have missed', () => {
   for (const evader of ['trackedVesselMmsi', 'selectedVesselId', 'trackedNorad', 'primaryTargetIcao']) {
-    assert.ok(SCENE_SELECTION_PARAM_PATTERN.test(evader), `${evader} must be caught`);
+    assert.ok(SELECTION_PARAM_PATTERN.test(evader), `${evader} must be caught`);
   }
   for (const ordinary of ['models3d', 'catalog', 'showOrbits', 'densityScale', 'coverageMode', 'calibration']) {
-    assert.equal(SCENE_SELECTION_PARAM_PATTERN.test(ordinary), false, `${ordinary} is not a selection param`);
+    assert.equal(SELECTION_PARAM_PATTERN.test(ordinary), false, `${ordinary} is not a selection param`);
   }
 });
 

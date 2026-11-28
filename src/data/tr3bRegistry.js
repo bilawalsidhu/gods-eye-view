@@ -81,11 +81,6 @@ export function tr3bConvertedIds() {
   return [..._converted];
 }
 
-/** @returns {number} How many contacts are converted right now. */
-export function tr3bCount() {
-  return _converted.size;
-}
-
 /** Drop every conversion. Test/reset seam — production has no caller. */
 export function clearTr3bRegistry() {
   _converted.clear();

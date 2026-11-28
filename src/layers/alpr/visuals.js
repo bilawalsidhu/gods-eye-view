@@ -1,5 +1,5 @@
 import { fromDegrees } from '../../geo/index.js';
-import { destinationPointDeg } from './model.js';
+import { destinationPoint } from '../../geoDistance.js';
 import { lookupAlprModelSpec } from './modelSpecs.js';
 import { specSummary } from '../cctv/modelSpecs.js';
 import {
@@ -91,26 +91,26 @@ export function alprLabelDetails(record, source) {
  */
 export function directionWedgePositions(record, heightM = 0, heightAt = null) {
   if (!Number.isFinite(record.directionDeg)) return null;
-  const left = destinationPointDeg(
+  const left = destinationPoint(
     record.latitude,
     record.longitude,
     record.directionDeg - DIRECTION_CONE_HALF_ANGLE_DEG,
     DIRECTION_CONE_M,
   );
-  const right = destinationPointDeg(
+  const right = destinationPoint(
     record.latitude,
     record.longitude,
     record.directionDeg + DIRECTION_CONE_HALF_ANGLE_DEG,
     DIRECTION_CONE_M,
   );
   const corner = (point) => {
-    const height = heightAt?.(point.latitude, point.longitude);
+    const height = heightAt?.(point.lat, point.lon);
     return Number.isFinite(height) ? height : heightM;
   };
   return [
     fromDegrees(record.longitude, record.latitude, heightM),
-    fromDegrees(left.longitude, left.latitude, corner(left)),
-    fromDegrees(right.longitude, right.latitude, corner(right)),
+    fromDegrees(left.lon, left.lat, corner(left)),
+    fromDegrees(right.lon, right.lat, corner(right)),
   ];
 }
 

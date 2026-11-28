@@ -21,7 +21,6 @@ import {
   validateLayerStateAllocations,
 } from './layerState.js';
 import {
-  PRE_LEDGER_LAYER_STATE_TOKENS,
   checkLayerStateTokens,
   readPublishedLayerStateReservations,
 } from '../../scripts/check-layer-state-tokens.mjs';
@@ -43,25 +42,6 @@ const reservationRows = JSON.parse(
     'utf8',
   ),
 );
-
-test('pre-ledger published ownership is independent of the candidate mapping', () => {
-  assert.notStrictEqual(
-    PRE_LEDGER_LAYER_STATE_TOKENS,
-    LEGACY_LAYER_STATE_TOKENS,
-  );
-  assert.deepEqual(PRE_LEDGER_LAYER_STATE_TOKENS, LEGACY_LAYER_STATE_TOKENS);
-  assert.equal(Object.keys(PRE_LEDGER_LAYER_STATE_TOKENS).length, 28);
-  assert.equal(PRE_LEDGER_LAYER_STATE_TOKENS['recent-imagery'], '1');
-  assert.equal(PRE_LEDGER_LAYER_STATE_TOKENS['fire-perimeters'], '2');
-  assert.throws(
-    () =>
-      validateLayerStateAllocations(PRE_LEDGER_LAYER_STATE_TOKENS, {
-        ...LAYER_STATE_TOKEN_RESERVATIONS,
-        flights: '00',
-      }),
-    /Published layer-state token changed or removed: flights/,
-  );
-});
 
 function git(cwd, ...args) {
   return execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();

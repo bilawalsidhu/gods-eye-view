@@ -1,6 +1,6 @@
 import { fromDegrees, fromDegreesInto } from '../../geo/ellipsoid.js';
 import { horizonFrom } from '../../geo/horizon.js';
-import { clamp } from '../../geo/vector.js';
+import { clamp, clone } from '../../geo/vector.js';
 import { hexColor } from '../../render/color.js';
 import { drawOf, findCamera, findQuery } from '../../render/rendererOf.js';
 import {
@@ -26,8 +26,6 @@ function launchIdOf(id) {
   return match?.[1] || null;
 }
 
-const copy = (p) => ({ x: p.x, y: p.y, z: p.z });
-
 export function createRendering({
   state: layerState,
   services,
@@ -50,12 +48,6 @@ export function createRendering({
   const records = new Map();
   /** Items to write at the next flush, by set name. */
   const pending = new Map();
-
-  /** A launch's marker colour. */
-  function markerColor(launch) {
-    const [r, g, b, a] = parts.model.missionMarkerColor(launch);
-    return [r, g, b, a];
-  }
 
   const recordKey = (set, id) => `${set}\u0000${id}`;
 
@@ -189,23 +181,17 @@ export function createRendering({
     return null;
   }
 
-  /** The mission items under a screen position (CSS px), at most `limit`. */
-  function missionHitsAt(position, limit = 12) {
+  /** The mission items under a screen position (CSS px), at most 12. */
+  function missionHitsAt(position) {
     const query = findQuery(layerState._viewer);
     if (!query || !position) return [];
-    return query.drillPick(position.x, position.y, { limit });
+    return query.drillPick(position.x, position.y, { limit: 12 });
   }
 
   /** Whether a mission item is under a screen position (CSS px). */
   function launchMarkerAt(position) {
     return Boolean(launchIdFromPicks(missionHitsAt(position)));
   }
-
-  /**
-   * Note the selected launch site. Nothing draws it differently; the
-   * selected mission is the layer's own (`_selectedLaunchId`).
-   */
-  function selectLaunchEntity() {}
 
   /**
    * Show only the selected mission's items, or every site marker and
@@ -291,7 +277,7 @@ export function createRendering({
           ? horizonVisible &&
             record.launchId === layerState._hoveredRosterLaunchId
           : horizonVisible;
-      refresh(record, live && position ? copy(position) : null);
+      refresh(record, live && position ? clone(position) : null);
     }
     flush();
   }
@@ -355,7 +341,7 @@ export function createRendering({
       satelliteName: satelliteTrack?.name || '',
       noradId: satelliteTrack?.noradId || '',
     };
-    const color = markerColor(launch);
+    const color = parts.model.missionMarkerColor(launch);
     addItem(
       'sites',
       {
@@ -418,7 +404,7 @@ export function createRendering({
         if (segment.positions.length < 2) return;
         addItem('lines', {
           id: `rocket-trajectory:${launch.id}:${index}`,
-          positions: parts.paths.surfaceSafePath(segment.positions).map(copy),
+          positions: parts.paths.surfaceSafePath(segment.positions).map(clone),
           widthPx: 2,
           mode: '3d',
           style: {
@@ -497,10 +483,7 @@ export function createRendering({
         launch,
         ascentPath,
       );
-      // Camera tracking and the HTML replay overlay must use the exact same
-      // replay epoch within a frame; sampling Date.now() independently made
-      // the vehicle advance relative to the camera and then snap back on the
-      // next frame.
+      // Camera tracking and the replay overlay read one replay epoch per frame.
       let replayStateForFrame = null;
       const sampleReplayState = () =>
         parts.replay.replayState(
@@ -547,7 +530,7 @@ export function createRendering({
           ];
         addItem('lines', {
           id: `rocket-reentry-recovery:${launch.id}:${stageIndex}`,
-          positions: path.map(copy),
+          positions: path.map(clone),
           widthPx: 2,
           mode: '3d',
           style: {
@@ -567,7 +550,7 @@ export function createRendering({
         if (reentryPath.length > 1) {
           addItem('lines', {
             id: `rocket-reentry:${launch.id}:${stageIndex}`,
-            positions: reentryPath.map(copy),
+            positions: reentryPath.map(clone),
             widthPx: 2.5,
             mode: '3d',
             style: {
@@ -584,7 +567,7 @@ export function createRendering({
               source: 'Estimated 100 km atmospheric interface',
             },
           });
-          const reentryPosition = copy(path[reentryIndex]);
+          const reentryPosition = clone(path[reentryIndex]);
           overlayRecord.elementEntryFactories.push(() =>
             parts.overlays.createRocketMissionElementOverlayEntry({
               id: `reentry:${launch.id}:${stageIndex}`,
@@ -596,7 +579,7 @@ export function createRendering({
             }),
           );
         }
-        const endpoint = copy(path.at(-1));
+        const endpoint = clone(path.at(-1));
         addItem(
           'markers',
           {
@@ -684,7 +667,7 @@ export function createRendering({
         'markers',
         {
           id: `rocket-satellite:${launch.id}`,
-          pos: copy(livePosition),
+          pos: clone(livePosition),
           pixelSize: 6,
           color: hexColor(satelliteTrack ? '#7bed9f' : '#ffd166'),
           outlineWidth: 0,
@@ -735,7 +718,7 @@ export function createRendering({
       else {
         addItem('lines', {
           id: `rocket-orbit:${launch.id}`,
-          positions: orbitPath.map(copy),
+          positions: orbitPath.map(clone),
           // The 3 px width gives the periodic dot room to read as round;
           // the pattern masks the intervening dashes down to a thin
           // centre stroke.
@@ -751,7 +734,7 @@ export function createRendering({
         });
         layerState._replayTracks.get(launch.id).projectedOrbitPath = orbitPath;
       }
-      const orbitLabelBakePosition = copy(ascentPath.at(-1));
+      const orbitLabelBakePosition = clone(ascentPath.at(-1));
       let orbitLabelPosition = orbitLabelBakePosition;
       if (ringPath) {
         ringPath.labelBakePosition = orbitLabelBakePosition;
@@ -774,7 +757,7 @@ export function createRendering({
       );
       addItem('lines', {
         id: `rocket-transfer:${launch.id}`,
-        positions: ascentPath.map(copy),
+        positions: ascentPath.map(clone),
         widthPx: 1.5,
         // The replay vehicle moves straight between these exact samples:
         // the line runs straight between them too, so the dot stays on it.
@@ -805,7 +788,6 @@ export function createRendering({
     launchIdFromPicks,
     missionHitsAt,
     launchMarkerAt,
-    selectLaunchEntity,
     isolateMission,
     projectedOrbitPath,
     updateMissionFrame,

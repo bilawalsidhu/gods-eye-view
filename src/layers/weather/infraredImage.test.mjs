@@ -11,12 +11,8 @@ import {
 function canvas() {
   const output = {};
   output.getContext = () => ({
-    setTransform: (...matrix) => {
-      output.transforms = [...(output.transforms ?? []), matrix];
-    },
     drawImage: (image) => {
       output.image = image;
-      output.drawnWith = output.transforms?.at(-1) ?? null;
     },
     getImageData: () => {
       const data = new Uint8ClampedArray([194, 0, 0, 200]);
@@ -36,7 +32,7 @@ function canvas() {
 
 test('decoded pixels are processed once on a same-sized canvas', () => {
   const image = { width: 1, height: 1 };
-  const output = processInfraredImage(image, 'filtered', canvas);
+  const output = processInfraredImage(image, 100, canvas);
   assert.equal(output.width, 1);
   assert.equal(output.height, 1);
   assert.equal(output.image, image);
@@ -50,18 +46,6 @@ test('decoded pixels are processed once on a same-sized canvas', () => {
     [...processInfraredImage(image, 0, canvas).pixels],
     [194, 0, 0, 200],
   );
-  assert.deepEqual(
-    [...processInfraredImage(image, 'full', canvas).pixels],
-    [194, 0, 0, 200],
-  );
-});
-
-test('flipY draws a bottom-up image upright, then restores the transform', () => {
-  const image = { width: 4, height: 8 };
-  assert.equal(processInfraredImage(image, 'full', canvas).drawnWith, null);
-  const output = processInfraredImage(image, 'full', canvas, { flipY: true });
-  assert.deepEqual(output.drawnWith, [1, 0, 0, -1, 0, 8]);
-  assert.deepEqual(output.transforms.at(-1), [1, 0, 0, 1, 0, 0]);
 });
 
 test('mosaic fetch is capped at 4 MiB, forwards cancellation, and releases decoded images', async () => {
@@ -72,7 +56,7 @@ test('mosaic fetch is capped at 4 MiB, forwards cancellation, and releases decod
     fetched = false;
   const options = {
     signal: controller.signal,
-    mode: 'filtered',
+    mode: 100,
     createCanvas: canvas,
     now: () => clock,
     onFetched: () => {
@@ -140,7 +124,7 @@ test('mosaic fetch is capped at 4 MiB, forwards cancellation, and releases decod
   assert.equal(closes, 2);
 });
 
-test('bitmap decoding and Image fallback release resources on success, error and abort', async (t) => {
+test('bitmap decoding returns the decoded bitmap', async (t) => {
   const original = Object.getOwnPropertyDescriptor(
     globalThis,
     'createImageBitmap',
@@ -156,41 +140,6 @@ test('bitmap decoding and Image fallback release resources on success, error and
     await decodeInfraredImage(new Blob(), new AbortController().signal),
     bitmap,
   );
-  globalThis.createImageBitmap = undefined;
-  const images = [],
-    revoked = [];
-  const originalImage = globalThis.Image;
-  globalThis.Image = class {
-    constructor() {
-      images.push(this);
-    }
-  };
-  t.after(() => {
-    if (originalImage) globalThis.Image = originalImage;
-    else delete globalThis.Image;
-  });
-  t.mock.method(URL, 'createObjectURL', () => 'blob:test');
-  t.mock.method(URL, 'revokeObjectURL', (url) => revoked.push(url));
-  for (const action of ['load', 'error', 'abort']) {
-    const controller = new AbortController();
-    const pending = decodeInfraredImage(new Blob(), controller.signal);
-    const image = images.at(-1);
-    assert.equal(image.src, 'blob:test');
-    if (action === 'load') {
-      image.onload();
-      assert.equal(await pending, image);
-    } else if (action === 'error') {
-      image.onerror();
-      await assert.rejects(pending, /decode failed/);
-    } else {
-      controller.abort();
-      await assert.rejects(pending, { name: 'AbortError' });
-      assert.equal(image.src, '');
-    }
-    assert.equal(image.onload, null);
-    assert.equal(image.onerror, null);
-  }
-  assert.deepEqual(revoked, ['blob:test', 'blob:test', 'blob:test']);
 });
 
 const pixels = (width, height) => ({
@@ -210,7 +159,7 @@ test('a frame source supplies the image: nothing is fetched or decoded and the p
     fetched = false;
   const result = await acquireInfraredMosaic('2026-09-15T20:00:00.000Z', {
     signal: controller.signal,
-    mode: 'filtered',
+    mode: 100,
     createCanvas: canvas,
     now: () => clock,
     onFetched: () => {
@@ -291,7 +240,7 @@ test('a supplied frame of the wrong size is refused and still released', async (
   await assert.rejects(
     acquireInfraredMosaic('t', {
       signal: new AbortController().signal,
-      mode: 'filtered',
+      mode: 100,
       createCanvas: canvas,
       frameSource: { getImage: async () => wrong },
     }),
@@ -301,7 +250,7 @@ test('a supplied frame of the wrong size is refused and still released', async (
   await assert.rejects(
     acquireInfraredMosaic('t', {
       signal: new AbortController().signal,
-      mode: 'filtered',
+      mode: 100,
       createCanvas: canvas,
       frameSource: { getImage: async () => undefined },
     }),
@@ -315,7 +264,7 @@ test('cancellation reaches the frame source, and a frame that arrives after it i
   let seen;
   const pending = acquireInfraredMosaic('t', {
     signal: controller.signal,
-    mode: 'filtered',
+    mode: 100,
     createCanvas: () => assert.fail('a cancelled frame is not drawn'),
     frameSource: {
       getImage: async ({ signal }) => {

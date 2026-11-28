@@ -1,15 +1,12 @@
-// src/data/geoid.test.mjs — EGM96 geoid-undulation lookup (docs/plans/2026-07-05-entity-height-datum-fix.md Task 1).
+// EGM96 geoid-undulation lookup.
 //
-// Locks the module's public interface (later tasks — aircraft altitude
-// correction, CCTV terrain fallback — call this verbatim):
+// Public interface:
 //   ensureGeoidReady(): Promise<void>   lazy-loads the grid on first call
 //   geoidHeight(latDeg, lonDeg): number N in metres; throws if not ready
 //   orthometricToEllipsoidal(hMslM, latDeg, lonDeg): number  hMslM + N
 //
-// Tolerance is loose (±2.5 m) by design: the bundled grid is EGM96 while the
-// plan's "Verified facts" reference values are Re:Earth's EGM2008 — the two
-// models differ by up to ~1 m, and the brief's own tolerance absorbs that
-// spread rather than asserting exact agreement.
+// The ±2.5 m tolerance allows for the difference between the bundled EGM96 grid and
+// Re:Earth's EGM2008 reference values (up to ~1 m).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -27,14 +24,6 @@ const SF = { lat: 37.7749, lon: -122.4194, nExpected: -32.2 };
 const DENVER = { lat: 39.7392, lon: -104.9903, nExpected: -17.3 };
 /** SFO runway 28R touchdown area — the cockpit/OSD field report's coordinates. */
 const SFO = { lat: 37.616, lon: -122.368 };
-
-test('geoidHeight throws before ensureGeoidReady() has resolved', () => {
-  // A fresh, never-initialized module instance can't be observed from the
-  // same process (ESM module cache), so this asserts the documented
-  // contract via the type check further down instead of re-importing.
-  // (See "ready-gate" test below for the real not-ready behavior.)
-  assert.equal(typeof geoidHeight, 'function');
-});
 
 test('ensureGeoidReady() resolves and is idempotent (safe to call repeatedly)', async () => {
   await ensureGeoidReady();

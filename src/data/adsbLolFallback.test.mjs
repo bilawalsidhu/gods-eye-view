@@ -80,3 +80,13 @@ test('the point response sends each admitted aircraft type alongside the vectors
   });
   assert.equal(Object.hasOwn(untyped, 'typeByIcao'), false);
 });
+
+test('surface emitter categories C1–C5 keep their OpenSky vehicle and obstacle codes', () => {
+  for (const [index, category] of ['C1', 'C2', 'C3', 'C4', 'C5'].entries()) {
+    const state = normalizeAdsbLolAircraftState(
+      { hex: 'abc123', lat: 40, lon: -73, alt_baro: 'ground', category },
+      1e9,
+    );
+    assert.equal(state[17], 16 + index, category);
+  }
+});

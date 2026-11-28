@@ -10,11 +10,8 @@
 /**
  * Maximum distance to a curated POI that still reads as "NEAR" it.
  *
- * The 2026-08-20 QA hunt found the HUD announcing NEAR SACRE-COEUR (PARIS) 2470KM
- * while parked over Moscow, and NEAR LINCOLN MEMORIAL 962KM over Chicago — the old
- * bound was 2,500 km, roughly a continent. The POI catalogue only covers eight
- * cities, so anywhere else on Earth matched whichever landmark happened to be
- * closest and reported an absurd distance as if it were a locality.
+ * The curated catalogue covers eight cities. Without a bound, the nearest POI can be a
+ * continent away and the HUD would report it as a locality.
  *
  * 150 km is metro scale: a camera over San Francisco still reads NEAR ALCATRAZ, a
  * camera over DC still reads NEAR its monuments, and Chicago (962 km from the

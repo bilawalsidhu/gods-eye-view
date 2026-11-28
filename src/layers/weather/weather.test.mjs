@@ -6,7 +6,7 @@ import { createWeatherClock } from './clock.js';
 import { worldClock } from '../../time/worldClock.js';
 import * as Cesium from 'cesium';
 import { Color, ImageryLayerCollection, GeographicTilingScheme } from 'cesium';
-import { NO_IMAGERY_HOST } from './imageryHost.js';
+import { NO_IMAGERY_HOST } from '../../maps/imageryHost.js';
 import { createWeatherShell } from './shellRendering.js';
 import { createCesiumFields } from '../../render/cesium/drawFields.js';
 import { WEATHER_IMAGERY_Z } from './imageryOrder.js';
@@ -600,6 +600,9 @@ function layerHarness({
     rehome() {
       active?.finish(false);
     },
+    cancelPrefetch() {},
+    async prefetch() {},
+    updateSnapshot() {},
     setAlpha(value) {
       alpha = value;
     },
@@ -607,7 +610,7 @@ function layerHarness({
       hidden = value;
       if (value) active?.finish(false);
     },
-    setFrame(value, selected, { signal, infrared = 'filtered' } = {}) {
+    setFrame(value, selected, { signal, infrared = 100 } = {}) {
       if (active) active.finish(false);
       const task = deferred();
       const abort = () => stage.finish(false);
@@ -1271,7 +1274,7 @@ test('host switches tear one renderer down and restage the retained frame on the
   const clouds = { ...snapshot, product: 'clouds' };
   host = { collection: h.viewer.imageryLayers, kind: 'globe' };
   h.rendering.setAlpha(0.4);
-  const first = h.rendering.setFrame(clouds, times[1], { infrared: 'full' });
+  const first = h.rendering.setFrame(clouds, times[1], { infrared: 0 });
   await flush();
   h.settle();
   assert.equal(await first, true);
@@ -1296,7 +1299,7 @@ test('host switches tear one renderer down and restage the retained frame on the
   assert.equal(diagnostics.height, 5_500);
   assert.equal(diagnostics.loading, false);
   assert.equal(diagnostics.time, times[1]);
-  assert.equal(diagnostics.infrared, 'full');
+  assert.equal(diagnostics.infrared, 0);
   assert.equal(shell.appearance.material.uniforms.alpha, 0.4);
   host = { collection: h.viewer.imageryLayers, kind: 'globe' };
   assert.equal(h.rendering.rehome(), true);
@@ -1312,7 +1315,7 @@ test('host switches tear one renderer down and restage the retained frame on the
   assert.equal(diagnostics.host, 'globe');
   assert.equal(diagnostics.loading, false);
   assert.equal(diagnostics.time, times[1]);
-  assert.equal(diagnostics.infrared, 'full');
+  assert.equal(diagnostics.infrared, 0);
   assert.equal(h.layers[0].alpha, 0.4);
   assert.equal(h.layers[0].spec.tileSize, 256);
   h.rendering.clear();
@@ -1781,7 +1784,7 @@ for (const kind of ['globe']) {
     const previous = h.layers[0];
     assert.equal(await h.rendering.setFrame(clouds, times[0]), true);
     assert.equal(h.providers.length, 1);
-    const full = h.rendering.setFrame(clouds, times[0], { infrared: 'full' });
+    const full = h.rendering.setFrame(clouds, times[0], { infrared: 0 });
     await flush();
     const tile = await h.providers[1].requestImage(0, 0, 0);
     assert.deepEqual([...tile.source.pixels], [194, 100, 0, 200]);
@@ -1791,7 +1794,7 @@ for (const kind of ['globe']) {
     assert.equal(h.layers.length, 2);
     assert.equal(h.layers[1].alpha, 0.7);
     assert.equal(previous.removed, false);
-    assert.equal(h.rendering.getDiagnostics().infrared, 'full');
+    assert.equal(h.rendering.getDiagnostics().infrared, 0);
     h.postRender.emit();
     assert.equal(h.layers.length, 1);
     assert.equal(previous.removed, true);
@@ -2304,7 +2307,7 @@ test('observed descriptors keep configuration only and label satellite clouds by
 });
 
 const globalSnapshot = { ...snapshot, product: 'clouds' };
-async function showMosaic(h, time, infrared = 'filtered') {
+async function showMosaic(h, time, infrared = 100) {
   const pending = h.rendering.setFrame(globalSnapshot, time, { infrared });
   await flush();
   h.settle();
@@ -2336,7 +2339,7 @@ test('mosaic cache skips fetch and decode, separates modes, evicts LRU at 6 and 
     cached: true,
     decodeMs: 0,
   });
-  await showMosaic(h, times[0], 'full');
+  await showMosaic(h, times[0], 0);
   assert.equal(fetches, 3);
   assert.equal(h.rendering.getDiagnostics().mosaic.cached, false);
   await showMosaic(h, times[0]);
@@ -3136,4 +3139,284 @@ test('a feed names the source behind each product, before any manifest does', (t
     feed: { getSnapshot: async () => snapshot },
   });
   assert.equal(unnamed.source, 'NOAA nowCOAST · OBSERVED');
+});
+
+const SATELLITE_CREDIT =
+  'NOAA nowCOAST · NESDIS GOES / global satellite partners';
+const BUILT_IN_CREDIT = {
+  radar: 'NOAA nowCOAST · NWS/OAR MRMS',
+  lightning: 'NOAA/NWS lightning density · derived from Vaisala NLDN/GLD360',
+  'clouds-regional': SATELLITE_CREDIT,
+  clouds: SATELLITE_CREDIT,
+};
+const creditBase = {
+  schemaVersion: 1,
+  times: times.slice(0, 2),
+  latest: times[1],
+  bounds: { west: -180, south: -60, east: 180, north: 80 },
+};
+/** The credit the shown frame owes. */
+const creditOf = (h) => h.credits.owed.at(-1)?.text;
+/** Let a staged frame land: its tiles settle over two rendered frames. */
+const landFrame = async (h) => {
+  await flush();
+  h.settle();
+  await flush();
+};
+
+/** Show a frame of `manifest` and return its rendering harness. */
+async function shownFrame(manifest) {
+  const h = renderingHarness();
+  const shown = h.rendering.setFrame(manifest, times[1]);
+  await landFrame(h);
+  assert.equal(await shown, true);
+  return h;
+}
+
+test('the imagery credit uses the source credit as plain text, else the built-in one', async () => {
+  for (const product of ['radar', 'lightning', 'clouds-regional', 'clouds']) {
+    for (const display of [undefined, { credit: 42 }]) {
+      const h = await shownFrame({
+        ...creditBase,
+        product,
+        ...(display ? { display } : {}),
+      });
+      assert.equal(creditOf(h), BUILT_IN_CREDIT[product], product);
+      h.rendering.clear();
+    }
+    const h = await shownFrame({
+      ...creditBase,
+      product,
+      display: { credit: 'Example <network> & partners' },
+    });
+    assert.equal(
+      creditOf(h),
+      'Example <network> & partners',
+      'plain text: the credits port escapes it',
+    );
+    h.rendering.clear();
+  }
+});
+
+test('a refreshed manifest updates the credit of the frame already shown', async () => {
+  for (const product of ['lightning', 'clouds']) {
+    const h = await shownFrame({
+      ...creditBase,
+      product,
+      display: { credit: 'First credit' },
+    });
+    assert.equal(creditOf(h), 'First credit');
+    const again = (display) =>
+      h.rendering.setFrame(
+        { ...creditBase, product, ...(display ? { display } : {}) },
+        times[1],
+      );
+    assert.equal(await again({ credit: 'Second credit' }), true);
+    assert.equal(h.providers.length, 1, 'the frame is not restaged');
+    assert.equal(creditOf(h), 'Second credit');
+    assert.equal(await again(), true);
+    assert.equal(creditOf(h), BUILT_IN_CREDIT[product]);
+    h.rendering.updateSnapshot({
+      ...creditBase,
+      product,
+      display: { credit: 'Third credit' },
+    });
+    assert.equal(creditOf(h), 'Third credit');
+    // Another product's manifest leaves this frame alone.
+    h.rendering.updateSnapshot({
+      ...creditBase,
+      product: 'radar',
+      display: { credit: 'Other' },
+    });
+    assert.equal(creditOf(h), 'Third credit');
+    h.rendering.clear();
+  }
+});
+
+test('a refreshed manifest leaves the shown snapshot for a host switch to restage', async () => {
+  let host;
+  const staged = [];
+  const h = renderingHarness({
+    getHost: () => host,
+    createShell: ({ product }) => ({
+      product,
+      setAlpha() {},
+      setHidden() {},
+      rehome: () => false,
+      cancelPrefetch() {},
+      clear() {},
+      async setFrame(snapshot, time) {
+        staged.push([snapshot, time]);
+        return true;
+      },
+    }),
+  });
+  host = { collection: h.viewer.imageryLayers, kind: 'globe' };
+  const first = {
+    ...creditBase,
+    product: 'lightning',
+    display: { credit: 'First credit' },
+  };
+  const shown = h.rendering.setFrame(first, times[0]);
+  await landFrame(h);
+  assert.equal(await shown, true);
+  const refreshed = {
+    ...first,
+    times: [times[1]],
+    bounds: { west: -10, south: 0, east: 10, north: 5 },
+    display: { credit: 'Second credit' },
+  };
+  h.rendering.updateSnapshot(refreshed);
+  assert.equal(creditOf(h), 'Second credit');
+  host = { collection: {}, kind: 'tileset' };
+  assert.equal(h.rendering.rehome(), true);
+  await flush();
+  assert.deepEqual(staged, [[first, times[0]]]);
+  host = { collection: h.viewer.imageryLayers, kind: 'globe' };
+  assert.equal(h.rendering.rehome(), true);
+  await landFrame(h);
+  assert.equal(h.providers.length, 2);
+  assert.deepEqual(
+    h.providers.at(-1).spec.rectangle,
+    first.bounds,
+    'the restaged frame keeps the bounds it was staged from',
+  );
+  assert.equal(creditOf(h), 'Second credit');
+  h.rendering.clear();
+});
+
+test('a refresh during a host-switch restage keeps the newest credit', async () => {
+  let host;
+  const h = renderingHarness({
+    getHost: () => host,
+    createShell: ({ product }) => ({
+      product,
+      setAlpha() {},
+      setHidden() {},
+      rehome: () => false,
+      cancelPrefetch() {},
+      clear() {},
+      async setFrame() {
+        return true;
+      },
+    }),
+  });
+  host = { collection: h.viewer.imageryLayers, kind: 'globe' };
+  const first = {
+    ...creditBase,
+    product: 'lightning',
+    display: { credit: 'First credit' },
+  };
+  const shown = h.rendering.setFrame(first, times[0]);
+  await landFrame(h);
+  assert.equal(await shown, true);
+  h.rendering.updateSnapshot({
+    ...first,
+    display: { credit: 'Second credit' },
+  });
+  host = { collection: {}, kind: 'tileset' };
+  assert.equal(h.rendering.rehome(), true);
+  await flush();
+  host = { collection: h.viewer.imageryLayers, kind: 'globe' };
+  assert.equal(h.rendering.rehome(), true);
+  h.rendering.updateSnapshot({ ...first, display: { credit: 'Third credit' } });
+  await landFrame(h);
+  assert.equal(h.providers.length, 2);
+  assert.equal(creditOf(h), 'Third credit');
+  h.rendering.clear();
+});
+
+test('a refresh while a frame loads survives a later host switch', async () => {
+  let host;
+  const h = renderingHarness({
+    getHost: () => host,
+    createShell: ({ product }) => ({
+      product,
+      setAlpha() {},
+      setHidden() {},
+      rehome: () => false,
+      cancelPrefetch() {},
+      clear() {},
+      async setFrame() {
+        return true;
+      },
+    }),
+  });
+  host = { collection: h.viewer.imageryLayers, kind: 'globe' };
+  const first = {
+    ...creditBase,
+    product: 'lightning',
+    display: { credit: 'First credit' },
+  };
+  const shown = h.rendering.setFrame(first, times[0]);
+  h.rendering.updateSnapshot({
+    ...first,
+    display: { credit: 'Second credit' },
+  });
+  await landFrame(h);
+  assert.equal(await shown, true);
+  assert.equal(creditOf(h), 'Second credit');
+  host = { collection: {}, kind: 'tileset' };
+  assert.equal(h.rendering.rehome(), true);
+  await flush();
+  host = { collection: h.viewer.imageryLayers, kind: 'globe' };
+  assert.equal(h.rendering.rehome(), true);
+  await landFrame(h);
+  assert.equal(h.providers.length, 2);
+  assert.equal(creditOf(h), 'Second credit');
+  h.rendering.clear();
+});
+
+test('a refresh before a frame is installed gives it the newest credit', async () => {
+  for (const product of ['lightning', 'clouds']) {
+    const h = renderingHarness();
+    const first = {
+      ...creditBase,
+      product,
+      display: { credit: 'First credit' },
+    };
+    const shown = h.rendering.setFrame(first, times[1]);
+    h.rendering.updateSnapshot({
+      ...first,
+      display: { credit: 'Second credit' },
+    });
+    await landFrame(h);
+    assert.equal(await shown, true);
+    assert.equal(creditOf(h), 'Second credit', product);
+    h.rendering.clear();
+  }
+});
+
+test('a layer refresh with the same latest frame updates the imagery credit', async (t) => {
+  t.mock.method(Date, 'now', () => Date.parse(times[1]));
+  const h = renderingHarness();
+  h.viewer.camera = { moveEnd: event() };
+  bindRenderer(h.viewer, { camera: cameraOver(h.viewer) });
+  let manifest = {
+    ...creditBase,
+    product: 'lightning',
+    display: { credit: 'First credit' },
+  };
+  const layer = createWeatherLayer({
+    id: 'weather-lightning',
+    feed: { getSnapshot: async () => manifest },
+    documentRef: target({ hidden: false }),
+    eventTarget: target(),
+    matchMedia: () => target({ matches: false }),
+    createRendering: () => h.rendering,
+  });
+  layer.init(h.viewer);
+  layer.enable();
+  const first = layer.update();
+  await landFrame(h);
+  await first;
+  assert.equal(creditOf(h), 'First credit');
+  manifest = { ...manifest, display: { credit: 'Second credit' } };
+  await layer.update();
+  assert.equal(h.providers.length, 1, 'the frame is not restaged');
+  assert.equal(creditOf(h), 'Second credit');
+  manifest = { ...creditBase, product: 'lightning' };
+  await layer.update();
+  assert.equal(creditOf(h), BUILT_IN_CREDIT.lightning);
+  layer.destroy();
 });

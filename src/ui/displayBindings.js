@@ -42,6 +42,23 @@ export class DisplayBindings {
   }
   _initUI() {
     const { cycleDetectionMode, isScopeMaskEnabled } = this.services;
+    // A Display change the person made claims the share link's visual lane first.
+    const visual =
+      (fn) =>
+      (...args) => {
+        this.shareLinkManager?.claimRestoreLane('visual');
+        fn(...args);
+      };
+    const toggleHud = visual(() => {
+      this.hud.toggle();
+      this._updateHudButtonState();
+      this._syncShareState();
+    });
+    const cycleDetection = visual(() => {
+      this.claimDetection();
+      cycleDetectionMode();
+      this._syncShareState();
+    });
     this._applicationShortcuts?.destroy();
     this._frameRateMonitor?.destroy();
     this._frameRateMonitor = createFrameRateMonitor({
@@ -52,22 +69,12 @@ export class DisplayBindings {
       documentRef: document,
       actions: {
         setStyle: (style) => this.setStyle(style),
-        toggleHud: () => {
-          this.shareLinkManager?.claimRestoreLane?.('visual');
-          this.hud.toggle();
-          this._updateHudButtonState();
-          this._syncShareState();
-        },
+        toggleHud,
         toggleOrbit: () => this._toggleOrbit(),
         toggleCleanView: () => this.toggleCleanView(),
         // Same collapse as the panel's own button, so its rail entry stays.
         toggleLayers: () => this._togglePanel('data-panel'),
-        cycleDetection: () => {
-          this.shareLinkManager?.claimRestoreLane?.('visual');
-          this.claimDetection();
-          cycleDetectionMode();
-          this._syncShareState();
-        },
+        cycleDetection,
         toggleCctv: () => this._toggleCctvEnabled(),
       },
     });
@@ -79,64 +86,44 @@ export class DisplayBindings {
     const store = this.displayStore ?? useDisplayStore(applicationPinia());
     const token = store.connect({
       setStyle: (style) => this.setStyle(style),
-      toggleBloom: () => {
-        this.shareLinkManager?.claimRestoreLane?.('visual');
-        this._setBloomEnabled(!this.bloomEnabled);
-      },
-      setBloomIntensity: (value) => {
-        this.shareLinkManager?.claimRestoreLane?.('visual');
-        this._setBloomIntensity(value);
-      },
-      toggleSharpen: () => {
-        this.shareLinkManager?.claimRestoreLane?.('visual');
-        this._setSharpenEnabled(!this.sharpenEnabled);
-      },
-      setScopeEnabled: (enabled) => {
-        this.shareLinkManager?.claimRestoreLane?.('visual');
+      toggleBloom: visual(() => this._setBloomEnabled(!this.bloomEnabled)),
+      setBloomIntensity: visual((value) => this._setBloomIntensity(value)),
+      toggleSharpen: visual(() =>
+        this._setSharpenEnabled(!this.sharpenEnabled),
+      ),
+      setScopeEnabled: visual((enabled) => {
         this._setScope({ enabled });
         this._syncShareState();
-      },
-      setScopeFeather: (value) => {
-        this.shareLinkManager?.claimRestoreLane?.('visual');
+      }),
+      setScopeFeather: visual((value) => {
         this._setScope({ featherPct: value });
         this._syncShareState();
-      },
-      setScopeOpacity: (value) => {
-        this.shareLinkManager?.claimRestoreLane?.('visual');
+      }),
+      setScopeOpacity: visual((value) => {
         this._setScope({ opacityPct: Number(value) });
         this._syncShareState();
-      },
-      setSharpenIntensity: (pct) => {
-        this.shareLinkManager?.claimRestoreLane?.('visual');
-        this._setSharpenIntensity(pct);
-      },
-      setHudLayout: (value) => {
-        this.shareLinkManager?.claimRestoreLane?.('visual');
-        this._setHudVariant(value);
-      },
+      }),
+      setSharpenIntensity: visual((pct) => this._setSharpenIntensity(pct)),
+      setHudLayout: visual((value) => this._setHudVariant(value)),
       toggleCleanView: () => this.toggleCleanView(),
       exitCleanView: () => this.toggleCleanView(false),
-      setDensity: (value) => {
-        this.shareLinkManager?.claimRestoreLane?.('visual');
+      setDensity: visual((value) => {
         this.claimDetection();
         this._setDetectionDensity(value);
         this._syncShareState();
-      },
-      setAllocation: (value) => {
-        this.shareLinkManager?.claimRestoreLane?.('visual');
+      }),
+      setAllocation: visual((value) => {
         this.claimDetection();
         this._setDetectionAllocation(value);
-      },
-      setFade: (fadePct) => {
-        this.shareLinkManager?.claimRestoreLane?.('visual');
+      }),
+      setFade: visual((fadePct) => {
         this._setDetectionFade({ fadePct });
         this._syncShareState();
-      },
-      setOutsideOpacity: (outsideOpacityPct) => {
-        this.shareLinkManager?.claimRestoreLane?.('visual');
+      }),
+      setOutsideOpacity: visual((outsideOpacityPct) => {
         this._setDetectionFade({ outsideOpacityPct });
         this._syncShareState();
-      },
+      }),
       toggleCelestial: () => {
         const ringIsVisible = !!this.celestialRing?.visible;
         if (!this.celestialRingEnabled || !ringIsVisible) {
@@ -145,28 +132,15 @@ export class DisplayBindings {
           this.setCelestialRingEnabled(false);
         }
       },
-      toggleHud: () => {
-        this.shareLinkManager?.claimRestoreLane?.('visual');
-        this.hud.toggle();
-        this._updateHudButtonState();
-        this._syncShareState();
-      },
-      toggleSonar: () => {
-        this.shareLinkManager?.claimRestoreLane?.('visual');
-        this._setCyberSonarEnabled();
-      },
+      toggleHud,
+      toggleSonar: visual(() => this._setCyberSonarEnabled()),
       setSonarRings: (value) => this._setCyberSonarSetting('rings', value),
       setSonarRange: (value) => this._setCyberSonarSetting('range', value),
       setSonarIntensity: (value) =>
         this._setCyberSonarSetting('intensity', value),
       setSonarOpacity: (value) => this._setCyberSonarSetting('opacity', value),
       setSonarSector: (value) => this._setCyberSonarSetting('sector', value),
-      cycleDetection: () => {
-        this.shareLinkManager?.claimRestoreLane?.('visual');
-        this.claimDetection();
-        cycleDetectionMode();
-        this._syncShareState();
-      },
+      cycleDetection,
       toggleModels: () => {
         this._setModels3dEnabled(!this._models3dEnabled);
         this._syncModels3dModeRow();
@@ -175,8 +149,7 @@ export class DisplayBindings {
       // Back to the out-of-the-box look: Normal style, the global post
       // defaults (bloom, sharpen, HUD, labels, celestial), scope on at full
       // feather and opacity, 3D aircraft on in Proximity.
-      resetVisual: () => {
-        this.shareLinkManager?.claimRestoreLane?.('visual');
+      resetVisual: visual(() => {
         this.setStyle('normal');
         // The HUD layout and the Sonar style stay as the viewer set them.
         this._applyGlobalPostDefaults({ keepHudVariant: true });
@@ -184,15 +157,15 @@ export class DisplayBindings {
         this._setScope({ enabled: true, featherPct: 100, opacityPct: 100 });
         this._setModels3dEnabled(true);
         this._setModels3dMode('proximity');
-        this._syncModels3dModeRow?.();
+        this._syncModels3dModeRow();
         // Inside Contacts the detection shown is lent for the session, and
         // leaving puts back the state from before. A reset there is the user's
         // choice, so the defaults become what leaving puts back and what a
         // share link carries.
         this.claimDetection();
-        this._adoptDetectionAsRestore?.();
+        this._adoptDetectionAsRestore();
         this._syncShareState();
-      },
+      }),
     });
     this._detachDisplayControls = () => store.detach(token);
   }

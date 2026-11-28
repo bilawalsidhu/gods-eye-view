@@ -17,10 +17,6 @@ export function realtimeSessionEvent(payload) {
       'response.output_audio_transcript.done',
       'response.output_text.delta',
       'response.output_text.done',
-      'response.audio_transcript.delta',
-      'response.audio_transcript.done',
-      'response.text.delta',
-      'response.text.done',
     ].includes(type)
   ) {
     const final = type.endsWith('.done');

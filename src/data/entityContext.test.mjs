@@ -25,7 +25,6 @@ import {
   nearbyEntities,
   recordKey,
   recordTitle,
-  recordWarnings,
   searchEntities,
   viewSummaryForLayer,
 } from './entityContext.js';
@@ -44,6 +43,18 @@ function manager(layers) {
     getAll: () => [...map.values()],
   };
 }
+
+/** The warnings a flight record's card leads with. */
+const warningsOf = (record) =>
+  describeEntity(
+    manager({
+      flights: {
+        name: 'Live Flights',
+        records: [{ id: 'W', icao24: 'w00001', lat: 1, lon: 1, ...record }],
+      },
+    }),
+    { layerId: 'flights', id: 'w00001' },
+  ).warnings;
 
 const flights = Array.from({ length: 2500 }, (_, i) => ({
   id: `FLT${i}`,
@@ -487,17 +498,17 @@ test('fact formatting follows the field suffix', () => {
 
 test('warnings lead with an emergency, then the squawk code, and stay out of the facts', () => {
   assert.deepEqual(
-    recordWarnings({ emergency: true, emergencyKind: 'medical' }),
+    warningsOf({ emergency: true, emergencyKind: 'medical' }),
     ['Emergency: medical'],
   );
-  assert.deepEqual(recordWarnings({ squawk: '7600' }), [
+  assert.deepEqual(warningsOf({ squawk: '7600' }), [
     'Radio failure (squawk 7600)',
   ]);
   assert.deepEqual(
-    recordWarnings({ squawk: '1200', emergencyKind: 'none' }),
+    warningsOf({ squawk: '1200', emergencyKind: 'none' }),
     [],
   );
-  assert.deepEqual(recordWarnings({ tsunami: 1 }), ['Tsunami warning issued']);
+  assert.deepEqual(warningsOf({ tsunami: 1 }), ['Tsunami warning issued']);
   const urgent = manager({
     flights: {
       name: 'Live Flights',
@@ -875,6 +886,7 @@ test('in-view satellites stand at their SGP4 catalogue positions (the layer reco
     },
     parts: {
       orbits,
+      controls: { _classVisible: () => true },
       rendering: {
         _pointPosition: () => {
           rendererAsked++;
@@ -1048,14 +1060,17 @@ test('a link is built only from a language code, and a level is not a warning', 
     lat: 1,
     lon: 1,
     wikipedia: 'evil.example/a#:Y',
+    alert: 'green',
   };
   const data = manager({ 'local-dams': { name: 'Dams', records: [site] } });
-  assert.deepEqual(
-    describeEntity(data, { layerId: 'local-dams', id: 'X', lat: 1, lon: 1 })
-      .links,
-    [],
-  );
-  assert.deepEqual(recordWarnings({ alert: 'green' }), []);
+  const card = describeEntity(data, {
+    layerId: 'local-dams',
+    id: 'X',
+    lat: 1,
+    lon: 1,
+  });
+  assert.deepEqual(card.links, []);
+  assert.deepEqual(card.warnings, []);
 });
 
 test('a breakdown names "Other" once', () => {

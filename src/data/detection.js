@@ -45,6 +45,7 @@ import {
   detectionHorizontalSector,
   labelBudgetFor,
   normalizeAllocationStrategy,
+  normalizeProfile,
   profileForDensity,
   viewScaleForAltitude,
 } from './detectionPolicy.js';
@@ -90,15 +91,6 @@ const MODE_BALANCED = 2;
 const MODE_DENSE = 3;
 /** @constant {string[]} MODE_LABELS - Human-readable labels indexed by mode value */
 const MODE_LABELS = ['OFF', 'SPARSE', 'BALANCED', 'DENSE'];
-
-/** @constant {Object<string,string>} LEGACY_MODE_ALIAS - Maps deprecated mode names to current labels */
-const LEGACY_MODE_ALIAS = {
-  SURVEY: 'SPARSE',
-  GOD: 'DENSE',
-  PANOPTIC: 'DENSE',
-  NORMAL: 'BALANCED',
-  ON: 'DENSE',
-};
 
 /**
  * @constant {Object<string, {line: string, label: string, labelBg: string, glow: string, blend: string, filter: string, scanline: number}>}
@@ -150,30 +142,14 @@ const BILL_NEAR_SCALE = 3.0;
 const BILL_FAR = 8000000;
 const BILL_FAR_SCALE = 0.5;
 /**
- * Query-string gate for the detection mode banner, mirroring `trafficDebug` in
- * `traffic.js` — the app's existing convention for a developer-only affordance.
- *
- * The banner ("DENSE VIS:15 SRC:1036 DENS:100% ELASTIC 0.4ms") is engine
- * telemetry, but it painted for every user: CRT/NVG/FLIR auto-enable detection,
- * so an orange debug readout was the first thing a visitor saw, colliding with
- * the cockpit callsign block. It is kept — the same numbers also ship
- * programmatically via `getDetectionDiagnostics()` — but now defaults OFF and
- * paints only under `?detectDebug=1`.
- *
- * Deliberately NOT also gated on `import.meta.env.DEV`, unlike `trafficDebug`:
- * that gate exists there so Vite can strip per-road timing instrumentation from
- * production builds. This banner installs no machinery, and being able to read
- * detection telemetry against a production build is the point of keeping it.
- *
+ * Whether `?detectDebug=1` enables the detection mode banner. This developer telemetry
+ * defaults off and works in production builds. The same numbers are always available
+ * through `getDetectionDiagnostics()`.
  * @param {string} search A `location.search` string.
  * @returns {boolean}
  */
 export function detectionDebugRequested(search) {
-  try {
-    return new URLSearchParams(String(search ?? '')).get('detectDebug') === '1';
-  } catch {
-    return false;
-  }
+  return new URLSearchParams(String(search ?? '')).get('detectDebug') === '1';
 }
 
 /** Resolved once per `initDetection` — never re-read per frame. */
@@ -187,14 +163,8 @@ const FADE_MS = DETECTION_ENABLE_FADE_MS;
 const GLOW_PX = DETECTION_STYLE.glowPx;
 
 /**
- * The clock the render-demand model runs on: monotonic, and the SAME source the
- * world-overlay host samples once per frame into `frame.timestamp`.
- *
- * Detection used to mix this with `Date.now()`, which meant the paint and the
- * "do I need another frame" question could land on different milliseconds inside
- * a single frame and disagree about whether an animation had finished. Every
- * timestamp that feeds a fade — this module's and the label arbiter's — now
- * comes from here or from `frame.timestamp`, which is the same clock.
+ * The monotonic clock the world-overlay host samples into `frame.timestamp`. Every
+ * timestamp that feeds a fade comes from here or from that frame sample.
  * @returns {number}
  */
 function _nowMs() {
@@ -206,7 +176,7 @@ function _nowMs() {
  * @param {Array<{selected?: boolean}>} renderEntries - Arbiter render rows.
  * @returns {number} Number of rendered rows no longer selected.
  */
-export function countFadingRenderEntries(renderEntries) {
+function countFadingRenderEntries(renderEntries) {
   let count = 0;
   for (let i = 0; i < renderEntries.length; i++) {
     if (!renderEntries[i].selected) count++;
@@ -219,8 +189,6 @@ export function countFadingRenderEntries(renderEntries) {
 
 /** @type {number} Current mode index into MODE_LABELS */
 let _mode = MODE_OFF;
-/** @type {HTMLCanvasElement|null} Shared host canvas used for QA diagnostics. */
-let _hostCanvas = null;
 /** @type {HTMLCanvasElement|null} Host-owned scene-blend isolation surface. */
 let _hostSurface = null;
 /** @type {CanvasRenderingContext2D|null} Current host-owned paint target. */
@@ -268,8 +236,6 @@ let _platePaint = DETECTION_THEME_MAP._default.calloutPlate;
 let _platePaintSpace = DETECTION_THEME_MAP._default.calloutPlateSpace;
 /** @type {Object} Active theme palette from THEME_MAP */
 let _theme = THEME_MAP._default;
-/** @type {string} Name of the active theme */
-let _themeName = 'normal';
 /** @type {number} Canonical density stop (0, 25, 50, 75, or 100). */
 let _densityPct = 50;
 /** @type {'ELASTIC'|'WEIGHTED'} Active layer-capacity splitter. */
@@ -449,7 +415,6 @@ export function destroyDetection() {
   _calloutCount = 0;
   _layers = [];
   _onModeChange = null;
-  _hostCanvas = null;
   _hostSurface = null;
   _ctx = null;
   _mode = MODE_OFF;
@@ -524,7 +489,7 @@ export function cycleMode() {
  */
 export function setMode(modeLabel) {
   if (!modeLabel) return;
-  const target = _normalizeModeLabel(modeLabel);
+  const target = normalizeProfile(modeLabel);
   if (!target) return;
   if (target === 'OFF') {
     if (_mode !== MODE_OFF) _lastNonOffMode = _mode;
@@ -579,14 +544,6 @@ function _setLanesActive(active) {
   _hostLane?.setActive(next);
   _calloutLane?.setActive(next);
   if (!next) _calloutCount = 0;
-}
-
-/**
- * Checks whether overlay rendering is currently suspended.
- * @returns {boolean} True if suspended.
- */
-export function isDetectionSuspended() {
-  return _suspended;
 }
 
 /**
@@ -674,52 +631,13 @@ export function getDetectionDiagnostics() {
   return result;
 }
 
-function _publishDiagnostics() {
-  if (!_hostCanvas?.dataset || !_lastDiagnostics) return;
-  const dataset = _hostCanvas.dataset;
-  dataset.profile = _lastDiagnostics.profile || 'OFF';
-  dataset.densityPct = String(_lastDiagnostics.densityPct ?? _densityPct);
-  dataset.allocationStrategy =
-    _lastDiagnostics.allocationStrategy || _allocationStrategy;
-  dataset.solveRevision = String(_lastDiagnostics.solveRevision ?? 0);
-  dataset.collectiveLabelBudget = String(
-    _lastDiagnostics.collectiveLabelBudget ?? 0,
-  );
-  dataset.labelsByLayer = JSON.stringify(_lastDiagnostics.labelsByLayer || {});
-  dataset.entitlementByLayer = JSON.stringify(
-    _lastDiagnostics.entitlementByLayer || {},
-  );
-  dataset.labeledKeys = JSON.stringify(_lastDiagnostics.labeledKeys || []);
-  dataset.labelAlphaByKey = JSON.stringify(
-    _lastDiagnostics.labelAlphaByKey || {},
-  );
-  dataset.bracketOpacityCounts = JSON.stringify(
-    _lastDiagnostics.bracketOpacityCounts || {},
-  );
-  dataset.keyholeRadius = String(_lastDiagnostics.keyholeRadius ?? 0);
-  dataset.keyholeFeatherPx = String(_lastDiagnostics.keyholeFeatherPx ?? 0);
-  dataset.demandByLayer = JSON.stringify(_lastDiagnostics.demandByLayer || {});
-  dataset.cohortByLayer = JSON.stringify(_lastDiagnostics.cohortByLayer || {});
-  dataset.placementBuildCount = String(
-    _lastDiagnostics.placementBuildCount ?? 0,
-  );
-  dataset.observationCount = String(_lastDiagnostics.observationCount ?? 0);
-  dataset.selectedCount = String(_lastDiagnostics.selectedCount ?? 0);
-  dataset.fadingCount = String(_lastDiagnostics.fadingCount ?? 0);
-  dataset.paintMs = String(_lastDiagnostics.paintMs ?? 0);
-  dataset.solveMs = String(_lastDiagnostics.solveMs ?? 0);
-  dataset.frameTotalMs = String(_lastDiagnostics.frameTotalMs ?? 0);
-  dataset.throttleSkipCount = String(_lastDiagnostics.throttleSkipCount ?? 0);
-}
-
 /**
  * Switches the visual theme for detection's host paint lane.
  * @param {string} styleName - Theme key from THEME_MAP (e.g. 'retro', 'surveillance', 'thermal').
  *   Falls back to '_default' for unrecognized names.
  */
 export function setDetectionStyle(styleName) {
-  _themeName = styleName || 'normal';
-  _theme = THEME_MAP[_themeName] || THEME_MAP._default;
+  _theme = THEME_MAP[styleName || 'normal'] || THEME_MAP._default;
   // Resolve the plate fills once per style change. The callout painter reads
   // these strings directly, so the hot path never builds a colour.
   _platePaint = _theme.calloutPlate || THEME_MAP._default.calloutPlate;
@@ -747,33 +665,6 @@ function _syncSurfaceVisibility() {
   if (!_hostSurface) return;
   _hostSurface.style.display = _mode === MODE_OFF ? 'none' : 'block';
   _hostSurface.style.opacity = _suspended ? '0' : '1';
-}
-
-/**
- * Returns the active theme's key colors so other overlays (e.g. the tracked-target
- * readout) can match the current visual mode (cyan/green/amber/white-hot).
- * @returns {{label: string, line: string, dim: string, glow: string, labelBg: string}}
- */
-export function getDetectionTheme() {
-  return {
-    label: _theme.label,
-    line: _theme.line,
-    dim: _theme.dim || _theme.label,
-    glow: _theme.glow,
-    labelBg: _theme.labelBg,
-  };
-}
-
-/**
- * Normalizes a mode label string, resolving legacy aliases to current names.
- * @param {string} label - Raw mode label (case-insensitive).
- * @returns {string|null} Canonical mode label or null if unrecognized.
- */
-function _normalizeModeLabel(label) {
-  const upper = String(label).toUpperCase();
-  if (LEGACY_MODE_ALIAS[upper]) return LEGACY_MODE_ALIAS[upper];
-  if (MODE_LABELS.includes(upper)) return upper;
-  return null;
 }
 
 /**
@@ -827,22 +718,20 @@ function _shouldPaintDetectionLane(frame) {
     _clearCyberSonarRenderTimer();
     _lastCyberSonarPaintAt = Number.NEGATIVE_INFINITY;
   }
-  // The skip and the follow-up request come from ONE decision, so the valve
-  // cannot drop a frame without handing its request forward — see
-  // `detectionPaintSkipDecision`. (Skipping is a deferral, never a cancellation:
-  // without a render hold, the frame this declines may be the only one anybody
-  // asked for.)
-  const decision = detectionPaintSkipDecision({
-    layoutChanged,
-    lastPaintMs: _lastPaintMs,
-    frameCount: _frameCount,
-  });
-  if (decision.skip) {
+  // A skip is a deferral, never a cancellation: without a render hold, the
+  // frame this declines may be the only one anybody asked for, so every skip
+  // requests a follow-up.
+  if (
+    detectionPaintSkipDecision({
+      layoutChanged,
+      lastPaintMs: _lastPaintMs,
+      frameCount: _frameCount,
+    })
+  ) {
     _throttleSkipCount++;
     if (_lastDiagnostics)
       _lastDiagnostics.throttleSkipCount = _throttleSkipCount;
-    if (decision.requestFollowUp)
-      governorRequestRender('detection-paint-skipped');
+    governorRequestRender('detection-paint-skipped');
     return false;
   }
   return true;
@@ -852,7 +741,6 @@ function _shouldPaintDetectionLane(frame) {
 function _paintDetectionLane(frame) {
   if (_mode === MODE_OFF || _suspended) return;
   _ctx = frame.ctx;
-  _hostCanvas = frame.canvas;
   if (_hostSurface !== frame.surface) {
     _hostSurface = frame.surface;
     _applySurfaceTheme();
@@ -863,13 +751,7 @@ function _paintDetectionLane(frame) {
     _labelSolveDirty = true;
   }
   const start = performance.now();
-  const result = _drawOverlay(frame) || {
-    didSolve: false,
-    solveMs: 0,
-    fadingCount: 0,
-    animatingCount: 0,
-    solvePending: false,
-  };
+  const result = _drawOverlay(frame);
   _lastRenderMs = performance.now() - start;
   _lastSolveMs = result.solveMs || 0;
   _lastPaintMs = Math.max(0, _lastRenderMs - _lastSolveMs);
@@ -887,19 +769,12 @@ function _paintDetectionLane(frame) {
     _lastDiagnostics.solveMs = _lastSolveMs;
     _lastDiagnostics.throttleSkipCount = _throttleSkipCount;
   }
-  if (result.didSolve) _publishDiagnostics();
-  // Detection holds nothing, so a time-based animation has to ask for its own
-  // next frame. This chain is self-terminating BY CONSTRUCTION — every animation
-  // it covers ends (the enable fade closes, labels finish fading out) — which is
-  // exactly what makes it safe where the old blanket hold was not. On a parked
-  // scene with nothing animating it asks for nothing, and the governor stays
-  // idle. See `detectionRenderDemand.js`.
+  // Detection holds no continuous render. Each bounded animation requests its own next
+  // frame until it ends (see `detectionRenderDemand.js`).
   if (
     detectionNeedsFollowUpFrame({
       active: _mode !== MODE_OFF && !_suspended,
-      // The frame's OWN timestamp, not a fresh sample — re-reading the clock here
-      // is what dropped the terminal frame of a fade (paint at 219 ms, policy at
-      // 220 ms, and the settled alpha never painted).
+      // The frame's timestamp ends demand on the frame that paints the end of the fade.
       nowMs,
       enabledAtMs: _enableTime,
       fadeMs: FADE_MS,
@@ -952,18 +827,9 @@ function _collectDetectableObjects() {
 }
 
 /**
- * Draws a CRT-style scanline overlay across the entire canvas.
- *
- * The scroll offset comes from the CLOCK, not from `_frameCount`. Those look
- * identical while the scene is rendering — `SCANLINE_STEP_MS` is one 60 fps
- * frame — but they differ in what they DEMAND. A frame counter only advances if
- * something keeps rendering, so tying decorative texture to it meant detection
- * had to hold the scene in continuous mode forever to keep its own shimmer
- * alive. Off the clock, the pattern scrolls whenever the scene is rendering for
- * any real reason and simply rests on a parked view. The lines are always
- * painted; only the shimmer pauses.
- *
- * Opacity is controlled by the theme's scanline property.
+ * Draws CRT-style scanlines across the canvas at the theme's `scanline` opacity. The
+ * scroll offset follows the frame clock (`scanlineOffsetPx`), so the pattern rests on a
+ * parked scene without holding the render loop.
  * @param {number} width - Canvas width in pixels.
  * @param {number} height - Canvas height in pixels.
  * @param {number} nowMs - Wall-clock time of this frame.
@@ -979,10 +845,10 @@ function _drawScanlines(width, height, nowMs) {
   _ctx.restore();
 }
 
-// Corner-bracket geometry (appendCornerBracket) and label composition
-// (composeLabel) now live in detectionDraw.js. _drawOverlay batches brackets by
-// tier color + radial-opacity band and draws labels as one background fill plus
-// two text passes, avoiding per-object strokes while preserving keyhole fading.
+// Corner-bracket geometry (appendCornerBracket) lives in detectionDraw.js.
+// _drawOverlay batches brackets by tier color + radial-opacity band and draws
+// labels as one background fill plus two text passes, avoiding per-object
+// strokes while preserving keyhole fading.
 
 /**
  * Draws the top-left status banner showing the current mode, visible/source counts,
@@ -1394,18 +1260,12 @@ function _drawOverlay(frame) {
   const objects = _collectDetectableObjects();
   const sampledCount = objects.length;
   if (objects.length === 0) {
-    // No detectable objects (e.g. DETECT on with no data layers enabled). Still
-    // paint so the overlay reads "armed, nothing in view" instead of a dead blank
-    // canvas (H3 silent-failure theme). The scanlines and focus ring carry that
-    // signal for everyone; the mode banner adds counts only under ?detectDebug=1.
-    // The frame is already cleared above.
+    // With nothing detectable, paint the scanlines and focus ring to show the overlay is
+    // armed. The mode banner adds counts under ?detectDebug=1.
     //
-    // Drop the replay buffer with it. Every other exit from this function
-    // rebuilds the buffer, but this one returns early — and because the
-    // callout lane repaints the last solve on frames the sensor lane skips,
-    // leaving rows here would strand the final callsigns on screen after the
-    // last data layer is switched off. The kept containers go with it: no
-    // paint refills them while nothing is detectable.
+    // Drop the replay buffer with it: the callout lane repaints the last solve on frames
+    // the sensor lane skips. Leftover rows would strand callsigns on screen. Release the
+    // kept containers too.
     _calloutCount = 0;
     _releaseKeptPaintState();
     _ctx.font = FONT;

@@ -2,6 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Event } from 'cesium';
+import { createControls } from './controls.js';
 import { createLifecycle } from './lifecycle.js';
 import { createState } from './state.js';
 import {
@@ -79,6 +80,7 @@ function rig(t, { overlayHit = null, geometryLaunchId = null } = {}) {
       launchMarkerAt: () => null,
     }),
   };
+  parts.controls = createControls({ state, services, parts, source: {} });
   const lifecycle = createLifecycle({
     state,
     services,

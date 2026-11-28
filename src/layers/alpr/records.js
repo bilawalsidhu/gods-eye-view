@@ -44,15 +44,19 @@ export function boxContains(outer, inner) {
   );
 }
 
-/**
- * Backoff progression for the unavailable-state retry: 30 s, doubling to a
- * 240 s ceiling. Pure so the progression is pinnable without booting the layer.
- */
-export function alprRetryDelayMs(prevDelayMs) {
-  const RETRY_MIN_MS = 30000;
-  const RETRY_CEIL_MS = 240000;
-  if (!Number.isFinite(prevDelayMs) || prevDelayMs <= 0) return RETRY_MIN_MS;
-  return Math.min(prevDelayMs * 2, RETRY_CEIL_MS);
+/** The `limit` records nearest the centre of `box` (equirectangular, cos-latitude scaled). */
+export function nearestToCentre(records, box, limit) {
+  const lat = (box.south + box.north) / 2;
+  const lon = (box.west + box.east) / 2;
+  const scale = Math.cos((lat * Math.PI) / 180);
+  return records
+    .map((record) => ({
+      record,
+      d: (record.latitude - lat) ** 2 + ((record.longitude - lon) * scale) ** 2,
+    }))
+    .sort((a, b) => a.d - b.d)
+    .slice(0, limit)
+    .map((item) => item.record);
 }
 
 /**

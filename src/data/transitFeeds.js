@@ -1903,19 +1903,6 @@ export function getRegisteredTransitFeed(id) {
 }
 
 /**
- * Great-circle distance in km. Retained for compatibility with existing
- * transit consumers; new shared spatial code should use `greatCircleKm`.
- * @param {number} aLat
- * @param {number} aLon
- * @param {number} bLat
- * @param {number} bLon
- * @returns {number}
- */
-export function haversineKm(aLat, aLon, bLat, bLon) {
-  return greatCircleKm({ lat: aLat, lon: aLon }, { lat: bLat, lon: bLon });
-}
-
-/**
  * Feeds whose coverage circle contains the point, nearest first.
  * @param {number} lat
  * @param {number} lon
@@ -1927,7 +1914,7 @@ export function transitFeedsInRange(lat, lon, slackKm = 0) {
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return [];
   return TRANSIT_ENABLED_FEEDS.map((feed) => ({
     feed,
-    km: haversineKm(lat, lon, feed.center.lat, feed.center.lon),
+    km: greatCircleKm({ lat, lon }, feed.center),
   }))
     .filter(({ feed, km }) => km <= feed.loadRadiusKm + Math.max(0, slackKm))
     .sort((a, b) => a.km - b.km)

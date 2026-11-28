@@ -3,11 +3,13 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { twoline2satrec } from 'satellite.js';
-import satellitesLayer, {
-  mapAnalystRecord,
+import satellitesLayer from './satellites.js';
+import { mapAnalystRecord } from '../layers/satellites/records.js';
+
+const {
   _clearDenseCatalogStateForTest,
   _setTrackedSatelliteRefreshStateForTest,
-} from './satellites.js';
+} = satellitesLayer.testing;
 
 const ISS_NORAD = 25544;
 

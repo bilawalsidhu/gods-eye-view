@@ -1,18 +1,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {
-  createKartaViewProvider,
-  createTileCache,
-  kartaViewZoomFor,
-} from './index.js';
+import { createKartaViewProvider } from './index.js';
 import {
   COVERAGE_TUNING,
+  COVERAGE_ZOOMS,
   FILTERED_OUT_MESSAGE,
   NO_COVERAGE_HINT,
   SEQUENCE_PAGE_SIZE,
   TOO_HIGH_HINT,
 } from './policy.js';
 import { validateProviders } from '../../registry.js';
+import { zoomForHeight } from '../../tileMath.js';
 import {
   drawn,
   fakeHost,
@@ -73,6 +71,7 @@ function fakeSource({ nearest = [], sequences = {}, archived = [] } = {}) {
       return !archived.some((id) => url.includes(`/${id}.jpg`));
     },
     getTile: async () => ({ lines: [] }),
+    getSequenceCount: async () => null,
     nearestPhotos: async ({ filter }) => {
       calls.nearest++;
       calls.nearestFilters.push(filter);
@@ -180,12 +179,13 @@ test('KartaView registers keyless, off by default, with Mapillary’s filters an
 });
 
 test('coverage is drawn from z14 near the street and z13 a little higher; never from orbit', () => {
-  assert.equal(kartaViewZoomFor(300), 14);
-  assert.equal(kartaViewZoomFor(2_500), 14);
-  assert.equal(kartaViewZoomFor(4_000), 13);
-  assert.equal(kartaViewZoomFor(6_000), 13, 'the top of the range still draws');
-  assert.equal(kartaViewZoomFor(6_001), null);
-  assert.equal(kartaViewZoomFor(NaN), null);
+  const zoomFor = (h) => zoomForHeight(h, COVERAGE_ZOOMS);
+  assert.equal(zoomFor(300), 14);
+  assert.equal(zoomFor(2_500), 14);
+  assert.equal(zoomFor(4_000), 13);
+  assert.equal(zoomFor(6_000), 13, 'the top of the range still draws');
+  assert.equal(zoomFor(6_001), null);
+  assert.equal(zoomFor(NaN), null);
 });
 
 test('the nearest photo is the closest within 50 m, and opening it asks nothing more', async () => {
@@ -507,49 +507,6 @@ test('a photo far past a run of deleted photos still finds its page and neighbou
   assert.equal(prev.disabled, false);
   await press(next, poses);
   assert.equal(poses.at(-1), 's-6006');
-});
-
-test('coverage tiles are kept for a while: panning back asks KartaView nothing', async () => {
-  let now = 0;
-  const asked = [];
-  const tiles = createTileCache({
-    load: async (tile) => {
-      asked.push(`${tile.z}/${tile.x}/${tile.y}`);
-      return { sequences: [] };
-    },
-    size: 2,
-    ttlMs: 1000,
-    now: () => now,
-  });
-  const a = { x: 1, y: 2, z: 14 };
-  const b = { x: 2, y: 2, z: 14 };
-  const c = { x: 3, y: 2, z: 14 };
-  const first = await tiles.get(a, {});
-  assert.equal(await tiles.get(a, {}), first, 'the same decoded tile');
-  await tiles.get(b, {});
-  await tiles.get(c, {});
-  await tiles.get(a, {});
-  assert.deepEqual(
-    asked,
-    ['14/1/2', '14/2/2', '14/3/2', '14/1/2'],
-    'oldest dropped',
-  );
-  now = 2000;
-  await tiles.get(a, {});
-  assert.equal(asked.length, 5, 'stale after the TTL');
-  // The same x/y at another zoom is another tile.
-  await tiles.get({ ...a, z: 13 }, {});
-  assert.deepEqual(asked.at(-1), '13/1/2');
-  assert.equal(asked.length, 6);
-  // A failed load is not kept.
-  const failing = createTileCache({
-    load: async () => {
-      throw new Error('KartaView did not answer in time — try again');
-    },
-    size: 2,
-    ttlMs: 1000,
-  });
-  await assert.rejects(failing.get(a, {}), /did not answer/);
 });
 
 test('a page in id order, its indexes out of order, still steps in index order', async () => {

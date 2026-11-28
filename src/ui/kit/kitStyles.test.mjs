@@ -292,3 +292,16 @@ test('feature rules over a kit skin keep the type they inherit', () => {
       `${selector} keeps ${property}`,
     );
 });
+
+test('the heading caret outranks the kit icon rule that loads after it', () => {
+  // kit.css's `.ui-icon` sets display and line-height with one class and
+  // loads after cockpit.css, so a one-class caret rule would lose to it.
+  assert.match(
+    ruleWith('.cockpit-compass .cockpit-heading-caret').body,
+    /display:\s*block;/,
+  );
+  assert.ok(
+    !all.some((rule) => rule.selectors.includes('.cockpit-heading-caret')),
+    'no one-class caret rule',
+  );
+});

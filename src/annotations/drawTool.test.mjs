@@ -1,5 +1,5 @@
-// STRUCTURAL contracts only: where files live, which ids the markup carries,
-// what the docs may claim. Things a running test cannot observe.
+// STRUCTURAL contracts only: where files live and which ids the markup carries.
+// Things a running test cannot observe.
 //
 // Everything about the tool's BEHAVIOUR — the pointer lease, borrowing and
 // restoring the viewer's own click actions, teardown, the Enter key, preview
@@ -170,33 +170,6 @@ test('nothing promises a GeoJSON export for drawn shapes', () => {
       `${file} still claims a GeoJSON export`,
     );
   }
-  // Draw lives in UTILITIES; only the changelog's history still says DISPLAY.
-  for (const [file, heading] of [
-    ['README.md', 'UTILITIES ▸ **Draw**'],
-    ['CHANGELOG.md', 'DISPLAY ▸ Draw'],
-    ['docs/CURRENT-STATE.md', 'UTILITIES ▸ **Draw**'],
-  ]) {
-    const source = read(file);
-    const start = source.indexOf(heading);
-    assert.ok(start >= 0, `${file} should describe the Draw control`);
-    const section = source.slice(start, start + 1200);
-    assert.doesNotMatch(
-      section,
-      /GeoJSON/i,
-      `${file} still claims a GeoJSON export for drawn shapes`,
-    );
-  }
-});
-
-test('the docs do not promise a vertex height the renderer would discard', () => {
-  // Areas and routes are DRAPED, so a per-vertex height is not a placement.
-  // That the finished spec actually drops it is asserted against the running
-  // module in drawToolBehaviour.test.mjs; this only guards the wording.
-  assert.doesNotMatch(tool(), /lands on the roof/);
-  assert.doesNotMatch(
-    read('docs/CURRENT-STATE.md'),
-    /a vertex on a roof lands on the roof/,
-  );
 });
 
 test('draped marks classify onto terrain as well as 3D tiles', () => {

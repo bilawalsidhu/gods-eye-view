@@ -1,4 +1,5 @@
-import { distance } from '../../geo/vector.js';
+import { distance, toRadians } from '../../geo/vector.js';
+import { greatCircleKm } from '../../geoDistance.js';
 import { toLonLatH } from '../../geo/ellipsoid.js';
 import { rangeForBoundingSphere } from '../../data/cameraFraming.js';
 import { isFollowing } from '../../data/followed.js';
@@ -34,11 +35,9 @@ export function createNavigation({
 
     let best = null;
     for (const record of layerState._records) {
-      const distKm = parts.model.haversineKm(
-        lat,
-        lon,
-        record.camera.lat,
-        record.camera.lon,
+      const distKm = greatCircleKm(
+        { lat, lon },
+        { lat: record.camera.lat, lon: record.camera.lon },
       );
       if (!best || distKm < best.distKm) {
         best = { id: record.camera.id, distKm };
@@ -124,8 +123,8 @@ export function createNavigation({
       { center: record.position, radius: Math.max(40, camera.rangeM * 0.36) },
       {
         offset: {
-          heading: parts.model.toRad(camera.headingDeg),
-          pitch: parts.model.toRad(-22),
+          heading: toRadians(camera.headingDeg),
+          pitch: toRadians(-22),
           range,
         },
         durationS: Math.max(0.2, duration || 0),

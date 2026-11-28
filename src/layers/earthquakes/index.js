@@ -2,6 +2,10 @@ import { fromDegrees } from '../../geo/ellipsoid.js';
 import { drawOf } from '../../render/rendererOf.js';
 import { worldClock } from '../../time/worldClock.js';
 import {
+  SELECTED_CARD_SOURCE_OPTIONS,
+  selectedCard,
+} from '../../overlays/worldOverlayTokens.js';
+import {
   isTrackingClickGesture,
   isTrackingSelectionGesture,
 } from '../../data/trackingClickGesture.js';
@@ -21,6 +25,7 @@ import {
   earthquakeDiscRadiusM,
   describeEarthquake,
 } from './model.js';
+import { analystRecordLimit } from '../../data/analystRecordLimit.js';
 export * from './model.js';
 export { createUsgsEarthquakeSource } from './source.js';
 
@@ -33,8 +38,8 @@ const msg = (text) => text;
  * own (`earthquakes:1`, …), so several can share a renderer. Picks name it
  * as `Hit.set`.
  */
-export const EARTHQUAKE_DISC_SET_ID = 'earthquakes';
-export const EARTHQUAKES_LAYER_ID = 'earthquakes';
+const EARTHQUAKE_DISC_SET_ID = 'earthquakes';
+const EARTHQUAKES_LAYER_ID = 'earthquakes';
 /** The overlay source the clicked quake's detail card is shown in. */
 export const EARTHQUAKE_CARD_SOURCE_ID = 'earthquake-card';
 /** A disc's item id is this prefix and the event's stable id. */
@@ -43,11 +48,6 @@ const PICK_PREFIX = 'earthquake:';
 const EARTHQUAKE_FOCUS_RANGE_PER_RADIUS = 3.5;
 /** The selected quake's flat fill, faint under the painted gradient. */
 const SELECTED_DISC_ALPHA = 0.04;
-const CARD_HOST_OPTIONS = Object.freeze({
-  cohortLimit: 1,
-  collisionCapacity: 1,
-  moving: false,
-});
 let instances = 0;
 
 /**
@@ -208,9 +208,8 @@ export function createEarthquakesLayer({
       { ...text, canOpen: Boolean(openExternal) },
     );
     _selectedLink = link && openExternal ? link : null;
-    const card = {
+    const card = selectedCard({
       id: `earthquake-card:${event.stableId}`,
-      selected: true,
       // Always hit-testable (the host only hit-tests interactive entries),
       // so a click on a card with no link keeps it rather than falling
       // through to the ground under it and clearing the selection.
@@ -218,14 +217,8 @@ export function createEarthquakesLayer({
       title,
       details,
       accent: depthAccent(event.depthKm || 0),
-      priority: Number.MAX_SAFE_INTEGER,
-      gapPx: 15,
-      verticalOnly: true,
-      placement: 'above',
-      stateless: true,
-      horizonCull: true,
       position: fromDegrees(event.lon, event.lat),
-    };
+    });
     if (_selectedLink) {
       const target = _selectedLink;
       card.accessibilityLabel = accessibilityLabel;
@@ -244,7 +237,7 @@ export function createEarthquakesLayer({
     overlayHost.setEntries(
       EARTHQUAKE_CARD_SOURCE_ID,
       [card],
-      CARD_HOST_OPTIONS,
+      SELECTED_CARD_SOURCE_OPTIONS,
     );
     overlayHost.setVisible(EARTHQUAKE_CARD_SOURCE_ID, true);
     publishContext(event, user);
@@ -334,7 +327,11 @@ export function createEarthquakesLayer({
     ripples?.hide?.();
     fadeDisc(null);
     if (had)
-      overlayHost.setEntries(EARTHQUAKE_CARD_SOURCE_ID, [], CARD_HOST_OPTIONS);
+      overlayHost.setEntries(
+        EARTHQUAKE_CARD_SOURCE_ID,
+        [],
+        SELECTED_CARD_SOURCE_OPTIONS,
+      );
   }
 
   function installClickHandler() {
@@ -364,7 +361,7 @@ export function createEarthquakesLayer({
       // click so every layer agrees: another layer's is that layer's click
       // (the disc under it is background), and ours acts whatever is drawn
       // under it.
-      const top = picking.clickCard?.(click) ?? null;
+      const top = picking.clickCard(click) ?? null;
       if (top?.sourceId === EARTHQUAKE_CARD_SOURCE_ID) {
         // The card's action, as its keyboard action: open the source, or
         // with none, fly to the quake.
@@ -441,12 +438,7 @@ export function createEarthquakesLayer({
       _viewer = viewer;
       // While on, the strong quakes are marks on the world clock's timeline.
       // Registered once; off, the layer has no time to show.
-      _marksKey = null;
       _uncover = worldClock.register({ id: 'earthquakes', coverage });
-      _count = 0;
-      _lastUpdate = null;
-      _lastError = null;
-      _enabled = false;
       overlayHost.setVisible(EARTHQUAKE_OVERLAY_SOURCE_ID, false);
       console.log('[Data:Earthquakes] Initialized');
     },
@@ -610,23 +602,10 @@ export function createEarthquakesLayer({
      */
     getAnalystRecords(maxCount = 2000) {
       if (!_discs || !_enabled || !_events.length) return [];
-      const limit = Number.isFinite(maxCount)
-        ? Math.max(1, Math.floor(maxCount))
-        : 2000;
-      return _events.slice(0, limit).map((event, index) =>
-        mapAnalystRecord(
-          {
-            id: event.usgsId ?? null,
-            mag: event.mag,
-            place: event.place,
-            time: event.time,
-            depth: event.depthKm,
-            lat: event.lat,
-            lon: event.lon,
-          },
-          index,
-        ),
-      );
+      const limit = analystRecordLimit(maxCount, { fallback: 2000, min: 1 });
+      return _events
+        .slice(0, limit)
+        .map((event, index) => mapAnalystRecord(event, index));
     },
 
     getStats() {

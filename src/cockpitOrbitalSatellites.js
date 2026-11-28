@@ -3,21 +3,13 @@
  * No DOM, Cesium or i18n dependencies: vectors are plain `{x, y, z}` objects
  * in Earth-fixed (ECEF) metres.
  */
+import { finiteVector } from './geo/vector.js';
 
 /** The most nearby satellites asked for the orbital rows, nearest first. */
 export const ORBITAL_SATELLITES_MAX = 8;
 
 /** How long the camera takes to hop to another satellite, ms. */
 export const ORBITAL_HOP_MS = 1200;
-
-function finiteVector(v) {
-  return (
-    Boolean(v) &&
-    Number.isFinite(v.x) &&
-    Number.isFinite(v.y) &&
-    Number.isFinite(v.z)
-  );
-}
 
 /**
  * Where the camera is part-way through a hop: along the great circle

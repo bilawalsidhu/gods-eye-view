@@ -12,35 +12,16 @@ export const ALLOCATION_STRATEGIES = Object.freeze([
   ALLOCATION_WEIGHTED,
 ]);
 
-// The keyhole's default 1% outside opacity is appropriate for text, but it
-// made side aircraft brackets effectively disappear while the same contacts
-// remained eligible. AIR geometry therefore gets a readable floor, without
-// changing label budgets.
-//
-// The floor is 0.35 AT THE DEFAULT OUTSIDE OPACITY, and it SCALES with the
-// OUTSIDE slider rather than overriding it. A flat 0.35 made that slider a
-// no-op for aircraft: dialling it down to 1% still painted brackets at 35%, so
-// the control did nothing across a third of its travel while visibly working
-// for labels. A setting that moves everything except the thing the operator is
-// looking at is a broken control, not a safety net.
+// AIR brackets get a readable alpha floor outside the keyhole so side aircraft stay
+// visible at the default 1% outside opacity. The floor scales with the OUTSIDE slider.
+// Label budgets are unchanged.
 export const AIRCRAFT_BRACKET_ALPHA_FLOOR = 0.35;
 
 /**
- * Mirror of celestialRing's KEYHOLE_OUTSIDE_OPACITY_DEFAULT — the OUTSIDE
- * setting the bracket look is calibrated at, so `AIRCRAFT_BRACKET_ALPHA_FLOOR`
- * lands EXACTLY at the shipped default. Mirrored rather than imported so this
- * stays a pure policy module with no Cesium dependency; detectionPolicy.test.mjs
- * imports the real constant and pins the two together so they cannot drift.
- *
- * It MOVES WITH THE DEFAULT (0.05 → 0.03 → 0.01; owner final lock 2026-08-24).
- * That pin is the tripwire
- * for exactly this change, and the decision it forces is which of two things the
- * approval attaches to: the bracket BRIGHTNESS, or the slider POSITION. It is
- * the brightness — the floor exists so side aircraft brackets stay readable at
- * whatever the default is, and the owner's directive moved the label default,
- * not the bracket look. Holding the anchor at 0.05 instead would dim brackets to
- * 0.07 on a first run at the 1% default, which is the dead-zone complaint in
- * reverse.
+ * Mirror of celestialRing's KEYHOLE_OUTSIDE_OPACITY_DEFAULT, the OUTSIDE setting where
+ * AIRCRAFT_BRACKET_ALPHA_FLOOR applies exactly. Mirroring keeps this policy free of
+ * Cesium. detectionPolicy.test.mjs pins the two together. The anchor follows the default
+ * so bracket brightness stays fixed there.
  */
 export const AIRCRAFT_BRACKET_FLOOR_ANCHOR = 0.01;
 

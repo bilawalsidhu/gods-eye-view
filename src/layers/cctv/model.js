@@ -1,71 +1,122 @@
-import { cross, negate, toDegrees, toRadians } from '../../geo/vector.js';
+import { clamp, cross, negate, toRadians } from '../../geo/vector.js';
+import { normalizeHeading } from '../../data/headingDegrees.js';
 import { fromAxes } from '../../geo/quaternion.js';
 import { findCamera } from '../../render/rendererOf.js';
-import { greatCircleKm } from '../../geoDistance.js';
 import { staticFrameRefreshMs } from '../../data/cctvLod.js';
 import { frameFetchDue, cardFetchPolicy } from '../../data/cctvCards.js';
 import { DEFAULT_CAMERA_CALIBRATION } from './policy.js';
 
+/**
+ * Coerces a value to a finite number or returns the fallback.
+ *
+ * Absent, blank and boolean values return the fallback as well. The source
+ * list serializes an unknown number (NaN) as JSON null, and `Number(null)`
+ * is 0, so without this an unknown pose field arrived as zero and was
+ * clamped to the field's floor instead of taking its default.
+ * @param {*} value
+ * @param {number} [fallback=NaN]
+ * @returns {number}
+ */
+
+export function safeNumber(value, fallback = NaN) {
+  if (
+    value == null ||
+    typeof value === 'boolean' ||
+    (typeof value === 'string' && !value.trim())
+  )
+    return fallback;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+/**
+ * Derives a deterministic heading from a camera ID string via a simple hash.
+ * Produces one of 16 evenly-spaced headings (0, 22.5, 45, ..., 337.5).
+ * @param {string} id
+ * @returns {number} Heading in degrees [0, 360).
+ */
+
+export function headingFromId(id) {
+  const text = String(id || '');
+  let acc = 0;
+  for (let i = 0; i < text.length; i++) {
+    acc = (acc * 33 + text.charCodeAt(i)) >>> 0;
+  }
+  return normalizeHeading((acc % 16) * 22.5);
+}
+
+/**
+ * Rounds a value to the nearest multiple of `step`.
+ * @param {number} value
+ * @param {number} [step=0.1]
+ * @returns {number}
+ */
+
+export function quantize(value, step = 0.1) {
+  return Math.round(value / step) * step;
+}
+
+/**
+ * Normalizes a coverage-mode request. Accepts the three
+ * mode strings plus booleans for `setParams({showCoverage})` back-compat
+ * (true → 'on', false → 'off'); anything else keeps the current mode.
+ * @param {*} value - Requested mode ('off'|'on'|'viewshed') or boolean.
+ * @param {'off'|'on'|'viewshed'} current - Mode to keep when the request is invalid.
+ * @returns {'off'|'on'|'viewshed'}
+ */
+
+export function normalizeCoverageMode(value, current) {
+  if (value === true) return 'on';
+  if (value === false) return 'off';
+  if (value === 'off' || value === 'on' || value === 'viewshed') return value;
+  return current;
+}
+
+/**
+ * Converts north/east metre offsets to lat/lon degree deltas at a given latitude.
+ * Uses the equirectangular approximation (111320 m/deg).
+ * @param {number} latDeg - Reference latitude (degrees).
+ * @param {number} northMeters - Offset northward (metres).
+ * @param {number} eastMeters - Offset eastward (metres).
+ * @returns {{ latOffset: number, lonOffset: number }} Degree deltas.
+ */
+
+export function offsetDegrees(latDeg, northMeters, eastMeters) {
+  const latOffset = northMeters / 111320;
+  const lonDivisor = Math.max(0.15, Math.cos(toRadians(latDeg)));
+  const lonOffset = eastMeters / (111320 * lonDivisor);
+  return { latOffset, lonOffset };
+}
+
+/**
+ * Computes the area of a circular sector (camera FOV wedge).
+ * @param {number} rangeM - Radius in metres.
+ * @param {number} fovDeg - Field of view in degrees.
+ * @returns {number} Area in km^2.
+ */
+
+export function sectorAreaKm2(rangeM, fovDeg) {
+  const theta = toRadians(clamp(fovDeg, 12, 170));
+  const areaM2 = 0.5 * rangeM * rangeM * theta;
+  return areaM2 / 1_000_000;
+}
+
+/**
+ * Reports whether selecting a record must run the full activation path.
+ * Disable re-arms the still-active record so its obstruction probe runs again
+ * on its next real activation after the temporary clamp is cleared.
+ * @param {string} cameraId Requested camera ID.
+ * @param {string|null} activeCameraId Current active camera ID.
+ * @param {Object|null} record Requested camera runtime record.
+ * @returns {boolean} Whether activation work must run.
+ */
+
+export function cctvRecordNeedsActivation(cameraId, activeCameraId, record) {
+  return cameraId !== activeCameraId || record?.activationDone !== true;
+}
+
 export function createModel({ state: layerState, services, parts, source }) {
   const { focusPassIsNeeded, getFocusTarget } = services.focus;
-
-  /**
-   * Converts degrees to radians.
-   * @param {number} deg
-   * @returns {number}
-   */
-
-  function toRad(deg) {
-    return toRadians(deg);
-  }
-
-  /**
-   * Normalizes a heading angle to the [0, 360) range.
-   * @param {number} deg
-   * @returns {number}
-   */
-
-  function normalizeHeading(deg) {
-    let v = deg % 360;
-    if (v < 0) v += 360;
-    return v;
-  }
-
-  /**
-   * Clamps a value to [min, max].
-   * @param {number} value
-   * @param {number} min
-   * @param {number} max
-   * @returns {number}
-   */
-
-  function clamp(value, min, max) {
-    return Math.max(min, Math.min(max, value));
-  }
-
-  /**
-   * Normalizes an angle to the (-180, 180] range.
-   * @param {number} deg
-   * @returns {number}
-   */
-
-  function normalizeSignedAngle(deg) {
-    let value = deg % 360;
-    if (value > 180) value -= 360;
-    if (value <= -180) value += 360;
-    return value;
-  }
-
-  /**
-   * Returns the absolute angular difference between two headings in degrees.
-   * @param {number} aDeg
-   * @param {number} bDeg
-   * @returns {number} Value in [0, 180].
-   */
-
-  function angularDeltaAbs(aDeg, bDeg) {
-    return Math.abs(normalizeSignedAngle(aDeg - bDeg));
-  }
 
   /**
    * Normalizes a raw feed-type string to a canonical type (image, mjpeg, mp4, hls, webm).
@@ -112,88 +163,6 @@ export function createModel({ state: layerState, services, parts, source }) {
   }
 
   /**
-   * Coerces a value to a finite number or returns the fallback.
-   *
-   * Absent, blank and boolean values return the fallback as well. The source
-   * list serializes an unknown number (NaN) as JSON null, and `Number(null)`
-   * is 0, so without this an unknown pose field arrived as zero and was
-   * clamped to the field's floor instead of taking its default.
-   * @param {*} value
-   * @param {number} [fallback=NaN]
-   * @returns {number}
-   */
-
-  function safeNumber(value, fallback = NaN) {
-    if (
-      value == null ||
-      typeof value === 'boolean' ||
-      (typeof value === 'string' && !value.trim())
-    )
-      return fallback;
-    const n = Number(value);
-    return Number.isFinite(n) ? n : fallback;
-  }
-
-  /**
-   * Derives a deterministic heading from a camera ID string via a simple hash.
-   * Produces one of 16 evenly-spaced headings (0, 22.5, 45, ..., 337.5).
-   * @param {string} id
-   * @returns {number} Heading in degrees [0, 360).
-   */
-
-  function headingFromId(id) {
-    const text = String(id || '');
-    let acc = 0;
-    for (let i = 0; i < text.length; i++) {
-      acc = (acc * 33 + text.charCodeAt(i)) >>> 0;
-    }
-    return normalizeHeading((acc % 16) * 22.5);
-  }
-
-  /**
-   * Rounds a value to the nearest multiple of `step`.
-   * @param {number} value
-   * @param {number} [step=0.1]
-   * @returns {number}
-   */
-
-  function quantize(value, step = 0.1) {
-    return Math.round(value / step) * step;
-  }
-
-  /**
-   * Normalizes a coverage-mode request (viewshed design §3b). Accepts the three
-   * mode strings plus booleans for `setParams({showCoverage})` back-compat
-   * (true → 'on', false → 'off'); anything else keeps the current mode.
-   * @param {*} value - Requested mode ('off'|'on'|'viewshed') or boolean.
-   * @param {'off'|'on'|'viewshed'} current - Mode to keep when the request is invalid.
-   * @returns {'off'|'on'|'viewshed'}
-   */
-
-  function normalizeCoverageMode(value, current) {
-    if (value === true) return 'on';
-    if (value === false) return 'off';
-    if (value === 'off' || value === 'on' || value === 'viewshed') return value;
-    return current;
-  }
-
-  /**
-   * Converts north/east metre offsets to lat/lon degree deltas at a given latitude.
-   * Uses the equirectangular approximation (111320 m/deg).
-   * @param {number} latDeg - Reference latitude (degrees).
-   * @param {number} northMeters - Offset northward (metres).
-   * @param {number} eastMeters - Offset eastward (metres).
-   * @returns {{ latOffset: number, lonOffset: number }} Degree deltas.
-   */
-
-  function offsetDegrees(latDeg, northMeters, eastMeters) {
-    const latOffset = northMeters / 111320;
-    const lonDivisor = Math.max(0.15, Math.cos(toRad(latDeg)));
-    const lonOffset = eastMeters / (111320 * lonDivisor);
-    return { latOffset, lonOffset };
-  }
-
-  /**
    * Returns `window.localStorage` when it is safely accessible, else null.
    * Split out so store IO can be exercised under plain node:test with an
    * injected storage-like object (getItem/setItem/removeItem) instead.
@@ -204,7 +173,7 @@ export function createModel({ state: layerState, services, parts, source }) {
     if (typeof window === 'undefined') return null;
     try {
       // NB: the window.localStorage property ACCESS itself throws SecurityError
-      // under "block all cookies", so it has to live inside the try (M11).
+      // under "block all cookies", so it has to live inside the try.
       return window.localStorage || null;
     } catch {
       return null;
@@ -218,11 +187,6 @@ export function createModel({ state: layerState, services, parts, source }) {
    * On first call for a camera, captures the raw values as `basePose`.
    * Subsequent calls re-derive lat/lon/heading/pitch/fov/range by applying
    * calibration deltas to the frozen base pose.
-   *
-   * Note: the old score-based quality system (`confidenceFromScore`, seeded
-   * `camera.quality.score`) is retired — panel trust signal is now the 3-state
-   * CAL badge (`deriveCalBadge`, driven by `calSource`/`poseSource`), not a
-   * fabricated confidence score.
    *
    * @param {Object} camera - Mutable camera record.
    */
@@ -285,63 +249,6 @@ export function createModel({ state: layerState, services, parts, source }) {
   }
 
   /**
-   * Projects a point along a bearing from a given lat/lon by a distance.
-   * Uses the spherical-earth direct geodesic formula (R = 6371 km).
-   * @param {number} latDeg - Origin latitude (degrees).
-   * @param {number} lonDeg - Origin longitude (degrees).
-   * @param {number} bearingDeg - Azimuth from north (degrees).
-   * @param {number} distanceM - Distance in metres.
-   * @returns {{ lat: number, lon: number }} Destination in degrees.
-   */
-
-  function projectPoint(latDeg, lonDeg, bearingDeg, distanceM) {
-    const angular = distanceM / 6371000;
-    const bearing = toRad(bearingDeg);
-    const lat1 = toRad(latDeg);
-    const lon1 = toRad(lonDeg);
-
-    const sinLat2 =
-      Math.sin(lat1) * Math.cos(angular) +
-      Math.cos(lat1) * Math.sin(angular) * Math.cos(bearing);
-    const lat2 = Math.asin(sinLat2);
-
-    const y = Math.sin(bearing) * Math.sin(angular) * Math.cos(lat1);
-    const x = Math.cos(angular) - Math.sin(lat1) * sinLat2;
-    const lon2 = lon1 + Math.atan2(y, x);
-
-    return {
-      lat: toDegrees(lat2),
-      lon: toDegrees(lon2),
-    };
-  }
-
-  /**
-   * Computes the great-circle distance between two points using the haversine formula.
-   * @param {number} lat1 - Latitude of point 1 (degrees).
-   * @param {number} lon1 - Longitude of point 1 (degrees).
-   * @param {number} lat2 - Latitude of point 2 (degrees).
-   * @param {number} lon2 - Longitude of point 2 (degrees).
-   * @returns {number} Distance in kilometres.
-   */
-
-  function haversineKm(lat1, lon1, lat2, lon2) {
-    return greatCircleKm({ lat: lat1, lon: lon1 }, { lat: lat2, lon: lon2 });
-  }
-
-  /**
-   * Computes the area of a circular sector (camera FOV wedge).
-   * @param {number} rangeM - Radius in metres.
-   * @param {number} fovDeg - Field of view in degrees.
-   * @returns {number} Area in km^2.
-   */
-
-  function sectorAreaKm2(rangeM, fovDeg) {
-    const theta = toRad(clamp(fovDeg, 12, 170));
-    const areaM2 = 0.5 * rangeM * rangeM * theta;
-    return areaM2 / 1_000_000;
-  }
-
-  /**
    * Returns a coarse grid key describing the viewer's current position and zoom
    * level. Used to detect meaningful view changes for auto-hop camera switching.
    * @returns {string} Grid key in the form "zoomBucket:latGrid:lonGrid".
@@ -398,7 +305,7 @@ export function createModel({ state: layerState, services, parts, source }) {
    * front face reads correctly from the natural viewpoint (focusCamera flies the
    * viewer to look along the camera heading). Local +X = viewer-right, +Y =
    * frame-up, so the 16:9 texture maps upright and unmirrored. Static geometry —
-   * computed only on slider/save/activation, never per frame (§2b).
+   * computed only on slider/save/activation, never per frame.
    * @param {Object} camera - Camera pose.
    * @param {{x: number, y: number, z: number}} capCenterPos - Plane center in ECEF.
    * @returns {{x: number, y: number, z: number, w: number}} The quaternion.
@@ -443,7 +350,7 @@ export function createModel({ state: layerState, services, parts, source }) {
   }
 
   /**
-   * Card-frame pacer tick (owner finding 3): launches AT MOST one fetch per
+   * Card-frame pacer tick: launches AT MOST one fetch per
    * tick, with cardFetchPolicy deciding whether a launch is allowed. Cold fill
    * — any selected card still missing its FIRST frame — bursts up to 4
    * in-flight fetches at 250 ms spacing so arriving in a new area populates
@@ -519,26 +426,8 @@ export function createModel({ state: layerState, services, parts, source }) {
    * pacer refills naturally on return. Owned by the initialized layer and detached on destruction.
    */
 
-  /**
-   * Reports whether selecting a record must run the full activation path.
-   * Disable re-arms the still-active record so its obstruction probe runs again
-   * on its next real activation after the temporary clamp is cleared.
-   * @param {string} cameraId Requested camera ID.
-   * @param {string|null} activeCameraId Current active camera ID.
-   * @param {Object|null} record Requested camera runtime record.
-   * @returns {boolean} Whether activation work must run.
-   */
-
-  function cctvRecordNeedsActivation(cameraId, activeCameraId, record) {
-    return cameraId !== activeCameraId || record?.activationDone !== true;
-  }
   return {
     eyePose,
-    toRad,
-    normalizeHeading,
-    clamp,
-    normalizeSignedAngle,
-    angularDeltaAbs,
     normalizeFeedType,
     isVideoFeedType,
     isVideoFeedCamera,
@@ -550,8 +439,6 @@ export function createModel({ state: layerState, services, parts, source }) {
     offsetDegrees,
     safeWindowLocalStorage,
     ensureCameraPose,
-    projectPoint,
-    haversineKm,
     sectorAreaKm2,
     currentViewContext,
     projectionTilesReady,

@@ -19,7 +19,7 @@ const EPSILON12 = 1e-12;
 const MAX_ITERATIONS = 200;
 
 /** Vincenty's longitude correction, shared with the direct series. */
-export function deltaLambda(
+function deltaLambda(
   sineAlpha,
   cosineSquaredAlpha,
   sigma,

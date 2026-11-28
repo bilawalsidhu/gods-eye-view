@@ -18,6 +18,10 @@ import {
   COVERAGE_HEIGHT_M,
 } from './policy.js';
 import { GBFS_CITY_REGISTRY } from './registry.js';
+import {
+  normalizeGbfsBool,
+  toNonNegativeInteger,
+} from '../../sources/gbfsStations.js';
 import { heightsOf } from '../../queries/heights.js';
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { drawOf } from '../../render/rendererOf.js';
@@ -27,7 +31,7 @@ import { drawOf } from '../../render/rendererOf.js';
  * its own (`bikeshare:1:stations`, `bikeshare:1:selected`), so several can
  * share a renderer. Picks name them as `Hit.set`.
  */
-export const BIKESHARE_SET_ID = 'bikeshare';
+const BIKESHARE_SET_ID = 'bikeshare';
 
 /** A covered city's marker id: its registry id under this prefix. */
 export const COVERAGE_ID_PREFIX = 'city:';
@@ -123,12 +127,12 @@ export function createRendering({
    */
 
   function resolveCapacity(capacityFromInfo, status) {
-    const fromInfo = parts.model.toNonNegativeInteger(capacityFromInfo);
+    const fromInfo = toNonNegativeInteger(capacityFromInfo);
     if (fromInfo && fromInfo > 0) return fromInfo;
 
     // Derive capacity from current bikes + available docks
-    const bikes = parts.model.toNonNegativeInteger(status?.bikesAvailable, 0);
-    const docks = parts.model.toNonNegativeInteger(status?.docksAvailable, 0);
+    const bikes = toNonNegativeInteger(status?.bikesAvailable, 0);
+    const docks = toNonNegativeInteger(status?.docksAvailable, 0);
     const derived = bikes + docks;
     if (derived > 0) return derived;
 
@@ -168,7 +172,7 @@ export function createRendering({
     if (!status.isInstalled || !status.isRenting || !status.isReturning)
       return COLOR_MUTED;
 
-    const bikes = parts.model.toNonNegativeInteger(status.bikesAvailable);
+    const bikes = toNonNegativeInteger(status.bikesAvailable);
     if (!Number.isFinite(bikes)) return COLOR_NEUTRAL;
 
     const cap = Math.max(1, Number(capacity) || DEFAULT_CAPACITY);
@@ -225,13 +229,13 @@ export function createRendering({
 
   function ensureCityPoints(cityId, stationMap) {
     // Deferred debounce/fetch completions mutate point primitives after the
-    // camera settled — each commit needs one frame in idle mode. (perf wave 2 fix)
+    // camera settled — each commit needs one frame in idle mode.
     governorRequestRender('bikeshare-points');
     const runtime = ensureCityRuntime(cityId);
 
     const added = [];
     for (const station of stationMap.values()) {
-      const key = parts.model.stationKey(cityId, station.stationId);
+      const key = `${cityId}:${station.stationId}`;
       if (layerState._stationRenderMap.has(key)) {
         runtime.stationKeys.add(key);
         continue;
@@ -259,8 +263,8 @@ export function createRendering({
         position,
         pixelSize: capacityToPixelSize(station.capacity),
         color: COLOR_NEUTRAL,
-        capacity: parts.model.toNonNegativeInteger(station.capacity),
-        publishedCapacity: parts.model.toNonNegativeInteger(station.capacity),
+        capacity: toNonNegativeInteger(station.capacity),
+        publishedCapacity: toNonNegativeInteger(station.capacity),
         bikesAvailable: null,
         docksAvailable: null,
         isInstalled: station.isInstalled,
@@ -331,21 +335,11 @@ export function createRendering({
       const capacity = resolveCapacity(record.publishedCapacity, status);
       record.capacity = capacity;
 
-      record.bikesAvailable = parts.model.toNonNegativeInteger(
-        status?.bikesAvailable,
-      );
-      record.docksAvailable = parts.model.toNonNegativeInteger(
-        status?.docksAvailable,
-      );
-      record.isInstalled = parts.model.normalizeGbfsBool(
-        status?.isInstalled,
-        true,
-      );
-      record.isRenting = parts.model.normalizeGbfsBool(status?.isRenting, true);
-      record.isReturning = parts.model.normalizeGbfsBool(
-        status?.isReturning,
-        true,
-      );
+      record.bikesAvailable = toNonNegativeInteger(status?.bikesAvailable);
+      record.docksAvailable = toNonNegativeInteger(status?.docksAvailable);
+      record.isInstalled = normalizeGbfsBool(status?.isInstalled, true);
+      record.isRenting = normalizeGbfsBool(status?.isRenting, true);
+      record.isReturning = normalizeGbfsBool(status?.isReturning, true);
 
       // Update visual properties based on current status
       record.pixelSize = capacityToPixelSize(capacity);

@@ -1,19 +1,59 @@
 import { AWARENESS_RADIUS_M } from '../../data/militaryAwarenessEngine.js';
+import { englishText, msg } from '../../i18n/marker.js';
 
 // The reason stays English for the voice analyst; the Contacts panel shows it
 // in the UI language from `reasonTemplate`.
-const msg = (text) => text;
-const fillTemplate = (template, values = {}) =>
-  template.replace(/\{(\w+)\}/g, (_, name) => String(values[name]));
 const withReason = (summary, template, values) => ({
   ...summary,
-  reason: fillTemplate(template, values),
+  reason: englishText(template, values),
   reasonTemplate: template,
   reasonValues: values,
 });
 import { DEPENDENCIES, AWARENESS_QUERY_LIMIT } from './policy.js';
+import { summarizeAwarenessCohortForNavigation } from './navigation.js';
 
-export function createQueries({ state: layerState, services, parts, source }) {
+/**
+ * Summarize viewport-backed installations without implying radius-complete coverage.
+ * @param {Array<object>} items Loaded installation matches.
+ * @param {object} source Current source availability and staleness.
+ * @returns {object} Awareness summary with viewport-honest reasoning.
+ */
+
+export function summarizeInstallationViewport(items, source) {
+  const coverage = source.stats?.coverage;
+  // getNearby measures these distances from the current subject, independent
+  // of the retained square used to fetch installation tiles.
+  const withinRadius =
+    coverage?.kind === 'subject' && Number.isFinite(coverage.radiusM)
+      ? items.filter(
+          (item) => (item.distanceM ?? item.distance) <= coverage.radiusM,
+        )
+      : items;
+  const summary = summarizeAwarenessCohortForNavigation(withinRadius, source);
+  if (summary.count === null)
+    return source.stats?.statusMessage
+      ? { ...summary, reason: source.stats.statusMessage }
+      : summary;
+  // A subject window is its own bounded area: name it instead of the viewport.
+  if (coverage?.kind === 'subject' && Number.isFinite(coverage.radiusM)) {
+    const km = Math.round(coverage.radiusM / 1000);
+    return withReason(
+      summary,
+      summary.count
+        ? msg('mapped matches within {km} km of the subject')
+        : msg('none mapped within {km} km; not a complete 250 km survey'),
+      { km },
+    );
+  }
+  return withReason(
+    summary,
+    summary.count
+      ? msg('mapped matches from the loaded viewport')
+      : msg('viewport feed is not a complete 250 km survey'),
+  );
+}
+
+export function createQueries({ state: layerState, services, parts }) {
   const flightsLayer = services.flights;
   const militaryFlightsLayer = services.military;
 
@@ -34,30 +74,11 @@ export function createQueries({ state: layerState, services, parts, source }) {
     // false all-clear, even if a lifecycle adapter briefly reports the requested
     // visibility intent as enabled.
     //
-    // `enabling` and the never-answered predicate cover two DIFFERENT windows, and
-    // both are needed because these dependencies do not settle the same way.
-    //
-    //   - military-installations is covered by `enabling` alone. Its enable() is
-    //     SYNCHRONOUS and the manager awaits update(), which owns the first
-    //     Overpass fetch, so the lifecycle stays `enabling` for that whole window
-    //     however long the fetch takes. Confirmed live: a held 17 s first fetch
-    //     read `enabling` across 34 samples with the panel non-numeric throughout,
-    //     and a failing one settled to `enabled` with status 'unavailable'. Its
-    //     getStats() also reports loading while a request is in progress —
-    //     setInstallationStatus is only ever called with
-    //     loading/zoom-in/ready/stale/empty/unavailable.
-    //   - ais-live-vessels is what the predicate below is FOR. Its enable() and
-    //     update() both resolve as soon as the first /api/vessels poll answers,
-    //     so the lifecycle settles to `enabled` — but until the server-side socket
-    //     delivers a position, firstConnectPhase is 'loading' and getStats()
-    //     reports loading: true, lastUpdate: null, count 0, and an UNDEFINED
-    //     status. That zero is an absence of evidence, not evidence of absence,
-    //     and neither the lifecycle nor the status list can tell.
-    //
-    // Deliberately `loading === true` and not truthiness: layers that never report
-    // a busy flag (flights, military) must keep answering for themselves, and a
-    // source that HAS answered once (lastUpdate set) keeps its last real count
-    // through every later poll rather than blanking to `?` on each refresh.
+    // `enabling` covers the first fetch inside enable/update (military-installations).
+    // `neverAnswered` covers a lifecycle that settles before data arrives
+    // (ais-live-vessels reports loading with no lastUpdate). Checking `loading === true`
+    // lets layers without a busy flag answer for themselves. A source that answered once
+    // keeps its last count.
     const neverAnswered = stats.loading === true && !stats.lastUpdate;
     const unavailable =
       enabling ||
@@ -105,60 +126,11 @@ export function createQueries({ state: layerState, services, parts, source }) {
   }
 
   /**
-   * Summarize viewport-backed installations without implying radius-complete coverage.
-   * @param {Array<object>} items Loaded installation matches.
-   * @param {object} source Current source availability and staleness.
-   * @returns {object} Awareness summary with viewport-honest reasoning.
-   */
-
-  function summarizeInstallationViewport(items, source) {
-    const coverage = source.stats?.coverage;
-    // getNearby measures these distances from the current subject, independent
-    // of the retained square used to fetch installation tiles.
-    const withinRadius =
-      coverage?.kind === 'subject' && Number.isFinite(coverage.radiusM)
-        ? items.filter(
-            (item) => (item.distanceM ?? item.distance) <= coverage.radiusM,
-          )
-        : items;
-    const summary = parts.navigation.summarizeAwarenessCohortForNavigation(
-      withinRadius,
-      source,
-    );
-    if (summary.count === null)
-      return source.stats?.statusMessage
-        ? { ...summary, reason: source.stats.statusMessage }
-        : summary;
-    // A subject window is its own bounded area: name it instead of the viewport.
-    if (coverage?.kind === 'subject' && Number.isFinite(coverage.radiusM)) {
-      const km = Math.round(coverage.radiusM / 1000);
-      return withReason(
-        summary,
-        summary.count
-          ? msg('mapped matches within {km} km of the subject')
-          : msg('none mapped within {km} km; not a complete 250 km survey'),
-        { km },
-      );
-    }
-    return withReason(
-      summary,
-      summary.count
-        ? msg('mapped matches from the loaded viewport')
-        : msg('viewport feed is not a complete 250 km survey'),
-    );
-  }
-
-  /**
    * THE aircraft-proximity engine. One computation, two consumers: the Contacts
    * panel window and the voice analyst's entity-centred "how many nearby".
    *
-   * They used to be separate. The panel read live billboard positions through
-   * `getNearby` with a 20 000 cap; the analyst re-derived its own answer from
-   * last-fix coordinates over a 2 000-record slice. Same question, same centre,
-   * two numbers — and in the owner's trial the spoken answer (15) and the panel
-   * (111) disagreed badly enough that the model narrated the difference away.
-   * Routing both through here makes them the same number BY CONSTRUCTION, so
-   * they cannot drift again.
+   * One computation serves the Contacts panel window and the analyst's entity-centred
+   * nearby count, so the two numbers agree.
    *
    * The subject is excluded from its own window, which is why the panel reads
    * "contacts around X" rather than "including X".
@@ -208,7 +180,6 @@ export function createQueries({ state: layerState, services, parts, source }) {
     };
   }
   return {
-    sourceState,
     collectSourceStates,
     sourceRevision,
     isSame,

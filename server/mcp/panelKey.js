@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 /** Where the install's panel key lives: beside the other local state, which
  * git ignores, at the checkout root rather than the client's working
  * directory (an MCP client may start the server anywhere). */
-export const DEFAULT_PANEL_KEY_FILE = fileURLToPath(
+const DEFAULT_PANEL_KEY_FILE = fileURLToPath(
   new URL('../../.gev-cache/mcp-panel-key', import.meta.url),
 );
 

@@ -34,6 +34,7 @@ test("another layer's card over a satellite keeps the click", (t) => {
         _trackSatellite: (id) => calls.push(['track', id]),
         _clearTracking: () => calls.push(['clear']),
       },
+      cockpit: { _cockpitHeld: () => false },
     },
   });
   interaction._installClickHandler(viewer);

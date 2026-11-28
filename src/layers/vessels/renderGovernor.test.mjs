@@ -6,7 +6,7 @@ import { bindFakeCesiumScene } from '../../testSupport/fakeCesiumScene.mjs';
 import { layerPlacement } from '../../data/placementProvider.js';
 import * as Cesium from 'cesium';
 import { PACE_MAX_HZ, PACE_MIN_HZ } from '../../renderPace.js';
-import { createVesselIconBook } from './iconBook.js';
+import { createIconBook } from '../../render/motion/iconBook.js';
 
 // The layer must let the scene idle: it asks for frames for forced passes,
 // for vessels that move, and one trailing frame after the camera stops, and
@@ -80,7 +80,7 @@ function setup({ focusPassIsNeeded = () => false, placement = null } = {}) {
       timer.fn();
     }
   };
-  const frame = () => layer.testing._runVisibilityPassForTest();
+  const frame = () => layer.testing.parts.rendering.updateVisibility();
   return {
     layer,
     camera,
@@ -114,7 +114,10 @@ test('a camera that stops inside the cadence gets exactly one trailing frame', (
   advance(100);
   frame();
   assert.equal(timers.size, 1, 'one trailing frame, not one per skipped pass');
-  assert.equal(layer.testing._hasTrailingVisibilityPassForTest(), true);
+  assert.equal(
+    layer.testing.vesselState.state.trailingVisibilityTimer !== null,
+    true,
+  );
 
   advance(VISIBILITY_UPDATE_MS);
   assert.deepEqual(requests, ['ais-vessels-visibility']);
@@ -151,7 +154,7 @@ test('following the clock, a time moved inside the cadence gets one trailing fra
 
 test('a forced pass requests its own frame', () => {
   const { layer, requests } = setup();
-  layer.testing._runVisibilityPassForTest(true);
+  layer.testing.parts.rendering.updateVisibility(true);
   assert.deepEqual(requests, ['ais-vessels-update']);
 });
 
@@ -236,7 +239,7 @@ test('a placement that places nothing asks for no frames; one that places a draw
   const viewer = { camera, scene: {} };
   bindFakeCesiumScene(viewer);
   layer.testing._setVesselStateForTest({ viewer, records: [record] });
-  const visual = layer.testing._prepareVesselVisualForTest(record);
+  const visual = layer.testing.parts.rendering.prepareRecordVisual(record);
   // Drawn: on the camera's side of the horizon.
   visual.visible = true;
   const position = visual.position;
@@ -245,7 +248,7 @@ test('a placement that places nothing asks for no frames; one that places a draw
   // Nothing placed: no frame is asked for, and the vessel stays put.
   for (let i = 0; i < 8; i += 1) {
     mono += 250;
-    layer.testing._runPlacementPassForTest();
+    layer.testing.parts.rendering.followPlacements();
     advance(250);
   }
   assert.equal(timers.size, 0);
@@ -255,7 +258,7 @@ test('a placement that places nothing asks for no frames; one that places a draw
   // Placed: moved in place, no new positions, and a frame asked for.
   spot = { lat: 51.94, lon: 4.05 };
   mono += 250;
-  layer.testing._runPlacementPassForTest();
+  layer.testing.parts.rendering.followPlacements();
   assert.equal(visual.position, position, 'written in place');
   assert.notDeepEqual({ ...visual.position }, before);
   assert.equal(timers.size, 1);
@@ -264,7 +267,7 @@ test('a placement that places nothing asks for no frames; one that places a draw
 
   // Turning the layer off drops the pending frame.
   mono += 250;
-  layer.testing._runPlacementPassForTest();
+  layer.testing.parts.rendering.followPlacements();
   assert.equal(timers.size, 1);
   layer.destroy();
   assert.equal(timers.size, 0);
@@ -293,19 +296,19 @@ test('a vessel moving visibly asks for its next frame as soon as it moves half a
   const drawnVisual = (viewer) => {
     bindFakeCesiumScene(viewer);
     layer.testing._setVesselStateForTest({ viewer, records: [record] });
-    layer.testing._prepareVesselVisualForTest(record).visible = true;
+    layer.testing.parts.rendering.prepareRecordVisual(record).visible = true;
   };
   drawnVisual({ camera, scene: {}, canvas: { clientHeight: 1000 } });
   // How long after a pass the next frame is asked for, once the vessel moved
   // `dLat` in the 40 ms since the pass before (passes come at most 30 a
   // second, so a frame 16 ms on would not move it).
   const waitAfterStep = (dLat) => {
-    layer.testing._runPlacementPassForTest();
+    layer.testing.parts.rendering.followPlacements();
     advance(1_000); // whatever frame that asked for comes and goes
     assert.equal(timers.size, 0);
     mono += 40;
     spot = { lat: spot.lat + dLat, lon: spot.lon };
-    layer.testing._runPlacementPassForTest();
+    layer.testing.parts.rendering.followPlacements();
     assert.equal(timers.size, 1);
     const [timer] = [...timers.values()];
     return timer.at - now();
@@ -332,13 +335,13 @@ test('a vessel moving visibly asks for its next frame as soon as it moves half a
   // the next pass is asked for when one may come.
   mono += 100;
   spot = { lat: spot.lat + 0.001, lon: spot.lon };
-  layer.testing._runPlacementPassForTest();
+  layer.testing.parts.rendering.followPlacements();
   advance(1_000);
-  const drawn = layer.testing._vesselVisualForTest(record).drawnLat;
+  const drawn = layer.testing.parts.rendering.getVisual(record).drawnLat;
   mono += 16;
   spot = { lat: spot.lat + 0.001, lon: spot.lon };
-  layer.testing._runPlacementPassForTest();
-  assert.equal(layer.testing._vesselVisualForTest(record).drawnLat, drawn);
+  layer.testing.parts.rendering.followPlacements();
+  assert.equal(layer.testing.parts.rendering.getVisual(record).drawnLat, drawn);
   const [held] = [...timers.values()];
   assert.ok(Math.abs(held.at - now() - (1000 / PACE_MAX_HZ - 16)) < 1e-6);
 });
@@ -380,7 +383,7 @@ test('following the clock moves drawn vessels in place each world time, prepares
     records: [drawn, hidden, owned, missing],
   });
   const visuals = [drawn, hidden, owned].map((record) =>
-    layer.testing._prepareVesselVisualForTest(record),
+    layer.testing.parts.rendering.prepareRecordVisual(record),
   );
   // Drawn as an icon (on the camera's side of the horizon), hidden, and
   // drawn by its model.
@@ -400,7 +403,7 @@ test('following the clock moves drawn vessels in place each world time, prepares
   assert.notDeepEqual({ ...visuals[2].position }, before[2], 'model moves');
   const hiddenAt = { ...visuals[1].position };
   assert.ok(
-    layer.testing._vesselVisualForTest(missing).position,
+    layer.testing.parts.rendering.getVisual(missing).position,
     'a missing visual is prepared',
   );
   assert.equal(timers.size, 1, 'moving vessels ask for a frame');
@@ -454,7 +457,7 @@ test('following the clock, a vessel draws no icon before it was there, and draws
   layer.testing._setVesselStateForTest({ viewer, icons: null });
   const first = 1_000_000;
   layer.testing._followClockForTest(first - 10 * 60_000);
-  layer.testing._reconcileVesselsForTest(viewer, [
+  layer.testing.parts.snapshots.reconcileVessels(viewer, [
     {
       mmsi: '111',
       lat: 51.93,
@@ -472,10 +475,10 @@ test('following the clock, a vessel draws no icon before it was there, and draws
     );
     return set.items.get('111').show;
   };
-  layer.testing._runVisibilityPassForTest(true);
+  layer.testing.parts.rendering.updateVisibility(true);
   assert.equal(shown(), false, 'ten minutes before its first fix');
   layer.testing._followClockForTest(first - 30_000);
-  layer.testing._runVisibilityPassForTest(true);
+  layer.testing.parts.rendering.updateVisibility(true);
   assert.equal(shown(), true, 'half a minute before it: reaching it');
 });
 
@@ -528,7 +531,7 @@ test('following the clock, drawn vessels move again once the fastest would have 
   const viewer = { camera, scene: {}, canvas: { clientHeight: 1000 } };
   bindFakeCesiumScene(viewer);
   layer.testing._setVesselStateForTest({ viewer, records: [record] });
-  const visual = layer.testing._prepareVesselVisualForTest(record);
+  const visual = layer.testing.parts.rendering.prepareRecordVisual(record);
   // Drawn: on the camera's side of the horizon.
   visual.visible = true;
   const at = () => ({ ...visual.position });
@@ -570,7 +573,7 @@ test('a vessel is drawn lifted above the sea surface, its waterline on it, as Ce
   const viewer = { camera, scene: {} };
   bindFakeCesiumScene(viewer);
   layer.testing._setVesselStateForTest({ viewer, records: [record] });
-  const visual = layer.testing._prepareVesselVisualForTest(record);
+  const visual = layer.testing.parts.rendering.prepareRecordVisual(record);
   const heightOf = (position) =>
     Cesium.Ellipsoid.WGS84.cartesianToCartographic(
       new Cesium.Cartesian3(position.x, position.y, position.z),
@@ -609,7 +612,7 @@ test('following the clock, a pass moves hidden vessels in proportion to the wall
   bindFakeCesiumScene(viewer);
   layer.testing._setVesselStateForTest({ viewer, records });
   const visuals = records.map((record) =>
-    layer.testing._prepareVesselVisualForTest(record),
+    layer.testing.parts.rendering.prepareRecordVisual(record),
   );
   // Hidden: past the horizon.
   for (const visual of visuals) visual.visible = false;
@@ -642,7 +645,7 @@ test('following the clock, the step gate measures each vessel from when it was d
   const viewer = { camera, scene: {}, canvas: { clientHeight: 1000 } };
   bindFakeCesiumScene(viewer);
   layer.testing._setVesselStateForTest({ viewer, records: [record] });
-  const visual = layer.testing._prepareVesselVisualForTest(record);
+  const visual = layer.testing.parts.rendering.prepareRecordVisual(record);
   visual.visible = true;
   const at = () => ({ ...visual.position });
   const pass = (atMs) => {
@@ -656,7 +659,7 @@ test('following the clock, the step gate measures each vessel from when it was d
   // A snapshot draws it afresh just before the next pass: the pass after
   // it measures the move over that short time, not since 11 s.
   layer.testing._followClockForTest(17_900);
-  layer.testing._prepareVesselVisualForTest(record);
+  layer.testing.parts.rendering.prepareRecordVisual(record);
   pass(18_000);
   let drawn = at();
   pass(19_000);
@@ -713,12 +716,12 @@ test('following the clock, a vessel the visibility pass shows before the clock p
   query.projectMany = (_world, screen) => screen.fill(Number.NaN);
   layer.testing._setVesselStateForTest({ viewer, records });
   layer.testing._followClockForTest(0);
-  const visual = layer.testing._prepareVesselVisualForTest(last);
+  const visual = layer.testing.parts.rendering.prepareRecordVisual(last);
   for (const record of records.slice(0, -1))
-    layer.testing._prepareVesselVisualForTest(record);
+    layer.testing.parts.rendering.prepareRecordVisual(record);
   // Hidden until the visibility pass finds them in view.
   for (const record of records)
-    layer.testing._vesselVisualForTest(record).visible = false;
+    layer.testing.parts.rendering.getVisual(record).visible = false;
   layer.testing._runClockPassForTest(10_000);
   // Paused, a seek far on: the next frame moves only a share of the hidden
   // vessels, not the last.
@@ -727,7 +730,7 @@ test('following the clock, a vessel the visibility pass shows before the clock p
   mono += 16;
   layer.testing._runClockPassForTest(1_800_000);
   assert.notEqual(visual.followedAtMs, 1_800_000);
-  layer.testing._runVisibilityPassForTest(true);
+  layer.testing.parts.rendering.updateVisibility(true);
   assert.equal(visual.visible, true);
   const { latitude } = Cesium.Ellipsoid.WGS84.cartesianToCartographic(
     new Cesium.Cartesian3(
@@ -758,7 +761,7 @@ test('a placement pass writes the vessels it moved to the set at once, not one a
   camera.positionWC = Cesium.Cartesian3.fromDegrees(4.05, 51.93, 20_000);
   camera.frustum = { fovy: 1 };
   const writes = [];
-  const icons = createVesselIconBook({
+  const icons = createIconBook({
     id: 'vessels',
     upsert: (list) => writes.push(list.map((item) => item.id)),
     remove: noop,
@@ -771,16 +774,16 @@ test('a placement pass writes the vessels it moved to the set at once, not one a
   bindFakeCesiumScene(viewer);
   layer.testing._setVesselStateForTest({ viewer, records, icons });
   for (const record of records) {
-    const visual = layer.testing._prepareVesselVisualForTest(record);
+    const visual = layer.testing.parts.rendering.prepareRecordVisual(record);
     visual.visible = true;
     // Drawn already, as the layer draws a vessel it was sent.
     icons.put({ id: visual.iconId }, { expiresAt: null });
   }
-  layer.testing._runPlacementPassForTest();
+  layer.testing.parts.rendering.followPlacements();
   mono += 100;
   for (const [id, spot] of spots)
     spots.set(id, { lat: spot.lat + 0.001, lon: spot.lon });
   writes.length = 0;
-  layer.testing._runPlacementPassForTest();
+  layer.testing.parts.rendering.followPlacements();
   assert.deepEqual(writes, [['111', '222']]);
 });

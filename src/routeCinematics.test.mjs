@@ -20,12 +20,10 @@ import {
   createRouteFlight,
   flyRoute,
   getActiveCameraMotion,
-  activeCameraMotionId,
   initCameraVerbs,
   interruptCameraMotion,
   interruptCameraMotionIfActive,
   moveCamera,
-  prefersReducedMotion,
   routeAltitudeOffsetM,
   routeColdSeedFloorM,
   routeCorridorCells,
@@ -36,6 +34,7 @@ import {
   routeSpeedProfile,
   signedTurnRad,
 } from './cameraVerbs.js';
+import { prefersReducedMotion } from './reducedMotion.js';
 
 const FRAME_S = 1 / 60;
 const CRUISE_M_S = { slow: 20, normal: 40, fast: 90 };
@@ -1025,11 +1024,11 @@ test('a flight can be stopped by its owner, and only while it is still theirs', 
   initCameraVerbs(viewer.viewer, () => null);
   const path = TWO_TURN_ROUTE.map(([lon, lat]) => ({ lon, lat, height: 0 }));
 
-  assert.equal(activeCameraMotionId(), 0, 'an idle camera has no motion id');
+  assert.equal(getActiveCameraMotion()?.motionId ?? 0, 0, 'an idle camera has no motion id');
   const first = flyRoute([{ type: 'route', label: 'mine', path }]);
   assert.equal(first.ok, true);
   assert.ok(first.motionId > 0, 'a started flight reports its id');
-  assert.equal(activeCameraMotionId(), first.motionId);
+  assert.equal(getActiveCameraMotion()?.motionId ?? 0, first.motionId);
   assert.equal(getActiveCameraMotion().motionId, first.motionId);
 
   // Someone else replaces it. The first owner's cancel must now be inert.
@@ -1040,7 +1039,7 @@ test('a flight can be stopped by its owner, and only while it is still theirs', 
     false,
   );
   assert.equal(
-    activeCameraMotionId(),
+    getActiveCameraMotion()?.motionId ?? 0,
     second.motionId,
     'the newer flight is still running',
   );
@@ -1050,7 +1049,7 @@ test('a flight can be stopped by its owner, and only while it is still theirs', 
     interruptCameraMotionIfActive(second.motionId, 'owner-cancel').wasActive,
     true,
   );
-  assert.equal(activeCameraMotionId(), 0);
+  assert.equal(getActiveCameraMotion()?.motionId ?? 0, 0);
   assert.equal(getActiveCameraMotion(), null);
 
   // A second cancel, and a cancel with no id at all, stop nothing.

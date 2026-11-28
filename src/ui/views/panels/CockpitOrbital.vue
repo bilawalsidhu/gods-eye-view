@@ -10,9 +10,9 @@ import {
 import {
   ownerMark,
   preloadOwnerFlags,
-  regionName,
   shownOwnerMark,
 } from '../../ownerFlag.js';
+import { countryName } from '../../../data/wikidataCities.js';
 import { useCockpitStore } from '../../stores/cockpit.js';
 import UiButton from '../../kit/UiButton.vue';
 import UiIcon from '../../kit/UiIcon.vue';
@@ -177,7 +177,7 @@ const placeText = computed(() => {
   if (!place) return '';
   if (place.kind !== 'country') return place.name || '';
   const country =
-    (place.countryCode && regionName(place.countryCode, getLocale())) ||
+    (place.countryCode && countryName(place.countryCode, getLocale(), null)) ||
     place.name ||
     '';
   const region = place.division

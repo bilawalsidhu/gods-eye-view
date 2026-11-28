@@ -1014,7 +1014,6 @@ test('a pick that fails at the screen centre counts as a miss, and the ellipsoid
 
 test('OPEN after a link armed opens at its point only while the view centre is still near it', async (t) => {
   const { createStreetLevelLayer: create } = await import('./index.js');
-  const scenePick = await import('../../data/scenePick.js');
   const lookups = [];
   const provider = fakeProvider({
     nearestImage: async (point, options) => {
@@ -1035,7 +1034,7 @@ test('OPEN after a link armed opens at its point only while the view centre is s
   });
   viewer.scene.canvas.clientWidth = 1000;
   viewer.scene.canvas.clientHeight = 600;
-  const layer = create({ providers: [provider], services: { scenePick } });
+  const layer = create({ providers: [provider] });
   layer.init(viewer);
   layer.enable(viewer);
   t.after(() => {
@@ -1542,7 +1541,6 @@ test('an armed lookup dies with its source: switched off, or its map gone', asyn
 
 test('a lookup armed with no point opens under the middle of the screen on the press', async (t) => {
   const { createStreetLevelLayer: create } = await import('./index.js');
-  const scenePick = await import('../../data/scenePick.js');
   const lookups = [];
   const provider = fakeProvider({
     nearestImage: async (point, options) => {
@@ -1570,7 +1568,7 @@ test('a lookup armed with no point opens under the middle of the screen on the p
     layer?.destroy();
     globalThis.document = saved;
   });
-  layer = create({ providers: [provider], services: { scenePick } });
+  layer = create({ providers: [provider] });
   layer.init(viewer);
   layer.enable(viewer);
   layer.armNearest(null, { providerIds: [provider.id], radiusM: 250 });
@@ -1970,7 +1968,6 @@ test('the panel says why a lit Street View draws nothing off Google 3D', async (
 });
 
 test('OPEN aimed at the sky after a link armed opens nothing: never the far link point', async (t) => {
-  const scenePick = await import('../../data/scenePick.js');
   const lookups = [];
   const provider = fakeProvider({
     nearestImage: async (point) => {
@@ -1979,7 +1976,6 @@ test('OPEN aimed at the sky after a link armed opens nothing: never the far link
     },
   });
   const { layer } = await enabledLayer(t, [provider], {
-    services: { scenePick },
     setup: (viewer) => {
       // Every pick misses the ground: the screen centre is sky.
       Object.assign(viewer.scene, {
@@ -2003,7 +1999,6 @@ test('OPEN aimed at the sky after a link armed opens nothing: never the far link
 });
 
 test('a request of its own (armed: false) neither uses nor drops the link’s armed point', async (t) => {
-  const scenePick = await import('../../data/scenePick.js');
   const lookups = [];
   const provider = fakeProvider({
     nearestImage: async (point, options) => {
@@ -2013,7 +2008,6 @@ test('a request of its own (armed: false) neither uses nor drops the link’s ar
   });
   const centre = Cesium.Cartesian3.fromDegrees(-121.4937, 38.5799, 0);
   const { layer } = await enabledLayer(t, [provider], {
-    services: { scenePick },
     setup: (viewer) => {
       Object.assign(viewer.scene, {
         pickPositionSupported: true,

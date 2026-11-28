@@ -105,7 +105,7 @@ test('satellite pass prediction methods report no-tle on cold catalog and coerce
   const L2 =
     '2 25544  51.6416 247.4627 0006703 130.5360 325.0288 15.72125391563537';
   const satrec = twoline2satrec(L1, L2);
-  layer._setTrackedSatelliteRefreshStateForTest({
+  layer.testing._setTrackedSatelliteRefreshStateForTest({
     noradId: 25544,
     name: 'ISS (ZARYA)',
     satrec,
@@ -136,7 +136,7 @@ test('satellite pass prediction methods report no-tle on cold catalog and coerce
   assert.equal(issResult.status, 'ok');
   assert.deepEqual(issResult, numericResult);
 
-  layer._setTrackedSatelliteRefreshStateForTest({
+  layer.testing._setTrackedSatelliteRefreshStateForTest({
     noradId: 25544,
     name: 'ISS (ZARYA)',
     satrec,
@@ -151,7 +151,7 @@ test('satellite pass prediction methods report no-tle on cold catalog and coerce
   assert.equal(layer.resolveSatelliteForPass('starlink').totalMatches, 2);
   assert.equal(layer.resolveSatelliteForPass('STARLINK ONE').noradId, 10);
   assert.equal(layer.resolveSatelliteForPass('missing').status, 'not-found');
-  layer._clearDenseCatalogStateForTest();
+  layer.testing._clearDenseCatalogStateForTest();
   assert.equal(layer.resolveSatelliteForPass('25544').status, 'not-found');
 
   // Non-existent satellite ID in populated catalog

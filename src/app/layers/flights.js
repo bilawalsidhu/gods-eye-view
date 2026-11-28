@@ -11,6 +11,7 @@ import * as readout from '../../data/trackedReadout.js';
 import * as context from '../../data/contextStore.js';
 import * as render from '../../renderGovernor.js';
 import * as recession from '../../data/aircraftRecession.js';
+import { appAssetUrl } from './overlayHost.js';
 
 /** Construct one layer using the application scene owners and a supplied source.
  * `placement`: a host-supplied placement for its live aircraft, or null. */
@@ -19,8 +20,7 @@ export function createApplicationFlights({
   source,
   militaryRegistry,
   placement = null,
-  resolveAsset = (url) =>
-    `${import.meta.env?.BASE_URL || '/'}${url.replace(/^\//, '')}`,
+  resolveAsset = appAssetUrl,
 }) {
   const { groundFloor, meshFloor, groundSnap } = surface;
   return createCivilFlightLayer({

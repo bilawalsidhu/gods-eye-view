@@ -12,9 +12,6 @@ function fixture() {
   const parts = {
     model: {
       eyePose: () => ({ lat: 40, lon: -101 }),
-      haversineKm(lat1, lon1, lat2, lon2) {
-        return Math.hypot(lat1 - lat2, lon1 - lon2);
-      },
     },
   };
   const navigation = createNavigation({

@@ -17,14 +17,8 @@ export function createWindSource({
       if (!['none', 'temperature', 'pressure'].includes(overlay))
         throw new Error(msg('Unknown weather overlay'));
       const query = `model=${model}${overlay === 'none' ? '' : `&overlay=${overlay}`}`;
-      const controller = new AbortController();
-      const abort = () => controller.abort(signal.reason);
-      signal?.addEventListener('abort', abort, { once: true });
-      const timer = setTimeout(
-        () => controller.abort(new Error(msg('Wind request timed out'))),
-        timeoutMs,
-      );
-      const active = controller.signal;
+      const timeout = AbortSignal.timeout(timeoutMs);
+      const active = signal ? AbortSignal.any([signal, timeout]) : timeout;
       try {
         signal?.throwIfAborted();
         const response = await fetchImpl(`/api/wind/manifest?${query}`, {
@@ -98,9 +92,11 @@ export function createWindSource({
             ? { scalar: { ...scalar, values: values.slice(count * 2) } }
             : {}),
         };
-      } finally {
-        clearTimeout(timer);
-        signal?.removeEventListener('abort', abort);
+      } catch (error) {
+        // The timeout's own reason is a DOMException; the layer shows this text.
+        if (timeout.aborted && !signal?.aborted)
+          throw new Error(msg('Wind request timed out'));
+        throw error;
       }
     },
   };

@@ -2,9 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as Cesium from 'cesium';
 import { createSelection } from './selection.js';
-import { createPickRouter } from './pickRouter.js';
 import { fakeInput } from '../../input/testDoubles.mjs';
 import * as pickRegistry from '../../data/pickRegistry.js';
+import { STREET_LEVEL_LAYER_ID } from './policy.js';
 
 /** The selection installed on a stand-in viewer, with what its clicks reach. */
 function harness({
@@ -74,9 +74,6 @@ function harness({
     ]),
   };
   const parts = {
-    router: createPickRouter(() => state.providers.values(), {
-      positionId: 'sl:pos',
-    }),
     hasSelectedSequence: () => sequences.selected,
     openAtGround: (click) => groundClicks.push(click),
     clearSequences() {
@@ -93,6 +90,7 @@ function harness({
     opened,
     groundClicks,
     scene,
+    ownsPick: (id) => pickRegistry.findPickOwner(id) === STREET_LEVEL_LAYER_ID,
     click: (x = 10) => input.click({ x, y: 10 }),
     /** A keydown reaching the document from `target`; the event as handled. */
     key(key, target, { defaultPrevented = false } = {}) {
@@ -134,6 +132,18 @@ test('a click on a line selects its sequence, on a cone opens its image, elsewhe
       h.groundClicks.map(({ surface }) => surface),
       [true, false],
     );
+  } finally {
+    h.restore();
+  }
+});
+
+test('the pick owner claims our prefixes and the position marker, nothing else', () => {
+  const h = harness();
+  try {
+    assert.equal(h.ownsPick('mly:img:2'), true);
+    assert.equal(h.ownsPick('sl:pos'), true);
+    for (const id of ['cctv:1', '', null, undefined, 42, {}])
+      assert.equal(h.ownsPick(id), false, String(id));
   } finally {
     h.restore();
   }

@@ -49,7 +49,7 @@ export function positionLine(record) {
  * @param {object} record
  * @returns {string}
  */
-export function cardLink(record) {
+function cardLink(record) {
   return record?.url || EMODNET_PAGE_URL;
 }
 

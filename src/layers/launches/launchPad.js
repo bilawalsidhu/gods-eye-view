@@ -1,5 +1,5 @@
 import { fromDegrees } from '../../geo/ellipsoid.js';
-import { distance } from '../../geo/vector.js';
+import { distance, smoothstep } from '../../geo/vector.js';
 import { findCamera, findFrame } from '../../render/rendererOf.js';
 import { hexColor } from '../../render/color.js';
 import { LAUNCH_PAD_ZONE_RADIUS_M } from './policy.js';
@@ -17,11 +17,6 @@ const ZONE_RIM_GLOW = 0.35;
 /** The zone image's side, pixels. */
 const ZONE_IMAGE_PX = 512;
 
-const smoothstep = (edge0, edge1, x) => {
-  const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
-  return t * t * (3 - 2 * t);
-};
-
 /**
  * The zone's colour and alpha at `r`, a fraction of its radius from its
  * centre: the fill's colour, easing into the rim's (which glows a little)
@@ -29,7 +24,7 @@ const smoothstep = (edge0, edge1, x) => {
  * @param {number} r
  * @returns {[number, number, number, number]} `r, g, b, a`, 0..1.
  */
-export function launchPadZoneColour(r) {
+function launchPadZoneColour(r) {
   const [red, green, blue] = hexColor(ZONE_COLOR, 1);
   const inside = 1 - smoothstep(ZONE_EDGE, 1, r);
   const rim = smoothstep(ZONE_EDGE - ZONE_RIM_WIDTH, ZONE_EDGE, r) * inside;
@@ -48,14 +43,11 @@ let zoneImage;
 /**
  * The zone as an image fill: `launchPadZoneColour` across a square canvas,
  * its centre at the middle and its edge at the sides.
- * @param {() => HTMLCanvasElement} [createCanvas]
  * @returns {?{canvas: HTMLCanvasElement, key: string}}
  */
-export function launchPadZoneImage(
-  createCanvas = () => globalThis.document?.createElement('canvas'),
-) {
+function launchPadZoneImage() {
   if (zoneImage !== undefined) return zoneImage;
-  const canvas = createCanvas();
+  const canvas = globalThis.document?.createElement('canvas');
   const context = canvas?.getContext?.('2d');
   if (!context) return (zoneImage = null);
   canvas.width = ZONE_IMAGE_PX;
@@ -74,12 +66,7 @@ export function launchPadZoneImage(
   return (zoneImage = { canvas, key: 'launch-pad-zone' });
 }
 
-export function createLaunchPad({
-  state: layerState,
-  services,
-  parts,
-  source,
-}) {
+export function createLaunchPad({ state: layerState, parts }) {
   function zoneSet() {
     return layerState._missionSets?.pad ?? null;
   }
@@ -180,10 +167,7 @@ export function createLaunchPad({
   }
   return {
     hideLaunchPadZone,
-    removeLaunchPadZonePrimitive,
-    createLaunchPadZonePrimitive,
     initLaunchPadZonePrimitive,
     destroyLaunchPadZonePrimitive,
-    updateLaunchPadZone,
   };
 }

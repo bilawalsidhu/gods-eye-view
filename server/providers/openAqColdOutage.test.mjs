@@ -1,61 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createOpenAqAcquisition } from './openAq.js';
-const start = Date.parse('2026-10-20T12:00:00Z');
-const HOUR = 3600_000;
-const iso = (t) => new Date(t).toISOString();
-const loc = (id, lon, lat, last, sensors) => ({
-  id,
-  name: 'S' + id,
-  country: { code: 'XX', name: 'X' },
-  datetimeLast: { utc: iso(last) },
-  coordinates: { latitude: lat, longitude: lon },
-  isMonitor: true,
-  sensors: sensors ?? [
-    { id: id * 10, parameter: { name: 'pm25', units: 'µg/m³' } },
-  ],
-});
-const latestRow = (id, t, value = 5) => ({
-  locationsId: id,
-  sensorsId: id * 10,
-  value,
-  datetime: { utc: iso(t) },
-});
-/** Fake OpenAQ: catalog from `stations()` filtered by bbox and paginated. */
-function fake({ clock, stations, latest, hours, fail }) {
-  const calls = [];
-  const fetchImpl = async (raw, options) => {
-    calls.push(raw);
-    const url = new URL(raw);
-    const status = fail?.(url);
-    if (status) return new Response('', { status });
-    if (url.pathname === '/v3/locations') {
-      const [w, s, e, n] = url.searchParams.get('bbox').split(',').map(Number);
-      const page = Number(url.searchParams.get('page'));
-      const all = stations()
-        .filter(
-          (l) =>
-            l.coordinates.longitude >= w &&
-            l.coordinates.longitude <= e &&
-            l.coordinates.latitude >= s &&
-            l.coordinates.latitude <= n,
-        )
-        .sort((a, b) => a.id - b.id);
-      return Response.json({
-        results: all.slice((page - 1) * 1000, page * 1000),
-      });
-    }
-    const m = url.pathname.match(/locations\/(\d+)\/latest/);
-    if (m)
-      return latest
-        ? latest(Number(m[1]), options)
-        : Response.json({ results: [latestRow(Number(m[1]), clock())] });
-    const h = url.pathname.match(/sensors\/(\d+)\/hours/);
-    if (h) return hours(Number(h[1]), options);
-    throw new Error('unexpected ' + raw);
-  };
-  return { calls, fetchImpl };
-}
+import { start, loc, fake } from './openAq.fixture.mjs';
+
+const monitorLoc = (...args) => ({ ...loc(...args), isMonitor: true });
 
 test('OpenAQ cold outage: a first-load 503 with nothing acquired is a failure, not a cached snapshot', async () => {
   const { fetchImpl } = fake({
@@ -128,7 +76,7 @@ test('OpenAQ cold deadline: a first catalog page that reaches the deadline is a 
 test('OpenAQ cold station outage: listed stations whose first checks all fail are a failure, not cached data', async () => {
   const { fetchImpl } = fake({
     clock: () => start,
-    stations: () => [loc(1, 20, 0, start), loc(2, 20.2, 0, start)],
+    stations: () => [monitorLoc(1, 20, 0, start), monitorLoc(2, 20.2, 0, start)],
     fail: (url) => (/\/latest$/.test(url.pathname) ? 503 : 0),
   });
   const source = createOpenAqAcquisition({
@@ -161,7 +109,7 @@ test('OpenAQ cold station outage: passes that only wait out the failed stations 
     down = true;
   const { fetchImpl } = fake({
     clock: () => clock,
-    stations: () => [loc(1, 20, 0, start), loc(2, 20.2, 0, start)],
+    stations: () => [monitorLoc(1, 20, 0, start), monitorLoc(2, 20.2, 0, start)],
     fail: (url) => (down && /\/latest$/.test(url.pathname) ? 503 : 0),
   });
   const source = createOpenAqAcquisition({

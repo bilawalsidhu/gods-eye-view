@@ -1,6 +1,7 @@
 import { createReticleFootprint } from './footprint.js';
-import { toLonLatH } from '../../geo/ellipsoid.js';
 import { canvasOf, findCamera, findQuery } from '../../render/rendererOf.js';
+import { groundAtViewCentre } from '../../render/viewCentre.js';
+import { approxDistanceKm } from '../../data/approxDistance.js';
 import {
   deriveFetchCenter,
   clampBoundsAroundCenter,
@@ -75,24 +76,13 @@ export function createViewport({ state: layerState, services, parts, source }) {
       return null;
     const nadirLat = pose.lat;
     const nadirLon = pose.lon;
-
-    let hitLat;
-    let hitLon;
-    const { width, height } = canvasSize();
-    if (width > 0 && height > 0) {
-      const hit = queryPort()?.pickEllipsoid(width / 2, height / 2);
-      const hitAt = hit && toLonLatH(hit);
-      if (hitAt) {
-        hitLat = hitAt.lat;
-        hitLon = hitAt.lon;
-      }
-    }
+    const hit = groundAtViewCentre(layerState._viewer);
 
     return deriveFetchCenter({
       nadirLat,
       nadirLon,
-      hitLat,
-      hitLon,
+      hitLat: hit?.lat,
+      hitLon: hit?.lon,
       maxPullKm: MAX_LOOKAT_PULL_KM,
     });
   }
@@ -110,24 +100,8 @@ export function createViewport({ state: layerState, services, parts, source }) {
     };
   }
 
-  /**
-   * Approximate great-circle distance between two points in kilometres.
-   *
-   * Uses an equirectangular projection (cosine correction on longitude)
-   * with the 111 km/degree approximation. Sufficient for the small
-   * viewport-center shifts being compared.
-   *
-   * @param {{lat:number, lon:number}} a - First point.
-   * @param {{lat:number, lon:number}} b - Second point.
-   * @returns {number} Distance in kilometres.
-   */
-
-  function distanceKm(a, b) {
-    const dLat = (a.lat - b.lat) * 111;
-    const avgLat = ((a.lat + b.lat) / 2) * (Math.PI / 180);
-    const dLon = (a.lon - b.lon) * 111 * Math.cos(avgLat);
-    return Math.sqrt(dLat * dLat + dLon * dLon);
-  }
+  /** Kilometres between two `{lat, lon}` points. */
+  const distanceKm = (a, b) => approxDistanceKm(a.lat, a.lon, b.lat, b.lon);
 
   /**
    * Check whether two bounding boxes overlap by at least a given fraction of
@@ -250,12 +224,7 @@ export function createViewport({ state: layerState, services, parts, source }) {
     );
   }
   return {
-    getCameraAltitude,
-    getViewBounds,
-    getFetchCenter,
     getBoundsCenter,
-    distanceKm,
-    boundsOverlap,
     clampBounds,
     onCameraChanged,
   };

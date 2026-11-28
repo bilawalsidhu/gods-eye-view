@@ -8,9 +8,9 @@ import { DEFAULT_FRAME_RATE, setFrameRateCap } from './renderGovernor.js';
 
 const STORAGE_KEY = 'godsEyeView.frameRate';
 /** The lowest and highest rates the slider sets, and its step. */
-export const MIN_FRAME_RATE = 30;
-export const MAX_FRAME_RATE = 240;
-export const FRAME_RATE_STEP = 10;
+const MIN_FRAME_RATE = 30;
+const MAX_FRAME_RATE = 240;
+const FRAME_RATE_STEP = 10;
 /** The slider's stop past MAX_FRAME_RATE: unlimited. */
 export const UNLIMITED_STOP = MAX_FRAME_RATE + FRAME_RATE_STEP;
 
@@ -58,7 +58,7 @@ export function createViewFrameRate({
   apply(fps);
 
   function publish() {
-    store?.publishFrameRate?.({
+    store.publishFrameRate({
       fps,
       stop: fps === 0 ? UNLIMITED_STOP : fps,
       min: MIN_FRAME_RATE,
@@ -67,7 +67,7 @@ export function createViewFrameRate({
     });
   }
 
-  const token = store?.connect?.({
+  const token = store.connect({
     /** The slider's stop: a rate, or UNLIMITED_STOP. */
     setFrameRate(stop) {
       const next = frameRateOf(stop);
@@ -87,8 +87,8 @@ export function createViewFrameRate({
 
   return {
     destroy() {
-      if (token) store?.detach?.(token);
-      store?.publishFrameRate?.(null);
+      if (token) store.detach(token);
+      store.publishFrameRate(null);
     },
   };
 }

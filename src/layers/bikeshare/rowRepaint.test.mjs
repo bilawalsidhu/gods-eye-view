@@ -10,7 +10,6 @@ import { CITY_BY_ID, GBFS_CITY_REGISTRY } from './registry.js';
 import { createState } from './state.js';
 import { createControls } from './controls.js';
 import { createIngestion } from './ingestion.js';
-import { createModel } from './model.js';
 import { createViewport } from './viewport.js';
 import { createRendering } from './rendering.js';
 import { createLifecycle } from './lifecycle.js';
@@ -132,11 +131,10 @@ function makeLiveLayer() {
     sprites: { registerSpriteCollection() {}, restoreSpriteOrder() {} },
     picking: { registerPickOwner() {}, unregisterPickOwner() {} },
   };
-  const state = createState({ services });
+  const state = createState();
   const parts = {};
   const context = { state, services, parts, source };
   parts.ingestion = createIngestion(context);
-  parts.model = createModel(context);
   parts.viewport = createViewport(context);
   parts.rendering = createRendering(context);
   parts.selection = {

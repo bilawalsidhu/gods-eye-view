@@ -96,7 +96,7 @@ const result = (...names) => ({
 test('a library dataset refreshes on the manager tick once older than cacheSeconds', async (t) => {
   t.mock.timers.enable({ apis: ['Date'], now: START });
   const env = harness(t, [result('a'), result('b', 'c')]);
-  assert.equal(env.layer.refreshInterval, 60_000);
+  assert.equal(env.layer.updateInterval, 60_000);
   await env.layer.enable(env.viewer);
   assert.equal(env.layer.getStats().count, 1);
   await env.layer.update(env.viewer);
@@ -121,7 +121,7 @@ test('a slow upstream still refreshes on every tick, not every other one', async
     slow(result('c')),
   ]);
   await env.layer.enable(env.viewer);
-  // The manager ticks every refreshInterval from when the layer came on.
+  // The manager ticks every updateInterval from when the layer came on.
   t.mock.timers.setTime(START + 60_000);
   await env.layer.update(env.viewer);
   t.mock.timers.setTime(START + 120_000);

@@ -3,6 +3,7 @@ import { renderApplicationHtml } from './testSupport/applicationHtml.mjs';
 import { readStylesheet } from './testSupport/readStylesheet.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { preferredFirst } from './ui/panelRailGeometry.js';
 import test from 'node:test';
 const leftRail = readFileSync(new URL('./ui/leftPanelRail.js', import.meta.url), 'utf8');
 const rightRail = readFileSync(new URL('./ui/rightPanelRail.js', import.meta.url), 'utf8');
@@ -156,15 +157,17 @@ test('desktop panel lanes use per-panel allocations and presentation-only auto-c
   assert.match(ui, /this\._panelLayout\._leftStackPreferredPanelId = leftOwnerPanel\.id;/);
   assert.match(
     leftRail,
-    /preferredExpandedPanel[\s\S]*?\[\s*preferredExpandedPanel,\s*\.\.\.expandedPanelsInDomOrder/,
+    /preferredExpandedPanel[\s\S]*?preferredFirst\(\s*expandedPanelsInDomOrder,\s*preferredExpandedPanel,?\s*\)/,
     'the latest explicitly opened left panel must receive primary allocation',
   );
   assert.match(ui, /this\._panelLayout\._rightStackPreferredPanelId = rightOwnerPanel\.id;/);
   assert.match(
     rightRail,
-    /panel\.id === preferredPanelId[\s\S]*?\[\s*preferredExpandedPanel,\s*\.\.\.expandedPanelsInDomOrder/,
+    /panel\.id === preferredPanelId[\s\S]*?preferredFirst\(\s*expandedPanelsInDomOrder,\s*preferredExpandedPanel,?\s*\)/,
     'the latest explicitly opened right panel must receive primary allocation',
   );
+  assert.deepEqual(preferredFirst(['a', 'b', 'c'], 'b'), ['b', 'a', 'c']);
+  assert.deepEqual(preferredFirst(['a', 'b'], undefined), ['a', 'b']);
   assert.match(ui, /panelId === 'radio-panel'[\s\S]*?document\.getElementById\('global-context-panel'\)/);
   assert.match(rightRail, /focusedExpandedPanel = expandedPanelsInDomOrder\.find\(\s*\(panel\) =>\s*panel\.contains\(documentRef\.activeElement\),?\s*\)/);
   // Collapse buttons render aria-expanded from the state the chrome presents
@@ -294,5 +297,4 @@ test('every left panel has its rail item, Utilities with its own icon', async ()
   const ids = [...view.matchAll(/<RailPanel id="([\w-]+)"/g)].map(([, id]) => id);
   assert.ok(ids.includes('utilities-panel'));
   for (const id of ids) assert.ok(PANEL_RAIL_ITEMS[id], `${id} has a rail item`);
-  assert.equal(PANEL_RAIL_ITEMS['utilities-panel'].icon, 'handyman');
 });

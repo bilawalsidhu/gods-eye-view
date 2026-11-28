@@ -90,8 +90,7 @@ export function createInteraction({
       if (!radioPresentationAllowed()) return;
       const stationId = pickedRadioStationAt(event);
       if (!stationId) return;
-      layerState._playFallbackId = null;
-      layerState._playFallbackFocus = null;
+      parts.playback.clearPlayFallback();
       parts.selection.selectRadioStation(stationId, {
         autoplay: true,
         origin: 'user',
@@ -122,7 +121,6 @@ export function createInteraction({
     pickedRadioStationAt,
     radioPresentationAllowed,
     syncRadioLifecyclePresentation,
-    installInteraction,
     removeInteraction,
   };
 }

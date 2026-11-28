@@ -11,32 +11,27 @@
  * course, and neither does one reported slower than
  * COURSE_FROM_FIXES_MIN_SPEED_MPS.
  */
+import { initialBearingDeg } from '../geoDistance.js';
 import { approxDistanceKm } from './approxDistance.js';
 
 /** Metres between fixes before a course is read from them. */
-export const COURSE_FROM_FIXES_MIN_M = 30;
+const COURSE_FROM_FIXES_MIN_M = 30;
 /** A contact reported slower than this (m/s) is standing: no course is read. */
-export const COURSE_FROM_FIXES_MIN_SPEED_MPS = 2;
+const COURSE_FROM_FIXES_MIN_SPEED_MPS = 2;
 
 /**
  * Initial great-circle bearing from one point to another, in degrees from
  * true north (0–360), or null when either is missing or they are less than
  * COURSE_FROM_FIXES_MIN_M apart.
  */
-export function courseBetweenFixes(fromLat, fromLon, toLat, toLon) {
+function courseBetweenFixes(fromLat, fromLon, toLat, toLon) {
   if (![fromLat, fromLon, toLat, toLon].every(Number.isFinite)) return null;
   if (
     approxDistanceKm(fromLat, fromLon, toLat, toLon) * 1000 <
     COURSE_FROM_FIXES_MIN_M
   )
     return null;
-  const φ1 = (fromLat * Math.PI) / 180;
-  const φ2 = (toLat * Math.PI) / 180;
-  const Δλ = ((toLon - fromLon) * Math.PI) / 180;
-  const y = Math.sin(Δλ) * Math.cos(φ2);
-  const x =
-    Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
-  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+  return initialBearingDeg(fromLat, fromLon, toLat, toLon);
 }
 
 /**

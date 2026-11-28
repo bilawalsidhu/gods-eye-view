@@ -2,30 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { issModelSpec } from './issModel.js';
-import {
-  ISS_MODEL_LOCAL_AXES,
-  ISS_NORAD,
-  TIANGONG_MODEL_URL,
-  TIANGONG_NORAD,
-} from './policy.js';
+import { ISS_NORAD, TIANGONG_MODEL_URL, TIANGONG_NORAD } from './policy.js';
 import { stationModelShouldShow } from './stationModel.js';
 import { tiangongIsModule, tiangongModelSpec } from './tiangongModel.js';
 
-test("Tiangong is CSS (TIANHE) by NORAD number, drawn at the file's meters", () => {
+test('Tiangong is CSS (TIANHE) by NORAD number, with Cockpit views and joints', () => {
   const spec = tiangongModelSpec();
-  assert.equal(TIANGONG_NORAD, 48274);
   assert.equal(spec.norad, TIANGONG_NORAD);
-  assert.equal(spec.key, 'tiangong');
-  assert.equal(spec.scale, 1);
-  assert.equal(spec.modelUrl, TIANGONG_MODEL_URL);
-  // The same frame as the ISS file, so the same flight-axes mapping.
-  assert.equal(spec.localAxes, ISS_MODEL_LOCAL_AXES);
-  // No telemetry; Cockpit views on the model, so the model stays while the
-  // Cockpit rides it.
-  assert.equal(spec.createTelemetry, null);
   assert.equal(typeof spec.cockpitMount, 'function');
-  assert.equal(spec.hideInCockpit, false);
-  assert.equal(spec.syncOrbit, null);
   assert.equal(typeof spec.createArticulation().update, 'function');
 });
 

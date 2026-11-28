@@ -77,27 +77,10 @@ export function createTransitLayer({
       /** Deselect the selected vehicle, as a click on the map does. */
       clearSelection() {
         parts.selection.clearSelection();
-        services.render.governorRequestRender?.('transit-selection');
+        services.render.governorRequestRender('transit-selection');
         return true;
       },
     },
     parts.testing,
   );
 }
-
-export {
-  TRANSIT_MODE_COLORS,
-  TRANSIT_POLL_MS,
-  TRANSIT_SELECTED_OVERLAY_SOURCE_ID,
-  TRANSIT_SELECTED_OVERLAY_SOURCE_OPTIONS,
-  aggregateTransitFeedHealth,
-  buildTransitSelectionCopy,
-  createTransitSelectedOverlayEntry,
-  interpolatedVehiclePosition,
-  isStaleVehicleFix,
-  transitDetectionClass,
-  transitDetectionId,
-  transitDetectionMetric,
-  transitVehicleKey,
-  vehicleFixAgeMs,
-} from './policy.js';

@@ -12,8 +12,7 @@
  *   dialogue  two-turn dialogues in one context; turn 2 depends on turn 1
  *   capability  area handles / imagery / OSM / point-and-ask phrases (and two
  *             dialogues) for the tools added after 4b56d0e9
- * Coverage rows are graded twice: v1 (original rubric, 4b56d0e9 tool schema)
- * and v2 (rubric for the current tool surface).
+ * Coverage rows are graded against the current tool surface.
  *
  * Methodology: a fresh context per phrase (new Realtime/Live session, or a
  * stateless chat request); stub tool results; continuations until the model
@@ -129,8 +128,7 @@ function regrade(rows) {
       return {
         ...row,
         gradeAtRun: row.grade,
-        grade: gradeCoverage(item, row.calls || [], row.text, BASELINE_TOOLS),
-        gradeV2: gradeCoverage(coverageRubric(item, 'v2'), row.calls || [], row.text, GEV_REALTIME_TOOLS),
+        grade: gradeCoverage(coverageRubric(item), row.calls || [], row.text, GEV_REALTIME_TOOLS),
       };
     }
     if (row.suite === 'capability' && cap.has(row.phraseId)) {
@@ -166,7 +164,7 @@ function writeSummary() {
       beforeLabel: `${path.relative(ROOT, beforeDir)} (prompt/tools @ ${beforeHead})`,
       afterLabel: `${path.relative(ROOT, OUT)} (prompt/tools @ ${afterHead})`,
     });
-    summary.comparison = { beforeDir: path.relative(ROOT, beforeDir), before: before.models.map((m) => ({ key: m.key, coreFull: m.core.fullCallAccuracyPct, coverageV1Pct: m.coverage.acceptablePct, hcV1: m.coverage.counts['hallucinated-capability'], dialogueT2: m.dialogue.turn2FullPct, toolCallP50: m.latencyMs.toolCallP50, promptTokens: m.warmup?.promptTokens ?? m.tokens.inputPerRequestMean })) };
+    summary.comparison = { beforeDir: path.relative(ROOT, beforeDir), before: before.models.map((m) => ({ key: m.key, coreFull: m.core.fullCallAccuracyPct, coveragePct: m.coverage.acceptablePct, hc: m.coverage.counts['hallucinated-capability'], dialogueT2: m.dialogue.turn2FullPct, toolCallP50: m.latencyMs.toolCallP50, promptTokens: m.warmup?.promptTokens ?? m.tokens.inputPerRequestMean })) };
     fs.writeFileSync(path.join(OUT, 'comparison.md'), `${comparison}\n`);
   }
   fs.writeFileSync(path.join(OUT, 'summary.json'), JSON.stringify(summary, null, 2));
@@ -266,9 +264,6 @@ const CAPABILITY_ITEMS = CAPABILITY_EXTRAS.map((c) => (c.turns
   ? { suite: 'capability', id: c.id, text: c.turns.join(' → '), dialogue: c }
   : { suite: 'capability', id: c.context ? `${c.phrase} [pointer]` : c.phrase, text: c.phrase, phrase: c, context: c.context || null }));
 
-/** The 4b56d0e9 tool schema, for grading coverage by the original yardstick. */
-const BASELINE_TOOLS = JSON.parse(fs.readFileSync(path.join(ROOT, 'scripts', 'voice-bench', 'baseline-tools-4b56d0e9.json'), 'utf8'));
-
 /** What prompt this run actually sent (so before/after runs are identifiable). */
 function promptVersion() {
   let head = null;
@@ -366,7 +361,7 @@ async function main() {
         grade = gradeDialogue(w.dialogue, [a.calls, b.calls]);
       } else {
         r = await adapter.runTurn({ text: w.text, context: w.context || undefined, onCall: (c) => stubResult(w.suite, c, GEV_REALTIME_TOOLS) });
-        grade = w.suite === 'coverage' ? gradeCoverage(w.item, r.calls, r.text, GEV_REALTIME_TOOLS) : gradeCore(w.phrase, r.calls);
+        grade = w.suite === 'coverage' ? gradeCoverage(coverageRubric(w.item), r.calls, r.text, GEV_REALTIME_TOOLS) : gradeCore(w.phrase, r.calls);
       }
       const row = {
         type: 'turn', runId, provider: PROVIDER, model: MODEL, variant: VARIANT, cloud: CLOUD, rep, suite: w.suite,

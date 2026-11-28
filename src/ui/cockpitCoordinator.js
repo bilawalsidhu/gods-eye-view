@@ -3,10 +3,7 @@ import { nextTick } from 'vue';
 import { CockpitViewController, CockpitDisplayPortal } from './cockpit.js';
 import {
   COCKPIT_AIRCRAFT_LAYER_IDS,
-  bridgeEntryAllowed,
-  cockpitEntryAllowed,
-  orbitEntryAllowed,
-  subjectEntryAllowed,
+  entryAllowed,
 } from '../contextModePolicy.js';
 import { cockpitSubjectProviders } from '../cockpitSubjectProviders.js';
 import {
@@ -112,25 +109,25 @@ export class CockpitCoordinator {
       isEntryAllowed: () => {
         const subjectLayerId =
           this.cockpitView?.readAircraftInfo?.()?.layerId ?? null;
-        return cockpitEntryAllowed({
-          subjectLayerId,
-          subjectLayerEnabled: this._isLayerEnabled(subjectLayerId),
+        return entryAllowed({
+          layerEnabled: this._isLayerEnabled(subjectLayerId),
           contextModeChanging: this._contextModeChanging,
+          allowed: COCKPIT_AIRCRAFT_LAYER_IDS.includes(subjectLayerId),
         });
       },
       isBridgeEntryAllowed: () =>
-        bridgeEntryAllowed({
-          vesselsEnabled: !!this._dataManager?.isEnabled('ais-live-vessels'),
+        entryAllowed({
+          layerEnabled: !!this._dataManager?.isEnabled('ais-live-vessels'),
           contextModeChanging: this._contextModeChanging,
         }),
       subjectProviders,
       // A provider's subject needs its own layer on, no Context change in
       // flight, and the provider's own say.
       isSubjectEntryAllowed: (provider, candidate) =>
-        subjectEntryAllowed({
+        entryAllowed({
           layerEnabled: this._isLayerEnabled(provider.layerId),
           contextModeChanging: this._contextModeChanging,
-          providerAllows:
+          allowed:
             this.cockpitView?.callSubject(
               provider,
               'isEntryAllowed',
@@ -139,12 +136,11 @@ export class CockpitCoordinator {
             ) === true,
         }),
       isOrbitEntryAllowed: () =>
-        orbitEntryAllowed({
-          satellitesEnabled: !!this._dataManager?.isEnabled('satellites'),
+        entryAllowed({
+          layerEnabled: !!this._dataManager?.isEnabled('satellites'),
           contextModeChanging: this._contextModeChanging,
           // The layer says whether its class may be ridden.
-          subjectEnterable:
-            satellitesLayer?.getCockpitSubject?.()?.enterable !== false,
+          allowed: satellitesLayer?.getCockpitSubject?.()?.enterable !== false,
         }),
       publish: this.publishCockpit,
       isUtilityDisclosureOpen: () => !!this.readUtilityDisclosureOpen?.(),

@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { crc32, deflateRawSync } from 'node:zlib';
+import { makeZip } from '../testSupport/zip.mjs';
 import {
   buildPack,
   buildSchedule,
@@ -14,47 +14,6 @@ import {
   openZip,
   readTripEnds,
 } from '../../scripts/build-rail-paths.mjs';
-
-/** A minimal zip writer: deflated entries, no zip64. */
-function makeZip(files) {
-  const locals = [];
-  const centrals = [];
-  let offset = 0;
-  for (const { name, text } of files) {
-    const data = Buffer.from(text, 'utf8');
-    const body = deflateRawSync(data);
-    const nameBytes = Buffer.from(name, 'utf8');
-    const local = Buffer.alloc(30);
-    local.writeUInt32LE(0x04034b50, 0);
-    local.writeUInt16LE(20, 4);
-    local.writeUInt16LE(8, 8);
-    local.writeUInt32LE(crc32(data), 14);
-    local.writeUInt32LE(body.length, 18);
-    local.writeUInt32LE(data.length, 22);
-    local.writeUInt16LE(nameBytes.length, 26);
-    const central = Buffer.alloc(46);
-    central.writeUInt32LE(0x02014b50, 0);
-    central.writeUInt16LE(20, 4);
-    central.writeUInt16LE(20, 6);
-    central.writeUInt16LE(8, 10);
-    central.writeUInt32LE(crc32(data), 16);
-    central.writeUInt32LE(body.length, 20);
-    central.writeUInt32LE(data.length, 24);
-    central.writeUInt16LE(nameBytes.length, 28);
-    central.writeUInt32LE(offset, 42);
-    locals.push(local, nameBytes, body);
-    centrals.push(central, nameBytes);
-    offset += local.length + nameBytes.length + body.length;
-  }
-  const cd = Buffer.concat(centrals);
-  const end = Buffer.alloc(22);
-  end.writeUInt32LE(0x06054b50, 0);
-  end.writeUInt16LE(files.length, 8);
-  end.writeUInt16LE(files.length, 10);
-  end.writeUInt32LE(cd.length, 12);
-  end.writeUInt32LE(offset, 16);
-  return Buffer.concat([...locals, cd, end]);
-}
 
 // A line 20 km due east from 51° N 7° E (in Germany), x in metres.
 const LAT = 51;
@@ -69,58 +28,61 @@ async function feedZip(t) {
   const file = path.join(dir, 'feed.zip');
   await writeFile(
     file,
-    makeZip([
-      {
-        name: 'agency.txt',
-        text: 'agency_id,agency_name,agency_url,agency_timezone\nA,Test,https://example.test,Europe/Berlin\n',
-      },
-      {
-        name: 'calendar.txt',
-        text: 'service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\nWK,1,1,1,1,1,1,1,20260101,20261231\n',
-      },
-      { name: 'routes.txt', text: 'route_id,route_type\nR1,2\n' },
-      {
-        name: 'trips.txt',
-        text: [
-          'route_id,service_id,trip_id,shape_id',
-          'R1,WK,t1,',
-          'R1,WK,t2,',
-          'R1,WK,t3,',
-          'R1,WK,t4,',
-        ].join('\n'),
-      },
-      {
-        name: 'stops.txt',
-        text: [
-          'stop_id,stop_name,stop_lat,stop_lon,parent_station',
-          `A,Alpha,${at(0)},`,
-          `C,Charlie,${at(20_000)},`,
-          // (0, 0) in the feed, parent and all.
-          'PZ,Zeta (Westf.),0,0,',
-          'Z,Zeta (Westf.),0,0,PZ',
-          'Y,Ypsilon,0,0,',
-          // Blank coordinates are none either.
-          'Q,Quebec,,,',
-        ].join('\n'),
-      },
-      {
-        name: 'stop_times.txt',
-        text: [
-          'trip_id,arrival_time,departure_time,stop_id,stop_sequence',
-          't1,08:00:00,08:00:00,A,1',
-          't1,08:10:00,08:10:00,Z,2',
-          't1,08:20:00,08:20:00,C,3',
-          't2,09:00:00,09:00:00,A,1',
-          't2,09:10:00,09:10:00,Y,2',
-          't2,09:20:00,09:20:00,C,3',
-          't3,10:00:00,10:00:00,A,1',
-          't3,10:10:00,10:10:00,Y,2',
-          't4,11:00:00,11:00:00,A,1',
-          't4,11:10:00,11:10:00,Q,2',
-          't4,11:20:00,11:20:00,C,3',
-        ].join('\n'),
-      },
-    ]),
+    makeZip(
+      [
+        {
+          name: 'agency.txt',
+          text: 'agency_id,agency_name,agency_url,agency_timezone\nA,Test,https://example.test,Europe/Berlin\n',
+        },
+        {
+          name: 'calendar.txt',
+          text: 'service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\nWK,1,1,1,1,1,1,1,20260101,20261231\n',
+        },
+        { name: 'routes.txt', text: 'route_id,route_type\nR1,2\n' },
+        {
+          name: 'trips.txt',
+          text: [
+            'route_id,service_id,trip_id,shape_id',
+            'R1,WK,t1,',
+            'R1,WK,t2,',
+            'R1,WK,t3,',
+            'R1,WK,t4,',
+          ].join('\n'),
+        },
+        {
+          name: 'stops.txt',
+          text: [
+            'stop_id,stop_name,stop_lat,stop_lon,parent_station',
+            `A,Alpha,${at(0)},`,
+            `C,Charlie,${at(20_000)},`,
+            // (0, 0) in the feed, parent and all.
+            'PZ,Zeta (Westf.),0,0,',
+            'Z,Zeta (Westf.),0,0,PZ',
+            'Y,Ypsilon,0,0,',
+            // Blank coordinates are none either.
+            'Q,Quebec,,,',
+          ].join('\n'),
+        },
+        {
+          name: 'stop_times.txt',
+          text: [
+            'trip_id,arrival_time,departure_time,stop_id,stop_sequence',
+            't1,08:00:00,08:00:00,A,1',
+            't1,08:10:00,08:10:00,Z,2',
+            't1,08:20:00,08:20:00,C,3',
+            't2,09:00:00,09:00:00,A,1',
+            't2,09:10:00,09:10:00,Y,2',
+            't2,09:20:00,09:20:00,C,3',
+            't3,10:00:00,10:00:00,A,1',
+            't3,10:10:00,10:10:00,Y,2',
+            't4,11:00:00,11:00:00,A,1',
+            't4,11:10:00,11:10:00,Q,2',
+            't4,11:20:00,11:20:00,C,3',
+          ].join('\n'),
+        },
+      ],
+      { deflate: true },
+    ),
   );
   const zip = await openZip(file);
   t.after(() => zip.handle.close());

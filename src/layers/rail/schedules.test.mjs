@@ -174,7 +174,6 @@ test('the tier places no trains: it has no train records to offer', () => {
     'loadSchedule',
     'onSelect',
     'scheduleFor',
-    'stats',
     'stop',
     'stopsFor',
     'unwatchUpdates',
@@ -349,7 +348,6 @@ test('delays are polled every 30 s only while a train on the feed is selected', 
   assert.equal(h.calls.updates, 1);
   assert.equal(h.timers.size, 1);
   assert.equal([...h.timers.values()][0].ms, RAIL_UPDATES_POLL_MS);
-  assert.equal(RAIL_UPDATES_POLL_MS, 30_000);
   const trip = h.provider.stopsFor(train, h.now);
   const bravo = trip.stops[1];
   assert.equal(bravo.arrivalDelaySec, 240);
@@ -430,7 +428,6 @@ test('a selected train’s delays are not polled when its feed has no timetable'
   assert.equal(h.calls.schedule, 1);
   assert.equal(h.calls.updates, 0);
   assert.equal(h.timers.size, 0);
-  assert.equal(h.provider.stats().updates[FEED], undefined);
 
   // With the pack, the same selection polls; cleared before the pack
   // arrives, it starts no poll.
@@ -451,10 +448,6 @@ test('every reader of a feed’s delays shares one poll', async () => {
   h.provider.watchUpdates(FEED, 'probe');
   h.provider.onSelect(liveTrain({ id: 'v1', tripId: 'T1' }));
   await flush();
-  assert.deepEqual(h.provider.stats().updates[FEED].reasons, [
-    'probe',
-    'selection',
-  ]);
   assert.equal(h.timers.size, 1);
   h.provider.onSelect(null);
   assert.equal(h.timers.size, 1);
@@ -625,18 +618,18 @@ test('a failing pack is tried again after 30 s, then twice as long each time, up
 test('a forgotten feed gives back its timetable and loads it again when used', async () => {
   const h = harness();
   await h.provider.loadSchedule(FEED);
-  assert.equal(h.provider.stats().schedules[FEED].status, 'ready');
+  assert.ok(h.provider.scheduleFor(FEED));
   assert.equal(h.calls.schedule, 1);
   h.provider.forget(FEED);
-  assert.equal(h.provider.stats().schedules[FEED], undefined);
+  assert.equal(h.provider.scheduleFor(FEED), null);
   await h.provider.loadSchedule(FEED);
   assert.equal(h.calls.schedule, 2);
   // Trip updates still polled for a reason are not dropped.
   h.provider.watchUpdates(FEED, 'probe');
   await flush();
   h.provider.forget(FEED);
-  assert.ok(h.provider.stats().updates[FEED].polling);
+  assert.equal(h.timers.size, 1);
   h.provider.unwatchUpdates(FEED, 'probe');
   h.provider.forget(FEED);
-  assert.equal(h.provider.stats().updates[FEED], undefined);
+  assert.equal(h.timers.size, 0);
 });

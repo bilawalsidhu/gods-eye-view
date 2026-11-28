@@ -2,18 +2,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { gstime, propagate, twoline2satrec } from 'satellite.js';
+import { ISS_MODEL_SCALE } from './issModel.js';
 import {
-  ISS_MODEL_SCALE,
-  issFlightAxes,
-  issModelShouldShow,
+  stationFlightAxes,
+  stationModelShouldShow,
   temeToEcefAxes,
-} from './issModel.js';
+} from './stationModel.js';
 import {
   ISS_MODEL_CENTER_NATIVE,
   ISS_MODEL_LOCAL_AXES,
   ISS_MODEL_NATIVE_SPAN,
   ISS_MODEL_URL,
-  ISS_NORAD,
   ISS_SPAN_M,
 } from './policy.js';
 
@@ -28,36 +27,38 @@ const norm = (a) => Math.hypot(a[0], a[1], a[2]);
 const shown = {
   enabled: true,
   showPoints: true,
-  hasIss: true,
+  hasStation: true,
   classVisible: true,
   tracked: false,
   cockpitHidden: false,
 };
 
 test('the ISS model shows on the same terms as its dot', () => {
-  assert.equal(issModelShouldShow(shown), true);
-  assert.equal(issModelShouldShow({ ...shown, enabled: false }), false);
-  assert.equal(issModelShouldShow({ ...shown, showPoints: false }), false);
-  assert.equal(issModelShouldShow({ ...shown, hasIss: false }), false);
-  assert.equal(issModelShouldShow({ ...shown, classVisible: false }), false);
+  assert.equal(stationModelShouldShow(shown), true);
+  assert.equal(stationModelShouldShow({ ...shown, enabled: false }), false);
+  assert.equal(stationModelShouldShow({ ...shown, showPoints: false }), false);
+  assert.equal(stationModelShouldShow({ ...shown, hasStation: false }), false);
+  assert.equal(
+    stationModelShouldShow({ ...shown, classVisible: false }),
+    false,
+  );
 });
 
 test('a tracked ISS keeps its model with its class hidden', () => {
   assert.equal(
-    issModelShouldShow({ ...shown, classVisible: false, tracked: true }),
+    stationModelShouldShow({ ...shown, classVisible: false, tracked: true }),
     true,
   );
 });
 
 test('the Cockpit hold hides the model', () => {
   assert.equal(
-    issModelShouldShow({ ...shown, tracked: true, cockpitHidden: true }),
+    stationModelShouldShow({ ...shown, tracked: true, cockpitHidden: true }),
     false,
   );
 });
 
 test('the model is the ISS by NORAD number, at its real 109 m span', () => {
-  assert.equal(ISS_NORAD, 25544);
   assert.ok(
     Math.abs(ISS_MODEL_SCALE * ISS_MODEL_NATIVE_SPAN - ISS_SPAN_M) < 1e-9,
   );
@@ -120,7 +121,7 @@ test('flight axes: orthonormal, z away from the Earth, x along the motion', () =
     const gmst = gstime(date);
     const r = temeToEcefAxes(position, gmst);
     const v = temeToEcefAxes(velocity, gmst);
-    const axes = issFlightAxes(r, v);
+    const axes = stationFlightAxes(r, v);
     for (const key of ['x', 'y', 'z'])
       assert.ok(Math.abs(norm(axes[key]) - 1) < 1e-9);
     assert.ok(Math.abs(dot(axes.x, axes.y)) < 1e-9);
@@ -142,8 +143,14 @@ test('flight axes: orthonormal, z away from the Earth, x along the motion', () =
 });
 
 test('flight axes refuse a degenerate state', () => {
-  assert.equal(issFlightAxes({ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }), null);
-  assert.equal(issFlightAxes({ x: 1, y: 0, z: 0 }, { x: 2, y: 0, z: 0 }), null);
+  assert.equal(
+    stationFlightAxes({ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }),
+    null,
+  );
+  assert.equal(
+    stationFlightAxes({ x: 1, y: 0, z: 0 }, { x: 2, y: 0, z: 0 }),
+    null,
+  );
 });
 
 test('TEME to Earth-fixed axes keeps the position eciToGeodetic uses', () => {

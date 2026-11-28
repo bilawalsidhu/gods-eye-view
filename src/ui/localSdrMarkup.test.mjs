@@ -9,10 +9,6 @@ import { R820T_GAIN_STEPS_DB } from '../sdr/gain.js';
 const html = await renderApplicationHtml(
   readFileSync(new URL('../../index.html', import.meta.url), 'utf8'),
 );
-const css = readFileSync(
-  new URL('./styles/radio.css', import.meta.url),
-  'utf8',
-);
 
 test('the Local RTL-SDR card lives inside the Radio panel with every control', () => {
   const radioStart = html.indexOf('id="radio-panel"');
@@ -43,7 +39,6 @@ test('the Local RTL-SDR card lives inside the Radio panel with every control', (
     assert.match(html, new RegExp(`id="${id}"`), `${id} is missing`);
   }
   assert.match(html, /id="sdr-status"[^>]*>Connect an RTL-SDR to begin\.</);
-  assert.match(css, /\.sdr-radio-card\s*\{/);
 });
 
 test('the gain control offers AUTO plus every R820T step', () => {

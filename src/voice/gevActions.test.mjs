@@ -9,7 +9,7 @@ import {
   getContextStore,
   registerEntityContext,
 } from '../data/contextStore.js';
-import { DataLayerManager } from '../data/manager.js';
+import { DataLayerManager } from '../testSupport/dataLayerManager.mjs';
 import {
   getActiveCameraMotion,
   interruptCameraMotion,
@@ -30,7 +30,7 @@ import {
   knownRadioLocation,
   normalizeStackId,
 } from './gevActions.js';
-import { MAP_STACKS } from '../mapStackController.js';
+import { MAP_STACKS } from '../maps/catalog.js';
 import { KEY_REJECTED_MESSAGE } from '../layers/streetLevel/providers/google/policy.js';
 import { GEV_REALTIME_TOOLS } from '../../server/providers/openai/tools.js';
 import { presentResult } from './resultDisplay.js';
@@ -39,6 +39,12 @@ import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
 import { fakeSceneQuery } from '../testSupport/fakeCesiumScene.mjs';
 import { bindRenderer, cameraOf } from '../render/rendererOf.js';
 import { entityFollowTarget } from '../data/followed.js';
+import {
+  fakeVoiceManager,
+  fakeVoiceViewer,
+  installVoiceWindow,
+  withVisibilityIntent,
+} from '../testSupport/voiceRunnerFakes.mjs';
 
 test('every live basemap is reachable by its own id — no enum value without a voice alias', () => {
   // B1 regression: a stack added to MAP_STACKS (and the set_map_stack enum)
@@ -96,11 +102,7 @@ test('track_entity narration names aircraft callsign → registration → icao24
 });
 
 test('track_entity runner narrates a callsign-less aircraft by its registration', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   // Only the layer lookup is stubbed — the runner reaches the real formatter
   // through its real wiring, so a broken hand-off fails this test.
   for (const layerId of ['flights', 'military']) {
@@ -229,16 +231,8 @@ function createVoiceNavigationHarness({ cockpitActive = false } = {}) {
 }
 
 test('zoom to globe adopts the shared visible reset route and returns its result', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
-  const viewer = {
-    clock: { onTick: { addEventListener: () => () => {} } },
-    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
-    camera: { moveEnd: { addEventListener() {} } },
-  };
+  installVoiceWindow();
+  const viewer = fakeVoiceViewer();
   const expected = {
     ok: true,
     action: 'zoom_to_globe',
@@ -255,23 +249,15 @@ test('zoom to globe adopts the shared visible reset route and returns its result
   const runner = createGevActionRunner({
     viewer,
     styleManager,
-    dataManager: { layers: new Map(), getAll: () => [] },
+    dataManager: fakeVoiceManager(),
   });
   assert.deepEqual(await runner('zoom_to_globe'), expected);
   assert.equal(calls, 1);
 });
 
 test('voice changes nothing behind Stories while it is open', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
-  const viewer = {
-    clock: { onTick: { addEventListener: () => () => {} } },
-    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
-    camera: { moveEnd: { addEventListener() {} } },
-  };
+  installVoiceWindow();
+  const viewer = fakeVoiceViewer();
   let calls = 0;
   let storiesVisible = true;
   const styleManager = {
@@ -283,7 +269,7 @@ test('voice changes nothing behind Stories while it is open', async () => {
   const runner = createGevActionRunner({
     viewer,
     styleManager,
-    dataManager: { layers: new Map(), getAll: () => [] },
+    dataManager: fakeVoiceManager(),
     openStories: () => (storiesVisible ? 'already-open' : true),
   });
   const classes = new Set(['stories-mode']);
@@ -323,7 +309,7 @@ test('opening Stories only admits current requests and can stop its own session'
   const runner = createGevActionRunner({
     viewer,
     styleManager,
-    dataManager: { layers: new Map(), getAll: () => [] },
+    dataManager: fakeVoiceManager(),
     async openStories({ isCurrent }) {
       admitted += 1;
       await loaded;
@@ -358,11 +344,7 @@ test('opening Stories only admits current requests and can stop its own session'
 });
 
 test('dependent voice navigation waits for the destination viewport to arrive', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const { viewer, styleManager } = createVoiceNavigationHarness();
   let completeFlight = null;
   viewer.camera.flyTo = (options) => {
@@ -373,7 +355,7 @@ test('dependent voice navigation waits for the destination viewport to arrive', 
   const runner = createGevActionRunner({
     viewer,
     styleManager,
-    dataManager: { layers: new Map(), getAll: () => [] },
+    dataManager: fakeVoiceManager(),
   });
   let settled = false;
   const resultPromise = runner('fly_to_location', {
@@ -400,11 +382,7 @@ test('dependent voice navigation waits for the destination viewport to arrive', 
 // Run at once, the tilt's navigation cancelled the flight; with a geocoded
 // place, the late flight replaced the tilt.
 function tiltAfterFlightHarness() {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const harness = createVoiceNavigationHarness();
   const { viewer, styleManager } = harness;
   const flights = [];
@@ -430,7 +408,7 @@ test('a tilt in the same reply as a fly-to waits for the flight to land', async 
   const runner = createGevActionRunner({
     viewer,
     styleManager,
-    dataManager: { layers: new Map(), getAll: () => [] },
+    dataManager: fakeVoiceManager(),
   });
   const fly = await runner('fly_to_location', { locationId: 'austin' });
   assert.equal(fly.ok, true);
@@ -456,7 +434,7 @@ test('a tilt waits through a geocoded fly-to search, then for its flight', async
   const runner = createGevActionRunner({
     viewer,
     styleManager,
-    dataManager: { layers: new Map(), getAll: () => [] },
+    dataManager: fakeVoiceManager(),
     searchNavigation: (_viewer, query, options) =>
       new Promise((resolve) => {
         finishSearch = () => {
@@ -483,7 +461,7 @@ test('a tilt waiting on a flight that never lands is not run', async () => {
   const runner = createGevActionRunner({
     viewer,
     styleManager,
-    dataManager: { layers: new Map(), getAll: () => [] },
+    dataManager: fakeVoiceManager(),
   });
   await runner('fly_to_location', { locationId: 'austin' });
   const tilt = runner('move_camera', { motion: 'tilt', pitchDeg: -45 });
@@ -498,7 +476,7 @@ test('a tilt beside a fly-to that found nothing is not run', async () => {
   const runner = createGevActionRunner({
     viewer,
     styleManager,
-    dataManager: { layers: new Map(), getAll: () => [] },
+    dataManager: fakeVoiceManager(),
     searchNavigation: async () => null,
   });
   const fly = runner('fly_to_location', { query: 'Nowhere' });
@@ -520,7 +498,7 @@ test('a tilt with no voice flight pending runs at once', async () => {
   const runner = createGevActionRunner({
     viewer,
     styleManager,
-    dataManager: { layers: new Map(), getAll: () => [] },
+    dataManager: fakeVoiceManager(),
   });
   await runner('fly_to_location', { locationId: 'austin' });
   flights[0].complete();
@@ -541,7 +519,7 @@ for (const motion of [
     const runner = createGevActionRunner({
       viewer,
       styleManager,
-      dataManager: { layers: new Map(), getAll: () => [] },
+      dataManager: fakeVoiceManager(),
     });
     assert.equal(
       (await runner('fly_to_location', { locationId: 'austin' })).ok,
@@ -574,7 +552,7 @@ for (const motion of [
     const runner = createGevActionRunner({
       viewer,
       styleManager,
-      dataManager: { layers: new Map(), getAll: () => [] },
+      dataManager: fakeVoiceManager(),
       searchNavigation: (_viewer, query, options) =>
         new Promise((resolve) => {
           finishSearch = () => {
@@ -615,7 +593,7 @@ for (const motion of [
     const runner = createGevActionRunner({
       viewer,
       styleManager,
-      dataManager: { layers: new Map(), getAll: () => [] },
+      dataManager: fakeVoiceManager(),
     });
     await runner('fly_to_location', { locationId: 'austin' });
     const moved = runner('move_camera', motion);
@@ -643,7 +621,7 @@ for (const motion of [{ motion: 'orbit' }, { motion: 'tilt', pitchDeg: -45 }]) {
     const runner = createGevActionRunner({
       viewer,
       styleManager,
-      dataManager: { layers: new Map(), getAll: () => [] },
+      dataManager: fakeVoiceManager(),
     });
     assert.equal(
       (await runner('fly_to_location', { locationId: 'austin' })).ok,
@@ -669,7 +647,7 @@ test('a drag during the first of two chained fly-tos still drops the queued moti
   const runner = createGevActionRunner({
     viewer,
     styleManager,
-    dataManager: { layers: new Map(), getAll: () => [] },
+    dataManager: fakeVoiceManager(),
   });
   assert.equal(
     (await runner('fly_to_location', { locationId: 'austin' })).ok,
@@ -697,7 +675,7 @@ test('input before a fly-to does not drop the motion queued behind it', async (t
   const runner = createGevActionRunner({
     viewer,
     styleManager,
-    dataManager: { layers: new Map(), getAll: () => [] },
+    dataManager: fakeVoiceManager(),
   });
   canvasListeners.get('wheel')();
   assert.equal(
@@ -715,7 +693,7 @@ test('a motion follows a later fly-to in the same reply that cancels its flight'
   const runner = createGevActionRunner({
     viewer,
     styleManager,
-    dataManager: { layers: new Map(), getAll: () => [] },
+    dataManager: fakeVoiceManager(),
   });
   assert.equal(
     (await runner('fly_to_location', { locationId: 'austin' })).ok,
@@ -744,7 +722,7 @@ test('a motion follows a later fly-to whose start cancels its geocode', async (t
   const runner = createGevActionRunner({
     viewer,
     styleManager,
-    dataManager: { layers: new Map(), getAll: () => [] },
+    dataManager: fakeVoiceManager(),
     searchNavigation: (_viewer, query, options) =>
       new Promise((resolve) => {
         searches.push({ query, options, resolve });
@@ -775,7 +753,7 @@ test('a motion does not run at a flight that lands while the next place is looke
   const runner = createGevActionRunner({
     viewer,
     styleManager,
-    dataManager: { layers: new Map(), getAll: () => [] },
+    dataManager: fakeVoiceManager(),
     searchNavigation: (_viewer, query, options) =>
       new Promise((resolve) => {
         searches.push({ query, options, resolve });
@@ -818,7 +796,7 @@ for (const order of ['lands first', 'not found first']) {
     const runner = createGevActionRunner({
       viewer,
       styleManager,
-      dataManager: { layers: new Map(), getAll: () => [] },
+      dataManager: fakeVoiceManager(),
       searchNavigation: (_viewer, query, options) =>
         new Promise((resolve) => {
           searches.push({ query, options, resolve });
@@ -847,7 +825,7 @@ test("a motion beside a fly-to that finds nothing never acts at an earlier reply
   const runner = createGevActionRunner({
     viewer,
     styleManager,
-    dataManager: { layers: new Map(), getAll: () => [] },
+    dataManager: fakeVoiceManager(),
     searchNavigation: (_viewer, query, options) =>
       new Promise((resolve) => {
         searches.push({ query, options, resolve });
@@ -880,7 +858,7 @@ for (const first of [0, 1]) {
     const runner = createGevActionRunner({
       viewer,
       styleManager,
-      dataManager: { layers: new Map(), getAll: () => [] },
+      dataManager: fakeVoiceManager(),
       searchNavigation: (_viewer, query, options) =>
         new Promise((resolve) => {
           searches.push({ query, options, resolve });
@@ -911,7 +889,7 @@ test('a lookup cancelled by a newer one that finds nothing does not hide the fli
   const runner = createGevActionRunner({
     viewer,
     styleManager,
-    dataManager: { layers: new Map(), getAll: () => [] },
+    dataManager: fakeVoiceManager(),
     searchNavigation: (_viewer, query, options) =>
       new Promise((resolve) => {
         searches.push({ query, options, resolve });
@@ -942,7 +920,7 @@ test('a motion sent after a fly-to that found nothing still waits for the flight
   const runner = createGevActionRunner({
     viewer,
     styleManager,
-    dataManager: { layers: new Map(), getAll: () => [] },
+    dataManager: fakeVoiceManager(),
     searchNavigation: async () => null,
   });
   assert.equal(
@@ -969,7 +947,7 @@ test('two lookups that found nothing in a row still leave the motion waiting for
   const runner = createGevActionRunner({
     viewer,
     styleManager,
-    dataManager: { layers: new Map(), getAll: () => [] },
+    dataManager: fakeVoiceManager(),
     searchNavigation: async () => null,
   });
   assert.equal(
@@ -1002,7 +980,7 @@ test('a motion acts at a landed flight that a later failed lookup replaced', asy
   const runner = createGevActionRunner({
     viewer,
     styleManager,
-    dataManager: { layers: new Map(), getAll: () => [] },
+    dataManager: fakeVoiceManager(),
     searchNavigation: (_viewer, query, options) =>
       new Promise((resolve) => {
         searches.push({ query, options, resolve });
@@ -1032,7 +1010,7 @@ test('a motion refuses when the flight a later failed lookup replaced was cancel
   const runner = createGevActionRunner({
     viewer,
     styleManager,
-    dataManager: { layers: new Map(), getAll: () => [] },
+    dataManager: fakeVoiceManager(),
     searchNavigation: (_viewer, query, options) =>
       new Promise((resolve) => {
         searches.push({ query, options, resolve });
@@ -1069,7 +1047,7 @@ test("a stale motion does not follow a newer reply's fly-to", async () => {
   const runner = createGevActionRunner({
     viewer,
     styleManager,
-    dataManager: { layers: new Map(), getAll: () => [] },
+    dataManager: fakeVoiceManager(),
   });
   let live = true;
   assert.equal(
@@ -1103,7 +1081,7 @@ test('a motion gives up on a flight that has not landed in 15 s', async (t) => {
   const runner = createGevActionRunner({
     viewer,
     styleManager,
-    dataManager: { layers: new Map(), getAll: () => [] },
+    dataManager: fakeVoiceManager(),
   });
   assert.equal(
     (await runner('fly_to_location', { locationId: 'austin' })).ok,
@@ -1128,7 +1106,7 @@ test('a motion follows a newer fly-to that lands while its own lookup stalls', a
   const runner = createGevActionRunner({
     viewer,
     styleManager,
-    dataManager: { layers: new Map(), getAll: () => [] },
+    dataManager: fakeVoiceManager(),
     // Place A's lookup never answers.
     searchNavigation: () => new Promise(() => {}),
   });
@@ -1168,7 +1146,7 @@ test("a motion run after its reply's fly-to found nothing is not run", async (t)
   const runner = createGevActionRunner({
     viewer,
     styleManager,
-    dataManager: { layers: new Map(), getAll: () => [] },
+    dataManager: fakeVoiceManager(),
     searchNavigation: async () => null,
   });
   const reply = { turn: 1 };
@@ -1208,7 +1186,7 @@ test('a motion in a later reply runs after a fly-to that found nothing', async (
   const runner = createGevActionRunner({
     viewer,
     styleManager,
-    dataManager: { layers: new Map(), getAll: () => [] },
+    dataManager: fakeVoiceManager(),
     searchNavigation: async () => null,
   });
   await runner(
@@ -1230,7 +1208,7 @@ test('a motion runs at a flight of its reply that landed after another lookup fo
   const runner = createGevActionRunner({
     viewer,
     styleManager,
-    dataManager: { layers: new Map(), getAll: () => [] },
+    dataManager: fakeVoiceManager(),
     searchNavigation: async () => null,
   });
   const reply = { turn: 1 };
@@ -1255,7 +1233,7 @@ test('a motion queued behind a fly-to yields to a search started during the flig
   const runner = createGevActionRunner({
     viewer,
     styleManager,
-    dataManager: { layers: new Map(), getAll: () => [] },
+    dataManager: fakeVoiceManager(),
   });
   assert.equal(
     (await runner('fly_to_location', { locationId: 'austin' })).ok,
@@ -1279,7 +1257,7 @@ test('a motion behind a geocoded fly-to yields to a search started while it flie
   const runner = createGevActionRunner({
     viewer,
     styleManager,
-    dataManager: { layers: new Map(), getAll: () => [] },
+    dataManager: fakeVoiceManager(),
     searchNavigation: (_viewer, query, options) =>
       new Promise((resolve) => {
         searches.push({ query, options, resolve });
@@ -1305,7 +1283,7 @@ test('a search before the fly-to does not drop the motion queued behind it', asy
   const runner = createGevActionRunner({
     viewer,
     styleManager,
-    dataManager: { layers: new Map(), getAll: () => [] },
+    dataManager: fakeVoiceManager(),
   });
   panelSearch();
   assert.equal(
@@ -1326,7 +1304,7 @@ test('a fly-to that stops a running motion says so', async (t) => {
   const runner = createGevActionRunner({
     viewer,
     styleManager,
-    dataManager: { layers: new Map(), getAll: () => [] },
+    dataManager: fakeVoiceManager(),
   });
   // The model sent the orbit first, so it ran at once.
   const orbit = await runner('move_camera', {
@@ -1346,7 +1324,7 @@ test('bad move_camera arguments are refused without waiting for a flight', async
   const runner = createGevActionRunner({
     viewer,
     styleManager,
-    dataManager: { layers: new Map(), getAll: () => [] },
+    dataManager: fakeVoiceManager(),
   });
   assert.equal(
     (await runner('fly_to_location', { locationId: 'austin' })).ok,
@@ -1366,7 +1344,7 @@ test('stop does not wait for a voice flight', async () => {
   const runner = createGevActionRunner({
     viewer,
     styleManager,
-    dataManager: { layers: new Map(), getAll: () => [] },
+    dataManager: fakeVoiceManager(),
   });
   await runner('fly_to_location', { locationId: 'austin' });
   const result = await runner('move_camera', { motion: 'stop' });
@@ -1375,11 +1353,7 @@ test('stop does not wait for a voice flight', async () => {
 });
 
 test('nearest-aircraft voice action serializes layer enable, arrival, refresh, airborne query, and selection', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const { viewer, styleManager } = createVoiceNavigationHarness();
   const order = [];
   let completeFlight = null;
@@ -1481,11 +1455,7 @@ test('nearest-aircraft voice action serializes layer enable, arrival, refresh, a
 });
 
 test('nearest-aircraft voice action refreshes an already-enabled viewport layer after arrival', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const { viewer, styleManager } = createVoiceNavigationHarness();
   const order = [];
   let completeFlight = null;
@@ -1561,11 +1531,7 @@ test('nearest-aircraft voice action refreshes an already-enabled viewport layer 
 });
 
 test('fallback with zero airborne records reports enabled fallback without selecting a landed aircraft', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const { viewer, styleManager } = createVoiceNavigationHarness();
   let completeFlight = null;
   viewer.camera.flyTo = (options) => {
@@ -1643,11 +1609,7 @@ test('nearest-aircraft voice action rejects a missing destination without changi
 });
 
 test('successful voice tracking stamps and releases the old owner before layer takeover', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const { order, viewer, styleManager } = createVoiceNavigationHarness();
   const satellites = {
     findByQuery: () => ({ noradId: '25544', name: 'ISS' }),
@@ -1656,11 +1618,10 @@ test('successful voice tracking stamps and releases the old owner before layer t
       return true;
     },
   };
-  const dataManager = {
-    layers: new Map([['satellites', { module: satellites }]]),
-    isEnabled: (id) => id === 'satellites',
-    getAll: () => [],
-  };
+  const dataManager = fakeVoiceManager(
+    [['satellites', { module: satellites }]],
+    { isEnabled: (id) => id === 'satellites' },
+  );
   const runner = createGevActionRunner({ viewer, styleManager, dataManager });
   const result = await runner('track_entity', {
     query: 'ISS',
@@ -1789,20 +1750,15 @@ test('voice Stop Tracking reports exact layers whose active or durable clear fai
 });
 
 test('successful voice overhead framing stamps and releases the old owner before flight', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const { order, viewer, styleManager } = createVoiceNavigationHarness();
   const position = viewer.camera.positionWC;
   viewer.camera.pickEllipsoid = () => position;
   const flights = { getNearby: () => [{ id: 'abc123', position }] };
-  const dataManager = {
-    layers: new Map([['flights', { module: flights }]]),
-    isEnabled: (id) => id === 'flights',
-    getAll: () => [],
-  };
+  const dataManager = fakeVoiceManager(
+    [['flights', { module: flights }]],
+    { isEnabled: (id) => id === 'flights' },
+  );
   const runner = createGevActionRunner({ viewer, styleManager, dataManager });
   const result = await runner('frame_overhead', { target: 'flights' });
   assert.equal(result.ok, true);
@@ -1810,11 +1766,7 @@ test('successful voice overhead framing stamps and releases the old owner before
 });
 
 test('tracked aircraft yields to strongest-fire and vessel voice flights before either flight begins', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   for (const kind of ['fire', 'vessel']) {
     const { order, viewer, styleManager } = createVoiceNavigationHarness();
     const module =
@@ -1841,11 +1793,10 @@ test('tracked aircraft yields to strongest-fire and vessel voice flights before 
             },
           };
     const layerId = kind === 'fire' ? 'local-firms' : 'ais-live-vessels';
-    const dataManager = {
-      layers: new Map([[layerId, { module }]]),
-      isEnabled: (id) => id === layerId,
-      getAll: () => [],
-    };
+    const dataManager = fakeVoiceManager(
+      [[layerId, { module }]],
+      { isEnabled: (id) => id === layerId },
+    );
     const runner = createGevActionRunner({ viewer, styleManager, dataManager });
     const result = await runner('track_entity', {
       query: kind === 'fire' ? 'strongest fire' : 'Test vessel',
@@ -1861,11 +1812,7 @@ test('tracked aircraft yields to strongest-fire and vessel voice flights before 
 });
 
 test('track_entity on a vessel follows it through its layer instead of flying to it', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const { order, viewer, styleManager } = createVoiceNavigationHarness();
   const tracked = [];
   const module = {
@@ -1885,11 +1832,10 @@ test('track_entity on a vessel follows it through its layer instead of flying to
       return true;
     },
   };
-  const dataManager = {
-    layers: new Map([['ais-live-vessels', { module }]]),
-    isEnabled: (id) => id === 'ais-live-vessels',
-    getAll: () => [],
-  };
+  const dataManager = fakeVoiceManager(
+    [['ais-live-vessels', { module }]],
+    { isEnabled: (id) => id === 'ais-live-vessels' },
+  );
   const runner = createGevActionRunner({ viewer, styleManager, dataManager });
   const result = await runner('track_entity', {
     query: 'Test vessel',
@@ -1902,11 +1848,7 @@ test('track_entity on a vessel follows it through its layer instead of flying to
 });
 
 test('move_camera and fly_route validate first, then use the shared camera authority seam', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const { order, viewer, styleManager } = createVoiceNavigationHarness();
   const annotations = {
     list: () => [
@@ -1923,7 +1865,7 @@ test('move_camera and fly_route validate first, then use the shared camera autho
   const runner = createGevActionRunner({
     viewer,
     styleManager,
-    dataManager: { layers: new Map(), getAll: () => [] },
+    dataManager: fakeVoiceManager(),
     annotations,
   });
 
@@ -1942,11 +1884,7 @@ test('move_camera and fly_route validate first, then use the shared camera autho
 });
 
 test('a chained orbit preserves its current destination flight while still stamping authority', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const { order, viewer, styleManager } = createVoiceNavigationHarness();
   viewer.trackedEntity = undefined;
   // The destination flight, still in progress.
@@ -1955,7 +1893,7 @@ test('a chained orbit preserves its current destination flight while still stamp
   const runner = createGevActionRunner({
     viewer,
     styleManager,
-    dataManager: { layers: new Map(), getAll: () => [] },
+    dataManager: fakeVoiceManager(),
   });
   const result = await runner('move_camera', {
     motion: 'orbit',
@@ -1969,11 +1907,7 @@ test('a chained orbit preserves its current destination flight while still stamp
 });
 
 test('invalid named voice navigation never releases the current camera owner', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const { order, viewer, styleManager } = createVoiceNavigationHarness();
   const runner = createGevActionRunner({
     viewer,
@@ -2043,11 +1977,7 @@ test('invalid named voice navigation never releases the current camera owner', a
 });
 
 test('Cockpit refuses every named voice camera route before camera or selection mutation', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const cases = [
     ['move_camera', { motion: 'pan', direction: 'right' }],
     ['move_camera', { motion: 'stop' }],
@@ -2138,11 +2068,7 @@ test('Cockpit refuses every named voice camera route before camera or selection 
 });
 
 test('a newer voice action makes an older deferred navigation authority inert', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const { viewer, styleManager, currentGeneration } =
     createVoiceNavigationHarness();
   const oldGeneration = currentGeneration();
@@ -2187,11 +2113,7 @@ test('a newer voice action makes an older deferred navigation authority inert', 
 });
 
 test('Data Layers voice inventory hides the Context coordinator while current-view truth retains it', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const layers = [
     {
       id: 'flights',
@@ -2252,11 +2174,7 @@ test('Data Layers voice inventory hides the Context coordinator while current-vi
 });
 
 test('showing a layer opens the panel that holds its row: Directions lives in Utilities', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const previous = { document: globalThis.document, CSS: globalThis.CSS };
   const focused = [];
   const rowIn = (panelId) => ({
@@ -2315,11 +2233,7 @@ test('showing a layer opens the panel that holds its row: Directions lives in Ut
       setPanelCollapsed: (panelId, collapsed) =>
         opened.push([panelId, collapsed]),
     };
-    const viewer = {
-      clock: { onTick: { addEventListener: () => () => {} } },
-      scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
-      camera: { moveEnd: { addEventListener() {} } },
-    };
+    const viewer = fakeVoiceViewer();
     const runner = createGevActionRunner({ viewer, styleManager, dataManager });
     const directions = await runner('show_data_layers_menu', {
       layerId: 'directions',
@@ -2345,16 +2259,8 @@ test('showing a layer opens the panel that holds its row: Directions lives in Ut
 });
 
 test('generic layer visibility forwards cancellation and reports semantic failure', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
-  const viewer = {
-    clock: { onTick: { addEventListener: () => () => {} } },
-    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
-    camera: { moveEnd: { addEventListener() {} } },
-  };
+  installVoiceWindow();
+  const viewer = fakeVoiceViewer();
   let enabled = false;
   let lifecycle = {
     enabled: false,
@@ -2416,16 +2322,8 @@ test('generic layer visibility forwards cancellation and reports semantic failur
 });
 
 test('generic voice visibility preserves a manager resource-cancellation envelope', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
-  const viewer = {
-    clock: { onTick: { addEventListener: () => () => {} } },
-    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
-    camera: { moveEnd: { addEventListener() {} } },
-  };
+  installVoiceWindow();
+  const viewer = fakeVoiceViewer();
   const dataManager = {
     layers: new Map([['rocket-launches', { module: {} }]]),
     getAll: () => [{ id: 'rocket-launches', name: 'Space Missions' }],
@@ -2476,16 +2374,8 @@ test('generic voice visibility preserves a manager resource-cancellation envelop
 });
 
 test('generic voice visibility preserves caller-abort phase before the stale-turn fallback', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
-  const viewer = {
-    clock: { onTick: { addEventListener: () => () => {} } },
-    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
-    camera: { moveEnd: { addEventListener() {} } },
-  };
+  installVoiceWindow();
+  const viewer = fakeVoiceViewer();
   const controller = new AbortController();
   const dataManager = {
     layers: new Map([['rocket-launches', { module: {} }]]),
@@ -2531,16 +2421,8 @@ test('generic voice visibility preserves caller-abort phase before the stale-tur
 });
 
 test('generic voice visibility preserves an exact commit when a newer turn arrives during Context settlement', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
-  const viewer = {
-    clock: { onTick: { addEventListener: () => () => {} } },
-    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
-    camera: { moveEnd: { addEventListener() {} } },
-  };
+  installVoiceWindow();
+  const viewer = fakeVoiceViewer();
   const controller = new AbortController();
   let releaseSettlement;
   let settlementStarted;
@@ -2603,16 +2485,8 @@ test('generic voice visibility preserves an exact commit when a newer turn arriv
 });
 
 test('late voice abort cannot revoke a committed manager event and leaves the intent lane reusable', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
-  const viewer = {
-    clock: { onTick: { addEventListener: () => () => {} } },
-    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
-    camera: { moveEnd: { addEventListener() {} } },
-  };
+  installVoiceWindow();
+  const viewer = fakeVoiceViewer();
   const dataManager = new DataLayerManager(viewer);
   const lifecycleCalls = [];
   dataManager.register({
@@ -2694,16 +2568,8 @@ test('late voice abort cannot revoke a committed manager event and leaves the in
 });
 
 test('generic layer visibility exposes lifecycle truth for every manager phase and thrown failure', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
-  const viewer = {
-    clock: { onTick: { addEventListener: () => () => {} } },
-    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
-    camera: { moveEnd: { addEventListener() {} } },
-  };
+  installVoiceWindow();
+  const viewer = fakeVoiceViewer();
   const lifecycleCases = [
     { enabled: false, lifecycleState: 'disabled', uncertain: false },
     { enabled: false, lifecycleState: 'enabling', uncertain: false },
@@ -2827,16 +2693,8 @@ test('generic layer visibility exposes lifecycle truth for every manager phase a
 });
 
 test('generic voice visibility maps Space Missions to the explicit mission layer', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
-  const viewer = {
-    clock: { onTick: { addEventListener: () => () => {} } },
-    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
-    camera: { moveEnd: { addEventListener() {} } },
-  };
+  installVoiceWindow();
+  const viewer = fakeVoiceViewer();
   const calls = [];
   let contextSettled = false;
   const dataManager = {
@@ -2909,11 +2767,7 @@ test('voice CCTV focus reports cockpit ownership', () => {
 });
 
 test('control_cockpit forwards schema-valid navigation filters', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const calls = [];
   const styleManager = {
     controlCockpit(action, options) {
@@ -2927,15 +2781,11 @@ test('control_cockpit forwards schema-valid navigation filters', async () => {
       };
     },
   };
-  const viewer = {
-    clock: { onTick: { addEventListener: () => () => {} } },
-    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
-    camera: { moveEnd: { addEventListener() {} } },
-  };
+  const viewer = fakeVoiceViewer();
   const runner = createGevActionRunner({
     viewer,
     styleManager,
-    dataManager: { layers: new Map(), getAll: () => [] },
+    dataManager: fakeVoiceManager(),
   });
 
   await runner('control_cockpit', {
@@ -2959,11 +2809,7 @@ test('control_cockpit forwards schema-valid navigation filters', async () => {
 });
 
 test('control_cockpit resolves spoken TR-3B spellings to the tr3b class id', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const calls = [];
   const styleManager = {
     controlCockpit(action, options) {
@@ -2977,15 +2823,11 @@ test('control_cockpit resolves spoken TR-3B spellings to the tr3b class id', asy
       };
     },
   };
-  const viewer = {
-    clock: { onTick: { addEventListener: () => () => {} } },
-    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
-    camera: { moveEnd: { addEventListener() {} } },
-  };
+  const viewer = fakeVoiceViewer();
   const runner = createGevActionRunner({
     viewer,
     styleManager,
-    dataManager: { layers: new Map(), getAll: () => [] },
+    dataManager: fakeVoiceManager(),
   });
 
   // Analyst records carry the class as the unpunctuated id `tr3b`, but nobody
@@ -3019,11 +2861,7 @@ test('control_cockpit resolves spoken TR-3B spellings to the tr3b class id', asy
 });
 
 test('control_cockpit delegates selected-flight adoption to the canonical cockpit owner and leaves Context alone', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const calls = [];
   let contextActive = false;
   const flights = {
@@ -3051,11 +2889,7 @@ test('control_cockpit delegates selected-flight adoption to the canonical cockpi
       };
     },
   };
-  const viewer = {
-    clock: { onTick: { addEventListener: () => () => {} } },
-    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
-    camera: { moveEnd: { addEventListener() {} } },
-  };
+  const viewer = fakeVoiceViewer();
   const recordCarrier = {};
   const record = registerEntityContext(recordCarrier, {
     id: 'abc123',
@@ -3065,11 +2899,10 @@ test('control_cockpit delegates selected-flight adoption to the canonical cockpi
   const contextStore = getContextStore();
   contextStore.selectedEntityId = record?.id || null;
   contextStore.selectedAt = Date.now();
-  const dataManager = {
-    layers: new Map([['flights', { module: flights }]]),
-    isEnabled: (layerId) => layerId === 'flights',
-    getAll: () => [],
-  };
+  const dataManager = fakeVoiceManager(
+    [['flights', { module: flights }]],
+    { isEnabled: (layerId) => layerId === 'flights' },
+  );
   const runner = createGevActionRunner({ viewer, styleManager, dataManager });
 
   const result = await runner('control_cockpit', { action: 'enter' });
@@ -3083,11 +2916,7 @@ test('control_cockpit delegates selected-flight adoption to the canonical cockpi
 });
 
 test('control_cockpit cancellation is inert when Contacts is already active', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const controller = new AbortController();
   controller.abort();
   const styleManager = {
@@ -3101,11 +2930,7 @@ test('control_cockpit cancellation is inert when Contacts is already active', as
       assert.fail('cancelled Cockpit entry must not mutate state'),
     getCockpitState: () => ({ active: false }),
   };
-  const viewer = {
-    clock: { onTick: { addEventListener: () => () => {} } },
-    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
-    camera: { moveEnd: { addEventListener() {} } },
-  };
+  const viewer = fakeVoiceViewer();
   const runner = createGevActionRunner({
     viewer,
     styleManager,
@@ -3129,11 +2954,7 @@ test('control_cockpit cancellation is inert when Contacts is already active', as
 });
 
 test('control_cockpit enters on the current selection and keeps the prior track for rollback', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const contextStore = getContextStore();
   const first = registerEntityContext(
     {},
@@ -3168,11 +2989,7 @@ test('control_cockpit enters on the current selection and keeps the prior track 
       return { ok: true, state: { active: true } };
     },
   };
-  const viewer = {
-    clock: { onTick: { addEventListener: () => () => {} } },
-    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
-    camera: { moveEnd: { addEventListener() {} } },
-  };
+  const viewer = fakeVoiceViewer();
   const dataManager = {
     layers: new Map([
       [
@@ -3201,11 +3018,7 @@ test('control_cockpit enters on the current selection and keeps the prior track 
 });
 
 test('a failed voice Cockpit entry leaves the Context mode as it was', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const calls = [];
   const styleManager = {
     getContextModeState: () => ({ mode: null, active: false, changing: false }),
@@ -3219,11 +3032,7 @@ test('a failed voice Cockpit entry leaves the Context mode as it was', async () 
       };
     },
   };
-  const viewer = {
-    clock: { onTick: { addEventListener: () => () => {} } },
-    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
-    camera: { moveEnd: { addEventListener() {} } },
-  };
+  const viewer = fakeVoiceViewer();
   const runner = createGevActionRunner({
     viewer,
     styleManager,
@@ -3241,11 +3050,7 @@ test('a failed voice Cockpit entry leaves the Context mode as it was', async () 
   assert.equal(result.contextRollback, undefined);
 });
 test('control_cockpit contains entry exceptions and passes the prior track for rollback', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const calls = [];
   const styleManager = {
     getAircraftTrackingTarget: () => ({ layerId: 'military', id: 'prior' }),
@@ -3257,11 +3062,7 @@ test('control_cockpit contains entry exceptions and passes the prior track for r
     },
     getCockpitState: () => ({ active: false }),
   };
-  const viewer = {
-    clock: { onTick: { addEventListener: () => () => {} } },
-    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
-    camera: { moveEnd: { addEventListener() {} } },
-  };
+  const viewer = fakeVoiceViewer();
   const runner = createGevActionRunner({
     viewer,
     styleManager,
@@ -3281,11 +3082,7 @@ test('control_cockpit contains entry exceptions and passes the prior track for r
   ]);
 });
 test('set_context_mode forwards cancellation authority and reports a stale turn', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const controller = new AbortController();
   let receivedOptions = null;
   const styleManager = {
@@ -3297,15 +3094,11 @@ test('set_context_mode forwards cancellation authority and reports a stale turn'
       return { ok: false, mode: null };
     },
   };
-  const viewer = {
-    clock: { onTick: { addEventListener: () => () => {} } },
-    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
-    camera: { moveEnd: { addEventListener() {} } },
-  };
+  const viewer = fakeVoiceViewer();
   const runner = createGevActionRunner({
     viewer,
     styleManager,
-    dataManager: { layers: new Map(), getAll: () => [] },
+    dataManager: fakeVoiceManager(),
   });
   const result = await runner(
     'set_context_mode',
@@ -3327,11 +3120,7 @@ test('set_context_mode forwards cancellation authority and reports a stale turn'
 });
 
 test('opening Contacts expands Context before activation and returns its settled aircraft window', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const order = [];
   const contactsWindow = {
     centeredOn: 'SWA2120',
@@ -3361,15 +3150,11 @@ test('opening Contacts expands Context before activation and returns its settled
       };
     },
   };
-  const viewer = {
-    clock: { onTick: { addEventListener: () => () => {} } },
-    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
-    camera: { moveEnd: { addEventListener() {} } },
-  };
+  const viewer = fakeVoiceViewer();
   const runner = createGevActionRunner({
     viewer,
     styleManager,
-    dataManager: { layers: new Map(), getAll: () => [] },
+    dataManager: fakeVoiceManager(),
   });
   const result = await runner('set_context_mode', { mode: 'contacts' });
   assert.deepEqual(order, ['panel:global-context-panel:open', 'mode:flights']);
@@ -3379,11 +3164,7 @@ test('opening Contacts expands Context before activation and returns its settled
 });
 
 test('set_context_mode pre-dispatch cancellation includes authoritative Context state', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const controller = new AbortController();
   controller.abort();
   const styleManager = {
@@ -3394,15 +3175,11 @@ test('set_context_mode pre-dispatch cancellation includes authoritative Context 
     }),
     setContextMode: () => assert.fail('cancelled request must not dispatch'),
   };
-  const viewer = {
-    clock: { onTick: { addEventListener: () => () => {} } },
-    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
-    camera: { moveEnd: { addEventListener() {} } },
-  };
+  const viewer = fakeVoiceViewer();
   const runner = createGevActionRunner({
     viewer,
     styleManager,
-    dataManager: { layers: new Map(), getAll: () => [] },
+    dataManager: fakeVoiceManager(),
   });
   const result = await runner(
     'set_context_mode',
@@ -3425,11 +3202,7 @@ test('set_context_mode pre-dispatch cancellation includes authoritative Context 
 });
 
 test('control_cockpit enter skips selected non-flight context', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const calls = [];
   let contextActive = false;
   const styleManager = {
@@ -3450,11 +3223,7 @@ test('control_cockpit enter skips selected non-flight context', async () => {
       };
     },
   };
-  const viewer = {
-    clock: { onTick: { addEventListener: () => () => {} } },
-    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
-    camera: { moveEnd: { addEventListener() {} } },
-  };
+  const viewer = fakeVoiceViewer();
   const recordCarrier = {};
   const record = registerEntityContext(recordCarrier, {
     id: 'poi-001',
@@ -4440,11 +4209,7 @@ test('voice Radio Pause while disabled is a truthful playback-only no-op', async
 // ---------------------------------------------------------------------------
 
 test('voice Cockpit entry, entered or failed, never changes the Context mode', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   for (const entered of [true, false]) {
     const calls = [];
     const styleManager = {
@@ -4471,11 +4236,7 @@ test('voice Cockpit entry, entered or failed, never changes the Context mode', a
       getAircraftTrackingTarget: () => null,
     };
     const layerCalls = [];
-    const viewer = {
-      clock: { onTick: { addEventListener: () => () => {} } },
-      scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
-      camera: { moveEnd: { addEventListener() {} } },
-    };
+    const viewer = fakeVoiceViewer();
     const runner = createGevActionRunner({
       viewer,
       styleManager,
@@ -4530,11 +4291,7 @@ function contextClaimProbe({
     getCockpitState: () => ({ active: false }),
     getAircraftTrackingTarget: () => null,
   };
-  const viewer = {
-    clock: { onTick: { addEventListener: () => () => {} } },
-    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
-    camera: { moveEnd: { addEventListener() {} } },
-  };
+  const viewer = fakeVoiceViewer();
   const runner = createGevActionRunner({
     viewer,
     styleManager,
@@ -4548,11 +4305,7 @@ function contextClaimProbe({
 }
 
 test('a genuine set_context_mode request DOES claim the visual lane', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const probe = contextClaimProbe();
   await probe.runner('set_context_mode', { mode: 'contacts' });
 
@@ -4764,11 +4517,7 @@ test('a lost cross-mode switch reports every mode field in the shared vocabulary
   // `priorMode` and a diagnostic sentence naming the mode. One leaked internal
   // id is enough to put the model back where it started — reading 'flights'
   // and concluding Contacts is off.
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const styleManager = {
     getContextModeState: () => ({
       mode: null,
@@ -4791,15 +4540,11 @@ test('a lost cross-mode switch reports every mode field in the shared vocabulary
       };
     },
   };
-  const viewer = {
-    clock: { onTick: { addEventListener: () => () => {} } },
-    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
-    camera: { moveEnd: { addEventListener() {} } },
-  };
+  const viewer = fakeVoiceViewer();
   const runner = createGevActionRunner({
     viewer,
     styleManager,
-    dataManager: { layers: new Map(), getAll: () => [] },
+    dataManager: fakeVoiceManager(),
   });
   const result = await runner('set_context_mode', { mode: 'contacts' });
   assert.equal(result.mode, 'off');
@@ -4826,11 +4571,7 @@ function spaceMissionsVoiceRig({
   missionsOn = false,
   contextMode = null,
 } = {}) {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const calls = { setEnabled: [], panels: [], contextModes: [], waits: 0 };
   let satellitesOn = true;
   const missions = {
@@ -4955,11 +4696,7 @@ test('a voice Satellites OFF waits for Space Missions to finish reacting', async
 });
 
 test('an absent secondary mode stays absent instead of claiming to be off', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const styleManager = {
     getContextModeState: () => ({
       mode: 'flights',
@@ -4978,15 +4715,11 @@ test('an absent secondary mode stays absent instead of claiming to be off', asyn
       };
     },
   };
-  const viewer = {
-    clock: { onTick: { addEventListener: () => () => {} } },
-    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
-    camera: { moveEnd: { addEventListener() {} } },
-  };
+  const viewer = fakeVoiceViewer();
   const runner = createGevActionRunner({
     viewer,
     styleManager,
-    dataManager: { layers: new Map(), getAll: () => [] },
+    dataManager: fakeVoiceManager(),
   });
   const result = await runner('set_context_mode', { mode: 'contacts' });
   assert.equal(result.mode, 'contacts');
@@ -5048,8 +4781,29 @@ function awarenessSubjectHarness({ subject, flights = [], military = [] }) {
   };
 }
 
+let awarenessInstance = null;
+/** One Contacts layer bound to the catalog singletons, built on first use. */
+async function awarenessLayer() {
+  if (awarenessInstance) return awarenessInstance;
+  const [{ createApplicationAwareness }, flights, military, vessels, installations] =
+    await Promise.all([
+      import('../app/layers/militaryAwareness.js'),
+      import('../data/flights.js'),
+      import('../data/militaryFlights.js'),
+      import('../data/aisLiveVessels.js'),
+      import('../data/militaryInstallations.js'),
+    ]);
+  awarenessInstance = createApplicationAwareness({
+    flights: flights.default,
+    military: military.default,
+    vessels: vessels.default,
+    installations: installations.default,
+  });
+  return awarenessInstance;
+}
+
 async function withAwareness(harness, run) {
-  const awareness = (await import('../data/militaryAwareness.js')).default;
+  const awareness = await awarenessLayer();
   const flightsLayer = (await import('../data/flights.js')).default;
   const militaryLayer = (await import('../data/militaryFlights.js')).default;
   const originals = {
@@ -5144,11 +4898,7 @@ function analystRunner(awareness, { getAll } = {}) {
   });
 }
 test('front5: a nearby ask centres on the Contacts SUBJECT, not the selected datacenter', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const harness = awarenessSubjectHarness({
     subject: { id: 'a1b2c3', label: 'N546PC' },
     flights: Array.from({ length: 111 }, (_, i) => ({
@@ -5193,13 +4943,8 @@ test('front5: a nearby ask centres on the Contacts SUBJECT, not the selected dat
 });
 
 test('front5: the spoken count and the panel window are ONE number by construction', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
-  const { collectAircraftProximityWindow } =
-    await import('../data/militaryAwareness.js');
+  installVoiceWindow();
+  const { collectAircraftProximityWindow } = (await awarenessLayer()).testing;
   const harness = awarenessSubjectHarness({
     subject: { id: 'a1b2c3', label: 'N546PC' },
     flights: Array.from({ length: 111 }, (_, i) => ({
@@ -5235,11 +4980,7 @@ test('front5: the spoken count and the panel window are ONE number by constructi
 });
 
 test('front5: Contacts active with NO subject falls back to the view, not an empty panel', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const harness = awarenessSubjectHarness({ subject: null });
   await withAwareness(harness, async (awareness) => {
     const result = await analystRunner(awareness)('analyst_query', {
@@ -5262,11 +5003,7 @@ test('front5: Contacts active with NO subject falls back to the view, not an emp
 });
 
 test('front5: an explicit region still uses the region engine while Contacts is active', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const harness = awarenessSubjectHarness({
     subject: { id: 'a1b2c3', label: 'N546PC' },
     flights: Array.from({ length: 111 }, (_, i) => ({
@@ -5316,11 +5053,7 @@ test('front5: the box DIAGONAL is not the subject — 1.32 km away is somewhere 
   // Both deltas are under 0.01, so a box calls this the subject. The real
   // separation is 1.32 km. This is the case the coordinator flagged: a centre
   // far enough to be a different place, slipping through on the diagonal.
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   await withAwareness(subjectWindowHarness(), async (awareness) => {
     const result = await analystRunner(awareness)('analyst_query', {
       layers: ['flights', 'military'],
@@ -5349,11 +5082,7 @@ test('front5: 0.99 km due EAST is the subject, though a degree box rejects it', 
   // A degree of longitude is short at this latitude, so 0.0103 deg is only
   // 0.99 km — inside 1 km — yet over the 0.01 box threshold. A box would send
   // the operator a different, smaller number for a centre that IS the contact.
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   await withAwareness(subjectWindowHarness(), async (awareness) => {
     const result = await analystRunner(awareness)('analyst_query', {
       layers: ['flights', 'military'],
@@ -5428,11 +5157,7 @@ function radioSelectionHarness() {
 
 /** Install a Google key plus a fetch stub, restoring both afterwards. */
 function installKeyedFetch(t, handler) {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const priorKey = globalThis.window.__GOOGLE_MAPS_API_KEY__;
   const priorFetch = globalThis.fetch;
   globalThis.window.__GOOGLE_MAPS_API_KEY__ = 'unit-test-key';
@@ -5559,31 +5284,26 @@ const testPlaceSearch = () =>
 /** Fake viewers with a fake Cesium camera reach the renderer's camera port too. */
 const withCameraPort = (viewer) =>
   viewer?.camera ? bindFakeCesiumCamera(viewer) : viewer;
+/** Fake managers that only have `setEnabled` get the visibility-intent API the runner calls. */
+const withIntent = (manager) => manager && withVisibilityIntent(manager);
 function createGevActionRunner(options) {
   return createActionRunner({
     placeSearch: testPlaceSearch(),
     ...options,
     viewer: withCameraPort(options?.viewer),
+    dataManager: withIntent(options?.dataManager),
   });
 }
 function controlRadio(viewer, manager, args, options) {
-  return runControlRadio(viewer, manager, args, {
+  return runControlRadio(viewer, withIntent(manager), args, {
     placeSearch: testPlaceSearch(),
     ...options,
   });
 }
 
 test('ALPR common names toggle only the registered camera layer through the normal voice action', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
-  const viewer = {
-    clock: { onTick: { addEventListener: () => () => {} } },
-    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
-    camera: { moveEnd: { addEventListener() {} } },
-  };
+  installVoiceWindow();
+  const viewer = fakeVoiceViewer();
   const calls = [];
   let enabled = false;
   const dataManager = {
@@ -5623,16 +5343,8 @@ test('ALPR common names toggle only the registered camera layer through the norm
 });
 
 test('GNSS integrity and interference common names toggle only the GNSS layer through the normal voice action', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
-  const viewer = {
-    clock: { onTick: { addEventListener: () => () => {} } },
-    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
-    camera: { moveEnd: { addEventListener() {} } },
-  };
+  installVoiceWindow();
+  const viewer = fakeVoiceViewer();
   const calls = [];
   let enabled = false;
   const dataManager = {
@@ -5673,16 +5385,8 @@ test('GNSS integrity and interference common names toggle only the GNSS layer th
 });
 
 test('Local ADS-B common names toggle only the receiver layer through the normal voice action', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
-  const viewer = {
-    clock: { onTick: { addEventListener: () => () => {} } },
-    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
-    camera: { moveEnd: { addEventListener() {} } },
-  };
+  installVoiceWindow();
+  const viewer = fakeVoiceViewer();
   const calls = [];
   let enabled = false;
   const dataManager = {
@@ -5722,11 +5426,7 @@ test('Local ADS-B common names toggle only the receiver layer through the normal
 
 test('ISS voice lookup uses the registered satellite instance', async () => {
   const calls = [];
-  const viewer = {
-    clock: { onTick: { addEventListener: () => () => {} } },
-    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
-    camera: { moveEnd: { addEventListener() {} } },
-  };
+  const viewer = fakeVoiceViewer();
   const runner = createGevActionRunner({
     viewer,
     styleManager: {},
@@ -5756,11 +5456,7 @@ test('ISS voice lookup uses the registered satellite instance', async () => {
 });
 
 test('analyst_query and get_current_view_state carry stale feed provenance', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const now = Date.now();
   const flights = {
     id: 'flights',
@@ -5860,11 +5556,7 @@ test('general satellite pass resolves once, refuses ambiguity, and preserves ISS
       return { status: 'ok', pass };
     },
   };
-  const viewer = {
-    clock: { onTick: { addEventListener: () => () => {} } },
-    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
-    camera: { moveEnd: { addEventListener() {} } },
-  };
+  const viewer = fakeVoiceViewer();
   const runner = createGevActionRunner({
     viewer,
     styleManager: {},
@@ -5945,11 +5637,7 @@ function manifestRunner(
 }
 
 test('analyst_query counts the whole loaded set, not a 2,000-record slice', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const rows = Array.from({ length: 8114 }, (_, i) => ({
     id: `F${i}`,
     icao24: `f${i}`,
@@ -5993,11 +5681,7 @@ test('analyst_query counts the whole loaded set, not a 2,000-record slice', asyn
 });
 
 test('analyst_query refusals carry their code and the allowed values', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const earthquakes = {
     getStats: () => ({ count: 1, lastUpdate: Date.now() }),
     getAnalystRecords: () => [
@@ -6032,11 +5716,7 @@ test('analyst_query refusals carry their code and the allowed values', async () 
 });
 
 test('analyst_query keeps its answer when one record has an out-of-range time', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const now = Date.now();
   const earthquakes = {
     getStats: () => ({ count: 2, lastUpdate: now }),
@@ -6062,11 +5742,7 @@ test('analyst_query keeps its answer when one record has an out-of-range time', 
 });
 
 test("analyst_query keeps a fire's discovery time apart from its last growth", async (t) => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const T = Date.parse('2026-09-04T00:00:00Z');
   t.mock.method(Date, 'now', () => T);
   const records = [
@@ -6110,11 +5786,7 @@ test("analyst_query keeps a fire's discovery time apart from its last growth", a
 });
 
 test('spoken layer names from the manifest reach the newer layers', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const stub = () => ({ getStats: () => ({ count: 0 }) });
   const { runner, toggles } = manifestRunner(
     {
@@ -6137,11 +5809,7 @@ test('spoken layer names from the manifest reach the newer layers', async () => 
 });
 
 test('the Contacts window ranks, filters and formats like any analyst answer', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const harness = awarenessSubjectHarness({
     subject: { id: 'a1b2c3', label: 'N546PC' },
     flights: Array.from({ length: 20 }, (_, i) => ({
@@ -6222,11 +5890,7 @@ test('the Contacts window ranks, filters and formats like any analyst answer', a
 });
 
 test('a cancelled Contacts scan returns cancellation and cannot seed follow-up memory', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const harness = awarenessSubjectHarness({
     subject: { id: 'a1b2c3', label: 'N546PC' },
     flights: Array.from({ length: 20_000 }, (_, index) => ({
@@ -6259,11 +5923,7 @@ test('a cancelled Contacts scan returns cancellation and cannot seed follow-up m
 });
 
 test('a newer analyst call wins over an overlapping Contacts scan', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const harness = awarenessSubjectHarness({
     subject: { id: 'a1b2c3', label: 'N546PC' },
     flights: Array.from({ length: 20_000 }, (_, index) => ({
@@ -6298,11 +5958,7 @@ test('a newer analyst call wins over an overlapping Contacts scan', async () => 
 });
 
 test('analyst siblings from one Realtime response run in order without superseding', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const harness = awarenessSubjectHarness({
     subject: { id: 'a1b2c3', label: 'N546PC' },
     flights: Array.from({ length: 20_000 }, (_, index) => ({
@@ -6434,11 +6090,10 @@ test('different OSM siblings from one response do not race the server slot or me
   const runner = createGevActionRunner({
     viewer,
     styleManager: {},
-    dataManager: {
-      layers: new Map([['osm-places', { module: osmLayer }]]),
-      isEnabled: (id) => id === 'osm-places',
-      getAll: () => [],
-    },
+    dataManager: fakeVoiceManager(
+      [['osm-places', { module: osmLayer }]],
+      { isEnabled: (id) => id === 'osm-places' },
+    ),
     areaOptions: {
       findRegion: async () => null,
       findAdminCandidates: async () => [
@@ -6512,11 +6167,10 @@ test('an analyst follow-up on OSM places keeps the area they were found in', asy
   const runner = createGevActionRunner({
     viewer,
     styleManager: {},
-    dataManager: {
-      layers: new Map([['osm-places', { module: osmLayer }]]),
-      isEnabled: (id) => id === 'osm-places',
-      getAll: () => [],
-    },
+    dataManager: fakeVoiceManager(
+      [['osm-places', { module: osmLayer }]],
+      { isEnabled: (id) => id === 'osm-places' },
+    ),
     areaOptions: {
       findRegion: async () => null,
       findAdminCandidates: async () => [
@@ -6580,11 +6234,7 @@ test('an analyst follow-up on OSM places keeps the area they were found in', asy
 });
 
 test('a capped Contacts snapshot is a lower bound from one immutable cohort', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const harness = awarenessSubjectHarness({
     subject: { id: 'a1b2c3', label: 'N546PC' },
     flights: Array.from({ length: 20_001 }, (_, index) => ({
@@ -6655,11 +6305,7 @@ test('a capped Contacts snapshot is a lower bound from one immutable cohort', as
 });
 
 test('Contacts follow-ups filter the cohort that was actually displayed', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const harness = awarenessSubjectHarness({
     subject: { id: 'a1b2c3', label: 'N546PC' },
     flights: Array.from({ length: 6 }, (_, index) => ({
@@ -6708,11 +6354,7 @@ test('Contacts follow-ups filter the cohort that was actually displayed', async 
 });
 
 test('point-and-ask: the runner resolves pointer and referent targets', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const { viewer, styleManager } = createVoiceNavigationHarness();
   const tracked = [];
   const aircraft = {
@@ -6804,11 +6446,7 @@ test('point-and-ask: the runner resolves pointer and referent targets', async ()
 });
 
 test('point-and-ask: only accepted, current results become the referent list', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const { viewer, styleManager } = createVoiceNavigationHarness();
   const referents = createReferentRegistry();
   let used = 0;
@@ -6890,11 +6528,7 @@ test('point-and-ask: only accepted, current results become the referent list', a
 });
 
 test('numbered analyst records navigate using the current layer accessor', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const { viewer, styleManager } = createVoiceNavigationHarness();
   const referents = createReferentRegistry();
   let enabled = true;
@@ -6937,11 +6571,7 @@ test('numbered analyst records navigate using the current layer accessor', async
 });
 
 test('analyst-only lookup distinguishes duplicate names and uses canonical aircraft IDs', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const { viewer, styleManager } = createVoiceNavigationHarness();
   const referents = createReferentRegistry();
   const stations = [
@@ -7206,11 +6836,7 @@ function withCamera(harness) {
 }
 
 test('show_street_level flies first, then switches the map, lights the source, turns the layer on and opens the nearest photo', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const { runner, order, finishFlight } = createStreetLevelHarness();
   const pending = runner('show_street_level', {
     latitude: 38.5799,
@@ -7252,11 +6878,7 @@ test('show_street_level flies first, then switches the map, lights the source, t
 });
 
 test('show_street_level on Mapillary keeps the map, searches at the default radius and skips what is already on', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const { runner, order } = createStreetLevelHarness({
     enabled: true,
     activeStack: 'osm',
@@ -7276,11 +6898,7 @@ test('show_street_level on Mapillary keeps the map, searches at the default radi
 });
 
 test('show_street_level without a source uses the one lit in the panel', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const { runner, order } = createStreetLevelHarness({
     activeStack: 'photoreal',
     lit: { mapillary: false, google: true },
@@ -7297,11 +6915,7 @@ test('show_street_level without a source uses the one lit in the panel', async (
 });
 
 test('show_street_level reports each stage it could not pass', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const centre = createStreetLevelHarness({
     enabled: true,
     activeStack: 'photoreal',
@@ -7383,11 +6997,7 @@ test('show_street_level reports each stage it could not pass', async () => {
 });
 
 test('show_street_level stops at the map when the source’s map is refused, before touching the panel', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const { layer, order } = createStreetLevelHarness({ enabled: true });
   const reason = 'Google 3D needs GOOGLE_MAPS_API_KEY';
   const dataManager = {
@@ -7423,11 +7033,7 @@ test('show_street_level stops at the map when the source’s map is refused, bef
 });
 
 test('show_street_level opens photos of a numbered item or a pointed spot through its entity', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const { runner, order, finishFlight } = withCamera(
     createStreetLevelHarness({ enabled: true, activeStack: 'photoreal' }),
   );
@@ -7455,11 +7061,7 @@ test('show_street_level opens photos of a numbered item or a pointed spot throug
 });
 
 test('show_street_level hands the point from a named place, a preset and a curated POI to the lookup', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const points = [];
   const make = () => {
     const harness = createStreetLevelHarness({
@@ -7532,11 +7134,7 @@ test('show_street_level hands the point from a named place, a preset and a curat
 });
 
 test('show_street_level retires its lookup when the turn is superseded, and says so', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const { runner, order, layer } = createStreetLevelHarness({
     enabled: true,
     activeStack: 'photoreal',
@@ -7566,11 +7164,7 @@ test('show_street_level retires its lookup when the turn is superseded, and says
 });
 
 test('show_street_level with autoOpen:false arms a billed source and leaves the load to a click; a free source still opens', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const armedHarness = createStreetLevelHarness({
     enabled: true,
     activeStack: 'osm',
@@ -7623,11 +7217,7 @@ test('show_street_level with autoOpen:false arms a billed source and leaves the 
 });
 
 test('show_street_level tells a failed enable, a delisted source, a key refused mid-lookup and a layer switched off apart', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const at = { latitude: 1, longitude: 2, provider: 'google', fly: false };
   const notEnabled = await createStreetLevelHarness({
     activeStack: 'photoreal',
@@ -7686,11 +7276,7 @@ test('show_street_level tells a failed enable, a delisted source, a key refused 
 });
 
 test('show_street_level reports a geocoder that throws as its location stage', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const h = createStreetLevelHarness({ enabled: true, activeStack: 'osm' });
   const runner = createGevActionRunner({
     viewer: createVoiceNavigationHarness().viewer,
@@ -7719,11 +7305,7 @@ test('show_street_level reports a geocoder that throws as its location stage', a
 });
 
 test('show_street_level reports a flight that lands without a position', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const hit = createStreetLevelHarness({ enabled: true, activeStack: 'osm' });
   // A flight that reports no coordinates cannot be followed by a lookup.
   const noPoint = createGevActionRunner({
@@ -7747,11 +7329,7 @@ test('show_street_level reports a flight that lands without a position', async (
 });
 
 test('fly_to_location reports the overview centre for a city framed as a whole, and the first POI for a close view', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const { viewer, styleManager } = createVoiceNavigationHarness();
   viewer.camera.lookAt = () => {};
   viewer.camera.flyTo = (options) => options.complete?.();
@@ -7761,7 +7339,7 @@ test('fly_to_location reports the overview centre for a city framed as a whole, 
   const runner = createGevActionRunner({
     viewer,
     styleManager,
-    dataManager: { layers: new Map(), getAll: () => [] },
+    dataManager: fakeVoiceManager(),
   });
   const overview = await runner('fly_to_location', { locationId: 'austin' });
   assert.equal(overview.ok, true);
@@ -7781,11 +7359,7 @@ test('fly_to_location reports the overview centre for a city framed as a whole, 
 });
 
 test('show_street_level arms the view centre when a billed link names no place, and keeps the flight label when it flew', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const centre = createStreetLevelHarness({
     enabled: true,
     activeStack: 'photoreal',
@@ -7824,11 +7398,7 @@ test('show_street_level arms the view centre when a billed link names no place, 
 });
 
 test('show_street_level says "refused its key" when Google already refused it, and fails when the source will not light', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const refusedHarness = createStreetLevelHarness({
     enabled: true,
     keyRejectedAtStart: true,
@@ -7903,11 +7473,7 @@ test('activeImageryFilter reports only the narrowing filters the lit source hono
 });
 
 test('analyst item display strings are single-line and bounded for voice', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const rows = [
     {
       id: 'stable-id',
@@ -7938,11 +7504,7 @@ test('analyst item display strings are single-line and bounded for voice', async
 });
 
 test('analyst_query keeps canonical IDs raw so numbered references still fly to the station', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const { viewer, styleManager } = createVoiceNavigationHarness();
   const referents = createReferentRegistry();
   const longName = 'Station ' + 'é'.repeat(200);
@@ -8009,11 +7571,7 @@ test('analyst_query keeps canonical IDs raw so numbered references still fly to 
 });
 
 test('analyst_query keeps transit route IDs raw so a follow-up filter still matches', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   for (const routeId of ['Route  17', 'R'.repeat(181)]) {
     const { viewer, styleManager } = createVoiceNavigationHarness();
     const vehicles = [{ id: 'bus-1', routeId, lat: 30, lon: -97 }];
@@ -8239,11 +7797,7 @@ test('a partial analyst card shows one partial chip', () => {
 });
 
 test('show_street_level superseded during its flight switches nothing', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const h = createStreetLevelHarness();
   let current = true;
   const pending = h.runner(
@@ -8264,11 +7818,7 @@ test('show_street_level superseded during its flight switches nothing', async ()
 });
 
 test('show_street_level superseded during its map switch lights no source', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const h = createStreetLevelHarness({ enabled: true });
   let current = true;
   const runner = createGevActionRunner({
@@ -8297,11 +7847,7 @@ test('show_street_level superseded during its map switch lights no source', asyn
 });
 
 test('show_street_level goes ahead while a source’s key status is still unknown', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   // A freshly loaded sl= link meets the source before its status call answers.
   const { runner, order } = createStreetLevelHarness({
     enabled: true,
@@ -8318,11 +7864,7 @@ test('show_street_level goes ahead while a source’s key status is still unknow
 });
 
 test('show_street_level in a view that hides its panel stops before anything loads unseen', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const saved = globalThis.document;
   for (const mode of [
     'cockpit-mode',
@@ -8355,11 +7897,7 @@ test('show_street_level in a view that hides its panel stops before anything loa
 });
 
 test('show_street_level checks the panel again after every wait: a mode entered meanwhile loads nothing unseen', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const saved = globalThis.document;
   const classes = new Set();
   globalThis.document = {
@@ -8410,11 +7948,7 @@ test('show_street_level checks the panel again after every wait: a mode entered 
 });
 
 test('show_street_level refuses a hidden panel before the camera leaves a recording', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const saved = globalThis.document;
   globalThis.document = {
     body: { classList: { contains: (name) => name === 'recording-mode' } },
@@ -8433,11 +7967,7 @@ test('show_street_level refuses a hidden panel before the camera leaves a record
 });
 
 test('show_street_level stops once the camera is someone else’s: a navigation or a gesture during the map switch', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   for (const take of ['navigate', 'gesture']) {
     let h;
     h = createStreetLevelHarness({ duringMapSwitch: () => h[take]() });
@@ -8483,11 +8013,7 @@ test('show_street_level stops once the camera is someone else’s: a navigation 
 });
 
 test('show_street_level loads no photo it found once the camera or the panel moved on during the lookup', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   for (const take of ['navigate', 'gesture']) {
     let h;
     h = createStreetLevelHarness({
@@ -8542,11 +8068,7 @@ test('show_street_level loads no photo it found once the camera or the panel mov
 });
 
 test('show_street_level replaces an open photo in place: the viewer (and EXPAND) stays up while it looks', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const h = createStreetLevelHarness({
     enabled: true,
     photoOpen: true,
@@ -8569,11 +8091,7 @@ test('show_street_level replaces an open photo in place: the viewer (and EXPAND)
 });
 
 test('show_street_level owns the camera from where its own flight lands', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const h = createStreetLevelHarness();
   const pending = h.runner('show_street_level', {
     latitude: 38.58,
@@ -8592,11 +8110,7 @@ test('show_street_level owns the camera from where its own flight lands', async 
 // press on the globe, which does not cancel a Cesium flight either.
 for (const take of ['navigate', 'gesture']) {
   test(`show_street_level stands down when the camera is taken during its own flight (${take})`, async () => {
-    globalThis.window = globalThis.window || {
-      clearTimeout,
-      setTimeout,
-      requestIdleCallback: null,
-    };
+    installVoiceWindow();
     const h = createStreetLevelHarness();
     const pending = h.runner('show_street_level', {
       latitude: 38.58,
@@ -8622,11 +8136,7 @@ for (const take of ['navigate', 'gesture']) {
 }
 
 test('show_street_level closes the previous photo, so one that finds nothing leaves no other place on screen', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const empty = createStreetLevelHarness({
     enabled: true,
     photoOpen: true,
@@ -8667,11 +8177,7 @@ test('show_street_level closes the previous photo, so one that finds nothing lea
 });
 
 test('show_street_level opens over the clean embedded globe but respects its other exclusive modes', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const saved = globalThis.document;
   try {
     for (const mode of [
@@ -8713,11 +8219,7 @@ test('show_street_level opens over the clean embedded globe but respects its oth
 });
 
 test('show_street_level from a link keeps the recipient’s preferences: its switches are not the user’s', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const link = createStreetLevelHarness();
   const linked = await link.runner(
     'show_street_level',
@@ -8745,11 +8247,7 @@ test('show_street_level from a link keeps the recipient’s preferences: its swi
 });
 
 test('show_street_level with no place looks under the screen centre, not a link’s armed point', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const here = createStreetLevelHarness({ enabled: true });
   const result = await here.runner('show_street_level', {
     provider: 'mapillary',
@@ -8786,11 +8284,7 @@ test('show_street_level with no place looks under the screen centre, not a link�
 });
 
 test('show_street_level tells missing imagery from a failing source', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const empty = await createStreetLevelHarness({
     enabled: true,
     nearest: null,
@@ -8821,11 +8315,7 @@ test('show_street_level tells missing imagery from a failing source', async () =
 });
 
 test('show_street_level shows every photo it opens, also over a panel the user had closed', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const harness = createStreetLevelHarness({ enabled: true });
   await harness.runner('show_street_level', {
     latitude: 1,
@@ -8856,11 +8346,7 @@ test('show_street_level shows every photo it opens, also over a panel the user h
 });
 
 test('a military voice Cockpit entry switches Military Flights on as a plain layer, never Contacts', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   for (const militaryOn of [false, true]) {
     const enabled = new Set(militaryOn ? ['flights', 'military'] : ['flights']);
     const layerCalls = [];
@@ -8880,11 +8366,7 @@ test('a military voice Cockpit entry switches Military Flights on as a plain lay
       getCockpitState: () => ({ active: false }),
       getAircraftTrackingTarget: () => ({ layerId: 'flights', id: 'civil' }),
     };
-    const viewer = {
-      clock: { onTick: { addEventListener: () => () => {} } },
-      scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
-      camera: { moveEnd: { addEventListener() {} } },
-    };
+    const viewer = fakeVoiceViewer();
     const runner = createGevActionRunner({
       viewer,
       styleManager,
@@ -8978,11 +8460,7 @@ function militaryEntryRunner(manager, controlCockpit) {
 }
 
 test('a military voice entry waits for a just-switched-on layer to report its first data', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   const fixture = militaryOffManager();
   let searchedWithData = null;
   const runner = militaryEntryRunner(fixture.manager, () => {
@@ -9007,11 +8485,7 @@ test('a military voice entry waits for a just-switched-on layer to report its fi
 });
 
 test('a failed military voice entry switches off only the layer it switched on', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
+  installVoiceWindow();
   for (const militaryOn of [false, true]) {
     const fixture = militaryOffManager({ militaryOn });
     const runner = militaryEntryRunner(fixture.manager, () => ({
@@ -9176,4 +8650,50 @@ test('AQI station concentrations can be filtered by pollutant', async () => {
     filters: [{ field: 'pm25', op: 'gt', value: 35 }],
   });
   assert.equal(result.count, 1);
+});
+
+test('fly_to_location reaches an air-quality station beyond the first 500 records', async () => {
+  const rows = Array.from({ length: 600 }, (_, i) => ({
+    id: `s${i}`,
+    lat: 10 + i * 0.01,
+    lon: 20,
+    name: `Station ${i}`,
+  }));
+  // The layer's own signature: getAnalystRecords(maxCount = 500), as in
+  // src/layers/airQuality/index.js; the analyst query asks for up to 250,000.
+  const module = {
+    getAnalystRecords: (maxCount = 500) => rows.slice(0, maxCount),
+  };
+  installVoiceWindow();
+  const viewer = fakeVoiceViewer({
+    scene: {
+      canvas: {
+        clientWidth: 100,
+        clientHeight: 100,
+        addEventListener() {},
+        removeEventListener() {},
+      },
+      globe: { getHeight: () => 0 },
+      tweens: [],
+    },
+    camera: {
+      moveEnd: { addEventListener() {} },
+      cancelFlight() {},
+      flyToBoundingSphere() {},
+      lookAtTransform() {},
+    },
+  });
+  bindFakeCesiumCamera(viewer);
+  const runner = createActionRunner({
+    viewer,
+    styleManager: {},
+    dataManager: fakeVoiceManager([['air-quality', { module }]], {
+      isEnabled: () => true,
+    }),
+  });
+  const far = await runner('fly_to_location', {
+    entity: { layerId: 'air-quality', id: 's550', label: 'Station 550' },
+  });
+  assert.equal(far.ok, true, far.error);
+  assert.equal(far.latitude, 15.5);
 });

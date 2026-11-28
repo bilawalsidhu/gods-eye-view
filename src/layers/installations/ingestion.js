@@ -102,20 +102,6 @@ export function createIngestion({
         source.getMappedSites(box, { exact, signal: requestAbort.signal });
 
       let payload = await fetchInstallations(false);
-      // Map tiles carry military areas only at z9 and finer: a view too wide
-      // for that is guidance, exactly like an unbounded view, never an empty
-      // all-clear. Previously loaded sites stay on the map.
-      if (payload.zoomIn) {
-        if (
-          requestAbort.signal.aborted ||
-          layerState.abort !== requestAbort ||
-          !layerState.enabled
-        )
-          return;
-        parts.viewport.clearUnavailableRetry();
-        setInstallationStatus('zoom-in');
-        return;
-      }
       // A SATURATED snapped tile was truncated upstream, so features from the
       // snap's extra ring may have crowded out sites actually on screen. Re-ask
       // for the exact viewport (separately keyed and cached) before rendering.

@@ -1,5 +1,6 @@
 import { isFollowing } from '../../data/followed.js';
-import { fromDegrees } from '../../geo/ellipsoid.js';
+import { destinationPoint } from '../../geoDistance.js';
+import { fromDegrees, WGS84 } from '../../geo/ellipsoid.js';
 import { dot, magnitude } from '../../geo/vector.js';
 import {
   HORIZON_CAMERA_MOVE_EPSILON_M,
@@ -70,28 +71,16 @@ export function createNavigation({
       downAngle > Math.PI / 2 - 1e-6
         ? 0
         : Math.min(2_000_000, height / Math.max(0.08, Math.tan(downAngle)));
-    const angularDistance = groundOffsetM / 6_378_137;
-    const targetLatRad = (targetLat * Math.PI) / 180;
-    const cameraBearing = heading + Math.PI;
-    const cameraLatRad = Math.asin(
-      Math.sin(targetLatRad) * Math.cos(angularDistance) +
-        Math.cos(targetLatRad) *
-          Math.sin(angularDistance) *
-          Math.cos(cameraBearing),
+    const camera = destinationPoint(
+      targetLat,
+      targetLon,
+      (heading * 180) / Math.PI + 180,
+      groundOffsetM,
+      WGS84.radii.x,
     );
-    const cameraLonRad =
-      (targetLon * Math.PI) / 180 +
-      Math.atan2(
-        Math.sin(cameraBearing) *
-          Math.sin(angularDistance) *
-          Math.cos(targetLatRad),
-        Math.cos(angularDistance) -
-          Math.sin(targetLatRad) * Math.sin(cameraLatRad),
-      );
-    const cameraLon = (((cameraLonRad * 180) / Math.PI + 540) % 360) - 180;
     return {
-      lat: (cameraLatRad * 180) / Math.PI,
-      lon: cameraLon,
+      lat: camera.lat,
+      lon: ((camera.lon + 540) % 360) - 180,
       height,
       heading,
       pitch,
@@ -375,13 +364,8 @@ export function createNavigation({
     radioGlobeRecenterHeight,
     radioCameraState,
     radioCameraNavigationAllowed,
-    radioGlobeRecenterPlan,
-    radioCameraNavigationIsCurrent,
-    cancelActiveRadioCameraFlight,
     invalidateRadioCameraNavigation,
     radioCameraNavigationOwnsSelection,
-    startRadioCameraFlight,
-    focusRadioNavigationTarget,
     beginRadioCameraNavigation,
     rotateRadioStationIntoView,
     focusStation,

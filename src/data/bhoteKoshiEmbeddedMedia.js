@@ -9,6 +9,7 @@ import { loadYouTubeApi } from './youtubeApi.js';
 import { t, msg, onLocaleChange } from '../i18n/index.js';
 import { h, render as renderVue } from 'vue';
 import BhoteKoshiMediaCards from '../ui/bhoteKoshi/BhoteKoshiMediaCards.vue';
+import { prefersReducedMotion } from '../reducedMotion.js';
 
 const YOUTUBE_HOSTS = new Set([
   'youtube.com',
@@ -688,9 +689,6 @@ export function createBhoteKoshiEmbeddedMedia({
     render();
   }
 
-  const prefersReducedMotion = () =>
-    globalRef.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ===
-    true;
   const scheduleFrame = (callback) => {
     if (typeof globalRef.requestAnimationFrame === 'function') {
       return { kind: 'frame', id: globalRef.requestAnimationFrame(callback) };
@@ -866,7 +864,7 @@ export function createBhoteKoshiEmbeddedMedia({
     setFacebookSessionPlayback(current.facebookSession, false);
     cancelScheduledFrame(current.enterFrame);
     current.enterFrame = null;
-    if (immediate || current.card.hidden || prefersReducedMotion()) {
+    if (immediate || current.card.hidden || prefersReducedMotion(globalRef)) {
       removeRecord(current);
       return;
     }

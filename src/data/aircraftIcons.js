@@ -3,25 +3,16 @@
  * Nose-up white aircraft silhouettes, one per classifyAircraft() kind, as SVG
  * data URIs for Cesium billboards.
  *
- * FIDELITY NOTE (2026-07-02): redrawn at a 96×96 viewBox (glyph centered at
- * 48,48) instead of the old 32×32. The billboards themselves are still added at
- * width/height 20 (24 tracked) in flights.js / militaryFlights.js, so Cesium
- * DOWN-samples this larger, higher-precision source to the same on-screen
- * footprint — crisp anti-aliased edges instead of an upscaled 32px bitmap. The
- * on-screen size is unchanged (the billboard's explicit width/height, not the
- * SVG's, sets the pixel size — the intrinsic SVG size only controls raster
- * fidelity).
+ * Glyphs are centred at (48,48) in a 96-unit viewBox and rastered at the requested px.
+ * Billboard dimensions set the on-screen size. Raster size controls fidelity. Airliner,
+ * widebody, turboprop and helicopter use refined recognition-chart drawings. Quadjet and
+ * glider use the bold chart symbols.
  *
  * All glyphs are nose-up (nose toward -Y at rotation 0; the screen-projected
  * rotation pipeline in iconOrientation.js spins the whole glyph). Fill is white
  * with a subtle dark hairline stroke so the tint pipeline (billboard.color =
  * white / cyan-tracked / amber-military, plus .withAlpha fades) keeps working —
  * no per-glyph hardcoded colors that would fight the tint.
- *
- * MIXED-SET UPDATE (2026-08-15, owner Hangar picks): airliner/widebody/
- * turboprop/helicopter use the "refined" recognition-chart redraw;
- * quadjet/glider use the "bold" chart-symbol redraw; light/fastjet keep the
- * original drawings. Raster fidelity doubled (192px source, same 96 coords).
  *
  * The helicopter is a top-down body under a four-blade rotor drawn in three
  * frames (`aircraftIcon('helicopter', px, frame)`, turned by
@@ -44,7 +35,7 @@ const C = VIEW / 2; // 48 — glyph centre
 // Hairline dark edge (scaled for the 96 box: ~1.5u ≈ the old 0.5u at 32).
 const STROKE =
   'stroke="rgba(0,0,0,0.32)" stroke-width="1.4" stroke-linejoin="round"';
-// Heavier edge for the chart-symbol ("bold") glyphs adopted 2026-08-15.
+// Heavier edge for the chart-symbol ("bold") glyphs.
 const STROKE_BOLD =
   'stroke="rgba(0,0,0,0.38)" stroke-width="2" stroke-linejoin="round"';
 // Softer white for translucent detail (prop discs, rotor disc) — still white so
@@ -318,27 +309,12 @@ const BODY_HALF_EXTENT = {
 
 const _iconCache = new Map();
 
-const _b64 = (s) =>
-  typeof btoa === 'function'
-    ? btoa(s)
-    : Buffer.from(s, 'utf8').toString('base64');
-
-/** Fleet raster: billboards render at ~40–58 DEVICE px (width 20–24 CSS ×
- *  Retina × class scale). Cesium's billboard atlas has no mipmaps, so a big
- *  texture gets GPU-minified into mush (192 px ÷ 40 = 4.8× — the owner's
- *  "soft" glyphs; the pre-2026-08-15 96 px raster aliased instead). Rastering
- *  NEAR the display size lets the browser's SVG AA do the work: crisp AND
- *  smooth. 64 covers the 40–58 px fleet band with ≤1.6× minification. */
-const FLEET_RASTER_PX = 64;
-/** Raster size of the default fleet glyph. */
-export const FLEET_ICON_PX = FLEET_RASTER_PX;
-/** Tracked raster: the tracked billboard is the one SUSTAINED large 2D glyph
- *  (close-zoom fleet flybys hand off to 3D models). Keep the 192 px texture so
- *  it stays crisp at its biggest on-screen sizes. */
-const TRACKED_RASTER_PX = 192;
-
-/** Raster size of the tracked glyph and every glyph's near image. */
-export const TRACKED_ICON_PX = TRACKED_RASTER_PX;
+/** Raster size of the default fleet glyph. Billboards draw at about 40–58 device px.
+ *  The atlas has no mipmaps, so ≤1.6× minification keeps the glyphs crisp. */
+export const FLEET_ICON_PX = 64;
+/** Raster size of the tracked glyph and every glyph's near image. The tracked
+ *  billboard is the sustained large 2D glyph, so it keeps a 192 px texture. */
+export const TRACKED_ICON_PX = 192;
 /**
  * Data URI for a class silhouette (lazily built, cached per kind, size and
  * frame). The default size serves the fleet; pass
@@ -349,7 +325,7 @@ export const TRACKED_ICON_PX = TRACKED_RASTER_PX;
  *   (the still frame by default); other kinds have one image.
  * @returns {string}
  */
-export function aircraftIcon(kind, px = FLEET_RASTER_PX, frame) {
+export function aircraftIcon(kind, px = FLEET_ICON_PX, frame) {
   const heli = kind === 'helicopter';
   const k = heli || BODIES[kind] ? kind : 'airliner';
   const f = heli ? rotorFrameIndex(frame) : 0;
@@ -359,7 +335,7 @@ export function aircraftIcon(kind, px = FLEET_RASTER_PX, frame) {
     const body = heli ? helicopterBody(f) : BODIES[k];
     const fit = +(GLYPH_HALF_EXTENT / BODY_HALF_EXTENT[k]).toFixed(4);
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${px}" height="${px}" viewBox="0 0 ${VIEW} ${VIEW}"><g transform="translate(${C},${C}) scale(${fit})">${body}</g></svg>`;
-    uri = 'data:image/svg+xml;base64,' + _b64(svg);
+    uri = 'data:image/svg+xml;base64,' + btoa(svg);
     _iconCache.set(key, uri);
   }
   return uri;

@@ -1,7 +1,7 @@
 import { isFollowing } from '../../data/followed.js';
 import { inputFor } from '../../input/dispatcher.js';
 import { isUnderOtherCard } from '../../data/pickRegistry.js';
-import { distance, fromDegrees, toLonLatH } from '../../geo/index.js';
+import { distance, fromDegrees } from '../../geo/index.js';
 import {
   LAYER_ID,
   MAX_VIEWPORT_DEGREES,
@@ -11,7 +11,7 @@ import {
   SELECTED_MARKER_ICON_SIZE,
   MARKER_FLOOR_LIFT_M,
 } from './policy.js';
-import { boxContains } from './model.js';
+import { boxContains, nearestToCentre } from './model.js';
 import { msg } from '../../i18n/index.js';
 import { createAlprFloorResolver } from './floors.js';
 import { createAlprOverlay } from './overlay.js';
@@ -26,6 +26,7 @@ import { entityRecord, readEntityRecord } from '../../data/entityRecords.js';
 import { alprIconPosition, alprMarkers } from './markerState.js';
 import { horizonFrom } from '../../geo/horizon.js';
 import { cameraOf, canvasOf, findQuery } from '../../render/rendererOf.js';
+import { groundAtViewCentre } from '../../render/viewCentre.js';
 
 /** A `#rrggbb` colour as `rgb(r,g,b)`, the form the readout card has always had. */
 function cssRgb(hex) {
@@ -116,18 +117,7 @@ export function createAlprPresentation({ state, services, source }) {
       }),
     );
     const capped = visible.length > MAX_RENDERED;
-    if (capped) {
-      const lat = (box.south + box.north) / 2;
-      const lon = (box.west + box.east) / 2;
-      const scale = Math.cos((lat * Math.PI) / 180);
-      const distance = (record) =>
-        (record.latitude - lat) ** 2 + ((record.longitude - lon) * scale) ** 2;
-      visible = visible
-        .map((record) => ({ record, d: distance(record) }))
-        .sort((a, b) => a.d - b.d)
-        .slice(0, MAX_RENDERED)
-        .map((item) => item.record);
-    }
+    if (capped) visible = nearestToCentre(visible, box, MAX_RENDERED);
     return { box, visible, capped };
   }
 
@@ -267,20 +257,16 @@ export function createAlprPresentation({ state, services, source }) {
   // the ground point in the center of the screen. Bound nearby coverage around
   // that point instead; the camera-to-ground range keeps zoom-out queries capped.
   function viewportBox(viewer) {
-    const query = findQuery(viewer);
-    const canvas = canvasOf(viewer);
-    if (typeof query?.pickEllipsoid === 'function' && canvas) {
-      const width = canvas.clientWidth || canvas.width;
-      const height = canvas.clientHeight || canvas.height;
-      if (!width || !height) return null;
-      const focus = query.pickEllipsoid(width / 2, height / 2);
-      if (!focus) return null;
-      const location = toLonLatH(focus);
-      if (!location) return null;
-      const range = distance(cameraOf(viewer).pose().position, focus);
+    if (
+      typeof findQuery(viewer)?.pickEllipsoid === 'function' &&
+      canvasOf(viewer)
+    ) {
+      const ground = groundAtViewCentre(viewer);
+      if (!ground) return null;
+      const range = distance(cameraOf(viewer).pose().position, ground.position);
       const radius = Math.max(1000, 2 * range);
-      const latitude = location.lat;
-      const longitude = location.lon;
+      const latitude = ground.lat;
+      const longitude = ground.lon;
       const latSpan = radius / 111000;
       const lonSpan = latSpan / Math.cos((latitude * Math.PI) / 180);
       if (

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { markRaw, shallowRef } from 'vue';
+import { presented } from './presented.js';
 
 /**
  * The full-globe celestial ring as its view renders it. The ring owner
@@ -14,20 +14,10 @@ export const useCelestialRingStore = defineStore('gev-celestial-ring', () => {
    * exists. `container` is the element it sits in; `owner` is passed back
    * with each canvas.
    */
-  const ring = shallowRef(null);
-
-  /** @param {?object} next A fresh presentation; every publish re-renders. */
-  function publish(next) {
-    ring.value = next && markRaw(next);
-  }
+  const [ring, publish] = presented();
 
   /** The controls whose `attach(owner, kind, canvas)` each canvas calls. */
-  const controls = shallowRef(null);
-
-  /** @param {?object} next The controls, or null to disconnect. */
-  function connect(next) {
-    controls.value = next && markRaw(next);
-  }
+  const [controls, connect] = presented();
 
   return { ring, publish, controls, connect };
 });

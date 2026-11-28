@@ -1,11 +1,11 @@
-// Pure-logic unit tests for the voice-lifecycle size guards (Batch 11, M13).
+// Pure-logic unit tests for the voice-lifecycle size guards.
 // These helpers are DOM/WebRTC-free so they pin the screenshot down-scaling and
 // payload-byte estimation that keep an oversized dc.send from stranding a turn.
 import { test } from 'node:test';
 import { bindRenderer } from '../render/rendererOf.js';
 import { fakeSceneFrame } from '../testSupport/fakeCesiumScene.mjs';
 import assert from 'node:assert/strict';
-import { DataLayerManager } from '../data/manager.js';
+import { DataLayerManager } from '../testSupport/dataLayerManager.mjs';
 import { controlRadio as runControlRadio, createGevActionRunner as createActionRunner } from './gevActions.js';
 import { createStandalonePlaceSearch } from '../standalone/placeSearch.js';
 import {
@@ -37,6 +37,7 @@ import {
 } from './gevRealtime.js';
 import { createVoiceCostTracker } from './voiceCost.js';
 import { createTestVoiceUi } from '../testSupport/voiceUi.mjs';
+import { withVisibilityIntent } from '../testSupport/voiceRunnerFakes.mjs';
 import { setLocale, t } from '../i18n/index.js';
 
 
@@ -48,7 +49,6 @@ function framed(scene) {
 }
 
 test('push-to-talk recognizes Space by code or key', () => {
-  assert.equal(PUSH_TO_TALK_HOLD_DELAY_MS, 500);
   assert.equal(isPushToTalkKey({ code: 'Space', key: 'Unidentified' }), true);
   assert.equal(isPushToTalkKey({ code: '', key: ' ' }), true);
   assert.equal(isPushToTalkKey({ code: 'KeyM', key: 'm' }), false);
@@ -1249,7 +1249,7 @@ test('real Radio Select cannot enable or play after a same-response Disable comp
       return state.selected;
     },
   };
-  const dataManager = {
+  const dataManager = withVisibilityIntent({
     layers: new Map([['radio', { module: radioLayer }]]),
     isEnabled: () => enabled,
     async setEnabled(_layerId, nextEnabled) {
@@ -1258,7 +1258,7 @@ test('real Radio Select cannot enable or play after a same-response Disable comp
       if (!nextEnabled) state.audioState = 'stopped';
       return true;
     },
-  };
+  });
   const ui = createTestVoiceUi();
   globalThis.window = { __GOOGLE_MAPS_API_KEY__: 'test-key' };
   globalThis.fetch = async () => {

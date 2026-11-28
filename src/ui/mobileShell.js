@@ -37,7 +37,7 @@ export {
 
 export const MOBILE_SHELL_MEDIA_QUERY = '(max-width: 720px)';
 /** On the page root while a phone keyboard covers part of the screen. */
-export const KEYBOARD_OPEN_CLASS = 'mobile-keyboard-open';
+const KEYBOARD_OPEN_CLASS = 'mobile-keyboard-open';
 export const MOBILE_TABS = Object.freeze([
   Object.freeze({ sheet: 'layers', label: msg('Layers'), icon: 'layers' }),
   Object.freeze({ sheet: 'cameras', label: msg('Cameras'), icon: 'videocam' }),
@@ -383,10 +383,6 @@ export function initMobileShell({
   if (media?.addEventListener) {
     media.addEventListener('change', onChange);
     removers.push(() => media.removeEventListener('change', onChange));
-  } else if (media?.addListener) {
-    // Safari before 14 only offers the legacy listener API.
-    media.addListener(onChange);
-    removers.push(() => media.removeListener(onChange));
   }
 
   listen(documentRef, 'click', (event) => {

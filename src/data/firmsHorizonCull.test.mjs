@@ -1,9 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import { createFirmsHeatmapLayer, fireCullPosition } from './firmsHeatmap.js';
+import {
+  createFirmsHeatmapLayer,
+  fireCullPosition,
+} from '../testSupport/firmsLayer.mjs';
 import { FIRE_ANCHOR_LIFT_M } from './fireAnchors.js';
-import { FIRMS_AMBIENT_COHORT_LIMIT, FIRMS_OVERLAY_SOURCE_ID } from './firmsLabels.js';
+import { FIRMS_AMBIENT_COHORT_LIMIT } from './firmsLabels.js';
 import {
   _clearMeshFloorCellsForTest,
   reportMeshFloorCell,
@@ -627,7 +630,6 @@ test('layer: far-side candidates never displace near-side ambient cards', async 
     assert.equal(nearIds.length, 6, 'every in-view fire gets a card');
     assert.equal(new Set(nearIds).size, 6, 'six distinct near-side detections, not one repeated');
     assert.equal(ids.length, 6, 'no slot is spent on a fire behind the planet');
-    assert.equal(FIRMS_OVERLAY_SOURCE_ID, 'firms');
   } finally {
     harness.cleanup();
   }

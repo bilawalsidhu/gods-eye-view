@@ -221,6 +221,7 @@ async function fixture(t, { realFocus = false } = {}) {
   })) {
     parts[name] = factory(context);
   }
+  parts.stationPanel = { _syncStationPanel() {}, _destroyStationPanel() {} };
   const viewer = { canvas: new EventTarget(), scene: {} };
   const camera = fakeFollowCamera();
   const frame = fakeFrame();

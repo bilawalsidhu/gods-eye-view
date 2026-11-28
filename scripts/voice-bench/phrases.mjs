@@ -165,23 +165,18 @@ export const CORE_PHRASES = Object.freeze([
 // Any call whose arguments violate the tool schema (an invented layer id) is
 // graded hallucinated-capability regardless of the item.
 //
-// Two rubrics, so a before/after comparison stays honest:
-//   v1  the original rubric, graded against the tool schema of 4b56d0e9
-//       (baseline-tools-4b56d0e9.json) — "by the old yardstick".
-//   v2  `item.v2` overrides (supported / correct / hallucinated / neutral),
-//       graded against the CURRENT production tools after the voice layer
-//       manifest and point-and-ask landed. Use
-//       coverageRubric(item, 'v2') to get the merged item.
+// `item.v2` overrides (supported / correct / hallucinated / neutral) describe
+// the current production tool surface; coverageRubric(item) merges them into
+// the item, and coverage is graded against the current tools.
 
 const hasRoute = (c) =>
   c.name === 'annotate_map' &&
   Array.isArray(c.args?.annotations) &&
   c.args.annotations.some((a) => a?.type === 'route');
 
-/** The coverage item as graded under rubric 'v1' (original) or 'v2' (current tools). */
-export function coverageRubric(item, version = 'v1') {
-  if (version !== 'v2' || !item.v2) return item;
-  return { ...item, ...item.v2 };
+/** The coverage item as graded against the current tools. */
+export function coverageRubric(item) {
+  return item.v2 ? { ...item, ...item.v2 } : item;
 }
 
 export const COVERAGE_PROBE = Object.freeze([

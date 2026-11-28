@@ -80,7 +80,7 @@ html:not([lang='en']) .cctv-controls .scene-btn {
   margin: 0;
 }
 
-/* Click-to-edit effective-pose readout (viewshed/gizmo design §3d): compact
+/* Click-to-edit effective-pose readout: compact
    value chips replace the seven offset sliders. */
 .cctv-cal-readout {
   display: flex;
@@ -146,9 +146,8 @@ html:not([lang='en']) .cctv-controls .scene-btn {
   --status-badge-background: rgba(0, 212, 255, 0.08);
 }
 
-/* CAL badge states (cctv-v2 §3b, amended by LOCKED §9.2 — panel-only, no
-   in-world tint). Three visually distinct states: calibrated / curated /
-   raw-prior. */
+/* CAL badge states (panel-only, no in-world tint). Three visually distinct
+   states: calibrated / curated / raw-prior. */
 #cctv-quality-chip[data-cal-badge='calibrated'] {
   --status-badge-color: #adffbf;
   --status-badge-border: rgba(141, 255, 135, 0.42);
@@ -161,7 +160,7 @@ html:not([lang='en']) .cctv-controls .scene-btn {
   --status-badge-background: rgba(255, 217, 122, 0.1);
 }
 
-/* Unsaved live edits (save-gated persistence, viewshed design §3e). */
+/* Unsaved live edits (save-gated persistence). */
 #cctv-quality-chip[data-cal-badge='edited'] {
   --status-badge-color: #ffd08a;
   --status-badge-border: rgba(255, 176, 82, 0.5);
@@ -239,13 +238,9 @@ html:not([lang='en']) .cctv-controls .scene-btn {
 
 #cctv-frame {
   width: 100%;
-  /* A fixed 16:9 box with the frame CONTAINED inside it. Providers burn their
-     timestamp into a corner (TfL top-left, Austin bottom-left) and the old
-     150px-tall box was ~2.2:1, so object-fit: cover ate ~18px off the top and
-     bottom — exactly where those stamps live (owner field test 2026-07-31).
-     Sources are not all 16:9 either (a TfL frame measures 352x288), so
-     `contain` is what actually guarantees nothing is cut; the ratio just keeps
-     the panel height stable as you switch cameras. */
+  /* The fixed 16:9 box keeps panel height stable as cameras change. Contain the
+     whole frame to show corner timestamps (TfL top-left, Austin bottom-left),
+     including on sources with different aspect ratios such as TfL's 352x288. */
   aspect-ratio: 16 / 9;
   height: auto;
   object-fit: contain;

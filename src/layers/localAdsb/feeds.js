@@ -2,6 +2,7 @@ import {
   localAdsbRecordIsLive,
   localAdsbRecordIsNewer,
 } from '../../sources/adsbRecords.js';
+import { requestWithDeadline } from '../../sources/requestDeadline.js';
 
 /** Same-origin route served by `server/providers/local-receivers.js`. */
 export const LOCAL_RECEIVERS_URL = '/api/local-receivers/aircraft';
@@ -11,25 +12,6 @@ const LOCAL_RECEIVER_POLL_MS = 1_000;
  * bounds each upstream read at 2 s; this bounds the browser-to-server leg.
  */
 const LOCAL_RECEIVER_REQUEST_TIMEOUT_MS = 5_000;
-
-function abortError() {
-  const error = new Error('Local receiver request aborted');
-  error.name = 'AbortError';
-  return error;
-}
-
-/** Reject with an AbortError as soon as `signal` aborts. */
-function untilAborted(promise, signal) {
-  if (signal.aborted) return Promise.reject(abortError());
-  let onAbort = null;
-  const aborted = new Promise((_, reject) => {
-    onAbort = () => reject(abortError());
-    signal.addEventListener('abort', onAbort, { once: true });
-  });
-  return Promise.race([promise, aborted]).finally(() =>
-    signal.removeEventListener('abort', onAbort),
-  );
-}
 
 function shiftTime(value, offset) {
   return Number.isFinite(value) ? value + offset : value;
@@ -64,8 +46,8 @@ export function createLocalReceiverFeeds({
 } = {}) {
   const listeners = new Set();
   const retained = new Map();
-  /** Abort controllers of requests still in flight. */
-  const inFlight = new Set();
+  /** Aborted by stop: ends every request still in flight. */
+  let stopController = new AbortController();
   let state = {
     configured: null,
     polling: false,
@@ -100,30 +82,24 @@ export function createLocalReceiverFeeds({
   }
 
   /** One route request with a deadline through the body, abortable by stop. */
-  async function request() {
-    const controller = new AbortController();
-    inFlight.add(controller);
-    const timer = setTimeout(() => controller.abort(), requestTimeoutMs);
-    try {
-      const response = await untilAborted(
-        fetchImpl(url, {
+  function request() {
+    return requestWithDeadline(
+      async (signal) => {
+        const response = await fetchImpl(url, {
           cache: 'no-store',
           headers: { Accept: 'application/json' },
-          signal: controller.signal,
-        }),
-        controller.signal,
-      );
-      if (!response?.ok) throw new Error('local receiver route unavailable');
-      return await untilAborted(response.json(), controller.signal);
-    } finally {
-      clearTimeout(timer);
-      inFlight.delete(controller);
-    }
+          signal,
+        });
+        if (!response?.ok) throw new Error('local receiver route unavailable');
+        return response.json();
+      },
+      { signal: stopController.signal, timeoutMs: requestTimeoutMs },
+    );
   }
 
   function abortInFlight() {
-    for (const controller of inFlight) controller.abort();
-    inFlight.clear();
+    stopController.abort();
+    stopController = new AbortController();
   }
 
   function apply(body) {

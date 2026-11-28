@@ -60,15 +60,6 @@ export const SATELLITE_CLASSES = Object.freeze({
   }),
 });
 
-/** Legend/report order for the classes above. */
-export const SATELLITE_CLASS_ORDER = Object.freeze([
-  'station',
-  'nav',
-  'geo',
-  'visual',
-  'comms',
-]);
-
 // What the card and legend show for each class.
 const CLASS_DISPLAY_KEYS = Object.freeze({
   station: Object.freeze({

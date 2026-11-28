@@ -254,20 +254,6 @@ export function closeRegionRing(ring) {
   return normalized;
 }
 
-/** Return the largest exterior ring from a Polygon or MultiPolygon GeoJSON. */
-export function largestGeoJsonRing(geojson) {
-  const polygons =
-    geojson?.type === 'Polygon'
-      ? [geojson.coordinates]
-      : geojson?.type === 'MultiPolygon'
-        ? geojson.coordinates
-        : [];
-  const rings = polygons
-    .map((polygon) => polygon?.[0])
-    .filter((ring) => Array.isArray(ring) && ring.length >= 3);
-  return rings.sort((a, b) => b.length - a.length)[0] || [];
-}
-
 /** The presentations that pin the incident's key places. */
 const PLACE_PRESENTATIONS = new Set([
   BHOTE_KOSHI_INCIDENT_PLACES_PRESENTATION,

@@ -11,10 +11,10 @@ const KEY = 'gev.contextRadiusKm';
 export const CONTEXT_RADIUS_STEPS = Object.freeze([
   25, 50, 100, 250, 500, 1000,
 ]);
-export const DEFAULT_CONTEXT_RADIUS_KM = 250;
+const DEFAULT_CONTEXT_RADIUS_KM = 250;
 
 /** The step closest to a distance; the default for anything unusable. */
-export function nearestRadiusStep(km) {
+function nearestRadiusStep(km) {
   const value = Number(km);
   if (!Number.isFinite(value) || value <= 0) return DEFAULT_CONTEXT_RADIUS_KM;
   return CONTEXT_RADIUS_STEPS.reduce((best, step) =>

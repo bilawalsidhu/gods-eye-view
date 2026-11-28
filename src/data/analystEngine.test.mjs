@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createAnalystEngine, applyScope, haversineKm } from './analystEngine.js';
+import { createAnalystEngine } from './analystEngine.js';
 import { createAnnotationResolver } from '../annotations/resolver.js';
 import { FEATURE_SOURCE_METHODS } from '../sources/featureSource.js';
 
@@ -758,13 +758,6 @@ test('analyst: satellites and local infrastructure are queryable layers', async 
   });
   assert.equal(dcs.count, 1);
   assert.equal(dcs.items[0].id, 'AUS-1');
-});
-
-test('helpers: haversine sanity + scope radius', () => {
-  const km = haversineKm(30.2672, -97.7431, 29.7604, -95.3698); // Austin→Houston
-  assert.ok(km > 200 && km < 280, `Austin-Houston ~235km, got ${km}`);
-  const scoped = applyScope(FLIGHTS, { kind: 'radius' }, { center: { lat: 30.27, lon: -97.74 }, km: 50 });
-  assert.deepEqual(scoped.map((f) => f.id).sort(), ['GND1', 'SWA1']);
 });
 
 test('capped cohorts report returned/total/truncated and keep it on follow-up', async () => {

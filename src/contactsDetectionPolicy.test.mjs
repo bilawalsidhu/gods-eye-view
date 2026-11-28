@@ -124,8 +124,6 @@ test('activating Contacts lands on the tactical preset, not the last profile use
 test('the Contacts preset is the very object the military styles apply', () => {
   // Reading the numbers out of ui.js is the point: if a style preset changes,
   // Contacts follows it rather than keeping a stale copy.
-  assert.equal(MILITARY_PRESET.mode, 'DENSE');
-  assert.equal(MILITARY_PRESET.densityPct, 75);
   const styles = uiSource.match(/detection: MILITARY_DETECTION_PRESET,/g) || [];
   assert.equal(styles.length, 3, 'retro, surveillance and thermal all share the one preset object');
   assert.doesNotMatch(

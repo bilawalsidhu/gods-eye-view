@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { markRaw, shallowRef } from 'vue';
+import { presented } from './presented.js';
 
 /**
  * Scene sharing as its views render it. The sharing owner
@@ -9,28 +9,13 @@ import { markRaw, shallowRef } from 'vue';
  */
 export const useSceneSharingStore = defineStore('gev-scene-sharing', () => {
   /** The bar's actions ({edit, share}), or null while no owner offers it. */
-  const toolbar = shallowRef(null);
-
-  /** @param {?{edit: Function, share: Function}} next */
-  function offerToolbar(next) {
-    toolbar.value = next && markRaw(next);
-  }
+  const [toolbar, offerToolbar] = presented();
 
   /** The open dialog's presentation, or null while none is open. */
-  const dialog = shallowRef(null);
-
-  /** @param {?object} next A fresh presentation; every publish re-renders. */
-  function publishDialog(next) {
-    dialog.value = next && markRaw(next);
-  }
+  const [dialog, publishDialog] = presented();
 
   /** The open dialog the view calls, or null while none is wired. */
-  const controls = shallowRef(null);
-
-  /** @param {?object} next The dialog, or null to disconnect. */
-  function connect(next) {
-    controls.value = next && markRaw(next);
-  }
+  const [controls, connect] = presented();
 
   return { toolbar, offerToolbar, dialog, publishDialog, controls, connect };
 });

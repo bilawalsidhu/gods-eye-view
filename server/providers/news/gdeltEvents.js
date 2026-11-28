@@ -183,7 +183,7 @@ export async function unzipExport(bytes, maxBytes = MAX_TABLE_BYTES) {
  * An article's address as the reports carry it: https, an http one
  * upgraded (GDELT keeps the address as it found it), else null.
  */
-export const articleLink = (value) =>
+const articleLink = (value) =>
   webLink(value) || webLink(String(value ?? '').replace(/^http:/, 'https:'));
 
 /**
@@ -364,7 +364,7 @@ function namedIn(words, place) {
  * region wins over a country; of those, the ones the article's own words
  * name; then the most mentioned.
  */
-export function choosePlaces(events, words) {
+function choosePlaces(events, words) {
   const byPlace = new Map();
   for (const event of events) {
     const key = `${event.lat},${event.lon}`;

@@ -37,7 +37,6 @@ function selectionHarness(t) {
     records: { byId: new Map([[vessel.id, vessel]]) },
     icons: { setId: 'vessels:icons', has: () => false },
     selectedRecord: null,
-    interactionKeyTarget: new EventTarget(),
   };
   const vesselState = { state };
   const selection = createSelection({
@@ -48,12 +47,6 @@ function selectionHarness(t) {
       context: recorder(calls),
     },
     parts: {
-      queries: {
-        reduceVesselSelection: ({ selectedId, pickedId }) =>
-          pickedId
-            ? { action: pickedId === selectedId ? 'none' : 'select' }
-            : { action: selectedId ? 'deselect' : 'none' },
-      },
       rendering: recorder(calls),
       cards: recorder(calls),
       photos: recorder(calls),
@@ -61,7 +54,7 @@ function selectionHarness(t) {
     },
     layer: { source: 'AIS' },
   });
-  selection.installInteraction(viewer);
+  selection.bindVesselInteraction(viewer, new EventTarget());
   t.after(() => selection.removeVesselInteraction());
   return { fake, state, vessel, focused };
 }

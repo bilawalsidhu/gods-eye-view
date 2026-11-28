@@ -25,6 +25,7 @@ import {
   tripStops,
 } from '../../data/railSchedule.js';
 import { pointAtS } from '../../data/railPaths.js';
+import { approxDistanceM } from '../../data/approxDistance.js';
 
 /** Trip updates are re-read this often while needed (ms). */
 export const RAIL_UPDATES_POLL_MS = 30_000;
@@ -42,13 +43,13 @@ export const SCHEDULE_RETRY_MS = 10 * 60_000;
  * A live train without a known trip id may be matched to a run from this
  * long before its departure (waiting at the origin)...
  */
-export const MATCH_BEFORE_MS = 5 * 60_000;
+const MATCH_BEFORE_MS = 5 * 60_000;
 /** ...to this long after its arrival, at the terminus. */
-export const MATCH_AFTER_MS = 2 * 60_000;
+const MATCH_AFTER_MS = 2 * 60_000;
 /** A live train without a known trip id matches a run this close (m). */
 export const MATCH_NEAREST_MAX_M = 3_000;
 /** How long a nearest-run match is kept before it is looked for again (ms). */
-export const MATCH_KEEP_MS = 60_000;
+const MATCH_KEEP_MS = 60_000;
 
 /**
  * How long a schedule pack waits after its nth failure in a row (ms).
@@ -60,15 +61,6 @@ export function scheduleRetryDelayMs(failures) {
     SCHEDULE_RETRY_MS,
     SCHEDULE_RETRY_FIRST_MS * 2 ** Math.max(0, failures - 1),
   );
-}
-
-const M_PER_DEG = 111_320;
-
-/** Ground distance in metres, equirectangular: fine at a few kilometres. */
-function distanceM(lat1, lon1, lat2, lon2) {
-  const kx = M_PER_DEG * Math.cos((((lat1 + lat2) / 2) * Math.PI) / 180);
-  const dLon = ((((lon2 - lon1 + 180) % 360) + 360) % 360) - 180;
-  return Math.hypot(dLon * kx, (lat2 - lat1) * M_PER_DEG);
 }
 
 /**
@@ -379,7 +371,7 @@ export function createRailSchedules({
       if (train.routeId && run.routeId !== train.routeId) continue;
       const point = scheduledRunPoint(schedule, run, matchMs, delays, pack);
       if (!point) continue;
-      const m = distanceM(record.lat, record.lon, point.lat, point.lon);
+      const m = approxDistanceM(record, point);
       if (m < bestM) {
         bestM = m;
         best = run;
@@ -482,35 +474,6 @@ export function createRailSchedules({
       if (key.startsWith(prefix)) matches.delete(key);
   }
 
-  /** Counts for QA probes and tests. */
-  function stats() {
-    return {
-      schedules: Object.fromEntries(
-        [...schedules].map(([feedId, slot]) => [
-          feedId,
-          slot.status === 'ready'
-            ? {
-                status: 'ready',
-                trips: slot.schedule.trips.size,
-                runs: slot.schedule.instances.length,
-              }
-            : { status: slot.status },
-        ]),
-      ),
-      updates: Object.fromEntries(
-        [...updates].map(([feedId, slot]) => [
-          feedId,
-          {
-            polling: slot.timer !== null,
-            reasons: [...slot.reasons],
-            trips: slot.delays ? Object.keys(slot.delays).length : 0,
-            ageMs: Number.isFinite(slot.at) ? now() - slot.at : null,
-          },
-        ]),
-      ),
-    };
-  }
-
   return {
     stopsFor,
     onSelect,
@@ -521,6 +484,5 @@ export function createRailSchedules({
     delaysFor,
     stop,
     forget,
-    stats,
   };
 }

@@ -17,7 +17,12 @@
  * @module voice/resultDisplay
  */
 
-import { analystNounFor, spokenLabel } from './speech.js';
+import {
+  analystNounFor,
+  boundedLabel,
+  MAX_ANALYST_HEADLINE,
+  spokenLabel,
+} from './speech.js';
 import {
   formatDate,
   formatNumber,
@@ -49,8 +54,6 @@ function notesOf(...values) {
   ];
 }
 
-/** The count/scope headline shared by the analyst card and spoken answer. */
-const ANALYST_HEADLINE_MAX = 64;
 // The card's headline wraps, and a translation runs longer than the English:
 // "Al menos 12 aeronaves militares en un radio de 40 km de Los Ángeles" is 67.
 // English keeps the spoken bound, so its card title still equals `say`.
@@ -63,14 +66,6 @@ const LEVEL_WORDS = Object.freeze({
   district: msg('neighbourhood'),
   natural: msg('natural region'),
 });
-
-function boundedHeadline(value, max = ANALYST_HEADLINE_MAX) {
-  const text = String(value || '')
-    .replace(/\s+/g, ' ')
-    .trim();
-  if (text.length <= max) return text;
-  return `${text.slice(0, max - 1).trimEnd()}…`;
-}
 
 /** Candidate lines for a clarification: "1 · Punjab — state or province, India". */
 function candidateLines(candidates) {
@@ -219,9 +214,9 @@ function shownAnalystHeadline(result) {
       ? t('At least {items}', { items: counted })
       : counted;
   const scope = shownScope(result?.scopeLabel);
-  return boundedHeadline(
+  return boundedLabel(
     scope ? t('{items} {scope}', { items, scope }) : items,
-    getLocale() === 'en' ? ANALYST_HEADLINE_MAX : SHOWN_HEADLINE_MAX,
+    getLocale() === 'en' ? MAX_ANALYST_HEADLINE : SHOWN_HEADLINE_MAX,
   );
 }
 

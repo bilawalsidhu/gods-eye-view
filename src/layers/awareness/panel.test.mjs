@@ -38,6 +38,44 @@ test('a Contacts row names its provider as the Layers panel does, with its feed 
   state.offPanelLocale?.();
 });
 
+test('a Contacts row presents a capped cohort as a lower bound and an unknown one as ?', () => {
+  const cohort = (id, counts) => ({
+    id,
+    label: id,
+    summary: {
+      relationship: 'OBSERVED',
+      nearest: [],
+      reason: 'observed',
+      ...counts,
+    },
+  });
+  const state = {
+    enabled: true,
+    results: {
+      subject: { label: 'AFR38JF' },
+      cohorts: [
+        cohort('flights', { count: 20_000, complete: false, truncated: true }),
+        cohort('military', { count: 19_999, complete: true, truncated: false }),
+        cohort('ais-live-vessels', { count: null }),
+      ],
+    },
+    cohortPages: new Map(),
+    panelListeners: new Set(),
+    panelSignature: '',
+    navigationIndex: 0,
+  };
+  const parts = {
+    navigation: { canNavigateNext: () => false },
+    rendering: { hideDirectionOverlay() {} },
+  };
+  createPanel({ state, parts }).renderResults();
+  assert.deepEqual(
+    state.panelView.rows.map((row) => row.count),
+    ['At least 20,000', '19,999', '?'],
+  );
+  state.offPanelLocale?.();
+});
+
 const PHOTO = Object.freeze({
   src: 'https://t.plnspttrs.net/1/abc123_280.jpg',
   width: 280,
@@ -178,7 +216,12 @@ test('only the tracked flight has a flight photo: not an installation, a militar
   };
   const { resolveSubjectPhoto } = createSubject({
     state: {},
-    services: { flights, military, vessels: {}, installations: {} },
+    services: {
+      flights,
+      military,
+      vessels: { getVesselPhoto: () => null },
+      installations: {},
+    },
     parts: {
       navigation: {
         isFlightLayer: (id) => id === 'flights' || id === 'military',

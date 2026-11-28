@@ -14,10 +14,8 @@ export function createGround({ state: layerState, services, parts, source }) {
   const { resolveEllipsoidalGround } = services.terrain;
 
   /**
-   * Task 5 (height-datum fix): maps whether the renderer shows the globe to the surface
-   * regime key the per-camera ground cache is keyed by (spec §2 "cache by
-   * surface regime", collapsed to two keys — ion World Terrain and Re:Earth
-   * globe terrain get the same handling):
+   * Maps globe visibility to the per-camera ground cache's surface regime key. There are
+   * two keys. Ion World Terrain and Re:Earth globe terrain share one:
    *
    *  - `google-3d`     — photoreal stack: globe hidden, the visible Google 3D
    *                      tileset IS the surface → one-shot scene sampling refines.
@@ -38,7 +36,7 @@ export function createGround({ state: layerState, services, parts, source }) {
   }
 
   /**
-   * Task 5: the surface regime the scene is CURRENTLY rendering, derived live
+   * The surface regime the scene is CURRENTLY rendering, derived live
    * from whether the renderer shows the globe (mapStackController's
    * `_activatePhotoreal` / `_activateGlobeStack` flip exactly this). Reading it live
    * — rather than caching the map-stack id — means the regime is correct even
@@ -51,7 +49,7 @@ export function createGround({ state: layerState, services, parts, source }) {
   }
 
   /**
-   * Task 5: the record's ellipsoidal ground PRIOR (Re:Earth point-height batch,
+   * The record's ellipsoidal ground PRIOR (Re:Earth point-height batch,
    * `record.groundPrior.ellipsoid`), falling back to the catalog's fabricated
    * orthometric `groundElevationM` only when the prior batch hasn't landed yet.
    * This is the value that replaces every previous
@@ -70,7 +68,7 @@ export function createGround({ state: layerState, services, parts, source }) {
   }
 
   /**
-   * Task 5: whether the record's one-shot ground resolution has completed for
+   * Whether the record's one-shot ground resolution has completed for
    * the given regime (per-regime latch — replaces the old boolean
    * `groundResolved`).
    * @param {Object} record - Camera record.
@@ -113,7 +111,7 @@ export function createGround({ state: layerState, services, parts, source }) {
    * called on a timer.
    *
    * The cached `groundSamples` entries are deliberately KEPT (only the latch is
-   * cleared). They are the record's "has ever resolved" memory: the B9c
+   * cleared). They are the record's "has ever resolved" memory: the
    * fallback guard in updateRecordGeometry reads the google-3d entry so a
    * rearmed camera whose tiles are mid-stream (e.g. select → flyTo →
    * tilesLoaded false) is not yanked back to prior/catalog heights before its
@@ -161,7 +159,7 @@ export function createGround({ state: layerState, services, parts, source }) {
   }
 
   /**
-   * Task 5: batches every catalog camera's coords through the Re:Earth
+   * Batches every catalog camera's coords through the Re:Earth
    * ellipsoidal ground resolver (`/api/terrain/heights` proxy — network-cached,
    * chunked, geoid fallback; NOT a scene query). The catalog's orthometric
    * `groundElevationM` rides along as `sourceOrthometricM` so the geoid
@@ -193,7 +191,7 @@ export function createGround({ state: layerState, services, parts, source }) {
   }
 
   /**
-   * Task 5: applies a LATE-arriving ground-prior batch (init's bounded race
+   * Applies a LATE-arriving ground-prior batch (init's bounded race
    * lost — cold proxy cache / slow upstream). Pure recomputes only, no scene
    * queries:
    *  - records without geometry yet: only the icon moves onto the prior;
@@ -294,8 +292,8 @@ export function createGround({ state: layerState, services, parts, source }) {
   }
 
   /**
-   * Task 5: surface-regime change handler ('gev:map-stack-changed'
-   * CustomEvent, dispatched by main.js from MapStackController.onChange). The
+   * Surface-regime change handler ('gev:map-stack-changed'
+   * CustomEvent dispatched by src/app/scene.js when the map stack changes). The
    * surface HEIGHT at a camera differs between regimes (a photogrammetric
    * deck/building-top in google-3d vs bare Re:Earth DEM on globe stacks), so
    * on a REGIME change (photoreal ↔ globe; bing→osm stays 'terrain-globe' and

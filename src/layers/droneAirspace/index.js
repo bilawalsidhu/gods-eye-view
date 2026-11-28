@@ -1,7 +1,8 @@
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { drawOf } from '../../render/rendererOf.js';
-import { cssColor } from '../../render/color.js';
+import { cssColor, withAlpha } from '../../render/color.js';
 import { inputFor as defaultInputFor } from '../../input/dispatcher.js';
+import { SELECTED_CARD_SOURCE_OPTIONS } from '../../overlays/worldOverlayTokens.js';
 import { msg, t } from '../../i18n/index.js';
 import {
   DRONE_AIRSPACE_OVERLAY_SOURCE_ID,
@@ -9,16 +10,17 @@ import {
   buildDroneAirspaceCard,
   droneAirspaceAccent,
 } from './cards.js';
+import { analystRecordLimit } from '../../data/analystRecordLimit.js';
+import { fnv1a } from '../../data/fnv1a.js';
 export { normalizeDroneAirspaceSnapshot } from './records.js';
 export { createDroneAirspaceSource } from './source.js';
 export * from './cards.js';
 
 /** Fill/line colour for a zone by TYPE_CODE, as a renderer colour `[r, g, b, a]`. */
-export function droneAirspaceColor(typeCode) {
+function droneAirspaceColor(typeCode) {
   return cssColor(droneAirspaceAccent(typeCode));
 }
 
-const withAlpha = ([r, g, b], alpha) => [r, g, b, alpha];
 const ringDegrees = (ring) => ring.map(([lon, lat]) => ({ lon, lat }));
 
 /**
@@ -26,7 +28,7 @@ const ringDegrees = (ring) => ring.map(([lon, lat]) => ({ lon, lat }));
  * own (`drone-airspace:1:fills`, …), so several can share a renderer. Picks
  * name them as `Hit.set`.
  */
-export const DRONE_AIRSPACE_SET_PREFIX = 'drone-airspace';
+const DRONE_AIRSPACE_SET_PREFIX = 'drone-airspace';
 let instances = 0;
 
 /**
@@ -34,21 +36,10 @@ let instances = 0;
  * boundary change with unchanged attributes still alters the refresh signature.
  */
 function geometryHash(polygons) {
-  const text = JSON.stringify(polygons);
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < text.length; i++) {
-    hash ^= text.charCodeAt(i);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return (hash >>> 0).toString(36);
+  return fnv1a(JSON.stringify(polygons)).toString(36);
 }
 
 const PICK_PREFIX = 'drone-airspace:';
-const CARD_HOST_OPTIONS = Object.freeze({
-  cohortLimit: 1,
-  collisionCapacity: 1,
-  moving: false,
-});
 
 /**
  * Own one drone-restriction display, its refresh lifecycle, and click selection.
@@ -94,7 +85,7 @@ export function createDroneAirspaceLayer({
       overlayHost.setEntries(
         DRONE_AIRSPACE_OVERLAY_SOURCE_ID,
         [],
-        CARD_HOST_OPTIONS,
+        SELECTED_CARD_SOURCE_OPTIONS,
       );
       return;
     }
@@ -106,7 +97,7 @@ export function createDroneAirspaceLayer({
     overlayHost.setEntries(
       DRONE_AIRSPACE_OVERLAY_SOURCE_ID,
       [card],
-      CARD_HOST_OPTIONS,
+      SELECTED_CARD_SOURCE_OPTIONS,
     );
   }
 
@@ -134,7 +125,7 @@ export function createDroneAirspaceLayer({
       // click so every layer agrees: this area's shapes are background to
       // another layer's card or label painted over them, and a click on our
       // own card leaves the selection as it is.
-      if (picking.clickCard?.(event)) return;
+      if (picking.clickCard(event)) return;
       const picked = event.topHit;
       const zoneId = picked ? pickedZoneId(event.drawHit) : null;
       if (zoneId) {
@@ -163,7 +154,7 @@ export function createDroneAirspaceLayer({
     _selectedCardId = null;
     if (overlayHost) {
       overlayHost.clearSource(DRONE_AIRSPACE_OVERLAY_SOURCE_ID);
-      overlayHost.setVisible?.(DRONE_AIRSPACE_OVERLAY_SOURCE_ID, false);
+      overlayHost.setVisible(DRONE_AIRSPACE_OVERLAY_SOURCE_ID, false);
     }
   }
 
@@ -191,18 +182,13 @@ export function createDroneAirspaceLayer({
       });
       _setIds = new Set([_fills.id, _lines.id]);
       _viewer = viewer;
-      _count = 0;
-      _lastUpdate = null;
-      _lastError = null;
-      _stale = false;
-      _enabled = false;
       console.log('[Data:DroneAirspace] Initialized');
     },
 
     enable() {
       _enabled = true;
       if (_fills) _fills.show = _lines.show = true;
-      overlayHost?.setVisible?.(DRONE_AIRSPACE_OVERLAY_SOURCE_ID, true);
+      overlayHost?.setVisible(DRONE_AIRSPACE_OVERLAY_SOURCE_ID, true);
       installClickHandler();
     },
 
@@ -221,12 +207,7 @@ export function createDroneAirspaceLayer({
       const request = new AbortController();
       _request = request;
       try {
-        // The source contract is getSnapshot; a source that can also say how
-        // fresh its rows are (the FAA proxy) offers getSnapshotDetail.
-        const snapshot =
-          typeof source.getSnapshotDetail === 'function'
-            ? await source.getSnapshotDetail({ signal: request.signal })
-            : { rows: await source.getSnapshot({ signal: request.signal }) };
+        const snapshot = await source.getSnapshot({ signal: request.signal });
         if (request.signal.aborted || _request !== request || !_enabled)
           return false;
         const { rows } = snapshot;
@@ -330,9 +311,7 @@ export function createDroneAirspaceLayer({
 
     getAnalystRecords(maxCount = 2000) {
       if (!_fills || !_fills.show) return [];
-      const limit = Number.isFinite(maxCount)
-        ? Math.max(1, Math.floor(maxCount))
-        : 2000;
+      const limit = analystRecordLimit(maxCount, { fallback: 2000, min: 1 });
       const result = [];
       for (const row of _rowById.values()) {
         if (result.length >= limit) break;

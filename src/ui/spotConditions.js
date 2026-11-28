@@ -1,3 +1,4 @@
+import { bearingBetweenCoordinates } from '../cockpitMath.js';
 import { codeWord } from '../data/entityContext.js';
 import { greatCircleKm } from '../geoDistance.js';
 import { formatNumber, msg, t, tn } from '../i18n/index.js';
@@ -71,16 +72,10 @@ const COMPASS = [
   msg('NW'),
 ];
 /** The compass point from one spot to another, like "NE". */
-export function compassPoint(from, to) {
-  const rad = Math.PI / 180;
-  const y = Math.sin((to.lon - from.lon) * rad) * Math.cos(to.lat * rad);
-  const x =
-    Math.cos(from.lat * rad) * Math.sin(to.lat * rad) -
-    Math.sin(from.lat * rad) *
-      Math.cos(to.lat * rad) *
-      Math.cos((to.lon - from.lon) * rad);
-  const deg = (Math.atan2(y, x) / rad + 360) % 360;
-  return compassName(deg);
+function compassPoint(from, to) {
+  return compassName(
+    bearingBetweenCoordinates(from.lat, from.lon, to.lat, to.lon) ?? 0,
+  );
 }
 
 /** The compass point for a bearing in degrees. */

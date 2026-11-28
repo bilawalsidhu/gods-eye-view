@@ -1,12 +1,7 @@
 import { canvasOf, findCamera, findFrame } from '../../render/rendererOf.js';
 import { AWARENESS_RANGE_PULSE } from './policy.js';
 
-export function createLifecycle({
-  state: layerState,
-  services,
-  parts,
-  source,
-}) {
+export function createLifecycle({ state: layerState, services, parts }) {
   const { holdContinuousRender, releaseContinuousRender } = services.render;
 
   /**
@@ -317,7 +312,7 @@ export function createLifecycle({
       layerState.autoFocusAttempted = false;
       layerState.autoFocusRetryPending = false;
       layerState.subject = null;
-      services.installations?.setContextAnchor?.(null);
+      services.installations.setContextAnchor(null);
       layerState.results = null;
       layerState.lastSubjectRefreshMs = 0;
       layerState.lastEvaluatedPosition = null;
@@ -351,11 +346,14 @@ export function createLifecycle({
       parts.dependencies.watchAdoptions(null);
       layerState.dataManager = null;
     },
+
+    update() {
+      parts.subject.refreshSelectedSubject();
+      return Promise.resolve();
+    },
   };
 
   return {
-    cameraMotionSignature,
-    syncAwarenessRenderHold,
     attachRuntimeListeners,
     detachRuntimeListeners,
     methods,

@@ -90,12 +90,16 @@ export function inspectWindAtCenter(
     : null;
   return {
     position: point,
+    lat,
+    lon,
     speed,
     from,
     units,
     coordinates: `${Math.abs(lat).toFixed(2)}°${lat < 0 ? 'S' : 'N'} · ${Math.abs(lon).toFixed(2)}°${lon < 0 ? 'W' : 'E'}`,
     wind: `${formatWindSpeed(speed, units)}${from === 'Calm' ? ' · calm' : ` from ${from}`}`,
     scalarKind: overlay,
+    // The sampled number; speed is formatted from `speed`.
+    scalar: overlay === 'speed' ? null : scalar,
     scalarLabel:
       overlay === 'speed'
         ? msg('Wind speed')

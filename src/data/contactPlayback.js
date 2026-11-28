@@ -8,6 +8,14 @@ export const FIX_FLAGS = Object.freeze({
   BREAK: 16,
   LIVE: 32,
 });
+
+/**
+ * Consecutive out-of-order refusals after which the history is reset to the
+ * incoming fix. A feed whose clock was corrected backwards would otherwise be
+ * refused until real time caught up with its old mistake.
+ */
+export const ORDER_REJECTS_BEFORE_RESET = 3;
+
 const clampDelay = (n) => Math.max(25_000, Math.min(120_000, n));
 
 export function createLagReservoir(capacity = 256) {
@@ -255,7 +263,7 @@ export function insertFix(track, fix, observation = {}) {
       return { accepted: false, reason };
     }
     track.pendingCount++;
-    const required = reason === 'out-of-order' ? 3 : 2;
+    const required = reason === 'out-of-order' ? ORDER_REJECTS_BEFORE_RESET : 2;
     if (track.pendingCount < required) {
       track.pending = { ...fix, reason };
       return { accepted: false, reason };

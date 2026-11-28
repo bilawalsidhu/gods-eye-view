@@ -52,7 +52,6 @@ import cctvLayer, {
   CCTV_FOCUS_RESULT,
   FRUSTUM_GROUND_CLEARANCE_M,
   CCTV_CALIBRATION_STORAGE_KEY_V2,
-  CCTV_CALIBRATION_STORAGE_KEY_V1,
   readCalibrationStoreV2,
   writeCalibrationStoreV2,
   deriveCalBadge,
@@ -1747,30 +1746,6 @@ test('calibration v2: malformed/partial entries are dropped defensively', () => 
   const restored = readCalibrationStoreV2(storage);
   assert.ok(restored.has('ok-cam'));
   assert.equal(restored.get('ok-cam').values.offsetNorthM, 1);
-});
-
-test('calibration v2: a corrupt v1 key never leaks into the v2 store (v1 is dead data, never read)', () => {
-  const storage = fakeStorage({
-    [CCTV_CALIBRATION_STORAGE_KEY_V1]: JSON.stringify({
-      'austin-42': {
-        offsetNorthM: 999,
-        offsetEastM: 999,
-        headingDeg: 999,
-        pitchDeg: 0,
-        fovDeg: 0,
-        rangeScale: 1,
-        heightM: 0,
-      },
-    }),
-  });
-  // v2 key is untouched/empty — v1's presence must have zero effect.
-  const restored = readCalibrationStoreV2(storage);
-  assert.equal(
-    restored.size,
-    0,
-    'v2 store must start empty — no legacy import (owner decision #3, §9.3)',
-  );
-  assert.ok(!restored.has('austin-42'));
 });
 
 test('deriveCalBadge: CALIBRATED when the camera carries a manual v2 calibration', () => {

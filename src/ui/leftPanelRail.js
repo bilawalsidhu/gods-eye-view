@@ -5,7 +5,11 @@ import {
   resolvePanelStackCorridor,
 } from '../panelStackLayout.js';
 import { measurePanelNaturalHeight } from './panelMeasurement.js';
-import { bandBesideMidpointObstacles } from './panelRailGeometry.js';
+import {
+  bandBesideMidpointObstacles,
+  preferredFirst,
+  visibleObstacles,
+} from './panelRailGeometry.js';
 import { settleSideAccordion } from './panelAccordion.js';
 
 /**
@@ -103,8 +107,7 @@ export function layoutLeftPanelRail({
     documentRef,
     onCollapse,
   });
-  const exclusive =
-    !isMobile && !documentRef?.body?.classList?.contains('cockpit-mode');
+  const exclusive = !documentRef?.body?.classList?.contains('cockpit-mode');
   stack.classList.toggle('layout-exclusive', exclusive);
   const laidOutPanels = panels.filter(
     (panel) => !exclusive || !panel.classList.contains('collapsed'),
@@ -122,23 +125,11 @@ export function layoutLeftPanelRail({
   const bottomObstacles = [];
   const inLane = [];
 
-  for (const obstacle of obstacles) {
-    if (stack.contains(obstacle)) continue;
-    let hiddenByAncestor = false;
-    for (let element = obstacle; element; element = element.parentElement) {
-      const style = getComputedStyle(element);
-      if (
-        style.display === 'none' ||
-        style.visibility === 'hidden' ||
-        Number(style.opacity) === 0
-      ) {
-        hiddenByAncestor = true;
-        break;
-      }
-    }
-    if (hiddenByAncestor) continue;
-    const rect = obstacle.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) continue;
+  for (const { element: obstacle, rect } of visibleObstacles(
+    obstacles,
+    stack,
+    getComputedStyle,
+  )) {
     // The centered controls can enter the stack's transparent outer gutter.
     // Only constrain the lane if they reach an expanded panel itself, whose
     // actual bounds also include the edge-rail offset.
@@ -216,14 +207,10 @@ export function layoutLeftPanelRail({
   // user's newest disclosure. Measure and allocate that explicitly opened
   // panel first so an older expanded sibling yields when the corridor cannot
   // usefully present both (for example Map Stack followed by Scenes).
-  const expandedPanels = preferredExpandedPanel
-    ? [
-        preferredExpandedPanel,
-        ...expandedPanelsInDomOrder.filter(
-          (panel) => panel !== preferredExpandedPanel,
-        ),
-      ]
-    : expandedPanelsInDomOrder;
+  const expandedPanels = preferredFirst(
+    expandedPanelsInDomOrder,
+    preferredExpandedPanel,
+  );
   // Clear the prior pass before reading intrinsic heights. The allocated
   // outer height and the inner scroller otherwise feed their constrained
   // size back into the next HUD-mode calculation.
@@ -269,7 +256,6 @@ export function layoutLeftPanelRail({
   const centeredTailTop = viewportMidpoint - tailRequiredHeight * 0.5;
   const tailLayoutTop = Math.min(centeredTailTop, safeTop);
   const tailLayoutBottom = tailLayoutTop + tailRequiredHeight;
-  const tailAvailableHeight = Math.max(0, obstacleSafeBottom - obstacleSafeTop);
   const tailTolerance = wasTail ? stabilityBand : -stabilityBand;
   // Data Layers has a scrollable list and a fixed footer. Give it the full
   // desktop lane while short control panels keep their natural height.
@@ -372,24 +358,7 @@ export function layoutLeftPanelRail({
       : 'normal';
   stack.dataset.safeTopPct = topPct.toFixed(2);
   stack.dataset.safeBottomPct = (100 - bottomPct).toFixed(2);
-  stack.dataset.availableHeightPct = (
-    (availableHeight / viewportHeight) *
-    100
-  ).toFixed(2);
-  stack.dataset.requiredHeightPct = (
-    (requiredHeight / viewportHeight) *
-    100
-  ).toFixed(2);
-  stack.dataset.tailAvailableHeightPct = (
-    (tailAvailableHeight / viewportHeight) *
-    100
-  ).toFixed(2);
   stack.dataset.expandedCount = String(expandedPanels.length);
-
-  // Cockpit Display/Radio live in the opposite margin and no longer borrow
-  // this corridor: the left accordion's top is solved against left-lane
-  // obstacles, which put the strip straight through the briefing card.
-  // CockpitView.syncSignalLayout() owns `--cockpit-utility-top` instead.
 
   for (const panel of panels) {
     if (exclusive && panel.classList.contains('collapsed'))

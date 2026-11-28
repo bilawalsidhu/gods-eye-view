@@ -3,7 +3,7 @@ export function featureReference(feature) {
   if (!geometry) return null;
 
   const props = feature?.properties || {};
-  const propertyCoords = coordsFromProperty(props.coordinates);
+  const propertyCoords = lonLatPair(props.coordinates);
   if (propertyCoords) {
     return {
       lon: propertyCoords[0],
@@ -12,7 +12,7 @@ export function featureReference(feature) {
   }
 
   if (geometry.type === 'Point') {
-    const coords = coordsFromPoint(geometry.coordinates);
+    const coords = lonLatPair(geometry.coordinates);
     if (!coords) return null;
     return { lon: coords[0], lat: coords[1] };
   }
@@ -33,15 +33,7 @@ export function featureReference(feature) {
   };
 }
 
-function coordsFromProperty(value) {
-  if (!Array.isArray(value) || value.length < 2) return null;
-  const lon = Number(value[0]);
-  const lat = Number(value[1]);
-  if (!Number.isFinite(lon) || !Number.isFinite(lat)) return null;
-  return [lon, lat];
-}
-
-function coordsFromPoint(value) {
+function lonLatPair(value) {
   if (!Array.isArray(value) || value.length < 2) return null;
   const lon = Number(value[0]);
   const lat = Number(value[1]);

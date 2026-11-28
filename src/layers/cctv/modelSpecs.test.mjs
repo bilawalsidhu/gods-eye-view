@@ -151,13 +151,11 @@ test('specFovCapabilityToken labels a datasheet range as capability, never as cu
   assert.equal(specFovCapabilityToken(null), null);
 });
 
-/** Browser catalog with the pose math stubbed: only enrichment is under test. */
+/** Browser catalog with a stub model: only enrichment is under test. */
 function browserCatalog() {
   const model = {
     safeNumber: (value, fallback = NaN) =>
       Number.isFinite(Number(value)) ? Number(value) : fallback,
-    normalizeHeading: (deg) => ((deg % 360) + 360) % 360,
-    clamp: (value, lo, hi) => Math.min(hi, Math.max(lo, value)),
     headingFromId: () => 0,
     normalizeFeedType: (type) => type,
     ensureCameraPose: () => {},

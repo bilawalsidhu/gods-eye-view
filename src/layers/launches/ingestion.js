@@ -14,36 +14,30 @@ async function waitForSatelliteVisibility(manager, { signal, timeoutMs }) {
   return manager.waitForLayerIdle('satellites', { signal, timeoutMs });
 }
 
-export function createIngestion({
-  state: layerState,
-  services,
-  parts,
-  source,
+/**
+ * Decide whether one bounded rebuild is needed after the active TLE lookup.
+ * @param {object} input Retry state.
+ * @param {boolean} input.enabled Whether Space Missions is active.
+ * @param {number} input.retryCount Number of post-TLE retries already used.
+ * @param {string|null} input.activeTleText Resolved active TLE catalog.
+ * @param {string|null} input.renderedTleText TLE catalog used for the last build.
+ * @returns {boolean} Whether to schedule a refresh.
+ */
+export function shouldRetryAfterActiveTle({
+  enabled,
+  retryCount,
+  activeTleText,
+  renderedTleText,
 }) {
-  /**
-   * Decide whether one bounded rebuild is needed after the active TLE lookup.
-   * @param {object} input Retry state.
-   * @param {boolean} input.enabled Whether Space Missions is active.
-   * @param {number} input.retryCount Number of post-TLE retries already used.
-   * @param {string|null} input.activeTleText Resolved active TLE catalog.
-   * @param {string|null} input.renderedTleText TLE catalog used for the last build.
-   * @returns {boolean} Whether to schedule a refresh.
-   */
+  return Boolean(
+    enabled &&
+    activeTleText &&
+    activeTleText !== renderedTleText &&
+    retryCount < MAX_POST_TLE_RETRIES,
+  );
+}
 
-  function shouldRetryAfterActiveTle({
-    enabled,
-    retryCount,
-    activeTleText,
-    renderedTleText,
-  }) {
-    return Boolean(
-      enabled &&
-      activeTleText &&
-      activeTleText !== renderedTleText &&
-      retryCount < MAX_POST_TLE_RETRIES,
-    );
-  }
-
+export function createIngestion({ state: layerState, parts, source }) {
   function clearPostTleRetry() {
     if (layerState._retryTimer) clearTimeout(layerState._retryTimer);
     layerState._retryTimer = null;
@@ -331,12 +325,8 @@ export function createIngestion({
   return {
     shouldRetryAfterActiveTle,
     clearPostTleRetry,
-    schedulePostTleRetry,
-    ensureActiveTleLookup,
     captureSatelliteDependency,
     restoreSatelliteDependency,
-    performMissionUpdate,
-    requestMissionUpdate,
     methods,
   };
 }

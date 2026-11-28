@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { markRaw, shallowRef } from 'vue';
+import { presented } from './presented.js';
 
 /**
  * The interface language picker as its view renders it. The shell publishes
@@ -8,12 +8,7 @@ import { markRaw, shallowRef } from 'vue';
  */
 export const useLocaleStore = defineStore('gev-locale', () => {
   /** `{current, onSelect, focus}`, or null while no picker is shown. */
-  const picker = shallowRef(null);
-
-  /** @param {?{current: string, onSelect: (locale: string) => void, focus?: boolean}} next */
-  function publishPicker(next) {
-    picker.value = next && markRaw(next);
-  }
+  const [picker, publishPicker] = presented();
 
   return { picker, publishPicker };
 });

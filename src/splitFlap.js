@@ -55,12 +55,6 @@
  * board read as a departure board.
  */
 
-/**
- * One-line kill switch. Flip to `false` and every chip goes back to a plain
- * instant text swap with no other code change.
- */
-export const SPLIT_FLAP_ENABLED = true;
-
 /** Time one character spends flipping. */
 export const FLAP_CHAR_MS = 190;
 /** Nominal gap between consecutive characters starting their flip. */
@@ -225,15 +219,6 @@ export function visibleGlyphs(plan, elapsedMs, options = {}) {
     out += displayedGlyph(cell, elapsed >= cell.delayMs + turn);
   }
   return out;
-}
-
-/** Whether the viewer asked for reduced motion. */
-export function prefersReducedMotion() {
-  return (
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  );
 }
 
 /**

@@ -4,7 +4,7 @@ import { composeUIState, summarizeCoverage } from './uiState.js';
 import { providerSnapshot } from '../../testSupport/streetLevelFakes.mjs';
 
 const provider = (overrides = {}) =>
-  providerSnapshot({ count: 10, ...overrides });
+  providerSnapshot({ count: 10, filters: ['pano', 'since'], ...overrides });
 const base = {
   enabled: true,
   filter: { pano: 'all', sinceDays: 0 },

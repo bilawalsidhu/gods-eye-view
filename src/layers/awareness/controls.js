@@ -8,7 +8,7 @@ const COHORT_FIELDS = Object.freeze({
   'military-installations': 'installationsCount',
 });
 
-export function createControls({ state: layerState, services, parts, source }) {
+export function createControls({ state: layerState, services, parts }) {
   const flightsLayer = services.flights;
   const militaryFlightsLayer = services.military;
   const aisLiveVesselsLayer = services.vessels;
@@ -27,8 +27,6 @@ export function createControls({ state: layerState, services, parts, source }) {
 
     updateInterval: 0,
 
-    statsRefreshInterval: 1000,
-
     attachDataManager(dataManager) {
       layerState.dataManager = dataManager;
       parts.dependencies.watchAdoptions(dataManager);
@@ -38,7 +36,7 @@ export function createControls({ state: layerState, services, parts, source }) {
       if (typeof params.passive !== 'boolean') return;
       const wasPassive = layerState.passive;
       layerState.passive = params.passive;
-      if (layerState.passive) services.installations?.setContextAnchor?.(null);
+      if (layerState.passive) services.installations.setContextAnchor(null);
       if (layerState.enabled && wasPassive && !layerState.passive)
         parts.dependencies.activateOperationalContext();
     },
@@ -123,26 +121,16 @@ export function createControls({ state: layerState, services, parts, source }) {
     /** Return the latest read-only context result for compact HUD consumers. */
     getContextSnapshot() {
       if (!layerState.enabled || !layerState.subject) return null;
-      if (!layerState.results) {
-        return parts.model.buildAwarenessContextSnapshot(
-          {
-            subject: { ...layerState.subject },
-            evaluatedAt: null,
-            radiusM: AWARENESS_RADIUS_M,
-            cohorts: [],
-          },
-          parts.model.navigationState(),
-          {
-            subjectPresent: !layerState.subjectMissing,
-          },
-        );
-      }
+      const results = layerState.results ?? {
+        subject: { ...layerState.subject },
+        evaluatedAt: null,
+        radiusM: AWARENESS_RADIUS_M,
+        cohorts: [],
+      };
       return parts.model.buildAwarenessContextSnapshot(
-        layerState.results,
+        results,
         parts.model.navigationState(),
-        {
-          subjectPresent: !layerState.subjectMissing,
-        },
+        { subjectPresent: !layerState.subjectMissing },
       );
     },
 
@@ -215,9 +203,9 @@ export function createControls({ state: layerState, services, parts, source }) {
         parts.subject.subjectKey(layerState.subject) || 'camera-release';
       layerState.pendingSelectionKey = preservedSelectionKey;
       try {
-        flightsLayer.stopTracking?.({ origin });
-        militaryFlightsLayer.stopTracking?.({ origin });
-        if (!preserveVesselSelection) aisLiveVesselsLayer.clearSelection?.();
+        flightsLayer.stopTracking({ origin });
+        militaryFlightsLayer.stopTracking({ origin });
+        if (!preserveVesselSelection) aisLiveVesselsLayer.clearSelection();
       } finally {
         if (layerState.pendingSelectionKey === preservedSelectionKey) {
           layerState.pendingSelectionKey = null;

@@ -38,7 +38,7 @@ import { greatCircleKm } from '../../geoDistance.js';
  * Copies farther apart than this are different trains (km): two copies of
  * one train at one moment differ only by where each feed reports it.
  */
-export const MATCH_RADIUS_KM = 15;
+const MATCH_RADIUS_KM = 15;
 /**
  * Copies with the same number match up to this far apart (km): two feeds
  * report one train at different moments, and one polled every few minutes
@@ -134,15 +134,6 @@ export function recordNumbers(record) {
   return number ? { number, line: null } : named;
 }
 
-/**
- * A record's train number (recordNumbers), or null.
- * @param {object} record
- * @returns {string|null}
- */
-export function recordTrainNumber(record) {
-  return recordNumbers(record).number;
-}
-
 /** Whether two lines can be one: one number, and one product where both name it. */
 function sameLine(a, b) {
   return (
@@ -174,11 +165,6 @@ export function matchStrength(a, b) {
   return a.line && b.line && a.category != null && a.category === b.category
     ? 1 - km / (2 * MATCH_RADIUS_KM)
     : 0;
-}
-
-/** Whether two copies are the same physical train. */
-export function sameTrain(a, b) {
-  return matchStrength(a, b) > 0;
 }
 
 /**
@@ -307,8 +293,7 @@ export function chooseCopies(groups, previous = new Map(), held = null) {
       .map((copy) => previous.get(copy.key))
       .find((key) => key && keys.has(key));
     let best =
-      scored.find(({ copy }) => copy.key === incumbentKey) ??
-      scored.reduce((a, b) => (better(b.score, a.score) ? b : a));
+      scored.find(({ copy }) => copy.key === incumbentKey) ?? scored[0];
     for (const candidate of scored)
       if (better(candidate.score, best.score)) best = candidate;
     best = scored.find(({ copy }) => copy.key === held) ?? best;
@@ -337,7 +322,6 @@ export function createDuplicateFilter({
 }) {
   let previous = new Map();
   let pending = false;
-  let lastStats = { groups: 0, hidden: 0 };
 
   /** The comparable view of one drawn train. */
   function copyOf(entry) {
@@ -379,11 +363,7 @@ export function createDuplicateFilter({
       const drawn = winners.get(selected);
       if (drawn && state._trains.has(drawn)) parts.selection.selectTrain(drawn);
     }
-    lastStats = {
-      groups: new Set(winners.values()).size,
-      hidden: hidden.size,
-    };
-    return lastStats;
+    return { groups: new Set(winners.values()).size, hidden: hidden.size };
   }
 
   /** Coalesce the refreshes of several feeds' polls into one. */
@@ -398,6 +378,5 @@ export function createDuplicateFilter({
   return {
     refresh,
     scheduleRefresh,
-    stats: () => ({ ...lastStats }),
   };
 }

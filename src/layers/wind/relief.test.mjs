@@ -40,7 +40,6 @@ test('relief asks the globe port for hillshade once and gives it back on clear',
   assert.deepEqual(f.calls, [
     ['first', { kind: 'hillshade', strength: WIND_RELIEF_STRENGTH }],
   ]);
-  assert.equal(WIND_RELIEF_STRENGTH, 0.28);
   assert.equal(f.relief.getDiagnostics().active, true);
   assert.equal(f.relief.getDiagnostics().maxOpacity, 0.28);
   f.relief.clear();

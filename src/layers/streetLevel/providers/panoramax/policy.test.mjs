@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  COLORS,
   PICK_PREFIX,
   isEquirectangular,
   licenseLabel,
@@ -13,8 +12,6 @@ import { PROVIDER_COLORS } from '../../policy.js';
 import { stacItem } from '../../../../testSupport/panoramaxFixtures.mjs';
 
 test('Panoramax draws in its own orange, and every pick id starts pnx:', () => {
-  assert.equal(COLORS.coverage, '#ff6f00');
-  assert.equal(PROVIDER_COLORS.panoramax, '#ff6f00');
   for (const prefix of Object.values(PICK_PREFIX))
     assert.ok(prefix.startsWith('pnx:'));
   // One colour per source.

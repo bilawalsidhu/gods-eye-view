@@ -1,12 +1,6 @@
 /** Composite queries that combine other tools' answers for one area. */
 
 import { suggestView } from '../views.js';
-import {
-  feedProvenanceEnvelope,
-  hudSummaryMatchesProvenance,
-  provenanceLine,
-  provenanceTag,
-} from '../../data/layerSnapshot.js';
 import { defineTool, ToolError } from '../catalog.js';
 import {
   AREA_SCHEMA,
@@ -96,17 +90,6 @@ const AWARENESS_SECTIONS = [
     args: (area) => ({ area: area.argument, limit: AWARENESS_LIMIT }),
   },
 ];
-
-/** A section's feed state for the caption, from what its result reported. */
-function sectionFeedState(section) {
-  if (section.unavailable) return 'unavailable';
-  const data = section.data || {};
-  if (data.freshness === 'stale' || data.stale === true) return 'stale';
-  // Answered, but some of the feeds or satellites behind it did not.
-  if (data.missing_sources?.length || data.unavailable_feeds?.length)
-    return 'degraded';
-  return 'nominal';
-}
 
 /**
  * The resolved area, plus the argument sections receive. A named place is
@@ -207,70 +190,6 @@ export const situationBrief = defineTool({
         }),
         area: area.label,
         sections: brief,
-      },
-    };
-  },
-});
-
-export const getHudCaption = defineTool({
-  name: 'get_hud_caption',
-  title: 'Heads-up display caption',
-  description:
-    "The short heads-up display caption God's Eye View would show for an " +
-    'area, written by the app from the same overview situation_brief gives.',
-  inputSchema: {
-    type: 'object',
-    properties: { area: AREA_SCHEMA },
-    required: ['area'],
-    additionalProperties: false,
-  },
-  requires: ['weather', 'summary'],
-  async run(args, context) {
-    const { area, center, brief, lines } = await buildBrief(args, context);
-    // The app's caption context: place labels and each section as a layer
-    // with the feed state its result reported, failures included.
-    const layers = SECTIONS.filter(({ key }) => brief[key]).map(
-      ({ key, label }) => ({
-        id: key,
-        name: label,
-        enabled: true,
-        feedState: sectionFeedState(brief[key]),
-      }),
-    );
-    const feedProvenance = feedProvenanceEnvelope(layers);
-    const response = await context.services.summary.summarize(
-      {
-        placeLabels: [area.label],
-        location: area.label,
-        center,
-        observations: lines,
-        enabledLayerLabels: layers.map((layer) => layer.name),
-        enabledLayers: layers.map(({ id, name, feedState }) => ({
-          id,
-          name,
-          feedState,
-        })),
-        feedProvenance,
-      },
-      { signal: context.signal },
-    );
-    const words = response?.data?.summary;
-    if (!response?.ok || typeof words !== 'string' || !words)
-      throw new ToolError('unavailable', 'The caption service did not answer');
-    // As on the HUD: the app's own state leads and its layers trail, and a
-    // reply that names another state than the app's keeps only the place.
-    const caption = provenanceLine(
-      hudSummaryMatchesProvenance(response.data, feedProvenance)
-        ? words
-        : area.label,
-      provenanceTag(feedProvenance),
-    );
-    return {
-      summary: caption,
-      data: {
-        area: area.label,
-        caption,
-        feedState: feedProvenance.overall,
       },
     };
   },

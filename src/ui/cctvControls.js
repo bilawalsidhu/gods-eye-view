@@ -124,48 +124,6 @@ export class CctvControls {
     );
     if (this.cctv.getUIState) this._renderCctvState(this.cctv.getUIState());
   }
-  _clearCctvFrame(...args) {
-    return _clearCctvFrame.call(this, ...args);
-  }
-  _setCctvFrame(...args) {
-    return _setCctvFrame.call(this, ...args);
-  }
-  _queueCctvFrame(...args) {
-    return _queueCctvFrame.call(this, ...args);
-  }
-  _settleCctvFrame(...args) {
-    return _settleCctvFrame.call(this, ...args);
-  }
-  _syncCctvSourceBadge(...args) {
-    return _syncCctvSourceBadge.call(this, ...args);
-  }
-  _activeCctvCameraId(...args) {
-    return _activeCctvCameraId.call(this, ...args);
-  }
-  _resetCctvCalibration(...args) {
-    return _resetCctvCalibration.call(this, ...args);
-  }
-  _beginCctvCalValueEdit(...args) {
-    return _beginCctvCalValueEdit.call(this, ...args);
-  }
-  _calBadgeLabel(...args) {
-    return _calBadgeLabel.call(this, ...args);
-  }
-  _renderCctvState(...args) {
-    return _renderCctvState.call(this, ...args);
-  }
-  _typeCctvSummary(...args) {
-    return _typeCctvSummary.call(this, ...args);
-  }
-  _publishCctvChip(...args) {
-    return _publishCctvChip.call(this, ...args);
-  }
-  _updateCctvSyncChip(...args) {
-    return _updateCctvSyncChip.call(this, ...args);
-  }
-  _initCctvPanel(...args) {
-    return _initCctvPanel.call(this, ...args);
-  }
   destroy() {
     if (this.destroyed) return;
     this.destroyed = true;
@@ -187,3 +145,20 @@ export class CctvControls {
     this._publishCctvChip({ visible: false, stopped: true });
   }
 }
+
+Object.assign(CctvControls.prototype, {
+  _clearCctvFrame,
+  _setCctvFrame,
+  _queueCctvFrame,
+  _settleCctvFrame,
+  _syncCctvSourceBadge,
+  _activeCctvCameraId,
+  _resetCctvCalibration,
+  _beginCctvCalValueEdit,
+  _calBadgeLabel,
+  _renderCctvState,
+  _typeCctvSummary,
+  _publishCctvChip,
+  _updateCctvSyncChip,
+  _initCctvPanel,
+});

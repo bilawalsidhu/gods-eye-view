@@ -17,37 +17,21 @@ export function createTerrainHeights({
   if (typeof source?.getHeights !== 'function')
     throw new TypeError('Terrain heights require a source');
   signal?.throwIfAborted();
-  // src/data/terrainHeights.js — batched, cached client terrain-height resolver
-  // (docs/plans/2026-07-05-entity-height-datum-fix.md Task 3).
-  //
   // Resolves ELLIPSOIDAL ground height per (lat, lon) via the server-side
-  // `/api/terrain/heights` proxy (Task 2 — Re:Earth `heights.json`, disk-cached,
+  // `/api/terrain/heights` proxy (Re:Earth `heights.json`, disk-cached,
   // serve-stale). When the proxy is unreachable (or errors) AND the point isn't
   // already warm in this module's in-memory cache, falls back to bundled-geoid
-  // math (Task 1, `src/data/geoid.js`):
+  // math (`src/data/geoid.js`):
   //
   //   sourceOrthometricM (if finite) + geoidHeight(lat, lon)  → source:'geoid-fallback'
   //   else geoidHeight(lat, lon) alone (H≈0 "at the geoid/coast" prior) → source:'geoid-fallback'
   //
-  // Two things learned building the Task 2 proxy (see its report, and the
-  // ledger's T2 entry) that this module builds in:
-  //
-  //   1. The proxy's GET has a Node http header-size ceiling — empirically a
-  //      single request much past ~700-1500 points (depending on coordinate
-  //      precision) risks a raw socket-level 431 *before* the proxy's own
-  //      request handler runs. So every network request this module issues is
-  //      chunked at CHUNK_SIZE (64 points), well under that ceiling, and
-  //      chunks are sent SEQUENTIALLY (not in parallel) to keep this client
-  //      well-behaved against a single dev-server proxy.
-  //   2. The proxy's disk cache is keyed by the raw `points` query string, with
-  //      no eviction — so a client that varies coordinate precision or point
-  //      order defeats the warm cache and grows the cache file unbounded. This
-  //      module rounds every coordinate to 5 decimal places (~1.1 m of
-  //      precision at the equator — comfortably tighter than any of this app's
-  //      placement needs) BOTH for its own in-memory cache key AND for the
-  //      points string sent to the proxy, so repeated calls (including calls
-  //      from a fresh page load, a different camera batch, etc.) consistently
-  //      hit the same warm proxy cache entry.
+  // Two constraints of the proxy shape these requests:
+  // 1. A long GET can exceed Node's header-size ceiling before the request handler runs.
+  // Send chunks of CHUNK_SIZE (64 points) sequentially.
+  // 2. The disk cache keys on the raw points query string and has no eviction. Round
+  // coordinates to five decimal places (~1.1 m) for both the in-memory key and the query
+  // so repeat requests share entries.
 
   /** Max points per outgoing request to `/api/terrain/heights` (see file header, point 1). */
   // Match the server's upstream batch so sequential upstream work also fits
@@ -147,13 +131,9 @@ export function createTerrainHeights({
   }
 
   /**
-   * Field-test round 5 (2026-07-06, the "sea-level poison"): like
-   * cachedEllipsoidalGround but returns null for geoid-FALLBACK entries —
-   * only a real Re:Earth value counts. A fallback (cached when the proxy
-   * failed mid-burst) is the geoid surface, which at Austin sits ~165 m below
-   * the airport: floors built on it sank every sprite/trail, and the mesh
-   * sampler's sanity gate rejected REAL surface samples against it. Floor
-   * consumers read THIS; the plain read stays for display-only consumers.
+   * Like cachedEllipsoidalGround, but only a real Re:Earth value counts. A geoid fallback
+   * can sit far below the ground, sinking floors and making the mesh gate reject real
+   * samples. Display-only consumers can use the plain read.
    * @param {number} lat
    * @param {number} lon
    * @returns {number|null}
@@ -173,28 +153,23 @@ export function createTerrainHeights({
    * @returns {Promise<Map<string, number>>} key -> ellipsoid height (m)
    */
   async function fetchChunk(chunk, requestSignal = signal) {
-    // lon,lat order (matches the proxy's documented `points=lon,lat;…` contract
-    // and Task 2's implementation).
+    // The proxy expects points in lon,lat order.
     const results = await source.getHeights(chunk, {
       signal: requestSignal
         ? AbortSignal.any([requestSignal, AbortSignal.timeout(30000)])
         : AbortSignal.timeout(30000),
     });
-    const body = { results };
-    if (!Array.isArray(body?.results))
+    if (!Array.isArray(results))
       throw new Error('malformed terrain heights response (no results array)');
-    if (body.results.length !== chunk.length) {
+    if (results.length !== chunk.length) {
       throw new Error(
-        `terrain heights response length mismatch (expected ${chunk.length}, got ${body.results.length})`,
+        `terrain heights response length mismatch (expected ${chunk.length}, got ${results.length})`,
       );
     }
     const out = new Map();
-    // The proxy is documented to preserve input order (Task 2 report verifies
-    // this against the live upstream), so map positionally rather than trust
-    // the response's own lon/lat fields to re-match — those are also present
-    // for callers who want them, but this module doesn't need them.
+    // The proxy preserves input order, so map positionally.
     for (let i = 0; i < chunk.length; i += 1) {
-      const ellipsoid = body.results[i]?.ellipsoid;
+      const ellipsoid = results[i]?.ellipsoid;
       if (!Number.isFinite(ellipsoid))
         throw new Error(`non-finite ellipsoid height at index ${i}`);
       out.set(chunk[i].key, ellipsoid);
@@ -203,8 +178,8 @@ export function createTerrainHeights({
   }
 
   /**
-   * Computes the geoid-fallback ellipsoidal height for one point per the
-   * brief's fallback chain: `sourceOrthometricM + geoidHeight` when a finite
+   * Computes the geoid-fallback ellipsoidal height by the fallback chain:
+   * `sourceOrthometricM + geoidHeight` when a finite
    * orthometric source height is available, else `geoidHeight` alone (treats
    * the point as if it were at the geoid, i.e. H≈0 — a coast-level prior).
    * Assumes `ensureGeoidReady()` has already resolved.
@@ -264,19 +239,15 @@ export function createTerrainHeights({
 
     // Points not yet warm in the cache, deduplicated by key (multiple inputs —
     // even within the same call — naming the same rounded coordinate should
-    // only ever hit the network once). Round 5: a geoid-FALLBACK entry does
-    // NOT count as permanently warm — it was cached when the proxy failed
-    // mid-burst and (at elevated terrain) is a sea-level poison that sank every
-    // floor built on it. Give failed keys a short cooldown before re-requesting
-    // so warm consumers do not hammer a failing proxy; after it expires, a
-    // successful response replaces the fallback entry and clears the path.
+    // only ever hit the network once). A geoid fallback gets a short cooldown before
+    // retrying so consumers share the backoff. A successful response replaces it.
     const uncached = [];
     const seenKeys = new Set();
     const now = Date.now();
     // What this call resolved or found warm, so the assembly below can report a
     // point even if a later chunk's writes pushed it past CACHE_MAX_ENTRIES.
-    // Without it a batch big enough to evict its own entries would report
-    // points as unresolved that it had in fact resolved.
+    // Without it a batch big enough to evict its own entries would lose points
+    // it had resolved.
     const resolvedThisCall = new Map();
     for (const item of work) {
       const entry = cacheTouch(item.key);
@@ -302,18 +273,12 @@ export function createTerrainHeights({
         const resolved = await fetchChunk(chunk, requestSignal);
         requestSignal?.throwIfAborted();
         for (const item of chunk) {
-          const ellipsoid = resolved.get(item.key);
-          // Round 6: only a FINITE value may be cached as 'reearth'. A point
-          // the upstream response omitted used to cache {ellipsoid: undefined,
-          // source: 'reearth'} — permanently "warm" yet empty, so its floor
-          // read null forever and every later warm skipped it (ATL verify:
-          // one contact frozen at the geoid while its neighbors resolved).
-          // An omitted point now caches nothing and retries on the next warm.
-          if (Number.isFinite(ellipsoid)) {
-            const entry = { ellipsoid, source: 'reearth' };
-            resolvedThisCall.set(item.key, entry);
-            cacheStore(item.key, entry);
-          }
+          const entry = {
+            ellipsoid: resolved.get(item.key),
+            source: 'reearth',
+          };
+          resolvedThisCall.set(item.key, entry);
+          cacheStore(item.key, entry);
         }
       } catch (error) {
         requestSignal?.throwIfAborted();
@@ -359,14 +324,13 @@ export function createTerrainHeights({
       }
     }
 
-    // Assemble the output in the original input order from the cache. A point
-    // the upstream omitted has NO entry (round 6 — deliberately uncached so it
-    // retries later): report it unresolved instead of throwing.
+    // Every point is in `resolvedThisCall`: warm, fetched, partial or geoid
+    // fallback. One non-finite height in a 200 response sends the whole chunk
+    // (up to 64 points) to the geoid fallback.
     return work.map((item) => {
-      const entry = cache.get(item.key) || resolvedThisCall.get(item.key);
-      return entry
-        ? { ellipsoid: entry.ellipsoid, source: entry.source }
-        : { ellipsoid: null, source: 'unresolved' };
+      const { ellipsoid, source } =
+        cache.get(item.key) || resolvedThisCall.get(item.key);
+      return { ellipsoid, source };
     });
   }
 

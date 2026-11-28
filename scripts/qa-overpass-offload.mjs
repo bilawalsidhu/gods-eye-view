@@ -10,7 +10,7 @@
  * and polygon outlines near Camp Mabry, Fort Cavazos marker deduplication,
  * and at least 150 street-view dots within -3/+25 m of the surface. Records the traffic road-source label
  * and rejects every browser request to an Overpass host or public Nominatim.
- * Server-side zero egress is separately pinned in src/overpassOffload.test.mjs.
+ * Server-side zero egress is separately pinned in server/providers/overpass/overpassOffload.test.mjs.
  * --tour measures Austin, London, Dubai, San Diego, Tokyo and São Paulo, then
  * revisits Austin, with all three layers enabled. CDP records requests, decoded
  * response-body bytes and transferred bytes (including headers), split by provider.

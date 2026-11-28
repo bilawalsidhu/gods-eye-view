@@ -1,8 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  US_AQI_BANDS,
-  US_AQI_LIMITS,
   aqiStations,
   plausibility,
   stationIndex,
@@ -189,12 +187,6 @@ test('a low-cost sensor gets no US AQI; its values say why', () => {
 });
 
 test('the bands are the EPA categories and colours', () => {
-  assert.deepEqual(US_AQI_LIMITS, [50, 100, 150, 200, 300]);
-  assert.deepEqual(
-    US_AQI_BANDS.map((band) => band.color),
-    ['#00e400', '#ffff00', '#ff7e00', '#ff0000', '#8f3f97', '#7e0023'],
-  );
-  assert.equal(US_AQI_BANDS[2].short, 'Sensitive groups');
   assert.equal(usAqiBand(50).id, 'good');
   assert.equal(usAqiBand(51).id, 'moderate');
   assert.equal(usAqiBand(301).id, 'hazardous');

@@ -43,7 +43,7 @@ import {
  */
 
 /** How often the status line's age is refreshed while the panel shows. */
-export const STATION_PANEL_TICK_MS = 1000;
+const STATION_PANEL_TICK_MS = 1000;
 
 /**
  * @param {{state: object, parts: object, stations: StationDescription[],
@@ -73,7 +73,7 @@ export function createStationPanel({
   function _stationShown() {
     if (!layerState._enabled) return null;
     // The right rail is hidden while the Cockpit rides; nothing to show.
-    if (parts.cockpit?._cockpitHeld()) return null;
+    if (parts.cockpit._cockpitHeld()) return null;
     return stations.find((station) => station.selected()) ?? null;
   }
 

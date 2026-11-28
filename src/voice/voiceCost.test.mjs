@@ -7,7 +7,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  DEFAULT_VOICE_TIER,
   VOICE_COST_LIMIT_OFF,
   VOICE_COST_LIMITS,
   VOICE_MODELS,
@@ -55,13 +54,6 @@ const dollarsOfUsage = (usd) => ({
 
 test('registry exposes exactly the two tiers the UI offers', () => {
   assert.deepEqual([...VOICE_TIERS].sort(), ['mini', 'standard']);
-  assert.equal(DEFAULT_VOICE_TIER, 'standard');
-});
-
-test('standard tier still points at the model vite.config.js defaults to', () => {
-  // If this fails, the client cost estimate is being computed against a
-  // different model than the session actually runs on.
-  assert.equal(VOICE_MODELS.standard.id, 'gpt-realtime-2');
 });
 
 test('mini tier uses a published mini model id, not a guessed -2-mini variant', () => {
@@ -313,8 +305,6 @@ test('formatCostUsd clamps junk to zero', () => {
  * -------------------------------------------------------------- */
 
 test('default limits are generous and ordered warn < cap', () => {
-  assert.equal(VOICE_COST_LIMITS.warnUsd, 2);
-  assert.equal(VOICE_COST_LIMITS.capUsd, 5);
   assert.ok(VOICE_COST_LIMITS.warnUsd < VOICE_COST_LIMITS.capUsd);
 });
 

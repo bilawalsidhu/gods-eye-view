@@ -1,4 +1,4 @@
-import { t, msg } from '../i18n/index.js';
+import { t } from '../i18n/index.js';
 import {
   showRadioEnableBusy,
   showRadioTuner,

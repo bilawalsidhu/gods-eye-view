@@ -2,6 +2,8 @@
 // attestation, marker looks and placement, the feed's filters and paging, and
 // the event cards the News panel and the globe show. No renderer, no DOM.
 
+import { greatCircleKm, pointInRing } from '../../geoDistance.js';
+import { fnv1a } from '../../data/fnv1a.js';
 import { getLocale, msg, t, tn } from '../../i18n/index.js';
 
 export const NEWS_LAYER_ID = 'news';
@@ -377,15 +379,6 @@ export function markerStyle(report, now = Date.now()) {
   };
 }
 
-function hash(text) {
-  let h = 2166136261;
-  for (let i = 0; i < text.length; i++) {
-    h ^= text.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-}
-
 /**
  * Trend glyph for a hotspot: ▲/▼ when the last 24 h differ from the 24 h
  * before by more than a fifth, nothing when flat or without a prior day.
@@ -629,7 +622,7 @@ export function countryGroups(reports) {
  */
 export function reportMarkerPosition(report, pin = 0) {
   const { lat, lon, precision } = report.pins?.[pin] || report.geo;
-  const h = hash(pin ? `${report.id}~${pin}` : report.id);
+  const h = fnv1a(pin ? `${report.id}~${pin}` : report.id);
   const angle = ((h % 3600) / 3600) * 2 * Math.PI;
   const radiusDeg =
     (precision === 'country' ? 0.25 : precision === 'region' ? 0.055 : 0.014) *
@@ -762,36 +755,12 @@ export function viewCell({ lat, lon }) {
   return `${Math.floor(lat / NEWS_CELL_DEG)}:${Math.floor(lon / NEWS_CELL_DEG)}`;
 }
 
-/** Great-circle distance in kilometres. */
-export function distanceKm(a, b) {
-  const rad = Math.PI / 180;
-  const dLat = (b.lat - a.lat) * rad;
-  const dLon = (b.lon - a.lon) * rad;
-  const s =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLon / 2) ** 2;
-  return 2 * 6371 * Math.asin(Math.min(1, Math.sqrt(s)));
-}
-
-function inRing(ring, { lat, lon }) {
-  let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const [xi, yi] = ring[i];
-    const [xj, yj] = ring[j];
-    if (
-      yi > lat !== yj > lat &&
-      lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi
-    )
-      inside = !inside;
-  }
-  return inside;
-}
-
 /** Whether a point lies in an outline's polygons (`{outer, holes}`). */
 export function inPolygons(polygons, point) {
   return polygons.some(
     ({ outer, holes }) =>
-      inRing(outer, point) && !holes.some((hole) => inRing(hole, point)),
+      pointInRing(outer, point.lat, point.lon) &&
+      !holes.some((hole) => pointInRing(hole, point.lat, point.lon)),
   );
 }
 
@@ -813,7 +782,7 @@ export function reportsInView(
   if (!centre) return [];
   const near = area?.length
     ? (pin) => inPolygons(area, pin)
-    : (pin) => distanceKm(pin, centre) <= NEWS_IN_VIEW_RADIUS_KM;
+    : (pin) => greatCircleKm(pin, centre) <= NEWS_IN_VIEW_RADIUS_KM;
   return reports
     .filter(
       (r) =>

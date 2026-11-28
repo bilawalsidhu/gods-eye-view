@@ -400,15 +400,12 @@ export function createOrbits({ state: layerState, services, parts, source }) {
   return {
     parseTLE,
     propagatePosition,
-    orbitalPeriodSeconds,
     computeOrbitPath,
     getNextIssPass,
     getNextSatellitePass,
     resolveSatelliteForPass,
     scoreSatelliteNameMatch,
-    lookupTleEntries,
     tleLineLaunchYear,
-    orbitTrackFromRecord,
     findSatelliteOrbitTrackInTle,
     getSatelliteOrbitTrack,
   };

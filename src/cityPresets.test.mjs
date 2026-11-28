@@ -9,7 +9,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CITY_POIS } from './cityPois.js';
-import { LOCATIONS } from './locations.js';
 
 const DESTINATIONS = Object.entries(CITY_POIS);
 const REQUIRED_POI_KEYS = ['name', 'lat', 'lon', 'alt', 'pitch', 'heading'];
@@ -146,18 +145,6 @@ test('every POI lies inside the frame its own destination opens on', () => {
         `${where(id, poi)} at ${poi.lat}, ${poi.lon} is outside ${id}'s viewBounds`,
       );
     }
-  }
-});
-
-test('every LOCATIONS row matches the destination it names', () => {
-  assert.equal(LOCATIONS.length, DESTINATIONS.length);
-  for (const [index, [id, city]] of DESTINATIONS.entries()) {
-    assert.deepEqual(LOCATIONS[index], {
-      id,
-      name: city.name,
-      lat: city.pois[0].lat,
-      lon: city.pois[0].lon,
-    });
   }
 });
 

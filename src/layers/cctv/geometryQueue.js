@@ -1,3 +1,4 @@
+import { greatCircleKm } from '../../geoDistance.js';
 import { followedOf } from '../../data/followed.js';
 import {
   GEO_PROGRESS_NOTIFY_INTERVAL_MS,
@@ -310,11 +311,9 @@ export function createGeometryQueue({
       .filter((record) => record !== active)
       .map((record) => ({
         record,
-        distKm: parts.model.haversineKm(
-          refLat,
-          refLon,
-          record.camera.lat,
-          record.camera.lon,
+        distKm: greatCircleKm(
+          { lat: refLat, lon: refLon },
+          { lat: record.camera.lat, lon: record.camera.lon },
         ),
       }))
       .sort((a, b) => a.distKm - b.distKm)

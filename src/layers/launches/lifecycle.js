@@ -164,12 +164,7 @@ function markerLaunchId(hit) {
   return hit.entryId.startsWith('launch:') ? hit.entryId.slice(7) : null;
 }
 
-export function createLifecycle({
-  state: layerState,
-  services,
-  parts,
-  source,
-}) {
+export function createLifecycle({ state: layerState, services, parts }) {
   const { holdContinuousRender, releaseContinuousRender } = services.render;
   const overlayAt = (position) =>
     services.overlays?.hitTestWorldOverlay?.(position?.x, position?.y);
@@ -181,13 +176,7 @@ export function createLifecycle({
     if (!launch) return false;
     parts.selection.setSelectedMission(launch.id);
     if (move) parts.selection.focusMission(launch);
-    for (const listener of [...layerState._globePickListeners]) {
-      try {
-        listener(launch.id);
-      } catch (error) {
-        console.warn('[Data:RocketLaunches] globe pick listener failed', error);
-      }
-    }
+    parts.controls.notifyGlobePick(launch.id);
     return true;
   };
   let hover = null;
@@ -262,7 +251,7 @@ export function createLifecycle({
           return;
         focusLaunch(
           parts.rendering.launchIdFromPicks(
-            parts.rendering.missionHitsAt(event.position, 12),
+            parts.rendering.missionHitsAt(event.position),
           ),
           { move: !cockpitActive() },
         );
@@ -297,7 +286,7 @@ export function createLifecycle({
       layerState._sourceController.abort();
       layerState._sourceController = new AbortController();
       layerState._enabled = true;
-      holdContinuousRender('rocket-launches'); // per-frame animator (perf wave 2)
+      holdContinuousRender('rocket-launches'); // per-frame animator
       layerState._lifecycleToken++;
       layerState._postTleRetryCount = 0;
       try {
@@ -390,7 +379,7 @@ export function createLifecycle({
       uncover = null;
       hover = null;
       layerState._sourceController.abort();
-      releaseContinuousRender('rocket-launches'); // direct-destroy path (perf wave 2 fix)
+      releaseContinuousRender('rocket-launches'); // direct-destroy path
       layerState._enabled = false;
       layerState._lifecycleToken++;
       layerState._updateDirty = false;

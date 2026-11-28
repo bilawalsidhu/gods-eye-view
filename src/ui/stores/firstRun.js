@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { markRaw, shallowRef } from 'vue';
+import { presented } from './presented.js';
 
 /**
  * The first-run mission launcher as the welcome view renders it.
@@ -12,20 +12,10 @@ export const useFirstRunStore = defineStore('gev-first-run', () => {
    * environmentalTitle, environmentalSub, scrollable}`, or null until the
    * launcher is initialized (the card stays hidden).
    */
-  const launcher = shallowRef(null);
-
-  /** @param {?object} next A fresh presentation; every publish re-renders. */
-  function publish(next) {
-    launcher.value = next && markRaw(next);
-  }
+  const [launcher, publish] = presented();
 
   /** `{choose(choice), dismiss(), suppress(wanted) → boolean, refreshLayout()}`, or null. */
-  const controls = shallowRef(null);
-
-  /** @param {?object} next The launcher's controls, or null to disconnect. */
-  function connect(next) {
-    controls.value = next && markRaw(next);
-  }
+  const [controls, connect] = presented();
 
   return { launcher, publish, controls, connect };
 });

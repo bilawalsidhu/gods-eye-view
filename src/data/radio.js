@@ -45,7 +45,6 @@ export const radioStationIdFromPick = layer.radioStationIdFromPick;
 export const radioStationCameraPlan = layer.radioStationCameraPlan;
 export const radioGlobeNeedsRecentering = layer.radioGlobeNeedsRecentering;
 export const radioGlobeRecenterHeight = layer.radioGlobeRecenterHeight;
-export const buildRadioTunerBand = layer.buildRadioTunerBand;
 export const radioTuningStaticShouldPlay = layer.radioTuningStaticShouldPlay;
 export const getRadioAcceptedCatalogSnapshot =
   layer.getRadioAcceptedCatalogSnapshot;

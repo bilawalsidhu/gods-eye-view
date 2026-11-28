@@ -26,7 +26,7 @@ import { resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { projectRoot } from '../scripts/project-root.mjs';
 import { parseEnv } from 'node:util';
-import { resolveGoogleServerKey } from '../scripts/google-server-key.mjs';
+import { resolveGoogleServerKey } from '../server/providers/places/google-key.js';
 
 const PROJECT_ROOT = projectRoot(import.meta.url);
 

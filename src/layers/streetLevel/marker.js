@@ -1,6 +1,6 @@
 import { positionMarkerGlyph, viewConeMarkerGlyph } from './glyphs.js';
 import { COLORS, POSITION_PICK_ID } from './policy.js';
-import { createHorizonCull } from './view.js';
+import { createHorizonCull } from '../../render/horizonCull.js';
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { drawOf } from '../../render/rendererOf.js';
 
@@ -88,7 +88,6 @@ export function createMarker({ state }) {
       return;
     }
     const look = markerLook(style);
-    state.marker.look = look.key;
     // Culled before it is drawn, so a marker past the horizon never shows.
     const marker = {
       position: fromDegrees(position.lon, position.lat),

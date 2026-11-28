@@ -4,6 +4,14 @@ import {
   closeWeatherPixels,
 } from './source.js';
 
+/** A tile of the geographic scheme (two level-zero tiles), in degrees. */
+export function geographicTile(x, y, level) {
+  const size = 180 / 2 ** level;
+  const west = -180 + x * size;
+  const north = 90 - y * size;
+  return { west, south: north - size, east: west + size, north };
+}
+
 /**
  * Draw one tile of the geographic scheme (two level-zero tiles) from a
  * decoded mosaic covering `bounds` (degrees), without network requests or
@@ -14,9 +22,8 @@ import {
  * @param {HTMLCanvasElement} canvas Sized to the tile.
  */
 export function drawMosaicTile(texture, bounds, { x, y, level }, canvas) {
-  const size = 180 / 2 ** level;
-  const west = -180 + x * size;
-  const north = 90 - y * size;
+  const { west, east, north } = geographicTile(x, y, level);
+  const size = east - west;
   const perLon = texture.width / (bounds.east - bounds.west);
   const perLat = texture.height / (bounds.north - bounds.south);
   const ctx = canvas.getContext('2d');

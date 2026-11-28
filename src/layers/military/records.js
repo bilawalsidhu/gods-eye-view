@@ -8,7 +8,7 @@ import {
   LANDED_MISSING_POLL_LIMIT,
   MISSING_POLL_LIMIT,
   TRACKED_RETENTION_MS,
-} from './recordPolicy.js';
+} from '../flights/recordPolicy.js';
 
 /** Portable military aircraft metadata and bounded missing-poll retention. */
 export class MilitaryFlightRecords {

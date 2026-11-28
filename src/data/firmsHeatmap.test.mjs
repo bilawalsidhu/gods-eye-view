@@ -3,7 +3,7 @@
 // Pure function — no viewer/DOM needed; imported directly.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mapAnalystRecord } from './firmsHeatmap.js';
+import { mapAnalystRecord } from '../testSupport/firmsLayer.mjs';
 import { fireDetectionKey } from './firmsLabels.js';
 import { createQueries } from '../layers/firms/queries.js';
 import { describeEntity, findRecord, nearbyForLayer, viewSummaryForLayer } from './entityContext.js';

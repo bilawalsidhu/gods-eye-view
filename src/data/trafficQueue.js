@@ -57,19 +57,6 @@ export function queuePlatoons(totalLen, count, rng = Math.random) {
 }
 
 /**
- * Flat variant of {@link queuePlatoons} — platoon structure discarded.
- *
- * @param {number} totalLen - Road length in meters.
- * @param {number} count    - Dots to place.
- * @param {() => number} [rng=Math.random] - Uniform [0,1) source (injectable for tests).
- * @returns {number[]} Distances in [0, totalLen), length `count` (or empty on
- *   degenerate input).
- */
-export function queueDistances(totalLen, count, rng = Math.random) {
-  return queuePlatoons(totalLen, count, rng).flat();
-}
-
-/**
  * Map an along-road distance to its containing segment and parametric t.
  * Distances beyond the road clamp to the far end; zero-length segments are
  * skipped. A distance landing exactly on a segment boundary resolves to the

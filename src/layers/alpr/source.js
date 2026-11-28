@@ -14,11 +14,13 @@ import {
   createVectorTileSource,
   validTileBounds,
 } from '../../sources/vectorTiles.js';
-import { buildOverpassQuery, normalizeAlprNode } from './records.js';
+import {
+  buildOverpassQuery,
+  nearestToCentre,
+  normalizeAlprNode,
+} from './records.js';
 import { decodeAlprTile } from './tileRecords.js';
-// Marks text for i18n extraction; the UI translates it with t(). Kept local
-// because AI tool services import this module outside the browser.
-const msg = (text) => text;
+import { msg } from '../../i18n/marker.js';
 
 /**
  * Finest attributed extract zoom whose tiles for `box` fit the per-view cap,
@@ -156,22 +158,8 @@ export function createAlprTileSource({
       signal?.throwIfAborted();
       let list = [...records.values()];
       const truncated = list.length > SOURCE_RECORD_LIMIT;
-      if (truncated) {
-        // Keep the cameras nearest the view centre when a dense metro overflows.
-        const lat = (box.south + box.north) / 2;
-        const lon = (box.west + box.east) / 2;
-        const scale = Math.cos((lat * Math.PI) / 180);
-        list = list
-          .map((record) => ({
-            record,
-            d:
-              (record.latitude - lat) ** 2 +
-              ((record.longitude - lon) * scale) ** 2,
-          }))
-          .sort((a, b) => a.d - b.d)
-          .slice(0, SOURCE_RECORD_LIMIT)
-          .map((item) => item.record);
-      }
+      // Keep the cameras nearest the view centre when a dense metro overflows.
+      if (truncated) list = nearestToCentre(list, box, SOURCE_RECORD_LIMIT);
       return {
         records: list,
         stale: false,

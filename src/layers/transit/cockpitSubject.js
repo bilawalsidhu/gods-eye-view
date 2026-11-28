@@ -3,20 +3,13 @@ import {
   getRegisteredTransitFeed,
   transitRouteLabel,
 } from '../../data/transitFeeds.js';
-import { displayMotion } from './movement.js';
-
-/**
- * `previous` when it holds each of `next`'s values, else a frozen copy of
- * `next`: a part of a snapshot that did not change is the one read before.
- * `next` is a draft, filled again on every read.
- */
-function reuse(previous, next) {
-  if (!previous) return Object.freeze({ ...next });
-  for (const name in next)
-    if (!Object.is(previous[name], next[name]))
-      return Object.freeze({ ...next });
-  return previous;
-}
+import {
+  fillFeedView,
+  fillMotionView,
+  finiteOrNull,
+  groundLiftM,
+  reuseSnapshot,
+} from '../../data/transitSnapshot.js';
 
 /**
  * Read access to one vehicle, and a hold on it for a first-person view.
@@ -43,14 +36,10 @@ function reuse(previous, next) {
  * @returns {{methods: object}}
  */
 export function createTransitCockpitSubject({ state, parts, services }) {
-  const liftM = Number.isFinite(services.ground?.GROUND_FLOOR_LIFT_M)
-    ? services.ground.GROUND_FLOOR_LIFT_M
-    : 0;
-  const finiteOrNull = (value) =>
-    typeof value === 'number' && Number.isFinite(value) ? value : null;
+  const liftM = groundLiftM(services);
   /** Each vehicle's last snapshot, returned again while nothing changed. */
   const views = new WeakMap();
-  /** The drafts vehicleView fills on every read (reuse). */
+  /** The drafts vehicleView fills on every read (reuseSnapshot). */
   const draft = {
     view: {},
     feed: {},
@@ -67,15 +56,7 @@ export function createTransitCockpitSubject({ state, parts, services }) {
 
   function feedOf(feed, previous) {
     if (!feed) return null;
-    const next = draft.feed;
-    next.id = feed.id;
-    next.name = feed.name ?? null;
-    next.operator = feed.operator ?? null;
-    next.region = feed.region ?? null;
-    next.attribution = feed.attribution ?? null;
-    next.license = feed.license ?? null;
-    next.licenseUrl = feed.licenseUrl ?? null;
-    return reuse(previous, next);
+    return reuseSnapshot(previous, fillFeedView(draft.feed, feed));
   }
 
   /**
@@ -115,8 +96,6 @@ export function createTransitCockpitSubject({ state, parts, services }) {
     const record = entry.record;
     const sample = entry.sample ?? null;
     const feed = feedEntry(entry.feedId);
-    const reported = finiteOrNull(record.speedMps);
-    const derived = finiteOrNull(sample?.segmentSpeedMps);
     const status = state._feedStatus.get(entry.feedId);
 
     const position = draft.position;
@@ -125,19 +104,9 @@ export function createTransitCockpitSubject({ state, parts, services }) {
     position.groundHeightM = drawnFloorOf(entry);
     position.atMs = finiteOrNull(sample?.displayT);
 
-    const motion = draft.motion;
-    motion.reportedSpeedMps = reported;
-    motion.derivedSpeedMps = derived;
-    motion.speedSource =
-      reported !== null ? 'reported' : derived !== null ? 'derived' : null;
-    motion.courseDeg = finiteOrNull(entry.courseDeg);
+    const motion = fillMotionView(draft.motion, entry, status);
     motion.reportedBearingDeg = finiteOrNull(record.bearing);
     motion.segmentCourseDeg = finiteOrNull(sample?.segmentCourseDeg);
-    motion.phase = sample?.phase ?? null;
-    motion.word = displayMotion(entry, Date.now()).word;
-    motion.reportAgeMs = finiteOrNull(sample?.latestReportAgeMs);
-    motion.shownBehindMs = finiteOrNull(sample?.actualDelayMs);
-    motion.feedStale = status?.stale === true;
 
     const stop = draft.stop;
     stop.stopId = record.stopId || null;
@@ -164,11 +133,11 @@ export function createTransitCockpitSubject({ state, parts, services }) {
     view.mode = entry.mode ?? null;
     view.modeInferred = entry.modeInferred === true;
     view.feed = feedOf(feed, previous?.feed);
-    view.position = reuse(previous?.position, position);
-    view.motion = reuse(previous?.motion, motion);
-    view.stop = reuse(previous?.stop, stop);
-    view.provenance = reuse(previous?.provenance, provenance);
-    const snapshot = reuse(previous, view);
+    view.position = reuseSnapshot(previous?.position, position);
+    view.motion = reuseSnapshot(previous?.motion, motion);
+    view.stop = reuseSnapshot(previous?.stop, stop);
+    view.provenance = reuseSnapshot(previous?.provenance, provenance);
+    const snapshot = reuseSnapshot(previous, view);
     views.set(entry, snapshot);
     return snapshot;
   }

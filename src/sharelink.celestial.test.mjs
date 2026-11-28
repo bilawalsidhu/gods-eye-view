@@ -588,32 +588,47 @@ test('newer visual, map, and individual panel actions suppress only their owned 
 
 test('every explicit visual UI gesture claims restore authority before it mutates state', () => {
   const initUi = sourceBlock('  _initUI() {', '  _initMapStackControl() {');
-  const gestureRoutes = [
-    ['toggleHud: () => {', 'toggleOrbit: () =>', 'this.hud.toggle()', 'HUD hotkey'],
-    ['cycleDetection: () => {', 'toggleCctv: () =>', 'cycleDetectionMode()', 'detection hotkey'],
-    ['toggleSonar:', 'setSonarRings:', 'this._setCyberSonarEnabled(', 'Sonar toggle'],
-    ['toggleBloom:', 'setBloomIntensity:', 'this._setBloomEnabled(', 'toggleBloom control'],
-    ['setBloomIntensity:', 'toggleSharpen:', 'this._setBloomIntensity(', 'setBloomIntensity control'],
-    ['toggleSharpen:', 'setScopeEnabled:', 'this._setSharpenEnabled(', 'toggleSharpen control'],
-    ['setScopeEnabled:', 'setScopeFeather:', 'this._setScope(', 'setScopeEnabled control'],
-    ['setScopeFeather:', 'setSharpenIntensity:', 'this._setScope(', 'setScopeFeather control'],
-    ['setSharpenIntensity:', 'setHudLayout:', 'this._setSharpenIntensity(', 'setSharpenIntensity control'],
-    ['setHudLayout:', 'toggleCleanView:', 'this._setHudVariant(', 'setHudLayout control'],
-    ['setDensity:', 'setAllocation:', 'this._setDetectionDensity(', 'setDensity control'],
-    ['setAllocation:', 'setFade:', 'this._setDetectionAllocation(', 'setAllocation control'],
-    ['setFade:', 'toggleCelestial:', 'this._setDetectionFade(', 'setFade control'],
-  ];
-  for (const [start, end, mutation, label] of gestureRoutes) {
-    const startIndex = initUi.indexOf(start);
-    const endIndex = initUi.indexOf(end, startIndex + start.length);
-    assert.ok(startIndex >= 0 && endIndex > startIndex, `${label} route is missing`);
-    assertClaimsBefore(initUi.slice(startIndex, endIndex), mutation, label);
+  // One wrapper claims the lane, then runs the gesture.
+  assert.match(
+    initUi,
+    /const visual =\s*\(fn\) =>\s*\(\.\.\.args\) =>\s*\{\s*this\.shareLinkManager\?\.claimRestoreLane\('visual'\);\s*fn\(\.\.\.args\);/,
+  );
+  for (const [name, mutation] of [
+    ['toggleHud', 'this.hud.toggle()'],
+    ['cycleDetection', 'cycleDetectionMode()'],
+  ]) {
+    const start = initUi.indexOf(`const ${name} = visual(`);
+    assert.ok(start >= 0, `${name} must be wrapped in visual()`);
+    assert.ok(
+      initUi.slice(start, initUi.indexOf('});', start)).includes(mutation),
+      `${name} mutation marker is missing`,
+    );
   }
-
+  // The hotkeys and the Display buttons share those two gestures.
+  const shortcuts = initUi.slice(
+    initUi.indexOf('bindApplicationShortcuts('),
+    initUi.indexOf('const token = store.connect('),
+  );
   const displayActions = initUi.slice(initUi.indexOf('const token = store.connect('));
-  assertClaimsBefore(displayActions.slice(displayActions.indexOf('toggleHud:'), displayActions.indexOf('cycleDetection:')), 'this.hud.toggle()', 'HUD button');
-  assertClaimsBefore(displayActions.slice(displayActions.indexOf('cycleDetection:'), displayActions.indexOf('toggleModels:')), 'cycleDetectionMode()', 'detection button');
-
+  for (const actions of [shortcuts, displayActions]) {
+    assert.match(actions, /\btoggleHud,/);
+    assert.match(actions, /\bcycleDetection,/);
+  }
+  for (const name of [
+    'toggleSonar',
+    'toggleBloom',
+    'setBloomIntensity',
+    'toggleSharpen',
+    'setScopeEnabled',
+    'setScopeFeather',
+    'setSharpenIntensity',
+    'setHudLayout',
+    'setDensity',
+    'setAllocation',
+    'setFade',
+  ]) {
+    assert.match(initUi, new RegExp(`\\b${name}: visual\\(`), `${name} must claim the visual lane`);
+  }
 });
 
 // Contacts OWNS detection while it is active (forced Dense @ 75%). That makes

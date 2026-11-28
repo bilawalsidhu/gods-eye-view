@@ -1,5 +1,4 @@
 import { readResponseBytesCapped } from '../../sources/httpBody.js';
-import { msg } from '../../i18n/index.js';
 import {
   weatherImageUrl,
   weatherPixelSize,
@@ -10,21 +9,13 @@ import { applyInfraredAlpha } from './infraredAlpha.js';
 
 export const MAX_MOSAIC_BYTES = 4 * 1024 * 1024;
 
-/** Apply the display transfer once to a decoded image; `flipY` draws a
- * bottom-up image back upright. */
-export function processInfraredImage(
-  image,
-  mode,
-  createCanvas,
-  { flipY = false } = {},
-) {
+/** Apply the display transfer once to a decoded image. */
+export function processInfraredImage(image, mode, createCanvas) {
   const canvas = createCanvas();
   canvas.width = image.width;
   canvas.height = image.height;
   const context = canvas.getContext('2d');
-  if (flipY) context.setTransform(1, 0, 0, -1, 0, image.height);
   context.drawImage(image, 0, 0);
-  if (flipY) context.setTransform(1, 0, 0, 1, 0, 0);
   applyInfraredTransfer(context, canvas, mode);
   return canvas;
 }
@@ -57,35 +48,10 @@ function drawSuppliedImage(pixels, product, mode, size, signal, createCanvas) {
   }
 }
 
-/** Decode locally, releasing the object URL on success, failure or cancellation. */
+/** Decode locally with `createImageBitmap`. */
 export function decodeInfraredImage(blob, signal) {
   signal.throwIfAborted();
-  if (typeof globalThis.createImageBitmap === 'function')
-    return globalThis.createImageBitmap(blob);
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-    const url = URL.createObjectURL(blob);
-    const cleanup = () => {
-      signal.removeEventListener('abort', abort);
-      image.onload = image.onerror = null;
-      URL.revokeObjectURL(url);
-    };
-    const abort = () => {
-      cleanup();
-      image.src = '';
-      reject(signal.reason);
-    };
-    image.onload = () => {
-      cleanup();
-      resolve(image);
-    };
-    image.onerror = () => {
-      cleanup();
-      reject(new Error(msg('Infrared decode failed')));
-    };
-    signal.addEventListener('abort', abort, { once: true });
-    image.src = url;
-  });
+  return globalThis.createImageBitmap(blob);
 }
 
 /** Fetch one capped whole-extent frame, or a `bbox` detail window of it, and draw

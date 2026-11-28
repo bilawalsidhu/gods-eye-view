@@ -17,6 +17,7 @@ import {
 import {
   add,
   clamp,
+  clone,
   copyInto,
   distance,
   lerpInto,
@@ -54,10 +55,7 @@ import {
   aircraftMotionRegime,
   createMotionRegime,
   fixEpochMs,
-  fixPosition,
-  copyPosition,
   historyFix,
-  julianAt,
   fixSpeedMps,
   fixTrackDeg,
   staleCoastSeconds,
@@ -450,7 +448,6 @@ export function createMotion({
     } else flightState._drPrevRawStepSec = 0;
     copyInto(raw, flightState._drPrevRaw);
     copyInto(display, flightState._drPrevDisplay);
-    flightState._drPrevMs = nowMs;
     flightState._drPrevWorldMs = worldMs;
     flightState._drReconcileValid = true;
     flightState._cachedDRPosition = display;
@@ -645,7 +642,8 @@ export function createMotion({
     flightState._trackedCourseMs = 0;
   }
   /** The display instant `epochMs` as a Julian date, for `_motionRegime`. */
-  const _displayTimeAt = (epochMs, result) => julianAt(epochMs, result);
+  const _displayTimeAt = (epochMs, result) =>
+    julianFromEpochMs(epochMs, result);
 
   /**
    * Re-floor STALE grounded contacts (mirror of the flights layer): a parked
@@ -699,8 +697,8 @@ export function createMotion({
 
   return {
     _deadReckon,
-    _fixPosition: fixPosition,
-    _copyPosition: copyPosition,
+    _fixPosition: fromDegrees,
+    _copyPosition: clone,
     _historyFix: historyFix,
     _refloorStaleGroundedContacts,
     _sampleMeshFloor,

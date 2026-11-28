@@ -156,3 +156,39 @@ export function shouldHideCollapsedRightPanels({
 }) {
   return hudVariant === 'tactical' && Boolean(hasExpandedPanel);
 }
+
+/**
+ * The obstacles a rail must keep clear of, with their rectangles: those outside
+ * `stack`, with no hidden ancestor (`display: none`, `visibility: hidden` or
+ * zero opacity) and a non-empty box.
+ */
+export function visibleObstacles(obstacles, stack, getComputedStyle) {
+  const visible = [];
+  for (const element of obstacles) {
+    if (stack.contains(element)) continue;
+    let hiddenByAncestor = false;
+    for (let node = element; node; node = node.parentElement) {
+      const style = getComputedStyle(node);
+      if (
+        style.display === 'none' ||
+        style.visibility === 'hidden' ||
+        Number(style.opacity) === 0
+      ) {
+        hiddenByAncestor = true;
+        break;
+      }
+    }
+    if (hiddenByAncestor) continue;
+    const rect = element.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) continue;
+    visible.push({ element, rect });
+  }
+  return visible;
+}
+
+/** `panels` with `preferred` moved first, the rest in their order. */
+export function preferredFirst(panels, preferred) {
+  return preferred
+    ? [preferred, ...panels.filter((panel) => panel !== preferred)]
+    : panels;
+}

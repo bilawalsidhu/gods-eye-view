@@ -1,6 +1,6 @@
 import { AIRCRAFT_CLASS_LABELS } from '../../data/aircraftClass.js';
 import { formatNumber, t, tn } from '../../i18n/index.js';
-import { BAND_LABELS, LOCAL_ADSB_COLOR, SOURCE_LABELS } from './policy.js';
+import { LOCAL_ADSB_COLOR } from './policy.js';
 import { roundHeadingDegrees } from '../../data/headingDegrees.js';
 
 const DASH = '—';
@@ -59,7 +59,7 @@ export function localAdsbReceiverLine(record) {
     .join(' · ');
 }
 
-/** A receiver band (policy.js BAND_LABELS) in the UI language: "1090 МГц". */
+/** A receiver band in the UI language: "1090 МГц". */
 function bandLabel(band) {
   switch (String(band)) {
     case '1090':
@@ -67,11 +67,11 @@ function bandLabel(band) {
     case '978':
       return t('978 MHz UAT');
     default:
-      return BAND_LABELS[band];
+      return null;
   }
 }
 
-/** A receiver source (policy.js SOURCE_LABELS) in the UI language. */
+/** A receiver source in the UI language. */
 function sourceLabel(source) {
   switch (source) {
     case 'webusb':
@@ -79,7 +79,7 @@ function sourceLabel(source) {
     case 'feed':
       return t('decoder feed');
     default:
-      return SOURCE_LABELS[source];
+      return null;
   }
 }
 

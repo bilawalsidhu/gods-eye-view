@@ -57,6 +57,7 @@ import {
   usAqiBand,
 } from './usAqi.js';
 import { concentrationIn, layerUnits } from './units.js';
+import { HOUR_MS } from './nowcast.js';
 import {
   onLocaleChange,
   formatNumber,
@@ -80,8 +81,7 @@ import {
   selectAirQualityOverlayCohort,
   STALE_AFTER_MS,
 } from './model.js';
-export * from './model.js';
-export { createAirQualitySource } from './providers.js';
+import { analystRecordLimit } from '../../data/analystRecordLimit.js';
 
 /** Picking source ID for station and group clicks. */
 const STATION_CLICK_SOURCE = 'air-quality-stations';
@@ -89,7 +89,13 @@ const STATION_CLICK_SOURCE = 'air-quality-stations';
 const SELECTED_LABEL_VALUE = 1e7;
 /** Time on either side of now for which stations can accompany the current step. */
 const STATIONS_NOW_MS = 3600_000;
-const HOUR_MS = 3600_000;
+/** A network still discovering the stations in view: its counts are a floor. */
+const discovering = (coverage) =>
+  coverage?.partial === true &&
+  Number.isFinite(coverage.checked) &&
+  Number.isFinite(coverage.eligible) &&
+  coverage.eligible > 0 &&
+  coverage.checked < coverage.eligible;
 /** Bidi controls a source's text may carry: marks, embeddings, overrides, isolates. */
 const BIDI_CONTROLS = /[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/g;
 /** A station name on its map label: without bidi controls, isolated so it cannot reorder the value after it. */
@@ -138,11 +144,11 @@ const FIELD_WAIT_MS = 20_000;
 /** Farthest a station's reading stands for a point, in kilometres. */
 export const AIR_QUALITY_VALUE_RADIUS_KM = 50;
 
-export const AIR_QUALITY_MARKER_SET_ID = 'air-quality';
+const AIR_QUALITY_MARKER_SET_ID = 'air-quality';
 let instances = 0;
 
 /** Pollutant views, as the providers' parameter ids; each on its own scale. */
-export const AIR_QUALITY_POLLUTANT_VIEWS = Object.freeze([
+const AIR_QUALITY_POLLUTANT_VIEWS = Object.freeze([
   'PM2.5',
   'PM10',
   'O3',
@@ -2690,12 +2696,6 @@ export function createAirQualityLayer({
       const providerLines = worldwideFirst(entries).flatMap((entry) => {
         const state = stateOf(entry);
         const { coverage: covered } = state;
-        const discovering =
-          covered?.partial === true &&
-          Number.isFinite(covered.checked) &&
-          Number.isFinite(covered.eligible) &&
-          covered.eligible > 0 &&
-          covered.checked < covered.eligible;
         const text =
           state.status === 'no-key'
             ? t('{network}: add a key in Provider Settings', {
@@ -2716,7 +2716,7 @@ export function createAirQualityLayer({
                     ? t('{network}: showing cached data', {
                         network: entry.network,
                       })
-                    : discovering
+                    : discovering(covered)
                       ? t('{network}: loading stations, {n} of {m}', {
                           network: entry.network,
                           n: covered.checked,
@@ -2915,7 +2915,7 @@ export function createAirQualityLayer({
               ? new Date(reading.observedMs).toISOString()
               : t('Unavailable');
             const older =
-              timed && readingsNow() - reading.observedMs > 2 * 3600_000;
+              timed && readingsNow() - reading.observedMs > STALE_AFTER_MS;
             const rated = isRatedReading(reading, view);
             const category = categoryText(reading);
             return {
@@ -2947,9 +2947,7 @@ export function createAirQualityLayer({
      */
     getAnalystRecords(maxCount = 500) {
       if (!_enabled || !_readings.length) return [];
-      const limit = Number.isFinite(maxCount)
-        ? Math.max(1, Math.floor(maxCount))
-        : 500;
+      const limit = analystRecordLimit(maxCount, { fallback: 500, min: 1 });
       return _readings
         .slice(0, limit)
         .map((reading, index) => mapAnalystRecord(reading, index));
@@ -2969,8 +2967,6 @@ export function createAirQualityLayer({
       let nearest = null;
       let nearestKm = Infinity;
       for (const reading of _readings) {
-        if (!Number.isFinite(reading?.lat) || !Number.isFinite(reading?.lon))
-          continue;
         const km = greatCircleKm({ lat, lon }, reading);
         if (km < nearestKm) {
           nearest = reading;
@@ -3047,11 +3043,7 @@ export function createAirQualityLayer({
         // the card's line shows: until done, counts are a floor.
         discovery: asked().flatMap((entry) => {
           const covered = stateOf(entry).coverage;
-          return covered?.partial === true &&
-            Number.isFinite(covered.checked) &&
-            Number.isFinite(covered.eligible) &&
-            covered.eligible > 0 &&
-            covered.checked < covered.eligible
+          return discovering(covered)
             ? [
                 {
                   network: entry.network,

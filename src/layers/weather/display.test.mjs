@@ -2,14 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { createWeatherLayer } from './index.js';
-import { createWeatherRendering } from './rendering.js';
 import { weatherDisplay, insideExtent } from './display.js';
-import { createShellScene } from './shellFixture.mjs';
-import { fakeGlobePort } from '../../testSupport/fakeGlobePort.mjs';
 import { formatScaleLabel } from '../../ui/unitLabels.js';
 import { bindFakeCesiumCamera } from '../../testSupport/fakeCameraPort.mjs';
 import { fromDegrees } from '../../geo/ellipsoid.js';
-import { fakeSceneFrame } from '../../testSupport/fakeCesiumScene.mjs';
 
 const times = ['2026-09-15T20:00:00.000Z', '2026-09-15T20:05:00.000Z'];
 const base = {
@@ -46,6 +42,8 @@ async function shownLayer(id, manifest, params, view = {}) {
     matchMedia: () => quiet(),
     createRendering: () => ({
       rehome() {},
+      cancelPrefetch() {},
+      async prefetch() {},
       setAlpha() {},
       setHidden() {},
       updateSnapshot(snapshot) {
@@ -109,8 +107,6 @@ const INVALID = {
 
 const SATELLITE_TITLE =
   'GOES-19/18 longwave infrared Band 14 regional; NESDIS global longwave mosaic. Clouds only dims everything but bright, cold cloud tops; a brightness filter, not a cloud mask. Coverage and freshness differ by region.';
-const SATELLITE_CREDIT =
-  'NOAA nowCOAST · NESDIS GOES / global satellite partners';
 // Today's built-in description of each product, written out rather than
 // derived from the code under test.
 const BUILT_IN = {
@@ -137,7 +133,6 @@ const BUILT_IN = {
       'NOAA MRMS radar echoes indicate precipitation patterns, not rain rate, a storm warning or a future forecast. Native source approximately 1 km; display is limited to level 6. Frames use exact advertised observation times.',
     chip: 'View US radar',
     focus: [-180, -60, 180, 80],
-    credit: 'NOAA nowCOAST · NWS/OAR MRMS',
   },
   lightning: {
     units: 'strikes/km²/min ×10³',
@@ -163,7 +158,6 @@ const BUILT_IN = {
       'NOAA/NWS 15-minute lightning density derived from Vaisala NLDN/GLD360. Coverage 110°E across the Pacific/Americas to 0°, 25°S–80°N. Not a live strike count, global coverage or a safety warning.',
     chip: 'View Americas & Pacific',
     focus: [110, -25, 0, 80],
-    credit: 'NOAA/NWS lightning density · derived from Vaisala NLDN/GLD360',
   },
   'clouds-regional': {
     units: '',
@@ -174,7 +168,6 @@ const BUILT_IN = {
     infoTitle: SATELLITE_TITLE,
     chip: 'View coverage',
     focus: [-180, -60, 180, 80],
-    credit: SATELLITE_CREDIT,
   },
   clouds: {
     units: '',
@@ -185,7 +178,6 @@ const BUILT_IN = {
     infoTitle: SATELLITE_TITLE,
     chip: 'View coverage',
     focus: [-180, -60, 180, 80],
-    credit: SATELLITE_CREDIT,
   },
 };
 
@@ -586,330 +578,4 @@ test('display validation bounds text, legend shape, colours and extents', () => 
   assert.equal(insideExtent(wrap.extent, -100, 10), true);
   assert.equal(insideExtent(wrap.extent, 50, 10), false);
   assert.equal(insideExtent(wrap.extent, -100, 81), false);
-});
-
-function mockCanvas() {
-  const canvas = { width: 0, height: 0 };
-  canvas.getContext = () => ({
-    setTransform() {},
-    drawImage() {},
-    getImageData: () => ({ data: new Uint8ClampedArray([194, 100, 0, 200]) }),
-    putImageData() {},
-  });
-  return canvas;
-}
-
-/** A globe viewer whose globe port records the layers added. */
-function globeViewer() {
-  const listeners = new Set();
-  const viewer = {
-    imageryLayers: {},
-    camera: {
-      moveEnd: { addEventListener: () => () => {} },
-      flyTo() {},
-    },
-    scene: {
-      postRender: {
-        addEventListener(fn) {
-          listeners.add(fn);
-          return () => listeners.delete(fn);
-        },
-      },
-      primitives: createShellScene().primitives,
-      globe: { tilesLoaded: true },
-      requestRender() {},
-    },
-  };
-  bindFakeCesiumCamera(viewer, { frame: fakeSceneFrame(viewer) });
-  const globe = fakeGlobePort();
-  const owed = [];
-  const credits = {
-    addStatic(credit) {
-      const entry = { ...credit };
-      owed.push(entry);
-      return () => owed.splice(owed.indexOf(entry), 1);
-    },
-  };
-  const options = {
-    globeOf: () => globe,
-    creditsOf: () => credits,
-    cameraOf: () => null,
-    toBitmap: (canvas) => canvas,
-    fetchImpl: async () => ({
-      ok: true,
-      headers: new Headers(),
-      arrayBuffer: async () => new ArrayBuffer(1),
-    }),
-    decodeImage: async () => ({ width: 2048, height: 1024, close() {} }),
-    createCanvas: mockCanvas,
-  };
-  const settle = async () => {
-    await flush();
-    for (let i = 0; i < 2; i++) for (const fn of [...listeners]) fn();
-    await flush();
-  };
-  return { viewer, providers: globe.added, owed, options, settle };
-}
-
-/** Show a frame of `manifest` and return the rendering and its globe. */
-async function shownFrame(manifest) {
-  const globe = globeViewer();
-  const rendering = createWeatherRendering({
-    viewer: globe.viewer,
-    ...globe.options,
-  });
-  const shown = rendering.setFrame(manifest, times[1]);
-  await globe.settle();
-  assert.equal(await shown, true);
-  return { ...globe, rendering };
-}
-
-/** The credit the shown frame owes. */
-const creditOf = (h) => h.owed.at(-1)?.text;
-
-test('the imagery credit uses the source credit as plain text, else the built-in one', async () => {
-  for (const product of ['radar', 'lightning', 'clouds-regional', 'clouds']) {
-    for (const display of [undefined, { credit: 42 }]) {
-      const h = await shownFrame({
-        ...base,
-        product,
-        ...(display ? { display } : {}),
-      });
-      assert.equal(creditOf(h), BUILT_IN[product].credit, product);
-      h.rendering.clear();
-    }
-    const h = await shownFrame({
-      ...base,
-      product,
-      display: { credit: 'Example <network> & partners' },
-    });
-    assert.equal(
-      creditOf(h),
-      'Example <network> & partners',
-      'plain text: the credits port escapes it',
-    );
-    h.rendering.clear();
-  }
-});
-
-test('a refreshed manifest updates the credit of the frame already shown', async () => {
-  for (const product of ['lightning', 'clouds']) {
-    const h = await shownFrame({
-      ...base,
-      product,
-      display: { credit: 'First credit' },
-    });
-    assert.equal(creditOf(h), 'First credit');
-    const again = (display) =>
-      h.rendering.setFrame(
-        { ...base, product, ...(display ? { display } : {}) },
-        times[1],
-      );
-    assert.equal(await again({ credit: 'Second credit' }), true);
-    assert.equal(h.providers.length, 1, 'the frame is not restaged');
-    assert.equal(creditOf(h), 'Second credit');
-    assert.equal(await again(), true);
-    assert.equal(creditOf(h), BUILT_IN[product].credit);
-    h.rendering.updateSnapshot({
-      ...base,
-      product,
-      display: { credit: 'Third credit' },
-    });
-    assert.equal(creditOf(h), 'Third credit');
-    // Another product's manifest leaves this frame alone.
-    h.rendering.updateSnapshot({
-      ...base,
-      product: 'radar',
-      display: { credit: 'Other' },
-    });
-    assert.equal(creditOf(h), 'Third credit');
-    h.rendering.clear();
-  }
-});
-
-test('a refreshed manifest leaves the shown snapshot for a host switch to restage', async () => {
-  const globe = globeViewer();
-  let host = { collection: globe.viewer.imageryLayers, kind: 'globe' };
-  const staged = [];
-  const rendering = createWeatherRendering({
-    viewer: globe.viewer,
-    ...globe.options,
-    getHost: () => host,
-    createShell: ({ product }) => ({
-      product,
-      setAlpha() {},
-      setHidden() {},
-      rehome: () => false,
-      cancelPrefetch() {},
-      clear() {},
-      async setFrame(snapshot, time) {
-        staged.push([snapshot, time]);
-        return true;
-      },
-    }),
-  });
-  const first = {
-    ...base,
-    product: 'lightning',
-    display: { credit: 'First credit' },
-  };
-  const shown = rendering.setFrame(first, times[0]);
-  await globe.settle();
-  assert.equal(await shown, true);
-  const refreshed = {
-    ...first,
-    times: [times[1]],
-    bounds: { west: -10, south: 0, east: 10, north: 5 },
-    display: { credit: 'Second credit' },
-  };
-  rendering.updateSnapshot(refreshed);
-  assert.equal(creditOf(globe), 'Second credit');
-  host = { collection: {}, kind: 'tileset' };
-  assert.equal(rendering.rehome(), true);
-  await flush();
-  assert.deepEqual(staged, [[first, times[0]]]);
-  host = { collection: globe.viewer.imageryLayers, kind: 'globe' };
-  assert.equal(rendering.rehome(), true);
-  await globe.settle();
-  assert.equal(globe.providers.length, 2);
-  assert.deepEqual(
-    globe.providers.at(-1).spec.rectangle,
-    first.bounds,
-    'the restaged frame keeps the bounds it was staged from',
-  );
-  assert.equal(creditOf(globe), 'Second credit');
-  rendering.clear();
-});
-
-test('a refresh during a host-switch restage keeps the newest credit', async () => {
-  const globe = globeViewer();
-  let host = { collection: globe.viewer.imageryLayers, kind: 'globe' };
-  const rendering = createWeatherRendering({
-    viewer: globe.viewer,
-    ...globe.options,
-    getHost: () => host,
-    createShell: ({ product }) => ({
-      product,
-      setAlpha() {},
-      setHidden() {},
-      rehome: () => false,
-      cancelPrefetch() {},
-      clear() {},
-      async setFrame() {
-        return true;
-      },
-    }),
-  });
-  const first = {
-    ...base,
-    product: 'lightning',
-    display: { credit: 'First credit' },
-  };
-  const shown = rendering.setFrame(first, times[0]);
-  await globe.settle();
-  assert.equal(await shown, true);
-  rendering.updateSnapshot({ ...first, display: { credit: 'Second credit' } });
-  host = { collection: {}, kind: 'tileset' };
-  assert.equal(rendering.rehome(), true);
-  await flush();
-  host = { collection: globe.viewer.imageryLayers, kind: 'globe' };
-  assert.equal(rendering.rehome(), true);
-  rendering.updateSnapshot({ ...first, display: { credit: 'Third credit' } });
-  await globe.settle();
-  assert.equal(globe.providers.length, 2);
-  assert.equal(creditOf(globe), 'Third credit');
-  rendering.clear();
-});
-
-test('a refresh while a frame loads survives a later host switch', async () => {
-  const globe = globeViewer();
-  let host = { collection: globe.viewer.imageryLayers, kind: 'globe' };
-  const rendering = createWeatherRendering({
-    viewer: globe.viewer,
-    ...globe.options,
-    getHost: () => host,
-    createShell: ({ product }) => ({
-      product,
-      setAlpha() {},
-      setHidden() {},
-      rehome: () => false,
-      cancelPrefetch() {},
-      clear() {},
-      async setFrame() {
-        return true;
-      },
-    }),
-  });
-  const first = {
-    ...base,
-    product: 'lightning',
-    display: { credit: 'First credit' },
-  };
-  const shown = rendering.setFrame(first, times[0]);
-  rendering.updateSnapshot({ ...first, display: { credit: 'Second credit' } });
-  await globe.settle();
-  assert.equal(await shown, true);
-  assert.equal(creditOf(globe), 'Second credit');
-  host = { collection: {}, kind: 'tileset' };
-  assert.equal(rendering.rehome(), true);
-  await flush();
-  host = { collection: globe.viewer.imageryLayers, kind: 'globe' };
-  assert.equal(rendering.rehome(), true);
-  await globe.settle();
-  assert.equal(globe.providers.length, 2);
-  assert.equal(creditOf(globe), 'Second credit');
-  rendering.clear();
-});
-
-test('a refresh before a frame is installed gives it the newest credit', async () => {
-  for (const product of ['lightning', 'clouds']) {
-    const globe = globeViewer();
-    const rendering = createWeatherRendering({
-      viewer: globe.viewer,
-      ...globe.options,
-    });
-    const first = { ...base, product, display: { credit: 'First credit' } };
-    const shown = rendering.setFrame(first, times[1]);
-    rendering.updateSnapshot({
-      ...first,
-      display: { credit: 'Second credit' },
-    });
-    await globe.settle();
-    assert.equal(await shown, true);
-    assert.equal(creditOf(globe), 'Second credit', product);
-    rendering.clear();
-  }
-});
-
-test('a layer refresh with the same latest frame updates the imagery credit', async (t) => {
-  t.mock.method(Date, 'now', () => Date.parse(times[1]));
-  const globe = globeViewer();
-  let manifest = {
-    ...base,
-    product: 'lightning',
-    display: { credit: 'First credit' },
-  };
-  const layer = createWeatherLayer({
-    id: 'weather-lightning',
-    feed: { getSnapshot: async () => manifest },
-    documentRef: quiet(),
-    eventTarget: quiet(),
-    matchMedia: () => quiet(),
-    createRendering: (args) =>
-      createWeatherRendering({ ...args, ...globe.options }),
-  });
-  layer.init(globe.viewer);
-  layer.enable();
-  const first = layer.update();
-  await globe.settle();
-  await first;
-  assert.equal(creditOf(globe), 'First credit');
-  manifest = { ...manifest, display: { credit: 'Second credit' } };
-  await layer.update();
-  assert.equal(globe.providers.length, 1, 'the frame is not restaged');
-  assert.equal(creditOf(globe), 'Second credit');
-  manifest = { ...base, product: 'lightning' };
-  await layer.update();
-  assert.equal(creditOf(globe), BUILT_IN.lightning.credit);
-  layer.destroy();
 });

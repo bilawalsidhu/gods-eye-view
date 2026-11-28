@@ -5,13 +5,10 @@ import { horizonFrom } from '../../geo/horizon.js';
 import { distanceSquared, vec } from '../../geo/vector.js';
 import { parsePlanespottersPhoto } from '../../data/planespottersPhoto.js';
 import {
-  ENRICH_MAX_INFLIGHT,
-  ENRICH_DISPATCH_GAP_MS,
   ENRICH_AMBIENT_BUDGET_CEIL,
   ENRICH_AMBIENT_REFILL_TOKENS,
   ENRICH_AMBIENT_REFILL_WINDOW_MS,
   ENRICH_AMBIENT_PER_SWEEP,
-  ENRICH_RETRY_COOLDOWN_MS,
 } from './policy.js';
 
 /** A contact counts as on screen while a sphere this big around it is (m). */
@@ -26,127 +23,7 @@ export function createEnrichment({
 }) {
   const { isMilitaryIcao } = services.militaryRegistry;
   const { isTr3b } = services.aircraftPresentation;
-  /**
-   * Whether `key` is answered, queued, or cooling down after a failure. A
-   * key past its cool-down is released here so it can be asked again.
-   * @param {string} key Lookup key.
-   * @returns {boolean}
-   */
-  function _enrichHeld(key) {
-    if (flightState._enrichSeen.has(key)) return true;
-    const retryAfter = flightState._enrichRetryAfter.get(key);
-    if (retryAfter === undefined) return false;
-    if (Date.now() < retryAfter) return true;
-    flightState._enrichRetryAfter.delete(key);
-    return false;
-  }
-
-  /**
-   * Whether a source failure is permanent: an unsupported lookup, or an HTTP
-   * 4xx other than 401/403 (an authorization refusal that may clear), 408
-   * (timeout) and 429 (rate limited). Anything else, including an error without a
-   * status, is temporary.
-   * @param {*} error The rejection, as `LiveSourceError` / `httpError` carry it.
-   * @returns {boolean}
-   */
-  function _enrichFailureIsFinal(error) {
-    if (error?.code === 'unsupported') return true;
-    const status = Number(error?.status);
-    return (
-      Number.isInteger(status) &&
-      status >= 400 &&
-      status < 500 &&
-      status !== 401 &&
-      status !== 403 &&
-      status !== 408 &&
-      status !== 429
-    );
-  }
-
-  /**
-   * Ask each key at most once per session, except that a lookup whose source
-   * failed temporarily (rejected or threw) may be asked again after
-   * ENRICH_RETRY_COOLDOWN_MS; an answer, found or not, and a permanent
-   * refusal (see _enrichFailureIsFinal) are final.
-   * @param {string} key Session-unique lookup key.
-   * @param {object} query The source's enrichment query.
-   * @param {function(object):void} onData Receives a `found` answer.
-   * @param {boolean} [priority] Front of the queue.
-   * @param {function(*):?object} [read] Reads the source's answer first, for
-   *   a lookup whose answer may arrive in more than one shape.
-   */
-  function _enqueueEnrich(key, query, onData, priority = false, read = null) {
-    if (flightState.lifetime.signal.aborted) return;
-    if (_enrichHeld(key)) return;
-    flightState._enrichSeen.add(key);
-    const job = { key, query, onData, read };
-    // Priority (tracked / model-eligible) goes to the FRONT so a deep ambient
-    // backlog can never delay the plane the user just clicked or zoomed into.
-    if (priority) flightState._enrichQueue.unshift(job);
-    else flightState._enrichQueue.push(job);
-    _drainEnrich();
-  }
-
-  function _drainEnrich() {
-    if (flightState.lifetime.signal.aborted) return;
-    while (
-      flightState._enrichActive < ENRICH_MAX_INFLIGHT &&
-      flightState._enrichQueue.length
-    ) {
-      // Drip: at most one dispatch per ENRICH_DISPATCH_GAP_MS. When the gap
-      // hasn't elapsed yet, park a single wake-up timer and stop — completions
-      // and enqueues in the meantime re-enter here harmlessly.
-      const wait =
-        ENRICH_DISPATCH_GAP_MS -
-        (Date.now() - flightState._enrichLastDispatchMs);
-      if (wait > 0) {
-        if (!flightState._enrichDripTimer) {
-          flightState._enrichDripTimer = setTimeout(() => {
-            flightState._enrichDripTimer = null;
-            _drainEnrich();
-          }, wait);
-        }
-        return;
-      }
-      flightState._enrichLastDispatchMs = Date.now();
-      const job = flightState._enrichQueue.shift();
-      flightState._enrichActive += 1;
-      const lifetime = flightState.lifetime;
-      Promise.resolve()
-        .then(() => {
-          lifetime.signal.throwIfAborted();
-          return flightState.feed._source.getEnrichment?.(job.query, {
-            signal: lifetime.signal,
-          });
-        })
-        .then(
-          (answer) => {
-            const data = job.read ? job.read(answer) : answer;
-            if (!lifetime.signal.aborted && data && data.found)
-              job.onData(data);
-          },
-          (error) => {
-            // The source failed: release the key after a cool-down. A layer
-            // teardown is not a failure and schedules nothing, and a
-            // permanent refusal is as final as an answer.
-            if (lifetime.signal.aborted || _enrichFailureIsFinal(error)) return;
-            flightState._enrichSeen.delete(job.key);
-            flightState._enrichRetryAfter.set(
-              job.key,
-              Date.now() + ENRICH_RETRY_COOLDOWN_MS,
-            );
-          },
-        )
-        .catch(() => {
-          /* enrichment never surfaces errors */
-        })
-        .finally(() => {
-          if (lifetime.signal.aborted) return;
-          flightState._enrichActive -= 1;
-          _drainEnrich();
-        });
-    }
-  }
+  const _enqueueEnrich = flightState._enrich.enqueue;
 
   function _requestTypeEnrichment(icao24, priority = false) {
     if (!/^[0-9a-f]{6}$/i.test(icao24)) return;
@@ -307,7 +184,7 @@ export function createEnrichment({
       for (const icao24 of icons.ids()) {
         // Answered, queued, negative this session, or cooling down after a
         // failure: never spend a token on it.
-        if (_enrichHeld(`t:${icao24}`)) continue;
+        if (flightState._enrich.held(`t:${icao24}`)) continue;
         if (!/^[0-9a-f]{6}$/i.test(icao24)) continue; // adsbdb keys are 6-char hex only
         if (flightState.records.data.get(icao24)?.onGround) continue; // ground traffic never spends ambient budget (click-to-enrich still works)
         if (!icons.position(icao24, t, position)) continue;
@@ -331,12 +208,10 @@ export function createEnrichment({
   }
   return {
     _enqueueEnrich,
-    _drainEnrich,
     _requestTypeEnrichment,
     _requestRouteEnrichment,
     _requestPhotoEnrichment,
     _ambientBudgetKnobs,
-    _refillAmbientBudget,
     _sweepAmbientEnrichment,
   };
 }

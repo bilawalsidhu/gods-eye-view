@@ -6,21 +6,7 @@ import assert from 'node:assert/strict';
 import { followedOf } from './followed.js';
 import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
 import * as Cesium from 'cesium';
-import flightsLayer, {
-  _addFlightTrackingCandidateForTest,
-  _applyPendingFlightTrackingRestoreForTest,
-  _armFlightTrackingRestoreForTest,
-  _militaryLayerSuppressesForTest,
-  _pendingFlightTrackingRestoreForTest,
-  _setFlightTrackingRefreshOutcomeForTest,
-  _setTrackedFlightRefreshStateForTest,
-  _floorGroundedDisplayPositionForTest,
-  _clearDisplayFloorStateForTest,
-  _iconForTest,
-  _floorGroundedIconsForTest,
-  _resetEnrichmentForTest,
-  mapAnalystRecord,
-} from './flights.js';
+import flightsLayer, { mapAnalystRecord } from './flights.js';
 import {
   isMilitaryLayerActive,
   registerMilitaryIcaos,
@@ -40,6 +26,20 @@ import {
   initTrackedReadout,
 } from './trackedReadout.js';
 import { readEntityRecord, withEntityRecord } from './entityRecords.js';
+const {
+  _addFlightTrackingCandidateForTest,
+  _applyPendingFlightTrackingRestoreForTest,
+  _armFlightTrackingRestoreForTest,
+  _militaryLayerSuppressesForTest,
+  _pendingFlightTrackingRestoreForTest,
+  _setFlightTrackingRefreshOutcomeForTest,
+  _setTrackedFlightRefreshStateForTest,
+  _floorGroundedDisplayPositionForTest,
+  _clearDisplayFloorStateForTest,
+  _iconForTest,
+  _floorGroundedIconsForTest,
+  _resetEnrichmentForTest,
+} = flightsLayer.testing;
 
 // Unit tests never reach the network. A test that tracks a plane queues its
 // enrichment (type, route, photo), so every test ends on an empty queue, and a

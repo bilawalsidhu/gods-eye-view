@@ -3,6 +3,7 @@ import { drawOf } from '../../render/rendererOf.js';
 import { msg } from '../../i18n/marker.js';
 import { OSM_PLACES_LAYER_ID } from './model.js';
 import { createNominatimStatus } from '../../sources/nominatimStatus.js';
+import { analystRecordLimit } from '../../data/analystRecordLimit.js';
 export * from './model.js';
 
 const OVERLAY_SOURCE_ID = OSM_PLACES_LAYER_ID;
@@ -170,9 +171,7 @@ export function createOsmPlacesLayer({
 
     getAnalystRecords(maxCount = 2000) {
       if (!enabled) return [];
-      const limit = Number.isFinite(maxCount)
-        ? Math.max(1, Math.floor(maxCount))
-        : 2000;
+      const limit = analystRecordLimit(maxCount, { fallback: 2000, min: 1 });
       return records.slice(0, limit).map((record) => ({ ...record }));
     },
 

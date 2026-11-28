@@ -3,6 +3,7 @@ import { bindChatPreferences } from './chatPreferences.js';
 import { readStoredCloudVoiceAuthMode } from './cloudVoiceAuth.js';
 import { isStoppable } from './session.js';
 import { t } from '../i18n/index.js';
+import { prefersReducedMotion } from '../reducedMotion.js';
 
 /** The longest command, including the message and attached data, sent to the model. */
 const MAX_COMMAND_CHARS = 15_000;
@@ -193,7 +194,7 @@ export function bindChatControl({ ui, session, onOpen, dataManager }) {
       }
       latestReply = reply;
       reply.text = event.final ? event.text : reply.text + event.text;
-      if (globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      if (prefersReducedMotion(globalThis)) {
         reply.entry.text = reply.text;
         if (event.final) preview(reply.text);
         typing.delete(reply);

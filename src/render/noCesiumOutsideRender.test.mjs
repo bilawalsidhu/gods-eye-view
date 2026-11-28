@@ -45,7 +45,6 @@ const SCOPES = ['src', 'server', 'dev'];
 const TEST_ONLY = new Set([
   'src/input/testDoubles.mjs',
   'src/layers/recentImagery/testDoubles.mjs',
-  'src/voice/voiceWorkflowHarness.mjs',
   'src/layers/weather/shellFixture.mjs',
   'src/overlays/worldOverlayAllocation.worker.mjs',
 ]);

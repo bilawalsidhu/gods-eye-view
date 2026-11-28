@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { manualTimers } from './testDoubles.mjs';
+import { manualTimers, response } from './testDoubles.mjs';
 import { createRecentImagerySource } from './source.js';
+import { gibsTemplate } from './model.js';
 
 test('imagery source routes catalog, thumbnails and tiles through supplied adapters', async () => {
   const controller = new AbortController();
@@ -13,23 +14,23 @@ test('imagery source routes catalog, thumbnails and tiles through supplied adapt
   const calls = [];
   const fetchImpl = async (...args) => {
     calls.push(args);
-    return new Response('image');
+    return String(args[0]).startsWith('https://cmr.earthdata.nasa.gov/')
+      ? response({ json: { hits: 0, items: [] } })
+      : new Response('image');
   };
   const source = createRecentImagerySource({
     fetchImpl,
-    search: async (request) => {
-      assert.equal(request.fetchImpl, fetchImpl);
-      assert.equal(request.signal, controller.signal);
-      assert.equal(request.box, query.box);
-      return [candidate];
-    },
     thumbnailUrl: ({ product, day, width }) =>
       `https://imagery.example/${product}/${day}/${width}`,
-    tileTemplate: (product, day) =>
-      `https://tiles.example/${product}/${day}/{z}/{x}/{y}`,
-    credit: 'Example imagery',
   });
-  assert.deepEqual(await source.searchHls(query), [candidate]);
+  const found = await source.searchHls({
+    ...query,
+    now: '2026-10-01T12:00:00Z',
+    days: 1,
+  });
+  assert.deepEqual(found.errors, []);
+  assert.equal(calls.length, 2, 'one CMR search per HLS product');
+  calls.length = 0;
   assert.equal(
     await (
       await source.getThumbnail(candidate, query.box, {
@@ -48,9 +49,9 @@ test('imagery source routes catalog, thumbnails and tiles through supplied adapt
   assert.equal(halfSignal.aborted, true);
   assert.equal(
     source.getTileTemplate(candidate.product, candidate.day),
-    'https://tiles.example/S30/2026-10-01/{z}/{x}/{y}',
+    gibsTemplate('S30', '2026-10-01'),
   );
-  assert.equal(source.credit, 'Example imagery');
+  assert.equal(source.credit, 'NASA GIBS');
 });
 
 test('cancelled thumbnail acquisition does not return stale responses or retry', async () => {

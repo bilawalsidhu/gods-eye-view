@@ -48,20 +48,6 @@ function nodeCandidates(publications, { name, state }) {
     .map((row) => `https://inciweb.wildfire.gov/node/${row.incident_id}`);
 }
 
-/**
- * Resolve one WFIGS incident against the publication catalog.
- * Only rows whose normalized title equals the incident's normalized name
- * count. Matches are filtered by the tau dispatch unit's state prefix.
- * The `/node/{id}` link 301s to the canonical page, so no slug construction
- * is needed.
- * @param {?Array} publications - Publication catalog rows.
- * @param {{name: ?string, state: ?string}} incident - WFIGS row facts.
- * @returns {?string} InciWeb node URL.
- */
-export function resolveInciwebNodeLink(publications, incident) {
-  return nodeCandidates(publications, incident)[0] ?? null;
-}
-
 /** The publication id inside a node link produced above, or null. */
 export function inciwebNodeId(link) {
   const match = /^https:\/\/inciweb\.wildfire\.gov\/node\/(\d+)$/.exec(
@@ -129,27 +115,24 @@ export function createInciwebPublicationSource({
   };
 }
 
-/** Every same-name page that could be this incident's, newest first: the own name's, else its complex's. */
+/**
+ * Every InciWeb page that could be this WFIGS incident's, newest first.
+ * Only rows whose normalized title equals the incident's normalized name
+ * count, filtered by the tau dispatch unit's state prefix. The incident's own
+ * name is tried first; a member of a complex whose own name has no page falls
+ * back to the complex's pages (InciWeb tracks the managing complex, not each
+ * member fire). Anything ambiguous yields `[]` rather than a wrong page. The
+ * `/node/{id}` links 301 to the canonical page, so no slug is built.
+ * @param {?Array} publications - Publication catalog rows.
+ * @param {{name: ?string, state: ?string, complexName: ?string}} incident
+ *   - WFIGS row facts.
+ * @returns {string[]} InciWeb node URLs.
+ */
 export function findInciwebLinks(publications, { name, state, complexName }) {
   const links = nodeCandidates(publications, { name, state });
   return links.length
     ? links
     : nodeCandidates(publications, { name: complexName, state });
-}
-
-/**
- * Resolve one WFIGS incident to its InciWeb page, or null.
- * The incident's own name is tried first; a member of a complex whose own
- * name has no page falls back to the complex's page (InciWeb tracks the
- * managing complex, not each member fire). Anything ambiguous yields null
- * rather than a wrong page.
- * @param {?Array} publications - Publication catalog rows.
- * @param {{name: ?string, state: ?string, complexName: ?string}} incident
- *   - WFIGS row facts.
- * @returns {?string} InciWeb URL.
- */
-export function findInciwebLink(publications, incident) {
-  return findInciwebLinks(publications, incident)[0] ?? null;
 }
 
 /** Fetch the full InciWeb incident catalog. */

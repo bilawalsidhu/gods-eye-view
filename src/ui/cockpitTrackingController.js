@@ -650,7 +650,6 @@ export function enter({ kind = null } = {}) {
   this.active = true;
   // Cockpit animates the camera from preUpdate every frame — preUpdate only
   // runs on rendered frames, so idle mode would freeze the cockpit solid.
-  // (perf wave 2)
   this.services.holdContinuousRender('cockpit');
   stopFollowing(this.viewer);
   this.releaseCameraInput?.();

@@ -120,11 +120,11 @@ const GROUND_MODES = {
 };
 
 /** Segment ends sampled for their ground after a frame, across the sets. */
-export const GROUND_SAMPLES_PER_FRAME = 256;
+const GROUND_SAMPLES_PER_FRAME = 256;
 /** Of those, how many also sample the drawn surface (each draws a view). */
-export const SURFACE_SAMPLES_PER_FRAME = 8;
+const SURFACE_SAMPLES_PER_FRAME = 8;
 /** How often rows clamped to more than terrain are sampled again, ms. */
-export const GROUND_REFRESH_MS = 5000;
+const GROUND_REFRESH_MS = 5000;
 
 /**
  * An image's atlas key: a URL itself, SVG as a data URL, a blob as its
@@ -170,7 +170,7 @@ const SVG_SIZES_KEPT = 128;
  * The largest an SVG is rasterised at its own size (px): past it, at this,
  * so an icon exported at 1024 px still packs.
  */
-export const MAX_OWN_RASTER_PX = 256;
+const MAX_OWN_RASTER_PX = 256;
 
 /**
  * An SVG data URL's own raster size: the larger of its root's `width` and

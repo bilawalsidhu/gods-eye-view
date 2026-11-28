@@ -5,7 +5,6 @@ import { ISS_RELAY_LONGITUDES_DEG } from './issArticulation.js';
 import { TIANGONG_MODEL_URL } from './policy.js';
 import {
   TIANGONG_ARMS,
-  TIANGONG_HGA,
   TIANGONG_ONE_AXIS_WINGS,
   TIANGONG_RELAY_LONGITUDES_DEG,
   TIANGONG_TWO_AXIS_WINGS,
@@ -172,7 +171,6 @@ test('the antenna aims at Tianlian, not TDRS: unit vectors, highest first', () =
     directions[0][1] >= directions[1][1] &&
       directions[1][1] >= directions[2][1],
   );
-  assert.deepEqual(TIANGONG_HGA.axis, [0, 1, 0]);
 });
 
 test('the arms sway on one side of rest only, so they lift off the hull', () => {

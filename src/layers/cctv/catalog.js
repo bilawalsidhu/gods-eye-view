@@ -1,3 +1,5 @@
+import { clamp } from '../../geo/vector.js';
+import { normalizeHeading } from '../../data/headingDegrees.js';
 import { CAMERA_SEEDS } from './policy.js';
 import {
   lookupModelSpec,
@@ -18,9 +20,8 @@ import {
  * @param {{model?:string, manufacturer?:string, explicitFov?:boolean}} hardware
  *   - Hardware model/manufacturer from a source or seed, and whether that
  *   source or seed stated its own `fovDeg`.
- * @param {(v:number,min:number,max:number)=>number} clamp - Pose clamp helper.
  */
-function applyModelEnrichment(camera, hardware, clamp) {
+function applyModelEnrichment(camera, hardware) {
   const { model, manufacturer, explicitFov } = hardware;
   const spec = model ? lookupModelSpec(model, manufacturer) : null;
   if (!spec) return;
@@ -70,23 +71,20 @@ export function createCatalog({ state: layerState, services, parts, source }) {
         headingConfidence: 'medium',
         lat: poi.lat + latOffset,
         lon: poi.lon + lonOffset,
-        headingDeg: parts.model.normalizeHeading(
-          seed.headingDeg ?? poi.heading ?? 0,
-        ),
-        fovDeg: parts.model.clamp(seed.fovDeg ?? 70, 20, 120),
-        rangeM: parts.model.clamp(seed.rangeM ?? 700, 260, 1800),
-        mountHeightM: parts.model.clamp(seed.elevationM ?? 22, 8, 80),
+        headingDeg: normalizeHeading(seed.headingDeg ?? poi.heading ?? 0),
+        fovDeg: clamp(seed.fovDeg ?? 70, 20, 120),
+        rangeM: clamp(seed.rangeM ?? 700, 260, 1800),
+        mountHeightM: clamp(seed.elevationM ?? 22, 8, 80),
         groundElevationM: Number(city.groundElevation) || 0,
         absoluteHeightM:
           (Number(city.groundElevation) || 0) +
-          parts.model.clamp(seed.elevationM ?? 22, 8, 80),
-        pitchDeg: parts.model.clamp(seed.pitchDeg ?? -17, -40, -4),
+          clamp(seed.elevationM ?? 22, 8, 80),
+        pitchDeg: clamp(seed.pitchDeg ?? -17, -40, -4),
       };
-      applyModelEnrichment(
-        camera,
-        { model: seed.model, explicitFov: seed.fovDeg != null },
-        parts.model.clamp,
-      );
+      applyModelEnrichment(camera, {
+        model: seed.model,
+        explicitFov: seed.fovDeg != null,
+      });
       parts.model.ensureCameraPose(camera);
       catalog.push(camera);
     }
@@ -168,30 +166,30 @@ export function createCatalog({ state: layerState, services, parts, source }) {
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
 
       const sourceHeading = parts.model.safeNumber(source.headingDeg, NaN);
-      const headingDeg = parts.model.normalizeHeading(
+      const headingDeg = normalizeHeading(
         Number.isFinite(sourceHeading)
           ? sourceHeading
           : (seed?.headingDeg ?? parts.model.headingFromId(id)),
       );
-      const fovDeg = parts.model.clamp(
+      const fovDeg = clamp(
         parts.model.safeNumber(source.fovDeg, seed?.fovDeg ?? 74),
         20,
         125,
       );
       // Same floor as the pose model (model.js): the packs' 145/210 m ranges
       // are intentional, and inflating them to 220 m pushed the monitor
-      // plane's far edge into higher ground (owner field test 2026-09-13).
-      const rangeM = parts.model.clamp(
+      // plane's far edge into higher ground.
+      const rangeM = clamp(
         parts.model.safeNumber(source.rangeM, seed?.rangeM ?? 700),
         120,
         2200,
       );
-      const mountHeightM = parts.model.clamp(
+      const mountHeightM = clamp(
         parts.model.safeNumber(source.mountHeightM, seed?.mountHeightM ?? 24),
         6,
         120,
       );
-      const pitchDeg = parts.model.clamp(
+      const pitchDeg = clamp(
         parts.model.safeNumber(source.pitchDeg, seed?.pitchDeg ?? -17),
         -55,
         -2,
@@ -206,7 +204,7 @@ export function createCatalog({ state: layerState, services, parts, source }) {
       const headingConfidence = String(
         source.headingConfidence || (seed ? 'high' : 'low'),
       ).toLowerCase();
-      // CAL badge input (design §3b passthrough): hand-authored file/env source
+      // CAL badge input: hand-authored file/env source
       // entries may carry poseSource:'curated'. Austin Open Data rows never set
       // this — they stay RAW PRIOR until a human manually calibrates them.
       const poseSource =
@@ -255,19 +253,13 @@ export function createCatalog({ state: layerState, services, parts, source }) {
         model: String(source.model || ''),
         manufacturer: String(source.manufacturer || ''),
       };
-      applyModelEnrichment(
-        camera,
-        {
-          model: source.model || seed?.model,
-          manufacturer: source.model ? source.manufacturer : '',
-          explicitFov:
-            (source.fovDeg != null && Number.isFinite(Number(source.fovDeg))) ||
-            CAMERA_SEEDS.some(
-              (entry) => entry.id === id && entry.fovDeg != null,
-            ),
-        },
-        parts.model.clamp,
-      );
+      applyModelEnrichment(camera, {
+        model: source.model || seed?.model,
+        manufacturer: source.model ? source.manufacturer : '',
+        explicitFov:
+          (source.fovDeg != null && Number.isFinite(Number(source.fovDeg))) ||
+          CAMERA_SEEDS.some((entry) => entry.id === id && entry.fovDeg != null),
+      });
       parts.model.ensureCameraPose(camera);
       catalog.push(camera);
     }
@@ -276,7 +268,6 @@ export function createCatalog({ state: layerState, services, parts, source }) {
   }
   return {
     seedCatalog,
-    cityIdByName,
     loadCameraSources,
     buildCatalogFromSources,
   };

@@ -5,7 +5,14 @@ import {
   migrateDetectionState,
   normalizeAllocationStrategy,
 } from './data/detectionPolicy.js';
-import { clampScopeTerminusPct } from './scopeMask.js';
+import {
+  KEYHOLE_LABEL_FEATHER_RATIO,
+  KEYHOLE_OUTSIDE_OPACITY_DEFAULT,
+} from './celestialRing.js';
+import {
+  SCOPE_FEATHER_RATIO_DEFAULT,
+  clampScopeTerminusPct,
+} from './scopeMask.js';
 import { worldClock as pageWorldClock } from './time/worldClock.js';
 import { clampScopeFeatherPct } from './scopeMaskPolicy.js';
 import {
@@ -43,25 +50,19 @@ import {
 const DEBOUNCE_MS = 500;
 const LEGACY_BLOOM_FALLBACK = 50;
 
-// Style name mapping: internal → URL-friendly, shared with views.
-const STYLE_TO_URL = STYLE_URL_NAMES;
-
 const SHARE_UI_STATE_PARAM = 'ui';
 const SHARE_STYLE_PARAMS_PARAM = 'sp';
 const SHARE_CREATED_AT_PARAM = 'at';
 
 // The panel and visual-preset parameter tables are the share format's own
 // (src/share/viewCodec.js); the long form spells their entries by token.
-const SHARE_PANEL_STATE_REGISTRY = SHARE_VIEW_PANELS;
 const SHARE_PANEL_STATE_BY_TOKEN = Object.freeze(
-  new Map(SHARE_PANEL_STATE_REGISTRY.map((entry) => [entry.token, entry])),
+  new Map(SHARE_VIEW_PANELS.map((entry) => [entry.token, entry])),
 );
 
 const URL_TO_STYLE = Object.fromEntries(
-  Object.entries(STYLE_TO_URL).map(([k, v]) => [v, k]),
+  Object.entries(STYLE_URL_NAMES).map(([k, v]) => [v, k]),
 );
-
-const SHARE_STYLE_PARAM_REGISTRY = SHARE_VIEW_STYLE_PARAMS;
 
 export class ShareLinkManager {
   constructor(
@@ -100,21 +101,20 @@ export class ShareLinkManager {
     this._detectionMode = 'OFF';
     this._detectionDensity = 50;
     this._detectionAllocation = 'ELASTIC';
-    this._detectionFadePct = 7;
-    // Mirrors KEYHOLE_OUTSIDE_OPACITY_DEFAULT in celestialRing.js and the
-    // slider's markup value (owner final lock 2026-08-24: 5 -> 3 -> 1). This is the
-    // state the link THIS session generates starts from, so it must match what
-    // the session actually renders; the `ko` PARSE fallback below is a separate
-    // question and deliberately stays at 5.
-    this._detectionOutsideOpacityPct = 1;
+    // The link this session makes starts from what it draws; the `ko` parse
+    // fallback below stays 5.
+    this._detectionFadePct = Math.round(KEYHOLE_LABEL_FEATHER_RATIO * 100);
+    this._detectionOutsideOpacityPct = Math.round(
+      KEYHOLE_OUTSIDE_OPACITY_DEFAULT * 100,
+    );
     this._celestialRingEnabled = false;
     this._scopeEnabled = true;
-    this._scopeFeatherPct = 100;
+    this._scopeFeatherPct = Math.round(SCOPE_FEATHER_RATIO_DEFAULT * 100);
     // How strongly the scope mask shows, 0..100; 100 (the full mask) is the
     // default and leaves `sco` out of the link.
     this._scopeOpacityPct = 100;
     // null = the altitude-adaptive terminus (the default). A number pins the
-    // outside-fill opacity as a percent, 94..100. (`sce`, 2026-08-17)
+    // outside-fill opacity as a percent, 94..100. (`sce`)
     this._scopeTerminusPct = null;
     this._mapStack = 'photoreal';
     this._layerStateProvider = null;
@@ -277,26 +277,16 @@ export class ShareLinkManager {
         0,
         Math.min(40, Math.round(parseOr(params.get('kf'), 16))),
       ),
-      // Deliberately still 5 after the 2026-08-23 default moved to 3. Same rule
-      // as `scf` below: this is the PARSE fallback for a link that predates
-      // `ko`, and such a link was authored when 5 was what its author saw. Every
-      // link since carries `ko` explicitly, because the generator always writes
-      // the field — so nothing from the 5 % era depends on this number either
-      // way. The first-run default is a different question, answered in
-      // celestialRing.js.
+      // Links predating `ko` were authored when 5 was the default. Later links write `ko`
+      // explicitly. The first-run default lives in celestialRing.js.
       detectionOutsideOpacityPct: Math.max(
         0,
         Math.min(100, Math.round(parseOr(params.get('ko'), 5))),
       ),
       celestialRing: params.has('cr') ? params.get('cr') === '1' : false,
       scopeEnabled: params.has('sc') ? params.get('sc') === '1' : true,
-      // Deliberately still 35 through both later default moves (0 on
-      // 2026-08-22, 8 on 2026-08-23). This is the PARSE fallback for a link that
-      // predates `scf` entirely, and such a link was authored when 35 was what
-      // its author saw — restoring their view is the point of a share link. A
-      // link from the feather-0 era is unaffected either way: it carries
-      // `scf=0` explicitly, because the generator always writes the field. The
-      // first-run default is a different question, answered in scopeMask.js.
+      // Links predating `scf` were authored when 35 was the default. Restore that view.
+      // Later links write `scf` explicitly. The first-run default lives in scopeMask.js.
       // (`_scopeFeatherPct` in the constructor tracks the default: that one
       // mirrors live state for the link this session generates, so it must match
       // the mask, not the archive.)
@@ -605,7 +595,7 @@ export class ShareLinkManager {
       return;
     }
     const assignments = [];
-    for (const spec of SHARE_PANEL_STATE_REGISTRY) {
+    for (const spec of SHARE_VIEW_PANELS) {
       const state = panelState.specs.find((entry) => entry.id === spec.id);
       if (!state || typeof state.collapsed !== 'boolean') continue;
       assignments.push(`${spec.token}.c.${state.collapsed ? '1' : '0'}`);
@@ -796,7 +786,7 @@ export class ShareLinkManager {
     params.set('heading', Math.round(toDegrees(pose.heading)).toString());
     params.set('pitch', Math.round(toDegrees(pose.pitch)).toString());
     params.set('roll', Math.round(toDegrees(pose.roll)).toString());
-    params.set('style', STYLE_TO_URL[this._currentStyle] || 'normal');
+    params.set('style', STYLE_URL_NAMES[this._currentStyle] || 'normal');
     params.set('bloom', this._bloomEnabled ? '1' : '0');
     params.set('sharpen', this._sharpenEnabled ? '1' : '0');
     params.set('bi', Math.round(this._bloomIntensity).toString());
@@ -880,7 +870,7 @@ export function decodeShareCreatedAtMs(params, { nowMs = Date.now() } = {}) {
 
 /** Encode allowlisted parameters for the active visual preset. */
 export function encodeStyleParamState(params, styleName, values) {
-  const registry = SHARE_STYLE_PARAM_REGISTRY[styleName];
+  const registry = SHARE_VIEW_STYLE_PARAMS[styleName];
   if (!registry || !values || typeof values !== 'object') {
     params.delete(SHARE_STYLE_PARAMS_PARAM);
     return;
@@ -901,7 +891,7 @@ export function encodeStyleParamState(params, styleName, values) {
 export function decodeStyleParamState(params, styleName) {
   if (params.get('v') !== '2' || !params.has(SHARE_STYLE_PARAMS_PARAM))
     return null;
-  const registry = SHARE_STYLE_PARAM_REGISTRY[styleName];
+  const registry = SHARE_VIEW_STYLE_PARAMS[styleName];
   if (!registry) return null;
   const byToken = new Map(registry.map((spec) => [spec.token, spec]));
   const decoded = {};

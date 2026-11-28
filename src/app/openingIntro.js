@@ -1,5 +1,5 @@
 import { START_VIEW } from '../camera.js';
-import { normalizeCameraLongitude } from '../director/camera.js';
+import { wrapLongitude } from '../geo/vector.js';
 import { findCamera } from '../render/rendererOf.js';
 import { isEmbedded } from './embed.js';
 
@@ -135,9 +135,7 @@ export function openingFlight({ target, farHeight }) {
         : 0;
       const turning = easeInOutCubic(approach);
       return {
-        lon: normalizeCameraLongitude(
-          target.lon + OPENING.spinDeg * (1 - spin),
-        ),
+        lon: wrapLongitude(target.lon + OPENING.spinDeg * (1 - spin)),
         lat: target.lat * spin,
         height:
           approach > 0
@@ -328,7 +326,7 @@ export function playOpeningIntro({
     const now = camera.pose();
     return (
       Math.abs(now.lat - placed.lat) > 1e-6 ||
-      Math.abs(normalizeCameraLongitude(now.lon - placed.lon)) > 1e-6 ||
+      Math.abs(wrapLongitude(now.lon - placed.lon)) > 1e-6 ||
       Math.abs(now.height - placed.height) > 1
     );
   };

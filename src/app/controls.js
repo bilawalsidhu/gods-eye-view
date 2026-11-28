@@ -83,10 +83,6 @@ export function createApplicationControls({
   defer(() => styleManager.orbitController.stop());
   defer(() => styleManager.hud.destroy());
   defer(() => styleManager.dispose());
-  // The previous multi-canvas weather compositor remains disabled. Cockpit
-  // clouds use a separate, capped low-resolution GPU pass that never attaches
-  // Cesium fog or post-process stages and is fully stopped in map mode.
-  const weatherEffects = null;
   // Where the renderer draws weather, it draws the cockpit's clouds too.
   const cockpitCloudEffects = findGlobe(viewer)?.weather
     ? null
@@ -110,5 +106,5 @@ export function createApplicationControls({
     ? t('Restoring shared view...')
     : t('Loading');
 
-  return { styleManager, weatherEffects, cockpitCloudEffects };
+  return { styleManager, cockpitCloudEffects };
 }

@@ -40,7 +40,7 @@ export const RAIL_TRIP_UPDATE_MAX_TRIPS = 20_000;
  * Plausible delay range (seconds). A day either way covers every honest
  * report; a value outside it is a unit error, not a late train.
  */
-export const RAIL_TRIP_UPDATE_MAX_DELAY_S = 86_400;
+const RAIL_TRIP_UPDATE_MAX_DELAY_S = 86_400;
 
 /** TripDescriptor.ScheduleRelationship enum → label. */
 const TRIP_RELATIONSHIP = Object.freeze({

@@ -25,15 +25,15 @@ export function createCredits() {
     );
   }
 
-  function hide(_viewer, def) {
+  function hide(def) {
     const off = shown.get(def.id);
     if (!off) return;
     shown.delete(def.id);
     off();
   }
 
-  function hideAll(viewer) {
-    for (const id of [...shown.keys()]) hide(viewer, { id });
+  function hideAll() {
+    for (const id of [...shown.keys()]) hide({ id });
   }
 
   return { show, hide, hideAll };

@@ -110,6 +110,7 @@ function satellitesLayer(t, { height = 20_000, pose = null } = {}) {
     }),
     labels: part({ _dockedCompanionNames: () => [] }),
     controls: part({ _pointStyleFor: () => ({ color: '#fff' }) }),
+    cockpit: part(),
   };
   parts.tracking = createTracking({ state, services, parts });
   const interaction = createInteraction({ state, services, parts });
@@ -385,7 +386,6 @@ test('with the world paused, a satellite is centred where it is; at 60x where it
 test('the globe view letting go flies to is the zoom-to-globe preset', () => {
   assert.equal(DESELECT_GLOBE_VIEW.heightM, GLOBE_VIEW.heightM);
   assert.equal(DESELECT_GLOBE_VIEW.durationS, GLOBE_VIEW.durationS);
-  assert.equal(GLOBE_VIEW.pitchDeg, -90);
 });
 
 /** The globe view letting go of a followed satellite flies to. */

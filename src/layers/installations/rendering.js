@@ -250,12 +250,8 @@ export function createRendering({
    * The records that get drawn this paint: the nearest `MAX_RENDERED`, plus
    * the selected one when it falls outside that window.
    *
-   * Context navigation walks the FULL nearby cohort, which is not bounded by the
-   * render cap, so selecting item 701+ used to produce no marker at all — the
-   * camera flew, the lookup returned null, and the selection was silently dropped
-   * on the floor, leaving the Context subject stale so NEXT offered the same
-   * installation forever. One extra marker keeps every cohort item selectable
-   * and the cohort count honest.
+   * Context navigation walks the full nearby cohort, even beyond the render cap. Always
+   * draw the selected record to keep every cohort item selectable and the count honest.
    * @returns {Array<object>} Records to render this paint.
    */
 
@@ -295,7 +291,7 @@ export function createRendering({
       }
     }
     // Post-moveEnd debounced fetches commit after the camera settles; the
-    // rebuilt markers need one frame in idle mode. (perf wave 2 fix)
+    // rebuilt markers need one frame in idle mode.
     governorRequestRender('installations-render');
     const records = renderableRecords();
     const keys = new Map(
@@ -421,8 +417,7 @@ export function createRendering({
    * `resolveGroundFloorCellsBounded` gives up after FLOOR_RESOLVE_DEADLINE_MS so
    * a cold DEM can never hold the dots hostage — but the resolve keeps running
    * and lands seconds later, and without this the records it covers stay pinned
-   * at ellipsoid height 0, sitting visibly under the 3D tiles (owner playtest
-   * 2026-08-18: "orange dots at the bottom").
+   * at ellipsoid height 0, under the 3D tiles.
    *
    * This is the render -> warm -> re-render chain FIRMS already uses, with one
    * difference the installations path forces: the trigger is whether a cell that

@@ -1,11 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  ALLOCATION_ELASTIC,
-  ALLOCATION_WEIGHTED,
-  LabelArbiter,
-  allocateLayerQuotas,
-} from './labelArbiter.js';
+import { ALLOCATION_ELASTIC, ALLOCATION_WEIGHTED } from './detectionPolicy.js';
+import { LabelArbiter, allocateLayerQuotas } from './labelArbiter.js';
 
 function objectQuotas(map) {
   return Object.fromEntries(Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b)));

@@ -1,6 +1,4 @@
-// Marks text for i18n extraction; the UI translates it with t(). Kept local
-// because AI tool services import this module outside the browser.
-const msg = (text) => text;
+import { msg } from '../../i18n/marker.js';
 
 /**
  * Pure domain model for the Recent Imagery layer: products, the selection box,
@@ -24,7 +22,15 @@ const KM_PER_DEG_LAT = 111.32;
 const QUANTUM = 100000;
 const DAY_MS = 86_400_000;
 const PRODUCT_ORDER = ['S30', 'L30', 'VIIRS'];
-const MONTHS = 'Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.split(' ');
+
+/** The two imagery slots a comparison drapes. */
+export const SLOT_IDS = ['a', 'b'];
+
+/** `value` clamped to 0..1, or `fallback` when it is not a number. */
+export function clampUnit(value, fallback = 1) {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(0, Math.min(1, number)) : fallback;
+}
 
 /**
  * Keyless, browser-direct imagery products. HLS products are searched via
@@ -190,20 +196,18 @@ export function validateBox(box) {
     return refuse('degenerate', msg('Box must enclose an area'));
   const { width, height } = boxSideKm(normalized);
   if (width > MAX_BOX_SIDE_KM || height > MAX_BOX_SIDE_KM)
-    return refuse('too-large', tooLargeMessage(Math.max(width, height)));
+    return refuse('too-large', sizeRefusal('Box', Math.max(width, height)));
   return { ok: true, box: normalized };
 }
 
 const formatKm = (km) => Math.round(Number(km) || 0).toLocaleString('en-US');
 
-// One short line each: the panel's hint says what to do about it.
-function tooLargeMessage(sideKm) {
-  return `Box is ${formatKm(sideKm)} km wide · limit ${formatKm(MAX_BOX_SIDE_KM)} km`;
-}
-
-/** The refusal for USE VIEW when the camera sees more than the cap allows. */
-export function viewTooLargeMessage(sideKm) {
-  return `View is ${formatKm(sideKm)} km wide · limit ${formatKm(MAX_BOX_SIDE_KM)} km`;
+/**
+ * One short line; the panel's hint says what to do about it. `noun` is 'Box'
+ * or 'View' (USE VIEW), as src/ui/recentImagery.js reads it back.
+ */
+export function sizeRefusal(noun, sideKm) {
+  return `${noun} is ${formatKm(sideKm)} km wide · limit ${formatKm(MAX_BOX_SIDE_KM)} km`;
 }
 
 /**
@@ -291,11 +295,6 @@ export function boxFromDegrees(rectangle) {
   return mapBox(rectangle, (degrees) => degrees);
 }
 
-/** Degrees box from a radians rectangle (Cesium `Rectangle` shape). */
-export function boxFromRectangle(rectangle) {
-  return mapBox(rectangle, (radians) => (Number(radians) * 180) / Math.PI);
-}
-
 /** Degrees box → signed integers at degrees × 100000 (the share-link form). */
 export function quantizeBox(box) {
   return mapBox(normalizeBox(box), (value) => Math.round(value * QUANTUM));
@@ -337,12 +336,6 @@ export function utcDay(value) {
 /** UTC midnight of a `YYYY-MM-DD` day in epoch ms, for locale formatting; null otherwise. */
 export function dayTime(day) {
   return isValidDay(day) ? Date.parse(`${day}T00:00:00Z`) : null;
-}
-
-/** `Sep 18` for a `YYYY-MM-DD` day; '' otherwise. */
-export function shortDay(day) {
-  const match = /^\d{4}-(\d{2})-(\d{2})$/.exec(String(day || ''));
-  return match ? `${MONTHS[Number(match[1]) - 1]} ${Number(match[2])}` : '';
 }
 
 /** `17:12` (UTC) for an ISO timestamp; '' when unparseable. */
@@ -622,47 +615,20 @@ function daysBetween(day, now) {
   );
 }
 
-function cloudLabel(cloud) {
-  if (!cloud) return 'cloud unknown';
-  const min = Math.round(cloud.min);
-  const max = Math.round(cloud.max);
-  return min === max ? `${min}% scene cloud` : `${min}–${max}% scene cloud`;
-}
-
-/**
- * The words of the readout. The page passes its own (translated, locale
- * formatted) set; this module stays free of i18n because AI tool services
- * import it outside the browser.
- */
-const READOUT_WORDS = Object.freeze({
-  /** `Sep 18, 2026` for a valid `YYYY-MM-DD` day. */
-  date: (day) => {
-    const [y, m, d] = day.split('-').map(Number);
-    return `${MONTHS[m - 1]} ${d}, ${y}`;
-  },
-  /** Age in whole UTC days, 0 or less for today. */
-  daysAgo: (delta) =>
-    delta <= 0 ? 'today' : delta === 1 ? 'yesterday' : `${delta} days ago`,
-  sensor: (sensor) => sensor,
-  metres: (value) => `${value} m`,
-  overview: () => 'overview',
-  /** `{ min, max }` scene cloud in percent, or null. */
-  cloud: cloudLabel,
-});
-
 /**
  * One-line UTC readout, e.g.
  * `Sep 18, 2026 17:12Z · 3 days ago · Sentinel-2 via HLS · 30 m · 12% scene cloud`.
+ * The page passes its words; this module stays free of i18n because AI tool
+ * services import it outside the browser.
  * @param {object} candidate
  * @param {string | number | Date} [now]
- * @param {Partial<typeof READOUT_WORDS>} [words] the page's localized words
+ * @param {object} words the page's localized words (display.js READOUT_WORDS)
  * @returns {string}
  */
 export function formatCandidateReadout(candidate, now = new Date(), words) {
   const product = PRODUCTS[candidate?.product];
   if (!product || !isValidDay(candidate?.day)) return '';
-  const say = words ? { ...READOUT_WORDS, ...words } : READOUT_WORDS;
-  let when = say.date(candidate.day);
+  let when = words.date(candidate.day);
   if (candidate.timeRange?.start) {
     const start = hhmm(candidate.timeRange.start);
     const end = candidate.timeRange.end ? hhmm(candidate.timeRange.end) : start;
@@ -673,10 +639,10 @@ export function formatCandidateReadout(candidate, now = new Date(), words) {
   }
   const parts = [when];
   const delta = daysBetween(candidate.day, now);
-  if (delta !== null) parts.push(say.daysAgo(delta));
-  parts.push(say.sensor(product.sensor), say.metres(product.resolutionM));
-  if (product.overview) parts.push(say.overview());
-  parts.push(say.cloud(candidate.cloud));
+  if (delta !== null) parts.push(words.daysAgo(delta));
+  parts.push(words.sensor(product.sensor), words.metres(product.resolutionM));
+  if (product.overview) parts.push(words.overview());
+  parts.push(words.cloud(candidate.cloud));
   return parts.join(' · ');
 }
 

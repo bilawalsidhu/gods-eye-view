@@ -1,4 +1,4 @@
-import { ERROR_BACKOFF_INTERVAL } from './recordPolicy.js';
+import { ERROR_BACKOFF_INTERVAL } from '../flights/recordPolicy.js';
 
 // Marks English the Layers panel translates when it shows the error. Kept
 // local: this module stays free of browser globals (package boundaries).
@@ -135,7 +135,12 @@ export function createIngestion({
     }
   }
 
-  return { methods };
+  function abortAll() {
+    for (const controller of feed._activeUpdateControllers) controller.abort();
+    feed._activeUpdateControllers.clear();
+  }
+
+  return { methods, abortAll };
 }
 
 /** Construct an independent military source lifetime and status. */

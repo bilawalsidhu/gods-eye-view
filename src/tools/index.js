@@ -11,11 +11,7 @@ import {
 } from './queries/aviation.js';
 import { getWeatherMap, getWind } from './queries/atmosphere.js';
 import { findSubmarineCables } from './queries/cables.js';
-import {
-  getHudCaption,
-  militaryAwareness,
-  situationBrief,
-} from './queries/brief.js';
+import { militaryAwareness, situationBrief } from './queries/brief.js';
 import {
   findMilitaryInstallations,
   getCyclones,
@@ -121,7 +117,6 @@ export const coreTools = Object.freeze([
   getMapFeatures,
   situationBrief,
   militaryAwareness,
-  getHudCaption,
   showInGodsEyeView,
   panelRequest,
 ]);

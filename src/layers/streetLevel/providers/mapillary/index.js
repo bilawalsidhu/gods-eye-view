@@ -4,14 +4,15 @@ import {
   sequenceIdFromPick,
 } from '../../lineCoverage.js';
 import { createSequenceCones, thinImages } from '../../sequenceCones.js';
-import { coverageZoomForHeight } from '../../tileMath.js';
+import { zoomForHeight } from '../../tileMath.js';
 import { passesImageryFilter } from '../../filter.js';
-import { metresBetween } from '../../view.js';
+import { approxDistanceM } from '../../../../data/approxDistance.js';
 import { decodeCoverageTile } from './decode.js';
 import { createMapillaryViewer } from './viewer.js';
 import {
   COLORS,
   COVERAGE_TUNING,
+  COVERAGE_ZOOMS,
   KEY_REJECTED_MESSAGE,
   MAPILLARY_CREDIT_HTML,
   MAPILLARY_KEY_ID,
@@ -95,7 +96,7 @@ export function createMapillaryProvider({ source, photoViewer = null }) {
             }),
             tile,
           ),
-        zoomFor: coverageZoomForHeight,
+        zoomFor: (heightM) => zoomForHeight(heightM, COVERAGE_ZOOMS),
         colors: COLORS,
         pickPrefix: PICK_PREFIX.sequence,
         renderKey: 'mapillary-coverage',
@@ -160,10 +161,10 @@ export function createMapillaryProvider({ source, photoViewer = null }) {
           parts.sequences.setVisible(false);
         },
 
-        destroy(viewer) {
+        destroy() {
           parts.coverage.detach();
           parts.coverage.clear();
-          parts.sequences.destroy(viewer);
+          parts.sequences.destroy();
         },
 
         /** The filter changed: redraw. Each draw reads it from the context. */
@@ -208,7 +209,7 @@ export function createMapillaryProvider({ source, photoViewer = null }) {
           const metres = (record) => {
             const [lon2, lat2] = (record.computed_geometry || record.geometry)
               ?.coordinates || [NaN, NaN];
-            const d = metresBetween({ lon, lat }, { lon: lon2, lat: lat2 });
+            const d = approxDistanceM({ lon, lat }, { lon: lon2, lat: lat2 });
             return Number.isFinite(d) ? d : Infinity;
           };
           const filter = context.getFilter();

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { markRaw, shallowRef } from 'vue';
+import { presented } from './presented.js';
 
 /**
  * The Space Missions replay vehicle overlay as its view renders it. The
@@ -11,12 +11,7 @@ export const useMissionReplayStore = defineStore('gev-mission-replay', () => {
    * `{visible, mode, thrusting, paused, transform, rotation, iconOpacity,
    * labelOpacity, title, detail}`, or null while the layer has no overlay.
    */
-  const overlay = shallowRef(null);
-
-  /** @param {?object} next A fresh presentation; every publish re-renders. */
-  function publish(next) {
-    overlay.value = next && markRaw(next);
-  }
+  const [overlay, publish] = presented();
 
   return { overlay, publish };
 });

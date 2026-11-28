@@ -197,3 +197,14 @@ test('frame provenance admits the proxy kinds and leaves missing or unknown head
     assert.equal(frame.sourceKind, kind === 'other' ? null : kind);
   }
 });
+
+test('a level camera asks for pitch 0, and one without a pitch for the -10° default', () => {
+  const source = createCctvSource();
+  const pitch = (pitchDeg) =>
+    new URL(
+      source.getFrameUrl({ ...camera, pitchDeg }),
+      'https://example.test',
+    ).searchParams.get('pitch');
+  assert.equal(pitch(0), '0');
+  assert.equal(pitch(undefined), '-10');
+});

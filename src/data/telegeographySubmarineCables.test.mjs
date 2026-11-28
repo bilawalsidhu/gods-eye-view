@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as Cesium from 'cesium';
-import { MAP_STACKS } from '../mapStackController.js';
+import { MAP_STACKS } from '../maps/catalog.js';
 import { fromDegrees, toLonLatH } from '../geo/ellipsoid.js';
 import { bindRenderer } from '../render/rendererOf.js';
 import {
@@ -16,7 +16,6 @@ import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
 import { fakeCameraPort } from '../testSupport/fakeCameraPort.mjs';
 import { fakeSceneFrame } from '../testSupport/fakeCesiumScene.mjs';
 import {
-  CABLE_LABEL_DEPTH_DECISION,
   CABLE_OVERLAY_COLLISION_CAPACITY,
   CABLE_OVERLAY_SOURCE_ID,
   CABLE_REFERENCE_LABEL_WINNER_CAP,
@@ -27,12 +26,19 @@ import {
   cableClassificationTypeForStack,
   cableReferencePriority,
   createCableOverlayEntry,
-  createCableOverlayPublisher,
+  createCableOverlayPublisher as createPublisher,
   createCableReferenceSweepGate,
-  createTeleGeographySubmarineCableLayer,
   selectCableReferenceLabelWinners,
   updateCableReferenceStem,
-} from './telegeographySubmarineCables.js';
+} from '../layers/submarineCables/index.js';
+import { createBundledCableSource } from '../layers/submarineCables/bundledSource.js';
+import { createApplicationCables } from '../app/layers/submarineCables.js';
+import { overlayHost } from '../app/layers/overlayHost.js';
+
+const createTeleGeographySubmarineCableLayer = (options = {}) =>
+  createApplicationCables({ source: createBundledCableSource(), ...options });
+const createCableOverlayPublisher = (options = {}) =>
+  createPublisher({ host: overlayHost, ...options });
 
 test('cable reference winners remain nearest-first and hard-capped', () => {
   const records = Array.from({ length: 300 }, (_, index) => ({
@@ -415,15 +421,6 @@ test('stems re-size only on real tip changes, moving the tip in place', () => {
   assert.ok(height >= 700 && height <= 85_000);
 });
 
-test('the depth decision is the dated Option-2 host migration, superseding Option 1', () => {
-  assert.deepEqual(CABLE_LABEL_DEPTH_DECISION, {
-    option: 2,
-    decidedAt: '2026-08-18',
-    supersedes: '2026-08-02',
-    depthTested: false,
-  });
-});
-
 test('cables create no native labels and reach no renderer but through its ports', () => {
   const files = [
     'rendering.js',
@@ -561,7 +558,7 @@ const settle = async () => {
  */
 function createCableHarness({
   source = deferredSource().source,
-  mapStackEventTarget = null,
+  subscribeMapStack = null,
 } = {}) {
   const hostCalls = [];
   // The sweep gate's motion-fallback clock is FROZEN here and advanced only by
@@ -584,7 +581,7 @@ function createCableHarness({
       },
     }),
     source,
-    mapStackEventTarget,
+    subscribeMapStack,
     sweepClock: () => clockMs,
   });
   const preRender = new Set();
@@ -803,13 +800,11 @@ test('cables, landing pins and references draw as their entities did', async () 
 
 test('a map-stack change re-drapes the cable lines once, and destroy detaches the listener', async () => {
   const listeners = new Map();
-  const eventTarget = {
-    addEventListener: (name, fn) => listeners.set(name, fn),
-    removeEventListener: (name, fn) => {
-      if (listeners.get(name) === fn) listeners.delete(name);
-    },
+  const subscribeMapStack = (fn) => {
+    listeners.set('gev:map-stack-changed', fn);
+    return () => listeners.delete('gev:map-stack-changed');
   };
-  const env = await loadedHarness({ mapStackEventTarget: eventTarget });
+  const env = await loadedHarness({ subscribeMapStack });
   // The harness scene has no globe → both at init (safe unknown fallback).
   assert.equal(env.set('lines').spec.clampTo, 'both');
   const listener = listeners.get('gev:map-stack-changed');

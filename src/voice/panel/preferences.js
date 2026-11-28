@@ -1,3 +1,5 @@
+import { optionalStorage } from '../../browserStorage.js';
+
 export const VOICE_PREVIEW_STORAGE_KEY = 'godsEyeView.voice.previewEnabled';
 export const VOICE_TIMEOUT_STORAGE_KEY = 'godsEyeView.voice.inactivityMinutes';
 const PRESETS = ['3', '5', '10', '15'];
@@ -14,8 +16,7 @@ function parseMinutes(value) {
 /** Outer, browser-local live state. Construction never writes storage. */
 export function createVoicePreferences({ storage } = {}) {
   const listeners = new Set();
-  const target = () =>
-    storage === undefined ? globalThis.localStorage : storage;
+  const target = () => optionalStorage(storage);
   const read = (key) => {
     try {
       return target()?.getItem?.(key);

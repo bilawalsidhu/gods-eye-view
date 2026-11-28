@@ -11,7 +11,7 @@ const VALID_DISPOSITIONS = new Set([
   'enabled+mirrored-options',
 ]);
 
-export const LAYER_STATE_VERSION = 2;
+const LAYER_STATE_VERSION = 2;
 export const LAYER_STATE_TOKEN_ALPHABET =
   '0123456789abcdefghijklmnopqrstuvwxyz';
 const LAYER_STATE_TOKEN_PATTERN = /^[a-z0-9]{1,2}$/;
@@ -318,7 +318,7 @@ const OPTION_GROUPS = Object.freeze({
       },
     ),
   ]),
-  // Active Fires intensity filter (HAL-676). `minFrp` is whole megawatts on
+  // Active Fires intensity filter. `minFrp` is whole megawatts on
   // the codec side; the panel's log slider rounds to it. Both default to
   // "show everything": many of the strongest fires are rated low confidence.
   // The bounds and modes mirror MIN_FRP_MW_MAX / FIRMS_CONFIDENCE_MODES in
@@ -410,25 +410,16 @@ const OPTION_GROUPS = Object.freeze({
     booleanOption('paused', 'p', false),
   ]),
   flights: Object.freeze([
-    // Owner directive 2026-08-22: the fleet's 3D models are DEFAULT-ON in
-    // PROXIMITY mode. Proximity is itself the altitude/count gate — models only
-    // materialize once the camera is close enough and only for the nearest
-    // contacts in view — so "on" costs nothing at globe scale, and an operator
-    // who wants every in-view plane still opts into `all` deliberately.
-    // This default must stay in lockstep with `_models3dEnabled` in BOTH flight
-    // layers, `this._models3dEnabled` in ui.js, and the `active` / `visible`
-    // classes in index.html: the fresh-boot path skips restoration entirely (see
-    // `start()` below), so nothing ever pushes this value into the layers — those
-    // four initializers ARE the agreement, and they are pinned together in
-    // layerState.test.mjs.
+    // Fleet 3D models default to proximity mode. Only nearby contacts get models once the
+    // camera is close, so the default costs nothing at globe scale.
     //
-    // `absentValue: false` is what keeps the flip out of links already in the
-    // wild. Schema v2 shipped with OFF as the omitted default, so `v=2&l=f`
-    // MEANS off — and it has to keep meaning that. Moving the default without
-    // this would have silently turned 3D on for every existing v2 link, and
-    // `v=2&l=f&lo=f.m.a` (an OFF link that remembered mode All) would have come
-    // back as ON+All. The price is that ON is now written explicitly (`f.e.1`)
-    // instead of ridden in on the omission; see `absentTokenValue`.
+    // Fresh boots skip restoration. This default must match both flight layers' state.js,
+    // src/ui/aircraftDisplay.js and the pressed state of #models3d-toggle in
+    // DisplayPanel.vue. layerState.test.mjs checks the layers and displayPanel.test.mjs
+    // checks the panel.
+    //
+    // In schema v2 an omitted models3d means off. absentValue: false preserves existing
+    // links, and on is written explicitly (f.e.1). See absentTokenValue.
     booleanOption('models3d', 'e', true, { absentValue: false }),
     enumOption('models3dMode', 'm', 'proximity', ['proximity', 'all'], {
       proximity: 'p',

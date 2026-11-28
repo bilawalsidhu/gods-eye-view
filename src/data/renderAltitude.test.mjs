@@ -1,5 +1,4 @@
 // src/data/renderAltitude.test.mjs
-// docs/plans/2026-07-05-entity-height-datum-fix.md Task 6.
 //
 // Locks pickRenderAltitudeM's priority chain — the SINGLE source of truth for
 // where a flights-layer aircraft (and its dead-reckoned/tracked-camera

@@ -110,7 +110,7 @@ export function createFrames({ state: layerState, services, parts, source }) {
 
   /**
    * Blits the latest projection canvas into the next of two alternating
-   * offscreen buffer canvases and returns it (H5).
+   * offscreen buffer canvases and returns it.
    *
    * Two buffers are required because the plane re-uploads a canvas texture
    * only when it is given a NEW canvas — redrawing the same canvas in place
@@ -146,7 +146,7 @@ export function createFrames({ state: layerState, services, parts, source }) {
    * projection tick.
    *
    * Video feeds are skipped entirely — the renderer reads their
-   * HTMLVideoElement every frame (H5). Image/webcam-frame feeds swap
+   * HTMLVideoElement every frame. Image/webcam-frame feeds swap
    * the double-buffer canvas reference, throttled to PROJECTION_TEXTURE_SWAP_MS.
    *
    * @param {Object} record - Camera record with an initialized projection runtime.
@@ -168,8 +168,7 @@ export function createFrames({ state: layerState, services, parts, source }) {
     // Only swap when the canvas content actually changed since the last swap.
     // Frames land every ~10 s but this runs at 1 Hz — swapping an UNCHANGED
     // canvas re-uploads the texture for nothing, and each material image
-    // reassignment is a flash opportunity on the live plane (owner field test
-    // 2026-07-04: intermittent white flashes on the monitor plane).
+    // reassignment can flash on the live plane.
     if (runtime.canvasStamp === runtime.lastSwappedCanvasStamp) return;
 
     const buffer = paintNextProjectionBuffer(runtime);
@@ -380,8 +379,7 @@ export function createFrames({ state: layerState, services, parts, source }) {
         // Redrawing regardless bumped canvasStamp, which forced a buffer swap
         // and a fresh 1920x1080 texture upload; the plane renders its white
         // base color (white, alpha .95) for the frame or
-        // two Cesium needs to rebind, which IS the periodic white flash from the
-        // owner field tests (2026-07-04 and 2026-07-30).
+        // two Cesium needs to rebind, which shows as a periodic white flash.
         const fit = fitToProjection(
           runtime.image.naturalWidth,
           runtime.image.naturalHeight,
@@ -419,14 +417,11 @@ export function createFrames({ state: layerState, services, parts, source }) {
   }
   return {
     frameSignatureFromPixels,
-    projectionFrameSignature,
-    paintNextProjectionBuffer,
     refreshProjectionTextures,
     frameUrlFor,
     mediaUrlFor,
     paintProjectionPlaceholder,
     refreshProjectionImage,
-    paintPlaceholderThrottled,
     drawProjectionFrame,
   };
 }

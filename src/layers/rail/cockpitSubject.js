@@ -1,6 +1,12 @@
 import { pointAtS } from '../../data/railPaths.js';
 import { getRegisteredRailFeed } from '../../data/railFeeds.js';
-import { displayMotion } from '../transit/movement.js';
+import {
+  fillFeedView,
+  fillMotionView,
+  finiteOrNull,
+  groundLiftM,
+  reuseSnapshot,
+} from '../../data/transitSnapshot.js';
 
 /** Each line's read-only copy for a snapshot's `path.line` (lineOf). */
 const lines = new WeakMap();
@@ -73,19 +79,6 @@ function stopsOf(list) {
 }
 
 /**
- * `previous` when it holds each of `next`'s values, else a frozen copy of
- * `next`: a part of a snapshot that did not change is the one read before.
- * `next` is a draft, filled again on every read.
- */
-function reuse(previous, next) {
-  if (!previous) return Object.freeze({ ...next });
-  for (const name in next)
-    if (!Object.is(previous[name], next[name]))
-      return Object.freeze({ ...next });
-  return previous;
-}
-
-/**
  * Read access to one train, and a hold on it for a first-person view.
  *
  * `getSelectedTrain()` and `getCockpitSubject()` describe the selected train
@@ -122,15 +115,11 @@ export function createRailCockpitSubject({
   services,
   timetable,
 }) {
-  const liftM = Number.isFinite(services.ground?.GROUND_FLOOR_LIFT_M)
-    ? services.ground.GROUND_FLOOR_LIFT_M
-    : 0;
-  const finiteOrNull = (value) =>
-    typeof value === 'number' && Number.isFinite(value) ? value : null;
+  const liftM = groundLiftM(services);
   const scratch = {};
   /** Each train's last snapshot, returned again while nothing in it changed. */
   const views = new WeakMap();
-  /** The drafts trainView fills on every read (reuse). */
+  /** The drafts trainView fills on every read (reuseSnapshot). */
   const draft = {
     view: {},
     feed: {},
@@ -145,20 +134,13 @@ export function createRailCockpitSubject({
     const listed = state._catalog?.find((feed) => feed.id === feedId);
     const feed = listed ?? getRegisteredRailFeed(feedId);
     if (!feed) return null;
-    const next = draft.feed;
-    next.id = feed.id;
-    next.name = feed.name ?? null;
-    next.operator = feed.operator ?? null;
-    next.region = feed.region ?? null;
+    const next = fillFeedView(draft.feed, feed);
     next.positions = listed?.positions ?? feed.positions ?? 'gps';
     next.tripUpdates =
       typeof listed?.tripUpdates === 'boolean'
         ? listed.tripUpdates
         : typeof feed.tripUpdatesUrl === 'string';
-    next.attribution = feed.attribution ?? null;
-    next.license = feed.license ?? null;
-    next.licenseUrl = feed.licenseUrl ?? null;
-    return reuse(previous, next);
+    return reuseSnapshot(previous, next);
   }
 
   /** The route's short (else long) name in the feed's timetable, or null. */
@@ -196,8 +178,6 @@ export function createRailCockpitSubject({
     const sample = entry.sample ?? null;
     const drawn = entry.drawnHeight ?? null;
     const binding = entry.path ?? null;
-    const reported = finiteOrNull(record.speedMps);
-    const derived = finiteOrNull(sample?.segmentSpeedMps);
     const trip = state._selectedKey === entry.key ? state._trip : null;
     const status = state._feedStatus.get(entry.feedId);
 
@@ -226,17 +206,7 @@ export function createRailCockpitSubject({
       path.line = lineOf(binding.path);
     }
 
-    const motion = draft.motion;
-    motion.reportedSpeedMps = reported;
-    motion.derivedSpeedMps = derived;
-    motion.speedSource =
-      reported !== null ? 'reported' : derived !== null ? 'derived' : null;
-    motion.courseDeg = finiteOrNull(entry.courseDeg);
-    motion.phase = sample?.phase ?? null;
-    motion.word = displayMotion(entry, Date.now()).word;
-    motion.reportAgeMs = finiteOrNull(sample?.latestReportAgeMs);
-    motion.shownBehindMs = finiteOrNull(sample?.actualDelayMs);
-    motion.feedStale = status?.stale === true;
+    const motion = fillMotionView(draft.motion, entry, status);
 
     const provenance = draft.provenance;
     provenance.positionSource = record.positionSource ?? 'gps';
@@ -257,13 +227,13 @@ export function createRailCockpitSubject({
     view.category = entry.category ?? null;
     view.mode = entry.railMode ?? null;
     view.feed = feedOf(entry.feedId, previous?.feed);
-    view.position = reuse(previous?.position, position);
-    view.path = path && reuse(previous?.path, path);
-    view.motion = reuse(previous?.motion, motion);
-    view.provenance = reuse(previous?.provenance, provenance);
+    view.position = reuseSnapshot(previous?.position, position);
+    view.path = path && reuseSnapshot(previous?.path, path);
+    view.motion = reuseSnapshot(previous?.motion, motion);
+    view.provenance = reuseSnapshot(previous?.provenance, provenance);
     view.stops = stopsOf(trip?.stops);
     view.match = trip?.match ?? null;
-    const snapshot = reuse(previous, view);
+    const snapshot = reuseSnapshot(previous, view);
     views.set(entry, snapshot);
     return snapshot;
   }

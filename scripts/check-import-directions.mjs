@@ -18,7 +18,6 @@ const tests = (file) =>
   // Test doubles outside src/testSupport, imported by tests only.
   file === 'src/input/testDoubles.mjs' ||
   file === 'src/layers/recentImagery/testDoubles.mjs' ||
-  file === 'src/voice/voiceWorkflowHarness.mjs' ||
   file === 'src/layers/wildlifeSightings/renderPerformanceFixtures.mjs' ||
   file === 'src/overlays/worldOverlayAllocation.worker.mjs';
 const source = (file) =>
@@ -180,11 +179,6 @@ export function checkImportDirections(root) {
         report(file, `Reusable module imports standalone setup: ${to}`);
       if (source(file) && renderer(to))
         report(file, `Source imports rendering/application: ${to}`);
-      if (file === 'src/voice/gevActions.js' && to === 'src/data/manager.js')
-        report(
-          file,
-          'Actions must consume feed state without the manager facade',
-        );
     }
     return record;
   }

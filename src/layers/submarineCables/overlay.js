@@ -140,10 +140,9 @@ export function createCableNameCard({ id, kind, label, position }) {
 
 /**
  * Bind the cable layer's host visibility and entry lifecycle to the shared
- * world overlay (same contract as the infrastructure publisher). The layer
- * supports re-init after destroy (legacy contract), so its teardown path is
- * hide() — clear the published source and go invisible while staying
- * reusable. There is deliberately no permanent-destroy method: a hidden
+ * world overlay (same contract as the infrastructure publisher). The publisher is
+ * reusable after destroy. Its teardown calls hide() to clear the published source and go
+ * invisible. There is deliberately no permanent-destroy method: a hidden
  * publisher already drops late publishes until the next show().
  * @param {object} [options]
  * @param {string} [options.sourceId]
@@ -186,15 +185,10 @@ export function createCableOverlayPublisher({
 /**
  * Dirty gate for the reference sweep. TWO dirty conditions, no timer:
  *
- * 1. EVENT (primary): the sweep runs on the first frame after a camera
- *    `moveEnd`, layer enable, or load completion. The former 500 ms timer
- *    path re-sized stems while frames were flowing, and every re-size
- *    rebuilt the 2,629-instance batched translucent stem primitive
- *    (measured: 12 rebuilds in 6 s with the replacement primitive unready
- *    for 46/360 frames — the felt hitch). Stem lengths are therefore
- *    deliberately stale mid-drag/mid-flight and settle on release;
- *    reference visibility and label winners go stale the same way, and the
- *    shared host keeps reprojecting the published positions per frame.
+ * 1. EVENT (primary): sweep on the first frame after moveEnd, layer enable or load
+ *    completion. Each stem resize rebuilds the 2,629-instance stem primitive. Stem
+ *    lengths, reference visibility and label winners stay stale mid-motion and settle on
+ *    release. The shared host reprojects the published positions every frame.
  * 2. MOTION FALLBACK: `moveEnd` covers drags, one-shot `setView`, and voice
  *    `flyTo`, but a TRACKED-entity follow camera or an orbit never emits it,
  *    so condition 1 alone starves those sessions forever (frozen horizon

@@ -7,7 +7,6 @@
    (flicker). Fade-OUT keeps its own transition via .gev-anno.gev-out below. */
 .gev-anno-ring { filter: drop-shadow(0 0 6px currentColor); }
 .gev-anno-dot { filter: drop-shadow(0 0 5px rgba(255,255,255,0.6)); }
-.gev-anno-area { filter: drop-shadow(0 0 5px currentColor); }
 .gev-anno-arrow { filter: drop-shadow(0 0 4px currentColor); stroke-linecap: round; }
 .gev-anno-leader { stroke-dasharray: 2 3; }
 .gev-anno-card { fill: rgba(8,18,28,0.78); stroke: rgba(255,255,255,0.14); stroke-width: 1; }

@@ -8,8 +8,8 @@ import {
   CAMERA_PERCENTAGE_CHANGED,
   RANGE_SLACK_KM,
   isLiveRailPositionSource,
-  railCatalogRetryDelayMs,
 } from './policy.js';
+import { scheduleRetryDelayMs } from './schedules.js';
 import {
   RAIL_ENABLED_FEEDS,
   railFeedNeedsSchedulePack,
@@ -72,7 +72,8 @@ export function createViewport({ state, services, parts, source }) {
    * it answers (or with a source that has no catalog), only the feeds that
    * need no pack are used. A feed it lists without live positions is never
    * polled: no train is placed from a timetable. A catalog that fails is
-   * asked for again after railCatalogRetryDelayMs while the layer is on.
+   * asked for again after scheduleRetryDelayMs (schedules.js) while the
+   * layer is on.
    */
   function loadCatalog() {
     if (state._catalog || state._catalogRequest) return;
@@ -97,14 +98,15 @@ export function createViewport({ state, services, parts, source }) {
         state._catalog = Object.freeze(usable);
         state._catalogFailures = 0;
         state._catalogRequest = null;
-        logCatalog(usable);
+        console.log(
+          `[Data:Rail] Catalog lists ${usable.length} live train feeds`,
+        );
         runProximityCheck();
       } catch (error) {
         if (error?.name === 'AbortError' || state._catalogRequest !== request)
           return;
-        state._catalogRequest = null;
         state._catalogFailures += 1;
-        const delay = railCatalogRetryDelayMs(state._catalogFailures);
+        const delay = scheduleRetryDelayMs(state._catalogFailures);
         console.warn(
           `[Data:Rail] feed catalog unavailable, trying again in ${Math.round(delay / 1000)}s:`,
           error?.message || error,
@@ -118,11 +120,6 @@ export function createViewport({ state, services, parts, source }) {
         if (state._catalogRequest === request) state._catalogRequest = null;
       }
     })();
-  }
-
-  /** Say once how many live feeds the catalog lists. */
-  function logCatalog(feeds) {
-    console.log(`[Data:Rail] Catalog lists ${feeds.length} live train feeds`);
   }
 
   function cancelCatalog() {

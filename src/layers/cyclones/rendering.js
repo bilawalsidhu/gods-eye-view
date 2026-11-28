@@ -1,5 +1,6 @@
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { sphereFromPoints } from '../../geo/sphere.js';
+import { hexColor } from '../../render/color.js';
 import { drawOf } from '../../render/rendererOf.js';
 import {
   CYCLONE_ACCENT,
@@ -46,12 +47,6 @@ function dangerAreaAnchor(ring, forecastPoints, ecef, lonLat) {
     }
   }
   return best;
-}
-
-/** A `#rrggbb` colour at `alpha`, as CSS. */
-function withAlpha(hex, alpha) {
-  const n = Number.parseInt(hex.slice(1), 16);
-  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
 }
 
 const BLACK = [0, 0, 0, 1];
@@ -208,7 +203,7 @@ export function createCycloneRendering({ viewer, overlayHost }) {
               nextCones.push({
                 id: own(`cyclone:${storm.id}:${kind}:${index}`),
                 geometry: { kind: 'polygon', rings: all },
-                fill: withAlpha(color, kind === 'cone' ? 0.16 : 0.12),
+                fill: hexColor(color, kind === 'cone' ? 0.16 : 0.12),
                 height: 'clampGround',
               });
               ecefRings.forEach((ring, ringIndex) => {
@@ -221,10 +216,10 @@ export function createCycloneRendering({ viewer, overlayHost }) {
                   mode: 'draped',
                   style:
                     kind === 'cone'
-                      ? { kind: 'solid', color: withAlpha(color, 0.55) }
+                      ? { kind: 'solid', color: hexColor(color, 0.55) }
                       : {
                           kind: 'dash',
-                          color: withAlpha(color, 0.8),
+                          color: hexColor(color, 0.8),
                           length: 16,
                         },
                 });
@@ -325,11 +320,9 @@ export function createCycloneRendering({ viewer, overlayHost }) {
     getDiagnostics() {
       return {
         ...counts,
-        // One display: the committed advisory's sets, and the items in them.
-        dataSources: Number(committed),
-        entities: itemCount,
+        // One display: the items in the committed advisory's sets.
+        items: itemCount,
         selectedId: selected,
-        timerActive: false,
       };
     },
   };

@@ -13,6 +13,7 @@ export {
   normalizeFirePerimeterSnapshot,
   perimeterAnchorDegrees,
 } from './records.js';
+import { analystRecordLimit } from '../../data/analystRecordLimit.js';
 export { createWfigsPerimeterSource } from './source.js';
 export * from './cards.js';
 export * from './inciweb.js';
@@ -65,7 +66,7 @@ const validAnchor = (anchor) =>
  * its own (`fire-perimeters:1:…`), so several can share a renderer. Picks
  * name them as `Hit.set`.
  */
-export const PERIMETER_SET_PREFIX = 'fire-perimeters';
+const PERIMETER_SET_PREFIX = 'fire-perimeters';
 let instances = 0;
 
 /**
@@ -838,9 +839,7 @@ export function createFirePerimetersLayer({
     /** Snapshot incident facts (with card-anchor coordinates) for the analyst query engine. */
     getAnalystRecords(maxCount = 2000) {
       if (!_draw || !_enabled) return [];
-      const limit = Number.isFinite(maxCount)
-        ? Math.max(1, Math.floor(maxCount))
-        : 2000;
+      const limit = analystRecordLimit(maxCount, { fallback: 2000, min: 1 });
       const result = [];
       for (const fire of _fireById.values()) {
         if (result.length >= limit) break;

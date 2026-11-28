@@ -1,4 +1,3 @@
-import { applicationServices } from './services/application.js';
 /**
  * @module hud
  * @description Intelligence HUD Overlay — NRO/NGA Satellite Aesthetic.
@@ -18,17 +17,23 @@ import { applicationServices } from './services/application.js';
  *
  * Color theming is driven by the active shader mode via CSS custom properties.
  */
+import { applicationServices } from './services/application.js';
 
-import { toDegrees, toRadians } from './geo/index.js';
+import {
+  dot,
+  fromDegrees,
+  geodeticSurfaceNormal,
+  normalize,
+  sub,
+  sunPositionFixed,
+  toDegrees,
+  toRadians,
+} from './geo/index.js';
 import { findCamera } from './render/rendererOf.js';
 import { greatCircleKm } from './geoDistance.js';
 import { forward as toMGRS } from 'mgrs';
 import { CITY_POIS } from './cityPois.js';
 import { worldTimeFor } from './time/worldClock.js';
-
-// The HUD stamps its readouts with the world time; its sun is the sky's.
-const hudTime = worldTimeFor('hud');
-const skyTime = worldTimeFor('sky');
 import { composeLocalityTag } from './hudLocality.js';
 import {
   hudAltitude,
@@ -67,6 +72,10 @@ import { localizeLayerName } from './ui/layerPanel.js';
 import { isEmbeddedInline } from './app/embed.js';
 import { openingPlaying } from './app/openingIntro.js';
 import { subscribeSelectedVessel } from './hudReadouts.js';
+
+// The HUD stamps its readouts with the world time; its sun is the sky's.
+const hudTime = worldTimeFor('hud');
+const skyTime = worldTimeFor('sky');
 
 /** Color palettes keyed by shader mode; applied as CSS custom properties. */
 const HUD_COLORS = {
@@ -222,17 +231,6 @@ const NEARBY_POINTS = Object.values(CITY_POIS).flatMap((city) =>
 );
 
 /**
- * Full-screen intelligence HUD overlay rendered on top of the map canvas.
- *
- * Displays MGRS/lat-lon, altitude and off-nadir readouts from the live
- * camera, UTC clocks, an approximate sun elevation, the selected vessel and a
- * semantic summary line built from the view and its data feeds, alongside
- * styling that is not sensor metadata: the classification banner, generated
- * mission, sensor and orbit identifiers, the fixed sensor strip, the REC blink
- * and the altitude-scaled GSD/NIIRS figures. Readouts update on independent
- * fixed cadences.
- */
-/**
  * The view's attributes on #intel-hud itself: shown or not, layout variant
  * and style colors. Stylesheets and layout elsewhere on the page read them.
  */
@@ -243,6 +241,17 @@ function pickFrame(view) {
   return Object.fromEntries(HUD_FRAME_KEYS.map((key) => [key, view[key]]));
 }
 
+/**
+ * Full-screen intelligence HUD overlay rendered on top of the map canvas.
+ *
+ * Displays MGRS/lat-lon, altitude and off-nadir readouts from the live
+ * camera, UTC clocks, an approximate sun elevation, the selected vessel and a
+ * semantic summary line built from the view and its data feeds, alongside
+ * styling that is not sensor metadata: the classification banner, generated
+ * mission, sensor and orbit identifiers, the fixed sensor strip, the REC blink
+ * and the altitude-scaled GSD/NIIRS figures. Readouts update on independent
+ * fixed cadences.
+ */
 export class IntelHUD {
   /**
    * @param {object} viewer - The scene the HUD sits over.
@@ -723,39 +732,17 @@ export class IntelHUD {
   }
 
   /**
-   * Estimate current solar elevation angle above the horizon.
-   *
-   * Uses a simplified astronomical model: solar declination is approximated
-   * from the day of year, and elevation is derived from the standard
-   * sin(elevation) formula involving latitude, declination, and hour angle.
-   *
+   * Sun elevation above the observer's horizon in degrees (negative below),
+   * from the Sun's Earth-fixed position at sky time (sunPositionFixed).
    * @param {number} lat - Observer latitude in decimal degrees.
    * @param {number} lon - Observer longitude in decimal degrees.
    * @returns {number} Estimated sun elevation in degrees (negative = below horizon).
    */
   _estimateSunElevation(lat, lon) {
-    const now = new Date(skyTime());
-    // Approximate local solar time by shifting UTC hours by longitude offset
-    const hours = now.getUTCHours() + now.getUTCMinutes() / 60 + lon / 15;
-    const solarNoon = 12;
-    const hourAngle = (hours - solarNoon) * 15;
-    // Solar declination approximation (~23.45 deg amplitude sinusoidal over the year)
-    const declination =
-      23.45 *
-      Math.sin(
-        toRadians(
-          (360 / 365) * (now.getUTCDate() + 30 * now.getUTCMonth() - 81),
-        ),
-      );
-    const latRad = toRadians(lat);
-    const decRad = toRadians(declination);
-    const haRad = toRadians(hourAngle);
-    // Standard formula: sin(el) = sin(lat)*sin(dec) + cos(lat)*cos(dec)*cos(ha)
-    const sinEl =
-      Math.sin(latRad) * Math.sin(decRad) +
-      Math.cos(latRad) * Math.cos(decRad) * Math.cos(haRad);
-    // Clamp to [-1,1] to guard against floating-point drift before asin
-    return toDegrees(Math.asin(Math.max(-1, Math.min(1, sinEl))));
+    const observer = fromDegrees(lon, lat, 0);
+    const toSun = normalize(sub(sunPositionFixed(skyTime()), observer));
+    const sinElevation = dot(toSun, geodeticSurfaceNormal(observer));
+    return toDegrees(Math.asin(Math.max(-1, Math.min(1, sinElevation))));
   }
 
   /**
@@ -815,19 +802,6 @@ export class IntelHUD {
   }
 
   /**
-   * Compute the great-circle distance between two geographic points
-   * using the Haversine formula.
-   * @param {number} lat1 - Start latitude (decimal degrees).
-   * @param {number} lon1 - Start longitude (decimal degrees).
-   * @param {number} lat2 - End latitude (decimal degrees).
-   * @param {number} lon2 - End longitude (decimal degrees).
-   * @returns {number} Distance in kilometers.
-   */
-  _haversineKm(lat1, lon1, lat2, lon2) {
-    return greatCircleKm({ lat: lat1, lon: lon1 }, { lat: lat2, lon: lon2 });
-  }
-
-  /**
    * Find the closest known POI to the given coordinates.
    * @param {number} latDeg - Latitude in decimal degrees.
    * @param {number} lonDeg - Longitude in decimal degrees.
@@ -837,7 +811,7 @@ export class IntelHUD {
   _nearestKnownPoint(latDeg, lonDeg) {
     let best = null;
     for (const point of NEARBY_POINTS) {
-      const distKm = this._haversineKm(latDeg, lonDeg, point.lat, point.lon);
+      const distKm = greatCircleKm({ lat: latDeg, lon: lonDeg }, point);
       if (!best || distKm < best.distKm) {
         best = { ...point, distKm };
       }

@@ -21,6 +21,7 @@ import { t, tn } from '../i18n/index.js';
  */
 
 import { greatCircleMeters } from '../geoDistance.js';
+import { wrapLongitude as moduloLongitude } from '../geo/vector.js';
 import { formatDistanceText } from '../data/distanceFormat.js';
 
 export const DRAW_SHAPES = Object.freeze(['area', 'line', 'pin']);
@@ -174,7 +175,7 @@ export function wrapLongitude(lon) {
   // as 0.0004999999999881766. The seam is the only place the arithmetic is
   // needed, so it is the only place that pays for it.
   if (lon >= -180 && lon < 180) return lon;
-  const value = ((((lon + 180) % 360) + 360) % 360) - 180;
+  const value = moduloLongitude(lon);
   return Object.is(value, -0) ? 0 : value;
 }
 

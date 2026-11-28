@@ -7,7 +7,7 @@
 
 export const STORY_THUMB_WIDTH = 320;
 export const STORY_THUMB_HEIGHT = 180;
-export const STORY_THUMB_QUALITY = 0.82;
+const STORY_THUMB_QUALITY = 0.82;
 /** Longest `storyThumb` a scene document accepts, in characters. */
 export const STORY_THUMB_MAX_LENGTH = 300000;
 

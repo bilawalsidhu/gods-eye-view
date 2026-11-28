@@ -3,13 +3,13 @@
 // behavior can be exercised by the offline node:test suite.
 
 /** Decimal precision used by the terrain client when serializing lon/lat. */
-export const TERRAIN_POINT_PRECISION = 5;
+const TERRAIN_POINT_PRECISION = 5;
 
 /** Maximum time retries may add after the first upstream attempt settles. */
-export const TERRAIN_RETRY_BUDGET_MS = 10_000;
+const TERRAIN_RETRY_BUDGET_MS = 10_000;
 
 /** One initial attempt plus three bounded retries. */
-export const TERRAIN_MAX_ATTEMPTS = 4;
+const TERRAIN_MAX_ATTEMPTS = 4;
 
 /** @param {number} ms */
 function defaultSleep(ms) {
@@ -77,7 +77,7 @@ export function validTerrainResult(result) {
  * genuine upstream fault.
  * @param {unknown} result
  */
-export function absentTerrainDatum(result) {
+function absentTerrainDatum(result) {
   return (
     typeof result === 'object' &&
     result !== null &&

@@ -1,6 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as fs from 'node:fs/promises';
 import {
   mkdtemp,
   mkdir,
@@ -15,11 +14,9 @@ import { fileURLToPath } from 'node:url';
 
 import {
   FRAGMENT_DIR,
-  STAGING_DIR,
   assembleChangelog,
   assembleFragments,
   orderFragmentNames,
-  recoverInterruptedBatch,
 } from '../../scripts/assemble-changelog.mjs';
 
 const EXISTING =
@@ -81,8 +78,6 @@ test('fragment text is spliced in unchanged, above the existing entries', () => 
     result,
     `# Changelog\n\n${entry}\n\n- An entry that was already released (someone, #1).\n`,
   );
-  // The entry survives byte for byte: drawTool.test.mjs reads this file as
-  // prose and slices a fixed window, so reflowing would move text across it.
   assert.ok(result.includes(entry));
 });
 
@@ -155,144 +150,6 @@ test('an empty directory is a no-op, so a release can always run it', async (t) 
 test('a mode that is neither check nor write is refused', async (t) => {
   const root = await fixture(t);
   await assert.rejects(assembleFragments(root, '--force'), /--check\|--write/);
-});
-
-// Failure injection. Every filesystem call the write path makes is a point
-// where a release can die: a full disk, a permissions error, a killed process.
-
-const IO_CALLS = ['readdir', 'readFile', 'mkdir', 'writeFile', 'rename', 'rm'];
-const BATCH = {
-  '20-second.md': '- Second (someone, #20).',
-  '100-first.md': '- First (someone, #100).',
-  '7-third.md': '- Third (someone, #7).',
-};
-
-/**
- * The real filesystem, except that `call` throws the `nth` time it runs. With
- * `crash`, every later call throws as well, the way a killed process makes no
- * further calls: the in-process rollback cannot run either, so the next
- * invocation is the only thing that can recover.
- */
-function failing(call, nth, { crash = false } = {}) {
-  let seen = 0;
-  let dead = false;
-  const io = { ...fs };
-  for (const name of IO_CALLS) {
-    io[name] = async (...args) => {
-      if (dead) throw new Error('process already gone');
-      if (name === call && ++seen === nth) {
-        dead = crash;
-        throw new Error(`injected ${call} failure #${nth}`);
-      }
-      return fs[name](...args);
-    };
-  }
-  return io;
-}
-
-/** How many times one uninterrupted `--write` makes each filesystem call. */
-async function countCalls(t) {
-  const root = await fixture(t, BATCH);
-  const counts = Object.fromEntries(IO_CALLS.map((name) => [name, 0]));
-  const io = { ...fs };
-  for (const name of IO_CALLS) {
-    io[name] = (...args) => {
-      counts[name] += 1;
-      return fs[name](...args);
-    };
-  }
-  await assembleFragments(root, '--write', io);
-  return {
-    counts,
-    expected: await readFile(path.join(root, 'CHANGELOG.md'), 'utf8'),
-  };
-}
-
-test('a write that fails at any call never lets a retry duplicate or lose an entry', async (t) => {
-  const { counts, expected } = await countCalls(t);
-  // The write path itself: one mkdir, one writeFile, a rename per fragment plus
-  // the commit rename, and the cleanup rm. Fewer would mean a step went missing.
-  assert.ok(counts.rename >= Object.keys(BATCH).length + 1);
-  for (const crash of [false, true]) {
-    for (const call of IO_CALLS) {
-      for (let nth = 1; nth <= counts[call]; nth += 1) {
-        const label = `${crash ? 'crash' : 'error'} at ${call} #${nth}`;
-        const root = await fixture(t, BATCH);
-        await assert.rejects(
-          assembleFragments(root, '--write', failing(call, nth, { crash })),
-          /injected|already gone/,
-          label,
-        );
-        await assembleFragments(root, '--write');
-        const changelog = await readFile(
-          path.join(root, 'CHANGELOG.md'),
-          'utf8',
-        );
-        assert.equal(changelog, expected, label);
-        for (const pr of [100, 20, 7, 1]) {
-          assert.equal(
-            changelog.split(`(someone, #${pr}).`).length - 1,
-            1,
-            `${label}: #${pr} appears exactly once`,
-          );
-        }
-        assert.deepEqual(
-          await readdir(path.join(root, FRAGMENT_DIR)),
-          ['README.md'],
-          label,
-        );
-      }
-    }
-  }
-});
-
-test('an error before the commit rolls the batch back in the same run', async (t) => {
-  const root = await fixture(t, BATCH);
-  // The second rename has already moved one fragment into the staging directory.
-  await assert.rejects(
-    assembleFragments(root, '--write', failing('rename', 2)),
-    /injected rename failure #2/,
-  );
-  assert.equal(
-    await readFile(path.join(root, 'CHANGELOG.md'), 'utf8'),
-    EXISTING,
-  );
-  assert.deepEqual(
-    (await readdir(path.join(root, FRAGMENT_DIR))).sort(),
-    [...Object.keys(BATCH), 'README.md'].sort(),
-  );
-});
-
-test('check mode reports a batch an interrupted release left staged', async (t) => {
-  const root = await fixture(t, BATCH);
-  await assert.rejects(
-    assembleFragments(root, '--write', failing('rename', 2, { crash: true })),
-  );
-  await assert.rejects(
-    assembleFragments(root, '--check'),
-    new RegExp(`${STAGING_DIR}/ holds a batch an interrupted release`),
-  );
-  assert.equal(await recoverInterruptedBatch(root), 'rolled-back');
-  assert.equal(await recoverInterruptedBatch(root), 'none');
-});
-
-test('recovery refuses to roll a fragment back over a file of the same name', async (t) => {
-  const root = await fixture(t, BATCH);
-  await assert.rejects(
-    assembleFragments(root, '--write', failing('rename', 2, { crash: true })),
-  );
-  await writeFile(
-    path.join(root, FRAGMENT_DIR, '100-first.md'),
-    '- Rewritten.',
-  );
-  await assert.rejects(
-    assembleFragments(root, '--write'),
-    /Cannot roll back .*100-first\.md/,
-  );
-  assert.equal(
-    await readFile(path.join(root, 'CHANGELOG.md'), 'utf8'),
-    EXISTING,
-  );
 });
 
 // The two below run against the repository itself, so a fragment that the

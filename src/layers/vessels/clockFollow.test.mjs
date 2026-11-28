@@ -280,23 +280,23 @@ test('back at live while a live poll is already out, that poll takes over and it
   );
 });
 
-test('without AbortSignal.any a vessel request still gives up after its timeout', async (t) => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
-  const any = AbortSignal.any;
-  AbortSignal.any = undefined;
-  try {
-    const probe = ingestion({
-      getSnapshot: (_query, { signal }) =>
-        new Promise((_, reject) =>
-          signal.addEventListener('abort', () => reject(signal.reason)),
-        ),
-    });
-    const resumed = probe.resumeLive({});
-    await Promise.resolve();
-    t.mock.timers.tick(10_000);
-    assert.equal(await resumed, false);
-    assert.equal(probe.feed.loading, false);
-  } finally {
-    AbortSignal.any = any;
-  }
+test('a vessel request gives up after its timeout', async (t) => {
+  const timeout = new AbortController();
+  const delays = [];
+  t.mock.method(AbortSignal, 'timeout', (ms) => {
+    delays.push(ms);
+    return timeout.signal;
+  });
+  const probe = ingestion({
+    getSnapshot: (_query, { signal }) =>
+      new Promise((_, reject) =>
+        signal.addEventListener('abort', () => reject(signal.reason)),
+      ),
+  });
+  const resumed = probe.resumeLive({});
+  await Promise.resolve();
+  assert.equal(delays.length, 1);
+  timeout.abort(new DOMException('timed out', 'TimeoutError'));
+  assert.equal(await resumed, false);
+  assert.equal(probe.feed.loading, false);
 });

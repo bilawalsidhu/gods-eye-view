@@ -1,5 +1,6 @@
 import { COLORS as SHARED_COLORS, PROVIDER_COLORS } from '../../policy.js';
 import { msg } from '../../../../i18n/index.js';
+import { publicRadioHttpsUrl } from '../../../../sources/radioBrowser.js';
 
 export { NEAREST_RADIUS_M } from '../../policy.js';
 
@@ -34,11 +35,13 @@ export const COLORS = Object.freeze({
  * Mapillary's are (a dense tile over Paris: z10 ~2.1 MB and 8,600
  * sequences, z11 ~1.4 MB, z12 ~800 kB). Higher up nothing is drawn.
  */
-export const COVERAGE_Z14_BELOW_M = 1_800;
-export const COVERAGE_Z13_BELOW_M = 5_000;
-export const COVERAGE_Z12_BELOW_M = 12_000;
-export const COVERAGE_Z11_BELOW_M = 30_000;
-export const COVERAGE_LINES_BELOW_M = 60_000;
+export const COVERAGE_ZOOMS = Object.freeze([
+  [1_800, 14],
+  [5_000, 13],
+  [12_000, 12],
+  [30_000, 11],
+  [60_000, 10],
+]);
 export const COVERAGE_TUNING = Object.freeze({
   maxTiles: 9,
   // Each tile draws at most 1,600 lines, its longest first (as decoded,
@@ -143,8 +146,6 @@ export const SD_WIDTH = 2_048;
 export const PANORAMAX_CREDIT_HTML =
   'Street Level: imagery © <a href="https://panoramax.fr" target="_blank" rel="noopener">Panoramax</a> contributors, licence per picture';
 
-export const LINE_CLICK_HINT = 'click a line for its nearest photo';
-
 /** Licence ids Panoramax uses, as the caption names them. */
 const LICENSE_LABELS = Object.freeze({
   'CC-BY-SA-4.0': 'CC BY-SA 4.0',
@@ -180,16 +181,6 @@ export function panoramaxTimeMs(value) {
     : value;
   const ms = Date.parse(iso);
   return Number.isFinite(ms) && ms > Date.UTC(1990, 0, 1) ? ms : null;
-}
-
-/** An https address, or null (asset links come from federated instances). */
-function httpsUrl(value) {
-  try {
-    const url = new URL(String(value));
-    return url.protocol === 'https:' ? url.href : null;
-  } catch {
-    return null;
-  }
 }
 
 /** Last path segment of an item's `rel` link: the linked picture's id. */
@@ -303,10 +294,11 @@ export function normalizeItem(item) {
     width: Number.isFinite(width) && width > 0 ? width : null,
     prevId: linkedId(item, 'prev'),
     nextId: linkedId(item, 'next'),
+    // Federated instances name these hosts: only public https ones load (the radio rule).
     urls: {
-      thumb: httpsUrl(assets.thumb?.href),
-      sd: httpsUrl(assets.sd?.href),
-      hd: httpsUrl(assets.hd?.href),
+      thumb: publicRadioHttpsUrl(assets.thumb?.href),
+      sd: publicRadioHttpsUrl(assets.sd?.href),
+      hd: publicRadioHttpsUrl(assets.hd?.href),
     },
   };
 }

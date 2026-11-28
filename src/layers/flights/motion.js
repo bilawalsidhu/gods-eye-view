@@ -22,6 +22,7 @@ import {
 import {
   add,
   clamp,
+  clone,
   copyInto,
   distance,
   lerpInto,
@@ -43,6 +44,7 @@ import {
   corridorPathLatLon,
 } from '../../data/motionModel.js';
 import { placeLiveAircraft } from './placed.js';
+import { approxDistanceKm } from '../../data/approxDistance.js';
 import {
   modelVisualAnchor,
   modelAnchorWorld,
@@ -71,10 +73,7 @@ import {
   aircraftMotionRegime,
   createMotionRegime,
   fixEpochMs,
-  fixPosition,
-  copyPosition,
   historyFix,
-  julianAt,
   fixSpeedMps,
   fixTrackDeg,
   staleCoastSeconds,
@@ -151,22 +150,10 @@ export function createMotion({
   /** `_motionRegime`'s reused result. */
   const regime = createMotionRegime();
 
-  // Round 5: the old `_warmGroundedAircraftSurfaceCache` (global exact-5-decimal
-  // warm for every grounded contact on Earth) is GONE. Parked-aircraft GPS
-  // jitter minted fresh keys every poll → thousands of upstream points per
-  // minute → Re:Earth proxy failures → geoid-fallback POISON cached at
-  // sea-level heights → sunken sprites/trails and rejected mesh samples. The
-  // coarse ~111 m floor cells (viewer-proximate, collected in the poll loop)
-  // are the only DEM warm the layer needs.
-
   /**
-   * Round 6: lifts STALE grounded contacts onto floors that warmed after
-   * their last feed fix. A parked plane whose transponder went quiet keeps
-   * coasting on its final meta — if that fix predated the floor warm, it sat
-   * frozen underground forever. Runs once per poll over the (bounded) flight
-   * map; touches only grounded, feed-absent, demonstrably-below-floor
-   * contacts, and patches the stored fix + icon in place (zero-velocity
-   * DR renders the patched fix verbatim).
+   * Lifts stale grounded contacts onto floors that warmed after their last feed fix. Once
+   * per poll, patch the stored fix and icon of feed-absent grounded contacts below the
+   * floor. Zero-velocity dead reckoning renders the patched fix in place.
    * @param {Set<string>} currentIcaos - Contacts present in THIS poll (already
    *   floored by the live path — skipped here).
    */
@@ -570,7 +557,6 @@ export function createMotion({
     } else flightState._drPrevRawStepSec = 0;
     copyInto(raw, flightState._drPrevRaw);
     copyInto(display, flightState._drPrevDisplay);
-    flightState._drPrevMs = nowMs;
     flightState._drPrevWorldMs = worldMs;
     flightState._drReconcileValid = true;
     flightState._cachedDRPosition = display;
@@ -823,7 +809,7 @@ export function createMotion({
       !(
         Number.isFinite(state.heldM) &&
         state.heldCell &&
-        parts.queries._approxDistanceKm(
+        approxDistanceKm(
           cell.lat,
           cell.lon,
           state.heldCell.lat,
@@ -935,11 +921,9 @@ export function createMotion({
    * Discipline:
    *  - READ-ONLY against the shared floor cache. No latch, no heal, no sampling.
    *    Keeping cold cells rare is `_collectDisplayCorridorCells`'s job, not this
-   *    one's. A cold cell used to mean NO clamp at all, which was only safe while
-   *    the un-clamped height was a real reading — and for a grounded contact with
-   *    no altitude data it is not: the poll path's last resort is the geoid, tens
-   *    of metres under the mesh at an inland field. When the cell cannot answer,
-   *    `_heldDisplayFloorM` holds the last floor that DID (owner, 2026-08-21).
+   *    one's. When the cell is cold, `_heldDisplayFloorM` holds the last floor that
+   *    answered. A grounded contact's unclamped height can be the geoid, tens of
+   *    metres under the mesh.
    *    Still never an invented surface: every tier is a measurement, and when
    *    none exists the position passes through as before.
    *  - Grounded contacts only. Airborne heights are the fix-time clamp's job.
@@ -1160,12 +1144,8 @@ export function createMotion({
       if (!Number.isFinite(info.rawLat) || !Number.isFinite(info.rawLon))
         continue;
       if (
-        parts.queries._approxDistanceKm(
-          viewerLat,
-          viewerLon,
-          info.rawLat,
-          info.rawLon,
-        ) > DISPLAY_CORRIDOR_RADIUS_KM
+        approxDistanceKm(viewerLat, viewerLon, info.rawLat, info.rawLon) >
+        DISPLAY_CORRIDOR_RADIUS_KM
       )
         continue;
       const dr = _deadReckon(icao24, flightState._scratchCorridorPos);
@@ -1216,15 +1196,16 @@ export function createMotion({
     }
   }
   /** The display instant `epochMs` as a Julian date, for `_motionRegime`. */
-  const _displayTimeAt = (epochMs, result) => julianAt(epochMs, result);
+  const _displayTimeAt = (epochMs, result) =>
+    julianFromEpochMs(epochMs, result);
 
   return {
     _refloorStaleGroundedContacts,
     _deadReckon,
     _displayTimeAt,
     _fixEpochMs: fixEpochMs,
-    _fixPosition: fixPosition,
-    _copyPosition: copyPosition,
+    _fixPosition: fromDegrees,
+    _copyPosition: clone,
     _historyFix: historyFix,
     _motionRegime,
     _signalLost,
@@ -1241,9 +1222,6 @@ export function createMotion({
     _trackedDisplayCourse,
     _resetTrackedDisplay,
     _heldDisplayFloorM,
-    _adoptHeldFloorM,
-    _dropHeldFloor,
-    _seedExpired,
     _retireDisplayFloorState,
     _floorGroundedDisplayPosition,
     _collectDisplayCorridorCells,

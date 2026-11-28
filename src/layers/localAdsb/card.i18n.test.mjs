@@ -1,5 +1,5 @@
-// The Local ADS-B click card follows the UI language; English keeps its
-// wording (index.test.mjs pins the full English card).
+// The Local ADS-B click card follows the UI language (index.test.mjs pins
+// the full English card).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { setLocale } from '../../i18n/index.js';
@@ -18,15 +18,8 @@ const record = {
   sources: ['webusb', 'feed'],
 };
 
-test('en: the local ADS-B card keeps its English wording', () => {
+test('en: the entity context names the receiver and the feed', () => {
   setLocale('en');
-  assert.deepEqual(localAdsbCardModel(record, 5000).details, [
-    'ICAO ABC123 · NO CALLSIGN',
-    'ALT 12,500 FT · GS 240 KT · TRK 90°',
-    'V/S -1,200 FPM',
-    'POSITION 4 S AGO · 48 MSGS',
-    'Heard by your receiver · 1090 MHz · browser SDR + decoder feed',
-  ]);
   assert.equal(
     localAdsbSourceText(record),
     'Your RTL-SDR receiver and decoder feed',

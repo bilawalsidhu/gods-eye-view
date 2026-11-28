@@ -14,6 +14,7 @@ import {
 import { WGS84 } from './geo/ellipsoid.js';
 import { frameVector } from './geo/frames.js';
 import {
+  clamp,
   dot,
   magnitude,
   normalize,
@@ -35,20 +36,17 @@ export const GLOBE_EXIT_CLEARANCE_PX = 12;
 export const CELESTIAL_PLANE_EPSILON = 0.045;
 /** Responsive radial fade band used by every keyhole-aligned text overlay —
  * this is the Detection FADE (label/card fading), NOT the scope-mask feather
- * in scopeMask.js. 0.07 since the 2026-08-24 owner final lock (was 0.16). */
+ * in scopeMask.js. */
 export const KEYHOLE_LABEL_FEATHER_RATIO = 0.07;
-export const KEYHOLE_LABEL_FEATHER_MAX_RATIO = 0.4;
+const KEYHOLE_LABEL_FEATHER_MAX_RATIO = 0.4;
 /**
  * First-run OUTSIDE opacity for keyhole-aligned world overlays.
  *
- * 0.01 since 2026-08-24 (owner final lock; 0.03 on 08-23, 0.05 before). Keep in lockstep with
- * `#detection-opacity-slider`'s markup value AND readout in index.html,
- * `_detectionOutsideOpacityPct` in sharelink.js,
- * `GLOBAL_POST_DEFAULTS.detectionOutsideOpacityPct` in ui.js, and
- * `AIRCRAFT_BRACKET_FLOOR_ANCHOR` in detectionPolicy.js — a fresh boot applies
- * no restore, so those literals ARE the first-run state. NOT the `ko` PARSE
- * fallback, which stays at 5 on purpose: a link predating that field was
- * authored when 5 was what its author saw. Pinned in reasonableDefaults.test.mjs.
+ * The slider and readout in DisplayPanel.vue, sharelink.js and
+ * GLOBAL_POST_DEFAULTS.detectionOutsideOpacityPct in src/ui/visualPresets.js share this
+ * first-run default. AIRCRAFT_BRACKET_FLOOR_ANCHOR in detectionPolicy.js follows the
+ * default to preserve bracket brightness. Links predating `ko` keep their original 5%
+ * opacity.
  */
 export const KEYHOLE_OUTSIDE_OPACITY_DEFAULT = 0.01;
 
@@ -69,21 +67,16 @@ const FULL_GLOBE_RADIUS_RATIO = 0.61;
 const TAU = Math.PI * 2;
 // This overlay is a secondary HUD treatment. Keep it smooth while reserving
 // the majority of the frame budget for Cesium's terrain and 3D tiles.
-export const CELESTIAL_MAX_FRAME_RATE = 30;
+const CELESTIAL_MAX_FRAME_RATE = 30;
 // There are two independently rotating effect canvases (sun and moon), so
 // this is a per-layer budget; their combined allocation remains comparable to
 // the former single 4 MP canvas.
-export const CELESTIAL_MAX_BACKING_PIXELS = 2_000_000;
-export const CELESTIAL_MAX_BACKING_DIMENSION = 1_600;
+const CELESTIAL_MAX_BACKING_PIXELS = 2_000_000;
+const CELESTIAL_MAX_BACKING_DIMENSION = 1_600;
 const CELESTIAL_MAX_DEVICE_PIXEL_RATIO = 1.25;
 
 let keyholeFadeRatio = KEYHOLE_LABEL_FEATHER_RATIO;
 let keyholeOutsideOpacity = KEYHOLE_OUTSIDE_OPACITY_DEFAULT;
-
-/** Clamp a number to an inclusive range. */
-function clamp(value, min, max) {
-  return Math.max(min, Math.min(max, value));
-}
 
 /** Update the shared fade distance and outside-opacity floor. */
 export function setKeyholeFadeTuning({ fadeRatio, outsideOpacity } = {}) {
@@ -118,19 +111,11 @@ export function getKeyholeGeometry(width, height) {
 }
 
 /**
- * Compute the radial opacity for a callout's visual center. Text remains fully
- * opaque inside the keyhole and fades linearly to the configured outside-opacity
- * floor through a band derived from the live keyhole radius.
+ * Compute keyhole opacity from geometry already cached by a hot render loop.
+ * Text remains fully opaque inside the keyhole and fades linearly to the
+ * configured outside-opacity floor through a band derived from the live
+ * keyhole radius.
  */
-export function keyholeLabelAlpha(labelX, labelY, width, height) {
-  return keyholeLabelAlphaFromGeometry(
-    labelX,
-    labelY,
-    getKeyholeGeometry(width, height),
-  );
-}
-
-/** Compute keyhole opacity from geometry already cached by a hot render loop. */
 export function keyholeLabelAlphaFromGeometry(labelX, labelY, geometry) {
   if (
     !geometry ||
@@ -469,16 +454,13 @@ export class CelestialRing {
     this._initView(store);
     this._removePostRender =
       findFrame(viewer)?.on('postRender', () => this._draw()) ?? null;
-    // Pre-existing staleness fix (perf wave 2 review): the ephemeris was
-    // sampled once per visible-enable from the FROZEN app clock, so the
-    // sun/moon markers aged with the app. Resample real wall time each
-    // minute and request the one frame that repaints the ring.
+    // The ephemeris resamples wall time each minute and requests one frame to repaint the
+    // ring. The app clock may be frozen.
     this._ephemerisTimer = setInterval(() => {
       if (!this.enabled) return;
-      // Always mark dirty so a long-hidden interval can't serve stale
-      // sun/moon vectors on return — but only request the repaint frame
-      // while visible; the visibility-restore request (main.js) picks the
-      // dirty flag up immediately. (review finding)
+      // Mark dirty even while hidden so the sun/moon vectors stay current. Request the
+      // repaint only while visible. The visibility-restore frame (src/app/tools.js) picks
+      // up the dirty flag.
       this._ephemerisDirty = true;
       if (typeof document !== 'undefined' && document.hidden) return;
       governorRequestRender('celestial-ephemeris');
@@ -571,7 +553,7 @@ export class CelestialRing {
     // rendered frames — under the idle render governor an enable (or the
     // clearing disable) must request its frame or the ring never draws at
     // all. Camera motion covers every later repaint; the 60 s ephemeris
-    // timer requests its own. (perf wave 2 fix — owner playtest finding)
+    // timer requests its own.
     if (this.enabled !== wasEnabled) governorRequestRender('celestial-ring');
     if (!this.enabled) {
       this.visible = false;

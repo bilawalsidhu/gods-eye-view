@@ -10,6 +10,7 @@ import {
 } from '../../data/firmsIntensity.js';
 import { formatNumber, formatUtcDayMonth, t } from '../../i18n/index.js';
 import { LOD_LEVELS, REFRESH_INTERVAL_MS } from './policy.js';
+import { analystRecordLimit } from '../../data/analystRecordLimit.js';
 
 /** Slider resolution: whole-percent positions along the log axis. */
 const SLIDER_STEPS = 1000;
@@ -338,9 +339,7 @@ export function createQueries({
      */
     getAnalystRecords(maxCount = 2000) {
       if (!layerState._enabled || !layerState._firesByFrp.length) return [];
-      const limit = Number.isFinite(maxCount)
-        ? Math.max(1, Math.floor(maxCount))
-        : 2000;
+      const limit = analystRecordLimit(maxCount, { fallback: 2000, min: 1 });
       const result = [];
       for (const fire of layerState._firesByFrp) {
         result.push(components.model.mapAnalystRecord(fire));
@@ -362,15 +361,11 @@ export function createQueries({
       components.rendering.applyHandoffFade();
     },
 
-    /** Test seam: shapes drawn in the layer's own set (none: the heat is imagery). */
-    _entityCountForTest() {
-      return layerState._cells?.size() ?? 0;
-    },
-
     /** Test seam that binds the production click path and indexes. */
     _bindInteractionForTest(viewer, fires = []) {
       layerState._viewer = viewer;
       layerState._enabled = true;
+      layerState._visibility.show = true;
       layerState._allFires = fires;
       layerState._allFiresByFrp = [...fires];
       layerState._fires = fires;

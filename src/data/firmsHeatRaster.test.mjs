@@ -12,7 +12,6 @@ import {
 const fire = (lat, lon, frp = 10) => ({ lat, lon, frp });
 
 test('palette runs ember to white-hot and starts fully transparent', () => {
-  assert.equal(HEAT_PALETTE[0].at, 0);
   assert.equal(HEAT_PALETTE.at(-1).at, 1);
   assert.deepEqual(heatColorAt(0), [0, 0, 0, 0]);
   assert.equal(heatColorAt(0.01)[3], 0, 'below the floor nothing is painted');

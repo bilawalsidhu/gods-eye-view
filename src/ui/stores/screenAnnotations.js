@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { markRaw, shallowRef } from 'vue';
+import { presented } from './presented.js';
 
 /**
  * The screen-space annotation board as its view renders it. The screen
@@ -15,23 +15,13 @@ export const useScreenAnnotationsStore = defineStore(
      * Each mark is `{key, className, opacity, display, drawn, children}`;
      * `owner` is passed back with each element and report.
      */
-    const board = shallowRef(null);
-
-    /** @param {?object} next A fresh presentation; every publish re-renders. */
-    function publish(next) {
-      board.value = next && markRaw(next);
-    }
+    const [board, publish] = presented();
 
     /**
      * The controls whose `attach(owner, key, kind, element)` and
      * `drawn(owner, key)` the view calls.
      */
-    const controls = shallowRef(null);
-
-    /** @param {?object} next The controls, or null to disconnect. */
-    function connect(next) {
-      controls.value = next && markRaw(next);
-    }
+    const [controls, connect] = presented();
 
     return { board, publish, controls, connect };
   },

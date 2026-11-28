@@ -80,8 +80,7 @@ export function rankContactMatch({
   const callsignText = String(callsign ?? '')
     .trim()
     .toLowerCase();
-  // Callsigns carry no separators, so they compare raw — canonicalizing them
-  // would silently widen the long-standing callsign contract.
+  // Callsigns carry no separators, so they compare raw.
   if (callsignText && callsignText === rawQuery)
     return CONTACT_MATCH_TIER.CALLSIGN_EXACT;
 
@@ -107,16 +106,9 @@ export function rankContactMatch({
 /**
  * Should `candidate` replace the best match found so far?
  *
- * Ties are broken on the transponder hex, ascending. The tool this feeds
- * (`track_entity`) is a MUTATION fulfilling "follow that one" — returning an
- * ambiguity for the caller to resolve would cost a round-trip mid-demo, and
- * the model's observed response to a non-ok track result is to retry with
- * different guesses rather than to ask (owner field session 2026-08-21,
- * 23:48). So the lookup always commits. What it owes the caller is STABILITY:
- * hex is unique and always present, so the same query resolves to the same
- * contact for as long as both are loaded, instead of flipping between polls
- * with feed order. Ambiguity that matters is visible to the operator anyway —
- * the camera moves to a named contact and the card says which.
+ * Break ties on transponder hex, ascending. `track_entity` commits to one contact. Hex is
+ * unique and always present, so the same query resolves to the same contact while both
+ * are loaded, regardless of feed order.
  * @param {{tier: number, id: string}} candidate Contact just ranked.
  * @param {{tier: number, id: string}|null} incumbent Best match so far.
  * @returns {boolean} True when the candidate should take over.

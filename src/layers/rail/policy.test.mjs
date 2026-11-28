@@ -9,18 +9,20 @@ import {
   DEFAULT_RAIL_CATEGORY_VISIBILITY,
   RAIL_CARD_MAX_LINES,
   RAIL_CATEGORY_COLORS,
-  TRAIN_MAX_FIX_AGE_MS,
   RAIL_LIVE_POSITION_SOURCES,
   buildRailSelectionCopy,
   createRailSelectedOverlayEntry,
   isLiveRailPositionSource,
-  isStaleTrainFix,
   normalizeRailCategories,
   playbackModeFor,
   railTrainKey,
-  trainFixAgeMs,
-  trainReportTimeMs,
 } from './policy.js';
+import {
+  VEHICLE_MAX_FIX_AGE_MS,
+  isStaleVehicleFix,
+  vehicleFixAgeMs,
+  vehicleReportTimeMs,
+} from '../../data/transitPolicy.js';
 import { RAIL_CATEGORIES } from '../../data/railFeeds.js';
 
 const NOW = 1_794_000_000_000;
@@ -133,37 +135,40 @@ test('train keys are namespaced so they never collide with Transit keys', () => 
 });
 
 test('a stamped report is aged from its own time', () => {
-  assert.equal(trainFixAgeMs(stampedTrain, NOW), 30_000);
+  assert.equal(vehicleFixAgeMs(stampedTrain, NOW), 30_000);
   // The fetch time does not override the train's own stamp.
-  assert.equal(trainFixAgeMs(stampedTrain, NOW, NOW - 1_000), 30_000);
-  assert.equal(trainReportTimeMs(stampedTrain, NOW - 1_000), NOW - 30_000);
+  assert.equal(vehicleFixAgeMs(stampedTrain, NOW, NOW - 1_000), 30_000);
+  assert.equal(vehicleReportTimeMs(stampedTrain, NOW - 1_000), NOW - 30_000);
 });
 
 test('a stamp ahead of now ages to zero, never below', () => {
-  assert.equal(trainFixAgeMs({ timestamp: (NOW + 5_000) / 1000 }, NOW), 0);
+  assert.equal(vehicleFixAgeMs({ timestamp: (NOW + 5_000) / 1000 }, NOW), 0);
 });
 
 test('an unstamped report is aged from the snapshot fetch time', () => {
-  assert.equal(trainFixAgeMs(unstampedMetro, NOW, NOW - 45_000), 45_000);
-  assert.equal(trainReportTimeMs(unstampedMetro, NOW - 45_000), NOW - 45_000);
+  assert.equal(vehicleFixAgeMs(unstampedMetro, NOW, NOW - 45_000), 45_000);
+  assert.equal(vehicleReportTimeMs(unstampedMetro, NOW - 45_000), NOW - 45_000);
   // Zero and negative stamps count as no stamp.
-  assert.equal(trainFixAgeMs({ timestamp: 0 }, NOW, NOW - 2_000), 2_000);
-  assert.equal(trainFixAgeMs({ timestamp: -1 }, NOW, NOW - 2_000), 2_000);
+  assert.equal(vehicleFixAgeMs({ timestamp: 0 }, NOW, NOW - 2_000), 2_000);
+  assert.equal(vehicleFixAgeMs({ timestamp: -1 }, NOW, NOW - 2_000), 2_000);
   // With neither a stamp nor a fetch time there is nothing to age from.
-  assert.equal(trainFixAgeMs(unstampedMetro, NOW), 0);
+  assert.equal(vehicleFixAgeMs(unstampedMetro, NOW), 0);
 });
 
 test('a report is stale only past the ten-minute limit', () => {
-  assert.equal(TRAIN_MAX_FIX_AGE_MS, 10 * 60_000);
+  assert.equal(VEHICLE_MAX_FIX_AGE_MS, 10 * 60_000);
   const at = (ageMs) => ({ timestamp: (NOW - ageMs) / 1000 });
-  assert.equal(isStaleTrainFix(at(TRAIN_MAX_FIX_AGE_MS), NOW), false);
-  assert.equal(isStaleTrainFix(at(TRAIN_MAX_FIX_AGE_MS + 1_000), NOW), true);
+  assert.equal(isStaleVehicleFix(at(VEHICLE_MAX_FIX_AGE_MS), NOW), false);
+  assert.equal(
+    isStaleVehicleFix(at(VEHICLE_MAX_FIX_AGE_MS + 1_000), NOW),
+    true,
+  );
 });
 
 test('an unstamped report from an old snapshot is stale, not live', () => {
-  const oldFetch = NOW - TRAIN_MAX_FIX_AGE_MS - 1;
-  assert.equal(isStaleTrainFix(unstampedMetro, NOW, oldFetch), true);
-  assert.equal(isStaleTrainFix(unstampedMetro, NOW, NOW - 60_000), false);
+  const oldFetch = NOW - VEHICLE_MAX_FIX_AGE_MS - 1;
+  assert.equal(isStaleVehicleFix(unstampedMetro, NOW, oldFetch), true);
+  assert.equal(isStaleVehicleFix(unstampedMetro, NOW, NOW - 60_000), false);
 });
 
 test('rail modes map onto the Transit playback modes', () => {
@@ -399,7 +404,6 @@ test('the card never grows past six lines', () => {
     stops: tripStopsNearYonkers,
   });
   assert.equal(copy.details.length, RAIL_CARD_MAX_LINES);
-  assert.equal(RAIL_CARD_MAX_LINES, 6);
   // What stays: who, motion, next, previous, report age and the depth note;
   // the reported speed and the vehicle line give way first.
   assert.deepEqual(copy.details, [

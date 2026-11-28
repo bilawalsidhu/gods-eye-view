@@ -7,7 +7,7 @@ import {
   BLOOM_SCALE_VERSION,
   decodeBloomIntensity,
 } from '../bloom.js';
-import { RETIRED_STYLES } from '../visualStylePolicy.js';
+import { RETIRED_STYLES } from '../view/index.js';
 import { isStoryTagList } from './storyTags.js';
 import { isStoryThumb } from './storyThumb.js';
 

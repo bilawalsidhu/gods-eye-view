@@ -16,7 +16,7 @@ import {
 import { createNarrationScheduler } from './narration.js';
 import { createVoiceCommands } from './sessionCommands.js';
 import { candidate } from '../layers/recentImagery/testDoubles.mjs';
-import { harness, tick } from './voiceWorkflowHarness.mjs';
+import { harness, tick } from '../testSupport/voiceWorkflowHarness.mjs';
 import { realtimeInstructions } from '../../server/providers/openai/instructions.js';
 import {
   GEV_REALTIME_TOOLS,

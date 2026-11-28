@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { markRaw, shallowRef } from 'vue';
+import { presented } from './presented.js';
 
 /**
  * Cockpit content as its views render it. The Cockpit controller presents
@@ -11,28 +12,13 @@ import { markRaw, shallowRef } from 'vue';
  */
 export const useCockpitStore = defineStore('gev-cockpit', () => {
   /** Which Cockpit surfaces are shown; null until the controller first syncs. */
-  const presence = shallowRef(null);
-
-  /** @param {?object} next A fresh presentation of the shown surfaces. */
-  function publishPresence(next) {
-    presence.value = next && markRaw(next);
-  }
+  const [presence, publishPresence] = presented();
 
   /** The presented briefing; null until the controller first presents it. */
-  const brief = shallowRef(null);
-
-  /** @param {?object} next A fresh presentation of the briefing card. */
-  function publishBrief(next) {
-    brief.value = next && markRaw(next);
-  }
+  const [brief, publishBrief] = presented();
 
   /** The presented Contact card; null until the controller first presents it. */
-  const context = shallowRef(null);
-
-  /** @param {?object} next A fresh presentation of the Contact card. */
-  function publishContext(next) {
-    context.value = next && markRaw(next);
-  }
+  const [context, publishContext] = presented();
 
   /**
    * The presented instruments; null until the first HUD update. Besides the
@@ -41,36 +27,16 @@ export const useCockpitStore = defineStore('gev-cockpit', () => {
    * starboard positive; the radar draws its look line there) and the worded
    * readout. An aircraft's look always rests (`offset: false`).
    */
-  const instruments = shallowRef(null);
-
-  /** @param {?object} next A fresh presentation of the instruments. */
-  function publishInstruments(next) {
-    instruments.value = next && markRaw(next);
-  }
+  const [instruments, publishInstruments] = presented();
 
   /** The presented flight plan and destination arrow; null until the first. */
-  const route = shallowRef(null);
-
-  /** @param {?object} next A fresh presentation of the route. */
-  function publishRoute(next) {
-    route.value = next && markRaw(next);
-  }
+  const [route, publishRoute] = presented();
 
   /** The presented vision selector; null until the first vision change. */
-  const vision = shallowRef(null);
-
-  /** @param {?object} next A fresh presentation of the vision selector. */
-  function publishVision(next) {
-    vision.value = next && markRaw(next);
-  }
+  const [vision, publishVision] = presented();
 
   /** The presented signal rows; null until the controller first presents them. */
-  const signals = shallowRef(null);
-
-  /** @param {?object[]} next A fresh presentation of the signal rows. */
-  function publishSignals(next) {
-    signals.value = next && markRaw(next);
-  }
+  const [signals, publishSignals] = presented();
 
   /**
    * The bridge radar: null outside a vessel bridge. Shape:
@@ -80,12 +46,7 @@ export const useCockpitStore = defineStore('gev-cockpit', () => {
    *    relativeCourseDeg|null, color, stale }] }` where x/y are heading-up
    * screen fractions in [-1, 1] (x right, y up) of the range circle.
    */
-  const radar = shallowRef(null);
-
-  /** @param {?object} next A fresh presentation of the bridge radar. */
-  function publishRadar(next) {
-    radar.value = next && markRaw(next);
-  }
+  const [radar, publishRadar] = presented();
 
   /**
    * The orbital view's HUD: null outside a satellite subject. Shape:
@@ -125,12 +86,7 @@ export const useCockpitStore = defineStore('gev-cockpit', () => {
    * which stays north-up) and `northDeg` where north sits, in degrees
    * clockwise from the top (0 when north-up).
    */
-  const orbital = shallowRef(null);
-
-  /** @param {?object} next A fresh presentation of the orbital view HUD. */
-  function publishOrbital(next) {
-    orbital.value = next && markRaw(next);
-  }
+  const [orbital, publishOrbital] = presented();
 
   /**
    * The utility strip's measured layout: its top and height limits as CSS

@@ -8,8 +8,6 @@ import {
   createCameraOrientationAnimator,
   pickViewTarget,
   readCameraTargetFrame,
-  resetCameraNorth,
-  toggleCameraTilt,
 } from './cameraOrientationControls.js';
 import { NavigationController } from './navigationController.js';
 import { bindRenderer } from '../render/rendererOf.js';
@@ -86,6 +84,19 @@ function createViewer({ cameraPosition, target, pickPosition = null } = {}) {
  * Record what the controls publish as the globe actions store keeps it:
  * `state` is the latest, and `publishes` counts the changes.
  */
+/** Turn the camera about its view target at once (no easing). */
+function orient(viewer, destination) {
+  const frame = readCameraTargetFrame(viewer);
+  return (
+    Boolean(frame) &&
+    createCameraOrientationAnimator(viewer, { duration: 0 }).animate(frame, {
+      heading: frame.heading,
+      pitch: frame.pitch,
+      ...destination,
+    })
+  );
+}
+
 function recorder() {
   const bar = {
     state: null,
@@ -216,7 +227,7 @@ test('north-up really points a real camera north from every quadrant', () => {
     viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
 
     assert.equal(
-      resetCameraNorth(viewer),
+      orient(viewer, { heading: 0 }),
       true,
       `reset failed at ${headingDeg}`,
     );
@@ -250,8 +261,7 @@ test('tilt moves a real camera between the two pitches and keeps target and rang
   );
   viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
 
-  const first = toggleCameraTilt(viewer);
-  assert.deepEqual(first, { tilted: true, pitch: OBLIQUE_PITCH });
+  assert.equal(orient(viewer, { pitch: OBLIQUE_PITCH }), true);
   const tilted = readCameraTargetFrame(viewer);
   assert.ok(Math.abs(tilted.pitch - OBLIQUE_PITCH) < 1e-6);
   assert.ok(Math.abs(tilted.range - 3000) < 1, `range ${tilted.range}`);
@@ -284,8 +294,7 @@ test('tilt moves a real camera between the two pitches and keeps target and rang
     `camera points ${offBy.toFixed(2)} deg away from its target`,
   );
 
-  const second = toggleCameraTilt(viewer);
-  assert.deepEqual(second, { tilted: false, pitch: STRAIGHT_DOWN_PITCH });
+  assert.equal(orient(viewer, { pitch: STRAIGHT_DOWN_PITCH }), true);
   const down = readCameraTargetFrame(viewer);
   assert.ok(Math.abs(down.pitch - STRAIGHT_DOWN_PITCH) < 1e-6);
   assert.ok(Math.abs(down.range - 3000) < 1);
@@ -296,27 +305,34 @@ test('tilt alternates at globe range, not only at map range', () => {
   // degrees away from the orbit pitch, so a control reading the camera would
   // command oblique twice in a row and the map would never come back level.
   for (const range of [3_000, 250_000, 18_000_000]) {
-    const { viewer } = createRealViewer(AUSTIN_GROUND);
+    const { viewer } = createRealViewer(AUSTIN_GROUND, { frames: false });
     orbit(viewer, AUSTIN_GROUND, 0, STRAIGHT_DOWN_PITCH, range);
+    const bar = recorder();
+    const controls = bindCameraOrientationControls({
+      viewer,
+      publish: bar.publish,
+      runNavigation: (_noun, navigate) => navigate(),
+    });
+    const pitch = () => readCameraTargetFrame(viewer).pitch;
 
-    const first = toggleCameraTilt(viewer);
-    assert.deepEqual(
-      first,
-      { tilted: true, pitch: OBLIQUE_PITCH },
-      `first click at ${range} m must tilt`,
-    );
-    const second = toggleCameraTilt(viewer);
-    assert.deepEqual(
-      second,
-      { tilted: false, pitch: STRAIGHT_DOWN_PITCH },
+    controls.tilt();
+    assert.equal(bar.state.tilted, true, `first click at ${range} m must tilt`);
+    assert.ok(Math.abs(pitch() - OBLIQUE_PITCH) < 1e-6);
+    controls.tilt();
+    assert.equal(
+      bar.state.tilted,
+      false,
       `second click at ${range} m must level (camera pitch reads ${Cesium.Math.toDegrees(viewer.camera.pitch).toFixed(1)} deg)`,
     );
-    const third = toggleCameraTilt(viewer);
-    assert.deepEqual(
-      third,
-      { tilted: true, pitch: OBLIQUE_PITCH },
+    assert.ok(Math.abs(pitch() - STRAIGHT_DOWN_PITCH) < 1e-6);
+    controls.tilt();
+    assert.equal(
+      bar.state.tilted,
+      true,
       `third click at ${range} m must tilt again`,
     );
+    assert.ok(Math.abs(pitch() - OBLIQUE_PITCH) < 1e-6);
+    controls.destroy();
   }
 });
 
@@ -462,8 +478,17 @@ test('a sky-facing camera yields no frame and both actions decline', () => {
   const viewer = withPorts({ camera, scene });
 
   assert.equal(readCameraTargetFrame(viewer), null);
-  assert.equal(toggleCameraTilt(viewer), false);
-  assert.equal(resetCameraNorth(viewer), false);
+  const toasts = [];
+  const controls = bindCameraOrientationControls({
+    viewer,
+    publish() {},
+    runNavigation: (_noun, navigate) => navigate(),
+    showToast: (text) => toasts.push(text),
+  });
+  controls.tilt();
+  controls.northUp();
+  assert.deepEqual(toasts, []);
+  controls.destroy();
 });
 
 test('center picking prefers terrain over the ellipsoid and falls through an invalid depth hit', () => {
@@ -499,9 +524,8 @@ test('target frame identifies a straight-down camera in local ENU space', () => 
 test('tilt preserves the picked target and range while choosing oblique pitch', () => {
   const { viewer, calls, target } = createViewer();
   const before = readCameraTargetFrame(viewer);
-  const result = toggleCameraTilt(viewer);
+  assert.equal(orient(viewer, { pitch: OBLIQUE_PITCH }), true);
   const lookAt = calls.find((call) => call.type === 'lookAt');
-  assert.deepEqual(result, { tilted: true, pitch: OBLIQUE_PITCH });
   assert.ok(Cesium.Cartesian3.equals(lookAt.target, target));
   assert.equal(lookAt.offset.range, before.range);
   assert.equal(lookAt.offset.pitch, OBLIQUE_PITCH);
@@ -512,7 +536,7 @@ test('tilt preserves the picked target and range while choosing oblique pitch', 
 test('north-up preserves target pitch and range', () => {
   const { viewer, calls } = createViewer();
   const before = readCameraTargetFrame(viewer);
-  assert.equal(resetCameraNorth(viewer), true);
+  assert.equal(orient(viewer, { heading: 0 }), true);
   const lookAt = calls.find((call) => call.type === 'lookAt');
   assert.equal(lookAt.offset.heading, 0);
   assert.equal(lookAt.offset.pitch, before.pitch);

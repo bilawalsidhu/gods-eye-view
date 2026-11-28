@@ -288,11 +288,8 @@ body.cockpit-mode #cockpit-cloud-effects.active {
 
 /* Hide Cesium default UI elements */
 .cesium-viewer-toolbar,
-.cesium-viewer-animationContainer,
-.cesium-viewer-timelineContainer,
 .cesium-viewer-bottom,
 .cesium-viewer-fullscreenContainer,
-.cesium-viewer-vrContainer,
 .cesium-viewer-geocoderContainer,
 .cesium-viewer-selectionIndicatorContainer,
 .cesium-viewer-infoBoxContainer {

@@ -88,6 +88,9 @@ function harness(source = { getSnapshot: async () => [] }) {
       clear: noop,
       destroy: noop,
       requestRender: noop,
+      beginBatch: noop,
+      endBatch: noop,
+      deactivate: noop,
     },
     photos: { clear: noop, destroy: noop },
     selection: {
@@ -100,6 +103,7 @@ function harness(source = { getSnapshot: async () => [] }) {
       refreshContexts: noop,
       syncCredits: noop,
       remove: noop,
+      retainedAmbientRows: () => [],
       clear() {
         state.selectedId = null;
         state.selectedRow = null;

@@ -28,14 +28,13 @@ import {
   QUERY_LIMIT,
   QUERY_SNAP_DEGREES,
   QUERY_REUSE_MS,
-  alprRetryDelayMs,
   boxContains,
   buildOverpassQuery,
   snapAlprBox,
-  destinationPointDeg,
   isAlprSurveillanceType,
   normalizeAlprNode,
 } from './alprCameras.js';
+import { destinationPoint } from '../geoDistance.js';
 import { readEntityRecord } from './entityRecords.js';
 import { alprMarkers } from '../layers/alpr/markerState.js';
 
@@ -98,17 +97,10 @@ test('normalizeAlprNode: a present-but-blank direction tag reads as missing, not
   assert.equal(record.directionDeg, null);
 });
 
-test('destinationPointDeg: due-north offset increases latitude, keeps longitude', () => {
-  const dest = destinationPointDeg(30, -97, 0, 100);
-  assert.ok(dest.latitude > 30);
-  assert.ok(Math.abs(dest.longitude - -97) < 1e-6);
-});
-
-test('alprRetryDelayMs: doubles from a 30s floor to a 240s ceiling', () => {
-  assert.equal(alprRetryDelayMs(0), 30000);
-  assert.equal(alprRetryDelayMs(30000), 60000);
-  assert.equal(alprRetryDelayMs(200000), 240000);
-  assert.equal(alprRetryDelayMs(240000), 240000);
+test('destinationPoint: due-north offset increases latitude, keeps longitude', () => {
+  const dest = destinationPoint(30, -97, 0, 100);
+  assert.ok(dest.lat > 30);
+  assert.ok(Math.abs(dest.lon - -97) < 1e-6);
 });
 
 test('isAlprSurveillanceType: accepts semicolon multi-values and mixed case, rejects other cameras', () => {

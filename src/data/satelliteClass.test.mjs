@@ -2,19 +2,20 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   SATELLITE_CLASSES,
-  SATELLITE_CLASS_ORDER,
   satelliteClassColor,
   satelliteClassLabel,
   satelliteClassOf,
   satelliteClassText,
 } from './satelliteClass.js';
-import satellitesLayer, {
+import satellitesLayer from './satellites.js';
+import { CATALOG_GROUPS } from '../layers/satellites/policy.js';
+import { SATELLITE_CLASS_DISPLAY } from '../layers/satellites/classes.js';
+
+const {
   _catalogGroupForTest,
   _clearDenseCatalogStateForTest,
   _setDenseCatalogStateForTest,
-} from './satellites.js';
-import { CATALOG_GROUPS } from '../layers/satellites/policy.js';
-import { SATELLITE_CLASS_DISPLAY } from '../layers/satellites/classes.js';
+} = satellitesLayer.testing;
 
 /**
  * A real, parseable TLE under an arbitrary 5-digit catalog number, so the dense
@@ -56,7 +57,6 @@ test('every ingested CelesTrak group resolves to a real class', () => {
   for (const group of INGESTED_GROUPS) {
     const { klass } = satelliteClassOf(group);
     assert.ok(SATELLITE_CLASSES[klass], `${group} maps to an unknown class ${klass}`);
-    assert.ok(SATELLITE_CLASS_ORDER.includes(klass), `${klass} is missing from the legend order`);
   }
 });
 
@@ -99,7 +99,7 @@ test('an unknown group falls back to the neutral bucket instead of vanishing', (
 });
 
 test('class colors are distinct, valid, and never borrow the military amber', () => {
-  const colors = SATELLITE_CLASS_ORDER.map((k) => SATELLITE_CLASSES[k].color);
+  const colors = Object.keys(SATELLITE_CLASSES).map((k) => SATELLITE_CLASSES[k].color);
   assert.equal(new Set(colors).size, colors.length, 'two classes share a color');
   for (const color of colors) {
     assert.match(color, /^#[0-9a-f]{6}$/, `${color} is not a 6-digit hex`);
@@ -126,7 +126,7 @@ test('class colors are distinct, valid, and never borrow the military amber', ()
     if (max === 0) return 0;
     return (max - min) / max;
   };
-  for (const klass of SATELLITE_CLASS_ORDER) {
+  for (const klass of Object.keys(SATELLITE_CLASSES)) {
     const color = SATELLITE_CLASSES[klass].color;
     const amberish = hueOf(color) >= 35 && hueOf(color) <= 50 && saturationOf(color) > 0.45;
     assert.equal(amberish, false, `${klass} (${color}) sits in the military amber band`);

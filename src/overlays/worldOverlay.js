@@ -1003,41 +1003,6 @@ export function setOverlayEntries(sourceId, entries, options = {}) {
 }
 
 /**
- * Insert or replace one entry without rebuilding another source.
- * @param {string} sourceId
- * @param {object} entry
- */
-export function upsertOverlayEntry(sourceId, entry) {
-  if (_destroyed) return;
-  const source = getOrCreateSource(sourceId);
-  const normalized = normalizeOverlayEntry(source.id, entry);
-  source.entries.set(normalized.id, normalized);
-  rebuildSourceCohorts(source);
-  updateEntryDiagnostics();
-  invalidateHost();
-}
-
-/**
- * Remove one entry by stable identity.
- * @param {string} sourceId
- * @param {string} entryId
- * @returns {boolean}
- */
-export function removeOverlayEntry(sourceId, entryId) {
-  if (_destroyed) return false;
-  const source = _sources.get(assertSourceId(sourceId));
-  if (!source) return false;
-  const id = String(entryId);
-  const removed = source.entries.delete(id);
-  if (!removed) return false;
-  _records.delete(entryKey(source.id, id));
-  rebuildSourceCohorts(source);
-  updateEntryDiagnostics();
-  invalidateHost();
-  return true;
-}
-
-/**
  * Remove all entries while retaining the source's registration/options.
  * @param {string} sourceId
  * @returns {boolean}

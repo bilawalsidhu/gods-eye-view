@@ -10,7 +10,7 @@ import {
   recordFix,
   syncPlayback,
   updatePlayback,
-} from '../transit/movement.js';
+} from '../../data/transitMovement.js';
 import {
   FEED_EVICT_AFTER_MS,
   FEED_STALE_AFTER_MS,
@@ -18,10 +18,10 @@ import {
   MAX_TRAINS_TOTAL,
   MISSED_POLLS_TO_DROP,
   isLiveRailPositionSource,
-  isStaleTrainFix,
+  isStaleVehicleFix,
   playbackModeFor,
   railTrainKey,
-  trainReportTimeMs,
+  vehicleReportTimeMs,
 } from './policy.js';
 import { bindTrainPath, followFix, rebindTrainPath } from './pathBinding.js';
 import { scheduleRetryDelayMs } from './schedules.js';
@@ -119,7 +119,7 @@ export function createIngestion({ state, services, parts, source }) {
     for (const [key, entry] of state._trains) {
       if (
         deadFeeds.has(entry.feedId) ||
-        isStaleTrainFix(entry.record, nowMs, entry.fetchedAt)
+        isStaleVehicleFix(entry.record, nowMs, entry.fetchedAt)
       ) {
         removeTrain(key);
         removed += 1;
@@ -235,7 +235,7 @@ export function createIngestion({ state, services, parts, source }) {
 
   /** A playback fix for one record, with the time it was really reported. */
   function fixFor(record, fetchedAt) {
-    const stamped = trainReportTimeMs(record, fetchedAt);
+    const stamped = vehicleReportTimeMs(record, fetchedAt);
     const reportAt =
       stamped > fetchedAt + FUTURE_STAMP_TOLERANCE_MS ? fetchedAt : stamped;
     return {
@@ -354,7 +354,7 @@ export function createIngestion({ state, services, parts, source }) {
     for (const record of snapshot.trains || []) {
       // Only a reported position is drawn, never one from a timetable.
       if (!isLiveRailPositionSource(record?.positionSource)) continue;
-      if (isStaleTrainFix(record, now, fetchedAt)) continue;
+      if (isStaleVehicleFix(record, now, fetchedAt)) continue;
       const key = railTrainKey(feed.id, record.id);
       if (
         only &&

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { markRaw, shallowRef } from 'vue';
+import { presented } from './presented.js';
 
 /**
  * The scene's status chips as their views render them. ShellFeedback
@@ -16,60 +16,30 @@ export const useStatusStore = defineStore('gev-status', () => {
    * `{hidden, state, label, detail, stopped}`; null until first published.
    * `stopped` rests a label for good once its owner is destroyed.
    */
-  const loading = shallowRef(null);
+  const [loading, publishLoading] = presented();
   /** `{visible, label, immediate, progress, stopped}`, or null. */
-  const traffic = shallowRef(null);
+  const [traffic, publishTraffic] = presented();
   /** `{visible, label, immediate, progress, stopped}`, or null. */
-  const cctv = shallowRef(null);
+  const [cctv, publishCctv] = presented();
 
   /**
    * The page toast, `{text, visible, shown}`; null until the first one.
    * `shown` changes with every show, which rewrites the text.
    */
-  const toast = shallowRef(null);
+  const [toast, publishToast] = presented();
 
   /**
    * The title bar's FPS readout, `{visible, text}`; null while no monitor
    * counts frames.
    */
-  const fps = shallowRef(null);
+  const [fps, publishFps] = presented();
 
   /**
    * The globe's render failure, `{reason, detail, retry, reset}`; null while
    * the globe draws. `reason` is 'render-error' or 'context-lost', and `retry`
    * and `reset` are null where that action is not offered.
    */
-  const renderFailure = shallowRef(null);
-
-  /** @param {?object} next A fresh presentation of the loading status. */
-  function publishLoading(next) {
-    loading.value = next && markRaw(next);
-  }
-
-  /** @param {?object} next A fresh presentation of the road network chip. */
-  function publishTraffic(next) {
-    traffic.value = next && markRaw(next);
-  }
-
-  /** @param {?object} next A fresh presentation of the camera grid chip. */
-  function publishCctv(next) {
-    cctv.value = next && markRaw(next);
-  }
-
-  /** @param {?{text: string, visible: boolean, shown: number}} next */
-  function publishToast(next) {
-    toast.value = next && markRaw(next);
-  }
-
-  /** @param {?{visible: boolean, text: string}} next */
-  function publishFps(next) {
-    fps.value = next && markRaw(next);
-  }
-
-  /** @param {?object} next A fresh presentation of the render failure. */
-  function publishRenderFailure(next) {
-    renderFailure.value = next && markRaw(next);
-  }
+  const [renderFailure, publishRenderFailure] = presented();
 
   return {
     fps,

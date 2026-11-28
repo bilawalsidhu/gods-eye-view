@@ -5,151 +5,84 @@ import {
 } from './policy.js';
 
 export function createState({ services }) {
-  const layerState = {};
-
-  // Scratch results the Earth-disc projection writes into.
-  layerState._radioEarthScreenCenter = { x: 0, y: 0 };
-
-  layerState._radioEarthToCenter = { x: 0, y: 0, z: 0 };
-
-  layerState._viewer = null;
-
-  layerState._enabled = false;
-
-  layerState._managerLifecyclePresentation = null;
-
-  layerState._loading = false;
-
-  layerState._stale = false;
-
-  layerState._degraded = false;
-  layerState._rejectedStationCount = 0;
-
-  layerState._error = null;
-
-  layerState._updatedAt = null;
-
-  layerState._acceptedCatalogSnapshot = EMPTY_ACCEPTED_CATALOG_SNAPSHOT;
-
-  layerState._stations = [];
-
-  layerState._stationById = new Map();
-
-  layerState._categories = [];
-  layerState._categoriesLocale = null;
-
-  layerState._renderById = new Map();
-
-  layerState._filter = DEFAULT_RADIO_FILTER;
-
-  layerState._selectedId = null;
-
-  layerState._selectionGeneration = 0;
-
-  layerState._selectionTimer = null;
-
-  layerState._radioCameraNavigationGeneration = 0;
-
-  layerState._radioCameraFlightSequence = 0;
-
-  layerState._activeRadioCameraFlight = null;
-
-  layerState._audio = null;
-
-  layerState._audioStationId = null;
-
-  layerState._audioState = 'stopped';
-
-  layerState._audioError = null;
-
-  layerState._userVolume = DEFAULT_RADIO_VOLUME;
-
-  layerState._tuningActive = false;
-
-  layerState._tuningStatic = false;
-
-  layerState._tuningAwaitingStationId = null;
-
-  layerState._tuningPreviewId = null;
-
-  layerState._tuningStartStationId = null;
-
-  layerState._tuningResumesPlayback = false;
-
-  layerState._tuningResolutionSnapshot = EMPTY_ACCEPTED_CATALOG_SNAPSHOT;
-
-  layerState._tuningStationById = new Map();
-
-  layerState._tuningUnavailableStationId = null;
-
-  layerState._cancelledTuningPresentationStation = null;
-
-  layerState._tuningCameraNavigation = null;
-
-  layerState._tuningNoiseContext = null;
-
-  layerState._tuningNoiseSource = null;
-
-  layerState._tuningNoiseFilter = null;
-
-  layerState._tuningNoiseGain = null;
-
-  layerState._voiceDucked = false;
-
-  layerState._voiceRestoring = false;
-
-  layerState._voiceRestoreTimer = null;
-
-  layerState._volumeFadeFrame = null;
-
-  layerState._volumeTransitionGeneration = 0;
-
-  layerState._playGeneration = 0;
-
-  layerState._playAttemptSequence = 0;
-
-  layerState._activePlaybackAttempt = null;
-
-  layerState._playFallbackId = null;
-
-  layerState._playFallbackFocus = null;
-
-  layerState._playFallbackOrigin = 'programmatic';
-
-  layerState._playFallbackAttemptId = null;
-
-  layerState._clickSubscription = null;
-
-  layerState._horizonTimer = null;
-
-  layerState._lastHorizonCameraPosition = null;
-
-  layerState._horizonScanCount = 0;
-
-  layerState._abortController = null;
-
-  layerState._requestGeneration = 0;
-
-  layerState._sessionGeneration = 0;
-
-  layerState._overlayPublishTimer = null;
-
-  layerState._clusterOverlayIdentitySequence = 0;
-
-  layerState._clusterOverlayIdentities = [];
-
-  layerState._overlayDiagnostics = {
-    entryCount: 0,
-    selectedCount: 0,
-    singletonTexts: [],
-    singletonIds: [],
-    clusterTexts: [],
-    clusterIds: [],
-    clusterMemberships: [],
+  return {
+    // Scratch results the Earth-disc projection writes into.
+    _radioEarthScreenCenter: { x: 0, y: 0 },
+    _radioEarthToCenter: { x: 0, y: 0, z: 0 },
+    _viewer: null,
+    _enabled: false,
+    _managerLifecyclePresentation: null,
+    _loading: false,
+    _stale: false,
+    _degraded: false,
+    _rejectedStationCount: 0,
+    _error: null,
+    _updatedAt: null,
+    _acceptedCatalogSnapshot: EMPTY_ACCEPTED_CATALOG_SNAPSHOT,
+    _stations: [],
+    _stationById: new Map(),
+    _categories: [],
+    _categoriesLocale: null,
+    _renderById: new Map(),
+    _filter: DEFAULT_RADIO_FILTER,
+    _selectedId: null,
+    _selectionGeneration: 0,
+    _selectionTimer: null,
+    _radioCameraNavigationGeneration: 0,
+    _radioCameraFlightSequence: 0,
+    _activeRadioCameraFlight: null,
+    _audio: null,
+    _audioStationId: null,
+    _audioState: 'stopped',
+    _audioError: null,
+    _userVolume: DEFAULT_RADIO_VOLUME,
+    _tuningActive: false,
+    _tuningStatic: false,
+    _tuningAwaitingStationId: null,
+    _tuningPreviewId: null,
+    _tuningStartStationId: null,
+    _tuningResumesPlayback: false,
+    _tuningResolutionSnapshot: EMPTY_ACCEPTED_CATALOG_SNAPSHOT,
+    _tuningStationById: new Map(),
+    _tuningUnavailableStationId: null,
+    _cancelledTuningPresentationStation: null,
+    _tuningCameraNavigation: null,
+    _tuningNoiseContext: null,
+    _tuningNoiseSource: null,
+    _tuningNoiseFilter: null,
+    _tuningNoiseGain: null,
+    _voiceDucked: false,
+    _voiceRestoring: false,
+    _voiceRestoreTimer: null,
+    _volumeFadeFrame: null,
+    _volumeTransitionGeneration: 0,
+    _playGeneration: 0,
+    _playAttemptSequence: 0,
+    _activePlaybackAttempt: null,
+    _playFallbackId: null,
+    _playFallbackFocus: null,
+    _playFallbackOrigin: 'programmatic',
+    _playFallbackAttemptId: null,
+    _clickSubscription: null,
+    _horizonTimer: null,
+    _lastHorizonCameraPosition: null,
+    _horizonScanCount: 0,
+    _abortController: null,
+    _requestGeneration: 0,
+    _sessionGeneration: 0,
+    _overlayPublishTimer: null,
+    _clusterOverlayIdentitySequence: 0,
+    _clusterOverlayIdentities: [],
+    _overlayDiagnostics: {
+      entryCount: 0,
+      selectedCount: 0,
+      singletonTexts: [],
+      singletonIds: [],
+      clusterTexts: [],
+      clusterIds: [],
+      clusterMemberships: [],
+    },
+    _listeners: new Set(),
+    _playbackControlListeners: new Set(),
   };
-
-  layerState._listeners = new Set();
-
-  layerState._playbackControlListeners = new Set();
-  return layerState;
 }

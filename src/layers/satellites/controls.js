@@ -63,7 +63,7 @@ export function createControls({ state: layerState, services, parts, source }) {
       parts.rendering._setPointShown(noradId, _classVisible(noradId));
     }
     _syncIssOrbit();
-    parts.labels?._syncIssOverlay?.();
+    parts.labels._syncIssOverlay();
     layerState._detectionObjects.clear();
   }
 
@@ -222,9 +222,9 @@ export function createControls({ state: layerState, services, parts, source }) {
 
     source: 'CelesTrak',
 
-    updateInterval: 0,
-    // We use preRender for real-time updates, not interval polling
-    refreshInterval: 5 * 60 * 1000,
+    // Positions move every frame in preRender; the manager refetches the
+    // catalog every 5 minutes.
+    updateInterval: 5 * 60 * 1000,
 
     getDetectableObjects(options = {}) {
       // Read on every detection paint: one result array and each satellite's
@@ -270,7 +270,7 @@ export function createControls({ state: layerState, services, parts, source }) {
         if (modelFor(parts, noradId)?._visualPosition?.()) continue;
         // The Cockpit camera rides a held subject; a bracket on it would sit
         // on the lens.
-        if (isTracked && parts.cockpit?._cockpitHeld()) continue;
+        if (isTracked && parts.cockpit._cockpitHeld()) continue;
         const cat = layerState._catalog.get(noradId);
         let object = layerState._detectionObjects.get(noradId);
         if (!object) {
@@ -829,7 +829,6 @@ export function createControls({ state: layerState, services, parts, source }) {
   return {
     _pointStyleFor,
     _notifyRowControls,
-    _classTally,
     _classVisible,
     _applyClassVisibility,
     _issOrbitVisible,

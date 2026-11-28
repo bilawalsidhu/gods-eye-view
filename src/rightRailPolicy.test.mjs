@@ -14,10 +14,11 @@ test('desktop side rails hide collapsed panels in every HUD layout, never on pho
     assert.doesNotMatch(ui, /hud\.variant === 'cyber'/);
   }
   assert.match(right, /const exclusive = !isMobile;/);
-  // Cockpit keeps its collapsed Data Layers strip, which its layout aligns to.
+  // Cockpit keeps its collapsed Data Layers strip, which its layout aligns to;
+  // phones return before this, with their own full-width stack.
   assert.match(
     left,
-    /const exclusive =\s*!isMobile && !documentRef\?\.body\?\.classList\?\.contains\('cockpit-mode'\);/,
+    /const exclusive =\s*!documentRef\?\.body\?\.classList\?\.contains\('cockpit-mode'\);/,
   );
   assert.match(css, /#right-context-rail\.layout-exclusive > \[data-panel-id\]\.collapsed \{/);
   assert.match(css, /#left-panel-stack\.layout-exclusive > \[data-panel-id\]\.collapsed \{/);

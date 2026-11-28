@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { bindRenderer } from '../../render/rendererOf.js';
 import { createIngestion } from './ingestion.js';
+import { flightQuery } from './index.js';
 
 function setup(source) {
   const feed = {
@@ -82,4 +84,33 @@ test('civil acquisition publishes source time and uses a replaced source on the 
   assert.equal(probe.feed._lastError, 'Source snapshot time unavailable');
   assert.deepEqual(probe.labels, ['First', 'Second']);
   assert.equal(probe.restores.length, 2);
+});
+
+test('the feed is asked for the flights around the camera port’s ground point', () => {
+  let pose = { lon: -97.04, lat: 32.9, height: 9000 };
+  const viewer = {};
+  const unbind = bindRenderer(viewer, { camera: { pose: () => pose } });
+  try {
+    assert.deepEqual(flightQuery(viewer), {
+      latitude: 32.9,
+      longitude: -97.04,
+    });
+    pose = { lon: NaN, lat: NaN, height: NaN };
+    assert.deepEqual(flightQuery(viewer), {}, 'no ground point: no area');
+    pose = { lon: -97.04, lat: NaN, height: 9000 };
+    assert.deepEqual(flightQuery(viewer), {}, 'half a ground point: none');
+  } finally {
+    unbind();
+  }
+});
+
+test('with no viewer or camera the query names no area', () => {
+  assert.deepEqual(flightQuery(null), {});
+  assert.deepEqual(flightQuery(undefined), {});
+  assert.deepEqual(flightQuery({}), {}, 'a viewer with no camera');
+  assert.deepEqual(
+    flightQuery({ isDestroyed: () => true, camera: {} }),
+    {},
+    'a destroyed viewer',
+  );
 });

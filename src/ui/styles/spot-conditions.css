@@ -103,16 +103,6 @@
   color: #ffb547;
 }
 
-.spot-conditions__query {
-  overflow: hidden;
-  margin-inline-start: auto;
-  max-width: 50%;
-  color: rgba(199, 214, 222, 0.45);
-  text-overflow: ellipsis;
-  text-transform: none;
-  white-space: nowrap;
-}
-
 .spot-conditions__block ul {
   display: grid;
   gap: 0.2rem;
@@ -171,13 +161,6 @@
   font-size: 0.7rem;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.spot-conditions__row-title--wrap {
-  display: -webkit-box;
-  white-space: normal;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
 }
 
 .spot-conditions__row-detail {

@@ -1,7 +1,6 @@
 /** Camera work runs on moveEnd/data arrival only. Measures remain observable
  * through PerformanceObserver while clearing entries prevents a long session
  * accumulating one timing record for every pan and streamed tile. */
-export const WILDLIFE_MOVE_END_BUDGET_MS = 4;
 const measureSpans = new Map();
 
 function measureSpan(stage) {

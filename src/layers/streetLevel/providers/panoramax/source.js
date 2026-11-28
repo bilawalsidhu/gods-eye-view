@@ -1,4 +1,4 @@
-import { createLimiter } from '../../limiter.js';
+import { createLimiter } from '../../../../data/limiter.js';
 import { msg } from '../../../../i18n/index.js';
 import {
   API_CONCURRENCY,
@@ -15,6 +15,7 @@ import {
   TILE_CONCURRENCY,
   TILE_TIMEOUT_MS,
 } from './policy.js';
+import { parseRetryAfterSeconds } from '../../../../sources/retryAfter.js';
 
 /** Longest wait a Retry-After (or the backoff) asks for. */
 const RETRY_AFTER_MAX_SEC = 300;
@@ -40,15 +41,11 @@ const UNREACHABLE = msg(
  * app this is usually null and the caller backs off on its own.
  */
 export function retryAfterSeconds(response, now = Date.now()) {
-  const header = response.headers?.get?.('retry-after');
-  if (header == null || header === '') return null;
-  let value = Number(header);
-  if (!Number.isFinite(value)) {
-    const at = Date.parse(header);
-    if (!Number.isFinite(at)) return null;
-    value = Math.ceil((at - now) / 1000);
-  }
-  if (value < 0) return null;
+  const value = parseRetryAfterSeconds(
+    response.headers?.get?.('retry-after'),
+    now,
+  );
+  if (value === null || value < 0) return null;
   // A maintenance page's hour must not freeze coverage for an hour.
   return Math.min(RETRY_AFTER_MAX_SEC, Math.max(1, value));
 }

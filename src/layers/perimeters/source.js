@@ -1,5 +1,5 @@
 import { msg } from '../../i18n/marker.js';
-import { readResponseJsonCapped } from '../../sources/httpBody.js';
+import { fetchProxyRows } from '../../sources/proxyRows.js';
 import { firePerimeterSnapshot } from './records.js';
 
 // Failures stay English data. The Layers panel shows them translated.
@@ -15,21 +15,16 @@ export function createWfigsPerimeterSource({
      * unreachable.
      */
     async getSnapshot({ signal } = {}) {
-      signal?.throwIfAborted();
-      const response = await fetchImpl('/api/fire-perimeters', { signal });
-      if (!response.ok) throw new Error(`WFIGS HTTP ${response.status}`);
-      const payload = await readResponseJsonCapped(
-        response,
-        80 * 1024 * 1024,
-        signal,
+      const { rows, stale, fetchedAt } = await fetchProxyRows(
+        fetchImpl,
+        '/api/fire-perimeters',
+        {
+          upstream: 'WFIGS',
+          malformed: msg('Malformed perimeter snapshot'),
+          signal,
+        },
       );
-      signal?.throwIfAborted();
-      if (!Array.isArray(payload?.rows))
-        throw new Error(msg('Malformed perimeter snapshot'));
-      return firePerimeterSnapshot(payload.rows, {
-        fetchedAt: payload.fetchedAt,
-        stale: payload.stale === true,
-      });
+      return firePerimeterSnapshot(rows, { fetchedAt, stale });
     },
   };
 }

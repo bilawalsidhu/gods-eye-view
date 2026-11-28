@@ -1,6 +1,8 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { msg, t } from '../../../i18n/index.js';
+import { t } from '../../../i18n/index.js';
+import { bearingBetweenCoordinates } from '../../../cockpitMath.js';
+import { compassName } from '../../spotConditions.js';
 import { useEntityCardStore } from '../../stores/entityCard.js';
 
 // A flight's route on a small globe of its own at the top of its card: the
@@ -38,18 +40,13 @@ const at = () =>
   props.at && Number.isFinite(props.at.lat) && Number.isFinite(props.at.lon) ? { lat: props.at.lat, lon: props.at.lon } : null;
 const route = () => ({ from: place(props.from), to: place(props.to), at: at() });
 
-/** The initial bearing (degrees from north) of the great circle a → b. */
-function bearing(a, b) {
-  const rad = Math.PI / 180;
-  const y = Math.sin((b.lon - a.lon) * rad) * Math.cos(b.lat * rad);
-  const x = Math.cos(a.lat * rad) * Math.sin(b.lat * rad) - Math.sin(a.lat * rad) * Math.cos(b.lat * rad) * Math.cos((b.lon - a.lon) * rad);
-  return (Math.atan2(y, x) / rad + 360) % 360;
-}
 // The compass: the view is north up, so N sits at the top; a cyan needle
 // shows the course to the destination, with its bearing in degrees.
-const course = computed(() => Math.round(bearing(at() || props.from, props.to)) % 360);
-const POINTS = [msg('N'), msg('NE'), msg('E'), msg('SE'), msg('S'), msg('SW'), msg('W'), msg('NW')];
-const courseLabel = computed(() => `${String(course.value).padStart(3, '0')}° ${t(POINTS[Math.round(course.value / 45) % 8])}`);
+const course = computed(() => {
+  const a = at() || props.from;
+  return Math.round(bearingBetweenCoordinates(a.lat, a.lon, props.to.lat, props.to.lon) ?? 0) % 360;
+});
+const courseLabel = computed(() => `${String(course.value).padStart(3, '0')}° ${t(compassName(course.value))}`);
 
 onMounted(() => {
   const previews = store.previews();

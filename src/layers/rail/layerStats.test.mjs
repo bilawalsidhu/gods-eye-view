@@ -99,3 +99,13 @@ test('trains the cap leaves out make the snapshot partial', async (t) => {
   assert.equal(app.state()._feedStatus.get('mbta-rail').capped, 0);
   assert.notEqual(app.layer.getStats().partial, true);
 });
+
+test('the prompt names the altitude the gate opens at, not 3,000 km', async (t) => {
+  // 2,900 km is under ACTIVATION_ALTITUDE_M but above the enter threshold.
+  const app = harness(t, { at: BOSTON, altitude: 2_900_000 });
+  await app.enable();
+  assert.equal(
+    app.layer.getStats().statusMessage,
+    'Fly below 2,850 km to a covered region',
+  );
+});

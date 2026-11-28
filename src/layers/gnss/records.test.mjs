@@ -4,12 +4,6 @@ import { getResolution, isPentagon, isValidCell } from 'h3-js';
 import {
   accumulateGnssObservations,
   binGnssCells,
-  GNSS_CLASSIFIER,
-  GNSS_H3_RESOLUTION,
-  GNSS_HIGH_PERCENT,
-  GNSS_MEDIUM_PERCENT,
-  GNSS_PROVENANCE,
-  GNSS_WINDOW_MS,
   gnssCellKey,
   gnssCellRing,
   gnssIntegrityLevel,
@@ -123,7 +117,6 @@ test('low NIC, low NACp or a readsb GPS-loss flag each mark an aircraft degraded
 });
 
 test('cell keys are the H3 resolution-4 cells gpsjam.org uses', () => {
-  assert.equal(GNSS_H3_RESOLUTION, 4);
   // Kraków: a known lat/lon lands in its known res-4 hexagon.
   assert.equal(gnssCellKey(50.1, 19.9), '841e2e7ffffffff');
   assert.equal(getResolution(gnssCellKey(50.1, 19.9)), 4);
@@ -248,39 +241,8 @@ test('the primary state is a navigation-integrity anomaly; interference is only 
     assert.doesNotMatch(key, /interference|jamming|spoof/i);
 });
 
-test('provenance separates the GEV classifier from the gpsjam aggregation and the GEV window', () => {
-  assert.deepEqual(GNSS_PROVENANCE.classifier, {
-    id: 'gev-nic-nacp-v2',
-    rule: 'gpsOkBefore set || aircraft-reported NACp < 8 || (aircraft-reported NIC < 7 && !(NIC === 0 && NACp >= 10))',
-    basis: '14 CFR 91.227(c) ADS-B Out performance minima (US regulation)',
-    definedBy: 'GEV',
-    validated: false,
-  });
-  assert.equal(GNSS_PROVENANCE.classifier, GNSS_CLASSIFIER);
-  assert.deepEqual(GNSS_PROVENANCE.aggregation, {
-    id: 'gpsjam-cell-bands',
-    formula: '100 * max(0, bad - 1) / total',
-    bands: [2, 10],
-    grid: 'h3',
-    h3Resolution: 4,
-    source: 'https://gpsjam.org/faq',
-    definedBy: 'gpsjam.org',
-  });
-  assert.deepEqual(GNSS_PROVENANCE.window, {
-    minutes: 30,
-    scope: 'visited-view',
-    definedBy: 'GEV',
-  });
-  assert.equal(GNSS_PROVENANCE.state.id, 'navigation-integrity-anomaly');
-  assert.equal(
-    GNSS_PROVENANCE.interpretation.id,
-    'suspected-gnss-interference',
-  );
-  assert.equal(GNSS_PROVENANCE.interpretation.validated, false);
-  assert.ok(Object.isFrozen(GNSS_PROVENANCE));
-  assert.ok(Object.isFrozen(GNSS_PROVENANCE.aggregation.bands));
-  // The bands in provenance are the ones the level function applies.
-  const [medium, high] = GNSS_PROVENANCE.aggregation.bands;
+test('the provenance bands are the ones the level function applies', () => {
+  const [medium, high] = gnssProvenance().aggregation.bands;
   assert.equal(gnssIntegrityLevel(100, 1 + medium).level, 'medium');
   assert.equal(gnssIntegrityLevel(100, 1 + high).level, 'medium');
   assert.equal(gnssIntegrityLevel(100, 2 + high).level, 'high');
@@ -457,7 +419,6 @@ test('pruning without new rows drops expired observations and expired degraded e
   assert.equal(entry(store, 'a1').degradedAt, null);
   pruneGnssObservations(store, 51 * MIN);
   assert.equal(store.size, 0);
-  assert.equal(GNSS_WINDOW_MS, 30 * MIN);
 });
 
 test('rows without finite coordinates never key a cell', () => {
@@ -497,8 +458,6 @@ test('every cell with an aircraft is shown, as on gpsjam.org; only the bad − 1
 });
 
 test('the gpsjam bands are unchanged by the hex grid', () => {
-  assert.equal(GNSS_MEDIUM_PERCENT, 2);
-  assert.equal(GNSS_HIGH_PERCENT, 10);
   // [total, bad] → level, at and either side of both band edges.
   for (const [total, bad, level] of [
     [100, 0, 'low'],

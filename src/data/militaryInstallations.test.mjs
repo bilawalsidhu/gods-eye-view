@@ -1,16 +1,15 @@
 import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
 import { fakeScenePorts } from '../testSupport/fakeCesiumScene.mjs';
-import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   approximateSurfaceDistanceM,
   classifyGoogleMilitaryPlace,
   installationSourceLabel,
-  installationResponseSaturated,
-  installationSurfaceHeightM,
   installationWithinViewport,
-} from './militaryInstallations.js';
+} from '../layers/installations/model.js';
+import { installationResponseSaturated } from '../layers/installations/source.js';
+import { installationSurfaceHeightM } from './militaryInstallations.js';
 import militaryInstallationsLayer from './militaryInstallations.js';
 import {
   _clearMeshFloorCellsForTest,
@@ -841,45 +840,19 @@ test('zoom-out aborts an active installation request and returns non-loading gui
 // sat healthy — observed in the field as a layer stuck reporting unavailable
 // while its own endpoint served hundreds of features. The backoff progression
 // is a pure exported helper so it pins without booting the layer (the full
-// layer needs a Cesium viewer and interaction handlers); the wiring is pinned
-// by source probes against the shipped file, the same technique the HUD datum
-// tests use where a full boot is impractical.
-import { installationRetryDelayMs } from './militaryInstallations.js';
+// layer needs a Cesium viewer and interaction handlers).
+import { unavailableRetryDelayMs } from './unavailableRetry.js';
 import { framePortFor } from '../testSupport/fakeFramePort.mjs';
 
-const installationsSource = readLayerSource(
-  new URL('./militaryInstallations.js', import.meta.url), 'utf8');
-
 test('the unavailable retry backs off 30s to a 240s ceiling and restarts clean', () => {
-  assert.equal(installationRetryDelayMs(0), 30000, 'first failure retries in 30s');
-  assert.equal(installationRetryDelayMs(undefined), 30000, 'no prior delay means the minimum');
-  assert.equal(installationRetryDelayMs(30000), 60000, 'each failure doubles');
-  assert.equal(installationRetryDelayMs(60000), 120000);
-  assert.equal(installationRetryDelayMs(120000), 240000, 'the ceiling is four minutes');
-  assert.equal(installationRetryDelayMs(240000), 240000, 'and it stays there');
-  assert.equal(installationRetryDelayMs(-5), 30000, 'garbage restarts at the minimum');
+  assert.equal(unavailableRetryDelayMs(0), 30000, 'first failure retries in 30s');
+  assert.equal(unavailableRetryDelayMs(undefined), 30000, 'no prior delay means the minimum');
+  assert.equal(unavailableRetryDelayMs(30000), 60000, 'each failure doubles');
+  assert.equal(unavailableRetryDelayMs(60000), 120000);
+  assert.equal(unavailableRetryDelayMs(120000), 240000, 'the ceiling is four minutes');
+  assert.equal(unavailableRetryDelayMs(240000), 240000, 'and it stays there');
+  assert.equal(unavailableRetryDelayMs(-5), 30000, 'garbage restarts at the minimum');
 });
-
-test('the retry is wired to every lifecycle edge, not just declared', () => {
-  assert.match(installationsSource,
-    /setInstallationStatus\(\s*'unavailable',[^]*?\);\n\s*if \(!isUnavailableCapability\(error\)\)\s*parts\.viewport\.scheduleUnavailableRetry\(error\?\.retryAfterMs\);/,
-    'a failed load schedules the retry immediately after reporting unavailable');
-  assert.match(installationsSource,
-    /clearUnavailableRetry\(\);\n\s*setInstallationStatus\(\n?\s*layerState\.records\.length/,
-    'a successful load clears the pending retry and resets the backoff');
-  assert.match(installationsSource,
-    /clearUnavailableRetry\(\);\n\s*setInstallationStatus\('zoom-in'/,
-    'zooming out of range cancels the retry — moveEnd owns re-entry there');
-  assert.match(installationsSource, /disable\(\) \{[^]*?clearUnavailableRetry\(\);/,
-    'disabling the layer cancels the retry');
-  assert.match(installationsSource,
-    /function scheduleLoad\(\) \{[^]*?clearUnavailableRetry\(\{ resetBackoff: false \}\)/,
-    'a user-driven load supersedes the retry without resetting the backoff step');
-  assert.match(installationsSource,
-    /layerState\.enabled && !layerState\.loading\)\s*parts\.ingestion\.loadInstallations\(\)/,
-    'the fired retry re-checks enablement and never races an in-flight load');
-});
-
 
 test('a merged installation stays visible when only its second fragment intersects', () => {
   const far = [[-96.6,30.4],[-96.4,30.4],[-96.4,30.6],[-96.6,30.6]];

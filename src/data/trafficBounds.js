@@ -1,10 +1,9 @@
 /**
  * @file Pure geometry helpers for the traffic layer's viewport fetch bounds.
  *
- * C4 fix (2026-07-16): `camera.computeViewRectangle()` spans toward the horizon
- * at oblique pitch, and centering the fetch box on the RECTANGLE MIDPOINT put
- * road fetches tens of km from what the user is actually looking at. The fetch
- * center is now derived from the camera's look-at ground point
+ * `camera.computeViewRectangle()` spans toward the horizon at oblique pitch, so its
+ * midpoint can sit tens of km from what the user looks at. The fetch center is derived
+ * from the camera's look-at ground point
  * (`camera.pickEllipsoid` at canvas center — the globe is hidden under Google
  * 3D tiles, so `scene.globe.pick` is not reliable), falling back to the camera
  * nadir, and pulled back toward nadir when the look-at point is beyond a
@@ -13,55 +12,13 @@
  * @module data/trafficBounds
  */
 
-import { EARTH_RADIUS_KM, greatCircleKm, isGeoPoint } from '../geoDistance.js';
-
-const toRad = (deg) => (deg * Math.PI) / 180;
-const toDeg = (rad) => (rad * 180) / Math.PI;
-
-/**
- * Initial bearing (radians) from point 1 toward point 2 along the great circle.
- *
- * @param {number} lat1 @param {number} lon1 @param {number} lat2 @param {number} lon2
- * @returns {number} Bearing in radians (0 = north, clockwise).
- */
-function initialBearingRad(lat1, lon1, lat2, lon2) {
-  const p1 = toRad(lat1);
-  const p2 = toRad(lat2);
-  const dl = toRad(lon2 - lon1);
-  const y = Math.sin(dl) * Math.cos(p2);
-  const x =
-    Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl);
-  return Math.atan2(y, x);
-}
-
-/**
- * Destination point given a start, an initial bearing, and a distance
- * (spherical direct geodesic).
- *
- * @param {number} lat - Start latitude (degrees).
- * @param {number} lon - Start longitude (degrees).
- * @param {number} bearingRad - Initial bearing (radians, 0 = north).
- * @param {number} distKm - Distance to travel (km).
- * @returns {{lat:number, lon:number}} Destination in degrees.
- */
-function destinationPoint(lat, lon, bearingRad, distKm) {
-  const delta = distKm / EARTH_RADIUS_KM;
-  const p1 = toRad(lat);
-  const l1 = toRad(lon);
-  const p2 = Math.asin(
-    Math.sin(p1) * Math.cos(delta) +
-      Math.cos(p1) * Math.sin(delta) * Math.cos(bearingRad),
-  );
-  const l2 =
-    l1 +
-    Math.atan2(
-      Math.sin(bearingRad) * Math.sin(delta) * Math.cos(p1),
-      Math.cos(delta) - Math.sin(p1) * Math.sin(p2),
-    );
-  // Normalize longitude to [-180, 180)
-  const lonDeg = ((toDeg(l2) + 540) % 360) - 180;
-  return { lat: toDeg(p2), lon: lonDeg };
-}
+import {
+  destinationPoint,
+  greatCircleKm,
+  initialBearingDeg,
+  isGeoPoint,
+} from '../geoDistance.js';
+import { wrapLongitude } from '../geo/vector.js';
 
 /**
  * Derive the road-fetch center from the camera's look-at ground point.
@@ -101,9 +58,13 @@ export function deriveFetchCenter({
   if (distKm <= maxPullKm) {
     return { lat: hitLat, lon: hitLon, source: 'hit' };
   }
-  const bearing = initialBearingRad(nadirLat, nadirLon, hitLat, hitLon);
-  const pulled = destinationPoint(nadirLat, nadirLon, bearing, maxPullKm);
-  return { lat: pulled.lat, lon: pulled.lon, source: 'pulled' };
+  const pulled = destinationPoint(
+    nadirLat,
+    nadirLon,
+    initialBearingDeg(nadirLat, nadirLon, hitLat, hitLon),
+    maxPullKm * 1000,
+  );
+  return { lat: pulled.lat, lon: wrapLongitude(pulled.lon), source: 'pulled' };
 }
 
 /**

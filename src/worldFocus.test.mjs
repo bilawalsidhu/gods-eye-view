@@ -10,7 +10,7 @@ import {
   WORLD_FOCUS_REQUEST_EVENT,
   flyToWorldTarget,
   isValidWorldFocusTarget,
-  registerWorldFocusRequestListener,
+  registerFocusRequestListener,
   requestWorldFocus,
   routeWorldFocusRequest,
 } from './worldFocus.js';
@@ -34,8 +34,10 @@ function stubCamera() {
 test('a focus request carries the clicked target to any registered listener', () => {
   const target = new EventTarget();
   const seen = [];
-  const dispose = registerWorldFocusRequestListener(target, (event) =>
-    seen.push(event.detail),
+  const dispose = registerFocusRequestListener(
+    target,
+    WORLD_FOCUS_REQUEST_EVENT,
+    (event) => seen.push(event.detail),
   );
   assert.equal(
     requestWorldFocus(

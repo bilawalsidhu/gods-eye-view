@@ -3,7 +3,7 @@
  * neighborhood boundaries that OSM tags as label-nodes-only (Chinatown, the Marina, the
  * Mission, …). It sits AHEAD of the live-Overpass / synthesis path in the resolver, so
  * covered neighborhoods resolve instantly to a REAL boundary with no network dependency
- * (the live-Overpass path is slow/flaky for neighborhoods — see docs/field-test-2-analysis.md).
+ * (the live-Overpass path is slow and flaky for neighborhoods).
  *
  * Source-agnostic: each city is a `{name, geometry}` GeoJSON file in
  * `local_data/neighborhoods/`. Swap the file (e.g. to public-domain DataSF) without
@@ -11,6 +11,7 @@
  */
 
 import { loadBundledJson } from './bundledJson.js';
+import { pointInRing } from '../geoDistance.js';
 import { createRetryableLoader } from './retryableLoad.js';
 
 // bbox = [west, south, east, north]; only load a city file when the point falls in its box.
@@ -26,10 +27,8 @@ const CITY_FILES = [
 ];
 
 /**
- * city id → memoized loader. Failures are NOT memoized: a transient
- * chunk-load error used to cache an empty array forever, silently demoting
- * every later neighborhood ask to the slow live-Overpass ladder for the rest
- * of the session, indistinguishably from "not in a covered city".
+ * City id → memoized loader. Retry transient chunk-load errors on the next request.
+ * Caching an empty result would send every later neighborhood lookup to live Overpass.
  * @type {Map<string, () => Promise<Array>>}
  */
 const _cityLoaders = new Map();
@@ -67,21 +66,6 @@ function sameWords(featureWords, queryWords) {
   return q.length === f.size && q.every((w) => f.has(w));
 }
 
-/** Ray-casting point-in-ring. ring = [[lon,lat], …]. */
-function pointInRing(lon, lat, ring) {
-  let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const xi = ring[i][0];
-    const yi = ring[i][1];
-    const xj = ring[j][0];
-    const yj = ring[j][1];
-    const intersect =
-      yi > lat !== yj > lat && lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi;
-    if (intersect) inside = !inside;
-  }
-  return inside;
-}
-
 /** Normalize Polygon | MultiPolygon → array of polygons (each = [outerRing, ...holes]). */
 function toPolygons(geom) {
   if (!geom) return [];
@@ -95,10 +79,10 @@ function containingOuterRing(feature, lon, lat) {
   for (const poly of toPolygons(feature.geometry)) {
     const outer = poly[0];
     if (!outer || outer.length < 3) continue;
-    if (!pointInRing(lon, lat, outer)) continue;
+    if (!pointInRing(outer, lat, lon)) continue;
     let inHole = false;
     for (let h = 1; h < poly.length; h++) {
-      if (pointInRing(lon, lat, poly[h])) {
+      if (pointInRing(poly[h], lat, lon)) {
         inHole = true;
         break;
       }
@@ -172,8 +156,8 @@ export async function lookupNeighborhoodRing(
   const feats = await loadCity(city);
   if (!feats.length) return null;
 
-  // Old/colloquial names whose DataSF taxonomy equivalent has a longer name
-  // (P0-2 swap): the word-subset matcher requires every feature-name word in
+  // Old/colloquial names whose DataSF taxonomy equivalent has a longer name. The
+  // word-subset matcher requires every feature-name word in
   // the query, so "Financial District" can never match "Financial
   // District/South Beach" without this. Exact-normalized-key aliases only —
   // no fuzzy aliasing.

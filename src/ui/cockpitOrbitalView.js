@@ -62,7 +62,7 @@ import {
  * the briefing's 25 km refresh distance every few seconds, so the sub-satellite
  * point is briefed on a clock instead.
  */
-export const ORBITAL_BRIEF_REFRESH_MS = 60_000;
+const ORBITAL_BRIEF_REFRESH_MS = 60_000;
 
 /** Whether the user asked for reduced motion: zoom steps and tilts cut. */
 function prefersReducedMotion() {
@@ -498,7 +498,7 @@ function wordFocusOffNadir(focus) {
  * @param {object} info Satellite subject (`readSatelliteInfo`).
  * @param {{active: boolean, blurPx: number, lockTick: boolean}} transition
  */
-export function publishOrbitalView(info, transition = IDLE_TRANSITION) {
+function publishOrbitalView(info, transition = IDLE_TRANSITION) {
   const state = this.orbital;
   if (!state || !info) return;
   const focus = orbitalFocusReadout.call(this);

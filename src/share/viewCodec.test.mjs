@@ -9,7 +9,7 @@ import {
   optionSpecs,
 } from '../data/layerState.js';
 import { VIEW_FOLLOW_KINDS, VIEW_MAPS, VIEW_STYLES } from '../view/index.js';
-import { HUD_LAYOUTS } from '../hudLayoutPolicy.js';
+import { HUD_LAYOUTS } from '../hudLayouts.js';
 import { ALLOCATION_STRATEGIES } from '../data/detectionPolicy.js';
 import { BLOOM_INTENSITY_DEFAULT, BLOOM_SCALE_VERSION } from '../bloom.js';
 import {

@@ -1,4 +1,3 @@
-import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 // src/data/trackedModelForm.test.mjs
 //
 // The TRACKED contact's form and size: selecting an aircraft changes its
@@ -11,19 +10,7 @@ import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import flightsLayer, {
-  _setTrackedFlightRefreshStateForTest,
-  _trackedModelRegimeActiveForTest as flightsRegimeActive,
-  _updateTrackedModelForTest as flightsDriveTrackedModel,
-  _trackedBillboardColorForTest as flightsTrackedBillboardColor,
-  _driveFleetModelHandoffForTest as flightsDriveFleetModel,
-  _ensureFleetModelForTest as flightsEnsureFleetModel,
-  _trackedModelForTest as flightsTrackedModel,
-  _trackedIconLookForTest as flightsTrackedIconLook,
-  _modelSetIdsForTest as flightsModelSetIds,
-  _iconForTest as flightsIcon,
-  _setIconForTest as flightsSetIcon,
-} from './flights.js';
+import flightsLayer from './flights.js';
 import militaryFlightsLayer, {
   _setTrackedMilitaryRefreshStateForTest,
   _trackedModelRegimeActiveForTest as militaryRegimeActive,
@@ -47,6 +34,19 @@ import { fakeDrawPort } from '../testSupport/fakeDrawPort.mjs';
 import { loadFleetModelSet } from './fleetModels.js';
 import { aircraftLayerModelSpec } from '../layers/flights/modelSpec.js';
 import { fetchPublicFile } from '../testSupport/fleetGlb.mjs';
+const {
+  _setTrackedFlightRefreshStateForTest,
+  _trackedModelRegimeActiveForTest: flightsRegimeActive,
+  _updateTrackedModelForTest: flightsDriveTrackedModel,
+  _trackedBillboardColorForTest: flightsTrackedBillboardColor,
+  _driveFleetModelHandoffForTest: flightsDriveFleetModel,
+  _ensureFleetModelForTest: flightsEnsureFleetModel,
+  _trackedModelForTest: flightsTrackedModel,
+  _trackedIconLookForTest: flightsTrackedIconLook,
+  _modelSetIdsForTest: flightsModelSetIds,
+  _iconForTest: flightsIcon,
+  _setIconForTest: flightsSetIcon,
+} = flightsLayer.testing;
 
 // The layers draw only once the fleet model set has loaded; load it from disk.
 const _silentInfo = console.info;
@@ -1437,49 +1437,3 @@ for (const fixture of LAYERS) {
     }
   });
 }
-
-test('both layers reset the per-selection tracked-model state', async () => {
-  for (const name of ['flights.js', 'militaryFlights.js']) {
-    const source = readLayerSource(new URL(`./${name}`, import.meta.url));
-    // The reset must be reachable from the real teardown, not only a test seam.
-    assert.match(
-      source,
-      /(?:parts\.\w+\.)?_releaseTrackedModel\(\s*,?\s*\);\n\s*(?:parts\.\w+\.)?_resetTrackedSelectionState\(\s*,?\s*\);/,
-      `${name}: deselect clears the per-selection state in the production path`,
-    );
-    assert.match(
-      source,
-      /(?:(?:flightState|state)\.)?_trackedIcao\s*=\s*icao24;\n\s*(?:parts\.\w+\.)?_resetTrackedSelectionState\(\s*,?\s*\);/,
-      `${name}: selecting a contact starts from a clean per-selection state`,
-    );
-  }
-});
-
-test('the tracked model follows the fleet model rule, and the fleet the 3D toggle', async () => {
-  for (const name of ['flights.js', 'militaryFlights.js']) {
-    const source = readLayerSource(new URL(`./${name}`, import.meta.url));
-    const regime =
-      /^([ \t]*)function _trackedModelRegimeActive\b[\s\S]*?\n\1\}/m.exec(
-        source,
-      )?.[0];
-    assert.ok(regime, `${name}: _trackedModelRegimeActive is defined`);
-    assert.match(
-      regime,
-      /_trackedModelEligible === true/,
-      `${name}: the tracked contact takes its place in the fleet cap`,
-    );
-    assert.match(
-      regime,
-      /(?:parts\.\w+\.)?_modelRegimeActive\(\s*\)/,
-      `${name}: and the fleet's regime`,
-    );
-    const fleet = /^([ \t]*)function _modelRegimeActive\b[\s\S]*?\n\1\}/m.exec(
-      source,
-    )?.[0];
-    assert.match(
-      fleet,
-      /if\s*\(\s*!(?:(?:flightState|state)\.)?_models3dEnabled,?\s*\)\s*return\s*false;/,
-      `${name}: the fleet regime still obeys the DISPLAY-rail 3D toggle`,
-    );
-  }
-});

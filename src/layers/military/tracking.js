@@ -60,6 +60,10 @@ import {
 } from '../../data/trailContinuity.js';
 import { roundHeadingDegrees } from '../../data/headingDegrees.js';
 import { entityRecord } from '../../data/entityRecords.js';
+import {
+  createTrackingRestore,
+  emitWindowEvent,
+} from '../../data/layerTracking.js';
 
 /**
  * The icao a click's hit carries (`event.hit`, the contract's `Hit`): a
@@ -111,23 +115,13 @@ export function createTracking({
     }
   }
 
-  function _emitAwarenessEvent(type, detail) {
-    if (
-      typeof window === 'undefined' ||
-      !window.dispatchEvent ||
-      typeof CustomEvent === 'undefined'
-    )
-      return;
-    window.dispatchEvent(new CustomEvent(type, { detail }));
-  }
-
   function _publishTrackedSelection(icao24, origin = 'programmatic') {
     const position = parts.icons._iconPosition(icao24, vec());
     const info = flightState.records.data.get(icao24);
     if (!position || !info) return false;
     if (flightState._trackedEntity)
       entityRecord(flightState._trackedEntity).selectionOrigin = origin;
-    _emitAwarenessEvent('gev:awareness-subject-selected', {
+    emitWindowEvent('gev:awareness-subject-selected', {
       layerId: 'military',
       id: icao24,
       label:
@@ -535,7 +529,7 @@ export function createTracking({
   }
 
   /**
-   * Field-test round 2 (2026-07-06): floors a trail-bound position at the warm
+   * Floors a trail-bound position at the warm
    * coarse ground cell — a pure LIFT (above-floor positions pass through
    * untouched, unknown floors change nothing). Grounded military billboards
    * deliberately render at the pre-datum default height (T7 groundSnap
@@ -696,7 +690,7 @@ export function createTracking({
       flightState._trailBodyCount,
     );
     if (!last) return [];
-    // Floor the head too (round 2): a grounded tracked contact's DR
+    // Floor the head too: a grounded tracked contact's DR
     // display height is the pre-datum default — without this the last
     // segment dives underground while taxiing. The model envelope is
     // measured against the FLOORED endpoint, which is the one actually drawn.
@@ -741,7 +735,7 @@ export function createTracking({
     // no position and breaks the line.
     for (const fix of history) {
       if (Number.isFinite(fix.reportEpochMs)) continue;
-      // Floor grounded-history seeds (round 2): a grounded contact's stored
+      // Floor grounded-history seeds: a grounded contact's stored
       // fixes carry the pre-datum default height — the trail copy sits on
       // the surface instead (pure lift; airborne fixes pass through).
       insertTrailFix(
@@ -766,7 +760,7 @@ export function createTracking({
     // Live head segment: last displayed body point → current dead-reckoned icon, drawn
     // again each frame before it draws, so it stays glued to the 12 Hz icon instead of
     // lagging ~1 s behind it. Only the head line is rebuilt; the body rebuilds on a real
-    // fix (poll cadence). Dimmed where occluded (round 4), geodesic as the body (round 8).
+    // fix (poll cadence). Dimmed where occluded, geodesic as the body.
     if (!flightState._trailHeadOff && flightState._viewer) {
       flightState._trailHeadOff =
         findFrame(flightState._viewer)?.on('preRender', _drawTrailHead) ?? null;
@@ -780,7 +774,7 @@ export function createTracking({
   }
 
   /**
-   * Fire-and-forget optional source history backfill (PRD F2). Every trace
+   * Fire-and-forget optional source history backfill. Every trace
    * point strictly older than the oldest seeded fix is spliced AHEAD of the
    * locally accumulated fine segment, each leg its own segment, capped at
    * TRAIL_MAX_POINTS (newest kept). Any failure (404/timeout/
@@ -841,16 +835,9 @@ export function createTracking({
     }
     if (!parsed.length) return;
 
-    // Field-test fix (WAKE01 trail-underground, 2026-07-06): resolve the coarse
-    // ellipsoidal ground along the trace and clamp every waypoint at it. A
-    // 'ground'/null point sits ON the local surface — the old fixed 50 m
-    // sentinel rendered ~1.5 km underground at Kirtland AFB (field ~1590 m
-    // ellipsoidal) and dragged the whole pattern-work loop with it.
-    // Round-2 fix (owner: "trails suddenly much shorter / not loading"): the
-    // resolve is BOUNDED (≤1.2 s), not a blocking await — a cold Re:Earth
-    // lookup across a long path could stall the paint for seconds-to-timeout.
-    // Paint with whatever cells are warm; the resolve keeps filling the cache
-    // in the background for the next paint/select.
+    // Resolve coarse ellipsoidal ground along the track and floor every waypoint at it. A
+    // no-baro or ground waypoint sits on the surface. Wait up to 1.2 s, then paint with
+    // the warm cells while the resolve keeps filling the cache for the next paint.
     await resolveGroundFloorCellsBounded(parsed);
     // Re-check the backfill token after the await (same guard as post-fetch):
     // tracking may have moved on while the terrain race was in flight.
@@ -924,11 +911,8 @@ export function createTracking({
   /**
    * Stop tracking the current aircraft and clean up all tracking state.
    * Hands the contact back to its icon, removes the tracked Entity, invalidates
-   * the per-frame DR cache, and RELEASES the camera IN PLACE — no flyTo
-   * (mirror of flights.js). Deselect used to fly an ~80 km pulled-back
-   * overview; the owner field-ruled that wrong (2026-07-02: "it randomly zooms
-   * way up and loses my context"). The camera stays at its current
-   * position/orientation, immediately free to orbit/zoom. Applies to every
+   * the per-frame DR cache, and RELEASES the camera IN PLACE — no flyTo. The camera is
+   * immediately free to orbit or zoom. Applies to every
    * deselect path: click-empty-space, Escape, aged-out plane, layer disable,
    * and voice stopTracking.
    *
@@ -979,7 +963,7 @@ export function createTracking({
       parts.icons._settleIcon(clearedIcao, { fromCourseDeg: trackedCourseDeg });
     parts.icons._applyIconPresentation(clearedIcao);
     clearTrackedSubjectContext('military');
-    _emitAwarenessEvent('gev:awareness-subject-cleared', {
+    emitWindowEvent('gev:awareness-subject-cleared', {
       layerId: 'military',
       id: clearedIcao,
       origin,
@@ -992,24 +976,18 @@ export function createTracking({
     releaseSelection('military', clearedIcao);
   }
 
-  function _applyPendingTrackingRestore() {
-    const pending = flightState._pendingTrackingRestore;
-    if (
-      !pending ||
-      pending.generation !== flightState._trackingIntentGeneration
-    )
-      return false;
-    if (!flightState._icons?.show || !flightState._icons.has(pending.id))
-      return false;
-    flightState._pendingTrackingRestore = null;
-    _trackFlight(pending.id, { origin: pending.origin });
-    return true;
-  }
-
-  function _cancelPendingTrackingRestore() {
-    flightState._trackingIntentGeneration += 1;
-    flightState._pendingTrackingRestore = null;
-  }
+  const {
+    apply: _applyPendingTrackingRestore,
+    cancel: _cancelPendingTrackingRestore,
+  } = createTrackingRestore({
+    state: flightState,
+    canApply: (pending) =>
+      flightState._icons?.show && flightState._icons.has(pending.id),
+    track: (pending) => {
+      _trackFlight(pending.id, { origin: pending.origin });
+      return true;
+    },
+  });
 
   /** Have the camera follow the tracked aircraft (an explicit follow). */
   function _followTracked() {
@@ -1212,12 +1190,8 @@ export function createTracking({
     if (follow) _followTracked();
     else if (center) _centerTracked();
 
-    // Track-history trail (PRD F2): seed from local history + async backfill.
-    // Ground traffic draws NO trail — if the plane takes off while tracked, the
-    // ground→air transition in update() starts one.
-    // Round 2 (owner): grounded contacts get trails too — a landed-but-taxiing
-    // aircraft's history is retrievable on select. Trail positions are floored
-    // at the surface (_trailFloorPosition), so ground legs drape, never dive.
+    // Seed the trail from local history and an async backfill. Grounded contacts get
+    // trails too. `_trailFloorPosition` floors their positions so the ground leg drapes.
     _startTrail(icao24);
 
     const callsign =
@@ -1302,8 +1276,6 @@ export function createTracking({
       if (picked) {
         // Clicking the plane we're ALREADY tracking (its tracked billboard, its
         // 3D model, or any pick carrying its icao) — ignore, don't deselect.
-        // H1: the model used to have no pick id, so this fell through to
-        // "empty space" and deselected the very plane being tracked.
         // Its billboard and models are draw-set items keyed by icao, like its icons.
         // A second click on the selected plane follows it, as the card's
         // Follow does; a click on the followed plane keeps the follow
@@ -1338,7 +1310,7 @@ export function createTracking({
       // vessel, station, CCTV camera…) is not "empty space" — leave tracking
       // alone and let that layer handle it. resolvePickId String()-coerces the
       // heterogeneous pick ids (numeric NORAD ids, AIS record objects) so the
-      // registry predicates can recognize them (H2).
+      // registry predicates can recognize them.
       if (picked) {
         const pickedId = resolvePickId(picked);
         if (pickedId && isOwnedByOtherLayer('military', pickedId)) return;
@@ -1356,7 +1328,6 @@ export function createTracking({
     document.addEventListener('keydown', _onKeyDown);
   }
   return {
-    _emitAwarenessEvent,
     _publishTrackedSelection,
     _contextSubjectMetadata,
     _isExplicitTrackingOrigin,

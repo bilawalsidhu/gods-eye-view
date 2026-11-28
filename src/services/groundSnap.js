@@ -1,5 +1,5 @@
 /**
- * groundSnap.js — one-shot cached ground-height snap for MODELED grounded aircraft.
+ * One-shot cached ground-height snap for MODELED grounded aircraft.
  *
  * Why: a parked/taxiing plane's feed altitude is last-known baro or 0 m — nowhere
  * near the photoreal tile skin in ellipsoid heights (buried ~100+ m at inland
@@ -8,7 +8,7 @@
  * renders inside the tiles or hovering above them. Billboards dodge this with
  * disableDepthTestDistance; a depth-tested glTF model cannot.
  *
- * Discipline (CCTV-B9b style): scene.sampleHeight forces a synchronous offscreen
+ * Discipline: scene.sampleHeight forces a synchronous offscreen
  * pick render, so it is NEVER called per frame. Each grounded modeled plane gets
  * ONE successful sample, cached per icao; the cache stops answering directly when
  * the plane moves >MOVE_INVALIDATE_M from the sampled spot (taxiing). A sample
@@ -16,11 +16,8 @@
  * geometry) is a retry-later signal with per-icao exponential backoff. Tiles
  * still streaming is not a miss: no sample was taken, so it earns no backoff
  * and the plane asks again on the next tick, sampling as soon as the tiles
- * settle. Counting it as a miss had every grounded plane in view back off to
- * RETRY_MAX_MS while the camera moved, then wait out that backoff after the
- * tiles had loaded, so models replaced icons late and in batches. A per-window
- * budget stops a freshly modeled airport cluster from firing dozens of pick
- * renders in one fleet tick.
+ * settle. A per-window budget stops a freshly modeled airport cluster from firing
+ * dozens of pick renders in one fleet tick.
  *
  * What a caller gets while a sample is outstanding depends on whether this
  * contact has ever HAD one, and the difference is the difference between two
@@ -61,73 +58,18 @@ import { findGlobe } from '../render/rendererOf.js';
  *  resample runs. */
 const MOVE_INVALIDATE_M = 50;
 /** @constant {number} How far a contact may travel from the spot its snap was
- *  measured at before that measurement stops describing the ground under it, and
- *  the hold is dropped rather than stretched.
- *
- *  Sized to two things at once. It has to outlast a resample outage, or it buys
- *  nothing: RETRY_MAX_MS is 30 s of backoff, and ordinary taxi is ~10 m/s, so a
- *  hold that expires inside ~25 s of rolling would hand back the pop it exists to
- *  prevent. And it has to stay inside the grade error an airfield can hide: the
- *  KAUS spread this file's header cites is ~21 m across a ~4 km field, ~0.5%, so
- *  250 m of taxi is ~1.3 m of vertical error — the order of the belly offsets
- *  already being added, and two orders under the ~100+ m burial the snap exists
- *  to prevent.
- *
- *  Deliberately a quarter of the billboard chain's HELD_FLOOR_MAX_DRIFT_KM. That
- *  hold only ever RAISES a position (`displayFloorHeightM` never lowers), so an
- *  under-read there is inert; here the held value IS the placement, so the error
- *  shows in both directions and the bound has to be tighter. */
+ *  measured before dropping the hold. At ~10 m/s, 250 m covers about 25 s of
+ *  a 30 s retry backoff. On a ~0.5% airfield grade that is ~1.3 m of vertical
+ *  error. The bound is a quarter of HELD_FLOOR_MAX_DRIFT_KM because the held
+ *  value sets placement directly and its error shows in both directions. */
 const HELD_SNAP_MAX_DRIFT_M = 250;
 /** @constant {number} How far a held measurement may disagree with FRESH
- *  measured evidence at the contact's current position before it is dropped
- *  rather than trusted.
- *
- *  The drift bound above asks "how far has the contact travelled?", which is a
- *  proxy for "does this value still describe the ground?" — and a proxy is all
- *  it is. 202 m of taxi onto a different surface is inside the bound and still
- *  wrong, and because a miss preserves the hold, repeated misses preserve the
- *  error for as long as they last. So the bound is not the only guard: where
- *  something has actually MEASURED the surface the contact is standing on now,
- *  that measurement outranks the memory, and a memory that contradicts it is
- *  discarded rather than stretched to cover the gap.
- *
- *  5 m sits between the two scales this has to separate:
- *   - ABOVE the honest disagreement between two measurements of the SAME
- *     surface. A floor cell is ~111 m across, so cell grade is ~0.6 m at the
- *     ~0.5 % KAUS spread this file's header cites and ~3.3 m even at a steep
- *     3 %; the hold's own 250 m allowance is ~1.3 m at that grade. None of
- *     those should cost a taxiing aircraft its model.
- *   - BELOW the scale at which a placement reads as wrong. The belly offsets
- *     this snap adds are ~2–5 m and an airliner fuselage is ~4 m across, so a
- *     model displaced more than ~5 m is visibly off its gear rather than
- *     imprecisely on it — and it is two orders under the ~100+ m burial the
- *     snap exists to prevent.
- *
- *  Applied in ONE direction: the hold is released only when fresh evidence sits
- *  ABOVE it, which is the BURIAL case — the model sunk into the surface, which
- *  is the entire reason this gate exists. The other sign is deliberately left
- *  alone, and the asymmetry is not tidiness:
- *
- *   - A cell reading LOW against a real sample is the EXPECTED error here, not a
- *     contradiction. Cells hold a few point readings over ~111 m, the
- *     borrowed-neighbour path leans to the LOWEST on purpose (`neighborFloorM`),
- *     and `displayFloorHeightM` only ever RAISES — the whole floor chain is
- *     built to under-read rather than to invent. Releasing on that sign would
- *     discard good measurements wherever the two disagree downward. Measured on
- *     the track-regression rig: a planted cell sat 66.7 m BELOW a real sample at
- *     the SAME spot, and a two-sided rule dropped a hold that was correct.
- *   - The residual is stated rather than hidden, and stated WITH its condition.
- *     A contact taxiing DOWNHILL keeps a held value above its new surface and
- *     its model floats. The correction is a SUCCESSFUL resample, and nothing on
- *     this path guarantees one: on the OSM fallback sampleHeight misses forever,
- *     so the retries never land and the float persists for as long as the
- *     contact stays inside HELD_SNAP_MAX_DRIFT_M. There is no timer beside it
- *     and no vertical cap of its own — only whatever the ground drops within
- *     that radius. The other releases (a ground flip via forget(), travelling
- *     past the bound, a mesh cell measuring ABOVE the hold) are not ones a
- *     downhill taxi is guaranteed to hit either. It is accepted over the
- *     alternative because it errs UPWARD and stays visible, where a buried model
- *     errs into the terrain and cannot be seen at all. */
+ *  measured mesh evidence at the current position. Drop the hold when the mesh
+ *  is more than 5 m above it. This exceeds the grade disagreement between
+ *  readings of the same surface (≲3 m) while detecting visible placement errors
+ *  (belly offsets are ~2–5 m). Only higher readings contradict the hold because
+ *  neighborFloorM and displayFloorHeightM deliberately under-read. A contact
+ *  taxiing downhill can float until a resample succeeds, but stays visible. */
 const HELD_SNAP_CONTRADICTION_M = 5;
 /** First retry delay after a sample finds no ground (ms); doubles per consecutive miss. */
 const RETRY_BASE_MS = 2000;

@@ -1,5 +1,6 @@
 import { AIS_FIRST_CONNECT_LABEL } from './recordPolicy.js';
 import { viewAreaMovedEnough } from './viewArea.js';
+import { KNOT_MPS } from '../../data/units.js';
 
 /** Longest a vessel request may take before it is given up. */
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -120,35 +121,15 @@ export function createIngestion({
     const requestController = new AbortController();
     const requestSessionId = feed.sessionId;
     feed.abort = requestController;
-    let timeout = null;
 
     try {
       // Combine the layer's teardown-abort with a hard timeout so a hung upstream
       // can't wedge the poll indefinitely (parity with the track fetch + flights).
-      let requestSignal;
-      if (typeof AbortSignal.any === 'function')
-        requestSignal = AbortSignal.any([
-          requestController.signal,
-          AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-          ...(signal ? [signal] : []),
-        ]);
-      else {
-        // Without it, the request's own controller takes the timeout and
-        // the caller's abort.
-        timeout = setTimeout(
-          () =>
-            requestController.abort(
-              new DOMException('Vessel request timed out', 'TimeoutError'),
-            ),
-          REQUEST_TIMEOUT_MS,
-        );
-        signal?.addEventListener(
-          'abort',
-          () => requestController.abort(signal.reason),
-          { once: true },
-        );
-        requestSignal = requestController.signal;
-      }
+      const requestSignal = AbortSignal.any([
+        requestController.signal,
+        AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        ...(signal ? [signal] : []),
+      ]);
       // Ask for the vessels in view; a wide view asks for every vessel.
       const area = readArea(viewer);
       feed.lastArea = area;
@@ -207,7 +188,6 @@ export function createIngestion({
       }
       return false;
     } finally {
-      if (timeout !== null) clearTimeout(timeout);
       if (
         feed.abort === requestController &&
         feed.sessionId === requestSessionId
@@ -304,21 +284,16 @@ export function createIngestion({
       lon: record.longitude,
       fixes: record.fixes,
       name: record.name,
-      imo: record.imo,
       type: record.type,
       destination: record.destination,
       length: record.lengthM ?? null,
       beam: record.beamM ?? null,
-      speed: record.speedMps == null ? null : record.speedMps / 0.514444,
+      speed: record.speedMps == null ? null : record.speedMps / KNOT_MPS,
       course: record.courseDeg,
       heading: record.headingDeg,
       virtual: record.virtual === true,
       last_position_epoch:
         record.observedAtMs == null ? null : record.observedAtMs / 1000,
-      last_position_UTC:
-        record.observedAtMs == null
-          ? ''
-          : new Date(record.observedAtMs).toISOString(),
     };
   }
   /** Ask again when the view moved away from the last area asked for. */

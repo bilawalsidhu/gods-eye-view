@@ -3,14 +3,14 @@ import {
   RAIL_CATEGORIES,
   getRegisteredRailFeed,
 } from '../../data/railFeeds.js';
-import { aggregateTransitFeedHealth } from '../transit/policy.js';
 import {
-  ACTIVATION_ALTITUDE_M,
+  ACTIVATION_ENTER_ALTITUDE_M,
   FEED_STALE_AFTER_MS,
   RAIL_CATEGORY_COLORS,
   RAIL_CATEGORY_LABELS,
+  aggregateTransitFeedHealth,
   normalizeRailCategories,
-  trainReportTimeMs,
+  vehicleReportTimeMs,
 } from './policy.js';
 
 /**
@@ -18,7 +18,7 @@ import {
  * @param {object} context
  * @returns {object}
  */
-export function createControls({ state, parts, timetable }) {
+export function createControls({ state, parts }) {
   function notify() {
     state._panel?.invalidate();
   }
@@ -128,14 +128,6 @@ export function createControls({ state, parts, timetable }) {
       }));
       return { chips, legend };
     },
-    /** Route-line, stop and schedule state, for QA probes. */
-    getRouteDisplayStats() {
-      return {
-        ...parts.routes.stats(),
-        timetable: timetable.stats(),
-        heldFeed: state._heldFeedId,
-      };
-    },
     /**
      * The trains the layer holds, as plain records for the analyst and the
      * Context panel: one per train the map counts (a shown category, not
@@ -175,7 +167,7 @@ export function createControls({ state, parts, timetable }) {
           operator: feed?.name || null,
           region: feed?.region || null,
           positionSource: word(record.positionSource),
-          observedMs: trainReportTimeMs(record, entry.fetchedAt),
+          observedMs: vehicleReportTimeMs(record, entry.fetchedAt),
         });
       }
       return result;
@@ -201,7 +193,7 @@ export function createControls({ state, parts, timetable }) {
         // through translateStatusMessage (ui/statusText.js), as Transit's.
         const note = state._altitudeGateOpen
           ? `No feed here yet · ${regionCount()} regions available`
-          : `Fly below ${Math.round(ACTIVATION_ALTITUDE_M / 1000).toLocaleString('en-US')} km to a covered region`;
+          : `Fly below ${Math.round(ACTIVATION_ENTER_ALTITUDE_M / 1000).toLocaleString('en-US')} km to a covered region`;
         return {
           count: 0,
           lastUpdate: state._lastUpdate,

@@ -1,5 +1,4 @@
 import { findFrame } from '../../render/rendererOf.js';
-import { approxDistanceKm as _approxDistanceKm } from './recordPolicy.js';
 import { displayedKinematics } from '../../data/motionModel.js';
 import { toLonLatH } from '../../geo/ellipsoid.js';
 import {
@@ -26,6 +25,7 @@ import {
 } from './policy.js';
 import { emergencyBroadcastPhrase } from '../../data/aircraftEmergency.js';
 import { locateOnTrack } from '../../data/locate.js';
+import { analystRecordLimit } from '../../data/analystRecordLimit.js';
 
 export function createQueries({
   flightState,
@@ -66,15 +66,9 @@ export function createQueries({
   function _likelyLanded(icao24) {
     const info = flightState.records.data.get(icao24);
     if (!info) return false;
-    // Round 7 (owner: "fewer planes than OpenSky's own map" + "parked planes
-    // never heal"): the fast cull only applies to contacts that were AIRBORNE
-    // this session — its original target, the post-LANDING ghost. OpenSky's
-    // ground coverage flaps constantly, so fast-culling every grounded contact
-    // put parked planes in an evict/re-enter churn: each re-entry was a
-    // brand-new contact with cold floor state (geoid-height first poll), so
-    // the apron looked half-empty AND perpetually sunken. First-seen-grounded
-    // contacts now ride the normal MISSING_POLL_LIMIT grace and keep their
-    // identity (and warmed floors) across feed flaps.
+    // Fast-cull only contacts seen airborne this session. A contact first seen grounded
+    // rides the normal MISSING_POLL_LIMIT grace and keeps its identity and warmed floors
+    // across ground-coverage flaps.
     if (info.wasAirborne !== true) return false;
     // Was airborne, then grounded, then VANISHED from the poll — landed ghost.
     if (info.onGround) return true;
@@ -632,9 +626,7 @@ export function createQueries({
       const t = parts.icons._displayMs();
       const scratch = flightState._scratchNearbyPos;
 
-      const limit = Number.isFinite(maxCount)
-        ? Math.max(1, Math.floor(maxCount))
-        : 50;
+      const limit = analystRecordLimit(maxCount, { fallback: 50, min: 1 });
       const maxRange =
         Number.isFinite(range) && range > 0 ? range : Number.POSITIVE_INFINITY;
 
@@ -673,8 +665,8 @@ export function createQueries({
           position: pos,
           distance,
           // Filter surface: the cockpit next/previous path matches on THIS field
-          // (militaryAwareness.aircraftClassMatchesFilter), so a converted contact
-          // has to report the class it renders as or a `tr3b` filter skips it.
+          // (aircraftClassMatches), so a converted contact has to report the
+          // class it renders as or a `tr3b` filter skips it.
           aircraftClass: tr3bAircraftClass(
             icao24,
             String(info?.klass || '')
@@ -723,9 +715,7 @@ export function createQueries({
     getAllPositions(maxCount = 500) {
       const icons = flightState._icons;
       if (!icons || icons.count === 0) return [];
-      const limit = Number.isFinite(maxCount)
-        ? Math.max(1, Math.floor(maxCount))
-        : 500;
+      const limit = analystRecordLimit(maxCount, { fallback: 500, min: 1 });
       const t = parts.icons._displayMs();
 
       const result = [];
@@ -771,9 +761,7 @@ export function createQueries({
     getAnalystRecords(maxCount = 2000) {
       if (!flightState._icons?.show || flightState.records.data.size === 0)
         return [];
-      const limit = Number.isFinite(maxCount)
-        ? Math.max(1, Math.floor(maxCount))
-        : 2000;
+      const limit = analystRecordLimit(maxCount, { fallback: 2000, min: 1 });
       const result = [];
       for (const [icao24, info] of flightState.records.data) {
         const routeOk =
@@ -1084,7 +1072,6 @@ export function createQueries({
   };
 
   return {
-    _approxDistanceKm,
     _likelyLanded,
     _toCleanText,
     _contactLabel,

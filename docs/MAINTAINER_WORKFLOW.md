@@ -16,8 +16,8 @@ continue static inspection only until a trusted revision is obtained.
 
 Record PR URL, author, head SHA, target branch/base SHA, and final candidate SHA.
 Protect ongoing working changes; resolve unexpected target branches before merging.
-A review request authorizes findings, not posting or integration. Existing explicit
-integration authorization covers necessary in-scope cleanup; do not ask again.
+A review request authorizes findings, not posting or integration. Confirm each
+integration step (push, comment, merge) with the maintainer before taking it.
 
 ## 2. Review the contribution
 
@@ -49,9 +49,9 @@ failure elsewhere. These questions guide review, not a mandatory questionnaire.
   regressions? Prefer fixes whose tests fail on the base. Test-only PRs should
   close a real coverage gap with deterministic fixtures and useful assertions.
   Inspect removed/skipped tests, weakened assertions, mocks, snapshots, and runner
-  changes. Update `CURRENT-STATE.md` and add a `changelog.d/<pr-number>-<slug>.md`
-  fragment (not an edit to `CHANGELOG.md`) for runtime changes, and
-  `DATA_SOURCES.md` for source changes.
+  changes. Correct `CURRENT-STATE.md` where the change makes it false, and add a
+  `changelog.d/<pr-number>-<slug>.md` fragment (not an edit to `CHANGELOG.md`)
+  for runtime changes, and `DATA_SOURCES.md` for source changes.
 
 ## 3. Choose execution proportionate to risk
 
@@ -130,9 +130,8 @@ resolves the top of `CHANGELOG.md`. At release, `npm run changelog:check` previe
 the batch and its order; `npm run changelog` splices it into `CHANGELOG.md` and
 empties the directory. The assembler refuses a malformed filename or two fragments
 claiming one PR number before writing, and copies text through unchanged so the
-contributor's wording and credit ship. The write is staged in
-`changelog.d/.assembling/`, so if it fails part-way, rerunning `npm run changelog`
-finishes or rolls back the batch. It never duplicates or drops an entry.
+contributor's wording and credit ship. If it fails part-way, restore with
+`git checkout -- changelog.d CHANGELOG.md` and run it again.
 
 Return this concise record privately unless posting is authorized. Keep sensitive
 security evidence in the private report:

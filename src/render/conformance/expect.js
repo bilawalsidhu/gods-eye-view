@@ -4,7 +4,7 @@
  * throw, so the suite runs in Node and in a browser page alike.
  */
 
-export class ConformanceError extends Error {
+class ConformanceError extends Error {
   constructor(message) {
     super(message);
     this.name = 'ConformanceError';

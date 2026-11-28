@@ -37,27 +37,6 @@ export function commandExtents(view) {
 }
 
 /**
- * The collection a picked billboard belongs to; Cesium's pick result names
- * the billboard, not its collection.
- * @param {object} billboard Cesium Billboard.
- * @returns {object|undefined} Cesium BillboardCollection.
- */
-export function billboardCollectionOf(billboard) {
-  return billboard?._billboardCollection;
-}
-
-/**
- * Close the widget's pending render-loop latch after `useDefaultRenderLoop`
- * is set false, so a callback already queued sees the loop as stopped and
- * manual renders start without waiting a vsync.
- * @param {object} viewer Cesium Viewer.
- */
-export function closeRenderLoopLatch(viewer) {
-  const widget = viewer?._cesiumWidget;
-  if (widget) widget._renderLoopRunning = false;
-}
-
-/**
  * Whether the widget's render loop is marked running. The render failure
  * notice keeps it marked while a frame it wraps throws, so a Retry before the
  * loop's queued frame starts no second loop.

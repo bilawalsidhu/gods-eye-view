@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { markRaw, shallowRef } from 'vue';
+import { presented } from './presented.js';
 
 /**
  * The top-bar omnibar's link to the shell. The shell connects the actions
@@ -16,12 +17,7 @@ import { markRaw, shallowRef } from 'vue';
  */
 export const useOmnibarStore = defineStore('gev-omnibar', () => {
   /** `{layers(), setLayer(id, enabled), creditPlaces?()}`, or null while disconnected. */
-  const controls = shallowRef(null);
-
-  /** @param {?object} next The shell's omnibar actions, or null. */
-  function connect(next) {
-    controls.value = next && markRaw(next);
-  }
+  const [controls, connect] = presented();
 
   /**
    * The voice action runner, `(name, args) → Promise<result>`: the same

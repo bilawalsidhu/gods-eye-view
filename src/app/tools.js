@@ -75,7 +75,7 @@ export function createApplicationTools({
   defer,
 }) {
   const { viewer, renderer, tileset, mapStackController, operations } = scene;
-  const { styleManager, weatherEffects, cockpitCloudEffects } = controls;
+  const { styleManager, cockpitCloudEffects } = controls;
   const { dataManager } = data;
   const sceneDirector = new SceneDirector(viewer, styleManager, dataManager, {
     dataPacks: { overlayHost, ...sceneDataPacks },
@@ -255,7 +255,7 @@ export function createApplicationTools({
     defer(startChrome({ loadingScreen, styleManager, dataManager, signal }));
   // Idle render governor: the loop draws on demand whenever nothing animates
   // per frame. It goes idle only now, after every module above has had its
-  // chance to hold. (perf wave 2)
+  // chance to hold.
   releaseContinuousRender('boot');
   // The renderer may keep a turned-off layer's draw commands (and so all its
   // entities) alive; trim them after each disable.
@@ -274,14 +274,14 @@ export function createApplicationTools({
   defer(() => destroyScopeMask());
 
   // The follow camera recomputes the tracked target's dead-reckon position
-  // every frame — tracking anything is a per-frame animation. (perf wave 2)
+  // every frame — tracking anything is a per-frame animation.
   const removeTrackingListener = onFollowChanged(viewer, (followed) => {
     if (followed)
       holdContinuousRender('tracked-entity', { maxFps: FOLLOW_FRAME_RATE });
     else releaseContinuousRender('tracked-entity');
   });
 
-  // Hidden-state suspension (perf wave 2): when the window/tab is hidden,
+  // Hidden-state suspension: when the window/tab is hidden,
   // stop the default render loop outright — a hidden canvas repaints for
   // nobody, and browser rAF throttling still lets throttled frames burn
   // GPU. Holder/data state is untouched, so return is seamless: restore
@@ -307,7 +307,7 @@ export function createApplicationTools({
   });
   // Apply the CURRENT state too — bootstrap can complete while the tab is
   // already hidden, and waiting for the next transition would leave the
-  // loop burning behind a hidden tab. (perf wave 2 fix)
+  // loop burning behind a hidden tab.
   syncVisibilitySuspension();
 
   window.__godsEyeView = Object.defineProperties(
@@ -319,7 +319,6 @@ export function createApplicationTools({
       sceneDirector,
       mapStackController,
       annotations,
-      weatherEffects,
       cockpitCloudEffects,
       getRenderGovernorDiagnostics,
       surfaceServices: operations.surface,

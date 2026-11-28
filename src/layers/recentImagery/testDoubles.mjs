@@ -344,6 +344,9 @@ export function fakeController({ refuse = false } = {}) {
   const calls = [];
   const controller = {
     calls,
+    getActiveId: () => null,
+    getSwitchGeneration: () => null,
+    getSwitchOrigin: () => 'manual',
     acquireImageryComparison(options) {
       calls.push(['acquire', options.owner, options.switchPolicy]);
       if (refuse) throw new Error('held by bhote');

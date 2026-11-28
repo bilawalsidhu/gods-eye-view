@@ -8,7 +8,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { layerKeyRequirementTooltip } from './layerPanel.js';
-import { DataLayerManager } from '../data/manager.js';
+import { DataLayerManager } from '../testSupport/dataLayerManager.mjs';
 import { KEY_SETUP_KEYS } from '../keySetupCore.mjs';
 import { setLocale } from '../i18n/index.js';
 import { createFirmsState } from '../layers/firms/state.js';

@@ -4,7 +4,7 @@
 import '../testSupport/registerDom.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DataLayerManager } from './manager.js';
+import { DataLayerManager } from '../testSupport/dataLayerManager.mjs';
 import { assertSameNode } from '../testSupport/domAssert.mjs';
 
 /** Build a mock layer whose init/update resolve on the next microtask. */

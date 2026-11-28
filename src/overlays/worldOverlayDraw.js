@@ -112,11 +112,6 @@ export function measureWorldOverlayText(ctx, text, font) {
   return width;
 }
 
-/** @returns {number} Current cache size, exposed for focused diagnostics/tests. */
-export function getWorldOverlayTextMeasureCacheSize() {
-  return _textMeasureCacheSize;
-}
-
 /**
  * Append a rounded rectangle to the current Canvas2D path.
  * @param {CanvasRenderingContext2D|Path2D} path
@@ -145,6 +140,26 @@ export function roundedRectPath(
   path.arcTo(x, y + h, x, y, r);
   path.arcTo(x, y, x + w, y, r);
   path.closePath();
+}
+
+/**
+ * Cover-fit an image, video or canvas into a box, cropping the overflow
+ * evenly; a source without dimensions draws nothing.
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {CanvasImageSource} image
+ * @param {number} x
+ * @param {number} y
+ * @param {number} w
+ * @param {number} h
+ */
+export function drawCover(ctx, image, x, y, w, h) {
+  const iw = image?.naturalWidth || image?.videoWidth || image?.width;
+  const ih = image?.naturalHeight || image?.videoHeight || image?.height;
+  if (!iw || !ih) return;
+  const s = Math.max(w / iw, h / ih);
+  const sw = w / s;
+  const sh = h / s;
+  ctx.drawImage(image, (iw - sw) / 2, (ih - sh) / 2, sw, sh, x, y, w, h);
 }
 
 /**

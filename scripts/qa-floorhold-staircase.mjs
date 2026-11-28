@@ -20,12 +20,14 @@
  */
 import * as Cesium from 'cesium';
 import { pickRenderAltitudeM } from '../src/data/renderAltitude.js';
-import {
-  _floorGroundedDisplayPositionForTest, _clearDisplayFloorStateForTest,
-} from '../src/data/flights.js';
+import flightsLayer from '../src/data/flights.js';
 import {
   reportMeshFloorCell, setMeshFloorPreferred, _clearMeshFloorCellsForTest, GROUND_FLOOR_LIFT_M,
 } from '../src/data/groundFloor.js';
+const {
+  _floorGroundedDisplayPositionForTest,
+  _clearDisplayFloorStateForTest,
+} = flightsLayer.testing;
 
 const LAT = 30.2004, LON = -97.6604;          // own cell 30.200 / -97.660
 const APRON = -22.0, ROOF = -4.0, START = -32.0; // ellipsoidal; SFO-ish geoid start

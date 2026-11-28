@@ -6,13 +6,10 @@ export const INFRARED_ALPHA_T1 = 0.7;
  * 4096×2048 is 8.4 M pixels. `strength` is 0–100: 0 is the full image, 100
  * the cloud key.
  */
-export function applyInfraredAlpha(pixels, strength = 'filtered') {
-  const amount =
-    strength === 'full'
-      ? 0
-      : strength === 'filtered' || !Number.isFinite(strength)
-        ? 1
-        : Math.max(0, Math.min(100, strength)) / 100;
+export function applyInfraredAlpha(pixels, strength = 100) {
+  const amount = Number.isFinite(strength)
+    ? Math.max(0, Math.min(100, strength)) / 100
+    : 1;
   if (amount === 0) return pixels;
   const scale = new Float64Array(256);
   for (let value = 0; value < 256; value++) {

@@ -9,6 +9,7 @@ import { fromDegrees, toCartographicRadians } from '../../geo/ellipsoid.js';
 import { surfaceDistance } from '../../geo/geodesic.js';
 import { toDegrees, toRadians } from '../../geo/vector.js';
 import { cameraOf } from '../../render/rendererOf.js';
+import { analystRecordLimit } from '../../data/analystRecordLimit.js';
 
 export function createControls({
   state: layerState,
@@ -27,8 +28,6 @@ export function createControls({
     source: 'OpenStreetMap + optional Google Maps Places',
 
     updateInterval: 0,
-
-    statsRefreshInterval: 1000,
 
     visitNamedMarkers(visitor) {
       parts.namedMarkers.visit(visitor);
@@ -135,7 +134,7 @@ export function createControls({
       nearby.sort((a, b) => a.distanceM - b.distanceM);
       return nearby.slice(
         0,
-        Number.isFinite(maxCount) ? Math.max(1, Math.floor(maxCount)) : 50,
+        analystRecordLimit(maxCount, { fallback: 50, min: 1 }),
       );
     },
 

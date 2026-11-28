@@ -9,6 +9,30 @@ export function createSelection({
 }) {
   const { warmGroundFloor } = services.ground;
 
+  /**
+   * Set the category filter; the tuning end runs first because it can write the
+   * cancelled-tuning marker read below.
+   */
+  function applyRadioFilter(nextFilter) {
+    const filterChanged = nextFilter !== layerState._filter;
+    if (
+      filterChanged &&
+      (layerState._tuningActive || layerState._tuningAwaitingStationId)
+    )
+      parts.tuning.endRadioTuning();
+    const clearedCancelledPresentation = Boolean(
+      layerState._cancelledTuningPresentationStation,
+    );
+    layerState._cancelledTuningPresentationStation = null;
+    layerState._filter = nextFilter;
+    if (clearedCancelledPresentation) parts.rendering.updateSelectionEntity();
+    if (filterChanged) parts.clustering.resetRadioClusterOverlayIdentities();
+    return {
+      filterChanged,
+      changed: filterChanged || clearedCancelledPresentation,
+    };
+  }
+
   /** Durable Radio preferences; this surface never creates or plays audio. */
 
   function setRadioParams(params = {}) {
@@ -28,23 +52,8 @@ export function createSelection({
 
     let changed = false;
     let filterChanged = false;
-    let clearedCancelledPresentation = false;
-    if (nextFilter !== null) {
-      filterChanged = nextFilter !== layerState._filter;
-      if (
-        filterChanged &&
-        (layerState._tuningActive || layerState._tuningAwaitingStationId)
-      )
-        parts.tuning.endRadioTuning();
-      clearedCancelledPresentation = Boolean(
-        layerState._cancelledTuningPresentationStation,
-      );
-      layerState._cancelledTuningPresentationStation = null;
-      layerState._filter = nextFilter;
-      if (clearedCancelledPresentation) parts.rendering.updateSelectionEntity();
-      if (filterChanged) parts.clustering.resetRadioClusterOverlayIdentities();
-      changed ||= filterChanged || clearedCancelledPresentation;
-    }
+    if (nextFilter !== null)
+      ({ filterChanged, changed } = applyRadioFilter(nextFilter));
     if (nextVolume !== null && nextVolume !== layerState._userVolume) {
       layerState._userVolume = nextVolume;
       if (layerState._audio && !layerState._voiceDucked) {
@@ -255,22 +264,9 @@ export function createSelection({
     const valid = layerState._categories.some(
       (category) => category.id === categoryId,
     );
-    const nextFilter = valid ? categoryId : 'all';
-    const changed = nextFilter !== layerState._filter;
-    if (
-      changed &&
-      (layerState._tuningActive || layerState._tuningAwaitingStationId)
-    )
-      parts.tuning.endRadioTuning();
-    const clearsCancelledPresentation = Boolean(
-      layerState._cancelledTuningPresentationStation,
-    );
-    layerState._cancelledTuningPresentationStation = null;
-    layerState._filter = nextFilter;
-    if (clearsCancelledPresentation) parts.rendering.updateSelectionEntity();
-    if (changed) parts.clustering.resetRadioClusterOverlayIdentities();
+    const { filterChanged } = applyRadioFilter(valid ? categoryId : 'all');
     parts.rendering.updateRenderVisibility();
-    if (changed) parts.rendering.reclusterStations();
+    if (filterChanged) parts.rendering.reclusterStations();
     parts.rendering.scheduleRadioOverlayPublish();
     parts.presentation.emitState();
     return true;

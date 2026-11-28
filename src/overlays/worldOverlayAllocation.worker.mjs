@@ -43,7 +43,7 @@ import {
   EARTHQUAKE_OVERLAY_COLLISION_CAPACITY,
   EARTHQUAKE_OVERLAY_SOURCE_ID,
   createEarthquakeOverlayEntry,
-} from '../data/earthquakes.js';
+} from '../layers/earthquakes/index.js';
 import {
   BIKESHARE_SELECTED_OVERLAY_SOURCE_ID,
   BIKESHARE_SELECTED_OVERLAY_SOURCE_OPTIONS,
@@ -77,7 +77,7 @@ import {
   CABLE_OVERLAY_SOURCE_ID,
   CABLE_REFERENCE_LABEL_WINNER_CAP,
   createCableOverlayEntry,
-} from '../data/telegeographySubmarineCables.js';
+} from '../layers/submarineCables/index.js';
 import {
   destroyDetection,
   getDetectionDiagnostics,
@@ -104,15 +104,14 @@ const PROFILE = process.env.GEV_ALLOC_PROFILE || 'generic';
 // Long enough for every frame-path function to reach the top optimizing tier
 // (V8 boxes intermediate doubles below TurboFan, which is not the steady state
 // a 60 fps browser session ever sits in).
-const WARMUP_FRAMES = Number(process.env.GEV_ALLOC_WARMUP) || 3000;
+const WARMUP_FRAMES = 3000;
 // Measured frames are split into GC-bracketed chunks. A chunk's heap delta is
 // (allocated - collected), so a chunk can only ever UNDER-report; the reported
 // median is immune to a single anomalous chunk, and the maximum is the
 // tightest sound estimate of the steady rate.
-const CHUNK_FRAMES = Number(process.env.GEV_ALLOC_CHUNK) || 48;
-const CHUNK_COUNT = Number(process.env.GEV_ALLOC_CHUNKS) || 10;
-const STABILIZATION_CHUNKS =
-  Number(process.env.GEV_ALLOC_STABILIZATION_CHUNKS) || 6;
+const CHUNK_FRAMES = 48;
+const CHUNK_COUNT = 10;
+const STABILIZATION_CHUNKS = 6;
 const FRAME_MS = 16;
 const VIEWPORT_WIDTH = 1600;
 const VIEWPORT_HEIGHT = 900;
@@ -877,20 +876,6 @@ function buildPhase5CctvProjectionWorkload(count) {
   return workload;
 }
 
-function buildPhase5CivilWorkload(count) {
-  const workload = buildPhase5CctvProjectionWorkload(count);
-  const registration = workload.registrations.find(
-    ({ sourceId }) => sourceId === TRACKED_OVERLAY_SOURCE_ID,
-  );
-  const entry = registration?.entries[0];
-  if (!entry)
-    throw new Error('phase5-civil requires the protected tracked entry');
-  // i18n-ignore: benchmark fixture
-  entry.title = 'ALLOC01 · FL350 · 451 kts';
-  entry.details = ['TEST AIR · A320', 'AUS → LAX'];
-  return workload;
-}
-
 function buildPhase5MilitaryWorkload(count) {
   const workload = buildPhase5CctvProjectionWorkload(count);
   const registration = workload.registrations.find(
@@ -1251,6 +1236,22 @@ function advanceWorkload(positions, drifts, frame) {
   }
 }
 
+/** The workload of each profile the allocation test runs; anything else is the generic one. */
+const WORKLOADS = {
+  'phase6-detection': buildPhase6DetectionWorkload,
+  'local-infrastructure': buildLocalInfrastructureWorkload,
+  'phase3-firms': buildPhase3FirmsWorkload,
+  'phase3-vessels': buildPhase3VesselsWorkload,
+  'phase3-tracked': buildPhase3TrackedWorkload,
+  'phase4-cctv': buildPhase4CctvWorkload,
+  'phase5-military': buildPhase5MilitaryWorkload,
+  'rocket-missions': buildRocketMissionAmbientWorkload,
+  'phase5-rockets': buildPhase5RocketMissionWorkload,
+  'all-live-radio': buildAllLiveRadioWorkload,
+  'air-quality': buildAirQualityWorkload,
+  'submarine-cables': buildSubmarineCablesWorkload,
+};
+
 function main() {
   if (typeof globalThis.gc !== 'function') {
     process.stdout.write(`${JSON.stringify({ ok: false, reason: 'no-gc' })}\n`);
@@ -1262,46 +1263,9 @@ function main() {
     dpr: 2,
   });
   initWorldOverlay(env.viewer);
-  const workload =
-    PROFILE === 'phase6-detection'
-      ? buildPhase6DetectionWorkload(ENTRY_COUNT)
-      : PROFILE === 'local-infrastructure'
-        ? buildLocalInfrastructureWorkload(ENTRY_COUNT)
-        : PROFILE === 'phase3-firms'
-          ? buildPhase3FirmsWorkload(ENTRY_COUNT)
-          : PROFILE === 'phase3-vessels'
-            ? buildPhase3VesselsWorkload(ENTRY_COUNT)
-            : PROFILE === 'phase3-tracked'
-              ? buildPhase3TrackedWorkload(ENTRY_COUNT)
-              : PROFILE === 'phase4-cctv'
-                ? buildPhase4CctvWorkload(ENTRY_COUNT)
-                : PROFILE === 'phase5-earthquakes'
-                  ? buildPhase5EarthquakesWorkload(ENTRY_COUNT)
-                  : PROFILE === 'phase5-bikeshare'
-                    ? buildPhase5BikeshareWorkload(ENTRY_COUNT)
-                    : PROFILE === 'phase5-satellites'
-                      ? buildPhase5SatellitesWorkload(ENTRY_COUNT)
-                      : PROFILE === 'phase5-cctv-projection'
-                        ? buildPhase5CctvProjectionWorkload(ENTRY_COUNT)
-                        : PROFILE === 'phase5-civil'
-                          ? buildPhase5CivilWorkload(ENTRY_COUNT)
-                          : PROFILE === 'phase5-military'
-                            ? buildPhase5MilitaryWorkload(ENTRY_COUNT)
-                            : PROFILE === 'rocket-missions'
-                              ? buildRocketMissionAmbientWorkload(ENTRY_COUNT)
-                              : PROFILE === 'phase5-rockets'
-                                ? buildPhase5RocketMissionWorkload(ENTRY_COUNT)
-                                : PROFILE === 'all-live-radio'
-                                  ? buildAllLiveRadioWorkload(ENTRY_COUNT)
-                                  : PROFILE === 'air-quality'
-                                    ? buildAirQualityWorkload(ENTRY_COUNT)
-                                    : PROFILE === 'submarine-cables'
-                                      ? buildSubmarineCablesWorkload(
-                                          ENTRY_COUNT,
-                                        )
-                                      : buildWorkload(ENTRY_COUNT);
+  const workload = (WORKLOADS[PROFILE] ?? buildWorkload)(ENTRY_COUNT);
   const { entries, positions, drifts } = workload;
-  const solveIntervalMs = Number(process.env.GEV_ALLOC_SOLVE_MS) || 125;
+  const solveIntervalMs = 125;
   const detectionActive = !!workload.detectionLayer;
   if (detectionActive) {
     // Spread polar ECEF x/y over the viewport while retaining a real WGS84

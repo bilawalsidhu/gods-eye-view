@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import {
+  DepthOcclusionProbe,
   PROBE_MAX_CONTROL_FAILURES,
   PROBE_MAX_FRUSTUMS,
   PROBE_MAX_PENDING_FRAMES,
@@ -9,15 +10,19 @@ import {
   PROBE_RETRY_AFTER_MS,
   PROBE_VERTEX_SHADER,
   SYNC_READ_INTERVAL_MS,
-  SceneOcclusionProbe,
-  readSceneDepthSource,
-} from './sceneOcclusionProbe.js';
+} from '../occlusion/depthProbe.js';
+import { readSceneDepthSource } from './sceneOcclusionProbe.js';
 import {
   createFakeDepthScene,
   createFakeGl,
   depthImage,
   viewDistanceToDepth,
 } from './fixtures/fakeDepthScene.mjs';
+
+// The occlusion probe on a Cesium scene's depth, as createSceneOcclusionTest
+// builds it.
+const sceneProbe = (options = {}) =>
+  new DepthOcclusionProbe({ readSource: readSceneDepthSource, ...options });
 
 const NEAR = 1;
 const FAR = 100_000;
@@ -58,7 +63,7 @@ function frame(probe, scene, now, tests = []) {
 test('a test is drawn at once and answered on a later frame, without anything being read back', () => {
   const scene = wallScene();
   const gl = scene.context._gl;
-  const probe = new SceneOcclusionProbe();
+  const probe = sceneProbe();
   const hidden = contact();
   const shown = contact();
   assert.equal(probe.mode, 'off');
@@ -125,7 +130,7 @@ test('queries are reused, and every depth range is tested nearest first', () => 
     ],
   });
   const gl = scene.context._gl;
-  const probe = new SceneOcclusionProbe();
+  const probe = sceneProbe();
   const cases = [
     [contact(), { x: -7500, y: 0, z: -15_000 }, true], // behind the near wall
     [contact(), { x: 7500, y: 0, z: -15_000 }, false], // above the far ground
@@ -153,7 +158,7 @@ test('queries are reused, and every depth range is tested nearest first', () => 
 
 test('standard depth scenes are tested too', () => {
   const scene = wallScene({ logDepth: false });
-  const probe = new SceneOcclusionProbe();
+  const probe = sceneProbe();
   const hidden = contact();
   const shown = contact();
   frame(probe, scene, 0, [
@@ -181,7 +186,7 @@ test('every binding the renderer relies on is left as found', () => {
     viewport: [12, 34, 640, 480],
   };
   Object.assign(gl.state, found, { units: [...found.units] });
-  const probe = new SceneOcclusionProbe();
+  const probe = sceneProbe();
   const hidden = contact();
   frame(probe, scene, 0, [[hidden, behindWall]]);
   for (const key of [
@@ -207,7 +212,7 @@ test('every binding the renderer relies on is left as found', () => {
 
 test('a contact outside the frame, or past the frame budget, is not taken', () => {
   const scene = wallScene();
-  const probe = new SceneOcclusionProbe();
+  const probe = sceneProbe();
   probe.beginFrame(scene, 0);
   const outside = contact();
   assert.equal(probe.add(outside, { x: -1100, y: 0, z: -500 }), false);
@@ -224,7 +229,7 @@ test('a contact outside the frame, or past the frame budget, is not taken', () =
 
 test('a frame with nothing to test touches nothing', () => {
   let reads = 0;
-  const probe = new SceneOcclusionProbe({
+  const probe = sceneProbe({
     readSource: () => {
       reads++;
       return null;
@@ -283,7 +288,7 @@ test('no depth source: nothing is tested and nothing is in flight', () => {
   ];
   for (const scene of broken) {
     assert.equal(readSceneDepthSource(scene), null);
-    const probe = new SceneOcclusionProbe();
+    const probe = sceneProbe();
     const entry = contact();
     assert.deepEqual(frame(probe, scene, 0, [[entry, behindWall]]), [false]);
     assert.equal(probe.mode, 'off');
@@ -294,7 +299,7 @@ test('no depth source: nothing is tested and nothing is in flight', () => {
 test('depth that comes and goes is picked up frame by frame', () => {
   const scene = wallScene();
   const gl = scene.context._gl;
-  const probe = new SceneOcclusionProbe();
+  const probe = sceneProbe();
   const entry = contact();
   scene.useDepthPicking = false;
   assert.deepEqual(frame(probe, scene, 0, [[entry, behindWall]]), [false]);
@@ -321,7 +326,7 @@ test('depth ranges past the limit are left out, nearest kept', () => {
 test('a control point that does not draw voids its batch; a run of them stands the probe down for a while', () => {
   const scene = wallScene();
   const gl = scene.context._gl;
-  const probe = new SceneOcclusionProbe();
+  const probe = sceneProbe();
   // Something outside the probe's reach stops every point from drawing, so
   // every query reads "nothing drew", which would otherwise mean "hidden".
   gl.state.drawsLand = false;
@@ -360,7 +365,7 @@ test('a control point that does not draw voids its batch; a run of them stands t
   assert.equal(entry.answered, true);
 
   // One good batch in between resets the count.
-  const healthy = new SceneOcclusionProbe();
+  const healthy = sceneProbe();
   const other = wallScene();
   for (let i = 0; i < 6; i++) {
     other.context._gl.state.drawsLand = i % 2 === 1;
@@ -377,7 +382,7 @@ test('a shader that does not compile, or a WebGL call that throws, stands the pr
   // not be left behind.
   scene.context._gl.state.compiles = (type) =>
     type !== scene.context._gl.FRAGMENT_SHADER;
-  let probe = new SceneOcclusionProbe();
+  let probe = sceneProbe();
   let entry = contact();
   assert.deepEqual(frame(probe, scene, 0, [[entry, behindWall]]), [false]);
   assert.equal(probe.mode, 'off');
@@ -412,7 +417,7 @@ test('a shader that does not compile, or a WebGL call that throws, stands the pr
     if (++draws === 2) throw new Error('driver');
     return drawArrays(...args);
   };
-  probe = new SceneOcclusionProbe();
+  probe = sceneProbe();
   entry = contact();
   const other = contact();
   assert.deepEqual(
@@ -434,7 +439,7 @@ test('a shader that does not compile, or a WebGL call that throws, stands the pr
 
   scene = wallScene();
   gl = scene.context._gl;
-  probe = new SceneOcclusionProbe();
+  probe = sceneProbe();
   entry = contact();
   frame(probe, scene, 0, [[entry, behindWall]]);
   gl.getQueryParameter = () => {
@@ -447,7 +452,7 @@ test('a shader that does not compile, or a WebGL call that throws, stands the pr
 
 test('a frame that never reaches its end leaves no contact waiting for an answer', () => {
   const scene = wallScene();
-  const probe = new SceneOcclusionProbe();
+  const probe = sceneProbe();
   const entry = contact();
   probe.beginFrame(scene, 0);
   assert.equal(probe.add(entry, behindWall), true);
@@ -467,7 +472,7 @@ test('a frame that never reaches its end leaves no contact waiting for an answer
 test('an answer collected late is dated to its test, not to its arrival', () => {
   const scene = wallScene();
   const gl = scene.context._gl;
-  const probe = new SceneOcclusionProbe();
+  const probe = sceneProbe();
   const entry = contact();
   frame(probe, scene, 1000, [[entry, behindWall]]);
   gl.finishGpu();
@@ -488,7 +493,7 @@ test('samplers for depth ranges not in use point at a texture that is bound', ()
   const gl = scene.context._gl;
   // Whatever the renderer left on the other units is not the probe's to read.
   gl.state.units = [null, null, null, null, null, null, null, null];
-  const probe = new SceneOcclusionProbe();
+  const probe = sceneProbe();
   const entry = contact();
   frame(probe, scene, 0, [[entry, behindWall]]);
   gl.finishGpu();
@@ -513,7 +518,7 @@ test('samplers for depth ranges not in use point at a texture that is bound', ()
 test('reset drops tests in flight but keeps the GPU objects for next time', () => {
   const scene = wallScene();
   const gl = scene.context._gl;
-  const probe = new SceneOcclusionProbe();
+  const probe = sceneProbe();
   const entry = contact();
   frame(probe, scene, 0, [[entry, behindWall]]);
   probe.reset();
@@ -535,7 +540,7 @@ test('reset drops tests in flight but keeps the GPU objects for next time', () =
 test('a lost context drops what was in flight and starts over when it returns', () => {
   const scene = wallScene();
   const gl = scene.context._gl;
-  const probe = new SceneOcclusionProbe();
+  const probe = sceneProbe();
   const entry = contact();
   frame(probe, scene, 0, [[entry, behindWall]]);
   gl.state.lost = true;
@@ -552,7 +557,7 @@ test('a lost context drops what was in flight and starts over when it returns', 
 test('queries that are never answered are abandoned', () => {
   const scene = wallScene();
   const gl = scene.context._gl;
-  const probe = new SceneOcclusionProbe();
+  const probe = sceneProbe();
   const entry = contact();
   frame(probe, scene, 0, [[entry, behindWall]]);
   for (let i = 1; i <= PROBE_MAX_PENDING_FRAMES; i++)
@@ -568,7 +573,7 @@ test('queries that are never answered are abandoned', () => {
 test('every batch times out on its own, however many are queued ahead of it', () => {
   const scene = wallScene();
   const gl = scene.context._gl;
-  const probe = new SceneOcclusionProbe();
+  const probe = sceneProbe();
   const entries = [];
   // Ten frames each start a batch; the GPU answers none of them.
   for (let i = 0; i < 10; i++) {
@@ -591,7 +596,7 @@ test('a target that cannot be made leaves nothing behind, and the next try start
   const gl = scene.context._gl;
   const complete = gl.checkFramebufferStatus;
   gl.checkFramebufferStatus = () => 0;
-  const probe = new SceneOcclusionProbe();
+  const probe = sceneProbe();
   const entry = contact();
   assert.deepEqual(frame(probe, scene, 0, [[entry, behindWall]]), [false]);
   assert.equal(probe.mode, 'off');
@@ -609,7 +614,7 @@ test('a target that cannot be made leaves nothing behind, and the next try start
 });
 
 test('a new WebGL context, or destroy, releases everything', () => {
-  const probe = new SceneOcclusionProbe();
+  const probe = sceneProbe();
   const first = wallScene();
   const entry = contact();
   frame(probe, first, 0, [[entry, behindWall]]);
@@ -636,7 +641,7 @@ test('without queries (WebGL 1) depth is read back synchronously, at most every 
   const sceneFramebuffer = { image: null };
   gl.state.read = sceneFramebuffer;
   gl.state.draw = sceneFramebuffer;
-  const probe = new SceneOcclusionProbe();
+  const probe = sceneProbe();
   const hidden = contact();
   const shown = contact();
   assert.deepEqual(

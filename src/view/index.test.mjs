@@ -74,7 +74,7 @@ test('views use the same style names as the app share links', async () => {
   const source = await import('node:fs/promises').then((fs) =>
     fs.readFile(new URL('../sharelink.js', import.meta.url), 'utf8'),
   );
-  assert.match(source, /const STYLE_TO_URL = STYLE_URL_NAMES;/);
+  assert.match(source, /\bSTYLE_URL_NAMES\b/);
   assert.equal(STYLE_URL_NAMES.retro, 'crt');
 });
 

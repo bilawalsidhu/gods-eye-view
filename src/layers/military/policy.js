@@ -113,13 +113,13 @@ export const TRACKED_BILLBOARD_SCALE_BY_DISTANCE = Object.freeze({
 });
 
 // ---------------------------------------------------------------------------
-// Track-history trail state (PRD WS-F F2/F4): a fading polyline behind the
+// Track-history trail state: a fading polyline behind the
 // tracked aircraft. The accumulation array is intentionally SEPARATE from
 // _positionHistory (capped at POSITION_HISTORY_LIMIT for drawing)
 // so the visible trail can grow to TRAIL_MAX_POINTS fixes.
 // ---------------------------------------------------------------------------
 
-/** @constant {string} Military trail hue (PRD F4, pinned). */
+/** @constant {string} Military trail hue. */
 
 export const TRAIL_COLOR = '#FFB800';
 

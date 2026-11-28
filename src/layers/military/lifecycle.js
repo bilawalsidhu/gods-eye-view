@@ -148,7 +148,7 @@ export function createLifecycle({
      */
     disable(viewer) {
       flightState.timeline?.stop();
-      parts.controller._abortActiveUpdates();
+      parts.ingestion.abortAll();
       parts.tracking._cancelPendingTrackingRestore();
       if (flightState._icons) flightState._icons.show = false;
       parts.rendering._stopPace();
@@ -190,8 +190,8 @@ export function createLifecycle({
     destroy(viewer) {
       flightState.timeline?.stop();
       flightState.lifetime.abort();
-      parts.controller._abortActiveUpdates();
-      parts.rendering._stopPace(); // direct-destroy path (perf wave 2 fix)
+      parts.ingestion.abortAll();
+      parts.rendering._stopPace(); // direct-destroy path
       parts.tracking._clearTracking();
       parts.tracking._destroyTrail();
       parts.tracking._cancelPendingTrackingRestore();

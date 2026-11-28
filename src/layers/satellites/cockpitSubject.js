@@ -12,7 +12,7 @@ import { ISS_NORAD } from './policy.js';
 import { trackedStation } from './stationModels.js';
 
 /** The layer id a satellite subject carries through Cockpit events and state. */
-export const SATELLITE_COCKPIT_LAYER_ID = 'satellites';
+const SATELLITE_COCKPIT_LAYER_ID = 'satellites';
 
 /**
  * While the Cockpit rides a satellite, every other orbit ring (the ISS ring
@@ -103,7 +103,7 @@ export function satelliteCockpitInfo(noradId, sat, fix) {
     // 'probes'|'debris'.
     satelliteClass: identity.satelliteClass,
     // Whether its class may be ridden in the orbital view (debris may not);
-    // the Cockpit's entry gate reads it (orbitEntryAllowed).
+    // the Cockpit's entry gate reads it (entryAllowed).
     enterable: satelliteClassEnterable(identity.satelliteClass),
     // International designator, e.g. '1998-067A'.
     cosparId: identity.cosparId,

@@ -2,31 +2,11 @@
 export function createGroundFloor({ terrain, signal }) {
   const { cachedRealEllipsoidalGround, resolveEllipsoidalGround } = terrain;
   signal?.throwIfAborted();
-  // src/data/groundFloor.js — coarse ground-floor clamp for entity render
-  // heights (field-test round 2026-07-06).
-  //
-  // Two owner findings drove this module:
-  //  - RS46 (military H60): baro-only low-altitude contacts near steep terrain
-  //    render INSIDE the hillside (no alt_geom → baro+N is off by more than the
-  //    local relief).
-  //  - WAKE01 (military B212): trail waypoints flagged 'ground' rendered at a
-  //    fixed 50 m ellipsoidal sentinel — ~1.5 km underground at Kirtland AFB
-  //    (field elevation ~1590 m ellipsoidal).
-  //
-  // The fix everywhere is the same: never render below the local ellipsoidal
-  // surface. This module provides the shared floor: a COARSE (3-decimal,
-  // ~111 m) grid over Task 3's terrainHeights resolver/cache, so that moving
-  // aircraft and multi-hundred-point trails collapse onto a small set of cells
-  // with heavy cache reuse (the exact 5-decimal grid would mint a new cache key
-  // every fix — the taxiing-cache lesson from the adversarial review).
-  // A ~111 m cell means the floor can be off by the relief within the cell in
-  // steep terrain; the clamp is a visual floor, not a survey — lifting an icon
-  // a few metres short of a ridge line still beats burying it.
-  //
-  // Zero-network on the render path: reads are synchronous cache lookups;
-  // `warmGroundFloor` batches the misses through resolveEllipsoidalGround
-  // (single-flight, fire-and-forget) exactly like flights.js's grounded-surface
-  // warm — results land for later polls/appends.
+  // The coarse floor keeps entity render heights above the local ellipsoidal surface.
+  // Moving aircraft and long trails share a 3-decimal (~111 m) grid over terrainHeights.
+  // Within a cell the error is bounded by local relief, sufficient for a visual floor.
+  // Reads use the synchronous cache. warmGroundFloor batches misses through
+  // resolveEllipsoidalGround (single-flight, fire-and-forget).
 
   /** @constant {number} Metres added above the resolved floor so a clamped
    *  billboard/waypoint sits ON the surface instead of z-fighting it. */
@@ -67,16 +47,15 @@ export function createGroundFloor({ terrain, signal }) {
   }
 
   /**
-   * Floor decision at the point of DISPLAY (2026-08-19).
+   * Floor decision at the point of DISPLAY.
    *
    * `floorAltitudeM` above answers "what height should this FIX render at" and
    * runs once per poll. But what the user sees is the DEAD-RECKONED position:
    * a Cartesian interpolation between two fixes for the whole segment, and a
    * velocity extrapolation of the newest fix while a contact coasts through its
    * stale-feed grace. Both drift the rendered point horizontally away from the
-   * fix whose cell supplied the height — across a graded apron (KAUS spans
-   * ~119–140 m ellipsoidal) a taxiing sprite therefore renders under the mesh it
-   * has drifted over (measured −15.5 m; `scripts/qa-floor-verify.mjs`).
+   * fix whose cell supplied the height, so a contact drifting over a sloped apron can
+   * render under the surface it is over.
    *
    * This is the same "never below the visible surface" rule applied at the
    * displayed coordinate instead of the fix coordinate. It returns `null` rather
@@ -114,37 +93,14 @@ export function createGroundFloor({ terrain, signal }) {
   /**
    * A floor for `cell` borrowed from the eight cells ADJACENT to it.
    *
-   * Used only as a stand-in while `cell` itself is unresolved (2026-08-21: the
-   * Re:Earth proxy timed out four times in a row and a grounded contact standing
-   * on a cold cell rendered at the geoid — tens of metres under the mesh it was
-   * parked on). A neighbour is ~111 m away; on the aprons and taxiways where
-   * grounded contacts live that is the same surface, and it is a MEASURED height
-   * rather than an invented one.
+   * Used only as a stand-in while `cell` itself is unresolved.
    *
    * Leans to the LOWEST resolved neighbour, and refuses to answer at all from
    * fewer than NEIGHBOR_FLOOR_MIN_SAMPLES of them.
    *
-   * An earlier cut leaned HIGH, reasoning from the locked "never below the
-   * visible surface" principle. That principle is about a contact's OWN measured
-   * ground; applied to a BORROWED cell it inverts, and an owner playtest found
-   * why — planes floating in midair at terminal gates. The two errors are not
-   * symmetric:
-   *  - Too LOW is inert. `displayFloorHeightM` only ever RAISES a position, so a
-   *    floor under the contact simply does not lift it — the same "no clamp" the
-   *    cold-cell case already has, bounded by one cell of grade (metres).
-   *  - Too HIGH actively invents a position. It is bounded by BUILDING HEIGHT,
-   *    not by grade, and a parked contact holds it: measured on the A/B rig,
-   *    a lone roof neighbour put a contact 29.5 m up and left it there
-   *    permanently when its own cell never warmed, and 6.3 s of visible
-   *    stair-stepping when it did.
-   * A plane at a gate is on the apron, never on the terminal roof, so on a
-   * structure edge the LOW neighbour is the answer and the high one is an
-   * artefact of the photogrammetric mesh.
-   *
-   * The honest residual: on a genuine SLOPE the lowest neighbour under-reads by
-   * the grade across ~111 m, so the clamp lifts a little less than it could. That
-   * shows up as no lift rather than as a wrong one, and the contact's own cell
-   * corrects it as soon as it warms.
+   * A low reading is inert because `displayFloorHeightM` only raises. A high reading can
+   * place a contact on a neighbouring roof. On a slope the lowest neighbour under-reads
+   * by up to one cell of grade, so the contact gets less lift until its own cell warms.
    *
    * @param {{lat: number, lon: number}|null|undefined} cell - Coarse cell.
    * @returns {number|null} Ellipsoidal floor, or null when too few neighbours are
@@ -300,10 +256,7 @@ export function createGroundFloor({ terrain, signal }) {
   /**
    * Shares one poll's corridor-cell budget across the contacts that need it.
    *
-   * The first cut walked contacts in Map insertion order and decremented the
-   * budget BEFORE deduping, so parked contacts burned slots on cells the poll had
-   * already collected and the contacts actually outrunning their floor data
-   * starved. Three rules fix that:
+   * Three rules:
    *  1. Cells already collected are FREE — a parked contact, whose corridor is
    *     its own fix cell, never competes for budget at all.
    *  2. Candidates are ordered by how many of their cells are genuinely cold,
@@ -313,30 +266,14 @@ export function createGroundFloor({ terrain, signal }) {
    *     another takes seconds. The nearest cell is the one a contact needs first
    *     anyway; the far end of its corridor can wait a poll.
    *
+   * Equal-ranked runs rotate by `epoch` so ties cycle round-robin within a rank. Only
+   * cold cells consume budget (`isWarm`). Warm cells are still emitted so the mesh
+   * sampler sees them after their DEM prior lands. Every candidate is served within
+   * `ceil(candidates / budget)` polls once warms land.
+   *
    * @param {Array<{cells: Array<{lat: number, lon: number}>, cold: number, speedMps: number}>} candidates
    * @param {Set<string>} seen - Keys ("lat,lon") already collected; MUTATED with
    *   everything this call allocates, so the caller's dedupe stays consistent.
-   * Ranking alone still starves a TIE longer than the budget: 80 equally needy
-   * movers means the same stable prefix wins every poll and the tail never moves.
-   * The `epoch` rotates each run of equal-ranked candidates, so a tie cycles
-   * round-robin across polls while a genuinely needier contact is never demoted
-   * below a less needy one (rotation happens WITHIN a rank, never across ranks).
-   *
-   * `seen` alone is NOT a sufficient free-list: in production it holds only the
-   * CURRENT poll's batch, so a cell that warmed on an earlier poll looked new and
-   * spent budget again, letting a contact's near cells consume its whole share
-   * poll after poll while the ground ahead of it stayed cold. Budget is therefore
-   * charged only for cells with no floor yet (`isWarm`) — but warm cells are
-   * still EMITTED, because the mesh sampler must see a cell again after its DEM
-   * prior lands or it never latches a rendered-surface height there.
-   *
-   * That gives a service bound derivable from the policy rather than a magic
-   * number: the first round charges at most one cell per candidate, so at least
-   * `min(candidates, budget)` candidates are served per poll; a candidate that
-   * misses out keeps its cold count while every served candidate's drops, so it
-   * outranks them next poll. Every candidate is therefore served within
-   * `ceil(candidates / budget)` polls once the warms land.
-   *
    * @param {number} budget - Max cold cells to charge for.
    * @param {number} fairShare - Per-candidate cap for the middle round.
    * @param {number} [epoch] - Poll counter; rotates equal-ranked runs.
@@ -413,17 +350,10 @@ export function createGroundFloor({ terrain, signal }) {
     return out;
   }
 
-  // --- Mesh-floor cells (round 4, owner-approved design) ---------------------
-  // The Re:Earth DEM is BARE EARTH; the visible world in the google-3d regime
-  // is the photogrammetric MESH, which sits above it (measured ~17 m at the
-  // Austin airport apron). DEM-flooring therefore still buried sprites/trails
-  // inside the mesh. These cells hold the RENDERED surface height, sampled
-  // at the callers' points, a few per coarse cell near the viewer, each kept
-  // where it was taken and read back from the nearest (scene.sampleHeight — the same
-  // source groundSnap uses, which is why 3D models always looked right) and
-  // reported here by meshFloorSampler.js. Design principle (owner): NEVER
-  // below the visible surface; slightly above is always fine. The DEM stays
-  // the instant global prior/fallback and the sanity gate for samples.
+  // --- Mesh-floor cells ---
+  // The visible photogrammetric mesh can sit above the bare-earth DEM. Use the nearest
+  // validated mesh reading in the cell to keep contacts above the visible surface.
+  // Slightly above is fine. The DEM provides the instant prior, fallback and sanity gate.
   /** @type {Map<string, Array<{lat: number, lon: number, h: number}>>}
    *  coarse cell key -> rendered-surface readings (m, ellipsoidal), each kept
    *  at the point it was probed. A read answers from the reading nearest the
@@ -587,10 +517,8 @@ export function createGroundFloor({ terrain, signal }) {
    * @returns {Promise<void>}
    */
   /** @constant {number} Max ms a one-shot consumer (trail backfill) waits for
-   *  the floor resolve before painting with whatever cells are warm. Owner
-   *  field test 2026-07-06 round 2: an UNBOUNDED await here held trail paints
-   *  hostage to cold Re:Earth lookups spanning a whole flight path (seconds to
-   *  the 30 s proxy timeout) — trails showed up late, short, or not at all.
+   *  the floor resolve before painting. An unbounded wait would hold trail
+   *  paints on cold lookups.
    *  The resolve keeps running past the deadline and lands in the cache for
    *  the next paint/select. */
   const FLOOR_RESOLVE_DEADLINE_MS = 1200;
@@ -637,11 +565,8 @@ export function createGroundFloor({ terrain, signal }) {
   /** @type {boolean} Single-flight guard for the warm batch. */
   let _floorBatchInFlight = false;
   /** @type {Map<string, {lat: number, lon: number}>} Cells requested while a
-   *  batch was in flight — flushed as the NEXT batch the moment it completes.
-   *  Round 6: the old guard silently DROPPED contending calls (flights every
-   *  30 s, military every 15 s, trail backfills ad hoc), so arriving at a new
-   *  airport could take minutes of lost polls before a given cell resolved —
-   *  the owner's "you can't just go to a place and start inspecting it". */
+   *  batch was in flight are flushed as the next batch when it completes,
+   *  so contending calls queue instead of being dropped. */
   const _pendingFloorCells = new Map();
 
   /** Kicks the resolver for a cell map, chaining any cells queued meanwhile. */

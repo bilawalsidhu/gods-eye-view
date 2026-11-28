@@ -16,6 +16,7 @@ import {
   sdrDeviceLabel,
   selectAuthorizedSdrDevice,
 } from './usbDevices.js';
+import { browserStorage } from '../browserStorage.js';
 import { summarizeLocalAdsb } from '../sources/adsbRecords.js';
 import {
   formatNumber,
@@ -24,8 +25,6 @@ import {
   t,
   translateKnown,
 } from '../i18n/index.js';
-
-export { createRememberingWebUsb } from './usbDevices.js';
 
 const FM_MIN_HZ = 87_500_000;
 const FM_MAX_HZ = 108_000_000;
@@ -54,8 +53,6 @@ const SDR_WORKER_ADMISSION = Object.freeze({
   maxBytes: 8 * 65_536,
   maxAgeMs: 1_000,
   watchdogMs: 250,
-  // Pending-work diagnostics are published at most this often, never per ack.
-  reportMs: 1_000,
   // A cold module worker can take far longer to load than 8 blocks of input:
   // no block is sent before it reports ready, and a worker that never does
   // stops the receiver.
@@ -64,10 +61,6 @@ const SDR_WORKER_ADMISSION = Object.freeze({
 const WORKER_READY = Symbol('workerReady');
 // SNR and signal levels are display values: published at most this often.
 const FM_LEVEL_STATE_MS = 250;
-// Diagnostic mode: per-worker ring of recent block timings, and per-report
-// samples kept for peaks. Both are bounded.
-const DECODER_TIMING_RING = 256;
-const DECODER_WINDOW_SAMPLES = 256;
 // Upper bound on a graceful close queued behind other USB work; past it the
 // raw USB device is closed directly, which aborts any pending transfer. The
 // raw close is bounded by the same deadline, so a teardown settles within
@@ -97,14 +90,6 @@ const ADSB_SAMPLE_RATE = SDR_RECEIVER_PRESETS.adsb.sampleRate;
 
 function normalizeMode(mode) {
   return mode === 'adsb' ? 'adsb' : 'fm';
-}
-
-function defaultStorage() {
-  try {
-    return globalThis.localStorage || null;
-  } catch {
-    return null;
-  }
 }
 
 async function setRtlAgc(device, enabled) {
@@ -218,34 +203,6 @@ function fenceDevice(device) {
   }
 }
 
-/** Wall-aligned milliseconds comparable between this page and its workers. */
-function absoluteNow() {
-  const clock = globalThis.performance;
-  return clock?.timeOrigin !== undefined
-    ? clock.timeOrigin + clock.now()
-    : Date.now();
-}
-
-function newTimingWindow() {
-  return {
-    queueMs: [],
-    computeMs: [],
-    ackDelayMs: [],
-    rttMs: [],
-    audioDelayMs: [],
-    max: {},
-    pendingPeak: 0,
-    oldestPeakMs: 0,
-  };
-}
-
-function percentile(values, fraction) {
-  const sorted = [...values].sort((a, b) => a - b);
-  return sorted[
-    Math.min(sorted.length - 1, Math.floor(fraction * sorted.length))
-  ];
-}
-
 /** Monotonic milliseconds for ages and deadlines (wall-clock can jump). */
 function monotonicNow() {
   return globalThis.performance?.now?.() ?? Date.now();
@@ -353,8 +310,7 @@ export class SdrController {
     readStallMs = SDR_READ_STALL_MS,
     closeTimeoutMs = SDR_CLOSE_TIMEOUT_MS,
     workerAdmission = SDR_WORKER_ADMISSION,
-    decoderDiagnostics = false,
-    storage = defaultStorage(),
+    storage = browserStorage(),
     webUsb = typeof navigator !== 'undefined' ? navigator.usb : null,
   } = {}) {
     const webUsbSupported = Boolean(webUsb);
@@ -423,14 +379,9 @@ export class SdrController {
     this._pendingBytes = 0;
     this._nextBlockId = 0;
     this._watchdog = null;
-    this._lastAdmissionReport = 0;
     this._ackAnomalies = 0;
     this._lastAckId = null;
     this._workerSerial = 0;
-    // Optional timing instrumentation (test and soak use); off in production.
-    this._decoderDiagnostics = Boolean(decoderDiagnostics);
-    this._timingRing = [];
-    this._timingWindow = newTimingWindow();
     this._fmLevelStateAt = -Infinity;
     this._fmLevelPatch = null;
     // Audio player epoch: only samples of the active FM session are accepted.
@@ -594,8 +545,6 @@ export class SdrController {
     this._nextBlockId = 0;
     let markReady;
     this._workerSerial += 1;
-    this._timingRing = [];
-    this._timingWindow = newTimingWindow();
     this._lastAckId = null;
     worker[WORKER_READY] = {
       ready: false,
@@ -610,7 +559,7 @@ export class SdrController {
         return;
       }
       if (data.type === 'ack') {
-        this._acknowledgeBlock(data.id, data);
+        this._acknowledgeBlock(data.id);
         return;
       }
       this._handleWorkerMessage(data);
@@ -680,32 +629,18 @@ export class SdrController {
       return false;
     }
     const id = this._nextBlockId++;
-    const postedAt = this._decoderDiagnostics ? absoluteNow() : undefined;
     this._pendingBlocks.set(id, {
       bytes: buffer.byteLength,
       at: monotonicNow(),
-      postedAt,
     });
     this._pendingBytes += buffer.byteLength;
-    if (this._decoderDiagnostics) {
-      const window = this._timingWindow;
-      window.pendingPeak = Math.max(
-        window.pendingPeak,
-        this._pendingBlocks.size,
-      );
-    }
     // Spectra are used only by seek, so the decoder computes them only then.
     const spectrum = this.state.seeking === true;
-    worker.postMessage(
-      postedAt === undefined
-        ? { type: 'samples', buffer, id, spectrum }
-        : { type: 'samples', buffer, id, spectrum, postedAt },
-      [buffer],
-    );
+    worker.postMessage({ type: 'samples', buffer, id, spectrum }, [buffer]);
     return true;
   }
 
-  _acknowledgeBlock(id, ack = {}) {
+  _acknowledgeBlock(id) {
     const entry = this._pendingBlocks.get(id);
     // Unknown, duplicate or already-cleared ids change nothing.
     if (!entry) {
@@ -715,77 +650,6 @@ export class SdrController {
     this._pendingBlocks.delete(id);
     this._pendingBytes -= entry.bytes;
     this._lastAckId = id;
-    if (this._decoderDiagnostics && entry.postedAt !== undefined)
-      this._recordBlockTiming(id, entry.postedAt, ack);
-  }
-
-  /** Diagnostic mode: split one block's round trip into its hops. */
-  _recordBlockTiming(id, postedAt, ack) {
-    const received = absoluteNow();
-    const finite = (value) => (Number.isFinite(value) ? value : null);
-    const timing = {
-      id,
-      postedAt,
-      // Waiting in the worker's queue before it started this block.
-      queueMs: finite(ack.receivedAt - postedAt),
-      computeMs: finite(ack.computeMs),
-      // From the worker posting the ack to this thread handling it.
-      ackDelayMs: finite(received - ack.ackPostedAt),
-      rttMs: received - postedAt,
-    };
-    this._timingRing.push(timing);
-    if (this._timingRing.length > DECODER_TIMING_RING) this._timingRing.shift();
-    const window = this._timingWindow;
-    for (const key of ['queueMs', 'computeMs', 'ackDelayMs', 'rttMs']) {
-      if (timing[key] === null) continue;
-      const values = window[key];
-      if (values.length < DECODER_WINDOW_SAMPLES) values.push(timing[key]);
-      window.max[key] = Math.max(window.max[key] ?? -Infinity, timing[key]);
-    }
-  }
-
-  /** Diagnostic mode: worker post to this thread, for FM audio messages. */
-  _recordAudioDelay(workerPostedAt) {
-    if (!this._decoderDiagnostics || !Number.isFinite(workerPostedAt)) return;
-    const delay = absoluteNow() - workerPostedAt;
-    const window = this._timingWindow;
-    if (window.audioDelayMs.length < DECODER_WINDOW_SAMPLES)
-      window.audioDelayMs.push(delay);
-    window.max.audioDelayMs = Math.max(
-      window.max.audioDelayMs ?? -Infinity,
-      delay,
-    );
-  }
-
-  _publishTimingWindow(now) {
-    const window = this._timingWindow;
-    this._timingWindow = newTimingWindow();
-    const summary = {};
-    for (const key of [
-      'queueMs',
-      'computeMs',
-      'ackDelayMs',
-      'rttMs',
-      'audioDelayMs',
-    ]) {
-      const values = window[key];
-      summary[key] = values.length
-        ? {
-            count: values.length,
-            p95: percentile(values, 0.95),
-            max: window.max[key],
-          }
-        : null;
-    }
-    summary.pendingPeak = Math.max(
-      window.pendingPeak,
-      this._pendingBlocks.size,
-    );
-    summary.oldestPendingPeakMs = Math.max(
-      window.oldestPeakMs,
-      this._oldestPendingAgeMs(now),
-    );
-    return summary;
   }
 
   _clearPendingBlocks() {
@@ -805,25 +669,7 @@ export class SdrController {
       if (!this._device) return;
       const now = monotonicNow();
       const oldest = this._oldestPendingAgeMs(now);
-      if (oldest > this._admission.maxAgeMs) {
-        this._overload('stalled');
-        return;
-      }
-      if (this._decoderDiagnostics) {
-        const window = this._timingWindow;
-        window.oldestPeakMs = Math.max(window.oldestPeakMs, oldest);
-      }
-      if (now - this._lastAdmissionReport >= this._admission.reportMs) {
-        this._lastAdmissionReport = now;
-        this._setState({
-          decoderPendingBlocks: this._pendingBlocks.size,
-          decoderPendingBytes: this._pendingBytes,
-          decoderOldestPendingMs: oldest,
-          ...(this._decoderDiagnostics
-            ? { decoderTimings: this._publishTimingWindow(now) }
-            : {}),
-        });
-      }
+      if (oldest > this._admission.maxAgeMs) this._overload('stalled');
     }, this._admission.watchdogMs);
     this._watchdog.unref?.();
   }
@@ -870,15 +716,6 @@ export class SdrController {
       nextBlockId: this._nextBlockId,
       ackAnomalies: this._ackAnomalies,
     };
-    if (this._decoderDiagnostics) {
-      snapshot.pending = [...this._pendingBlocks].map(([id, entry]) => ({
-        id,
-        ageMs: now - entry.at,
-        bytes: entry.bytes,
-      }));
-      snapshot.timings = this._timingRing.slice();
-      snapshot.window = this._publishTimingWindow(now);
-    }
     return snapshot;
   }
 
@@ -968,7 +805,6 @@ export class SdrController {
           }
         : null;
     if (message.type === 'fm') {
-      this._recordAudioDelay(message.workerPostedAt);
       // Display values only: merged and published at most every 250 ms, so
       // every subscriber is not run for each 16 ms block.
       const patch = {

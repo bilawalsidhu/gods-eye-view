@@ -12,7 +12,7 @@ export const LOOK_STEP_DEG = 5;
 export const LOOK_COARSE_STEP_DEG = 45;
 
 /** The view pitches no further than straight up or straight down. */
-export const LOOK_PITCH_LIMIT_DEG = 90;
+const LOOK_PITCH_LIMIT_DEG = 90;
 
 /**
  * The eased view's time constant. Three of them (about 180 ms) close 95% of

@@ -16,8 +16,6 @@ import {
   destroyScopeMask,
   setScopeMaskEnabled,
   setScopeMaskFeather,
-  SCOPE_TERMINUS_MIN_PCT,
-  SCOPE_TERMINUS_MAX_PCT,
   SCOPE_FEATHER_RATIO_DEFAULT,
   getScopeMaskFeather,
   setScopeMaskOpacity,
@@ -336,8 +334,6 @@ test('destroy tears the DPR watch down (no redraw after teardown)', () => {
 // FEATHER is untouched (owner locked 35).
 
 test('the terminus band is the owner-approved 10 Mm → 7 Mm fade', () => {
-  assert.equal(SCOPE_TERMINUS_FAR_M, 10_000_000, 'the relaxed corners start above 10 Mm');
-  assert.equal(SCOPE_TERMINUS_NEAR_M, 7_000_000, 'and are gone by 7 Mm');
   assert.equal(scopeTerminusAlpha(10_500_000), SCOPE_OUTSIDE_ALPHA, 'full-globe view keeps its stars');
   assert.equal(scopeTerminusAlpha(6_900_000), SCOPE_TERMINUS_ALPHA_NEAR, 'below the band: solid black');
   assert.equal(scopeTerminusAlpha(400_000), SCOPE_TERMINUS_ALPHA_NEAR, 'orbital view: solid black');
@@ -596,8 +592,6 @@ test('a DPR change that also crosses a terminus step paints once, not twice', ()
 // ── `sce` band clamp (shared by the share layer and the UI) ──────────────────
 
 test('terminus percents clamp into the supported band; junk is absent, not zero', () => {
-  assert.equal(SCOPE_TERMINUS_MIN_PCT, 94);
-  assert.equal(SCOPE_TERMINUS_MAX_PCT, 100);
   assert.equal(clampScopeTerminusPct(97), 97);
   assert.equal(clampScopeTerminusPct(96.6), 97);
   assert.equal(clampScopeTerminusPct(0), 94, 'a sub-band value is floored, never honoured');

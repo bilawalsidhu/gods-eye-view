@@ -6,31 +6,17 @@ import { isTouchOnly, watchTouchOnly } from './overlays/canvasPixelRatio.js';
 /**
  * Scope mask — the app's signature circular viewport treatment, made real.
  *
- * History (2026-08-08 owner field test): the scope was never implemented.
- * It emerged from six zero-intensity style PostProcessStages whose stacked
- * "identity" passes progressively smeared the starfield into a circular
- * falloff — every grep for a mask came up empty because none existed. The
- * owner ruled: draw it explicitly on a canvas, make the edge featherable
- * (like the NVG/FLIR tube masks), and free the six shader passes for real.
- *
  * Implementation: one fixed canvas parented into the viewer container
  * BELOW the detection surface (z-index 2 < 5) so detection's
- * mix-blend-mode still composites over the masked scene, exactly like the
- * old in-scene artifact. The mask is a radial gradient — fully transparent
- * inside the shared keyhole circle, feathering to near-opaque page black
- * outside — redrawn only on resize, tuning change, DPR change, or a
- * QUANTIZED terminus-alpha step (see below). No rAF, no per-frame paint, no
- * render-loop coupling.
+ * mix-blend-mode still composites over the masked scene. The mask is a radial
+ * gradient — fully transparent inside the shared keyhole circle, feathering to
+ * near-opaque page black outside — redrawn only on resize, tuning change,
+ * DPR change, or a QUANTIZED terminus-alpha step (see below). No rAF, no
+ * per-frame paint, no render-loop coupling.
  *
- * Altitude-adaptive edge terminus (owner-approved 2026-08-17, band retuned the
- * same day after a field test): the outside fill's terminus alpha is 0.94 only
- * at TRUE full-globe altitude — above 10 Mm, where the relaxed 6% keeps faint
- * stars alive in the corners — and fades QUICKLY to fully opaque black on the
- * way down, reaching solid black by 7 Mm. Every working altitude below that is
- * opaque, because there the same 6% bleed reads as smeared geometry rather
- * than atmosphere. FEATHER is untouched BY THIS RAMP — only the terminus opacity
- * moves here. (The feather's own default later moved 35 → 0 on 2026-08-22; see
- * SCOPE_FEATHER_RATIO_DEFAULT below. The two are independent.)
+ * The outside fill's terminus alpha is 0.94 above 10 Mm, keeping faint stars in the
+ * corners. It reaches opaque black by 7 Mm, where the bleed reads as smeared geometry.
+ * The feather (SCOPE_FEATHER_RATIO_DEFAULT) is independent.
  *
  * Perf contract for that ramp: the height sample is throttled AND the repaint
  * is gated on a QUANTIZED alpha step, so a full zoom gesture costs a handful
@@ -65,9 +51,7 @@ export const SCOPE_TERMINUS_MAX_PCT = 100;
 export const SCOPE_TERMINUS_ALPHA_NEAR = 1;
 /**
  * Camera height at/above which the terminus stays at SCOPE_OUTSIDE_ALPHA.
- * Owner retune (2026-08-17 field test): the relaxed 6% corners belong to TRUE
- * full-globe views only — "the moment we go past roughly 10 million m in
- * altitude, looking at the world, it should start quickly fading into black".
+ * The 6% corners belong only to full-globe views.
  */
 export const SCOPE_TERMINUS_FAR_M = 10_000_000;
 /**

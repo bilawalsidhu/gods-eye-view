@@ -117,7 +117,7 @@ test('a landing with a cold surface cell sits on the geoid, not at its approach 
   store.geoidReady = true;
   store.receive(observation({ ellipsoidAltitudeM: 1040 }), view());
   // Every grounded poll, not just the first: a contact far from the viewer
-  // never has its cell warmed (HAL-1032).
+  // never has its cell warmed.
   for (let poll = 0; poll < 3; poll += 1) {
     const next = store.receive(
       observation({

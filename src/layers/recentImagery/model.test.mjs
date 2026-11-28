@@ -5,7 +5,6 @@ import {
   boxFromPin,
   lonSpanDeg,
   nonCrossingBoxes,
-  boxFromRectangle,
   boxSideKm,
   coverageFor,
   boxCentre,
@@ -18,15 +17,15 @@ import {
   parseCandidateKey,
   quantizeBox,
   rankLatest,
-  shortDay,
   thumbnailOrder,
   utcDay,
   validateBox,
-  viewTooLargeMessage,
+  sizeRefusal,
   viirsCandidates,
   wvsSnapshotUrl,
 } from './model.js';
 import { BOX } from './testDoubles.mjs';
+import { READOUT_WORDS } from './display.js';
 
 function granule(overrides = {}) {
   return {
@@ -105,7 +104,7 @@ test('validateBox refuses polar, degenerate, invalid and oversized boxes, and ac
   );
   assert.equal(validateBox({ west: 0, south: 0, east: 8, north: 8 }).ok, true);
   assert.equal(
-    viewTooLargeMessage(2400),
+    sizeRefusal('View', 2400),
     'View is 2,400 km wide · limit 1,000 km',
   );
   // Latitudes are ordered; longitudes are never swapped.
@@ -195,15 +194,7 @@ test('boxFromPin builds a 10 km square within 2% at any latitude and refuses wha
   assert.equal(boxFromPin(0, 85.04).north, 85.0511, 'clamped, still valid');
 });
 
-test('rectangles convert from radians and the share-link quantization round-trips', () => {
-  const box = boxFromRectangle({
-    west: -Math.PI / 2,
-    south: 0,
-    east: -Math.PI / 4,
-    north: Math.PI / 6,
-  });
-  assert.ok(Math.abs(box.west + 90) < 1e-9 && Math.abs(box.north - 30) < 1e-9);
-  assert.equal(boxFromRectangle(null), null);
+test('the share-link quantization round-trips', () => {
   const ints = quantizeBox({
     west: -97.812345678,
     south: 30.2,
@@ -232,8 +223,6 @@ test('days and candidate keys are real UTC calendar days', () => {
   });
   assert.equal(parseCandidateKey('X30:2026-09-10'), null);
   assert.equal(parseCandidateKey('S30:2026-02-30'), null);
-  assert.equal(shortDay('2026-09-18'), 'Sep 18');
-  assert.equal(shortDay('nope'), '');
 });
 
 test('granules group into one candidate per product and UTC day, newest first', () => {
@@ -420,10 +409,10 @@ test('START HERE prefers a day that covers the whole box over a newer sliver', (
 test('the readout is one UTC line with age, sensor, resolution and scene cloud', () => {
   const now = '2026-09-21T12:00:00Z';
   const readout = (granules) =>
-    formatCandidateReadout(groupGranulesByDay(granules)[0], now);
+    formatCandidateReadout(groupGranulesByDay(granules)[0], now, READOUT_WORDS);
   assert.equal(
     readout([granule({ timeStart: '2026-09-18T17:12:10Z' })]),
-    'Sep 18, 2026 17:12Z · 3 days ago · Sentinel-2 via HLS · 30 m · 12% scene cloud',
+    'Sep 18, 2026 17:12Z · 3 days ago · Sentinel-\u20602 via HLS · 30\u00a0m · 12% scene cloud',
   );
   assert.equal(
     readout([
@@ -435,7 +424,7 @@ test('the readout is one UTC line with age, sensor, resolution and scene cloud',
         timeEnd: '2026-09-18T17:20:30Z',
       }),
     ]),
-    'Sep 18, 2026 17:12–17:20Z · 3 days ago · Sentinel-2 via HLS · 30 m · 12–18% scene cloud',
+    'Sep 18, 2026 17:12–17:20Z · 3 days ago · Sentinel-\u20602 via HLS · 30\u00a0m · 12–18% scene cloud',
   );
   assert.equal(
     readout([
@@ -446,11 +435,15 @@ test('the readout is one UTC line with age, sensor, resolution and scene cloud',
         timeEnd: null,
       }),
     ]),
-    'Sep 20, 2026 16:05Z · yesterday · Landsat 8/9 via HLS · 30 m · cloud unknown',
+    'Sep 20, 2026 16:05Z · yesterday · Landsat 8/9 via HLS · 30\u00a0m · cloud unknown',
   );
   assert.equal(
-    formatCandidateReadout(viirsCandidates('2026-09-21', 1)[0], now),
-    'Sep 21, 2026 · today · VIIRS NOAA-21 · 250 m · overview · cloud unknown',
+    formatCandidateReadout(
+      viirsCandidates('2026-09-21', 1)[0],
+      now,
+      READOUT_WORDS,
+    ),
+    'Sep 21, 2026 · today · VIIRS NOAA-\u206021 · 250\u00a0m · overview · cloud unknown',
   );
   assert.equal(formatCandidateReadout(null), '');
 });
@@ -547,4 +540,31 @@ test('boxFromPin returns the short-arc box for a pin near the dateline', () => {
   const high = boxFromPin(-179.99, 60);
   spanOk(high);
   assert.ok(high.west > high.east);
+});
+
+test('missing imagery edges do not turn into invented zero coordinates', () => {
+  for (const value of [null, undefined, '', ' ', false, true]) {
+    const box = { west: value, south: 0, east: 1, north: 1 };
+    assert.equal(validateBox(box).ok, false);
+    assert.equal(validateBox(box).reason, 'invalid');
+    assert.equal(boxCentre(box), null);
+  }
+  assert.equal(validateBox({ west: 0, south: 0, east: 1, north: 1 }).ok, true);
+  assert.equal(
+    validateBox({ west: '0', south: '0', east: '1', north: '1' }).ok,
+    true,
+  );
+});
+
+test('every edge and every box entry point refuses a missing edge', async () => {
+  const blanks = [null, undefined, '', ' ', false, [], {}];
+  for (const edge of ['west', 'south', 'east', 'north']) {
+    for (const value of blanks) {
+      const box = { west: 1, south: 1, east: 2, north: 2, [edge]: value };
+      assert.equal(validateBox(box).ok, false, `${edge}=${String(value)}`);
+      // Share-link integers are converted per edge.
+      assert.equal(dequantizeBox(box), null, `share ${edge}`);
+    }
+  }
+  assert.ok(dequantizeBox({ west: 0, south: 0, east: 100000, north: 100000 }));
 });

@@ -8,7 +8,8 @@ test('reenabling an empty filtered layer never reveals the retained pre-filter h
   const layerState = {
     _enabled: false,
     _viewer: {},
-    _cells: {},
+    _initialized: true,
+    _visibility: { show: false },
     _fires: [],
     _loading: true,
     _pickIndexById: new Map(),
@@ -22,7 +23,6 @@ test('reenabling an empty filtered layer never reveals the retained pre-filter h
     layerState,
     services: {
       picking: { registerPickOwner: noop, unregisterPickOwner: noop },
-      sprites: { restoreSpriteOrderOnEnable: noop },
       context: { clearSelectedEntityContextForLayer: noop },
     },
     config: { id: 'local-firms', overlayHost: { setVisible: noop } },

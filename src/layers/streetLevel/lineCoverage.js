@@ -15,6 +15,8 @@ let lineSets = 0;
 
 /** Hint above the street-zoom ceiling, where no coverage is drawn. */
 export const ZOOM_IN_HINT = msg('Zoom in to see street-level coverage');
+/** The coverage label's action where a line click opens its nearest photo (KartaView, Panoramax). */
+export const LINE_CLICK_HINT = 'click a line for its nearest photo';
 /** Hint when no ground is in view within range (looking at the sky). */
 const NO_GROUND_HINT = msg(
   'Point the camera at the ground for street-level coverage',
@@ -606,7 +608,6 @@ export function createLineCoverage({
     rebuild,
     reload,
     highlight,
-    sequenceCount,
     stats,
   };
 }

@@ -453,23 +453,6 @@ export class CockpitViewController {
     );
   }
 
-  readAircraftInfo() {
-    return readAircraftInfo.call(this);
-  }
-  readVesselInfo() {
-    return readVesselInfo.call(this);
-  }
-  readSatelliteInfo() {
-    return readSatelliteInfo.call(this);
-  }
-  beginOrbital() {
-    return beginOrbital.call(this);
-  }
-
-  orbitalViewSignal(info) {
-    return orbitalViewSignal.call(this, info);
-  }
-
   /**
    * The station view's right arrow: step to the station's next view.
    * @returns {boolean} True when the view changed.
@@ -485,90 +468,6 @@ export class CockpitViewController {
   previousOrbitalView() {
     return stepOrbitalMount.call(this, -1);
   }
-  endOrbital() {
-    return endOrbital.call(this);
-  }
-  updateOrbital(nowMs) {
-    return updateOrbital.call(this, nowMs);
-  }
-  updateOrbitalHud(info, nowMs) {
-    return updateOrbitalHud.call(this, info, nowMs);
-  }
-  /**
-   * Step the orbital view's optical zoom (the + and − keys and buttons).
-   * @param {number} direction Positive zooms in, negative out.
-   * @returns {boolean} True when the zoom changed.
-   */
-  stepOrbitalZoom(direction) {
-    return stepOrbitalZoom.call(this, direction);
-  }
-  jumpToSensorSwath() {
-    return jumpToSensorSwath.call(this);
-  }
-  onOrbitalWheel(event) {
-    return onOrbitalWheel.call(this, event);
-  }
-  /**
-   * A click on the orbital picture: on a mapped point in reach it keeps the
-   * camera on that point; anywhere else it ends such a focus.
-   * @param {{x: number, y: number}|null|undefined} position
-   * @returns {boolean} True when the click focused a point.
-   */
-  onOrbitalClick(position) {
-    return onOrbitalClick.call(this, position);
-  }
-  /**
-   * A double-click on the orbital picture: on a mapped ground point it keeps
-   * or starts the focus there instead of letting Cesium track the point.
-   * @param {{x: number, y: number}|null|undefined} position
-   * @returns {boolean} True when it was taken.
-   */
-  onOrbitalDoubleClick(position) {
-    return onOrbitalDoubleClick.call(this, position);
-  }
-  orbitalSiteUnder(position) {
-    return orbitalSiteUnder.call(this, position);
-  }
-  /**
-   * A site's orbital Live Signals row: focus that site, switch to it, or end
-   * the focus held on it.
-   * @param {string} key The site's id in the Mapped Installations layer.
-   * @returns {boolean} True when the focus changed.
-   */
-  toggleOrbitalFocus(key) {
-    return toggleOrbitalFocus.call(this, key);
-  }
-  /** Rebuild the orbital Live Signals rows now. */
-  refreshOrbitalSignals() {
-    return refreshOrbitalSignals.call(this);
-  }
-  /** Rebuild the orbital Live Signals rows on their clock. */
-  updateOrbitalSignals(nowMs) {
-    return updateOrbitalSignals.call(this, nowMs);
-  }
-  /**
-   * Ride the satellite an orbital Live Signals row names (RETURN goes back).
-   * @param {number|string} noradId
-   * @returns {boolean} True when the ridden satellite changed.
-   */
-  rideOrbitalSatellite(noradId) {
-    return rideOrbitalSatellite.call(this, noradId);
-  }
-  /**
-   * A click on an orbital Live Signals row.
-   * @returns {boolean} True in orbit.
-   */
-  handleOrbitalSignalClick(layerId, id) {
-    return handleOrbitalSignalClick.call(this, layerId, id);
-  }
-  /**
-   * Tilt the orbital view one arrow step off nadir.
-   * @param {{axis: 'yaw'|'pitch', sign: number, stepDeg: number}} step
-   * @returns {boolean} True in an orbital view.
-   */
-  turnOrbitalLook(step) {
-    return turnOrbitalLook.call(this, step);
-  }
   /**
    * The NADIR control and the Home and 0 keys in orbit: back to pure nadir.
    * Focus leaves the button before it hides.
@@ -581,83 +480,11 @@ export class CockpitViewController {
     if (reset && hadFocus) this.mapViewButton?.focus({ preventScroll: true });
     return reset;
   }
-  readSubjectCandidate(provider) {
-    return readSubjectCandidate.call(this, provider);
-  }
-  subjectContext() {
-    return subjectContext.call(this);
-  }
-  subjectInfo(frame) {
-    return subjectInfo.call(this, frame);
-  }
-  entryCandidates(nowMs) {
-    return entryCandidates.call(this, nowMs);
-  }
-  resolveEntry(nowMs) {
-    return resolveEntry.call(this, nowMs);
-  }
-  readSubjectLayerId() {
-    return readSubjectLayerId.call(this);
-  }
-  resolveEntryKind() {
-    return resolveEntryKind.call(this);
-  }
-  dispatchCockpitModeChanged(active, info) {
-    return dispatchCockpitModeChanged.call(this, active, info);
-  }
-  toggleTrackedTr3b() {
-    return toggleTrackedTr3b.call(this);
-  }
-  publishPresenceView() {
-    return publishPresenceView.call(this);
-  }
-  syncTr3bToggle(info) {
-    return syncTr3bToggle.call(this, info);
-  }
-  syncEntry() {
-    return syncEntry.call(this);
-  }
-  refreshSubjectWords() {
-    return refreshSubjectWords.call(this);
-  }
-  navigateContext(direction, options) {
-    return navigateContext.call(this, direction, options);
-  }
-  _adoptTrackedEntity(nowMs, suppliedInfo) {
-    return _adoptTrackedEntity.call(this, nowMs, suppliedInfo);
-  }
-  enter(options) {
-    return enter.call(this, options);
-  }
-  exit(options) {
-    return exit.call(this, options);
-  }
-  update() {
-    return update.call(this);
-  }
-  publishInstrumentsView() {
-    return publishInstrumentsView.call(this);
-  }
-  publishRouteView() {
-    return publishRouteView.call(this);
-  }
-  updateHud(info, nowMs, forceContext) {
-    return updateHud.call(this, info, nowMs, forceContext);
-  }
-  updateRoute(info) {
-    return updateRoute.call(this, info);
-  }
-  updateRadar(info) {
-    return updateRadar.call(this, info);
-  }
   /** Step the bridge radar to its next range and redraw it at once. */
   cycleRadarRange() {
     this.radarRangeNm = nextRadarRange(this.radarRangeNm);
     if (this.active && this.subjectKind === 'vessel' && this.lastSubjectInfo)
       this.updateRadar(this.lastSubjectInfo);
-  }
-  presentLook() {
-    return presentLook.call(this);
   }
   /** Whether the active view looks around: a bridge, or a provider's with `look`. */
   get looksAround() {
@@ -712,63 +539,6 @@ export class CockpitViewController {
     if (hadFocus) this.mapViewButton?.focus({ preventScroll: true });
     return true;
   }
-  syncWeatherToggle(enabled) {
-    return syncWeatherToggle.call(this, enabled);
-  }
-  setVisionMode(mode, options) {
-    return setVisionMode.call(this, mode, options);
-  }
-  cycleVisionMode(direction) {
-    return cycleVisionMode.call(this, direction);
-  }
-  clearPredictiveRoute() {
-    return clearPredictiveRoute.call(this);
-  }
-  publishContextView() {
-    return publishContextView.call(this);
-  }
-  showContextCard(visible) {
-    return showContextCard.call(this, visible);
-  }
-  updateContext(info, heading) {
-    return updateContext.call(this, info, heading);
-  }
-  publishBriefView() {
-    return publishBriefView.call(this);
-  }
-  showBriefPage(index, options) {
-    return showBriefPage.call(this, index, options);
-  }
-  setBriefAutoRotate(enabled) {
-    return setBriefAutoRotate.call(this, enabled);
-  }
-  setBriefLiveOffered(offered) {
-    return setBriefLiveOffered.call(this, offered);
-  }
-  startBriefRotation(options) {
-    return startBriefRotation.call(this, options);
-  }
-  stopBriefRotation() {
-    return stopBriefRotation.call(this);
-  }
-  updateLocalPosition(info) {
-    return updateLocalPosition.call(this, info);
-  }
-  maybeRefreshRegionalBrief(info) {
-    return maybeRefreshRegionalBrief.call(this, info);
-  }
-  renderRegionalBriefStatus(status, info) {
-    return renderRegionalBriefStatus.call(this, status, info);
-  }
-  relocalizeBrief() {
-    return relocalizeBrief.call(this);
-  }
-  renderRegionalBrief(payload, info) {
-    return renderRegionalBrief.call(this, payload, info);
-  }
-  publishCockpitSignals() {
-    return publishCockpitSignals.call(this);
-  }
   pushCockpitSignal(key, tone, title, detail, target, options) {
     return pushCockpitSignal.call(
       this,
@@ -780,12 +550,6 @@ export class CockpitViewController {
       options,
     );
   }
-  dropCockpitSignal(key) {
-    return dropCockpitSignal.call(this, key);
-  }
-  dropContextSnapshotSignals() {
-    return dropContextSnapshotSignals.call(this);
-  }
   updateCockpitSignals(snapshot, unknownCount, partialPicture) {
     return updateCockpitSignals.call(
       this,
@@ -793,34 +557,6 @@ export class CockpitViewController {
       unknownCount,
       partialPicture,
     );
-  }
-  scheduleContextLayout() {
-    return scheduleContextLayout.call(this);
-  }
-  setContextCollapsed(collapsed) {
-    return setContextCollapsed.call(this, collapsed);
-  }
-  setSignalCollapsed(collapsed, options) {
-    return setSignalCollapsed.call(this, collapsed, options);
-  }
-  syncContextLayout() {
-    return syncContextLayout.call(this);
-  }
-  syncSignalLayout() {
-    return syncSignalLayout.call(this);
-  }
-  onKeyDown(event) {
-    return onKeyDown.call(this, event);
-  }
-  onSceneDoubleClick(position, nowMs) {
-    return onSceneDoubleClick.call(this, position, nowMs);
-  }
-  onScenePointerDown(nowMs) {
-    return onScenePointerDown.call(this, nowMs);
-  }
-
-  handleSignalClick(event) {
-    return handleSignalClick.call(this, event);
   }
 
   /**
@@ -878,3 +614,80 @@ export class CockpitViewController {
     this.exit({ restoreTracking: false });
   }
 }
+
+Object.assign(CockpitViewController.prototype, {
+  readAircraftInfo,
+  readVesselInfo,
+  readSatelliteInfo,
+  beginOrbital,
+  orbitalViewSignal,
+  endOrbital,
+  updateOrbital,
+  updateOrbitalHud,
+  stepOrbitalZoom,
+  jumpToSensorSwath,
+  onOrbitalWheel,
+  onOrbitalClick,
+  onOrbitalDoubleClick,
+  orbitalSiteUnder,
+  toggleOrbitalFocus,
+  refreshOrbitalSignals,
+  updateOrbitalSignals,
+  rideOrbitalSatellite,
+  handleOrbitalSignalClick,
+  turnOrbitalLook,
+  readSubjectCandidate,
+  subjectContext,
+  subjectInfo,
+  entryCandidates,
+  resolveEntry,
+  readSubjectLayerId,
+  resolveEntryKind,
+  dispatchCockpitModeChanged,
+  toggleTrackedTr3b,
+  publishPresenceView,
+  syncTr3bToggle,
+  syncEntry,
+  refreshSubjectWords,
+  navigateContext,
+  _adoptTrackedEntity,
+  enter,
+  exit,
+  update,
+  publishInstrumentsView,
+  publishRouteView,
+  updateHud,
+  updateRoute,
+  updateRadar,
+  presentLook,
+  syncWeatherToggle,
+  setVisionMode,
+  cycleVisionMode,
+  clearPredictiveRoute,
+  publishContextView,
+  showContextCard,
+  updateContext,
+  publishBriefView,
+  showBriefPage,
+  setBriefAutoRotate,
+  setBriefLiveOffered,
+  startBriefRotation,
+  stopBriefRotation,
+  updateLocalPosition,
+  maybeRefreshRegionalBrief,
+  renderRegionalBriefStatus,
+  relocalizeBrief,
+  renderRegionalBrief,
+  publishCockpitSignals,
+  dropCockpitSignal,
+  dropContextSnapshotSignals,
+  scheduleContextLayout,
+  setContextCollapsed,
+  setSignalCollapsed,
+  syncContextLayout,
+  syncSignalLayout,
+  onKeyDown,
+  onSceneDoubleClick,
+  onScenePointerDown,
+  handleSignalClick,
+});

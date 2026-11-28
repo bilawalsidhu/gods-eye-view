@@ -1,4 +1,5 @@
 import { msg } from '../../../../i18n/marker.js';
+import { requestWithDeadline } from '../../../../sources/requestDeadline.js';
 import { NEAREST_RADIUS_M } from '../../policy.js';
 import {
   MAPILLARY_GRAPH_HOST,
@@ -78,39 +79,15 @@ export function createMapillarySource({
     if (!timeoutMs) return graphOnce(path, params, { signal });
     // The whole answer, body included, within `timeoutMs`; the caller's
     // abort still wins.
-    if (signal?.aborted) throw signal.reason;
-    const controller = new AbortController();
-    const onAbort = () => controller.abort(signal.reason);
-    signal?.addEventListener('abort', onAbort, { once: true });
-    const timer = setTimeout(
-      () =>
-        controller.abort(
-          new MapillarySourceError(NO_ANSWER, {
-            status: 504,
-          }),
-        ),
-      timeoutMs,
-    );
     try {
-      // A body that never ends is given up too, whatever the fetch does.
-      const gaveUp = new Promise((_, reject) =>
-        controller.signal.addEventListener(
-          'abort',
-          () => reject(controller.signal.reason),
-          { once: true },
-        ),
+      return await requestWithDeadline(
+        (deadline) => graphOnce(path, params, { signal: deadline }),
+        { signal, timeoutMs },
       );
-      return await Promise.race([
-        graphOnce(path, params, { signal: controller.signal }),
-        gaveUp,
-      ]);
     } catch (error) {
-      if (signal?.aborted) throw signal.reason;
-      if (controller.signal.aborted) throw controller.signal.reason;
+      if (!signal?.aborted && error?.name === 'TimeoutError')
+        throw new MapillarySourceError(NO_ANSWER, { status: 504 });
       throw error;
-    } finally {
-      clearTimeout(timer);
-      signal?.removeEventListener('abort', onAbort);
     }
   }
 

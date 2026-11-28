@@ -17,7 +17,8 @@ import {
 } from './gridViewport.js';
 import { canvasOf, findCamera } from '../../render/rendererOf.js';
 import { wildlifeEyeHeight, wildlifeViewRectangle } from './view.js';
-import { wildlifeViewportBoxes, snapWildlifeBox } from './viewport.js';
+import { wildlifeViewportBoxes } from './viewport.js';
+import { snapWildlifeBox } from './bounds.js';
 import {
   WILDLIFE_DEBOUNCE_MS,
   WILDLIFE_MAX_ROWS,
@@ -65,11 +66,11 @@ export function createLifecycle({ state, services, parts }) {
   }
 
   function renderBatch(fn) {
-    parts.rendering.beginBatch?.();
+    parts.rendering.beginBatch();
     try {
       return fn();
     } finally {
-      parts.rendering.endBatch?.();
+      parts.rendering.endBatch();
     }
   }
 
@@ -337,7 +338,7 @@ export function createLifecycle({ state, services, parts }) {
             state.rows.get(state.selectedId) ||
             null;
         const retainedRows = sameParams
-          ? (parts.selection.retainedAmbientRows?.() || []).filter(
+          ? (parts.selection.retainedAmbientRows() || []).filter(
               (row) =>
                 state.rows.has(row.stableId) &&
                 isRecentWildlifeSighting(row, services.now(), params.taxa),
@@ -521,7 +522,7 @@ export function createLifecycle({ state, services, parts }) {
     clearPending();
     state.removeCamera?.();
     state.removeCamera = null;
-    parts.rendering.deactivate?.();
+    parts.rendering.deactivate();
     removeManagerListener?.();
     removeManagerListener = null;
     parts.selection.remove();

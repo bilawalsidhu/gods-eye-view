@@ -27,13 +27,12 @@ function placementFix(record) {
  */
 export function createVesselSnapshotRenderer({
   state,
-  placement = null,
-  records,
+  placement,
   rendering,
   tracking,
   selection,
   cards,
-  followsClock = () => false,
+  followsClock,
 }) {
   /**
    * `replace`: the rows are the world at another time (see VesselRecords).
@@ -55,7 +54,7 @@ export function createVesselSnapshotRenderer({
             if (record.id) placement.observe(record.id, placementFix(record));
           }
         : () => {};
-    records.reconcile(
+    state.records.reconcile(
       rows,
       {
         complete,

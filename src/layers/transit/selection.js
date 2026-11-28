@@ -114,7 +114,7 @@ export function createSelection({ state, services, parts }) {
     state._selectedCardText = null;
     state._detectRevision += 1;
     // Cleared first: the styling path reads the selection from state.
-    if (entry) parts.rendering.paintSelected(entry, false);
+    if (entry) parts.rendering.paintSelected(entry);
     state._overlayHost.clearSource(TRANSIT_SELECTED_OVERLAY_SOURCE_ID);
   }
 
@@ -133,7 +133,7 @@ export function createSelection({ state, services, parts }) {
     claimSelection('transit', key);
     if (byUser) state._selectedAtMs = Date.now();
     state._detectRevision += 1;
-    parts.rendering.paintSelected(entry, true);
+    parts.rendering.paintSelected(entry);
     parts.trails.select(entry);
     refreshSelectedCard(true);
     governorRequestRender('transit-select');

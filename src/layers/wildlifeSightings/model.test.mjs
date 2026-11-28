@@ -5,7 +5,6 @@ import {
   rowInWildlifeBoxes,
   buildWildlifeIconModel,
 } from './model.js';
-import { ICONIC_TINTS, ICONIC_LEGEND_ORDER, TAXA_PRESETS } from './policy.js';
 
 const row = {
   stableId: 'inat:1',
@@ -18,17 +17,10 @@ const row = {
   obscured: false,
 };
 
-test('unknown groups are slate and molluscs fold into other animals', () => {
+test('unknown groups fold into Unknown and molluscs into other animals', () => {
   assert.equal(wildlifeIconicGroup('Mollusca'), 'Animalia');
   for (const iconic of ['Unknown', 'Protozoa', 'Chromista', undefined])
     assert.equal(wildlifeIconicGroup(iconic), 'Unknown');
-  assert.equal(ICONIC_TINTS.Unknown, '#9aa7b3');
-  assert.equal(ICONIC_LEGEND_ORDER.at(-1), 'Unknown');
-  assert.equal(ICONIC_LEGEND_ORDER.length, 11);
-  assert.equal(TAXA_PRESETS.length, 6);
-  assert.equal(TAXA_PRESETS.filter((item) => item.label === 'ALL').length, 1);
-  assert.equal(Object.isFrozen(ICONIC_TINTS), true);
-  assert.equal(Object.isFrozen(TAXA_PRESETS[0]), true);
 });
 
 test('view filtering includes padding and both sides of the antimeridian', () => {

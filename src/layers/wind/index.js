@@ -32,6 +32,16 @@ const SERVER_REASONS = new Set([msg('Wind upstream unavailable')]);
 const reasonText = (reason) =>
   SERVER_REASONS.has(reason) ? t(reason) : translateKnown(reason) || null;
 
+/** Whether the GPU trails are still being built. */
+function streamlinesPreparing(enabled, diagnostic) {
+  return (
+    enabled &&
+    diagnostic?.renderMode === 'gpu-streamlines' &&
+    diagnostic.gpu?.pathCount > 0 &&
+    !diagnostic.gpu?.ready
+  );
+}
+
 /**
  * A wind problem in the UI language. Source errors are English data; the
  * HTTP status line carries a number, so it goes back onto a placeholder.
@@ -59,7 +69,6 @@ export function windStats(manifest) {
 export function createWindLayer({
   feed,
   clock,
-  container,
   createRendering = createWindRendering,
 } = {}) {
   if (typeof feed?.getSnapshot !== 'function')
@@ -129,7 +138,7 @@ export function createWindLayer({
       _panel = panel;
       viewer = nextViewer;
       rendering = createRendering({
-        container: container ?? nextViewer.container,
+        container: nextViewer.container,
         getViewer: () => viewer,
         // Without a host from the shell, the rendering drapes on the globe.
         getHost: () => imageryHost?.(),
@@ -137,7 +146,7 @@ export function createWindLayer({
       });
       rendering.attach();
       rendering.setOptions?.({ overlay, paused });
-      const target = container ?? nextViewer.container;
+      const target = nextViewer.container;
       inspectionMarker = createWindInspectionMarker({
         container: target,
         viewer,
@@ -298,11 +307,7 @@ export function createWindLayer({
       const run = formatWindValidTime(manifest?.cycle?.runIso);
       const diagnostic = rendering?.getDiagnostics?.();
       const motionPaused = paused || diagnostic?.reducedMotion;
-      const preparing =
-        enabled &&
-        diagnostic?.renderMode === 'gpu-streamlines' &&
-        diagnostic.gpu?.pathCount > 0 &&
-        !diagnostic.gpu?.ready;
+      const preparing = streamlinesPreparing(enabled, diagnostic);
       const scalarMissing =
         !loading &&
         requestedScalar() !== 'none' &&
@@ -403,15 +408,8 @@ export function createWindLayer({
           ...(speedLegendVisible ||
           diagnostic?.renderMode === 'canvas-fallback' ||
           Number.isFinite(reading?.speed)
-            ? Object.keys(WIND_UNITS)
-            : []
-          ).map((value) => ({
-            id: `units-${value}`,
-            label: unitLabel(value),
-            active: units === value,
-            params: { units: value },
-            title: t('Wind speed units'),
-          })),
+            ? windUnitChips(units)
+            : []),
           {
             id: 'read-wind',
             label: t('Read wind at map center'),
@@ -470,15 +468,9 @@ export function createWindLayer({
     },
     getStats() {
       const diagnostic = rendering?.getDiagnostics?.();
-      const preparing =
-        enabled &&
-        diagnostic?.renderMode === 'gpu-streamlines' &&
-        diagnostic.gpu?.pathCount > 0 &&
-        !diagnostic.gpu?.ready;
+      const preparing = streamlinesPreparing(enabled, diagnostic);
       const imageryError =
-        enabled && !loading
-          ? rendering?.getDiagnostics?.()?.imageryError
-          : null;
+        enabled && !loading ? diagnostic?.imageryError : null;
       return {
         ...windStats(manifest),
         countLabel: t('Forecast'),
@@ -499,9 +491,6 @@ export function createWindLayer({
     },
     getDiagnostics() {
       return rendering?.getDiagnostics?.() || {};
-    },
-    getParticleCount() {
-      return rendering?.getParticleCount() || 0;
     },
   };
   return layer;

@@ -87,11 +87,6 @@ export function chainSegments(segments, { x, y, z }) {
   return { sequences };
 }
 
-/** Decode a KartaView coverage tile into the shared coverage's line records. */
-export function decodeCoverageTile(payload, address) {
-  return chainSegments(tileSegments(payload), address);
-}
-
 /**
  * The segments a filtered PNG tile of the same address draws over. The PNG
  * draws the same ways a few pixels wide (on a transparent ground): a

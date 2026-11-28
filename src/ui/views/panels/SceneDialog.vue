@@ -16,7 +16,7 @@ const { controls } = storeToRefs(useSceneSharingStore());
 const bodyItems = computed(() => props.view.items.filter((item) => item.place === 'body'));
 const footerItems = computed(() => props.view.items.filter((item) => item.place === 'footer'));
 // Typing reaches the item before any republish, so a field is rewritten only
-// when the owner changes its value, focused or not, as the old code did.
+// when the owner changes its value, focused or not.
 const statusText = computed(() => ({ text: props.view.status, seq: props.view.statusSeq }));
 
 // The browser draws a file input's button and "no file" text in its own

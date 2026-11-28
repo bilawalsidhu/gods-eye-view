@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { markRaw, shallowRef } from 'vue';
+import { presented } from './presented.js';
 
 /**
  * The Context panel's mode switch as its view renders it. ContextControls
@@ -19,12 +20,7 @@ export const useContextStore = defineStore('gev-context', () => {
   }
 
   /** The Contacts panel; null until the layer first publishes. */
-  const awareness = shallowRef(null);
-
-  /** @param {object} next A fresh presentation of the Contacts panel. */
-  function publishAwareness(next) {
-    awareness.value = next && markRaw(next);
-  }
+  const [awareness, publishAwareness] = presented();
 
   /**
    * The Contacts layer whose navigation the panel calls: `navigatePrevious`,

@@ -35,7 +35,6 @@ export function createVesselLayer({ source, services, options = {} } = {}) {
   parts.snapshots = createVesselSnapshotRenderer({
     state: vesselState.state,
     placement: services?.placement ?? null,
-    records: vesselState.state.records,
     rendering: parts.rendering,
     tracking: parts.tracking,
     selection: parts.selection,
@@ -91,10 +90,6 @@ export function createVesselLayer({ source, services, options = {} } = {}) {
   );
   layer.source = source?.label || 'Vessels';
   Object.assign(layer, {
-    applyVesselFocusDeemphasis: parts.rendering.applyVesselFocusDeemphasis,
-    buildVesselCard: parts.cards.buildVesselCard,
-    buildSelectedVesselCard: parts.cards.buildSelectedVesselCard,
-    cardScreenSeparated: parts.cards.cardScreenSeparated,
     /** The vessel's Open Vessel Photos photo, once its lookup answered. */
     getVesselPhoto: (id) =>
       parts.photos.vesselPhoto(vesselState.state.records.byId.get(id)),
@@ -102,16 +97,3 @@ export function createVesselLayer({ source, services, options = {} } = {}) {
   Object.defineProperty(layer, 'testing', { value: parts.testing });
   return layer;
 }
-export { AIS_FIRST_CONNECT_GRACE_MS } from './policy.js';
-export {
-  VESSEL_OVERLAY_SOURCE_ID,
-  VESSEL_LABEL_GRID_PX,
-  VESSEL_DEFAULT_LABEL_LIMIT,
-  VESSEL_OVERLAY_MAX_COHORT,
-  VESSEL_CARD_FADE_DISTANCE_M,
-  normalizeVesselType,
-  vesselTypeCss,
-  accentForVesselType,
-  vesselOverlayCohortLimit,
-  applyVesselOverlayPolicy,
-} from '../../data/vesselLabels.js';

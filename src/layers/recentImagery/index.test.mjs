@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { until } from '../../testSupport/kartaViewFakes.mjs';
 import { createRecentImagerySource } from './source.js';
 import { createThumbnailLoader } from './thumbnails.js';
-import { boxKey, nonCrossingBoxes } from './model.js';
+import { boxKey, gibsTemplate, nonCrossingBoxes } from './model.js';
 import { NO_IMAGERY_HOST } from '../../maps/imageryHost.js';
 import { acquireImageryComparison } from '../../maps/imageryComparison.js';
 import { MapSourceController } from '../../maps/controller.js';
@@ -14,7 +14,6 @@ import { resetPointerOwnership } from '../../data/inputOwnership.js';
 import { initImageryBoxTool } from '../../ui/imageryBoxTool.js';
 import {
   FOCUS_DEBOUNCE_MS,
-  MODES,
   SPLIT_PUBLISH_MS,
   createRecentImageryLayer,
 } from './index.js';
@@ -72,6 +71,9 @@ function leasingController({ stuck = false, subscribable = false } = {}) {
     },
     getSwitchGeneration() {
       return this._generation;
+    },
+    getSwitchOrigin() {
+      return 'manual';
     },
     async setStack(id) {
       this.calls.push(['setStack', id]);
@@ -374,7 +376,6 @@ test('VS BASEMAP: the day swipes on the left with no second layer; the preview s
   f.layer.setMode('image');
   assert.deepEqual(f.drapes(), { a: `${L16}|none`, b: null });
   assert.equal(f.snap().comparison.active, false);
-  assert.deepEqual(MODES, ['image', 'basemap', 'ab']);
 });
 
 test('A / B: A pins, the focused day previews as B against it, B pins, and a day is in one slot only', async () => {
@@ -1409,7 +1410,6 @@ test('arrow focus previews the focused present day after the 250 ms debounce; on
   assert.equal(f.snap().preview.pending, L16);
   assert.equal(f.snap().candidates[2].pending, true);
   assert.equal([...f.timers.pending.values()][0].ms, FOCUS_DEBOUNCE_MS);
-  assert.equal(FOCUS_DEBOUNCE_MS, 250);
   f.layer.focus(3);
   assert.equal(f.timers.armed(), 1, 'a single timer');
   f.timers.flush();
@@ -1648,7 +1648,10 @@ function realLayer({
     catalog: {
       searchHls: async () => ({ candidates, truncated: false, errors: [] }),
     },
-    renderer: createRecentImageryRenderer(),
+    renderer: createRecentImageryRenderer({
+      tileTemplate: gibsTemplate,
+      credit: 'NASA GIBS',
+    }),
     thumbnails: loader,
     host: () => ({ collection: globe.imagery, kind: 'globe' }),
     globeOf: () => globe,

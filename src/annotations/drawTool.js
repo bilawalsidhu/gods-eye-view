@@ -61,7 +61,7 @@ import {
 
 import { onLocaleChange, t } from '../i18n/index.js';
 import { fromDegrees } from '../geo/index.js';
-import { cssColor } from '../render/color.js';
+import { cssColor, withAlpha } from '../render/color.js';
 import {
   canvasOf as sceneCanvasOf,
   drawOf,
@@ -651,9 +651,4 @@ export function initDrawTool({
   };
   window.__gevDrawTool = api;
   return api;
-}
-
-/** `color` at `alpha`. */
-function withAlpha(color, alpha) {
-  return [color[0], color[1], color[2], alpha];
 }

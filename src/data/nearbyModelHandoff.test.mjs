@@ -10,14 +10,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import flightsLayer, {
-  _iconForTest,
-  _setTrackedFlightRefreshStateForTest,
-} from './flights.js';
+import flightsLayer from './flights.js';
 import militaryFlightsLayer, {
   _iconForTest as _militaryIconForTest,
   _setTrackedMilitaryRefreshStateForTest,
 } from './militaryFlights.js';
+const {
+  _iconForTest,
+  _setTrackedFlightRefreshStateForTest,
+} = flightsLayer.testing;
 
 const ICAO = 'abc123';
 const OTHER = 'def456';

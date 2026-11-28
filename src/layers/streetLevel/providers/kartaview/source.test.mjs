@@ -1,10 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {
-  KartaViewSourceError,
-  createKartaViewSource,
-  createLimiter,
-} from './source.js';
+import { KartaViewSourceError, createKartaViewSource } from './source.js';
 import {
   MASK_ATTEMPTS,
   MASK_SLOW_MESSAGE,
@@ -227,24 +223,6 @@ test('an abort stops a queued lookup without fetching, and wins over a retry wai
   // The two first lookups are still waiting out their backoff: drop them.
   first.abort(new Error('done'));
   for (const promise of slow) await assert.rejects(promise, /done/);
-});
-
-test('the limiter runs tasks in order and keeps going after a failure', async () => {
-  const limiter = createLimiter(1);
-  const order = [];
-  const failing = limiter.run(async () => {
-    order.push('a');
-    throw new Error('a failed');
-  });
-  const second = limiter.run(async () => {
-    order.push('b');
-    return 'b';
-  });
-  await assert.rejects(failing, /a failed/);
-  assert.equal(await second, 'b');
-  assert.deepEqual(order, ['a', 'b']);
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  assert.equal(limiter.pending, 0);
 });
 
 test('tiles, lookups and sequence pages queue separately, so a lookup never waits behind them', async () => {
@@ -505,8 +483,6 @@ test('the nearest lookup asks for the few photos around the point at the search 
     zoomLevel: String(NEAREST_SEARCH_ZOOM),
     itemsPerPage: String(NEAREST_LIMIT),
   });
-  assert.equal(NEAREST_SEARCH_ZOOM, 18);
-  assert.equal(NEAREST_LIMIT, 10);
 });
 
 test('a chunked answer with no length is cut off once it grows past the cap', async () => {

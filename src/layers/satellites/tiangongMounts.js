@@ -1,10 +1,5 @@
 import { TIANGONG_NORAD } from './policy.js';
-import {
-  issMountView,
-  issMountWorld,
-  issNextMountView,
-  issPreviousMountView,
-} from './issMounts.js';
+import { issMountView, issMountWorld } from './issMounts.js';
 
 /**
  * The Cockpit's views from Tiangong, as `issMounts.js` gives the ISS's: a
@@ -151,6 +146,3 @@ export function tiangongCockpitMount({
     views,
   };
 }
-
-export { issNextMountView as tiangongNextMountView };
-export { issPreviousMountView as tiangongPreviousMountView };

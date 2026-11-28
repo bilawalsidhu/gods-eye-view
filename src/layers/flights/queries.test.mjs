@@ -5,7 +5,7 @@ import { createQueries } from './queries.js';
 import { createRendering } from './rendering.js';
 import { createIcons } from './icons.js';
 import { createContactIcons } from '../../data/aircraftIconLayer.js';
-import { createModelRecord, showModel } from '../../data/modelRecord.js';
+import { createModelRecord } from '../../data/modelRecord.js';
 
 /** A model record in a given load and show state, placed at `at` unturned. */
 function modelRecord({ ready, show, at = null }) {
@@ -35,6 +35,7 @@ function fixture() {
     _icons: icons,
     _models: new Map(),
     _detectionObjects: new Map(),
+    _displayDelay: { currentMs: 0, step: () => 0 },
     records: { data: new Map([['abc123', info]]) },
   };
   let formats = 0;
@@ -144,12 +145,12 @@ test('candidate collection resolves models once and keeps handoffs live', (t) =>
   placeAt(record, new Cesium.Cartesian3(40, 50, 60));
   f.queries.getDetectableObjects();
   assert.deepEqual({ ...candidate.position }, { x: 40, y: 50, z: 60 });
-  showModel(record, false);
+  record.show = false;
   assert.deepEqual(f.queries.getDetectableObjects(), []);
   f.show(true);
   assert.deepEqual({ ...f.queries.getDetectableObjects()[0].position }, f.drawn());
   assert.equal(get.mock.callCount(), 6);
-  showModel(record, true);
+  record.show = true;
   assert.equal(f.parts.rendering._modelOwnsVisual('abc123'), true);
   assert.equal(get.mock.callCount(), 7);
 });
@@ -220,4 +221,12 @@ test('repeated collection with nothing moved hands back the same array, objects 
   f.flightState._icons.show = false;
   assert.equal(f.queries.getDetectableObjects(), first);
   assert.equal(first.length, 0);
+});
+
+test('hasContact declines while the contact icons are hidden, whatever they still hold', () => {
+  const { flightState, queries } = fixture();
+  flightState._icons = { show: true, count: 1, has: (id) => id === 'abc123' };
+  assert.equal(queries.hasContact('abc123'), true);
+  flightState._icons.show = false;
+  assert.equal(queries.hasContact('abc123'), null);
 });

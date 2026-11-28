@@ -531,8 +531,6 @@ export const HOUSTON_MAX_CATALOG_BYTES = 4 * 1024 * 1024;
 /** Ground-elevation prior in metres. The TranStar payload carries none, and
  * Houston sits a few metres above sea level. */
 export const HOUSTON_GROUND_ELEVATION_M = 15;
-/** Downtown Houston (Main @ Texas): the primary prioritization anchor. */
-export const HOUSTON_DOWNTOWN = { lat: 29.7604, lon: -95.3698 };
 export const HOUSTON_ANCHORS = [
   { lat: 29.7604, lon: -95.3698 }, // Downtown
   { lat: 29.739, lon: -95.461 }, // Uptown / Galleria

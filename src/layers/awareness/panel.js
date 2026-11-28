@@ -9,15 +9,6 @@ import { formatQuantity } from '../../ui/unitLabels.js';
 import { AWARENESS_PAGE_SIZE, AWARENESS_PAGE_ROTATE_MS } from './policy.js';
 import { distanceParts } from '../../data/distanceFormat.js';
 
-/** Format a cohort total without presenting a retained cap as exact. */
-export function formatAwarenessCount(summary = {}) {
-  if (!Number.isFinite(summary.count)) return '?';
-  const count = summary.count.toLocaleString('en-US');
-  return summary.complete === false || summary.truncated === true
-    ? `At least ${count}`
-    : count;
-}
-
 /** The count as the panel shows it, in the UI language. */
 function presentAwarenessCount(summary = {}) {
   if (!Number.isFinite(summary.count)) return '?';
@@ -42,6 +33,21 @@ function presentAwarenessReason(summary = {}) {
   return summary.reasonTemplate
     ? t(summary.reasonTemplate, summary.reasonValues)
     : translateStatusMessage(summary.reason || '');
+}
+
+/**
+ * Whether an evaluation actually has a contact to point an arrow at.
+ *
+ * A cohort reports `count: null` when its feed is unavailable or stale, and `0`
+ * when the feed is healthy but empty. Only a positive count puts a marker on
+ * the compass rim, so anything else means there is nothing to animate.
+ * @param {?{cohorts?: Array<{summary?: {count: ?number}}>}} results
+ * @returns {boolean}
+ */
+
+export function awarenessResultsAreLive(results) {
+  const cohorts = Array.isArray(results?.cohorts) ? results.cohorts : [];
+  return cohorts.some((cohort) => Number(cohort?.summary?.count) > 0);
 }
 
 /**
@@ -272,27 +278,12 @@ export function createPanel({ state: layerState, parts }) {
     layerState.pageTimer = null;
   }
 
-  /**
-   * Whether an evaluation actually has a contact to point an arrow at.
-   *
-   * A cohort reports `count: null` when its feed is unavailable or stale, and `0`
-   * when the feed is healthy but empty. Only a positive count puts a marker on
-   * the compass rim, so anything else means there is nothing to animate.
-   * @param {?{cohorts?: Array<{summary?: {count: ?number}}>}} results
-   * @returns {boolean}
-   */
-
-  function awarenessResultsAreLive(results) {
-    const cohorts = Array.isArray(results?.cohorts) ? results.cohorts : [];
-    return cohorts.some((cohort) => Number(cohort?.summary?.count) > 0);
-  }
   return {
     subscribePanel,
     ensurePanel,
     hidePanel,
     clearPanel,
     renderResults,
-    rotateAwarenessPages,
     startAwarenessPageRotation,
     stopAwarenessPageRotation,
     awarenessResultsAreLive,

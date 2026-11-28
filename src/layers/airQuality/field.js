@@ -39,6 +39,7 @@
  * Each step hands over new arrays. Sources must leave their contents intact.
  */
 import { AQI_POLLUTANTS } from './usAqi.js';
+import { HOUR_MS } from './nowcast.js';
 
 /** The grids a step carries: the six pollutants, then the US AQI. */
 export const FIELD_IDS = Object.freeze([
@@ -53,7 +54,7 @@ export const FIELD_IDS = Object.freeze([
 /** A grid value with no data. */
 export const FIELD_MISSING = 65535;
 /** The Europe inset blends into the global field over this many degrees. */
-export const EUROPE_BLEND_DEG = 3;
+const EUROPE_BLEND_DEG = 3;
 /**
  * The field's strength by camera height: full (this share of each pixel's
  * own opacity) from `FIELD_FULL_M` up, fading on a log scale to nothing at
@@ -66,7 +67,6 @@ export const FIELD_FADE = Object.freeze({
 });
 /** Maximum number of grid points across a step's regions. */
 const MAX_REGION_POINTS = 8_000_000;
-const HOUR_MS = 3600_000;
 /** Grid cells within this of a grid point read as on it. */
 const SNAP = 1e-9;
 

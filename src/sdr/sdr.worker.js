@@ -15,8 +15,6 @@ let receiverLocation = null;
 let demodulator = null;
 let blockCount = 0;
 let tune = 0;
-// True while handling a block the controller stamped for diagnostics.
-let timedBlock = false;
 const aircraft = new Map();
 // Positions refused by the decoder's speed check since the last clear.
 const decoderStats = { positionsRejected: 0 };
@@ -100,33 +98,12 @@ self.onmessage = (event) => {
     handleMessage(message);
     return;
   }
-  // Diagnostic mode only: the controller stamped the block, so time it here.
-  const timed = Number.isFinite(message.postedAt);
-  const receivedAt = timed ? absoluteNow() : 0;
-  const started = timed ? performance.now() : 0;
-  timedBlock = timed;
   try {
     handleMessage(message);
   } finally {
-    timedBlock = false;
-    self.postMessage(
-      timed
-        ? {
-            type: 'ack',
-            id: message.id,
-            receivedAt,
-            computeMs: performance.now() - started,
-            ackPostedAt: absoluteNow(),
-          }
-        : { type: 'ack', id: message.id },
-    );
+    self.postMessage({ type: 'ack', id: message.id });
   }
 };
-
-/** Wall-aligned milliseconds comparable across the page and its workers. */
-function absoluteNow() {
-  return performance.timeOrigin + performance.now();
-}
 
 function handleMessage(message) {
   if (message.type === 'configure') {
@@ -167,7 +144,6 @@ function handleMessage(message) {
     self.postMessage(
       {
         type: 'fm',
-        ...(timedBlock ? { workerPostedAt: absoluteNow() } : {}),
         samples,
         bins,
         tune,

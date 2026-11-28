@@ -245,7 +245,7 @@ test('from orbit the selected train and its feed stay; the other trains go as be
     distance(position, app.entry(key).marker.position) > 1,
     'it still moves',
   );
-  assert.equal(app.layer.getRouteDisplayStats().heldFeed, 'mbta-rail');
+  assert.equal(state._heldFeedId, 'mbta-rail');
 
   // Deselecting returns the feed to the viewport's rules: from orbit, gone.
   app.parts().selection.clearSelection();

@@ -10,21 +10,6 @@
 const records = new WeakMap();
 
 /**
- * Another object a scene object's styles may be recorded on, for test
- * doubles whose tests record them on the engine's own scene.
- */
-let aliasOf = null;
-
-/**
- * Let `styleStagesOf` also find records made on `alias(host)`; a later call
- * replaces it. For test doubles (src/input/testDoubles.mjs).
- * @param {((host: object) => object|null|undefined) | null} alias
- */
-export function provideStyleStageAlias(alias) {
-  aliasOf = alias;
-}
-
-/**
  * @param {object} scene The scene object.
  * @param {Record<string, {enabled: boolean, uniforms: Record<string, number>}>} stages
  * @returns {() => void} Forgets them, if they are still the scene's.
@@ -43,8 +28,5 @@ export function registerStyleStages(scene, stages) {
  */
 export function styleStagesOf(scene) {
   if (!scene || typeof scene !== 'object') return null;
-  const own = records.get(scene);
-  if (own) return own;
-  const alias = aliasOf?.(scene);
-  return (alias && typeof alias === 'object' && records.get(alias)) || null;
+  return records.get(scene) ?? null;
 }

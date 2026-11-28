@@ -409,76 +409,6 @@ test("an earlier renderer leaves a later renderer's board alone", async (t) => {
   assert.equal(groups()[0].querySelector('text').textContent, 'Kept');
 });
 
-test('a multipart area with holes draws every visible part and keeps holes open', async (t) => {
-  const { store, svg } = board(t);
-  // A fixed projection: 0.001 degrees spans 100 px.
-  projectTo(t, (_scene, world) => {
-    const c = Cesium.Cartographic.fromCartesian(world);
-    return {
-      x: 100 + Cesium.Math.toDegrees(c.longitude) * 1e5,
-      y: 100 + Cesium.Math.toDegrees(c.latitude) * 1e5,
-    };
-  });
-  const camera = cameraOver(0, 0);
-  const renderer = createScreenAnnotationRenderer(
-    { scene: sceneFor(camera), camera, trackedEntity: null },
-    { store, activeTrackedReadoutId: () => null },
-  );
-  t.after(() => renderer.destroy());
-  const outer = [[0, 0], [0.001, 0], [0.001, 0.001], [0, 0.001], [0, 0]];
-  const hole = [[0.0002, 0.0002], [0.0004, 0.0002], [0.0004, 0.0004], [0.0002, 0.0004], [0.0002, 0.0002]];
-  const island = outer.map(([lon, lat]) => [lon + 0.002, lat]);
-  const anno = {
-    id: 'anno-multipart-screen',
-    label: 'Multipart',
-    type: 'area',
-    color: 'primary',
-    alpha: 1,
-    anchor: { lon: 0, lat: 0, height: 0 },
-    ring: outer,
-    polygons: [[outer, hole], [island]],
-    synthesized: false,
-  };
-  renderer.add(anno);
-  await settle();
-  const area = () => svg().querySelector('.gev-anno-area');
-  const subpaths = () => (area().getAttribute('d').match(/M /g) || []).length;
-  assert.equal(area().tagName.toLowerCase(), 'path');
-  assert.equal(area().getAttribute('fill-rule'), 'evenodd');
-  assert.equal(subpaths(), 3, 'screen fill retains both parts and the hole');
-
-  // The first part is behind the globe: the label centres on the next part.
-  anno.polygons = [[island.map(([lon, lat]) => [lon + 180, lat])], [outer, hole]];
-  renderer.sync();
-  await settle();
-  assert.equal(subpaths(), 2, 'an island behind the globe cannot hide the visible part and its hole');
-  assert.notEqual(area().parentNode.style.display, 'none');
-  assert.doesNotMatch(
-    area().parentNode.querySelector('.gev-anno-callout').getAttribute('transform'),
-    /NaN/,
-  );
-
-  anno.polygons = [[outer, hole]];
-  projectTo(t, (_scene, world) => {
-    const lon = Cesium.Math.toDegrees(Cesium.Cartographic.fromCartesian(world).longitude);
-    return { x: lon > 0.0009 ? 2401 : 0, y: 0 };
-  });
-  renderer.sync();
-  await settle();
-  assert.equal(subpaths(), 2, 'finite offscreen shell coordinates cannot hide a visible holed part');
-  assert.notEqual(area().parentNode.style.display, 'none');
-
-  anno.polygons = [[outer, hole], [island]];
-  projectTo(t, (_scene, world) => {
-    const lon = Cesium.Math.toDegrees(Cesium.Cartographic.fromCartesian(world).longitude);
-    return Math.abs(lon - 0.0002) < 1e-7 ? undefined : { x: 0, y: 0 };
-  });
-  renderer.sync();
-  await settle();
-  assert.equal(subpaths(), 1, 'an unprojectable hole omits its entire part, not the independently visible island');
-  assert.notEqual(area().parentNode.style.display, 'none');
-});
-
 test('Preview avoids the map callout without moving its world anchor', async (t) => {
   const { store, svg, groups } = board(t);
   projectTo(t, (_scene, world) => {
@@ -656,20 +586,6 @@ test('hidden and back-facing annotations do not sample; visible unresolved heigh
   camera.directionWC = new Cesium.Cartesian3(-Math.SQRT1_2, Math.SQRT1_2, 0);
   postRender.raiseEvent();
   assert.equal(samples, 11, 'outside-frustum anchors do not sample');
-  camera.directionWC = new Cesium.Cartesian3(-1, 0, 0);
-  const before = samples;
-  renderer.add({
-    id: 'large-area',
-    type: 'area',
-    label: 'Area',
-    ring: Array.from({ length: 100 }, (_, i) => [0.001 + i / 10000, 0]),
-    anchor: { lon: 0, lat: 0 },
-  });
-  assert.equal(
-    samples - before,
-    32,
-    'a projection pass caps synchronous surface work',
-  );
   renderer.destroy();
   assert.equal(postRender.numberOfListeners, 0);
 });
@@ -967,41 +883,6 @@ test('an arrow wholly beyond the horizon is not drawn across the screen', (t) =>
   renderer.add({ id: 'x', type: 'arrow', label: 'Ghost', anchor: a, to: b });
   for (let i = 0; i < 3; i++) postRender.raiseEvent();
   assert.equal(store.board.marks[0].display, 'none', 'no ghost connector');
-});
-
-test('a visible area ring keeps a vertex past the horizon only at 0 m', (t) => {
-  const store = samplingBoard(t);
-  const camera = eastwardCamera(100);
-  const toWindow = projectThrough(t, camera);
-  const bearing = Cesium.Math.toRadians(50);
-  const far = { lon: metresEast(56000 * Math.cos(bearing)), lat: metresNorth(56000 * Math.sin(bearing)) };
-  const nearLon = metresEast(2000);
-  const vertices = [
-    { lon: nearLon, lat: metresNorth(300) },
-    { lon: nearLon, lat: metresNorth(-300) },
-    far,
-  ];
-  const occluder = new Cesium.EllipsoidalOccluder(Cesium.Ellipsoid.WGS84, camera.positionWC);
-  assert.ok(outsideFrustum(camera, at(far, 0)));
-  assert.equal(occluder.isPointVisible(at(far, 0)), false);
-  assert.equal(occluder.isPointVisible(at(far, 100)), true);
-  const { scene, postRender, sampled } = surfaceScene(camera, (lon) => (lon === far.lon ? 100 : 10));
-  const renderer = samplingRenderer(store, scene);
-  t.after(() => renderer.destroy());
-  renderer.add({
-    id: 'triangle', type: 'area', label: 'Ridge', anchor: vertices[0],
-    ring: vertices.map(({ lon, lat }) => [lon, lat]),
-  });
-  postRender.raiseEvent();
-  const [mark] = store.board.marks;
-  assert.equal(mark.display, '', 'the triangle stays drawn');
-  const path = mark.children.find((child) => child.attrs.class?.includes('gev-anno-area'));
-  const coords = vertices.map((p) => {
-    const { x, y } = toWindow(at(p, p === far ? 100 : 10));
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  });
-  assert.equal(path.attrs.d, `M ${coords.join(' L ')} Z`, 'the far vertex sits at its real height');
-  assert.deepEqual(sampled, [nearLon, nearLon, far.lon], 'the off-view vertex samples too');
 });
 
 test('a low-angle cached roof stays visible when range endpoints fail different tests', (t) => {

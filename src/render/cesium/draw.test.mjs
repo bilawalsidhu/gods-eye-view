@@ -8,7 +8,6 @@ import {
   LONG_SETTLE_MS,
   MOVING_SHAPES,
   OVERLAY_GRANULARITY,
-  overlayInView,
   revealUniform,
   SETTLE_MS,
   unboundDrawPart,
@@ -834,8 +833,7 @@ test('a clamped colour ring whose radius alone changes is drawn alone where it n
     const scene = fakeScene();
     const { draw, frame } = drawOver(scene);
     const set = draw.shapes({ id: 'rings' });
-    // The app follows the camera's height and sends the radius it wants, as
-    // annotation target rings do.
+    // The app resizes the ring each frame and sends the radius it wants.
     const ring = (radius, show = true) => ({
       id: 'ring',
       geometry: {
@@ -1579,7 +1577,8 @@ test('point sets blend as asked and fall off with distance', () => {
 
 test('the bikeshare layer draws its stations as point primitives on a viewer of its own', async () => {
   const { createState } = await import('../../layers/bikeshare/state.js');
-  const { createModel } = await import('../../layers/bikeshare/model.js');
+  const { parseStationInformation, parseStationStatus } =
+    await import('../../sources/gbfsStations.js');
   const { createRendering } =
     await import('../../layers/bikeshare/rendering.js');
   const { createSelection } =
@@ -1594,16 +1593,15 @@ test('the bikeshare layer draws its stations as point primitives on a viewer of 
       clearOverlaySource() {},
     },
   };
-  const state = createState({ services });
+  const state = createState();
   const parts = {};
   const context = { state, services, parts, source: {} };
-  parts.model = createModel(context);
   parts.rendering = createRendering(context);
   parts.selection = createSelection(context);
   state._viewer = viewer;
   parts.rendering.attachSets(viewer);
   state._stationSet.show = true;
-  const info = parts.model.parseStationInformation({
+  const info = parseStationInformation({
     data: {
       stations: [
         { station_id: 'a', name: 'A', lat: 30.26, lon: -97.74, capacity: 20 },
@@ -1614,7 +1612,7 @@ test('the bikeshare layer draws its stations as point primitives on a viewer of 
   parts.rendering.ensureCityPoints('austin', info);
   parts.rendering.applyStatusToPoints(
     'austin',
-    parts.model.parseStationStatus({
+    parseStationStatus({
       data: {
         stations: [
           { station_id: 'a', num_bikes_available: 18, num_docks_available: 2 },
@@ -4052,7 +4050,7 @@ test('the vessels layer draws its ships as one GPU icon set that holds them on c
   );
   try {
     layer.testing._setVesselStateForTest({ viewer, icons: null });
-    layer.testing._reconcileVesselsForTest(viewer, [
+    layer.testing.parts.snapshots.reconcileVessels(viewer, [
       { mmsi: '244000001', lat: 51.95, lon: 4.1, heading: 90, speed: 12 },
       { mmsi: '244000002', lat: 51.96, lon: 4.2, course: 200, speed: 2 },
     ]);
@@ -4083,7 +4081,7 @@ test('the vessels layer draws its ships as one GPU icon set that holds them on c
     });
 
     // A poll that moves one and drops the other writes rows, not a new host.
-    layer.testing._reconcileVesselsForTest(viewer, [
+    layer.testing.parts.snapshots.reconcileVessels(viewer, [
       { mmsi: '244000001', lat: 51.95, lon: 4.12, heading: 95, speed: 12 },
     ]);
     assert.equal(scene.added[0], host);
@@ -4098,7 +4096,7 @@ test('the vessels layer draws its ships as one GPU icon set that holds them on c
     layer.destroy(viewer);
     assert.equal(scene.added.length, 0, 'destroyed: the set goes');
     layer.testing._setVesselStateForTest({ viewer, icons: null });
-    layer.testing._reconcileVesselsForTest(viewer, [
+    layer.testing.parts.snapshots.reconcileVessels(viewer, [
       { mmsi: '244000003', lat: 51.9, lon: 4.0, heading: 10, speed: 5 },
     ]);
     assert.equal(scene.added.length, 1);
@@ -4351,7 +4349,7 @@ test('vessels on a host without the sprite order still draw, at the default draw
   const { layer, viewer, part, unbind } = await vesselLayerOver(scene, {});
   const ship = { mmsi: '244000001', lat: 51.95, lon: 4.1, heading: 90 };
   layer.testing._setVesselStateForTest({ viewer, icons: null });
-  layer.testing._reconcileVesselsForTest(viewer, [ship]);
+  layer.testing.parts.snapshots.reconcileVessels(viewer, [ship]);
   assert.equal(scene.added.length, 1, 'drawn');
   assert.equal(part.sets.get(scene.added[0].drawSetId).spec.drawOrder, 0);
   layer.destroy(viewer);
@@ -4368,8 +4366,9 @@ test('an aircraft layer draws its contacts as one GPU icon set moving on the del
     await import('../../data/iconAtlas.js');
   const { aircraftIcon, FLEET_ICON_PX, TRACKED_ICON_PX } =
     await import('../../data/aircraftIcons.js');
-  const { aircraftMotionRegime, createMotionRegime, fixEpochMs, julianAt } =
+  const { aircraftMotionRegime, createMotionRegime, fixEpochMs } =
     await import('../../data/aircraftMotionRegime.js');
+  const { julianFromEpochMs: julianAt } = await import('../../geo/julian.js');
   const scene = fakeScene();
   const part = createCesiumDraw({
     scene,
@@ -4435,7 +4434,7 @@ test('an aircraft layer draws its contacts as one GPU icon set moving on the del
     services: { focus: { focusPassIsNeeded: () => false } },
     parts,
     layerId: 'flights',
-    renderDelaySec: delayMs / 1000,
+    displayDelay: { currentMs: delayMs, step: () => delayMs },
     courseMaxDps: 3,
     cockpitContactSizePx: 6,
   });
@@ -5237,6 +5236,11 @@ test('the directions layer draws its markers, flowing route and maneuver dots on
     const sprites = [];
     const overlays = [];
     const layer = createDirectionsLayer({
+      overlayHost: {
+        setEntries: (source, entries) => overlays.push([source, entries]),
+        setVisible: noop,
+        clearSource: noop,
+      },
       source: {
         getRoute: async () => ({
           ok: true,
@@ -5267,12 +5271,6 @@ test('the directions layer draws its markers, flowing route and maneuver dots on
           },
         },
         picking: { registerPickOwner: noop, unregisterPickOwner: noop },
-        overlays: {
-          setOverlayEntries: (source, entries) =>
-            overlays.push([source, entries]),
-          setOverlaySourceVisible: noop,
-          clearOverlaySource: noop,
-        },
         ground: {
           GROUND_FLOOR_LIFT_M: 2,
           cachedGroundFloor: () => 150,
@@ -5438,7 +5436,7 @@ test('the local ADS-B layer draws its aircraft, 978 MHz rings and trail head on 
   layer.init(viewer);
   await layer.enable();
   await layer.update();
-  assert.equal(layer.selectAircraft('abc123'), true);
+  assert.equal(layer.pickById('abc123', { center: false }), true);
 
   const hostOf = (suffix) =>
     scene.added.find((host) => host.drawSetId?.endsWith(suffix));
@@ -6066,6 +6064,55 @@ test('an overlay shape draws its fill on the ellipsoid over everything, and its 
     assert.equal(scene.added.length, 0);
   }));
 
+const OVERLAY_HEIGHT_K = 100_000; // OVERLAY_HORIZON's switch height in draw.js
+
+/** `OVERLAY_HORIZON`'s test (draw.js), for checks: whether an overlay's point
+ *  `position` (world metres) is drawn from `eye`. With `float32`, each step
+ *  is rounded to float32 as in the shader, from what the shader is given:
+ *  the point less the eye, the eye, and the eye's height (at least 1 m). */
+function overlayInView(position, eye, { float32 = false } = {}) {
+  const f = float32 ? Math.fround : (x) => x;
+  const vec = (c) => [f(c.x), f(c.y), f(c.z)];
+  const mul = (x, y) => x.map((c, i) => f(c * y[i]));
+  const dot = (x, y) => f(f(f(x[0] * y[0]) + f(x[1] * y[1])) + f(x[2] * y[2]));
+  const ellipsoid = Cesium.Ellipsoid.WGS84;
+  const inverse = vec(ellipsoid.oneOverRadii);
+  const e = vec(eye);
+  const h = f(Math.max(ellipsoid.cartesianToCartographic(eye).height, 1));
+  const scaled = mul(e, inverse);
+  const v = mul(
+    vec(Cesium.Cartesian3.subtract(position, eye, new Cesium.Cartesian3())),
+    inverse,
+  );
+  const k =
+    h <= OVERLAY_HEIGHT_K
+      ? heightK(e, h, inverse, f)
+      : f(dot(scaled, scaled) - 1);
+  const ka = f(k + dot(scaled, v));
+  return f(1 + ka) >= 0 && dot(v, v) <= f(k + f(ka * ka));
+}
+
+/** `OVERLAY_HORIZON`'s `k` near the surface, from the eye's height `h`. */
+function heightK(e, h, inverse, f) {
+  const mul = (x, y) => x.map((c, i) => f(c * y[i]));
+  const dot = (x, y) => f(f(f(x[0] * y[0]) + f(x[1] * y[1])) + f(x[2] * y[2]));
+  const over = mul(mul(e, inverse), inverse);
+  const length = f(Math.sqrt(dot(over, over)));
+  const normal = over.map((c) => f(c / length));
+  const foot = mul(
+    mul(
+      e.map((c, i) => f(c - f(h * normal[i]))),
+      inverse,
+    ),
+    inverse,
+  );
+  const normalScaled = mul(normal, inverse);
+  return f(
+    f(f(2 * h) * f(Math.sqrt(dot(foot, foot)))) +
+      f(f(h * h) * dot(normalScaled, normalScaled)),
+  );
+}
+
 test('an overlay line crossing the horizon keeps its near part and drops its far part', () =>
   withImageClasses(() => {
     const scene = fakeScene();
@@ -6104,6 +6151,8 @@ test('an overlay line crossing the horizon keeps its near part and drops its far
         look.fragmentShaderSource,
         /overlayPastHorizon\(v_overlayRte\)\) discard/,
       );
+      // The model below switches its `k` at the shader's own height.
+      assert.match(look.fragmentShaderSource, /if \(h <= 100000\.0\)/);
       // Each corner hands on its segment's end as Cesium draws it: cut at
       // the near plane, turned back from the eye's frame.
       assert.match(
@@ -8690,6 +8739,7 @@ test('the transit layer draws its vehicles as two icon sets, moving a marker bet
       holdContinuousRender: noop,
       releaseContinuousRender: noop,
     },
+    ground: { GROUND_FLOOR_LIFT_M: 0 },
     sprites: {
       spriteDrawOrder: (layerId) => {
         registered.push(layerId);

@@ -11,7 +11,6 @@ import {
   createModelRecord,
   modelIsRendering,
   placeModel,
-  showModel,
 } from './modelRecord.js';
 import { modelDrawnScale } from './modelVisualAnchor.js';
 import {
@@ -31,6 +30,7 @@ import {
   RADIANS_PER_DEGREE,
   sub,
 } from '../geo/vector.js';
+import { fleetColor } from './fleetModelDraw.js';
 
 /** A white tint: what an IR-boosted model draws with. */
 const WHITE = Object.freeze([1, 1, 1, 1]);
@@ -38,13 +38,6 @@ const WHITE = Object.freeze([1, 1, 1, 1]);
 /** How long (ms) a fleet model whose load failed (`loadFailed`) waits
  *  before it is removed and added again, which loads it again. */
 const FLEET_MODEL_RETRY_MS = 5000;
-
-/** A colour as the draw contract's `[r, g, b, a]`, from `{red, green, blue, alpha}`. */
-function rgba(color) {
-  if (!color) return null;
-  if (typeof color === 'string' || Array.isArray(color)) return color;
-  return [color.red, color.green, color.blue, color.alpha ?? 1];
-}
 
 /**
  * Whether `point` is inside the eye's view cone (`pose`), a metre's slack:
@@ -555,7 +548,7 @@ export function createAircraftModels({
     _retryFailedFleetModel(set, icao24, record);
     const displayPos = _modelDisplayPosition(icao24, pos);
     if (!displayPos) {
-      showModel(record, false); // no ground evidence → nothing safe to place a depth-tested model at
+      record.show = false; // no ground evidence → nothing safe to place a depth-tested model at
       _send(set, icao24, record, spec, out);
       icons.setShown(icao24, true);
       return false;
@@ -565,13 +558,13 @@ export function createAircraftModels({
     placeModel(record, displayPos, _modelHeading(course, meta));
     _poseParts(record, meta, spec);
     if (!record.ready) {
-      showModel(record, false); // not loaded yet → keep the 2D icon, no half-model flash
+      record.show = false; // not loaded yet → keep the 2D icon, no half-model flash
       _send(set, icao24, record, spec, out);
       icons.setShown(icao24, true);
       return false;
     }
     beforeShow?.();
-    showModel(record, true);
+    record.show = true;
     _send(set, icao24, record, spec, out);
     icons.setShown(icao24, false); // hand off ONLY once the model renders
     return true;
@@ -725,7 +718,7 @@ export function createAircraftModels({
     });
     record.url = resolveAsset(spec.url);
     record.gltf = _gltfOf(spec);
-    record.tint = state._irBoost ? WHITE : rgba(_modelColor(icao24));
+    record.tint = state._irBoost ? WHITE : fleetColor(_modelColor(icao24));
     // Admitted, not yet the visual: the handoff places and shows it, and the
     // set loads it from its first write.
     state._models.set(icao24, record);
@@ -803,7 +796,7 @@ export function createAircraftModels({
   function _hideTrackedModel() {
     const record = state._trackedModel;
     if (!record) return;
-    showModel(record, false);
+    record.show = false;
     _send(
       state._modelSets?.tracked,
       record.id,
@@ -840,7 +833,7 @@ export function createAircraftModels({
     const icao24 = state._trackedIcao;
     const record = icao24 ? state._models.get(icao24) : null;
     if (!record?.show) return;
-    showModel(record, false);
+    record.show = false;
     _send(state._modelSets?.fleet, icao24, record, _modelSpec(_metaOf(icao24)));
   }
 
@@ -857,7 +850,7 @@ export function createAircraftModels({
     _retryFailedFleetModel(set, icao24, record);
     const displayPos = _modelDisplayPosition(icao24, position);
     if (displayPos) placeModel(record, displayPos, _modelHeading(course, meta));
-    else showModel(record, false); // nowhere safe to draw it
+    else record.show = false; // nowhere safe to draw it
     _send(set, icao24, record, _modelSpec(meta), out);
   }
 
@@ -912,7 +905,7 @@ export function createAircraftModels({
       // white. Boosted models also skip the recession fade: hot targets
       // stay full-strength at any range (icons keep their normal
       // fade — full-opacity glyph walls read as overwhelming).
-      base: state._irBoost ? WHITE : rgba(_modelColor(icao24)),
+      base: state._irBoost ? WHITE : fleetColor(_modelColor(icao24)),
       alpha: state._irBoost
         ? 1
         : aircraftTreatmentAlpha({
@@ -985,7 +978,7 @@ export function createAircraftModels({
     // The tracked aircraft uses the same dominant light tint as the fleet;
     // the IR boost removes the remaining diffuse hint with flat white. It
     // fades like the tracked billboard while the plane is stale.
-    const base = state._irBoost ? WHITE : rgba(_modelColor(icao24));
+    const base = state._irBoost ? WHITE : fleetColor(_modelColor(icao24));
     _treat(record, {
       base,
       alpha: parts.tracking._trackedStaleCue?.(icao24)?.dimmed
@@ -1005,7 +998,7 @@ export function createAircraftModels({
       _modelHeading(parts.motion._trackedDisplayCourse(), meta),
     );
     _poseParts(record, meta, spec);
-    showModel(record, record.ready);
+    record.show = record.ready;
     _send(state._modelSets.tracked, icao24, record, spec);
     if (record.ready) _hideTrackedFleetModel();
   }
@@ -1046,7 +1039,7 @@ export function createAircraftModels({
             const record = state._models.get(item.id);
             if (record) {
               record.sent = null;
-              showModel(record, false);
+              record.show = false;
             }
             _showReleasedIcon(item.id);
           }
@@ -1191,7 +1184,7 @@ export function createAircraftModels({
         // there yet at the time drawn is hidden as one beyond it.
         const hidden = state._models.get(icao24);
         if (hidden?.show) {
-          showModel(hidden, false);
+          hidden.show = false;
           _send(
             state._modelSets?.fleet,
             icao24,

@@ -53,14 +53,12 @@ export function validatePlacesCoordinates(searchParams) {
 const GEOCODE_MAX_QUERY = 200;
 
 /**
- * Upstream deadline and body ceiling for the geocode routes. The deadline stays
- * armed through body consumption, so a stalled upstream cannot hold a handler
- * open, and the cap bounds a chunked or length-omitted reply. A geocode answer
- * is a handful of results; 256 KiB is far above any honest one.
+ * The deadline covers fetch and body consumption on every Google route here.
+ * The byte cap also applies to chunked replies without a Content-Length.
  */
-const GEOCODE_UPSTREAM_TIMEOUT_MS = 10_000;
+const UPSTREAM_TIMEOUT_MS = 10_000;
 
-const GEOCODE_MAX_RESPONSE_BYTES = 256 * 1024;
+const MAX_RESPONSE_BYTES = 256 * 1024;
 
 const GEOCODE_ANSWER_STATUSES = new Set(['OK', 'ZERO_RESULTS']);
 
@@ -158,12 +156,14 @@ export function googlePlacesContextProxy({
       );
 
       try {
+        const deadline = AbortSignal.timeout(UPSTREAM_TIMEOUT_MS);
         const response = await fetchImpl(
           endpoints.nearby ||
             'https://places.googleapis.com/v1/places:searchNearby',
           {
             method: 'POST',
             redirect: 'error',
+            signal: deadline,
             headers: {
               'Content-Type': 'application/json',
               'X-Goog-Api-Key': apiKey,
@@ -190,7 +190,11 @@ export function googlePlacesContextProxy({
             }),
           },
         );
-        const data = await response.json().catch(() => null);
+        const data = await readResponseJsonCapped(
+          response,
+          MAX_RESPONSE_BYTES,
+          deadline,
+        ).catch(() => null);
         // A 200 we could not read is an upstream failure, not an empty answer.
         if (response.ok && !data)
           throw new Error('Google Places request failed');
@@ -283,12 +287,14 @@ export function googlePlacesContextProxy({
       );
 
       try {
+        const deadline = AbortSignal.timeout(UPSTREAM_TIMEOUT_MS);
         const response = await fetchImpl(
           endpoints.textSearch ||
             'https://places.googleapis.com/v1/places:searchText',
           {
             method: 'POST',
             redirect: 'error',
+            signal: deadline,
             headers: {
               'Content-Type': 'application/json',
               'X-Goog-Api-Key': apiKey,
@@ -314,7 +320,11 @@ export function googlePlacesContextProxy({
             }),
           },
         );
-        const data = await response.json().catch(() => null);
+        const data = await readResponseJsonCapped(
+          response,
+          MAX_RESPONSE_BYTES,
+          deadline,
+        ).catch(() => null);
         if (response.ok && !data)
           throw new Error('Google Places request failed');
         const places = projectTextSearchPlaces(data || {}, latitude, longitude);
@@ -417,7 +427,7 @@ export function googlePlacesContextProxy({
           for (const [name, value] of Object.entries(query.params))
             upstream.searchParams.set(name, value);
           upstream.searchParams.set('key', apiKey);
-          const deadline = AbortSignal.timeout(GEOCODE_UPSTREAM_TIMEOUT_MS);
+          const deadline = AbortSignal.timeout(UPSTREAM_TIMEOUT_MS);
           const response = await fetchImpl(upstream.toString(), {
             redirect: 'error',
             signal: deadline,
@@ -426,7 +436,7 @@ export function googlePlacesContextProxy({
           // falls through to the same shaped failure as a refusal below.
           const data = await readResponseJsonCapped(
             response,
-            GEOCODE_MAX_RESPONSE_BYTES,
+            MAX_RESPONSE_BYTES,
             deadline,
           ).catch(() => null);
 

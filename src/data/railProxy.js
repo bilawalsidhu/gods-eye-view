@@ -70,7 +70,7 @@ export const RAIL_MIN_TTL_MS = 5_000;
 /** Trips one `/updates` answer carries, after the rail filter. */
 export const RAIL_UPDATES_MAX_TRIPS = 3_000;
 /** Stop updates one `/updates` answer carries, across all its trips. */
-export const RAIL_UPDATES_MAX_STOPS = 40_000;
+const RAIL_UPDATES_MAX_STOPS = 40_000;
 
 /**
  * Freshness window for one route of a feed: its own interval when the

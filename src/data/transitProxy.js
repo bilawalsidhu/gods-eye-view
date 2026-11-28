@@ -37,9 +37,7 @@ export const TRANSIT_MAX_REDIRECTS = 3;
  * so treating the whole 3xx range as a redirect turns every healthy unchanged
  * feed into a failure and walks it up the backoff ladder.
  */
-export const TRANSIT_REDIRECT_STATUSES = Object.freeze([
-  301, 302, 303, 307, 308,
-]);
+const TRANSIT_REDIRECT_STATUSES = Object.freeze([301, 302, 303, 307, 308]);
 
 /**
  * Whether an upstream status is a redirect this proxy should follow.

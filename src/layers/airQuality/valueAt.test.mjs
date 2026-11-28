@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { AIR_QUALITY_VALUE_RADIUS_KM, createAirQualityLayer } from './index.js';
+import { createAirQualityLayer } from './index.js';
 import { interpretHourly } from './interpretation.js';
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
@@ -104,7 +104,6 @@ test('getValueAt reads the nearest station within the radius', async (t) => {
   const durban = layer.getValueAt(-29.9, 31.0);
   assert.equal(plain(durban.detail), 'Durban · 5 km');
   assert.notEqual(durban.value, cape.value, 'each reads its own station');
-  assert.equal(AIR_QUALITY_VALUE_RADIUS_KM, 50);
   const none = {
     value: null,
     reason: 'No station within 50 km',

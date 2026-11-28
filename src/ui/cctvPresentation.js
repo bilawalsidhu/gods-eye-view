@@ -44,6 +44,17 @@ function outsideNoteText(count) {
   );
 }
 
+/** The cameras, catalog size and active camera a CCTV layer state holds. */
+function readCctvState(state) {
+  const cameras = state?.cameraIndex || state?.cameras || [];
+  return {
+    cameras,
+    catalogCount: Number.isFinite(state?.count) ? state.count : cameras.length,
+    activeId: state?.activeCameraId || '',
+    activeCamera: state?.activeCamera || null,
+  };
+}
+
 /**
  * The panel's buttons, CAL chip and meta line for a camera state, as the CCTV
  * panel view renders them. Pure: the picker, frame, source badge, calibration
@@ -52,21 +63,15 @@ function outsideNoteText(count) {
  * @param {boolean} enabled Whether the layer is on.
  */
 export function presentCctvPanel(state, enabled) {
-  const cameras = state?.cameraIndex || state?.cameras || [];
-  const catalogCount = Number.isFinite(state?.count)
-    ? state.count
-    : cameras.length;
-  const activeId = state?.activeCameraId || '';
-  const activeCamera = state?.activeCamera || null;
-  // Tri-state (viewshed design §3b): off → on (wireframes) → viewshed
+  const { catalogCount, activeId, activeCamera } = readCctvState(state);
+  // Tri-state: off → on (wireframes) → viewshed
   // (color-coded volumes). The click handler cycles; this renders.
   const coverage = state?.coverageMode || (state?.showCoverage ? 'on' : 'off');
   const autoHop = !!state?.autoHop;
   const showProjection = state?.showProjection !== false;
-  // CAL badge (cctv-v2 design §3b, amended by LOCKED §9.2 — panel-only, no
-  // in-world tint): three states from cctv.js's deriveCalBadge. Unsaved live
-  // edits show EDITED over the persisted state (viewshed design §3e): SAVE
-  // CAL promotes to CALIBRATED, RESET CAL clears.
+  // CAL badge (panel-only, no in-world tint): three states from the layer's
+  // deriveCalBadge. Unsaved live edits show EDITED over the persisted state. SAVE CAL
+  // promotes to CALIBRATED and RESET CAL clears.
   const badge = activeCamera?.calBadge || null;
   const dirty = !!activeCamera?.calDirty;
   return {
@@ -166,14 +171,10 @@ export function _renderCctvState(state) {
   this._cctvState = state || null;
   // The light index, not `state.cameras`: reading that builds every camera's
   // full state, which a large catalog cannot afford on each notification.
-  const cameras = state?.cameraIndex || state?.cameras || [];
   // The picker lists what is in view; the catalog is every camera.
-  const catalogCount = Number.isFinite(state?.count)
-    ? state.count
-    : cameras.length;
+  const { cameras, catalogCount, activeId, activeCamera } =
+    readCctvState(state);
   const enabled = !!state?.enabled && !!this.actions.isEnabled();
-  const activeId = state?.activeCameraId || '';
-  const activeCamera = state?.activeCamera || null;
   const selectionRevision = Number(state?.activeCameraReselection);
   const reselected =
     this._lastQuebecSelectionRevision !== null &&

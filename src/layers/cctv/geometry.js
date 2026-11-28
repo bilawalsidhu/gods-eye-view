@@ -1,6 +1,7 @@
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { eastNorthUp, frameVector } from '../../geo/frames.js';
-import { distance, vec } from '../../geo/vector.js';
+import { clamp, distance, toRadians, vec } from '../../geo/vector.js';
+import { greatCircleKm } from '../../geoDistance.js';
 import {
   FRUSTUM_GROUND_CLEARANCE_M,
   PROBE_MIN_RANGE_M,
@@ -13,6 +14,7 @@ import {
 import {
   planeDimensions,
   poseHash,
+  projectPoint,
   requiredPlaneLift,
 } from '../../data/cctvFootprint.js';
 
@@ -91,7 +93,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
   }
 
   /**
-   * V2 core geometry (design §2a): computes the pitched frustum pyramid — mount
+   * Computes the pitched frustum pyramid — mount
    * point, far-cap (monitor plane) center, and the 4 far-plane corners — purely
    * from the calibrated pose + a caller-supplied ground altitude. ZERO scene
    * queries: ground sampling happens in the caller (one-shot snap), and the
@@ -138,47 +140,26 @@ export function createGeometry({ state: layerState, services, parts, source }) {
       Number.isFinite(override) && override > 0
         ? Math.min(poseRange, override)
         : poseRange;
-    const pitchDeg = parts.model.clamp(
+    const pitchDeg = clamp(
       parts.model.safeNumber(camera.pitchDeg, -17),
       -89,
       89,
     );
-    const fovDeg = parts.model.clamp(
-      parts.model.safeNumber(camera.fovDeg, 74),
-      8,
-      160,
-    );
+    const fovDeg = clamp(parts.model.safeNumber(camera.fovDeg, 74), 8, 160);
     const heading = parts.model.safeNumber(camera.headingDeg, 0);
     const mountAlt = ground + parts.model.safeNumber(camera.mountHeightM, 24);
     const dims = planeDimensions({ rangeM: R, pitchDeg, fovDeg });
 
-    const capLL = parts.model.projectPoint(
-      camera.lat,
-      camera.lon,
-      heading,
-      dims.horiz,
-    );
+    const capLL = projectPoint(camera.lat, camera.lon, heading, dims.horiz);
     const capAlt = mountAlt + dims.vert;
-    const capL = parts.model.projectPoint(
-      capLL.lat,
-      capLL.lon,
-      heading - 90,
-      dims.halfW,
-    );
-    const capR = parts.model.projectPoint(
-      capLL.lat,
-      capLL.lon,
-      heading + 90,
-      dims.halfW,
-    );
+    const capL = projectPoint(capLL.lat, capLL.lon, heading - 90, dims.halfW);
+    const capR = projectPoint(capLL.lat, capLL.lon, heading + 90, dims.halfW);
     // Ground clearance: ONE rigid lift for the whole rectangle, sized by the
     // support point with the largest deficit against the ground measured
     // under it (a 3×3 grid over the plane; see footprint.js). Points without
     // a measurement fall back to the ground at the mount, so with no
-    // footprint data the bottom edge still clears the mount's ground — the
-    // old center-only clamp left the bottom edge tens of metres underground
-    // (owner field test 2026-09-13). The rectangle stays rigid and the
-    // wireframe rays still terminate exactly on its corners.
+    // footprint data the bottom edge still clears the mount's ground. The rectangle stays
+    // rigid and the wireframe rays still terminate on its corners.
     // Two lifts: what the mount's own ground demands (always honoured), plus
     // whatever the measured footprint adds, capped so a building under the
     // far edge cannot send the plane into the sky.
@@ -203,12 +184,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
       footprintExtraM > 0 ? measured.limitingKey : base.limitingKey;
     const capAltLifted = capAlt + liftM;
     const corner = (base, sign) => {
-      const ll = parts.model.projectPoint(
-        base.lat,
-        base.lon,
-        heading,
-        sign * dims.upHoriz,
-      );
+      const ll = projectPoint(base.lat, base.lon, heading, sign * dims.upHoriz);
       return {
         lat: ll.lat,
         lon: ll.lon,
@@ -241,7 +217,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
 
   /**
    * Resolves the obstruction probe's effective-range clamp just short of a hit,
-   * with the field-derived 12 m floor used by the original H6 monitor.
+   * with a 12 m floor.
    * @param {number} rangeM Nominal camera range.
    * @param {number} hitDistanceM Distance to the first obstruction.
    * @returns {number|null} Clamp range, or null when the hit does not shorten it.
@@ -286,8 +262,8 @@ export function createGeometry({ state: layerState, services, parts, source }) {
    */
 
   function frustumFrameEcef(camera, atPos) {
-    const h = parts.model.toRad(camera.headingDeg);
-    const p = parts.model.toRad(camera.pitchDeg);
+    const h = toRadians(camera.headingDeg);
+    const p = toRadians(camera.pitchDeg);
     const enu = eastNorthUp(atPos);
     // ENU components: view axis + the perpendicular "up" of the pitched cap.
     const dirEnu = vec(
@@ -359,7 +335,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
 
   /**
    * Refreshes a record's frustum geometry with a regime-aware, ONE-SHOT ground
-   * resolution (Task 5, spec §2). Per regime:
+   * resolution. Per regime:
    *
    *  - `terrain-globe` (any globe stack): `cachedGroundFloor` returns its DEM
    *    floor because mesh floors are regime-disabled. The exact Re:Earth prior
@@ -455,11 +431,9 @@ export function createGeometry({ state: layerState, services, parts, source }) {
       }
       return {
         record,
-        distKm: parts.model.haversineKm(
-          activeRecord.camera.lat,
-          activeRecord.camera.lon,
-          record.camera.lat,
-          record.camera.lon,
+        distKm: greatCircleKm(
+          { lat: activeRecord.camera.lat, lon: activeRecord.camera.lon },
+          { lat: record.camera.lat, lon: record.camera.lon },
         ),
       };
     });
@@ -499,11 +473,9 @@ export function createGeometry({ state: layerState, services, parts, source }) {
     let count = 0;
     for (const record of layerState._records) {
       if (record === targetRecord) continue;
-      const dKm = parts.model.haversineKm(
-        targetRecord.camera.lat,
-        targetRecord.camera.lon,
-        record.camera.lat,
-        record.camera.lon,
+      const dKm = greatCircleKm(
+        { lat: targetRecord.camera.lat, lon: targetRecord.camera.lon },
+        { lat: record.camera.lat, lon: record.camera.lon },
       );
       const overlapKm =
         ((targetRecord.camera.rangeM + record.camera.rangeM) / 1000) * 0.92;
@@ -518,7 +490,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
   }
 
   /**
-   * §9.1 activation obstruction probe (LOCKED owner decision): on camera
+   * Activation obstruction probe: on camera
    * ACTIVATION only, cast ONE ray against the scene along the frustum axis
    * (mount → cap-center direction). If it hits the tiles closer than the pose
    * range, clamp the plane's effective range just short of the first hit so the
@@ -565,7 +537,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
       const inRange = (d) => Number.isFinite(d) && d > 0 && d < camera.rangeM;
       return Promise.all([
         parts.rendering.obstructionHit(mountPos, dir),
-        parts.rendering.terrainHit?.(mountPos, dir) ?? null,
+        parts.rendering.terrainHit(mountPos, dir) ?? null,
       ])
         .then(([hit, terrain]) => {
           if (record.probeToken !== token) return;
@@ -738,7 +710,6 @@ export function createGeometry({ state: layerState, services, parts, source }) {
     materializeCctvCoverageEntities,
     materializeCctvActiveCoverageEntities,
     materializeCctvVisibleCoverageEntities,
-    registerCoverageEntities,
     ensureActiveCoverageEntities,
     ensureVisibleCoverageEntities,
     destroyCoverageEntities,

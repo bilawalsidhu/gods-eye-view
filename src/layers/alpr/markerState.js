@@ -54,7 +54,7 @@ export function alprIconPosition(carrier) {
  * @param {{id: string}} carrier
  * @returns {import('../../render/contract/draw').IconItem}
  */
-export function alprIconItem(carrier) {
+function alprIconItem(carrier) {
   const marker = alprMarkers.read(carrier) ?? {};
   const canvas = Boolean(marker.canvasOwned && marker.canvasPosition);
   const size = marker.selected ? SELECTED_MARKER_ICON_SIZE : MARKER_ICON_SIZE;

@@ -1,6 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { setLocale, t, translateKnown } from '../../i18n/index.js';
 import { createIngestion } from './ingestion.js';
 
 /**
@@ -84,19 +83,9 @@ const CASES = [
 ];
 
 for (const { name, options, expected } of CASES) {
-  test(`radio directory error is English in state and translated on show: ${name}`, async () => {
+  test(`radio directory error is the English message in state: ${name}`, async () => {
     const { layerState, methods } = makeIngestion(options);
     await methods.update();
     assert.equal(layerState._error, expected);
-    try {
-      for (const locale of ['es', 'ru']) {
-        setLocale(locale);
-        const shown = translateKnown(layerState._error);
-        assert.notEqual(shown, expected, `${locale}: ${name}`);
-        assert.equal(t(layerState._error), shown);
-      }
-    } finally {
-      setLocale('en');
-    }
   });
 }

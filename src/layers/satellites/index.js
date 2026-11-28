@@ -52,7 +52,7 @@ export function createSatellitesLayer({
   parts.lifecycle = createLifecycle(context);
   parts.ingestion = createIngestion(context);
   parts.cockpit = createCockpitSubject(context);
-  return Object.assign(
+  const layer = Object.assign(
     {},
     parts.controls.methods,
     parts.cockpit.methods,
@@ -60,44 +60,17 @@ export function createSatellitesLayer({
     parts.lifecycle.methods,
     parts.ingestion.methods,
     {
-      satelliteVisualsVisible: parts.controls.satelliteVisualsVisible,
-      satelliteCatalogModeChanged: parts.controls.satelliteCatalogModeChanged,
       createIssOverlayEntry: parts.labels.createIssOverlayEntry,
-      orbitFrameModelMatrix: parts.rendering.orbitFrameModelMatrix,
-      _setTrackedSatelliteRefreshStateForTest:
-        parts.testing._setTrackedSatelliteRefreshStateForTest,
-      _setSatelliteTrackingRefreshOutcomeForTest:
-        parts.testing._setSatelliteTrackingRefreshOutcomeForTest,
-      _trackedFrameCartesianForTest:
-        parts.testing._trackedFrameCartesianForTest,
-      _runSatellitePreRenderForTest:
-        parts.testing._runSatellitePreRenderForTest,
-      _setDenseCatalogStateForTest: parts.testing._setDenseCatalogStateForTest,
-      _clearDenseCatalogStateForTest:
-        parts.testing._clearDenseCatalogStateForTest,
-      _catalogGroupForTest: parts.testing._catalogGroupForTest,
-      _setSatelliteLabelLifecycleStateForTest:
-        parts.testing._setSatelliteLabelLifecycleStateForTest,
-      _trackIssForTest: parts.testing._trackIssForTest,
-      _pendingSatelliteTrackingRestoreForTest:
-        parts.testing._pendingSatelliteTrackingRestoreForTest,
-      _applyPendingSatelliteTrackingRestoreForTest:
-        parts.testing._applyPendingSatelliteTrackingRestoreForTest,
-      _removeSatelliteTrackingCandidateForTest:
-        parts.testing._removeSatelliteTrackingCandidateForTest,
-      _clearSatelliteLabelLifecycleForTest:
-        parts.testing._clearSatelliteLabelLifecycleForTest,
-      applySatellitePointFocusDeemphasis:
-        parts.rendering.applySatellitePointFocusDeemphasis,
       getNextIssPass: parts.orbits.getNextIssPass,
       getNextSatellitePass: parts.orbits.getNextSatellitePass,
       resolveSatelliteForPass: parts.orbits.resolveSatelliteForPass,
       getAnalystRecords: parts.records.getAnalystRecords,
-      scoreSatelliteNameMatch: parts.orbits.scoreSatelliteNameMatch,
       findSatelliteOrbitTrackInTle: parts.orbits.findSatelliteOrbitTrackInTle,
       getSatelliteOrbitTrack: parts.orbits.getSatelliteOrbitTrack,
     },
   );
+  Object.defineProperty(layer, 'testing', { value: parts.testing });
+  return layer;
 }
 export { ISS_OVERLAY_SOURCE_ID, ISS_OVERLAY_SOURCE_OPTIONS } from './policy.js';
 export { createSatelliteSource } from './source.js';

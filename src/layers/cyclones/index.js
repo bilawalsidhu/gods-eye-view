@@ -574,7 +574,6 @@ export function createCyclonesLayer({
         selectionActive: selectionOwner !== null,
         selectedId,
         selectionIntent,
-        timerActive: false,
       };
     },
     destroy() {

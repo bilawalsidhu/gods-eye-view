@@ -6,9 +6,7 @@ import {
   INFRARED_ALPHA_T1,
 } from './infraredAlpha.js';
 
-test('filtered infrared preserves RGB, scales existing alpha, and matches the old linear threshold', () => {
-  assert.equal(INFRARED_ALPHA_T0, 0.4);
-  assert.equal(INFRARED_ALPHA_T1, 0.7);
+test('filtered infrared preserves RGB, scales existing alpha, and crosses half opacity at the 0.55 linear cut', () => {
   const bytes = new Uint8ClampedArray([
     0, 0, 0, 255, 168, 12, 50, 255, 12, 194, 50, 200, 12, 50, 217, 128, 255,
     255, 255, 0,
@@ -20,7 +18,7 @@ test('filtered infrared preserves RGB, scales existing alpha, and matches the ol
     [result[3], result[7], result[11], result[15], result[19]],
     [0, 0, 98, 128, 0],
   );
-  // Cesium's old 0.55 hard cut falls between byte values 194 and 195.
+  // The 0.55 linear cut falls between byte values 194 and 195.
   assert.ok((194 / 255) ** 2.2 < 0.55);
   assert.ok((195 / 255) ** 2.2 > 0.55);
   const ramp = [];
@@ -47,7 +45,7 @@ test('filter strength interpolates between the full infrared image and the cloud
   assert.deepEqual([...applyInfraredAlpha(pixels.slice(), 0)], [...pixels]);
   assert.deepEqual(
     applyInfraredAlpha(pixels.slice(), 100),
-    applyInfraredAlpha(pixels.slice(), 'filtered'),
+    applyInfraredAlpha(pixels.slice()),
   );
   assert.deepEqual(
     [...applyInfraredAlpha(pixels.slice(), 50)],
@@ -59,7 +57,7 @@ test('full infrared preserves every channel including partial and zero alpha', (
   const pixels = new Uint8ClampedArray([
     12, 50, 194, 80, 0, 0, 0, 255, 255, 200, 0, 0,
   ]);
-  assert.deepEqual(applyInfraredAlpha(pixels.slice(), 'full'), pixels);
+  assert.deepEqual(applyInfraredAlpha(pixels.slice(), 0), pixels);
 });
 
 test('the lookup table gives the per-pixel curve byte for byte, in place', () => {
@@ -99,7 +97,6 @@ test('the lookup table gives the per-pixel curve byte for byte, in place', () =>
     [101, 1],
     [Infinity, 1],
     [-Infinity, 1],
-    ['filtered', 1],
     [Number.NaN, 1],
     [null, 1],
     [undefined, 1],
@@ -109,7 +106,7 @@ test('the lookup table gives the per-pixel curve byte for byte, in place', () =>
     assert.equal(applyInfraredAlpha(pixels, strength), pixels);
     assert.deepEqual(pixels, perPixel(source, amount), `strength ${strength}`);
   }
-  for (const strength of [0, -5, 'full']) {
+  for (const strength of [0, -5]) {
     const pixels = source.slice();
     assert.deepEqual(applyInfraredAlpha(pixels, strength), source);
   }

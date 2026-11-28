@@ -16,7 +16,7 @@
 import { isAircraftLayer } from '../data/aircraftLayerIds.js';
 import { h, render as renderVue } from 'vue';
 import { t } from '../i18n/index.js';
-import { EXCLUSIVE_SURFACE_CLASSES } from '../exclusiveSurfaces.js';
+import { exclusiveSurfaceActive } from '../exclusiveSurfaces.js';
 import { LABEL_LAYERS } from './contextLayerTabs.js';
 import OmnibarGuide from './views/panels/OmnibarGuide.vue';
 
@@ -65,8 +65,6 @@ function cameraAltitude() {
 
 const pressed = (selector) =>
   $(selector)?.getAttribute('aria-pressed') === 'true';
-const screenIsOwned = (doc) =>
-  EXCLUSIVE_SURFACE_CLASSES.some((name) => doc.body.classList.contains(name));
 
 /** Steps that open a side panel from its rail, unless it is already open. */
 function openPanelSteps(rail, item, label) {
@@ -446,7 +444,7 @@ let active = null;
 export function startGuide(steps, { title = '' } = {}) {
   active?.stop();
   const doc = globalThis.document;
-  if (!doc?.body || screenIsOwned(doc) || !steps?.length) return;
+  if (!doc?.body || exclusiveSurfaceActive(doc) || !steps?.length) return;
   // What the view renders: the owner writes it for each step, then paints.
   // The view never binds what is set on the elements: the guide's `visible`
   // class, the callout's entrance replay, place and side, and the rings'
@@ -556,7 +554,7 @@ export function startGuide(steps, { title = '' } = {}) {
 
   async function run(at) {
     if (stopped) return;
-    if (screenIsOwned(doc)) return stop();
+    if (exclusiveSurfaceActive(doc)) return stop();
     current = null;
     index = at;
     const step = live[index];
@@ -612,7 +610,7 @@ export function startGuide(steps, { title = '' } = {}) {
   // Omnibar or a panel behind it stays as it is). Every other key goes on to
   // the page untouched.
   function onKey(event) {
-    if (screenIsOwned(doc)) {
+    if (exclusiveSurfaceActive(doc)) {
       stop();
       return;
     }
@@ -638,7 +636,7 @@ export function startGuide(steps, { title = '' } = {}) {
     });
   }
   const place = () => {
-    if (screenIsOwned(doc)) return stop();
+    if (exclusiveSurfaceActive(doc)) return stop();
     if (!current) return;
     if (current.done?.()) advance();
     const targets = (current.targets?.() || []).filter(Boolean);

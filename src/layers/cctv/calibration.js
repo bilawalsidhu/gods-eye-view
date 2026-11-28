@@ -1,3 +1,4 @@
+import { clamp } from '../../geo/vector.js';
 import { createCalibrationGizmo } from '../../data/cctvGizmo.js';
 import {
   DEFAULT_CAMERA_CALIBRATION,
@@ -39,39 +40,31 @@ export function createCalibration({
     const raw = value && typeof value === 'object' ? value : {};
     return {
       offsetNorthM: parts.model.quantize(
-        parts.model.clamp(
-          parts.model.safeNumber(raw.offsetNorthM, 0),
-          -900,
-          900,
-        ),
+        clamp(parts.model.safeNumber(raw.offsetNorthM, 0), -900, 900),
         0.1,
       ),
       offsetEastM: parts.model.quantize(
-        parts.model.clamp(
-          parts.model.safeNumber(raw.offsetEastM, 0),
-          -900,
-          900,
-        ),
+        clamp(parts.model.safeNumber(raw.offsetEastM, 0), -900, 900),
         0.1,
       ),
       headingDeg: parts.model.quantize(
-        parts.model.clamp(parts.model.safeNumber(raw.headingDeg, 0), -180, 180),
+        clamp(parts.model.safeNumber(raw.headingDeg, 0), -180, 180),
         0.1,
       ),
       pitchDeg: parts.model.quantize(
-        parts.model.clamp(parts.model.safeNumber(raw.pitchDeg, 0), -45, 45),
+        clamp(parts.model.safeNumber(raw.pitchDeg, 0), -45, 45),
         0.1,
       ),
       fovDeg: parts.model.quantize(
-        parts.model.clamp(parts.model.safeNumber(raw.fovDeg, 0), -50, 50),
+        clamp(parts.model.safeNumber(raw.fovDeg, 0), -50, 50),
         0.1,
       ),
       rangeScale: parts.model.quantize(
-        parts.model.clamp(parts.model.safeNumber(raw.rangeScale, 1), 0.35, 3.0),
+        clamp(parts.model.safeNumber(raw.rangeScale, 1), 0.35, 3.0),
         0.01,
       ),
       heightM: parts.model.quantize(
-        parts.model.clamp(parts.model.safeNumber(raw.heightM, 0), -120, 240),
+        clamp(parts.model.safeNumber(raw.heightM, 0), -120, 240),
         0.1,
       ),
     };
@@ -89,12 +82,12 @@ export function createCalibration({
    * @returns {Object} A new values object.
    */
   function migrateRangeScaleForFloor(values, packRangeM) {
-    const oldBase = parts.model.clamp(
+    const oldBase = clamp(
       parts.model.safeNumber(packRangeM, 700),
       LEGACY_CALIBRATION_RANGE_FLOOR_M,
       2200,
     );
-    const newBase = parts.model.clamp(
+    const newBase = clamp(
       parts.model.safeNumber(packRangeM, 700),
       CALIBRATION_RANGE_FLOOR_M,
       2200,
@@ -123,8 +116,7 @@ export function createCalibration({
    * Loads all persisted per-camera calibration overrides from the v2 store.
    *
    * v2 entries carry provenance: `{ values: <7-field offsets>, source: 'manual',
-   * savedAt: <epoch ms> }`. The v1 key (`CCTV_CALIBRATION_STORAGE_KEY_V1`) is
-   * NEVER read here — owner decision #3 (§9.3): wipe clean, no legacy import.
+   * savedAt: <epoch ms> }`.
    *
    * @param {{getItem:function}|null} [storage] - Injectable storage (defaults
    *   to `window.localStorage`); lets the unit suite test this pure of a DOM.
@@ -144,7 +136,7 @@ export function createCalibration({
       for (const [cameraId, entry] of Object.entries(parsed)) {
         if (!cameraId || !entry || typeof entry !== 'object') continue;
         if (!entry.values || typeof entry.values !== 'object') continue;
-        // 'manual' is the only provenance v2 knows (§9.3 killed 'legacy'); a
+        // 'manual' is the only provenance v2 knows; a
         // malformed/foreign source string still normalizes to 'manual' rather
         // than surfacing an unrecognized value into the badge logic.
         map.set(cameraId, {
@@ -213,8 +205,7 @@ export function createCalibration({
   }
 
   /**
-   * Derives the panel CAL badge state for a camera (design §3b, as amended by
-   * the LOCKED §9.2 — panel-only, no in-world tint).
+   * Derives the panel CAL badge state for a camera (panel-only, no in-world tint).
    *
    * Three states:
    *  - 'calibrated' — a human explicitly saved a v2 calibration (`source:'manual'`).
@@ -222,8 +213,7 @@ export function createCalibration({
    *                   (`poseSource:'curated'`, file/env sources only).
    *  - 'raw-prior'  — everything else (all Austin Open Data today).
    *
-   * Pure — no scoring math, no raycasts. `confidenceFromScore` and score-based
-   * quality seeding are retired; this replaces them.
+   * Pure, with no scoring math or raycasts.
    * @param {{calSource?: string|null, poseSource?: string|null}} camera
    * @returns {'calibrated'|'curated'|'raw-prior'}
    */
@@ -235,9 +225,8 @@ export function createCalibration({
   }
 
   /**
-   * Applies a calibration patch to a record's IN-MEMORY pose (save-gated
-   * persistence, design §3e: no localStorage write here — only the explicit
-   * `calibration.save` action persists).
+   * Applies a calibration patch to a record's in-memory pose. Only the explicit
+   * `calibration.save` action persists it.
    *
    * Transient grade (gizmo mid-drag): recompute pose + frustum geometry only
    * (the cheap v2 path) with throttled notify — no ground re-arm, no frame
@@ -258,7 +247,7 @@ export function createCalibration({
       ...patch,
     });
     parts.model.ensureCameraPose(record.camera);
-    // §9.1: touching range takes manual control — clear the activation clamp.
+    // Touching range takes manual control — clear the activation clamp.
     if ('rangeScale' in patch) {
       record.probeClampRangeM = null;
       // A probe still to answer no longer lands.

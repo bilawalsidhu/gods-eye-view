@@ -155,7 +155,6 @@ export function createTuningNoise({
   }
   return {
     radioTuningStaticShouldPlay,
-    stopTuningNoiseSource,
     syncTuningNoiseGain,
     installTuningNoise,
     clearRadioTuningNoise,

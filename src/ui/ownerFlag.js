@@ -8,6 +8,7 @@
  */
 
 import { OWNER_FLAG_SHEET } from './ownerFlagSheet.js';
+import { countryName } from '../data/wikidataCities.js';
 
 /** The flag sheet's URL. */
 export const OWNER_FLAG_SHEET_URL = new URL(
@@ -84,23 +85,6 @@ function isoCode(value) {
 }
 
 /**
- * A region's name in the locale, from the browser's own table.
- * @param {string} code ISO 3166-1 alpha-2.
- * @param {string} locale BCP 47 tag.
- * @returns {string|null}
- */
-export function regionName(code, locale) {
-  try {
-    const name = new Intl.DisplayNames([locale || 'en'], {
-      type: 'region',
-    }).of(code);
-    return name && name !== code ? name : null;
-  } catch {
-    return null;
-  }
-}
-
-/**
  * How to mark a satellite's owner.
  * @param {{countryCode: string|null, label: string|null}|null|undefined} owner
  * @param {{locale?: string, flags?: {has: (code: string) => boolean}}}
@@ -114,7 +98,7 @@ export function ownerMark(owner, { locale = 'en', flags = SHEET_INDEX } = {}) {
   const code = isoCode(owner?.countryCode);
   const label = String(owner?.label ?? '').trim();
   if (code) {
-    const name = regionName(code, locale) || label || code;
+    const name = countryName(code, locale || 'en', null) || label || code;
     if (flags.has(code)) return { kind: 'flag', code, label: name };
     return { kind: 'badge', label: label || code, title: name };
   }

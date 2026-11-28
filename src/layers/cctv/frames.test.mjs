@@ -14,8 +14,6 @@ import {
 } from './policy.js';
 
 // The expected rectangles below are written for a 1920x1080 canvas.
-assert.equal(PROJECTION_CANVAS_WIDTH, 1920);
-assert.equal(PROJECTION_CANVAS_HEIGHT, 1080);
 
 const FULL_CANVAS = {
   x: 0,

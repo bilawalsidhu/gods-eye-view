@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { markRaw, shallowRef } from 'vue';
+import { presented } from './presented.js';
 
 /**
  * The Bhote Koshi event's reconstruction panel as its view renders it. The
@@ -16,20 +16,10 @@ export const useBhoteKoshiPanelStore = defineStore(
      * `textContent`, `hidden`, `disabled`, `value` and `attributes`; the
      * cinematic button's also holds `pressed`.
      */
-    const panel = shallowRef(null);
-
-    /** @param {?object} next A fresh presentation; every publish re-renders. */
-    function publish(next) {
-      panel.value = next && markRaw(next);
-    }
+    const [panel, publish] = presented();
 
     /** The controls the panel's buttons, sliders and reports call. */
-    const controls = shallowRef(null);
-
-    /** @param {?object} next The controls, or null to disconnect. */
-    function connect(next) {
-      controls.value = next && markRaw(next);
-    }
+    const [controls, connect] = presented();
 
     return { panel, publish, controls, connect };
   },

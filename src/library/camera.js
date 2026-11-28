@@ -7,6 +7,7 @@
 import { cancelCameraArrival } from '../data/cameraArrival.js';
 import { findCamera } from '../render/rendererOf.js';
 import { isWorldScale, padExtent } from './extent.js';
+import { prefersReducedMotion } from '../reducedMotion.js';
 
 /** Camera height for a world-scale layer: the whole globe in view. */
 const WORLD_HEIGHT_M = 20_000_000;
@@ -24,10 +25,7 @@ const VIEW_LANDING_FRACTION = 0.6;
 export function flyToLibraryExtent(
   viewer,
   extent,
-  {
-    reducedMotion = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)')
-      ?.matches === true,
-  } = {},
+  { reducedMotion = prefersReducedMotion(globalThis) } = {},
 ) {
   const camera = findCamera(viewer);
   if (!camera?.flyTo || !extent) return false;

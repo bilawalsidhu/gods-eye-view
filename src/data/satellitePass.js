@@ -7,6 +7,7 @@
  * skylight (MIT) shared/src/celestial.ts nextISSPass.
  */
 import { propagate, gstime, eciToEcf, ecfToLookAngles } from 'satellite.js';
+import { lowPrecisionSun } from '../geo/lowPrecisionSun.js';
 
 const R2D = 180 / Math.PI;
 const D2R = Math.PI / 180;
@@ -55,14 +56,7 @@ export function lookAnglesAt(satrec, dateMs, latDeg, lonDeg) {
  * @returns {{ x: number, y: number, z: number, raDeg: number, decDeg: number }}
  */
 export function solarPositionECI(dateMs) {
-  const JD = dateMs / 86400000 + 2440587.5;
-  const D = JD - 2451545.0; // days since J2000.0
-  const g = ((((357.529 + 0.98560028 * D) % 360) + 360) % 360) * D2R;
-  const q = (((280.459 + 0.98564736 * D) % 360) + 360) % 360;
-  const L =
-    ((((q + 1.915 * Math.sin(g) + 0.02 * Math.sin(2 * g)) % 360) + 360) % 360) *
-    D2R;
-  const e = (23.439 - 0.00000036 * D) * D2R;
+  const { eclipticLongitudeRad: L, obliquityRad: e } = lowPrecisionSun(dateMs);
   const ra = Math.atan2(Math.cos(e) * Math.sin(L), Math.cos(L));
   const dec = Math.asin(Math.sin(e) * Math.sin(L));
   return {

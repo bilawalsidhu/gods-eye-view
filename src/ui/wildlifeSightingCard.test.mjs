@@ -144,7 +144,14 @@ function fixture(
       picking: { clickCard: () => hit },
     },
     parts: {
-      rendering: { refreshSelection() {}, requestRender() {} },
+      rendering: {
+        refreshSelection() {},
+        requestRender() {},
+        beginBatch() {},
+        endBatch() {},
+        hasPhotoCard: () => false,
+        setPhotoCardVisibility() {},
+      },
     },
   });
   const layer = {
@@ -679,7 +686,7 @@ test('locale changes translate the card without replacing the image or credit', 
   }
 });
 
-test('date-only and unsafe-link rows remain readable, and no sighting rail or lightbox is shipped', async (context) => {
+test('date-only and unsafe-link rows remain readable, and no sighting rail is shipped', async (context) => {
   const f = fixture(context, {
     ...row,
     observedAt: null,
@@ -694,14 +701,6 @@ test('date-only and unsafe-link rows remain readable, and no sighting rail or li
   );
   assert.equal(PANEL_RAIL_ITEMS['wildlife-sighting-panel'], undefined);
   assert.equal(sheetForPanelId('wildlife-sighting-panel'), null);
-  const source = readFileSync(
-    new URL('./wildlifeSightingCard.js', import.meta.url),
-    'utf8',
-  );
-  assert.doesNotMatch(
-    source,
-    /Lightbox|showModal|requestAnimationFrame|setInterval/,
-  );
 });
 
 test('WHALES cards retain compact whale guidance outside the observation action', async (context) => {

@@ -42,7 +42,7 @@ test('flights and military make their icon sets at their draw orders', (t) => {
       services: { focus: { focusPassIsNeeded: () => false }, sprites },
       parts: {},
       layerId,
-      renderDelaySec: 0,
+      displayDelay: { currentMs: 0, step: () => 0 },
       courseMaxDps: 1,
       cockpitContactSizePx: 4,
     });

@@ -72,13 +72,13 @@ import { stationTrackedOn } from './policy.js';
  */
 
 /** Default `unloadAfterMs`: a minute undrawn releases the model. */
-export const STATION_MODEL_UNLOAD_AFTER_MS = 60_000;
+const STATION_MODEL_UNLOAD_AFTER_MS = 60_000;
 /**
  * A model that failed to load is released after this and asked for again
  * on the next frame in range (the renderer retries a load only on an
  * update, and a model that is not ready is not sent).
  */
-export const STATION_MODEL_RETRY_AFTER_MS = 30_000;
+const STATION_MODEL_RETRY_AFTER_MS = 30_000;
 
 /**
  * Whether a station model may be drawn: the dot's own rules (layer on, points
@@ -149,7 +149,7 @@ export function temeToEcefAxes(v, gmst) {
  * @param {readonly string[]} localAxes
  * @returns {{heading: number, pitch: number, roll: number}}
  */
-export function stationModelOrientation(position, axes, localAxes) {
+function stationModelOrientation(position, axes, localAxes) {
   const as = (key) => vec(axes[key][0], axes[key][1], axes[key][2]);
   return headingPitchRollOfAxes(position, {
     x: as(localAxes[0]),
@@ -292,7 +292,7 @@ export function createStationModel(
       // hull, so the model goes while the Cockpit rides the station.
       cockpitHidden:
         spec.hideInCockpit &&
-        Boolean(parts.cockpit?._cockpitHeld?.()) &&
+        Boolean(parts.cockpit._cockpitHeld()) &&
         _trackedOnStation(),
     });
   }

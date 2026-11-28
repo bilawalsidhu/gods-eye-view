@@ -1,11 +1,8 @@
 import { encodeParams, decodeParams } from '../layers/streetLevel/params.js';
-import { readShellSource } from '../testSupport/readShellSource.mjs';
-import { renderApplicationHtml } from '../testSupport/applicationHtml.mjs';
-import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { DataLayerManager } from './manager.js';
+import { DataLayerManager } from '../testSupport/dataLayerManager.mjs';
 import {
   LEGACY_LAYER_STATE_TOKENS,
   LAYER_STATE_REGISTRY,
@@ -667,18 +664,16 @@ test('compact URL omits absent-meaning option state and still resolves to it', (
   assert.deepEqual(roundTrip.options.satellites.selectedSatTrackingId, null);
 });
 
-test('a fresh boot starts 3D aircraft ON in proximity — codec, both layers, and the rail agree', async () => {
+test('a fresh boot starts 3D aircraft ON in proximity — the codec and both layers agree', async () => {
   // Owner directive 2026-08-22: the DISPLAY-rail 3D toggle defaults ON with mode
   // `proximity`, because proximity is itself the budget — models materialize only
   // below the fleet altitude ceiling and only for the nearest MODEL_MAX in view,
   // so "on" costs nothing at globe scale and `all` stays a deliberate opt-in.
   //
-  // The reason this is one test rather than four is the early return in `start()`
-  // below: with no share payload and no stored state, restoration NEVER RUNS, so
-  // nothing pushes the codec default into the layers. Four independent
-  // initializers decide what a first-run operator actually sees, and changing any
-  // one alone ships a lit button over an unarmed layer, or an armed layer under a
-  // dark button. Pinning them together is what makes "state and UI agree" a fact.
+  // Restoration never runs on a fresh boot (the early return in start() below),
+  // so the layers' own initializers decide what a first-run operator sees.
+  // They must match the codec. The Display panel's first paint is checked in
+  // displayPanel.test.mjs.
   const defaults = createDefaultLayerState().options.flights;
   assert.equal(defaults.models3d, true, 'the durable default is 3D ON');
   assert.equal(defaults.models3dMode, 'proximity', 'and proximity, never all');
@@ -715,65 +710,20 @@ test('a fresh boot starts 3D aircraft ON in proximity — codec, both layers, an
   );
   coordinator.destroy();
 
-  // The other three surfaces, read from source, because each is the literal a
-  // first-run session actually boots from.
-  const { readFile } = await import('node:fs/promises');
-  for (const name of ['flights.js', 'militaryFlights.js']) {
-    const source = readLayerSource(new URL(`./${name}`, import.meta.url));
-    assert.match(
-      source,
-      /^\s*(?:let |flightState\.)_models3dEnabled = true;$/m,
+  // The layers' own initializers are what a first run boots from.
+  const layers = [
+    ['flights', (await import('./flights.js')).default],
+    ['military', (await import('./militaryFlights.js')).default],
+  ];
+  for (const [name, layer] of layers) {
+    const { models3d, models3dMode } = layer.getParams();
+    assert.equal(
+      models3d,
+      true,
       `${name}: the fleet starts armed, matching the codec default`,
     );
-    assert.match(
-      source,
-      /^\s*(?:let |flightState\.)_models3dMode = 'proximity';/m,
-      `${name}: and starts in proximity, matching the codec default`,
-    );
+    assert.equal(models3dMode, 'proximity', `${name}: and starts in proximity`);
   }
-  const ui = await readShellSource();
-  assert.match(
-    ui,
-    /^\s*this\.(?:flightState\.)?_models3dEnabled = true;$/m,
-    'ui.js: the DISPLAY rail believes 3D is on before any layer-state sync arrives',
-  );
-  assert.match(
-    ui,
-    /this\.(?:flightState\.)?_models3dMode = 'proximity';/,
-    'ui.js: and believes the mode is proximity',
-  );
-  const html = await renderApplicationHtml(
-    await readFile(new URL('../../index.html', import.meta.url), 'utf8'),
-  );
-  assert.match(
-    html,
-    /<button(?=[^>]*\sid="models3d-toggle")(?=[^>]*\sclass="(?=[^"]*\bpp-toggle-btn\b)(?=[^"]*\bactive\b))(?=[^>]*\saria-pressed="true")/,
-    'index.html: the 3D button paints lit on first paint, before ui.js runs — and says so',
-  );
-  assert.match(
-    ui,
-    /this\._models3dPressedShown = this\._models3dEnabled;/,
-    'ui.js: and keeps the pressed state synchronized, so the lit state is not colour-only',
-  );
-  const panel = await readFile(
-    new URL('../ui/views/panels/DisplayPanel.vue', import.meta.url),
-    'utf8',
-  );
-  assert.match(
-    panel,
-    /:pressed="models3dOn" pressed-class="active" id="models3d-toggle"/,
-    'DisplayPanel.vue: the view renders aria-pressed with the lit state',
-  );
-  assert.match(
-    html,
-    /class="pp-slider-row visible" id="models3d-mode-row"/,
-    'index.html: and the Proximity/All row paints open with it',
-  );
-  assert.match(
-    html,
-    /id="models3d-mode-proximity"[^>]*aria-checked="true"/,
-    'index.html: Proximity is the selected mode in the markup',
-  );
 });
 
 test('a v2 link written before the flip still means what its author saw: 3D OFF', () => {
@@ -3170,11 +3120,14 @@ test('Active Fires: the intensity filter rides share token w and round-trips', (
 test('Active Fires: the codec accepts whole megawatts in bounds and the three confidence codes', () => {
   // The codec spells its bounds out (it runs in isolation in the ledger
   // tests); they must stay the layer's.
-  assert.equal(MIN_FRP_MW_MAX, 10000);
   assert.deepEqual([...FIRMS_CONFIDENCE_MODES], ['all', 'nominal', 'high']);
   assert.equal(firmsOptions('w.f.300').minFrp, 300);
-  assert.equal(firmsOptions('w.f.10000').minFrp, 10000);
-  assert.equal(firmsOptions('w.f.10001').minFrp, 0, 'out of bounds → default');
+  assert.equal(firmsOptions(`w.f.${MIN_FRP_MW_MAX}`).minFrp, MIN_FRP_MW_MAX);
+  assert.equal(
+    firmsOptions(`w.f.${MIN_FRP_MW_MAX + 1}`).minFrp,
+    0,
+    'out of bounds → default',
+  );
   assert.equal(firmsOptions('w.f.-5').minFrp, 0);
   assert.equal(
     firmsOptions('w.f.2.5').minFrp,

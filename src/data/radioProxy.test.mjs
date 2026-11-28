@@ -14,7 +14,7 @@ import {
   normalizeRadioBrowserStation,
   publicRadioStation,
   publicRadioHttpsUrl,
-} from '../../vite.config.js';
+} from '../../server/providers/radio.js';
 import {
   getRadioAcceptedCatalogSnapshot,
   getRadioUIState,

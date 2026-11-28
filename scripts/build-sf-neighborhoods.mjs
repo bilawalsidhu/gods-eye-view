@@ -28,45 +28,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { douglasPeucker } from './build-admin-packs.mjs';
 
 const SOURCE_URL = 'https://data.sfgov.org/resource/j2bu-swwd.geojson?$limit=100';
 const OUT = path.join(path.dirname(fileURLToPath(import.meta.url)),
   '..', 'src', 'data', 'local_data', 'neighborhoods', 'san-francisco.json');
 const TOLERANCE = 2e-5; // degrees, ~2 m
 const DECIMALS = 6;
-
-/** Perpendicular distance from point p to segment a-b (in degrees, planar — fine at this scale). */
-function segDist(p, a, b) {
-  let [x, y] = p; const [x1, y1] = a; const [x2, y2] = b;
-  let dx = x2 - x1; let dy = y2 - y1;
-  if (dx !== 0 || dy !== 0) {
-    const t = ((x - x1) * dx + (y - y1) * dy) / (dx * dx + dy * dy);
-    if (t > 1) { x -= x2; y -= y2; return Math.hypot(x, y); }
-    if (t > 0) { x -= x1 + dx * t; y -= y1 + dy * t; return Math.hypot(x, y); }
-  }
-  return Math.hypot(x - x1, y - y1);
-}
-
-/** Iterative Douglas-Peucker on an open point list. */
-function douglasPeucker(points, tolerance) {
-  if (points.length <= 2) return points.slice();
-  const keep = new Uint8Array(points.length);
-  keep[0] = keep[points.length - 1] = 1;
-  const stack = [[0, points.length - 1]];
-  while (stack.length) {
-    const [first, last] = stack.pop();
-    let maxDist = 0; let index = -1;
-    for (let i = first + 1; i < last; i++) {
-      const d = segDist(points[i], points[first], points[last]);
-      if (d > maxDist) { maxDist = d; index = i; }
-    }
-    if (maxDist > tolerance && index !== -1) {
-      keep[index] = 1;
-      stack.push([first, index], [index, last]);
-    }
-  }
-  return points.filter((_, i) => keep[i]);
-}
 
 const round = (v) => Number(v.toFixed(DECIMALS));
 

@@ -21,6 +21,8 @@ import {
   DR_CORRECTION_MS,
 } from '../flights/policy.js';
 import { fromDegreesInto } from '../../geo/ellipsoid.js';
+import { KNOT_MPS } from '../../data/units.js';
+import { EARTH_RADIUS_M } from '../../geoDistance.js';
 
 /** Heard positions kept per aircraft for its trail: 10 minutes, 600 fixes. */
 export const LOCAL_ADSB_HISTORY_MS = 10 * 60_000;
@@ -35,8 +37,6 @@ const TURN_WINDOW_MS = 30_000;
 const COAST_MINIMUM_SEC = 10;
 const COAST_CONTACT_GRACE_SEC = 10;
 const COAST_MAXIMUM_SEC = 60;
-const KT_TO_MPS = 1852 / 3600;
-const EARTH_RADIUS_M = 6_371_008.8;
 const DEG = Math.PI / 180;
 const _chordFrom = { x: 0, y: 0, z: 0 };
 const _chordTo = { x: 0, y: 0, z: 0 };
@@ -140,7 +140,7 @@ export class LocalAdsbMotion {
       return false;
     }
     const speedMps = Number.isFinite(record.groundSpeedKt)
-      ? Math.max(0, record.groundSpeedKt) * KT_TO_MPS
+      ? Math.max(0, record.groundSpeedKt) * KNOT_MPS
       : (newest?.speedMps ?? null);
     const fix = {
       at,
@@ -156,7 +156,7 @@ export class LocalAdsbMotion {
       newest &&
       !localAdsbFixIsPlausible(newest, fix, {
         // The last known speed stands in while a record carries none.
-        groundSpeedKt: Number.isFinite(speedMps) ? speedMps / KT_TO_MPS : null,
+        groundSpeedKt: Number.isFinite(speedMps) ? speedMps / KNOT_MPS : null,
         category: record.category,
       })
     ) {
@@ -227,7 +227,7 @@ export class LocalAdsbMotion {
     this.telemetryAt = at;
     const altitudeFt = finite(record.altitudeFt) ?? anchor.altitudeFt;
     const speedMps = Number.isFinite(record.groundSpeedKt)
-      ? Math.max(0, record.groundSpeedKt) * KT_TO_MPS
+      ? Math.max(0, record.groundSpeedKt) * KNOT_MPS
       : anchor.speedMps;
     const trackDeg = Number.isFinite(record.trackDeg)
       ? norm360(record.trackDeg)

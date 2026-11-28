@@ -3,7 +3,7 @@ import { fromDegrees, fromRadians } from '../../geo/ellipsoid.js';
 import { horizonFrom } from '../../geo/horizon.js';
 import { densifyRhumb } from '../../geo/rhumb.js';
 import { distance, toRadians } from '../../geo/vector.js';
-import { cssColor } from '../../render/color.js';
+import { cssColor, withAlpha } from '../../render/color.js';
 import { cameraOf, canvasOf, drawOf } from '../../render/rendererOf.js';
 import {
   clampLabel,
@@ -16,6 +16,8 @@ import {
 import { featureLabel, featureReference, geometryParts } from './geometry.js';
 import { cablePinImage } from './pin.js';
 import {
+  BASE_CABLE_COLOR,
+  BASE_LANDING_COLOR,
   CABLE_LAYER_ID,
   CABLE_LINE_GRANULARITY_M,
   CABLE_PIN_SIZE_PX,
@@ -27,16 +29,13 @@ import {
  * (`submarine-cables:1:lines`, …), so several can share a renderer. Picks
  * name them as `Hit.set`.
  */
-export const CABLE_SET_PREFIX = 'submarine-cables';
+const CABLE_SET_PREFIX = 'submarine-cables';
 let layers = 0;
 
 const BLACK_OUTLINE = [0, 0, 0, 0.65];
 
 /** A polygon's edges are placed along rhumb lines a degree apart at most. */
 const POLYGON_GRANULARITY_M = (6378137 * Math.PI) / 180;
-
-/** A renderer colour with its alpha replaced. */
-const withAlpha = (color, alpha) => [color[0], color[1], color[2], alpha];
 
 /** A feature's CSS colour property, or null when absent or unreadable. */
 const propColor = (value) =>
@@ -182,17 +181,9 @@ export function createRendering({ state }) {
   }
 
   /**
-   * Clear the draw sets and forget the built items. Hiding them is NOT
-   * enough: thousands of hidden lines and markers keep costing memory long
-   * after the user toggled the layer off — that is the "everything gets
-   * sluggish after I turn layers off" report. The fetched JSON stays
-   * cached, so the next enable rebuilds without a network round trip or a
-   * re-parse.
-   */
-
-  /**
-   * Forget what was drawn; `clearSets: false` (destroy, where `detach`
-   * disposes the sets next) leaves the sets alone.
+   * Clear the draw sets and forget the built items. Hidden items still cost memory. The
+   * fetched JSON stays cached, so the next enable rebuilds without a fetch or re-parse.
+   * `clearSets: false` leaves the sets for detach to dispose during destroy.
    */
   function releaseDrawing({ clearSets = true } = {}) {
     state._referenceRecords = [];
@@ -230,7 +221,7 @@ export function createRendering({ state }) {
    */
   function buildFeatures(features, kind, out) {
     const cable = kind === 'cable';
-    const baseColor = cssColor(cable ? state.cableColor : state.landingColor);
+    const baseColor = cssColor(cable ? BASE_CABLE_COLOR : BASE_LANDING_COLOR);
     features.forEach((feature, index) => {
       // A feature with no reference still draws, as the GeoJSON loader drew
       // it: unstyled, not picked and never culled.

@@ -11,7 +11,7 @@ import {
   createBrowserViteConfig,
   escapeFsDenyPath,
 } from '../../build/vite.js';
-import standaloneConfig, * as compatibility from '../../vite.config.js';
+import standaloneConfig from '../../vite.config.js';
 import * as providers from '../../server/providers/local.js';
 import { apiNotFoundPlugin } from '../../server/standalone/api-not-found.js';
 import { makeFixtureRoot } from './fixtureRoot.mjs';
@@ -140,9 +140,7 @@ test('build helper does not discover environment values or construct local provi
   }
 });
 
-test('root config retains existing named exports and standalone provider order', () => {
-  for (const [name, value] of Object.entries(providers))
-    assert.equal(compatibility[name], value, name);
+test('root config keeps the standalone provider order', () => {
   const config = standaloneConfig({ mode: 'test' }, { nominatimStorageDir });
   const standaloneProviders = config.plugins
     .slice(4, -8)

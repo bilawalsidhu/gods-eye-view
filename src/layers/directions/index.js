@@ -30,14 +30,14 @@ import {
 import { distanceParts } from '../../data/distanceFormat.js';
 
 export const DIRECTIONS_STEP_OVERLAY_SOURCE_ID = 'directions-step';
-export const DIRECTIONS_STEP_OVERLAY_SOURCE_OPTIONS = Object.freeze({
+const DIRECTIONS_STEP_OVERLAY_SOURCE_OPTIONS = Object.freeze({
   cohortLimit: 1,
   collisionCapacity: 0,
   moving: false,
 });
 /** The A and B letters above the endpoint markers. */
 export const DIRECTIONS_MARKER_OVERLAY_SOURCE_ID = 'directions-markers';
-export const DIRECTIONS_MARKER_OVERLAY_SOURCE_OPTIONS = Object.freeze({
+const DIRECTIONS_MARKER_OVERLAY_SOURCE_OPTIONS = Object.freeze({
   cohortLimit: 2,
   collisionCapacity: 0,
   moving: false,
@@ -114,7 +114,7 @@ export const STEP_ANCHOR_SLOW_RETRY_MS = 2000;
 /** Re-reads at the quick gap before backing off. */
 export const STEP_ANCHOR_FAST_ATTEMPTS = 5;
 /** How often the row repaints the highlighted step while FLY is running (ms). */
-export const FLIGHT_PROGRESS_MS = 250;
+const FLIGHT_PROGRESS_MS = 250;
 
 // ---------------------------------------------------------------------------
 // Display text in the page's language. The proxy's English `instruction` stays
@@ -526,18 +526,8 @@ export function stepMarkerIndices(steps) {
 }
 
 /**
- * Render height for a maneuver dot.
- *
- * A dot fixed at a couple of metres ellipsoidal is at sea level, which in
- * Denver (ground ~1.6 km) puts it a kilometre and a half under the city: on an
- * oblique view it sits visibly off its own junction. So the dot reads the same
- * shared ground floor every other anchored point in the app reads
- * (`cachedGroundFloor` — the rendered mesh cell on the photoreal stack, the
- * Re:Earth DEM cell on the keyless terrain stacks) and lifts clear of it.
- * Until that cell is warm there is no honest height, and the caller keeps the
- * dot hidden rather than drawing it somewhere wrong.
- * @param {number|null} floorM Ellipsoidal ground for the cell, or null.
- * @returns {number|null} Ellipsoidal render height, or null while unknown.
+ * A maneuver dot stands on the ground floor every anchored point reads, not
+ * at sea level. Null until that floor cell is known; the dot stays hidden.
  */
 export function stepMarkerHeightM(floorM, liftM) {
   return Number.isFinite(floorM) ? floorM + liftM : null;
@@ -679,7 +669,6 @@ export function directionsStats(state) {
       endpoint: armed.toUpperCase(),
     });
   else if (a && !b) coverage = t('SET B, then click the globe');
-  else if (!a && b) coverage = t('SET A, then click the globe');
   else coverage = t('SET A, then click the globe');
   return {
     count: 0,
@@ -779,13 +768,6 @@ export function createDirectionsMarkerOverlayEntry(letter, position, accent) {
   };
 }
 
-/**
- * Build the `/api/route` URL for two endpoints.
- * @param {string} mode car | foot | bike
- * @param {{lat:number, lon:number}} a
- * @param {{lat:number, lon:number}} b
- * @returns {string}
- */
 export { directionsRequestUrl } from './source.js';
 
 /**
@@ -843,23 +825,15 @@ let _instances = 0;
  * route, the markers, the pointer claim or the flight this layer owns. The
  * shared services are injected, which is what keeps this module's own imports
  * down to the renderer's draw port, geodesy and the pure step formatter.
- * @param {{services: object, source: {getRoute: Function}}} options
+ * @param {{services: object, source: {getRoute: Function},
+ *   overlayHost: {setEntries: Function, setVisible: Function,
+ *   clearSource: Function}}} options `overlayHost` draws the endpoint letters
+ *   and the maneuver card.
  * @returns {object} The layer module the data manager registers.
  */
-export function createDirectionsLayer({ services, source }) {
+export function createDirectionsLayer({ services, source, overlayHost }) {
   if (typeof source?.getRoute !== 'function')
     throw new TypeError('Directions require a route source');
-  /**
-   * Where the maneuver card is drawn. Defaults to the shared world-overlay host;
-   * tests swap it. Resolved on use, not at import, because the services arrive
-   * after this module is evaluated.
-   */
-  const DEFAULT_OVERLAY_HOST = Object.freeze({
-    setEntries: (...args) => services.overlays.setOverlayEntries(...args),
-    setVisible: (...args) => services.overlays.setOverlaySourceVisible(...args),
-    clearSource: (...args) => services.overlays.clearOverlaySource(...args),
-  });
-  let _overlayHost = DEFAULT_OVERLAY_HOST;
 
   // --- Module state ---
   let _viewer = null;
@@ -1038,7 +1012,7 @@ export function createDirectionsLayer({ services, source }) {
             accent,
           ),
         );
-    _overlayHost.setEntries(
+    overlayHost.setEntries(
       DIRECTIONS_MARKER_OVERLAY_SOURCE_ID,
       entries,
       DIRECTIONS_MARKER_OVERLAY_SOURCE_OPTIONS,
@@ -1376,7 +1350,7 @@ export function createDirectionsLayer({ services, source }) {
     _status = 'idle';
     _error = null;
     _sets?.markers.clear();
-    _overlayHost.clearSource(DIRECTIONS_MARKER_OVERLAY_SOURCE_ID);
+    overlayHost.clearSource(DIRECTIONS_MARKER_OVERLAY_SOURCE_ID);
     clearRouteGraphics();
     services.render.governorRequestRender('directions-clear');
   }
@@ -1470,7 +1444,7 @@ export function createDirectionsLayer({ services, source }) {
     const was = _selectedStep;
     _selectedStep = null;
     if (was !== null) drawStepDots([was]);
-    _overlayHost.clearSource(DIRECTIONS_STEP_OVERLAY_SOURCE_ID);
+    overlayHost.clearSource(DIRECTIONS_STEP_OVERLAY_SOURCE_ID);
   }
 
   /**
@@ -1509,7 +1483,7 @@ export function createDirectionsLayer({ services, source }) {
       directionsStepCopy(_route.steps, index),
     );
     if (!entry) return false;
-    _overlayHost.setEntries(
+    overlayHost.setEntries(
       DIRECTIONS_STEP_OVERLAY_SOURCE_ID,
       [entry],
       DIRECTIONS_STEP_OVERLAY_SOURCE_OPTIONS,
@@ -1637,7 +1611,7 @@ export function createDirectionsLayer({ services, source }) {
           id: `${prefix}:steps`,
           blend: 'translucent',
           show: false,
-          drawOrder: services.sprites.spriteDrawOrder?.('directions') ?? 0,
+          drawOrder: services.sprites.spriteDrawOrder('directions') ?? 0,
         }),
         route: draw.lines({ id: `${prefix}:route` }),
       };
@@ -1654,8 +1628,8 @@ export function createDirectionsLayer({ services, source }) {
       _status = 'idle';
       _error = null;
       _flightStep = null;
-      _overlayHost.setVisible(DIRECTIONS_STEP_OVERLAY_SOURCE_ID, false);
-      _overlayHost.setVisible(DIRECTIONS_MARKER_OVERLAY_SOURCE_ID, false);
+      overlayHost.setVisible(DIRECTIONS_STEP_OVERLAY_SOURCE_ID, false);
+      overlayHost.setVisible(DIRECTIONS_MARKER_OVERLAY_SOURCE_ID, false);
       console.log('[Data:Directions] Initialized');
     },
 
@@ -1666,8 +1640,8 @@ export function createDirectionsLayer({ services, source }) {
     enable(viewer) {
       _enabled = true;
       if (_sets) _sets.steps.show = true;
-      _overlayHost.setVisible(DIRECTIONS_STEP_OVERLAY_SOURCE_ID, true);
-      _overlayHost.setVisible(DIRECTIONS_MARKER_OVERLAY_SOURCE_ID, true);
+      overlayHost.setVisible(DIRECTIONS_STEP_OVERLAY_SOURCE_ID, true);
+      overlayHost.setVisible(DIRECTIONS_MARKER_OVERLAY_SOURCE_ID, true);
       _installClickHandler(viewer);
       services.picking.registerPickOwner(
         'directions',
@@ -1684,13 +1658,12 @@ export function createDirectionsLayer({ services, source }) {
     disable(viewer) {
       _enabled = false;
       clearAll();
-      _overlayHost.setVisible(DIRECTIONS_STEP_OVERLAY_SOURCE_ID, false);
-      _overlayHost.setVisible(DIRECTIONS_MARKER_OVERLAY_SOURCE_ID, false);
+      overlayHost.setVisible(DIRECTIONS_STEP_OVERLAY_SOURCE_ID, false);
+      overlayHost.setVisible(DIRECTIONS_MARKER_OVERLAY_SOURCE_ID, false);
       _removeClickHandler();
       services.picking.unregisterPickOwner('directions');
       if (_sets) _sets.steps.show = false;
       syncRenderHold();
-      void viewer;
     },
 
     /** Nothing to poll: routes are requested on placement and mode change. */
@@ -1766,9 +1739,8 @@ export function createDirectionsLayer({ services, source }) {
       _shellSeams = null;
       _panel = null;
       detachSets();
-      void viewer;
-      _overlayHost.clearSource(DIRECTIONS_STEP_OVERLAY_SOURCE_ID);
-      _overlayHost.clearSource(DIRECTIONS_MARKER_OVERLAY_SOURCE_ID);
+      overlayHost.clearSource(DIRECTIONS_STEP_OVERLAY_SOURCE_ID);
+      overlayHost.clearSource(DIRECTIONS_MARKER_OVERLAY_SOURCE_ID);
       _viewer = null;
     },
 
@@ -1778,11 +1750,6 @@ export function createDirectionsLayer({ services, source }) {
      * ownership timing this decides can be tested on its own.
      */
     placeEndpoint: placeDirectionsEndpoint,
-
-    /** Test seam: swap the shared overlay host. */
-    _setOverlayHostForTest(host) {
-      _overlayHost = host || DEFAULT_OVERLAY_HOST;
-    },
   };
 
   return directionsLayer;

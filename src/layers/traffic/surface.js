@@ -99,7 +99,7 @@ function currentRenderedFrame(viewer) {
  * rendered-frame observer is recording for this same frame, which a frame
  * listener may run before.
  */
-export function drawnSurfaceReady(viewer) {
+function drawnSurfaceReady(viewer) {
   return surfaceTilesReady(viewer);
 }
 

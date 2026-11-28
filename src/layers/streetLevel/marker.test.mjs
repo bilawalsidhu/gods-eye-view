@@ -30,7 +30,7 @@ function setup() {
   const state = {
     services: {},
     viewer,
-    marker: { set: null, placed: null, look: null },
+    marker: { set: null, placed: null },
   };
   const marker = createMarker({ state });
   marker.ensure(viewer);
@@ -87,11 +87,10 @@ test('the marker is clamped to the ground and turned to the bearing', () => {
 });
 
 test('a Street View photo gets a blue view cone; a Mapillary photo GEV\u2019s pin', () => {
-  const { marker, icon, state } = setup();
+  const { marker, icon } = setup();
   const streetView = { kind: 'view-cone', color: '#4285f4' };
   marker.set({ lon: -121.49, lat: 38.58 }, 45, streetView);
   const cone = icon().image;
-  assert.equal(state.marker.look, 'view-cone:#4285f4');
   assert.deepEqual(icon().size, [48, 48]);
   assert.equal(icon().course, 45, 'it turns with the view');
   // Dragging the panorama keeps the look.
@@ -99,7 +98,6 @@ test('a Street View photo gets a blue view cone; a Mapillary photo GEV\u2019s pi
   assert.equal(icon().image, cone);
   // A Mapillary photo next (its provider has no marker): the pin.
   marker.set({ lon: -121.49, lat: 38.58 }, 90, undefined);
-  assert.equal(state.marker.look, 'pin');
   assert.notEqual(icon().image, cone);
   assert.deepEqual(icon().size, [40, 40]);
 });

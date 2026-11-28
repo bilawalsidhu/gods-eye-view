@@ -1,10 +1,7 @@
-import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 // Aircraft models draw LIFE SIZE: every aircraft layer takes its model and
 // scale from the procedural fleet set (fleetModels.js), a type's published
-// length over the model's built length. These pins keep that true — no layer
-// carries a scale constant of its own (the giant-military-jet bug was one
-// copied across layers) — and keep the trail and bracket anchors riding the
-// transform chain Cesium draws the models with.
+// length over the model's built length. These pins keep that true and keep the
+// trail and bracket anchors riding the transform chain Cesium draws the models with.
 import { test } from 'node:test';
 import * as Cesium from 'cesium';
 import assert from 'node:assert/strict';
@@ -77,30 +74,6 @@ test('every typed aircraft renders at its published length, a real-world aircraf
       else assert.ok(spec.clearanceM > 0, `${type}: clearance ${spec.clearanceM}`);
       assert.ok(spec.clearanceM < radius, `${type}: clearance larger than the aircraft`);
     }
-  }
-});
-
-function normalBillboardScaleByDistance(sourceFile) {
-  const src = readLayerSource(path.join(ROOT, sourceFile));
-  const fn = src.match(/const NORMAL_SCALE_BY_DISTANCE = ([\s\S]*?\);)/);
-  assert.ok(fn, `${sourceFile}: NORMAL_SCALE_BY_DISTANCE not found`);
-  const scalar = fn[1].match(/near: (\d+),\s*nearValue: ([\d.]+),\s*far: (\d+),\s*farValue: ([\d.]+),?\s*\}/);
-  assert.ok(scalar, `${sourceFile}: icon scale-by-distance not found`);
-  return scalar.slice(1).map(Number);
-}
-
-const AIRCRAFT_LAYERS = [
-  'src/layers/flights/rendering.js',
-  'src/layers/military/rendering.js',
-  'src/layers/localAdsb/models.js',
-];
-
-test('every aircraft layer takes its model and scale from the fleet set, no layer scale of its own', () => {
-  for (const file of AIRCRAFT_LAYERS) {
-    const source = fs.readFileSync(path.join(ROOT, file), 'utf8');
-    assert.match(source, /\baircraftLayerModelSpec\b/, `${file}: models come from aircraftLayerModelSpec`);
-    assert.match(source, /\bloadFleetModelSet\(|\bcreateAircraftModels\(/, `${file}: models are drawn from the loaded fleet set`);
-    assert.doesNotMatch(source, /\bMODEL_SCALE\b|CLASS_SCALE_3D|\.glb['"]/, `${file}: no layer-owned model scale or asset`);
   }
 });
 
@@ -327,19 +300,6 @@ test('a model is drawn at its scale until the pixel floor raises it', () => {
   const big = modelDrawnScale({ ...base, scale: 5, maxScale: 1e9, minPixelSize: 4000, viewportHeightPx: 1000, viewportWidthPx: 5000, center: { x: 0, y: 0, z: depth } });
   assert.ok(Math.abs(big - (4000 * ((2 * (depth - 150) * Math.tan(Math.PI / 6)) / 1000)) / 60) < 1e-9, `raised from the sphere at scale 5: ${big}`);
   assert.equal(modelDrawnScale({ ...base, pose: null, center: { x: 0, y: 0, z: depth } }), 1);
-});
-
-test('civilian and military globe-view aircraft retain the established 3.0 near scale and 0.5 floor', () => {
-  for (const [name, source] of [
-    ['flights', 'src/data/flights.js'],
-    ['military', 'src/data/militaryFlights.js'],
-  ]) {
-    assert.deepEqual(
-      normalBillboardScaleByDistance(source),
-      [1000, 3, 8000000, 0.5],
-      `${name}: owner-established close sizing and the orbital floor must remain readable`,
-    );
-  }
 });
 
 test('a layer asking every tick gets one cached spec per type and category', async () => {

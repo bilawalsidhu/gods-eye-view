@@ -543,27 +543,6 @@ body.cockpit-mode:is(
   color: var(--cockpit-emergency);
   font-weight: 600;
 }
-.cockpit-mode-chip {
-  margin-top: 2px;
-  padding: 7px 11px;
-  border: 1px solid color-mix(in srgb, var(--cockpit-accent) 45%, transparent);
-  border-radius: 20px;
-  background: rgba(0, 7, 12, 0.62);
-  color: var(--cockpit-accent);
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.16em;
-}
-.cockpit-live-dot {
-  display: inline-block;
-  width: 5px;
-  height: 5px;
-  margin-right: 6px;
-  border-radius: 50%;
-  background: var(--cockpit-accent);
-  box-shadow: 0 0 8px var(--cockpit-accent);
-  animation: cockpit-live 1.6s ease-in-out infinite;
-}
 @keyframes cockpit-live {
   50% {
     opacity: 0.35;
@@ -2237,9 +2216,6 @@ body.cockpit-mode #intel-hud .hud-right-edge {
   }
   .cockpit-topline {
     grid-template-columns: 1fr auto;
-  }
-  .cockpit-mode-chip {
-    display: none;
   }
   .cockpit-readout {
     min-width: 76px;

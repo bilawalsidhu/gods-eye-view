@@ -14,7 +14,6 @@ import {
 import { resolveDeicticArgs } from './deixis.js';
 import { isStoriesOpen } from './realtimeInputPolicy.js';
 export { readLayerLifecycleSummary } from './layerSummary.js';
-import { defaultGeospatial } from '../search/defaults.js';
 import { msg } from '../i18n/index.js';
 import { useProviderSettingsStore } from '../ui/stores/providerSettings.js';
 import { layerFinderFor } from '../ui/layerFinderFilter.js';
@@ -268,6 +267,16 @@ const FRAME_TARGETS = new Map([
   ['ships', 'ais-live-vessels'],
 ]);
 
+/** Change one layer's visibility as a tracked intent; resolves with the manager's result and the settled intent. */
+async function setLayerWithIntent(dataManager, layerId, enabled, options) {
+  const intent = dataManager._setEnabledWithIntent(layerId, enabled, options);
+  const changed = await intent.promise;
+  const outcome = Number.isInteger(intent.intentEpoch)
+    ? await dataManager._waitForVisibilityIntent(layerId, intent.intentEpoch)
+    : null;
+  return { changed, outcome };
+}
+
 const serviceCaches = new WeakMap();
 function cachesFor(service) {
   service.signal?.throwIfAborted();
@@ -513,14 +522,14 @@ export function createGevActionRunner({
       }
     };
 
-    // Navigation tools interrupt any continuous camera motion (spec §1.1) —
+    // Navigation tools interrupt any continuous camera motion —
     // checked FIRST because each handler returns.
     if (name === 'zoom_to_globe') {
       interruptCameraMotion(`nav:${name}`);
     }
     // Explicit navigation while TRACKING supersedes the follow camera —
-    // otherwise the tracker drags the view back and "I flew there but can't
-    // do anything" (field finding). track_entity manages its own handoff.
+    // otherwise the tracker drags the view back to the followed entity. track_entity
+    // manages its own handoff.
     if (name === 'zoom_to_globe' && isFollowing(viewer)) {
       stopAllTracking(viewer, dataManager);
     }
@@ -588,26 +597,12 @@ export function createGevActionRunner({
       let changeError = null;
       let intentOutcome = null;
       try {
-        if (typeof dataManager._setEnabledWithIntent === 'function') {
-          const intent = dataManager._setEnabledWithIntent(
-            layerId,
-            enabled,
-            changeOptions,
-          );
-          changed = await intent.promise;
-          if (Number.isInteger(intent.intentEpoch)) {
-            intentOutcome = await dataManager._waitForVisibilityIntent?.(
-              layerId,
-              intent.intentEpoch,
-            );
-          }
-        } else {
-          changed = await dataManager.setEnabled(
-            layerId,
-            enabled,
-            changeOptions,
-          );
-        }
+        ({ changed, outcome: intentOutcome } = await setLayerWithIntent(
+          dataManager,
+          layerId,
+          enabled,
+          changeOptions,
+        ));
         if (layerId === 'satellites') {
           // A Satellites OFF can end Space Missions, which needs it.
           await dataManager.layers
@@ -639,10 +634,7 @@ export function createGevActionRunner({
         };
       }
       const intentCommitted = intentOutcome?.succeeded === true;
-      const current =
-        !runOptions.signal?.aborted &&
-        (typeof runOptions.isCurrent !== 'function' || runOptions.isCurrent());
-      if (!current && !intentCommitted) {
+      if (!current() && !intentCommitted) {
         return {
           ok: false,
           action: 'set_layer_visibility',
@@ -1911,9 +1903,7 @@ export function createGevActionRunner({
       // Only an accepted, still-current result may become "the last list": a
       // cancelled turn or one finishing after the session ended must not
       // repopulate a cleared registry.
-      const stillCurrent =
-        !runOptions.signal?.aborted &&
-        (typeof runOptions.isCurrent !== 'function' || runOptions.isCurrent());
+      const stillCurrent = runOptions.isCurrent();
       if (stillCurrent)
         deixis?.referents?.recordResult?.(name, out, {
           since: referentGeneration,
@@ -1955,7 +1945,7 @@ function selectedCockpitTarget(dataManager) {
   if (!selected || !['flights', 'military'].includes(selected.layerId))
     return null;
   const module = dataManager?.layers?.get(selected.layerId)?.module;
-  if (!module?.trackById || typeof module.trackById !== 'function') return null;
+  if (typeof module?.trackById !== 'function') return null;
   const id = String(selected.id || '').trim();
   return id ? { layerId: selected.layerId, id } : null;
 }
@@ -2520,26 +2510,13 @@ export async function controlRadio(
     if (options.signal) enableOptions.signal = options.signal;
     let result = false;
     try {
-      if (typeof dataManager._setEnabledWithIntent === 'function') {
-        const intent = dataManager._setEnabledWithIntent(
+      ({ changed: result, outcome: lastIntentOutcome } =
+        await setLayerWithIntent(
+          dataManager,
           'radio',
           shouldEnable,
           enableOptions,
-        );
-        result = await intent.promise;
-        if (Number.isInteger(intent.intentEpoch)) {
-          lastIntentOutcome = await dataManager._waitForVisibilityIntent?.(
-            'radio',
-            intent.intentEpoch,
-          );
-        }
-      } else {
-        result = await dataManager.setEnabled(
-          'radio',
-          shouldEnable,
-          enableOptions,
-        );
-      }
+        ));
     } catch (error) {
       lastIntentError = error;
       return false;
@@ -3456,7 +3433,7 @@ function runManagedVoiceNavigation(
  */
 export async function getBasemapLabelContext(
   viewer,
-  service = defaultGeospatial,
+  service,
   { cachedOnly = false, previous = null, camera = cameraOf(viewer) } = {},
 ) {
   const pose = camera.pose();
@@ -3733,7 +3710,12 @@ function compassDir(azDeg) {
   return COMPASS_16[Math.round((((azDeg % 360) + 360) % 360) / 22.5) % 16];
 }
 
-function nextIssPass(viewer, dataManager, args) {
+/**
+ * The next pass of one satellite over the asked location or the camera:
+ * `getPass({ latDeg, lonDeg, minElevDeg })` gives the layer's `{ status, pass }`,
+ * and `label` names the satellite in the errors.
+ */
+function passResult(viewer, args, getPass, label, action) {
   let latDeg = Number.isFinite(args.latitude) ? args.latitude : null;
   let lonDeg = Number.isFinite(args.longitude) ? args.longitude : null;
   if (latDeg == null || lonDeg == null) {
@@ -3747,30 +3729,27 @@ function nextIssPass(viewer, dataManager, args) {
   const minElevDeg = Number.isFinite(args.minElevationDeg)
     ? args.minElevationDeg
     : 10;
-  const result = dataManager?.layers
-    ?.get('satellites')
-    ?.module?.getNextIssPass?.({ latDeg, lonDeg, minElevDeg }) ?? {
+  const result = getPass({ latDeg, lonDeg, minElevDeg }) ?? {
     status: 'no-tle',
   };
   if (result.status === 'no-tle') {
     return {
       ok: false,
-      action: 'next_iss_pass',
-      error:
-        'ISS orbital elements not loaded yet — enable the satellites layer once, then ask again.',
+      action,
+      error: `${label} orbital elements not loaded yet — enable the satellites layer once, then ask again.`,
     };
   }
   if (result.status === 'none') {
     return {
       ok: false,
-      action: 'next_iss_pass',
-      error: `No ISS pass above ${minElevDeg}° in the next 24 hours for this location.`,
+      action,
+      error: `No ${label} pass above ${minElevDeg}° in the next 24 hours for this location.`,
     };
   }
   const { pass } = result;
   return {
     ok: true,
-    action: 'next_iss_pass',
+    action,
     observer: { latitude: latDeg, longitude: lonDeg },
     riseIso: new Date(pass.riseMs).toISOString(),
     minutesFromNow: Math.round((pass.riseMs - Date.now()) / 60000),
@@ -3783,6 +3762,17 @@ function nextIssPass(viewer, dataManager, args) {
     setIso: new Date(pass.setMs).toISOString(),
     peakIso: new Date(pass.maxElevMs).toISOString(),
   };
+}
+
+function nextIssPass(viewer, dataManager, args) {
+  return passResult(
+    viewer,
+    args,
+    (options) =>
+      dataManager?.layers?.get('satellites')?.module?.getNextIssPass?.(options),
+    'ISS',
+    'next_iss_pass',
+  );
 }
 
 function nextSatellitePass(viewer, dataManager, args) {
@@ -3800,37 +3790,21 @@ function nextSatellitePass(viewer, dataManager, args) {
           ? 'Several loaded satellites match. Choose a NORAD ID from candidates.'
           : 'No loaded satellite matches. Enable satellites and use an exact name or NORAD ID.',
     };
-  // Reuse the legacy location fallback and result formatting, substituting only
-  // this explicitly resolved catalog identity and the optional visibility filter.
-  const adapter = {
-    layers: new Map([
-      [
-        'satellites',
-        {
-          module: {
-            getNextIssPass: (options) =>
-              layer.getNextSatellitePass(identity.noradId, {
-                ...options,
-                requireVisible: args.visibleOnly === true,
-              }),
-          },
-        },
-      ],
-    ]),
-  };
-  const result = nextIssPass(viewer, adapter, args);
-  if (result.error) {
-    result.error = result.error.replace(
-      /ISS/g,
-      identity.name || String(identity.noradId),
-    );
-    if (args.visibleOnly === true)
-      result.error +=
-        ' Search required estimated illumination under a dark sky.';
-  }
+  const result = passResult(
+    viewer,
+    args,
+    (options) =>
+      layer.getNextSatellitePass(identity.noradId, {
+        ...options,
+        requireVisible: args.visibleOnly === true,
+      }),
+    identity.name || String(identity.noradId),
+    'next_satellite_pass',
+  );
+  if (result.error && args.visibleOnly === true)
+    result.error += ' Search required estimated illumination under a dark sky.';
   return {
     ...result,
-    action: 'next_satellite_pass',
     noradId: identity.noradId,
     name: identity.name,
     visibleOnly: args.visibleOnly === true,
@@ -4638,7 +4612,7 @@ async function getEntityContext(
   dataManager,
   styleManager,
   args = {},
-  service = defaultGeospatial,
+  service,
 ) {
   const startedAt = performance.now();
   const scope = String(args.scope || 'auto').toLowerCase();
@@ -5237,7 +5211,7 @@ async function getSceneContext(
   styleManager,
   dataManager,
   viewTarget = null,
-  service = defaultGeospatial,
+  service,
 ) {
   const cartographic = cameraOf(viewer).pose();
   const basemap = await getBasemapContext(viewer, viewTarget, service);
@@ -5262,11 +5236,7 @@ async function getSceneContext(
   };
 }
 
-async function getBasemapContext(
-  viewer,
-  viewTarget = null,
-  service = defaultGeospatial,
-) {
+async function getBasemapContext(viewer, viewTarget = null, service) {
   const { reverseGeocodeCache, nearbyPlacesCache } = cachesFor(service);
   const target = viewTarget;
   const samples = sampleViewportCartographics(viewer);
@@ -5299,18 +5269,12 @@ async function getBasemapContext(
 
   const latitude = Number(toDegrees(target.latitude).toFixed(6));
   const longitude = Number(toDegrees(target.longitude).toFixed(6));
-  const inferredCountry = inferCountryFromSamples(samples);
   const knownLandmarks = nearbyKnownLandmarks(
     latitude,
     longitude,
     cameraHeightM,
   );
-  const fallbackPlace = coarseBasemapPlace(
-    viewScale,
-    latitude,
-    longitude,
-    inferredCountry,
-  );
+  const fallbackPlace = coarseBasemapPlace(viewScale, latitude, longitude);
   const cachedPlace = shouldReverseGeocode(cameraHeightM)
     ? reverseGeocodeCache.get(
         reverseGeocodeKey(latitude, longitude, service),
@@ -5420,12 +5384,7 @@ function nearbyKnownLandmarks(latitude, longitude, cameraHeightM) {
   return matches.sort((a, b) => a.distanceKm - b.distanceKm).slice(0, 5);
 }
 
-function coarseBasemapPlace(
-  viewScale,
-  latitude,
-  longitude,
-  inferredCountry = null,
-) {
+function coarseBasemapPlace(viewScale, latitude, longitude) {
   if (viewScale === 'global') {
     return {
       formattedAddress: 'Global Earth view',
@@ -5437,14 +5396,11 @@ function coarseBasemapPlace(
     };
   }
   return {
-    formattedAddress: inferredCountry?.country
-      ? `${viewScale[0].toUpperCase()}${viewScale.slice(1)} basemap view over ${inferredCountry.country}`
-      : `${viewScale[0].toUpperCase()}${viewScale.slice(1)} basemap view centered near ${latitude.toFixed(2)}, ${longitude.toFixed(2)}`,
+    formattedAddress: `${viewScale[0].toUpperCase()}${viewScale.slice(1)} basemap view centered near ${latitude.toFixed(2)}, ${longitude.toFixed(2)}`,
     locality: null,
     region: null,
-    country: inferredCountry?.country || null,
+    country: null,
     precision: viewScale,
-    confidence: inferredCountry?.confidence || null,
     note: 'Camera altitude is high, so this is approximate basemap context rather than a precise address.',
   };
 }
@@ -5558,58 +5514,6 @@ function sampleViewportCartographics(viewer) {
     });
   }
   return samples;
-}
-
-function inferCountryFromSamples(samples) {
-  if (!samples.length) return null;
-  const counts = new Map();
-  for (const sample of samples) {
-    const country = inferCountry(sample.latitude, sample.longitude);
-    if (!country) continue;
-    counts.set(country, (counts.get(country) || 0) + 1);
-  }
-  if (!counts.size) return null;
-  const [country, count] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
-  return {
-    country,
-    confidence: Number((count / samples.length).toFixed(2)),
-    sampleCount: count,
-    totalSamples: samples.length,
-  };
-}
-
-function inferCountry(latitude, longitude) {
-  const regions = [
-    { name: 'Iran', south: 24.0, north: 40.2, west: 44.0, east: 63.5 },
-    { name: 'Iraq', south: 29.0, north: 37.5, west: 38.5, east: 49.0 },
-    { name: 'Turkey', south: 35.5, north: 42.5, west: 25.5, east: 45.2 },
-    { name: 'Saudi Arabia', south: 16.0, north: 32.5, west: 34.0, east: 56.5 },
-    { name: 'Afghanistan', south: 29.0, north: 38.8, west: 60.0, east: 75.5 },
-    { name: 'Pakistan', south: 23.0, north: 37.2, west: 60.5, east: 77.5 },
-    { name: 'Turkmenistan', south: 35.0, north: 42.9, west: 52.0, east: 66.8 },
-    { name: 'Azerbaijan', south: 38.3, north: 41.9, west: 44.6, east: 50.8 },
-    { name: 'Armenia', south: 38.7, north: 41.4, west: 43.4, east: 46.7 },
-    { name: 'Japan', south: 24.0, north: 46.5, west: 122.0, east: 146.5 },
-    { name: 'South Korea', south: 33.0, north: 38.8, west: 124.0, east: 132.0 },
-    { name: 'North Korea', south: 37.5, north: 43.2, west: 124.0, east: 131.0 },
-    { name: 'China', south: 18.0, north: 53.8, west: 73.0, east: 135.2 },
-    { name: 'Russia', south: 41.0, north: 82.0, west: 19.0, east: 180.0 },
-    {
-      name: 'United States',
-      south: 24.0,
-      north: 49.8,
-      west: -125.0,
-      east: -66.0,
-    },
-  ];
-  const region = regions.find(
-    (item) =>
-      latitude >= item.south &&
-      latitude <= item.north &&
-      longitude >= item.west &&
-      longitude <= item.east,
-  );
-  return region?.name || null;
 }
 
 async function reverseGeocode(latitude, longitude, service) {

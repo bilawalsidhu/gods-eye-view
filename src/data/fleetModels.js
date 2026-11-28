@@ -95,7 +95,7 @@ const TEXT_SHIP_TYPES = [
  * that matches. Beacons, lights, RACONs and reference points with no mark of
  * their own are the special mark.
  */
-const AID_MODELS = [
+export const AID_MODELS = [
   [/cardinal\b.*\bn(orth)?$/i, 'buoy_cardinal_north'],
   [/cardinal\b.*\be(ast)?$/i, 'buoy_cardinal_east'],
   [/cardinal\b.*\bs(outh)?$/i, 'buoy_cardinal_south'],
@@ -497,35 +497,6 @@ export function transitModelSpec(set, vehicle) {
     model: set.types.transit.default[0],
     length: set.types.transit.default[1],
   }));
-}
-
-/**
- * Every model the type map names, defaults and fallbacks included.
- * @param {object} types Parsed `types.json`.
- * @returns {Set<string>}
- */
-export function namedFleetModels(types) {
-  const pairs = (map) => Object.values(map).map(([model]) => model);
-  const transit = types.transit;
-  return new Set([
-    ...pairs(types.aircraft),
-    ...pairs(types.helicopters),
-    ...pairs(types.categories),
-    ...Object.values(types.aircraft_callsign ?? {}).flatMap((rules) =>
-      rules.map((rule) => rule.model),
-    ),
-    ...types.vessels.flatMap((group) => group.rules.map((rule) => rule.model)),
-    types.default_aircraft[0],
-    types.default_vessel,
-    ...pairs(transit.modes),
-    ...pairs(transit.route_types),
-    ...Object.values(transit.rail).flatMap(pairs),
-    transit.default[0],
-    ...Object.keys(transit.elevation),
-    ...Object.values(CLASS_MODELS),
-    ...AID_MODELS.map(([, model]) => model),
-    DEFAULT_AID_MODEL,
-  ]);
 }
 
 /** Each loaded set's part tables by model name (null for a model without one). */

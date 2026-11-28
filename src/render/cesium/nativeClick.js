@@ -6,12 +6,10 @@
  * made at most once per click, and a hit on the follow's helper entity is a
  * hit on its target (`pickThroughFollowHelper`).
  *
- * Also the raw forms of the shared pick-id and contact rules
- * (`src/data/pickRegistry.js`, which reads the contract's `Hit`), for code
- * that still holds a Cesium pick.
+ * Also the raw form of the shared pick-id rule, for code that still holds a
+ * Cesium pick.
  */
 import * as Cesium from 'cesium';
-import { findPickOwner } from '../../data/pickRegistry.js';
 import { isSurfacePick } from '../../data/scenePick.js';
 import { provideNativeClick } from '../rendererOf.js';
 import { drawHitOf } from './drawHit.js';
@@ -44,39 +42,6 @@ export function nativePickId(picked) {
   let id = unwrap(picked.id);
   if (id === undefined) id = unwrap(picked.primitive?.id);
   return typeof id === 'string' || typeof id === 'number' ? String(id) : null;
-}
-
-/**
- * `pickContact` (`src/data/pickRegistry.js`) over Cesium's own picks: on a
- * coarse pointer, the first registered contact under a surface pick.
- * @param {object} scene
- * @param {{x: number, y: number}} position
- * @param {{picked?: object|null, drill?: (limit: number, width: number, height: number) => object[]}} [options]
- * @returns {object|null|undefined}
- */
-export function nativePickContact(scene, position, options = {}) {
-  const picked = 'picked' in options ? options.picked : scene.pick(position);
-  if (
-    !globalThis.matchMedia?.('(pointer: coarse)').matches ||
-    findPickOwner(nativePickId(picked)) ||
-    !isSurfacePick(picked) ||
-    typeof scene.drillPick !== 'function'
-  )
-    return picked;
-  let hits;
-  try {
-    hits =
-      (options.drill
-        ? options.drill(8, 14, 14)
-        : scene.drillPick(position, 8, 14, 14)) || [];
-  } catch {
-    return picked;
-  }
-  for (const hit of hits.slice(0, 8)) {
-    if (findPickOwner(nativePickId(hit))) return hit;
-    if (!isSurfacePick(hit)) break;
-  }
-  return picked;
 }
 
 /**

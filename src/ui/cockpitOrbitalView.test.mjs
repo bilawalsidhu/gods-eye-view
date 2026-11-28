@@ -18,7 +18,6 @@ import {
   ORBITAL_SETTLE_BLUR_PX,
   ORBITAL_SETTLE_MAX_MS,
   ORBITAL_ZOOM_TRANSITION_MS,
-  cesiumFrustumFovRad,
   fovForZoom,
   orbitalBaseFovRad,
 } from '../cockpitOrbital.js';
@@ -336,6 +335,10 @@ const satellitePosition = (subject = ISS) =>
     subject.latitude,
     subject.altitudeM,
   );
+
+// Cesium's frustum.fov: horizontal on a landscape canvas.
+const cesiumFrustumFovRad = (vertical, aspect) =>
+  aspect > 1 ? 2 * Math.atan(Math.tan(vertical / 2) * aspect) : vertical;
 
 /** The field of view Cesium should hold at a zoom, as `frustum.fov`. */
 const frustumFovAt = (zoom, altitudeM = ISS.altitudeM) =>

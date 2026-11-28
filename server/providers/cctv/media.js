@@ -226,11 +226,7 @@ export async function proxyMediaResponse(
       'Cache-Control': 'no-store',
     });
     res.end(JSON.stringify({ error: 'Upstream media exceeds size cap' }));
-    try {
-      await upstream.body?.cancel();
-    } catch {
-      /* no-op */
-    }
+    await upstream.body?.cancel().catch(() => {});
     return;
   }
 
@@ -346,11 +342,7 @@ export function watchDownstreamClose(res) {
 async function readCappedResponseBytes(upstream, maxBytes) {
   const declared = Number(upstream.headers.get('content-length'));
   if (Number.isFinite(declared) && declared > maxBytes) {
-    try {
-      await upstream.body?.cancel();
-    } catch {
-      /* no-op */
-    }
+    await upstream.body?.cancel().catch(() => {});
     return null;
   }
   if (!upstream.body) return null;
@@ -368,11 +360,7 @@ async function readCappedResponseBytes(upstream, maxBytes) {
   if (typeof upstream.body[Symbol.asyncIterator] === 'function') {
     for await (const chunk of upstream.body) {
       if (!keep(chunk)) {
-        try {
-          await upstream.body.cancel();
-        } catch {
-          /* no-op */
-        }
+        await upstream.body.cancel().catch(() => {});
         return null;
       }
     }
@@ -586,11 +574,7 @@ export async function fetchWithinHost(url, init, fetchImpl = fetch) {
     const status = Number(upstream?.status);
     if (!(status >= 300 && status < 400)) return upstream;
     const location = upstream.headers.get('location');
-    try {
-      await upstream.body?.cancel();
-    } catch {
-      /* no-op */
-    }
+    await upstream.body?.cancel().catch(() => {});
     if (!location || hop === MAX_SAME_HOST_REDIRECTS) return null;
     let next;
     try {
@@ -632,7 +616,7 @@ export function cctvUpstreamUserAgent(url) {
 }
 
 /** Largest single JPEG the MJPEG first-frame reader will buffer. */
-export const CCTV_MJPEG_FRAME_MAX_BYTES = 2 * 1024 * 1024;
+const CCTV_MJPEG_FRAME_MAX_BYTES = 2 * 1024 * 1024;
 
 /**
  * Read one bounded JPEG part from an open MJPEG response, then stop the stream.
@@ -658,11 +642,7 @@ async function readFirstMjpegFrame(upstream, maxBytes) {
     !Number.isSafeInteger(frameMax) ||
     frameMax < 4
   ) {
-    try {
-      await upstream.body?.cancel();
-    } catch {
-      /* no-op */
-    }
+    await upstream.body?.cancel().catch(() => {});
     return null;
   }
 
@@ -886,11 +866,7 @@ export async function fetchCctvImageFromUpstream(
     );
     if (!upstream) return null;
     if (!upstream.ok) {
-      try {
-        await upstream.body?.cancel();
-      } catch {
-        /* no-op */
-      }
+      await upstream.body?.cancel().catch(() => {});
       return null;
     }
     const upstreamType = upstream.headers.get('content-type');
@@ -901,11 +877,7 @@ export async function fetchCctvImageFromUpstream(
       return { ok: true, body, contentType };
     }
     if (!allowMjpeg || !cctvLiveMediaType('mjpeg', upstreamType)) {
-      try {
-        await upstream.body?.cancel();
-      } catch {
-        /* no-op */
-      }
+      await upstream.body?.cancel().catch(() => {});
       return null;
     }
     const body = await readFirstMjpegFrame(upstream, maxBytes);

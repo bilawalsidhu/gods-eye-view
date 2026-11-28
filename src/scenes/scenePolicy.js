@@ -41,35 +41,6 @@ export const SCENE_TRACKING_PARAM_KEYS = Object.freeze([
 ]);
 
 /**
- * Selection params that look like the ones above and are deliberately KEPT.
- *
- * `selectedCameraId` (cctv) activates a camera and raises its monitor plane.
- * It never writes viewer.trackedEntity or moves the camera — only the separate
- * `focusSelected` option does that — so it is composition the operator meant
- * to capture, not a second writer on the camera. The vessels layer exposes no
- * getParams() surface at all, so its selection cannot be captured today.
- *
- * The list exists so the decision is RECORDED rather than implied by absence:
- * scenePolicy.test.mjs sweeps every layer's getParams() for the selection
- * naming family and requires each match to appear on this list or the one
- * above. A future param named `trackedVesselMmsi` therefore cannot slip
- * through merely by not matching the older `selected…TrackingId` spelling.
- * @constant {ReadonlyArray<string>}
- */
-export const SCENE_KEPT_SELECTION_PARAM_KEYS = Object.freeze([
-  'selectedCameraId',
-]);
-
-/**
- * Names belonging to the selection/tracking family, whatever their spelling.
- * Deliberately wider than the three params that exist today — the sweep's job
- * is to force a decision about a NEW name, not to recognise the current ones.
- * @constant {RegExp}
- */
-export const SCENE_SELECTION_PARAM_PATTERN =
-  /^(?:selected|tracked)[A-Z0-9]|TrackingId$|(?:Mmsi|Norad|Icao|Callsign)$/;
-
-/**
  * Drop every camera-tracking key from one shot's layer params.
  *
  * @param {Object|undefined} params Params as stored on the shot.

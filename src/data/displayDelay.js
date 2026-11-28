@@ -26,7 +26,7 @@
  */
 
 /** @constant {number} Percentile of the recent lags the delay covers. */
-export const DISPLAY_DELAY_RANK = 0.9;
+const DISPLAY_DELAY_RANK = 0.9;
 /** @constant {number} How many recent lags the percentile is taken over. */
 export const DISPLAY_DELAY_LAGS = 256;
 /** @constant {number} Lags before they, rather than first reports, set the aim. */
@@ -42,7 +42,7 @@ export const DISPLAY_DELAY_FALL = 0.05;
 /** @constant {number} An aim this close (ms) to the delay leaves it be. */
 export const DISPLAY_DELAY_DEADBAND_MS = 2_000;
 /** @constant {number} Poll intervals between deliveries past which a delivery gives no lags. */
-export const DISPLAY_DELAY_GAP_POLLS = 3;
+const DISPLAY_DELAY_GAP_POLLS = 3;
 
 function createWindow(capacity) {
   return { values: new Float64Array(capacity), count: 0, cursor: 0 };

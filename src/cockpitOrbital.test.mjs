@@ -6,7 +6,6 @@ import {
   ORBITAL_EARTH_RADIUS_M,
   ORBITAL_SETTLE_MAX_MS,
   ORBITAL_WHEEL_COOLDOWN_MS,
-  cesiumFrustumFovRad,
   earthAngularRadiusRad,
   footprintWidthKm,
   fovForZoom,
@@ -33,7 +32,6 @@ import {
   ORBITAL_PREFETCH_ACROSS,
   ORBITAL_PREFETCH_LEAD_S,
   ORBITAL_PREFETCH_MAX_TILES,
-  destinationPoint,
   groundTrackAhead,
   imageryLevelForView,
   tilesForPoints,
@@ -188,15 +186,6 @@ test('the footprint shrinks with zoom and stops at the limb', () => {
   assert.ok(Math.abs(footprintWidthKm(35.786e6, 40 * RAD) - cap) < 1e-6);
   assert.equal(footprintWidthKm(0, 1), null);
   assert.equal(footprintWidthKm(420e3, NaN), null);
-});
-
-test('Cesium frustum fov widens to the horizontal on a landscape canvas', () => {
-  const vertical = 30 * RAD;
-  assert.equal(cesiumFrustumFovRad(vertical, 0.75), vertical);
-  const horizontal = cesiumFrustumFovRad(vertical, 2);
-  assert.ok(
-    Math.abs(Math.tan(horizontal / 2) - 2 * Math.tan(vertical / 2)) < 1e-12,
-  );
 });
 
 test('zoom transition curves stay bounded and settle', () => {
@@ -438,15 +427,6 @@ const PASS = Object.freeze({
   groundTrackDeg: 45,
   velocityMps: 7_600,
   altitudeM: 500_000,
-});
-
-test('destinationPoint walks a great circle along a bearing', () => {
-  const east = destinationPoint(0, 179.9, 90, 111_195 * 0.2);
-  assert.ok(Math.abs(east.lat) < 1e-9);
-  assert.ok(Math.abs(east.lon - -179.9) < 1e-3, 'wraps the antimeridian');
-  const north = destinationPoint(10, 20, 0, 50_000);
-  assert.ok(Math.abs(greatCircleKm({ lat: 10, lon: 20 }, north) - 50) < 0.1);
-  assert.ok(north.lat > 10 && Math.abs(north.lon - 20) < 1e-9);
 });
 
 test('the points ahead run along the ground track at ground speed', () => {

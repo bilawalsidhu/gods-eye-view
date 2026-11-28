@@ -3,6 +3,7 @@
  * mapped to plain analyst records. Pure — no Cesium.
  * @module layers/osmPlaces/model
  */
+import { approxDistanceM } from '../../data/approxDistance.js';
 
 export const OSM_PLACES_LAYER_ID = 'osm-places';
 /** A node and a way/relation of the same name this close are one site mapped twice. */
@@ -34,13 +35,6 @@ function text(value) {
         .slice(0, MAX_TEXT - 1)
         .join('')
         .trimEnd()}…`;
-}
-
-function distanceM(a, b) {
-  const toRad = Math.PI / 180;
-  const x = (b.lon - a.lon) * toRad * Math.cos(((a.lat + b.lat) / 2) * toRad);
-  const y = (b.lat - a.lat) * toRad;
-  return Math.hypot(x, y) * 6_371_000;
 }
 
 /**
@@ -102,7 +96,7 @@ export function dedupeOsmRecords(records) {
           other.osmType &&
           (other.osmType === 'node') !== isNode &&
           other.name?.toLowerCase() === name &&
-          distanceM(other, record) <= SAME_SITE_M,
+          approxDistanceM(other, record) <= SAME_SITE_M,
       );
     if (sameSite) merged += 1;
     else kept.push(record);

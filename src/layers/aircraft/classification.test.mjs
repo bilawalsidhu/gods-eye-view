@@ -2,13 +2,20 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMilitaryRegistry } from './classification.js';
 
+/** A military source whose identities `getIdentities` answers; classification
+ *  never reads its position snapshots. */
+const identitySource = (getIdentities) => ({
+  getSnapshot() {
+    assert.fail('classification reads identities, not position snapshots');
+  },
+  getIdentities,
+});
+
 test('classification instances have independent identities, listeners and active states', () => {
   let requests = 0;
-  const source = {
-    getSnapshot() {
-      requests++;
-    },
-  };
+  const source = identitySource(() => {
+    requests++;
+  });
   const first = createMilitaryRegistry({ source });
   const second = createMilitaryRegistry({ source });
   let firstEvents = 0;
@@ -32,12 +39,10 @@ test('classification uses normalized identities and respects its polling interva
   let calls = 0;
   const registry = createMilitaryRegistry({
     now: () => time,
-    source: {
-      async getSnapshot() {
-        calls++;
-        return { records: [{ id: 'abc123' }] };
-      },
-    },
+    source: identitySource(async () => {
+      calls++;
+      return ['abc123'];
+    }),
   });
   await registry.refreshMilitaryRegistryIfStale();
   await registry.refreshMilitaryRegistryIfStale();
@@ -59,33 +64,29 @@ test('source replacement rejects an old response and disposal cancels the curren
   let oldSignal;
   let newSignal;
   const registry = createMilitaryRegistry({
-    source: {
-      getSnapshot(query, { signal }) {
-        oldSignal = signal;
-        return new Promise((resolve) => {
-          resolveOld = resolve;
-        });
-      },
-    },
+    source: identitySource((query, { signal }) => {
+      oldSignal = signal;
+      return new Promise((resolve) => {
+        resolveOld = resolve;
+      });
+    }),
   });
   const old = registry.refreshMilitaryRegistryIfStale();
   const application = new AbortController();
   registry.configureSource(
-    {
-      getSnapshot(query, { signal }) {
-        newSignal = signal;
-        return new Promise((resolve) => {
-          resolveNew = resolve;
-        });
-      },
-    },
+    identitySource((query, { signal }) => {
+      newSignal = signal;
+      return new Promise((resolve) => {
+        resolveNew = resolve;
+      });
+    }),
     { signal: application.signal },
   );
   const current = registry.refreshMilitaryRegistryIfStale();
-  resolveOld({ records: [{ id: 'abc123' }] });
+  resolveOld(['abc123']);
   await old;
   application.abort();
-  resolveNew({ records: [{ id: 'def456' }] });
+  resolveNew(['def456']);
   await current;
   assert.equal(oldSignal.aborted, true);
   assert.equal(newSignal.aborted, true);
@@ -99,12 +100,10 @@ test('a failed classification source preserves known identities and makes no fal
   let calls = 0;
   const registry = createMilitaryRegistry({
     now: () => time,
-    source: {
-      async getSnapshot() {
-        calls++;
-        throw new Error('fixture source unavailable');
-      },
-    },
+    source: identitySource(async () => {
+      calls++;
+      throw new Error('fixture source unavailable');
+    }),
   });
   registry.registerMilitaryIcaos(['abc123']);
   time += 60000;
@@ -120,22 +119,4 @@ test('disposing a registry fed directly by its layer also clears classification'
   registry.registerMilitaryIcaos(['abc123']);
   registry.dispose();
   assert.equal(registry.isMilitaryIcao('abc123'), false);
-});
-
-test('classification prefers an explicit identity capability over positioned observations', async () => {
-  const registry = createMilitaryRegistry({
-    source: {
-      getSnapshot() {
-        assert.fail(
-          'position snapshots must not replace an available identity capability',
-        );
-      },
-      async getIdentities() {
-        return ['abc123'];
-      },
-    },
-  });
-  await registry.refreshMilitaryRegistryIfStale();
-  assert.equal(registry.isMilitaryIcao('abc123'), true);
-  registry.dispose();
 });

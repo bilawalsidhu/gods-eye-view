@@ -5,6 +5,7 @@
 
 import { createView, viewUrl } from '../view/index.js';
 import { areaCenter, areaRadiusKm } from './area.js';
+import { EARTH_RADIUS_KM } from '../geoDistance.js';
 
 const MIN_ALTITUDE_M = 500;
 const MAX_ALTITUDE_M = 15_000_000;
@@ -28,7 +29,7 @@ export function cameraForArea(area) {
   };
 }
 
-const EARTH_RADIUS_M = 6_371_008.8;
+const EARTH_RADIUS_M = EARTH_RADIUS_KM * 1000;
 
 /**
  * The camera position for looking at a point from `altitudeM` with a heading

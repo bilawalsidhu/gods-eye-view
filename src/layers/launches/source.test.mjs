@@ -46,7 +46,7 @@ test('launch factories construct independently without starting a scene or sourc
   const services = { satellites: {}, geometry: {}, overlays: {}, render: {} };
   const first = createRocketLaunchesLayer({ source, services });
   const second = createRocketLaunchesLayer({ source, services });
-  first._setSelectedRocketMissionForTest('first');
+  first.testing._setSelectedRocketMissionForTest('first');
   assert.notEqual(first, second);
   assert.equal(first.getStats().count, 0);
   assert.equal(second.getStats().count, 0);

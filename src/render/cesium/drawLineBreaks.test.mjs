@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import test, { after } from 'node:test';
 import { createCesiumDraw } from './draw.js';
+import { fakeDrawScene } from '../../testSupport/fakeDrawScene.mjs';
 
 // Node has no WebGL context to report line-width limits.
 Cesium.ContextLimits._minimumAliasedLineWidth = 1;
@@ -21,33 +22,9 @@ after(() =>
   IMAGE_CLASSES.forEach((name, i) => (globalThis[name] = realClasses[i])),
 );
 
-/** A scene with what a line set touches: primitives, its events and its time. */
-function fakeScene(ms = Date.UTC(2026, 0, 1)) {
-  const added = [];
-  return {
-    added,
-    postRender: new Cesium.Event(),
-    preRender: new Cesium.Event(),
-    camera: { positionWC: new Cesium.Cartesian3(2e7, 0, 0) },
-    frameState: {
-      mode: Cesium.SceneMode.SCENE3D,
-      time: Cesium.JulianDate.fromDate(new Date(ms)),
-    },
-    updateHeight: () => () => {},
-    getHeight: () => undefined,
-    primitives: {
-      add: (primitive) => (added.push(primitive), primitive),
-      remove: (primitive) => {
-        const at = added.indexOf(primitive);
-        if (at >= 0) added.splice(at, 1);
-        return at >= 0;
-      },
-      length: 0,
-    },
-    requestRender() {},
-    isDestroyed: () => false,
-  };
-}
+/** A line set's scene at a scene time. */
+const fakeScene = (ms = Date.UTC(2026, 0, 1)) =>
+  fakeDrawScene({ timeMs: ms, mode: Cesium.SceneMode.SCENE3D, events: true });
 
 const T0 = Date.UTC(2026, 0, 1);
 

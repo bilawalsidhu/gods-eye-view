@@ -411,7 +411,7 @@ export function entityKind(layerId, record) {
 }
 
 /** Latitude and longitude of a record, whichever names it uses. */
-export function recordPosition(record) {
+function recordPosition(record) {
   const lat = finite(record?.lat ?? record?.latitude);
   const lon = finite(record?.lon ?? record?.longitude);
   return lat === null || lon === null ? null : { lat, lon };
@@ -1083,14 +1083,6 @@ function storeRecord(identity, { exact = false } = {}) {
   return null;
 }
 
-/**
- * The card for one item.
- * @param {object} dataManager
- * @param {{layerId: string, id?: string, label?: string, lat?: number|null, lon?: number|null, record?: object}} identity
- * @param {object} [options]
- * @param {number} [options.nowMs]
- * @returns {object|null} `{key, layerId, layerName, kind, icon, moving, title, lat, lon, facts, observedAgeMs, links, source}`
- */
 /** What a transponder code means when it is one of the emergency codes. */
 const EMERGENCY_SQUAWKS = Object.freeze({
   7500: msg('Hijack (squawk 7500)'),
@@ -1130,17 +1122,6 @@ function warningEntries(record) {
       found.push({ value, words: null });
   }
   return found;
-}
-
-/**
- * Warnings a record carries, most serious first: an aircraft emergency or
- * emergency squawk, a tsunami flag, or a layer's own alert text. These lead
- * the card, ahead of any facts.
- * @param {?object} record
- * @returns {string[]} In English; cards and alerts also carry their words.
- */
-export function recordWarnings(record) {
-  return warningEntries(record).map((entry) => entry.value);
 }
 
 /** What a routine transponder code says, for the codes with a meaning. */
@@ -1267,6 +1248,14 @@ function cardPhoto(dataManager, layerId, record) {
   };
 }
 
+/**
+ * The card for one item.
+ * @param {object} dataManager
+ * @param {{layerId: string, id?: string, label?: string, lat?: number|null, lon?: number|null, record?: object}} identity
+ * @param {object} [options]
+ * @param {number} [options.nowMs]
+ * @returns {object|null} `{key, layerId, layerName, kind, icon, moving, title, lat, lon, facts, observedAgeMs, links, source}`
+ */
 export function describeEntity(
   dataManager,
   identity,
@@ -1967,7 +1956,7 @@ export function layerBreakdown(dataManager, layerId, { rect = null } = {}) {
  * @param {string} [layerLabel]
  * @returns {boolean}
  */
-export function recordMatches(record, needle, layerLabel = '') {
+function recordMatches(record, needle, layerLabel = '') {
   if (!needle) return true;
   if (text(layerLabel).toLowerCase().includes(needle)) return true;
   for (const value of Object.values(record || {})) {

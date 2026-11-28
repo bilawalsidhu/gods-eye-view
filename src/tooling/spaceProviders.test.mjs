@@ -4,14 +4,11 @@ import { promises as fsp } from 'node:fs';
 import {
   celestrakProxy,
   rocketLaunchesProxy,
-  launchLibraryRequestHeaders,
-  LL2_CACHE_TTL_MS,
 } from 'gods-eye-view/server/providers/space';
 import {
   celestrakTleUrl,
   launchLibraryRecentUrl,
 } from 'gods-eye-view/sources/space';
-import * as compatibility from '../../server/providers/local.js';
 import { createLaunchSource } from 'gods-eye-view/layers/launches/source';
 
 function install(plugin, preview = false) {
@@ -95,14 +92,6 @@ test('portable requests keep fixed origins, encode group data and preserve the 3
     mode: 'detailed',
   });
   assert.equal(end.toISOString(), '2026-03-01T12:34:56.000Z');
-});
-
-test('compatibility exports retain the same LL2 header helper and TTL', () => {
-  assert.equal(
-    compatibility.launchLibraryRequestHeaders,
-    launchLibraryRequestHeaders,
-  );
-  assert.equal(compatibility.LL2_CACHE_TTL_MS, LL2_CACHE_TTL_MS);
 });
 
 test('exported CelesTrak plugin coalesces refreshes, retains stale TLEs, and reads disk in a new instance', async (t) => {

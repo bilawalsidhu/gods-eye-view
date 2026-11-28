@@ -16,7 +16,7 @@ import {
   layerSourceText,
 } from './layerNames.js';
 export { localizeLayerName } from './layerNames.js';
-import { createWeatherPanel } from './weatherPanel.js';
+import { WEATHER_PANEL_LAYER_IDS, createWeatherPanel } from './weatherPanel.js';
 import { createNewsPanel } from './newsPanel.js';
 import { watchDisplayed } from './displayWatch.js';
 import { onPanelOpening } from './rail/panelContent.js';
@@ -89,14 +89,7 @@ const PANEL_GROUPS = [
   },
   {
     label: msg('Weather'),
-    ids: [
-      'air-quality',
-      'wind',
-      'weather-radar',
-      'weather-satellite',
-      'weather-lightning',
-      'weather-cyclones',
-    ],
+    ids: [...WEATHER_PANEL_LAYER_IDS],
   },
   // Directions renders in the Utilities panel, beside Draw and Import, and
   // needs no heading there.

@@ -303,7 +303,7 @@ async function main() {
           body: JSON.stringify({
             rows: [],
             source: 'AISStream QA',
-            status: 'open',
+            status: 'live',
             error: null,
             refreshing: false,
             newestPositionAt: null,

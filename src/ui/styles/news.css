@@ -136,17 +136,6 @@
   align-self: flex-start;
   font-family: var(--font-mono);
 }
-.news-toggle {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--text-secondary);
-  font-size: 10px;
-  cursor: pointer;
-}
-.news-toggle input {
-  accent-color: var(--accent);
-}
 .news-readout__section {
   display: flex;
   flex-direction: column;

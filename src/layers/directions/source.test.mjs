@@ -4,20 +4,20 @@ import { createDirectionsSource } from './source.js';
 
 const query = { mode: 'foot', a: { lon: 1, lat: 2 }, b: { lon: 3, lat: 4 } };
 
-test('route acquisition uses only the supplied transport and endpoint', async () => {
+test('route acquisition uses only the supplied transport', async () => {
   const controller = new AbortController();
   const payload = { ok: true, geometry: [[1, 2], [3, 4]] };
   const calls = [];
   const source = createDirectionsSource({
-    endpoint: 'https://routes.example/route',
     fetchImpl: async (...args) => { calls.push(args); return Response.json(payload); },
   });
   assert.deepEqual(await source.getRoute(query, { signal: controller.signal }), payload);
   assert.equal(calls.length, 1);
   const [url, init] = calls[0];
-  assert.equal(new URL(url).origin, 'https://routes.example');
-  assert.equal(new URL(url).searchParams.get('coords'), '1.000000,2.000000;3.000000,4.000000');
-  assert.equal(new URL(url).searchParams.get('profile'), 'foot');
+  const parsed = new URL(url, 'http://localhost');
+  assert.equal(parsed.pathname, '/api/route');
+  assert.equal(parsed.searchParams.get('coords'), '1.000000,2.000000;3.000000,4.000000');
+  assert.equal(parsed.searchParams.get('profile'), 'foot');
   assert.equal(init.signal, controller.signal);
   assert.equal(init.headers.Accept, 'application/json');
 });

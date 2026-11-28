@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  decodeCoverageTile,
   decodeCoverageTileSliced,
   decodePictures,
   simplifyLine,
@@ -11,7 +10,7 @@ import { tileCentre } from '../../../../testSupport/streetLevelFakes.mjs';
 
 const near = (a, b, eps = 1e-4) => Math.abs(a - b) < eps;
 
-test('sequence lines keep their parts apart, with their day and camera type', () => {
+test('sequence lines keep their parts apart, with their day and camera type', async () => {
   const { tile, lon, lat } = tileCentre(2.35, 48.85);
   const bytes = encodePanoramaxTile(tile, {
     sequences: [
@@ -41,7 +40,7 @@ test('sequence lines keep their parts apart, with their day and camera type', ()
       },
     ],
   });
-  const { sequences } = decodeCoverageTile(bytes, tile);
+  const { sequences } = await decodeCoverageTileSliced(bytes, tile);
   assert.equal(sequences.length, 2);
   const pano = sequences.find((s) => s.id === 'pano-seq');
   const flat = sequences.find((s) => s.id === 'flat-seq');
@@ -50,36 +49,38 @@ test('sequence lines keep their parts apart, with their day and camera type', ()
   assert.equal(pano.parts.length, 2, 'the gap is not bridged');
   assert.ok(near(pano.parts[1][1][0], lon + 0.001));
   assert.equal(flat.isPano, false);
-  const untyped = decodeCoverageTile(
-    encodePanoramaxTile(tile, {
-      sequences: [
-        {
-          id: 'u',
-          type: '',
-          parts: [
-            [
-              [lon, lat],
-              [lon + 0.001, lat],
+  const untyped = (
+    await decodeCoverageTileSliced(
+      encodePanoramaxTile(tile, {
+        sequences: [
+          {
+            id: 'u',
+            type: '',
+            parts: [
+              [
+                [lon, lat],
+                [lon + 0.001, lat],
+              ],
             ],
-          ],
-        },
-      ],
-    }),
-    tile,
+          },
+        ],
+      }),
+      tile,
+    )
   ).sequences[0];
   assert.equal(untyped.isPano, null, 'no camera type: neither');
 });
 
-test('the density grid is not read: nothing is drawn from orbit', () => {
+test('the density grid is not read: nothing is drawn from orbit', async () => {
   const tile = { x: 0, y: 0, z: 0 };
   const grid = [{ lon: 2.35, lat: 48.85, pano: 3, flat: 5 }];
   assert.deepEqual(
-    decodeCoverageTile(encodePanoramaxTile(tile, { grid }), tile),
+    await decodeCoverageTileSliced(encodePanoramaxTile(tile, { grid }), tile),
     { sequences: [] },
   );
 });
 
-test('lines come longest first, so a cap on lines drawn drops the shortest', () => {
+test('lines come longest first, so a cap on lines drawn drops the shortest', async () => {
   const { tile, lon, lat } = tileCentre(2.35, 48.85);
   const span = (id, metres) => ({
     id,
@@ -90,7 +91,7 @@ test('lines come longest first, so a cap on lines drawn drops the shortest', () 
       ],
     ],
   });
-  const { sequences } = decodeCoverageTile(
+  const { sequences } = await decodeCoverageTileSliced(
     encodePanoramaxTile(tile, {
       sequences: [span('short', 20), span('long', 900), span('mid', 300)],
     }),
@@ -134,7 +135,10 @@ test('a sliced decode gives the page turns and decodes the same as one in one go
     },
   });
   assert.ok(pauses > 20, `${pauses} turns`);
-  assert.deepEqual(sliced, decodeCoverageTile(bytes, tile));
+  assert.deepEqual(
+    sliced,
+    await decodeCoverageTileSliced(bytes, tile, { sliceMs: Infinity }),
+  );
 });
 
 test('a sliced decode stops at the next turn once aborted', async () => {
@@ -167,11 +171,14 @@ test('a fast sliced decode takes no turns', async () => {
   assert.equal(pauses, 0);
 });
 
-test('an empty tile decodes to nothing', () => {
+test('an empty tile decodes to nothing', async () => {
   for (const bytes of [new Uint8Array(0), null, undefined])
-    assert.deepEqual(decodeCoverageTile(bytes, { x: 0, y: 0, z: 0 }), {
-      sequences: [],
-    });
+    assert.deepEqual(
+      await decodeCoverageTileSliced(bytes, { x: 0, y: 0, z: 0 }),
+      {
+        sequences: [],
+      },
+    );
   assert.deepEqual(
     decodePictures(new Uint8Array(0), { x: 0, y: 0, z: 15 }, 's'),
     [],
@@ -257,15 +264,17 @@ test('lines are simplified within a few tile units, ends and corners kept', () =
   assert.deepEqual(simplifyLine(deadEnd, 4), deadEnd);
 });
 
-test('a decoded GPS track keeps a fraction of its points', () => {
+test('a decoded GPS track keeps a fraction of its points', async () => {
   const { tile, lon, lat } = tileCentre(2.35, 48.85);
   const track = Array.from({ length: 500 }, (_, i) => [
     lon - 0.004 + i * 0.000016,
     lat + Math.sin(i / 40) * 0.0004,
   ]);
-  const [sequence] = decodeCoverageTile(
-    encodePanoramaxTile(tile, { sequences: [{ id: 'gps', parts: [track] }] }),
-    tile,
+  const [sequence] = (
+    await decodeCoverageTileSliced(
+      encodePanoramaxTile(tile, { sequences: [{ id: 'gps', parts: [track] }] }),
+      tile,
+    )
   ).sequences;
   assert.ok(
     sequence.parts[0].length < 100,

@@ -1,5 +1,5 @@
-// The CCTV "ACQUIRING FRAME" caption lives in CSS `content:` and the
-// i18n scanner (scripts/i18n.mjs) never reads CSS, so es/ru show it in English.
+// The i18n scanner (scripts/i18n.mjs) never reads CSS, so text in a CSS
+// `content:` would show in English in every locale: user-visible text stays out.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -8,7 +8,6 @@ import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const STYLES = path.join(HERE, 'styles');
-const LOCALES = path.join(HERE, '..', 'i18n', 'locales');
 // street-level.css ' · ESC' is a key cap, not UI copy.
 const DECORATIVE = new Set(['street-level.css']);
 
@@ -23,11 +22,4 @@ test('no user-visible text in CSS content: outside decorative themes', () => {
     });
   }
   assert.deepEqual(hits, []);
-});
-
-test('the CCTV acquisition caption has es and ru translations', () => {
-  for (const lang of ['es', 'ru']) {
-    const dict = JSON.parse(readFileSync(path.join(LOCALES, `${lang}.json`), 'utf8'));
-    assert.ok('ACQUIRING FRAME' in dict, `${lang}.json lacks "ACQUIRING FRAME"`);
-  }
 });

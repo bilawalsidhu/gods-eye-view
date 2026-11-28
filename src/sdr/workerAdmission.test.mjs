@@ -9,7 +9,6 @@ const ADMISSION = {
   maxBytes: 4 * 64,
   maxAgeMs: 60,
   watchdogMs: 10,
-  reportMs: 20,
   readyTimeoutMs: 150,
 };
 
@@ -143,6 +142,18 @@ test('a decoder that falls behind stops the receiver at the block bound', async 
   assert.equal(worker.blocks.length, posted, 'nothing posted after overload');
 });
 
+test('an overload freezes one snapshot of the counts before pending work is cleared', async (t) => {
+  installWorker(t, { ack: 'manual' });
+  const { controller } = streaming(t);
+  await until(() => controller.getState().status === 'error');
+  const snapshot = controller.getState().decoderOverloadSnapshot;
+  assert.equal(snapshot.reason, 'backlog');
+  assert.equal(snapshot.pendingBlocks, ADMISSION.maxBlocks);
+  assert.equal(snapshot.pendingBytes, ADMISSION.maxBytes);
+  assert.ok(Number.isFinite(snapshot.inflightReads));
+  assert.equal(controller._pendingBlocks.size, 0, 'cleared after the snapshot');
+});
+
 test('a hung decoder is stopped by age even when no further USB block arrives', async (t) => {
   const workers = installWorker(t, { ack: 'manual' });
   const { controller } = streaming(t, { reads: 2 });
@@ -150,21 +161,6 @@ test('a hung decoder is stopped by age even when no further USB block arrives', 
   await until(() => controller.getState().status === 'error', 1_000);
   assert.equal(controller.getState().decoderOverload, 'stalled');
   assert.equal(workers[0].terminated, true);
-});
-
-test('pending diagnostics are published at low frequency, not per ack', async (t) => {
-  const workers = installWorker(t);
-  const { controller } = streaming(t, { reads: 30 });
-  let reports = 0;
-  controller.subscribe((state) => {
-    if ('decoderPendingBlocks' in state) reports += 1;
-  });
-  await until(() => workers[0]?.blocks.length >= 30);
-  const state = controller.getState();
-  assert.ok(Number.isFinite(state.decoderPendingBlocks));
-  assert.ok(Number.isFinite(state.decoderPendingBytes));
-  assert.ok(Number.isFinite(state.decoderOldestPendingMs));
-  assert.ok(reports < workers[0].blocks.length, 'fewer reports than acks');
 });
 
 test('duplicate, unknown and stale acknowledgements change nothing', async (t) => {
@@ -248,6 +244,81 @@ test('audio reaches the player only for the live FM session and current tune', a
   controller._setState({ mode: 'fm' });
   worker.emit({ type: 'fm', samples: new Float32Array(0), tune: 3 });
   assert.equal(samples().length, 2, 'empty audio is not forwarded');
+});
+
+test('FM SNR and levels publish at most every 250 ms, while audio and spectrum stay immediate', async (t) => {
+  const workers = installWorker(t);
+  const { controller, audio } = streaming(t, { reads: 1 });
+  await until(() => workers[0]?.blocks.length === 1);
+  const worker = workers[0];
+  const tune = controller._fmTune;
+  // subscribe() reports the full state now and on every change, so count
+  // actual changes of the published SNR value.
+  let snrUpdates = 0;
+  let lastSnr;
+  let first = true;
+  controller.subscribe((state) => {
+    if (first) {
+      first = false;
+      lastSnr = state.snr;
+      return;
+    }
+    if (state.snr !== lastSnr) {
+      snrUpdates += 1;
+      lastSnr = state.snr;
+    }
+  });
+  const spectrumBefore = controller._spectrumSequence;
+  for (let index = 0; index < 20; index += 1) {
+    worker.emit({
+      type: 'fm',
+      tune,
+      snr: index,
+      samples: new Float32Array(4),
+      bins: new Float32Array(16),
+      diagnostics:
+        index === 7
+          ? { workerBlocks: 700, iqLevelDbfs: -9, audioLevelDbfs: -12 }
+          : null,
+    });
+  }
+  const forwarded = audio.filter((m) => m.type === 'samples').length;
+  assert.equal(forwarded, 20, 'every block of audio forwarded immediately');
+  assert.equal(
+    controller._spectrumSequence - spectrumBefore,
+    20,
+    'spectrum immediate',
+  );
+  assert.equal(snrUpdates, 1, 'one display update for 20 blocks');
+  assert.equal(controller.getState().snr, 0);
+  await pause(260);
+  worker.emit({ type: 'fm', tune, snr: 99, samples: new Float32Array(4) });
+  assert.equal(snrUpdates, 2);
+  const state = controller.getState();
+  assert.equal(state.snr, 99, 'latest value published');
+  assert.equal(state.workerBlocks, 700, 'a level update held back is not lost');
+  assert.equal(state.iqLevelDbfs, -9);
+});
+
+test('blocks request a spectrum only while seeking', (t) => {
+  // Deterministic: the _postSamples contract directly, no read loop or polling.
+  const workers = installWorker(t, { ack: 'manual' });
+  const controller = new SdrController({
+    storage: { getItem: () => null, setItem() {} },
+    webUsb: {},
+    workerAdmission: ADMISSION,
+  });
+  const post = () => {
+    assert.equal(controller._postSamples(new ArrayBuffer(64)), true);
+    const sent = workers[0].messages.filter((m) => m.type === 'samples');
+    return sent[sent.length - 1];
+  };
+  controller._setState({ seeking: false });
+  assert.equal(post().spectrum, false, 'listening: no spectrum');
+  controller._setState({ seeking: true });
+  assert.equal(post().spectrum, true, 'seeking: spectrum requested');
+  controller._setState({ seeking: false });
+  assert.equal(post().spectrum, false, 'after seek: no spectrum');
 });
 
 test('an FM to ADS-B to FM round trip cannot relabel old output as current', async (t) => {
@@ -416,5 +487,53 @@ test('the real decoder acknowledges every numbered block after its output, in ev
   assert.deepEqual(
     inbox.filter((m) => m.type === 'ack').map((m) => m.id),
     [0, 1, 2, 3, 4],
+  );
+});
+
+test('the real decoder computes spectra only when requested, with audio unchanged', async (t) => {
+  const { thread, inbox } = realWorker(t);
+  await until(() => inbox.some((m) => m.type === 'ready'), 5_000);
+  const run = async (spectrum, firstId) => {
+    // A reset starts each run at block 0 with identical decoder state.
+    thread.postMessage({ type: 'reset', tune: 1 });
+    thread.postMessage({
+      type: 'configure',
+      mode: 'fm',
+      sampleRate: 2_048_000,
+      tune: 1,
+    });
+    for (let index = 0; index < 6; index += 1) {
+      const buffer = iqBlock();
+      thread.postMessage(
+        { type: 'samples', buffer, id: firstId + index, spectrum },
+        [buffer],
+      );
+    }
+    await until(
+      () =>
+        inbox.filter((m) => m.type === 'ack' && m.id >= firstId).length === 6,
+      5_000,
+    );
+    return inbox.filter((m) => m.type === 'fm').splice(-6);
+  };
+  const listening = await run(false, 0);
+  const seeking = await run(true, 100);
+  assert.ok(
+    listening.every((m) => m.bins === null),
+    'no FFT while listening',
+  );
+  assert.equal(
+    seeking.filter((m) => m.bins instanceof Float32Array).length,
+    2,
+    'every third block',
+  );
+  assert.deepEqual(
+    listening.map((m) => m.samples.length),
+    seeking.map((m) => m.samples.length),
+    'audio output unchanged',
+  );
+  assert.deepEqual(
+    Array.from(listening[5].samples),
+    Array.from(seeking[5].samples),
   );
 });

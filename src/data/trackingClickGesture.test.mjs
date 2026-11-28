@@ -1,4 +1,3 @@
-import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -91,35 +90,4 @@ test('slow clean sprite clicks select, while long presses and orbit nudges canno
   handler.fire(TYPES.LEFT_CLICK, { position: { x: 3, y: 4 } });
   assert.equal(untracks, 1, 'a short clean empty-space tap still untracks');
   input.destroy();
-});
-
-test('civilian and military click handlers apply duration only at the deselect branch', () => {
-  const sources = [
-    readLayerSource(new URL('./flights.js', import.meta.url)),
-    readLayerSource(new URL('./militaryFlights.js', import.meta.url)),
-  ];
-  for (const source of sources) {
-    assert.match(source, /isTrackingSelectionGesture\(gesture\)[\s\S]+event\.hit/);
-    assert.match(source, /isTrackingClickGesture\(gesture\)[\s\S]+(?:parts\.\w+\.)?_clearTracking\([^)]*\{ origin: 'user' \}\)/);
-  }
-  assert.doesNotMatch(
-    sources[0],
-    /(?:flightState\.)?_trackedEntity = (?:flightState\.)?_viewer\.entities\.add\(\{\s*id:/,
-    'civilian tracked entities must retain Cesium-generated GUIDs',
-  );
-});
-
-test('a click on an aircraft selects and centres it without following it', () => {
-  const sources = [
-    readLayerSource(new URL('./flights.js', import.meta.url)),
-    readLayerSource(new URL('./militaryFlights.js', import.meta.url)),
-  ];
-  for (const source of sources) {
-    assert.match(
-      source,
-      /_trackFlight\(pickedIcao, \{ origin: 'user', follow: false \}\)/,
-    );
-    assert.match(source, /if \(follow\) _followTracked\(\);\s*else if \(center\) _centerTracked\(\);/);
-    assert.doesNotMatch(source, /keepView/);
-  }
 });

@@ -6,12 +6,12 @@ import * as overlays from '../../overlays/worldOverlay.js';
 import * as context from '../../data/contextStore.js';
 import * as render from '../../renderGovernor.js';
 import * as layerState from '../../data/layerState.js';
+import { appAssetUrl } from './overlayHost.js';
 
 /** Construct one layer using the application scene owners and a supplied source. */
 export function createApplicationSatellites({
   source,
-  resolveAsset = (url) =>
-    `${import.meta.env?.BASE_URL || '/'}${url.replace(/^\//, '')}`,
+  resolveAsset = appAssetUrl,
 }) {
   return createSatellitesLayer({
     source,

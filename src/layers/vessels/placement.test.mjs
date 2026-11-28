@@ -18,8 +18,8 @@ const row = (id, fields = {}) => ({
 
 function harness({ placement = null, following = false } = {}) {
   const visuals = [];
-  const state = { selectedRecord: null, trailId: null };
   const records = new VesselRecords({ now: () => 5_000_000 });
+  const state = { selectedRecord: null, trailId: null, records };
   const primitives = [];
   const rendering = {
     ensureCollections() {},
@@ -35,15 +35,12 @@ function harness({ placement = null, following = false } = {}) {
     removeRecordPrimitives(record) {
       primitives.push(['remove', record.id]);
     },
-    shipIcon: () => 'icon',
-    shipScale: () => 1,
     syncRecordIcon() {},
     updateVisibility() {},
   };
   const renderer = createVesselSnapshotRenderer({
     state,
     placement,
-    records,
     rendering,
     tracking: {},
     selection: { clearVesselInspection() {} },

@@ -457,13 +457,10 @@ test('the box search asks for a few pictures: the API returns them nearest first
     .find((url) => url.searchParams.has('bbox'));
   assert.ok(box, 'a box search');
   assert.equal(box.searchParams.get('limit'), String(NEAREST_BOX_LIMIT));
-  assert.ok(NEAREST_BOX_LIMIT <= 20);
 });
 
 test('the cones’ tiles have their own connection: never behind coverage tiles, the newest first', async () => {
-  const { PICTURE_TILE_CONCURRENCY, TILE_CONCURRENCY } =
-    await import('./policy.js');
-  assert.equal(PICTURE_TILE_CONCURRENCY, 1);
+  const { TILE_CONCURRENCY } = await import('./policy.js');
   const held = new Map();
   const asked = [];
   const source = createPanoramaxSource({

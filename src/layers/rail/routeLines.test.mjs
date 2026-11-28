@@ -19,7 +19,6 @@ import {
   railNetworkLineSteps,
   shapeCategories,
   splitFraction,
-  vertexIndexChords,
 } from './routeLines.js';
 import {
   createRailPath,
@@ -190,8 +189,7 @@ test('by vertex index, the split follows a line drawn per vertex', () => {
   // Vertices at 0, 500, 2500 m: by index the middle vertex is halfway.
   const coords = [LAT, -71.2, LAT, -71.2 + 500 / KX, LAT, -71.2 + 2_500 / KX];
   const path = createRailPath(coords);
-  const byIndex = vertexIndexChords(path);
-  assert.deepEqual(Array.from(byIndex), [0, 1, 2]);
+  const byIndex = new Float64Array([0, 1, 2]);
   assert.ok(Math.abs(splitFraction(path, byIndex, 500) - 0.5) < 1e-9);
   // 1500 m is halfway along the second segment: index 1.5 of 2.
   assert.ok(Math.abs(splitFraction(path, byIndex, 1_500) - 0.75) < 1e-9);
@@ -234,7 +232,7 @@ test('the selected train’s line is its trip’s shape, else its route’s long
   ]) {
     const key = railTrainKey('mbta-rail', id);
     app.parts().selection.selectTrain(key);
-    const { route } = app.layer.getRouteDisplayStats();
+    const route = app.state()._route;
     assert.equal(
       route?.id,
       `${key}
@@ -242,7 +240,7 @@ mbta-rail
 ${shapeIndex}`,
       id,
     );
-    assert.equal(route.vertices, vertices, id);
+    assert.equal(route.path.n, vertices, id);
     // Each route is drawn in a set made for it, on top of every line set
     // made before it, as its primitive was added when it was drawn.
     const lines = [...app.draw.sets.values()].filter(

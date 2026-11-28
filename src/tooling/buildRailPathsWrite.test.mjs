@@ -12,7 +12,6 @@ import { fileURLToPath } from 'node:url';
 import {
   BUILD_LOCK,
   FEED_FAILED_EXIT_CODE,
-  MIN_TRIP_SHARE,
   acquireDirLock,
   buildExitCode,
   isInside,
@@ -201,7 +200,6 @@ test('the trip floor counts what the build makes alike each time', () => {
   assert.equal(operatorShapeTrips(pack), 1);
   assert.equal(operatorShapeTrips(null), 0);
   assert.equal(scheduleTripsPerDay(schedulePack('x', 14, 7)), 2);
-  assert.equal(MIN_TRIP_SHARE, 0.2);
   assert.equal(tripFloorProblem('trips', 2, 10), null);
   assert.match(tripFloorProblem('trips', 1, 10), /trips 1 against 10/);
   assert.equal(tripFloorProblem('trips', 0, 0), null);

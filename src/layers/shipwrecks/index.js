@@ -3,7 +3,11 @@ import { spriteDrawOrder } from '../../data/spriteOrder.js';
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { drawOf, findFrame } from '../../render/rendererOf.js';
 import { inputFor } from '../../input/dispatcher.js';
-import { createHorizonCull } from '../streetLevel/view.js';
+import {
+  SELECTED_CARD_SOURCE_OPTIONS,
+  selectedCard,
+} from '../../overlays/worldOverlayTokens.js';
+import { createHorizonCull } from '../../render/horizonCull.js';
 import { ERA_COLORS, ERA_LABELS, describeShipwreck } from './cards.js';
 import { SHIPWRECK_ERAS, eraOf } from './eras.js';
 import {
@@ -18,14 +22,9 @@ export * from './eras.js';
 export * from './period.js';
 export { createShipwrecksSource } from './source.js';
 
-export const SHIPWRECKS_LAYER_ID = 'shipwrecks';
-export const SHIPWRECKS_OVERLAY_SOURCE_ID = 'shipwrecks';
+const SHIPWRECKS_LAYER_ID = 'shipwrecks';
+const SHIPWRECKS_OVERLAY_SOURCE_ID = 'shipwrecks';
 const PICK_PREFIX = 'shipwreck:';
-const CARD_HOST_OPTIONS = Object.freeze({
-  cohortLimit: 1,
-  collisionCapacity: 1,
-  moving: false,
-});
 const MAX_CARD_LINES = 14;
 /** Wrecks not refreshed for this long leave the map (the proxy's own limit). */
 const MAX_SHOWN_AGE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -61,7 +60,7 @@ export function markerPixelSize(casualties) {
  * @param {string} color CSS colour.
  * @returns {string}
  */
-export function wreckMarkerImage(color) {
+function wreckMarkerImage(color) {
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" width="144" height="144" viewBox="0 0 36 36">` +
     `<circle cx="18" cy="18" r="16" fill="${color}" stroke="#ffffff" stroke-width="2"/>` +
@@ -211,21 +210,14 @@ export function createShipwrecksLayer({
     }
     const { title, details, link } = describeShipwreck(record);
     _selectedLink = link && openExternal ? link : null;
-    const card = {
+    const card = selectedCard({
       id: `shipwreck-card:${record.id}`,
-      selected: true,
       interactive: Boolean(_selectedLink),
       title,
       details: details.slice(0, MAX_CARD_LINES),
       accent: ERA_COLORS[eraOf(record)],
-      priority: Number.MAX_SAFE_INTEGER,
-      gapPx: 15,
-      verticalOnly: true,
-      placement: 'above',
-      stateless: true,
-      horizonCull: true,
       position: fromDegrees(record.lon, record.lat),
-    };
+    });
     if (card.interactive) {
       const target = _selectedLink;
       card.accessibilityLabel = t('Open the source for {title}', { title });
@@ -238,9 +230,9 @@ export function createShipwrecksLayer({
     overlayHost.setEntries(
       SHIPWRECKS_OVERLAY_SOURCE_ID,
       [card],
-      CARD_HOST_OPTIONS,
+      SELECTED_CARD_SOURCE_OPTIONS,
     );
-    overlayHost.setVisible?.(SHIPWRECKS_OVERLAY_SOURCE_ID, true);
+    overlayHost.setVisible(SHIPWRECKS_OVERLAY_SOURCE_ID, true);
   }
 
   function clearSelection() {
@@ -250,7 +242,7 @@ export function createShipwrecksLayer({
     overlayHost?.setEntries(
       SHIPWRECKS_OVERLAY_SOURCE_ID,
       [],
-      CARD_HOST_OPTIONS,
+      SELECTED_CARD_SOURCE_OPTIONS,
     );
   }
 
@@ -263,7 +255,7 @@ export function createShipwrecksLayer({
 
   function installClickHandler() {
     if (!canSelect() || _clickHandler || !_viewer) return;
-    picking.registerPickOwner?.(
+    picking.registerPickOwner(
       SHIPWRECKS_LAYER_ID,
       (pickedId) =>
         typeof pickedId === 'string' && pickedId.startsWith(PICK_PREFIX),
@@ -282,7 +274,7 @@ export function createShipwrecksLayer({
       // click so every layer agrees: ours opens its source whatever is drawn
       // under it; another layer's is that layer's click, so the markers
       // under it do not act and the selection stays.
-      const cardHit = picking.clickCard?.(click) ?? null;
+      const cardHit = picking.clickCard(click) ?? null;
       if (cardHit) {
         if (
           cardHit.sourceId === SHIPWRECKS_OVERLAY_SOURCE_ID &&
@@ -316,7 +308,7 @@ export function createShipwrecksLayer({
   function removeClickHandler() {
     _clickHandler?.();
     _clickHandler = null;
-    picking?.unregisterPickOwner?.(SHIPWRECKS_LAYER_ID);
+    picking?.unregisterPickOwner(SHIPWRECKS_LAYER_ID);
   }
 
   /** Wrecks shown per era, in one pass over the records. */

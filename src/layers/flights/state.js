@@ -1,3 +1,4 @@
+import { createEnrichmentQueue } from './enrichmentQueue.js';
 import { FlightRecords } from './records.js';
 import { createFlightFeed } from './ingestion.js';
 import { worldTimeFor } from '../../time/worldClock.js';
@@ -235,8 +236,6 @@ export function createFlightState({ source, services }) {
 
   flightState._scratchNearbyPos = { x: 0, y: 0, z: 0 };
 
-  flightState._scratchSonarScreen = { x: 0, y: 0 };
-
   flightState._scratchDrRaw = { x: 0, y: 0, z: 0 };
 
   flightState._scratchWarmupTime = { dayNumber: 0, secondsOfDay: 0 };
@@ -325,21 +324,10 @@ export function createFlightState({ source, services }) {
 
   flightState._displayCourse = new Map();
 
-  flightState._enrichActive = 0;
-
-  flightState._enrichLastDispatchMs = 0;
-
-  /** @type {ReturnType<typeof setTimeout>|null} pending drip wake-up */
-
-  flightState._enrichDripTimer = null;
-
-  flightState._enrichQueue = [];
-
-  flightState._enrichSeen = new Set();
-
-  /** Lookup key -> epoch ms before which a failed lookup is not asked again. */
-
-  flightState._enrichRetryAfter = new Map();
+  flightState._enrich = createEnrichmentQueue({
+    source: () => flightState.feed._source,
+    signal: () => flightState.lifetime.signal,
+  });
 
   flightState._enrichAmbientBudget = ENRICH_AMBIENT_BUDGET_CEIL;
 
@@ -364,8 +352,6 @@ export function createFlightState({ source, services }) {
   /** The raw position's last step, and that frame's length (s; 0 for none). */
   flightState._drPrevRawStep = { x: 0, y: 0, z: 0 };
   flightState._drPrevRawStepSec = 0;
-
-  flightState._drPrevMs = 0;
 
   /** World time of that frame: the wall clock live, the cursor following the clock. */
   flightState._drPrevWorldMs = 0;

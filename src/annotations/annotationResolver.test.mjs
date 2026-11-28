@@ -2,11 +2,11 @@ import { createStandalonePlaceSearch } from '../standalone/placeSearch.js';
 import { createPlaceSearch } from '../search/placeSearch.js';
 // Footprint-selection contract tests — pure fixtures, no network, no browser.
 //
-// Locks the field-test-7 monument fix (docs/field-test-rootcause-2026-06-30.md §1):
+// Locks the monument rule:
 // a POINT-LIKE target ("Tejano Monument, Austin") must never adopt a nearby
 // polygon that merely shares locality/context words ("Austin", "History").
-// The fixtures replicate the REAL Overpass candidates captured over the Texas
-// Capitol on 2026-07-01, where "Thompson Austin" (a hotel 680 m away) outscored
+// The fixtures replicate the REAL Overpass candidates captured around the Texas
+// Capitol, where "Thompson Austin" (a hotel 680 m away) outscored
 // everything because `nameOverlap * 1000` paid +1000 for the single word
 // "Austin" — the monument itself is an OSM node and never even a candidate.
 //
@@ -14,12 +14,17 @@ import { createPlaceSearch } from '../search/placeSearch.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
-import {
-  resolveAnnotationTarget as resolveTarget,
-  selectFootprint,
-  refineScope,
-  isGroundsLikeAsk,
-} from './annotationResolver.js';
+import { resolveAnnotationTarget as resolveTarget } from './annotationResolver.js';
+import { createAnnotationResolver } from './resolver.js';
+import { applicationServices } from '../services/application.js';
+import { normalizeOverpassFeatures } from '../sources/overpassFeaturesRecords.js';
+
+const resolver = createAnnotationResolver({
+  featureSource: applicationServices.features,
+});
+const { refineScope, isGroundsLikeAsk } = resolver;
+const selectFootprint = (elements, ...args) =>
+  resolver.selectFootprint(normalizeOverpassFeatures(elements), ...args);
 
 // Build a square way of ~`areaM2` centred `dLatM`/`dLonM` metres from an anchor,
 // in Overpass `out geom` element shape ({ tags, geometry: [{lat,lon}...] }).

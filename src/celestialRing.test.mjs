@@ -11,7 +11,7 @@ import {
   getKeyholeGeometry,
   isCelestialRingStyleSupported,
   isFullGlobeInsideKeyhole,
-  keyholeLabelAlpha,
+  keyholeLabelAlphaFromGeometry,
   normalizeAngle,
   setKeyholeFadeTuning,
 } from './celestialRing.js';
@@ -113,23 +113,23 @@ test('label alpha stays opaque inside and fades monotonically outside', () => {
   setKeyholeFadeTuning({ fadeRatio: 0.16, outsideOpacity: 0 });
   const geometry = getKeyholeGeometry(1200, 800);
   const y = geometry.centerY;
-  assert.equal(keyholeLabelAlpha(geometry.centerX, y, 1200, 800), 1);
-  assert.equal(keyholeLabelAlpha(geometry.centerX + geometry.radius, y, 1200, 800), 1);
-  const quarter = keyholeLabelAlpha(
-    geometry.centerX + geometry.radius + geometry.featherPx * 0.25, y, 1200, 800,
+  assert.equal(keyholeLabelAlphaFromGeometry(geometry.centerX, y, geometry), 1);
+  assert.equal(keyholeLabelAlphaFromGeometry(geometry.centerX + geometry.radius, y, geometry), 1);
+  const quarter = keyholeLabelAlphaFromGeometry(
+    geometry.centerX + geometry.radius + geometry.featherPx * 0.25, y, geometry,
   );
-  const middle = keyholeLabelAlpha(
-    geometry.centerX + geometry.radius + geometry.featherPx * 0.5, y, 1200, 800,
+  const middle = keyholeLabelAlphaFromGeometry(
+    geometry.centerX + geometry.radius + geometry.featherPx * 0.5, y, geometry,
   );
-  const threeQuarter = keyholeLabelAlpha(
-    geometry.centerX + geometry.radius + geometry.featherPx * 0.75, y, 1200, 800,
+  const threeQuarter = keyholeLabelAlphaFromGeometry(
+    geometry.centerX + geometry.radius + geometry.featherPx * 0.75, y, geometry,
   );
   assert.ok(quarter > middle && middle > threeQuarter);
   assert.ok(Math.abs(quarter - 0.75) < 1e-12);
   assert.ok(Math.abs(middle - 0.5) < 1e-12);
   assert.ok(Math.abs(threeQuarter - 0.25) < 1e-12);
-  assert.equal(keyholeLabelAlpha(
-    geometry.centerX + geometry.radius + geometry.featherPx, y, 1200, 800,
+  assert.equal(keyholeLabelAlphaFromGeometry(
+    geometry.centerX + geometry.radius + geometry.featherPx, y, geometry,
   ), 0);
 });
 
@@ -139,11 +139,10 @@ test('fade tuning scales with keyhole radius and supports outside opacity', () =
   const large = getKeyholeGeometry(1600, 1200);
   assert.equal(large.featherPx, small.featherPx * 2);
   assert.deepEqual(getKeyholeFadeTuning(), { fadeRatio: 0.2, outsideOpacity: 0.3 });
-  assert.equal(keyholeLabelAlpha(
+  assert.equal(keyholeLabelAlphaFromGeometry(
     small.centerX + small.radius + small.featherPx,
     small.centerY,
-    800,
-    600,
+    small,
   ), 0.3);
   setKeyholeFadeTuning({ fadeRatio: 0.16, outsideOpacity: 0.05 });
 });

@@ -9,7 +9,6 @@
 import * as Cesium from 'cesium';
 import {
   createDepthOcclusionTest,
-  DepthOcclusionProbe,
   PROBE_MAX_FRUSTUMS,
 } from '../occlusion/depthProbe.js';
 import {
@@ -18,16 +17,6 @@ import {
   usesGlobeDepthFramebuffer,
   webglContext,
 } from './internals.js';
-
-export {
-  PROBE_MAX_CONTROL_FAILURES,
-  PROBE_MAX_FRUSTUMS,
-  PROBE_MAX_PENDING_FRAMES,
-  PROBE_MAX_PER_FRAME,
-  PROBE_RETRY_AFTER_MS,
-  PROBE_VERTEX_SHADER,
-  SYNC_READ_INTERVAL_MS,
-} from '../occlusion/depthProbe.js';
 
 /**
  * Everything this module takes from the renderer, in one place.
@@ -140,19 +129,6 @@ export function readSceneDepthSource(scene, viewScratch) {
     };
   } catch {
     return null;
-  }
-}
-
-/** The occlusion probe on a Cesium scene's depth (`readSceneDepthSource`). */
-export class SceneOcclusionProbe extends DepthOcclusionProbe {
-  /**
-   * @param {{
-   *   now?: () => number,
-   *   readSource?: typeof readSceneDepthSource,
-   * }} [options]
-   */
-  constructor({ now, readSource = readSceneDepthSource } = {}) {
-    super({ readSource, ...(now ? { now } : {}) });
   }
 }
 

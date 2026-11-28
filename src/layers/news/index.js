@@ -27,7 +27,8 @@ import {
   registerDynamicCredit,
 } from '../../data/dataCredits.js';
 import { msg, t, tn } from '../../i18n/index.js';
-import { createHorizonCull, viewCentre } from '../streetLevel/view.js';
+import { createHorizonCull } from '../../render/horizonCull.js';
+import { viewCentre } from '../streetLevel/view.js';
 import {
   NEWS_CARD_MIN_SOURCES,
   NEWS_CATEGORIES,
@@ -85,8 +86,6 @@ import {
 } from './model.js';
 import { SPRITE_SCALE, countSprite, markerSprite } from './sprites.js';
 import { CARD_H, CARD_W, eventCard } from './cards.js';
-export * from './model.js';
-export { createNewsSource } from './source.js';
 
 const FEED_UNAVAILABLE = msg('News feed unavailable');
 // The providers a server without a news pipeline reads each section from,
@@ -965,6 +964,14 @@ export function createNewsLayer({
     flyTo({ rect: { west, south, east, north } }, 1.6);
   }
 
+  const focusAround = (lon, lat) =>
+    focusRectangle([
+      lon - 5,
+      Math.max(-85, lat - 3.5),
+      lon + 5,
+      Math.min(85, lat + 3.5),
+    ]);
+
   // Hotspot extents (and developing countries) are drawn in sets of their
   // own, built once per outline and only shown or hidden afterwards: ground
   // polygons over 3D tiles are slow to build, so they are never rebuilt on a
@@ -1374,15 +1381,7 @@ export function createNewsLayer({
           .find((h) => h.id === hotspotId)
           ?.developing?.find((d) => d.key === key);
         layer.setParams({ filters: { hotspot: hotspotId } });
-        if (item) {
-          const { lat, lon } = item.focus;
-          focusRectangle([
-            lon - 5,
-            Math.max(-85, lat - 3.5),
-            lon + 5,
-            Math.min(85, lat + 3.5),
-          ]);
-        }
+        if (item) focusAround(item.focus.lon, item.focus.lat);
         return;
       }
       if (typeof id === 'string' && id.startsWith(COUNTRY_PREFIX)) {
@@ -1390,12 +1389,7 @@ export function createNewsLayer({
         const group = countryBadges.get(id.slice(COUNTRY_PREFIX.length));
         if (!group) return;
         layer.setParams({ filters: { section: 'local' } });
-        focusRectangle([
-          group.lon - 5,
-          Math.max(-85, group.lat - 3.5),
-          group.lon + 5,
-          Math.min(85, group.lat + 3.5),
-        ]);
+        focusAround(group.lon, group.lat);
         return;
       }
       if (typeof id === 'string' && id.startsWith(HOTSPOT_PREFIX)) {

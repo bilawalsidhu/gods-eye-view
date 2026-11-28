@@ -154,11 +154,10 @@ export function createPlaceSuggester({
             },
             { signal, timeoutMs: TIMEOUT_MS },
           );
-        } catch (error) {
+        } catch {
           signal?.throwIfAborted();
           // A refusal, a timeout or a failed request (a refusal sent without
           // CORS headers arrives as one) all hold suggestions off a while.
-          void error;
           shared.pausedUntil = Date.now() + PAUSE_AFTER_REFUSAL_MS;
           return [];
         }

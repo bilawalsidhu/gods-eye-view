@@ -24,22 +24,14 @@ import {
   recordFix,
   updatePlayback,
   syncPlayback,
-} from './movement.js';
+} from '../../data/transitMovement.js';
 
 /**
  * How far ahead of the snapshot's own fetch time a vehicle stamp may sit
- * before it is a clock fault rather than a report. A stamp an hour ahead once
- * made every honest fix that followed read as out of order, so the marker
- * froze for as long as the clock stayed wrong. Beyond this the fetch time is
- * the honest bound.
+ * before it counts as a clock fault. Beyond this the fetch time bounds it so one bad
+ * stamp cannot freeze the marker.
  */
 export const FUTURE_STAMP_TOLERANCE_MS = 10_000;
-/**
- * Consecutive out-of-order refusals after which the history is reset to the
- * incoming fix. A feed whose clock was corrected backwards would otherwise be
- * refused until real time caught up with its old mistake.
- */
-export const ORDER_REJECTS_BEFORE_RESET = 3;
 
 /**
  * Fetching feeds through the proxy and turning snapshots into rendered points.
@@ -79,7 +71,6 @@ export function createIngestion({ state, services, parts, source }) {
     entry.marker = null;
     entry.detectContact = null;
     state._visible.delete(entry);
-    parts.height.releaseVehicle(key, entry.heightCell);
     // A vehicle removed mid-glide takes its share of the hold with it, so the
     // set stays true without waiting for a frame that may never be requested.
     state._moving.delete(entry);
@@ -106,12 +97,8 @@ export function createIngestion({ state, services, parts, source }) {
   /**
    * Drop what has aged out, whatever the reason.
    *
-   * Two independent clocks matter. A single vehicle can go quiet inside a feed
-   * that is otherwise healthy, and a whole feed can stop answering while its
-   * last snapshot still sits on the globe. The proxy serves a stale snapshot
-   * for up to ten minutes and then stops answering at all, and before this
-   * sweep existed that silence left the last fleet frozen in place, indefinitely
-   * and unlabelled. Both cases now end in removal.
+   * A vehicle can go quiet inside a healthy feed, and a whole feed can stop answering
+   * while its last snapshot is on the globe. Both end in removal.
    *
    * @param {number} nowMs
    * @returns {number} Vehicles removed.
@@ -120,10 +107,8 @@ export function createIngestion({ state, services, parts, source }) {
     let removed = 0;
     const deadFeeds = new Set();
     for (const [feedId, status] of state._feedStatus) {
-      // `upstreamAt` — when the OPERATOR last answered — not when this browser
-      // last received bytes. The proxy hands back its cached copy every 15 s
-      // during an outage, and counting those as updates meant a dead feed never
-      // aged at all.
+      // `upstreamAt` records when the operator last answered. The proxy can re-serve its
+      // cached copy during an outage.
       if (
         Number.isFinite(status.upstreamAt) &&
         nowMs - status.upstreamAt > FEED_EVICT_AFTER_MS
@@ -168,14 +153,8 @@ export function createIngestion({ state, services, parts, source }) {
       Number.isFinite(snapshot?.fetchedAt) ? snapshot.fetchedAt : now,
       now,
     );
-    // When the operator last ANSWERED, which is a different question. A feed
-    // whose file has not changed answers 304, and the proxy rightly keeps
-    // serving the body it already holds — but that body's fetch time stops
-    // advancing, so reading it as "when did we last hear from them" aged a
-    // perfectly healthy feed into DEGRADED at ninety seconds and emptied it at
-    // five minutes while every single request was succeeding. The proxy
-    // reports its last successful contact separately; absent that header the
-    // fetch time is the best we know.
+    // Use the proxy's contact header when available. A 304 keeps the same body and fetch
+    // time even though the operator answered. Without the header, use the fetch time.
     const contacted = Math.min(
       Number.isFinite(contactedAt) ? contactedAt : fetchedAt,
       now,
@@ -255,20 +234,21 @@ export function createIngestion({ state, services, parts, source }) {
                 ? FIX_FLAGS.FEED_TIME
                 : FIX_FLAGS.RECEIPT_TIME,
       };
+      const observation = {
+        receivedAt: now,
+        monoNowMs: monoNow,
+        wallNowMs: now,
+        replayed,
+        modeInferred,
+        context: {
+          trip: record.tripId || '',
+          route: record.routeId || '',
+          mode,
+        },
+      };
       let entry = state._vehicles.get(key);
       if (entry) {
-        const heard = recordFix(entry, fix, {
-          receivedAt: now,
-          monoNowMs: monoNow,
-          wallNowMs: now,
-          replayed,
-          modeInferred,
-          context: {
-            trip: record.tripId || '',
-            route: record.routeId || '',
-            mode,
-          },
-        });
+        const heard = recordFix(entry, fix, observation);
         if (!heard.accepted) {
           entry.pollSeq = pollSeq;
           seen += 1;
@@ -282,7 +262,7 @@ export function createIngestion({ state, services, parts, source }) {
         parts.rendering.schedulePlayback(entry);
         // Ground follows the vehicle, every poll: a mesh floor landing over a
         // DEM one, or a change of map regime, moves a parked vehicle too. A
-        // cell still cold takes the lowest neighbour as a prior, as before.
+        // cell still cold takes the lowest neighbour as a prior.
         const priorHeightM = entry.heightM;
         const height = parts.height.requestHeight(record.lat, record.lon);
         if (height.height !== null) {
@@ -355,18 +335,7 @@ export function createIngestion({ state, services, parts, source }) {
           pollSeq,
         };
         initializePlayback(entry, state._historyBudget, status.lag);
-        const first = recordFix(entry, fix, {
-          receivedAt: now,
-          monoNowMs: monoNow,
-          wallNowMs: now,
-          replayed,
-          modeInferred,
-          context: {
-            trip: record.tripId || '',
-            route: record.routeId || '',
-            mode,
-          },
-        });
+        const first = recordFix(entry, fix, observation);
         if (!first.accepted) {
           destroyTrack(entry.track);
           continue;

@@ -105,7 +105,7 @@ export const BROWSER_HEADERS = Object.freeze({
 export const API_CSP = "default-src 'none'; sandbox";
 
 /** Response headers every `/api` response carries. */
-export const API_HEADERS = Object.freeze({
+const API_HEADERS = Object.freeze({
   'Content-Security-Policy': API_CSP,
   'X-Content-Type-Options': 'nosniff',
 });
@@ -143,7 +143,7 @@ function isApiPath(url) {
  * headers; a route's own Content-Security-Policy is sent as an additional
  * policy, which can only restrict further, never replace this one.
  */
-export function apiResponseHeadersPlugin() {
+function apiResponseHeadersPlugin() {
   const install = (server) => {
     server.middlewares.use((req, res, next) => {
       if (!isApiPath(req.url)) return next();

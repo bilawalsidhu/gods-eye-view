@@ -9,7 +9,6 @@ import { GEV_REALTIME_TOOLS } from '../../server/providers/openai/tools.js';
 import { createGevActionRunner } from '../voice/gevActions.js';
 import { StyleManager } from './applicationShell.js';
 import { VisualSettings } from './visualSettings.js';
-import { readFileSync } from 'node:fs';
 
 function fixture(layout = 'tactical') {
   const root = {
@@ -94,13 +93,6 @@ test('real runner and facade use visual settings, preserve visibility and return
     assert.equal((await unavailable('set_cyber_sonar', { enabled: true })).ok, false);
   } finally {
     globalThis.document = previousDocument;
-  }
-});
-
-test('native sonar sliders represent every accepted integer without browser snapping', () => {
-  const html = readFileSync(new URL('./views/panels/DisplayPanel.vue', import.meta.url), 'utf8');
-  for (const name of ['rings', 'range', 'intensity', 'opacity', 'sector']) {
-    assert.match(html, new RegExp(`id="cyber-sonar-${name}"[^>]*step="1"`));
   }
 });
 

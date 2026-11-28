@@ -1,6 +1,5 @@
 /**
- * Camera verbs — the "spy satellite simulator" feel
- * (docs/superpowers/specs/2026-07-23-camera-verbs-fly-route-spec.md).
+ * Camera verbs — the "spy satellite simulator" feel.
  *
  * One motion at a time, driven per clock tick. `once` = bounded eased nudge;
  * `continuous` runs until move_camera{stop}, ANY manual camera input on the
@@ -75,6 +74,7 @@ import {
   findCamera,
   findFrame,
 } from './render/rendererOf.js';
+import { prefersReducedMotion } from './reducedMotion.js';
 
 let _isCockpitActive = null;
 /** °/s by speed word — orbit; pan uses fractions of view height/s. */
@@ -223,19 +223,6 @@ const ROUTE_MAX_DESCENT_MPS = 10;
 
 /* ── Pure cinematic helpers (unit-tested; no viewer, no module state) ────── */
 
-/** Whether the operating system asked us to keep motion boring. */
-export function prefersReducedMotion() {
-  try {
-    return (
-      typeof window !== 'undefined' &&
-      typeof window.matchMedia === 'function' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches === true
-    );
-  } catch {
-    return false;
-  }
-}
-
 /**
  * Frame-rate independent first-order approach (exponential smoothing).
  * `1 - e^(-rate·dt)` rather than `rate·dt` so a dropped frame cannot overshoot.
@@ -298,7 +285,7 @@ export function routeSpeedProfile(u, r) {
  * @param {boolean} [reducedMotion] Flatten the roll entirely.
  * @returns {number} Degrees of roll, + = right wing down.
  */
-export function routeBankTargetDeg(turnRateDegS, reducedMotion = false) {
+function routeBankTargetDeg(turnRateDegS, reducedMotion = false) {
   if (reducedMotion || !Number.isFinite(turnRateDegS)) return 0;
   const raw = turnRateDegS * ROUTE_BANK_PER_DEG_S;
   return Math.max(-ROUTE_BANK_MAX_DEG, Math.min(ROUTE_BANK_MAX_DEG, raw));
@@ -992,13 +979,6 @@ function listenForFrames() {
   _tickRemover?.();
   _tickPort = port;
   _tickRemover = port?.on('preUpdate', onTick) ?? null;
-}
-
-/**
- * @returns {number} Id of the running motion, or 0 when the camera is idle.
- */
-export function activeCameraMotionId() {
-  return _active?.motionId || 0;
 }
 
 /**

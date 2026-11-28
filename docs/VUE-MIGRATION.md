@@ -128,8 +128,8 @@ BACK and the main NEXT / ENTER DEFAULT MODE action) are ghost `UiButton`s:
 the start tiles are pressed toggles, and all but SKIP keep `aria-disabled`
 rather than `disabled`, so they stay focusable while the card is busy. Its
 tile, tip, Stories and arrow glyphs are `UiIcon`s with `:size="null"`, so
-first-run.css still sizes them (`src/ui/kit/welcomeControls.test.mjs` pins
-it). Default mode's preview globe and callouts stay inline SVG drawings, and
+first-run.css still sizes them.
+Default mode's preview globe and callouts stay inline SVG drawings, and
 its outbound links stay links.
 Every button in the Stories views (the Stories entry and its popup and
 toast, Explore, the Story screen, its header, rail, timeline and context
@@ -143,7 +143,7 @@ search fields (Explore's two and the Story context sheet's story search, a
 combobox) keep their own markup, since `UiSearchField`'s Material
 magnifier would replace their SVG one, and Explore's two clear buttons,
 which draw an SVG cross, are ghost `UiButton`s rather than
-`UiCloseButton`s (`src/ui/kit/storiesControls.test.mjs` pins it).
+`UiCloseButton`s.
 Explore's sort is a `UiSelect`.
 Every button in the Cockpit HUD (`CockpitView` and its panels: the vision
 selector, Look ahead, the view switcher's Reset and Exit, the utility
@@ -159,14 +159,14 @@ glyphs (the rim pointers, the reticle, the heading caret, the chevrons and
 panel glyphs, the contact and route arrows) are `UiIcon`s with
 `:size="null"`; the heading caret's rule reads
 `.cockpit-compass .cockpit-heading-caret`, so it still outranks the kit's
-`.ui-icon`, which loads after cockpit.css
-(`src/ui/kit/cockpitControls.test.mjs` pins it). The −, ◀ ▶ and + glyphs
+`.ui-icon`, which loads after cockpit.css.
+The −, ◀ ▶ and + glyphs
 are text characters and stay text, and the Radio volume is a `UiSlider`.
 The Omnibar's mic (a pressed toggle with `active`) and its suggestion
 strip's chips (options, so `aria-current` rather than `pressed`) are
 ghost `UiButton`s, and its search, row and chip glyphs are `UiIcon`s with
-`:size="null"`, so its own rules still size them
-(`src/ui/kit/omnibarControls.test.mjs` pins it). The mic's and the chat
+`:size="null"`, so its own rules still size them.
+The mic's and the chat
 row's glyphs stay inline SVG, since no Material symbol the page loads
 draws them, and its field is its own combobox rather than a
 `UiSearchField`.
@@ -177,8 +177,8 @@ pressed toggles with `active` as their pressed class; Detection sets its own
 `active` and `panoptic` classes, and Clean UI is not a pressed toggle (its
 owner marks it `active`). The panel's Scope, Celestial,
 sky, application-row and Reset glyphs are `UiIcon`s with `:size="null"`, so
-the panel's rules still size them (`src/ui/kit/visualControls.test.mjs` pins
-it). The toggles' other glyphs (◎ ▣ ✈ □ ✨ 🔍) and the presets' style glyphs
+the panel's rules still size them.
+The toggles' other glyphs (◎ ▣ ✈ □ ✨ 🔍) and the presets' style glyphs
 are text characters, not Material symbols, and stay plain spans.
 The entity card's buttons are ghost `UiButton`s: its four preview buttons
 (Photos, Route, 3D, Cockpit view) are pressed toggles with `active`, Follow
@@ -186,8 +186,8 @@ is one with `entity-card__action--on`, and the cockpit entry, Fly to and
 Ask GEV are plain buttons; so are the camera preview's bigger-view and More
 info buttons and the nearby lists' rows (`SpotConditions`, which the
 context view shows too). Their glyphs are `UiIcon`s with `:size="null"`,
-so entity-card.css and spot-conditions.css still size them
-(`src/ui/kit/entityCardControls.test.mjs` pins it). Ask GEV's chat bubble
+so entity-card.css and spot-conditions.css still size them.
+Ask GEV's chat bubble
 stays inline SVG, since no Material symbol the page loads draws it.
 The command dock holds only the voice control, whose buttons are its own.
 The Context panel's buttons (its two tabs, Contacts, the
@@ -199,16 +199,16 @@ nothing is picked (a worldwide tile that turns a layer on, an item's row,
 the place and layer chips and Ask GEV) is on the kit too, and the glyphs of
 all three are `UiIcon`s with `:size="null"`, so their site rules still size
 them; an item's motion glyph keeps `role="img"` and its name, with the
-kit's `aria-hidden` taken off (`src/ui/kit/commandDockControls.test.mjs`
-pins it). Ask GEV's chat bubble stays inline SVG.
+kit's `aria-hidden` taken off.
+Ask GEV's chat bubble stays inline SVG.
 The Layer Finder's buttons (Search, Filter, the filter menu's Status and
 Category options and the bar's two clear chips) are ghost `UiButton`s.
 Search and the options are pressed toggles; the options' pressed class is
 `active`, while Search keeps its own `active` binding, which also stays on
 while a query is typed. The Filter button opens a disclosure and carries
 `aria-expanded`, not `aria-pressed`. Every glyph its own template draws is
-a `UiIcon` with `:size="null"`, so `layer-finder.css` still sizes them
-(`src/ui/kit/layerFinderControls.test.mjs` pins it); the search field's
+a `UiIcon` with `:size="null"`, so `layer-finder.css` still sizes them;
+the search field's
 magnifier is `UiSearchField`'s own span.
 The Space Missions panel's buttons (a mission's roster row, FOCUS,
 REPLAY ASCENT, the replay's pause, PREV, NEXT and SHOW ALL / DESELECT),
@@ -220,8 +220,8 @@ SAVE KEYS) are ghost `UiButton`s. Radio's Enable and the card's Connect,
 FM and ADS-B are pressed toggles with `active`; PLAY and Locate keep
 their own `active` class without `aria-pressed`, since their words say
 what they will do or have done. The chip's bolt is a `UiIcon` with
-`:size="null"`, so provider-settings.css still sizes it
-(`src/ui/kit/missionsRadioControls.test.mjs` pins it). The card's FM
+`:size="null"`, so provider-settings.css still sizes it.
+The card's FM
 frequency stays a native number field, which the kit has no control for,
 and the replay's pause, the roster's chevron and the compass arrows are
 text characters, not Material symbols.
@@ -236,8 +236,7 @@ show/hide, the application's row actions and fly to, beside its remove
 `:size="null"`, so `controls.css` still sizes them; show/hide says what it
 does in its name (Show …, Hide …) rather than being pressed. The Street
 Level panel's controls already were kit controls; its EXPAND ⤢ ⤡ and its
-errors' ⚠ are text characters and stay text
-(`src/ui/kit/drawControls.test.mjs` pins it).
+errors' ⚠ are text characters and stay text.
 The AI chat panel's and the voice control's buttons are ghost
 `UiButton`s: the chat's Settings, quick prompts, attachment removes,
 Attach layer, Attach a file, Expand conversation, command suggestions,
@@ -249,8 +248,8 @@ were. The tier button and dock are pressed toggles; the mic is one only
 while its owner has a state for it; the tabs keep `role="tab"` and
 `aria-selected`. DISMISS is a text button, not a cross, so it is not a
 `UiCloseButton`. The Settings and tab glyphs are `UiIcon`s with
-`:size="null"`, so voice-cost.css and voice-card.css still size them
-(`src/ui/kit/chatVoiceControls.test.mjs` pins it). The chat bubble,
+`:size="null"`, so voice-cost.css and voice-card.css still size them.
+The chat bubble,
 globe, attach, send and stop, expand and Back glyphs stay inline SVG,
 since no Material symbol the page loads draws them the same, and the
 message box, file picker and inactivity minutes stay native fields, which
@@ -270,14 +269,14 @@ inline SVG. The Omnibar guide draws the extra rings of a step with several
 targets in its template, as many as `view.subRings` says, rather than
 building them in script; the Omnibar's one other `material-symbols-outlined`
 is a stylesheet selector, and the layer disclosure only names a button in a
-comment (`src/ui/kit/smallSurfacesControls.test.mjs` pins it).
+comment.
 The Street Level photo viewer of KartaView and Panoramax (the photo, the
 panorama canvas and the ‹ › buttons) is `StreetLevelPhotoViewer`, drawn
 from what the photo viewer presents rather than built in script. Its ‹ and
 › are ghost `UiButton`s, not pressed toggles, whose glyphs are text
 characters; the viewer builds no element, and the street-level layer it
-belongs to needs no Vue (`src/ui/kit/streetLevelPhotoControls.test.mjs`
-pins it). The notice the God's Eye View panel page shows when it loses its
+belongs to needs no Vue.
+The notice the God's Eye View panel page shows when it loses its
 3D graphics (`#status`, in `src/app/globePanelRuntime.js`) stays built in
 script: that script is sent to the host as source text and runs in the
 host's panel page before the app loads, so it can import nothing.
@@ -299,8 +298,7 @@ the provider SDKs' script and preconnect tags, the overlay root, and the
 Facebook player node: that node is warmed hidden before its card exists
 and carried, loaded, into the card's player, where the SDK replaces its
 contents, so a template could only rebuild it and reload the player; the
-X post is likewise built by its SDK inside the player
-(`src/ui/kit/bhoteKoshiControls.test.mjs` pins it).
+X post is likewise built by its SDK inside the player.
 `UiSelect` renders the bare native select (Core's labels sit outside it or
 come as an `aria-label`) with `v-model`, `options` and `disabled`;
 options that carry their own attributes come through the slot, a caller's
@@ -324,7 +322,7 @@ empty rows stay a paragraph and table cells.
 no tip unless the site passes a `title`; attributes and classes pass through,
 so each site keeps its id, feature class and look. Every close, dismiss and
 clear button in the views that draws a cross is one
-(`src/ui/kit/closeButtons.test.mjs` and `viewControls.test.mjs` pin it,
+(`src/ui/kit/viewControls.test.mjs` pins it,
 for a bare × or one in a span) except Story Explore's two search clears,
 whose SVG cross is neither of its glyphs, and an imported file's
 Remove, one of the row's icon `UiButton`s (show or hide, fly to, remove)
@@ -359,7 +357,7 @@ a refused change. Attributes and classes go to the label; `inputId` and
 Visual panel's Scope, sky and application toggles, the voice and chat
 preferences, the Data Library's filter and the welcome card's box are
 `UiCheckbox`es, and so are Story Explore's filter options, whose label
-keeps its `fopt` class (`src/ui/kit/checkboxes.test.mjs` pins it). Its kit
+keeps its `fopt` class. Its kit
 rule holds the centred row the checkbox-only labels drew, moved rather than
 copied.
 `UiSwitch` is a `role="switch"` button whose `aria-checked` shows
@@ -479,9 +477,8 @@ slot whenever its view is drawn.
    `t()`, which follows the locale as the view renders; the views carry no
    `data-i18n*` markers, which `npm run i18n` rejects in a template. Shared builders become components first and
    keep their imperative entry points until their owners are components:
-   the rail cards and card blocks (`src/ui/rail/`) render through
-   Vue's synchronous `render()` behind `createRailCards()` and
-   `createRailCardBlocks()`. Order: Scenes (done: `SceneOptions` and
+   the rail cards and card blocks (`src/ui/rail/`) are components the
+   panels mount directly. Order: Scenes (done: `SceneOptions` and
    `SceneShotList` over the `gev-scenes` store; the panel's buttons, status
    line, progress bar and the runtime chip render the panel SceneControls
    presents there, and the buttons and file chooser call its actions), Weather (done: the owner
@@ -697,8 +694,7 @@ slot whenever its view is drawn.
    now requires the pattern for new UI. The page-level markup tests read
    `renderApplicationHtml()`, the real views rendered on the server, and new
    tests mount components. Many tests still read `.vue` sources: the kit's
-   control scans in `src/ui/kit/` (`viewControls`, `closeButtons`,
-   `checkboxes`, `dialogs` and the per-surface ones) and markup checks such
+   control scans in `src/ui/kit/` (`viewControls` and `dialogs`) and markup checks such
    as `contextTabKeyboard`, `geoFileImport` and `panelStorageDocs`. The
    views translate with `t()` while rendering, and vue-i18n holds the
    locale they read; the attribute translation pass is left for static page

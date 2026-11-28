@@ -6,13 +6,13 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import {
-  ENVIRONMENTAL_LABEL_CHOICE,
   EXCLUSIVE_SURFACE_CLASSES,
+  exclusiveSurfaceActive,
+} from './exclusiveSurfaces.js';
+import {
   FIRST_RUN_MISSIONS,
   FIRST_RUN_SESSION_KEY,
   FIRST_RUN_STORAGE_KEY,
-  environmentalLabel,
-  exclusiveSurfaceActive,
   rememberFirstRunSessionDismissed,
   runFirstRunChoice,
   setFirstRunSuppressed,
@@ -250,10 +250,6 @@ test('the JS and CSS lists of screen-claiming surfaces stay in step', () => {
     new URL('./exclusiveSurfaces.js', import.meta.url),
     'utf8',
   );
-  const firstRun = fs.readFileSync(
-    new URL('./firstRunExperience.js', import.meta.url),
-    'utf8',
-  );
   const css = readStylesheet(new URL('../style.css', import.meta.url));
 
   assert.deepEqual([...EXCLUSIVE_SURFACE_CLASSES].sort(), [
@@ -283,8 +279,6 @@ test('the JS and CSS lists of screen-claiming surfaces stay in step', () => {
     module,
     /export const EXCLUSIVE_SURFACE_CLASSES = Object\.freeze\(\[/,
   );
-  // First run keeps exporting the one shared list (the phone shell reads it too).
-  assert.match(firstRun, /export \{ EXCLUSIVE_SURFACE_CLASSES \};/);
 });
 
 test('exclusiveSurfaceActive reads the live body classes', () => {
@@ -450,10 +444,6 @@ test('a surface class that never clears is an ACCEPTED no-show, not a timer', ()
     new URL('./firstRunExperience.js', import.meta.url),
     'utf8',
   );
-  const state = fs.readFileSync(
-    new URL('../docs/CURRENT-STATE.md', import.meta.url),
-    'utf8',
-  );
 
   // A "reveal anyway after N seconds" would trade a benign no-show for the card
   // punching through a recording in progress — recordings run long, and none of
@@ -478,11 +468,6 @@ test('a surface class that never clears is an ACCEPTED no-show, not a timer', ()
     accepted,
     /setTimeout|setInterval/,
     'the acceptance is the decision NOT to time this out',
-  );
-  assert.match(accepted, /docs\/CURRENT-STATE\.md/);
-  assert.match(
-    state,
-    /a surface class that never clears means no launcher for that page/i,
   );
 });
 
@@ -666,17 +651,6 @@ test('Explore manually touches nothing at all, and an unknown choice is inert', 
   assert.deepEqual(spy.calls, { layerIds: [], globeFlights: 0 });
   assert.equal((await runFirstRunChoice('nope', spy.deps)).ok, false);
   assert.deepEqual(spy.calls, { layerIds: [], globeFlights: 0 });
-});
-
-test('the fires/quakes tile name is switchable from one constant', () => {
-  assert.equal(environmentalLabel('ENVIRONMENTAL').title, 'ENVIRONMENTAL');
-  assert.equal(environmentalLabel('EARTH_WATCH').title, 'EARTH WATCH');
-  assert.equal(environmentalLabel('ACTIVE_EVENTS').title, 'ACTIVE EVENTS');
-  assert.equal(environmentalLabel('nonsense').title, 'ENVIRONMENTAL');
-  assert.equal(
-    environmentalLabel().title,
-    environmentalLabel(ENVIRONMENTAL_LABEL_CHOICE).title,
-  );
 });
 
 // ── Defaults interplay: what a mission is allowed to persist ─────────────────

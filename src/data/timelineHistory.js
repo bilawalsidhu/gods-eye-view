@@ -8,7 +8,8 @@ import {
   julianLessThan,
   secondsDifference,
 } from '../geo/julian.js';
-import { clone, copyInto, toDegrees, toRadians } from '../geo/vector.js';
+import { clone, copyInto } from '../geo/vector.js';
+import { greatCircleMeters, initialBearingDeg } from '../geoDistance.js';
 import {
   mergeTimelineRuns,
   readTimelineFixes,
@@ -17,25 +18,12 @@ import {
 
 /** Fixes nearer than this are too close to read a course between. */
 const COURSE_MIN_M = 5;
-const EARTH_RADIUS_M = 6_371_000;
 
 /** The initial great-circle course from one fix to another (degrees from
  * north), or null when they are too close to tell. */
 function courseBetween(from, to) {
-  const lat1 = toRadians(from.lat);
-  const lat2 = toRadians(to.lat);
-  const dLon = toRadians(to.lon - from.lon);
-  const dLat = lat2 - lat1;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
-  if (2 * EARTH_RADIUS_M * Math.asin(Math.min(1, Math.sqrt(a))) < COURSE_MIN_M)
-    return null;
-  const y = Math.sin(dLon) * Math.cos(lat2);
-  const x =
-    Math.cos(lat1) * Math.sin(lat2) -
-    Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
-  return (toDegrees(Math.atan2(y, x)) + 360) % 360;
+  if (greatCircleMeters(from, to) < COURSE_MIN_M) return null;
+  return initialBearingDeg(from.lat, from.lon, to.lat, to.lon);
 }
 
 /**

@@ -7,11 +7,9 @@ import {
   formatFlightLevel,
   formatKnots,
   monoTextWidth,
-  composeLabel,
   acquireAlpha,
   appendCornerBracket,
   resolveTier,
-  measureLabelCard,
   measureTrackLabel,
   nearFarScale,
   rectIntersectsAny,
@@ -42,29 +40,6 @@ test('monoTextWidth multiplies length by advance, 0 for empty', () => {
   assert.equal(monoTextWidth('ABCD', 6), 24);
   assert.equal(monoTextWidth('', 6), 0);
   assert.equal(monoTextWidth(null, 6), 0);
-});
-
-test('composeLabel: id only -> empty secondary (degrades to today)', () => {
-  assert.deepEqual(composeLabel({ id: 'VEH-0001' }), { primary: 'VEH-0001', secondary: '' });
-});
-
-test('composeLabel: id + metric -> secondary is the metric', () => {
-  assert.deepEqual(composeLabel({ id: 'UAL2476', metric: 'FL340' }), {
-    primary: 'UAL2476',
-    secondary: 'FL340',
-  });
-});
-
-test('composeLabel: id + class + metric -> class · metric secondary', () => {
-  assert.deepEqual(composeLabel({ id: 'VIPER11', klass: 'MIL', metric: 'FL280' }), {
-    primary: 'VIPER11',
-    secondary: 'MIL · FL280',
-  });
-});
-
-test('composeLabel truncates an over-long primary and is defensive about empties', () => {
-  assert.equal(composeLabel({ id: 'SUPERLONGVESSELNAME12345' }).primary, 'SUPERLONGVESSELNAM'); // 18
-  assert.deepEqual(composeLabel({}), { primary: '', secondary: '' });
 });
 
 test('acquireAlpha ramps 0->1 across the fade window', () => {
@@ -111,24 +86,6 @@ test('resolveTier maps type to a threat tier, with explicit override winning', (
   // contacts carry no tier and keep the stock 'vehicle' color.
   assert.equal(resolveTier({ type: 'VEH', tier: 'veh_jam' }), 'veh_jam');
   assert.equal(resolveTier({ type: 'VEH', tier: 'veh_nodata' }), 'veh_nodata');
-});
-
-test('measureLabelCard sizes a two-line card so the second line never clips', () => {
-  const card = measureLabelCard('UAL2476', 'B738 · FL340', 6);
-  // bottom of the last baseline + descender must fit inside the card height
-  assert.ok(card.subBase + 3 <= card.h, `subBase+desc ${card.subBase + 3} must fit in h ${card.h}`);
-  assert.ok(card.idBase < card.subBase, 'id line sits above sub line');
-  assert.ok(card.w >= 12 * 6, 'width covers the wider (sub) text');
-  assert.equal(card.hasSec, true);
-});
-
-test('measureLabelCard collapses to a single line when there is no secondary', () => {
-  const card = measureLabelCard('VEH-0001', '', 6);
-  assert.equal(card.hasSec, false);
-  assert.equal(card.subBase, 0);
-  assert.ok(card.idBase + 3 <= card.h, 'single line + descender fits');
-  const two = measureLabelCard('VEH-0001', 'VEH · 38mph', 6);
-  assert.ok(two.h > card.h, 'two-line card is taller than one-line');
 });
 
 test('measureTrackLabel lays out callsign + altitude on one line', () => {

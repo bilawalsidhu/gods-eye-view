@@ -2,6 +2,7 @@
 import { nextTick, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { t } from '../../../i18n/index.js';
+import { vOwnedValue } from '../../rail/ownedValue.js';
 import { useVoiceStore } from '../../stores/voice.js';
 import { ASSISTANT_NAME } from '../../../voice/control.js';
 import PanelLayoutButtons from './PanelLayoutButtons.vue';
@@ -19,18 +20,6 @@ const { controls, chat: messages } = storeToRefs(store);
 const emit = (name, ...args) => controls.value?.emit(name, ...args);
 const list = ref(null);
 const layerChoice = ref('');
-
-// The input holds what the person types until its owner writes it (history
-// recall, a suggestion, clearing after send): only then is it replaced.
-const vOwnedDraft = {
-  mounted(el, { value }) {
-    el.value = value.text;
-  },
-  updated(el, { value, oldValue }) {
-    if (value.revision !== oldValue?.revision && el.value !== value.text)
-      el.value = value.text;
-  },
-};
 
 // Keep the newest message in view as the conversation grows, while the
 // reader is at the bottom: one who scrolled up to read stays there until
@@ -117,7 +106,7 @@ const quickPrompts = () => [t('Fly to Tokyo'), t('Show live flights')];
     <form id="gev-chat-form" @submit.prevent="emit('chat-submit')">
       <UiButton id="gev-chat-restore" :aria-label="t('Expand chat')" :title="t('Expand chat')" @click="emit('chat-restore')"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M5 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-6 4V6a2 2 0 0 1 2-2Z"></path></svg></UiButton>
       <UiButton id="gev-chat-attach" :disabled="props.view.chat.busy" :aria-label="t('Add attachment')" :aria-expanded="String(props.view.chat.attachMenuOpen)" aria-controls="gev-chat-attach-menu" @click="emit('chat-attach-toggle')" @keydown="emit('chat-attach-keydown', $event)"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m8 12 6-6a3 3 0 0 1 4 4l-8 8a5 5 0 0 1-7-7l9-9"></path></svg></UiButton>
-      <textarea id="gev-chat-input" v-owned-draft="{ text: props.view.chat.draft, revision: props.view.chat.draftRevision }" :rows="props.view.chat.rows" maxlength="4000" :aria-label="t('Message GEV')" :placeholder="t('Ask GEV anything about the map…')" @input="emit('chat-input', $event.target.value)" @keydown="emit('chat-keydown', $event)"></textarea>
+      <textarea id="gev-chat-input" v-owned-value="{ text: props.view.chat.draft, revision: props.view.chat.draftRevision }" :rows="props.view.chat.rows" maxlength="4000" :aria-label="t('Message GEV')" :placeholder="t('Ask GEV anything about the map…')" @input="emit('chat-input', $event.target.value)" @keydown="emit('chat-keydown', $event)"></textarea>
       <UiButton id="gev-chat-send" :type="props.view.chat.busy ? 'button' : 'submit'" :disabled="props.view.chat.sendDisabled" :data-busy="String(props.view.chat.busy)" :aria-label="props.view.chat.busy ? t('Stop reply') : t('Send message')" :title="props.view.chat.busy ? t('Stop reply') : t('Send message')" @click="props.view.chat.busy && emit('chat-stop')"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path class="gev-chat-enter-icon" d="M19 5v8H5m5-5-5 5 5 5"></path><rect class="gev-chat-stop-icon" x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor" stroke="none"></rect></svg></UiButton>
     </form>
   </section>

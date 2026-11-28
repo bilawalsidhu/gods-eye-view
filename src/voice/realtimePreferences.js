@@ -5,6 +5,7 @@ import {
   resolveVoiceModel,
   serializeCostLimits,
 } from './voiceCost.js';
+import { browserStorage } from '../browserStorage.js';
 
 // Voice cost control (repo-wide `godsEyeView.<feature>.<field>` convention;
 // the neighbouring ERROR_STORAGE_KEY predates it).
@@ -12,23 +13,13 @@ const VOICE_TIER_STORAGE_KEY = 'godsEyeView.voiceCost.tier';
 
 const VOICE_LIMITS_STORAGE_KEY = 'godsEyeView.voiceCost.limits';
 
-/** Best-effort localStorage handle; absent in tests and locked-down browsers. */
-function voiceStorage(storage) {
-  if (storage) return storage;
-  try {
-    return typeof localStorage === 'undefined' ? null : localStorage;
-  } catch {
-    return null; // privacy modes throw on mere access
-  }
-}
-
 /**
  * Read the persisted voice model tier. Unknown/corrupt values resolve to the
  * default, so a hand-edited localStorage entry can never pick a bad model.
  */
 export function readStoredVoiceTier(storage) {
   try {
-    const raw = voiceStorage(storage)?.getItem(VOICE_TIER_STORAGE_KEY);
+    const raw = (storage || browserStorage())?.getItem(VOICE_TIER_STORAGE_KEY);
     return isKnownVoiceTier(raw)
       ? resolveVoiceModel(raw).tier
       : DEFAULT_VOICE_TIER;
@@ -41,7 +32,7 @@ export function readStoredVoiceTier(storage) {
 export function writeStoredVoiceTier(tier, storage) {
   const resolved = resolveVoiceModel(tier).tier;
   try {
-    voiceStorage(storage)?.setItem(VOICE_TIER_STORAGE_KEY, resolved);
+    (storage || browserStorage())?.setItem(VOICE_TIER_STORAGE_KEY, resolved);
   } catch {
     /* best effort */
   }
@@ -54,7 +45,9 @@ export function writeStoredVoiceTier(tier, storage) {
  */
 export function readStoredVoiceLimits(storage) {
   try {
-    const raw = voiceStorage(storage)?.getItem(VOICE_LIMITS_STORAGE_KEY);
+    const raw = (storage || browserStorage())?.getItem(
+      VOICE_LIMITS_STORAGE_KEY,
+    );
     if (!raw) return normalizeCostLimits(null);
     return normalizeCostLimits(JSON.parse(raw));
   } catch {
@@ -73,7 +66,7 @@ export function readStoredVoiceLimits(storage) {
 export function writeStoredVoiceLimits(limits, storage) {
   const normalized = normalizeCostLimits(limits);
   try {
-    voiceStorage(storage)?.setItem(
+    (storage || browserStorage())?.setItem(
       VOICE_LIMITS_STORAGE_KEY,
       JSON.stringify(serializeCostLimits(normalized)),
     );

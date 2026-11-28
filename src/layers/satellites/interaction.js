@@ -17,7 +17,7 @@ export function createInteraction({
 
   function _onKeyDown(e) {
     // The Cockpit owns Escape while it rides the tracked satellite.
-    if (parts.cockpit?._cockpitHeld()) return;
+    if (parts.cockpit._cockpitHeld()) return;
     if (layerState._enabled && e.key === 'Escape' && layerState._trackedNorad) {
       parts.tracking._cancelPendingTrackingRestore();
       parts.tracking._clearTracking(false, { origin: 'user', globeView: true });
@@ -67,7 +67,7 @@ export function createInteraction({
       if (!layerState._enabled) return;
       // The Cockpit camera rides the tracked satellite: a click on the
       // picture below must not untrack it or switch satellites.
-      if (parts.cockpit?._cockpitHeld()) return;
+      if (parts.cockpit._cockpitHeld()) return;
       // Another layer's card or label painted on top takes the click: the item
       // under it does not act, and the click is not empty space either.
       if (isUnderOtherCard?.(event)) return;

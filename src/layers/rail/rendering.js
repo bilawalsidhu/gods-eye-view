@@ -11,13 +11,13 @@ import {
 } from '../../geo/ellipsoid.js';
 import { horizonFrom } from '../../geo/horizon.js';
 import { distanceSquared } from '../../geo/vector.js';
+import { approxDistanceKm } from '../../data/approxDistance.js';
 import {
   PLACED_WAKE_MS,
   applyDisplayCourse,
   playbackMoving,
   updatePlayback,
-} from '../transit/movement.js';
-import { HEIGHT_SAMPLE_MAX_ALTITUDE_M } from '../transit/policy.js';
+} from '../../data/transitMovement.js';
 import {
   COLD_CELL_FLUSH_MS,
   COLD_CELL_RETRY_MS,
@@ -37,6 +37,7 @@ import {
   FLOOR_CELLS_BURST,
   FLOOR_CELLS_PER_MINUTE,
   FLOOR_WARM_MAX_DIST_KM,
+  HEIGHT_SAMPLE_MAX_ALTITUDE_M,
   MARKER_PIXEL_SIZE,
   RAIL_CATEGORY_COLORS,
   UNSELECTED_TRAIN_ALPHA,
@@ -52,8 +53,6 @@ import { groundVehiclePartState } from '../../data/modelPartDrivers.js';
 
 /** How often the trains near enough for a model are gathered again (wall ms). */
 const MODEL_CANDIDATES_MS = 500;
-/** Each category's colour (CSS), painted where a train model marks it. */
-const CATEGORY_TINTS = RAIL_CATEGORY_COLORS;
 
 const SPRITE_PX = 64;
 /** Icon tints (0..1 channels); frozen, so sharing one is safe. */
@@ -312,8 +311,7 @@ export function createRendering({ state, services, parts }) {
     const pose = cameraPose();
     if (!pose || !Number.isFinite(pose.lat) || !Number.isFinite(pose.lon))
       return Infinity;
-    const kLon = Math.cos((pose.lat * Math.PI) / 180);
-    return Math.hypot(lat - pose.lat, (lon - pose.lon) * kLon) * 111.32;
+    return approxDistanceKm(pose.lat, pose.lon, lat, lon);
   }
 
   /**
@@ -422,7 +420,6 @@ export function createRendering({ state, services, parts }) {
     }
     const camLat = pose.lat;
     const camLon = pose.lon;
-    const kLon = Math.cos((camLat * Math.PI) / 180);
     // The layer's own sets are not ground: heights see through them.
     const exclude = state._icons ? [state._icons.id] : undefined;
     const now = performance.now();
@@ -434,8 +431,7 @@ export function createRendering({ state, services, parts }) {
     let sampled = 0;
     for (const [key, point] of items) {
       if (sampled >= TRACK_SAMPLES_PER_FLUSH) break;
-      const dKm =
-        Math.hypot(point.lat - camLat, (point.lon - camLon) * kLon) * 111.32;
+      const dKm = approxDistanceKm(camLat, camLon, point.lat, point.lon);
       if (dKm > TRACK_SAMPLE_MAX_DIST_KM) continue;
       const prior = cachedGroundFloor(point.lat, point.lon);
       if (!Number.isFinite(prior)) continue;
@@ -521,25 +517,6 @@ export function createRendering({ state, services, parts }) {
     return floorAnswer;
   }
 
-  /**
-   * Height to draw a train at: the rendered terrain under it on a terrain
-   * globe, else the shared ground floor (which tracks the photorealistic mesh
-   * where one is loaded). Where that cell is not warm yet, a neighbouring
-   * cell's floor, else the floor this train last stood on, while the cell is
-   * warmed: a train running onto unsampled ground keeps its height instead of
-   * dropping to the ellipsoid, which lies tens to hundreds of metres under
-   * the photorealistic mesh (about 150 m around Chicago). Only a train with
-   * no floor yet, or a stop, stands on the ellipsoid, until its cell is warm.
-   * @param {number} lat
-   * @param {number} lon
-   * @param {{floorM?: number, key?: string}|null} [entry] the train, which
-   *   keeps its floor
-   * @param {boolean} [stop] a stop of the selected trip: its cell is warmed
-   *   first, however far from the camera
-   * @returns {{h: number, q: number}} The height, and how good it is: 3 the
-   *   rendered terrain, 2 the cell's floor, 1 a neighbouring cell's or the
-   *   train's last floor, 0 the ellipsoid. The same object every call.
-   */
   /** The last coarse cell asked for a stop (stops have no entry). */
   const stopCell = { kLat: NaN, kLon: NaN, cell: null };
 
@@ -566,6 +543,25 @@ export function createRendering({ state, services, parts }) {
     return memo.cell;
   }
 
+  /**
+   * Height to draw a train at: the rendered terrain under it on a terrain
+   * globe, else the shared ground floor (which tracks the photorealistic mesh
+   * where one is loaded). Where that cell is not warm yet, a neighbouring
+   * cell's floor, else the floor this train last stood on, while the cell is
+   * warmed: a train running onto unsampled ground keeps its height instead of
+   * dropping to the ellipsoid, which lies tens to hundreds of metres under
+   * the photorealistic mesh (about 150 m around Chicago). Only a train with
+   * no floor yet, or a stop, stands on the ellipsoid, until its cell is warm.
+   * @param {number} lat
+   * @param {number} lon
+   * @param {{floorM?: number, key?: string}|null} [entry] the train, which
+   *   keeps its floor
+   * @param {boolean} [stop] a stop of the selected trip: its cell is warmed
+   *   first, however far from the camera
+   * @returns {{h: number, q: number}} The height, and how good it is: 3 the
+   *   rendered terrain, 2 the cell's floor, 1 a neighbouring cell's or the
+   *   train's last floor, 0 the ellipsoid. The same object every call.
+   */
   function floorHeight(lat, lon, entry = null, stop = false) {
     if (globeShown()) {
       // The loaded terrain under the point: cache work, no request.
@@ -653,9 +649,7 @@ export function createRendering({ state, services, parts }) {
     const prev = entry.drawnHeight;
     let h = targetH;
     if (prev && Number.isFinite(prev.h)) {
-      const kLon = Math.cos((lat * Math.PI) / 180);
-      const moved =
-        Math.hypot(lat - prev.lat, (lon - prev.lon) * kLon) * 111_320;
+      const moved = approxDistanceKm(prev.lat, prev.lon, lat, lon) * 1000;
       const better =
         (prev.q === 0 && targetQ > 0) || (prev.q <= 1 && targetQ >= 2);
       if (moved <= TRACK_SNAP_M && !better) {
@@ -971,7 +965,8 @@ export function createRendering({ state, services, parts }) {
         railCategory: entry.category,
         railMode: entry.railMode,
       });
-      item.tint = CATEGORY_TINTS[entry.category] || CATEGORY_TINTS.local;
+      item.tint =
+        RAIL_CATEGORY_COLORS[entry.category] || RAIL_CATEGORY_COLORS.local;
     }
     item.position = entry.marker.position;
     item.headingDeg = Number.isFinite(entry.courseDeg) ? entry.courseDeg : 0;
@@ -1081,12 +1076,9 @@ export function createRendering({ state, services, parts }) {
     showMarkers,
     clearMarkers,
     destroyMarkers,
-    flushMarkers,
     removeMarker,
-    markerShown,
     startFrames,
     stopFrames,
-    cameraPose,
     addMarker,
     paint,
     paintAll,
@@ -1096,7 +1088,6 @@ export function createRendering({ state, services, parts }) {
     cancelWake,
     schedulePlayback,
     syncRenderHold,
-    onPreRender,
     warmFloors,
     applyCategoryVisibility,
     categoryShown,

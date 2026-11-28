@@ -3,7 +3,6 @@ import {
   roundHeadingDegrees,
 } from './data/headingDegrees.js';
 
-export { resolveHudRailLayout } from './ui/panelRailGeometry.js';
 export { normalizeHeading };
 
 /**

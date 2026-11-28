@@ -1,9 +1,13 @@
-import { createLineCoverage, freshCoverage } from '../../lineCoverage.js';
-import { createLru, createTileCache } from '../../tileCache.js';
-
-export { createTileCache } from '../../tileCache.js';
+import {
+  LINE_CLICK_HINT,
+  createLineCoverage,
+  freshCoverage,
+} from '../../lineCoverage.js';
+import { createTileCache } from '../../tileCache.js';
+import { zoomForHeight } from '../../tileMath.js';
+import { createLru } from '../../../../data/lru.js';
 import { createSequenceCones, thinImages } from '../../sequenceCones.js';
-import { metresBetween } from '../../view.js';
+import { approxDistanceM } from '../../../../data/approxDistance.js';
 import {
   chainSegments,
   maskedSegments,
@@ -16,16 +20,14 @@ import { msg } from '../../../../i18n/index.js';
 import {
   ARCHIVED_MESSAGE,
   COLORS,
-  COVERAGE_MAX_HEIGHT_M,
   COVERAGE_NOUN,
-  COVERAGE_STREET_ZOOM_BELOW_M,
   COVERAGE_TUNING,
+  COVERAGE_ZOOMS,
   FILTERED_OUT_MESSAGE,
   KARTAVIEW_CREDIT_HTML,
   KARTAVIEW_LABEL,
   KARTAVIEW_NAME,
   KARTAVIEW_PROVIDER_ID,
-  LINE_CLICK_HINT,
   NEAREST_PROBES,
   NEAREST_RADIUS_M,
   NO_COVERAGE_HINT,
@@ -45,12 +47,6 @@ import {
 const PHOTO_CACHE_SIZE = 4000;
 /** Sequence pages kept in memory. */
 const PAGE_CACHE_SIZE = 12;
-
-/** z14 near the street, z13 a little higher, nothing above. */
-export function kartaViewZoomFor(heightM) {
-  if (!Number.isFinite(heightM) || heightM > COVERAGE_MAX_HEIGHT_M) return null;
-  return heightM > COVERAGE_STREET_ZOOM_BELOW_M ? 13 : 14;
-}
 
 /** The 1-based page of a sequence that holds `index`, if no photo is missing. */
 function pageOf(index) {
@@ -149,7 +145,7 @@ export function createKartaViewProvider({
                   .sort(
                     (a, b) => (a.sequenceIndex ?? 0) - (b.sequenceIndex ?? 0),
                   ),
-                metresBetween,
+                approxDistanceM,
               );
               // The open photo may have just learnt which way it looked. The
               // page is good whatever the viewer is doing.
@@ -318,7 +314,7 @@ export function createKartaViewProvider({
       const coverage = createLineCoverage({
         state,
         fetchTile,
-        zoomFor: kartaViewZoomFor,
+        zoomFor: (heightM) => zoomForHeight(heightM, COVERAGE_ZOOMS),
         colors: COLORS,
         pickPrefix: PICK_PREFIX.line,
         renderKey: 'kartaview-coverage',
@@ -369,7 +365,7 @@ export function createKartaViewProvider({
       /** Sequence id → its photo count from KartaView (asked once). */
       const counts = new Map();
       function countPhotos(sequenceId) {
-        if (counts.has(sequenceId) || !source.getSequenceCount) return;
+        if (counts.has(sequenceId)) return;
         counts.set(sequenceId, undefined);
         source.getSequenceCount(sequenceId).then(
           (count) => {
@@ -469,11 +465,11 @@ export function createKartaViewProvider({
           masks.clear();
         },
 
-        destroy(cesiumViewer) {
+        destroy() {
           coverage.detach();
           coverage.clear();
           coverage.unblock();
-          cones.destroy(cesiumViewer);
+          cones.destroy();
           tiles.clear();
           masks.clear();
         },
@@ -552,7 +548,7 @@ export function createKartaViewProvider({
           for (const record of records) {
             const photo = remember(record);
             if (!photo?.urls.view) continue;
-            const metres = metresBetween({ lat, lon }, photo);
+            const metres = approxDistanceM({ lat, lon }, photo);
             if (metres > NEAREST_RADIUS_M) continue;
             if (!passesKartaViewFilter(photo, filter)) filteredOut++;
             else near.push({ photo, metres });
@@ -562,7 +558,7 @@ export function createKartaViewProvider({
           // nearest one that answers wins.
           const candidates = near.slice(0, NEAREST_PROBES);
           const answers = await Promise.all(
-            candidates.map(({ photo }) => showable(photo, { signal })),
+            candidates.map(({ photo }) => showable(photo)),
           );
           const hit = candidates.find((_, i) => answers[i]);
           if (hit) return hit.photo.id;

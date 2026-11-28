@@ -96,3 +96,30 @@ test('the story screen previews a drag and seeks once on release', async (t) => 
   assert.equal(track.querySelector('.tl-seg.now')?.dataset.k, '0');
   assert.deepEqual(seeks.slice(1), [23990, first.wallMs + 1]);
 });
+
+test('closing Stories hands the credit line back to GEV', async (t) => {
+  const root = document.documentElement.style;
+  root.setProperty('--gs-credit-bottom', '40px');
+  root.setProperty('--gs-credit-left', '12px');
+  const host = document.body.appendChild(document.createElement('div'));
+  const pinia = createPinia();
+  const store = useStoriesStore(pinia);
+  store.connect({ open: async () => true });
+  const app = createApp(StoriesView).use(pinia);
+  app.mount(host);
+  t.after(() => {
+    app.unmount();
+    host.remove();
+  });
+  await nextTick();
+  assert.equal(root.getPropertyValue('--gs-credit-bottom'), '');
+  assert.equal(root.getPropertyValue('--gs-credit-left'), '');
+  root.setProperty('--gs-credit-bottom', '40px');
+  store.mode = 'explore';
+  await nextTick();
+  await nextTick();
+  store.mode = 'closed';
+  await nextTick();
+  await nextTick();
+  assert.equal(root.getPropertyValue('--gs-credit-bottom'), '');
+});

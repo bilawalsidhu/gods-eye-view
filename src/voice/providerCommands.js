@@ -1,11 +1,12 @@
 import { supportedVoiceProviders } from './providerCapabilities.js';
+import { browserStorage } from '../browserStorage.js';
 
 const STORAGE_KEY = 'gev.voice.provider';
 
 export function readVoiceProvider(storage, supported = ['openai', 'gemini']) {
   let saved;
   try {
-    saved = (storage ?? globalThis.localStorage)?.getItem(STORAGE_KEY);
+    saved = (storage ?? browserStorage())?.getItem(STORAGE_KEY);
   } catch {
     /* Storage is optional. */
   }
@@ -29,13 +30,7 @@ export function createProviderCommands(options, { bind, factories, storage }) {
   const lifetime = new AbortController();
   let mountGeneration = 0;
   let voiceEnabled = false;
-  const stored = () => {
-    try {
-      return storage ?? globalThis.localStorage;
-    } catch {
-      return null;
-    }
-  };
+  const stored = () => storage ?? browserStorage();
   const stop = (settings = {}) => {
     if (disposed) return;
     voiceEnabled = false;

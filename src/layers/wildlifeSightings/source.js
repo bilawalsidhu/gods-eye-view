@@ -12,12 +12,13 @@ import {
   WILDLIFE_GRID_TILE_CAP,
   wildlifeGridCellId,
 } from './gridViewport.js';
+import { parseRetryAfterSeconds } from '../../sources/retryAfter.js';
 
 // Leave room for projected observations while bounding malformed proxy replies.
 const SNAPSHOT_MAX_BYTES = 2 * 1024 * 1024;
 // The proxy owns upstream pacing; observation requests precede these workers.
-export const WILDLIFE_GRID_CONCURRENCY = 4;
-export const WILDLIFE_GRID_CACHE_MAX = 400;
+const WILDLIFE_GRID_CONCURRENCY = 4;
+const WILDLIFE_GRID_CACHE_MAX = 400;
 export const WILDLIFE_GRID_TTL_MS = 15 * 60_000;
 // Match the proxy's one-hour stale allowance. Keep the original data time so
 // repeated refresh failures never extend a tile's usable life.
@@ -71,27 +72,6 @@ function validProjectedGrid(payload) {
   );
 }
 
-function retryAfterSeconds(value, nowMs) {
-  if (typeof value !== 'string' || !value.trim()) return null;
-  const text = value.trim();
-  if (/^\d+(?:\.\d+)?$/.test(text)) {
-    const seconds = Number(text);
-    return Number.isFinite(seconds)
-      ? Math.min(WILDLIFE_RETRY_AFTER_MAX_SEC, Math.ceil(seconds))
-      : null;
-  }
-  // Reject malformed numeric values rather than letting Date.parse interpret
-  // them as calendar dates. HTTP dates include a named weekday or month.
-  if (!/[a-z]/i.test(text)) return null;
-  const deadline = Date.parse(text);
-  return Number.isFinite(deadline) && Number.isFinite(nowMs)
-    ? Math.min(
-        WILDLIFE_RETRY_AFTER_MAX_SEC,
-        Math.max(0, Math.ceil((deadline - nowMs) / 1000)),
-      )
-    : null;
-}
-
 function validProjectedRows(rows, origin) {
   return (
     Array.isArray(rows) &&
@@ -123,7 +103,7 @@ function wildlifeFailureStatus(error) {
 }
 
 /** Whether a failure asks clients to wait before the next request. */
-export function wildlifeFailureRetryable(error) {
+function wildlifeFailureRetryable(error) {
   const status = wildlifeFailureStatus(error);
   return status === 429 || status >= 500;
 }
@@ -231,10 +211,11 @@ export function createWildlifeSightingsSource({
     signal?.throwIfAborted();
     const response = await fetchImpl(url, { signal });
     signal?.throwIfAborted();
-    const retryAfterSec = retryAfterSeconds(
+    const told = parseRetryAfterSeconds(
       response.headers?.get?.('Retry-After'),
       now(),
     );
+    const retryAfterSec = told === null ? null : Math.max(0, told);
     const upstreamStatus =
       Number(response.headers?.get?.('X-Upstream-Status')) || 0;
     if (!response.ok) {

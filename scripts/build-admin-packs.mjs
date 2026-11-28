@@ -187,7 +187,7 @@ function segDist(p, a, b) {
 }
 
 /** Iterative Douglas-Peucker over an open point list. */
-function douglasPeucker(points, tolerance) {
+export function douglasPeucker(points, tolerance) {
   if (points.length <= 2) return points.slice();
   const keep = new Uint8Array(points.length);
   keep[0] = keep[points.length - 1] = 1;

@@ -1,4 +1,4 @@
-export function createTesting({ state: layerState, services, parts, source }) {
+export function createTesting({ state: layerState, services, parts }) {
   /** @returns {{historyKeys: string[], navigationVisitedKeys: string[], historyLength: number, navigationIndex: number, suppressedHistoryKey: string|null, pendingSelectionKey: string|null}} */
 
   function _getAwarenessNavigationStateForTest() {
@@ -18,5 +18,9 @@ export function createTesting({ state: layerState, services, parts, source }) {
   return {
     _getAwarenessNavigationStateForTest,
     _getAwarenessPanelRendersForTest,
+    collectAircraftProximityWindow: (...args) =>
+      parts.queries.collectAircraftProximityWindow(...args),
+    awarenessNeedsContinuousRender: (...args) =>
+      parts.model.awarenessNeedsContinuousRender(...args),
   };
 }

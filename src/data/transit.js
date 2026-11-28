@@ -27,8 +27,8 @@ const layer = createTransitLayer({
       neighborFloorM,
       warmGroundFloor,
     },
-    // The legacy sampler over the same legacy floor, so this standalone
-    // module warms its own mesh floors the way the application layer does.
+    // The module-scoped sampler shares the module-scoped floor (./groundFloor.js,
+    // ./meshFloorSampler.js), so standalone transit warms its own mesh floors.
     mesh: { sampleMeshFloorCells },
   },
 });
@@ -36,6 +36,7 @@ const layer = createTransitLayer({
 export const _setTransitOverlayHostForTest =
   layer._setTransitOverlayHostForTest;
 export const _transitStateForTest = layer._transitStateForTest;
+export { createTransitLayer } from '../layers/transit/index.js';
 export {
   TRANSIT_MODE_COLORS,
   TRANSIT_POLL_MS,
@@ -44,13 +45,11 @@ export {
   aggregateTransitFeedHealth,
   buildTransitSelectionCopy,
   createTransitSelectedOverlayEntry,
-  interpolatedVehiclePosition,
   isStaleVehicleFix,
   transitDetectionClass,
   transitDetectionId,
   transitDetectionMetric,
   transitVehicleKey,
   vehicleFixAgeMs,
-  createTransitLayer,
-} from '../layers/transit/index.js';
+} from '../layers/transit/policy.js';
 export default layer;

@@ -1,16 +1,11 @@
 /**
  * @module trailRenderer
- * @description Shared track-history renderer (PRD WS-F F4; rebuilt round 6,
- * 2026-07-06; drawn through the renderer's draw port since 2026-11).
+ * @description Shared track-history renderer, drawn through the renderer's draw port.
  *
  * One trail = one line set on the viewer's draw port: the history line and,
  * for layers that draw one, the live head from the last history point to
- * the moving contact. Two owner directives from the field shape it:
- *  - "the line must ALWAYS be visible": where the trail passes behind or
- *    below scene geometry it draws dimmed (the line's depth-fail colour)
- *    instead of vanishing.
- *  - "show actual tracks, don't style them too much": the whole history
- *    renders at one readable alpha (dimmer where it is hidden).
+ * the moving contact. The whole history uses one readable alpha and draws dimmed where
+ * scene geometry hides it.
  *
  * The history changes at poll cadence (~15-60 s) plus once on backfill; the
  * head may change every frame. Either is rebuilt alone, under the same pick

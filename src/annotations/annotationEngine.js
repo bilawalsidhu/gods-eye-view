@@ -3,7 +3,7 @@ import { defaultGeospatial } from '../search/defaults.js';
 import { cameraOf, findCamera, findQuery } from '../render/rendererOf.js';
 import { fromDegrees } from '../geo/ellipsoid.js';
 import { sphereFromPoints } from '../geo/sphere.js';
-import { distance, toRadians } from '../geo/vector.js';
+import { distance, toRadians, wrapLongitude } from '../geo/vector.js';
 import { greatCircleMeters } from '../geoDistance.js';
 import {
   holdContinuousRender,
@@ -1660,7 +1660,7 @@ export function createAnnotationEngine({
         ring,
         polygons: null,
         anchor: {
-          lon: ((((midLon + 180) % 360) + 360) % 360) - 180,
+          lon: wrapLongitude(midLon),
           lat: (Math.min(...lats) + Math.max(...lats)) / 2,
           height: 0,
         },
@@ -2182,7 +2182,7 @@ function pendingAnimation(anno, now) {
 // Region-scale viewports (a mountain range, sea, or desert can span thousands of km)
 // must not launch the assist flight to space: frameAnnotation flies at range × 2.4,
 // so this cap keeps the camera at ≈290 km — the same regional swath scale the
-// fly_to_location natural-region heuristic uses (owner field test 2026-07-23).
+// fly_to_location natural-region heuristic uses.
 const VIEWPORT_ASSIST_RANGE_CAP_M = 120000;
 
 /** The view frustum's planes as `row 3 ± row axis` of the view-projection. */

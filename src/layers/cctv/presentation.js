@@ -30,7 +30,7 @@ const SOURCE_KIND_LABELS = Object.freeze({
 });
 
 /** CAL badge id ('raw-prior') as the summary shows it; unknown ids stay codes. */
-export function summaryCalLabel(badge) {
+function summaryCalLabel(badge) {
   const key = String(badge || '');
   return CAL_BADGE_LABELS[key]
     ? t(CAL_BADGE_LABELS[key])
@@ -38,7 +38,7 @@ export function summaryCalLabel(badge) {
 }
 
 /** Source kind ('image', 'snapshot') for the summary; HLS, MJPEG… stay codes. */
-export function summarySourceLabel(kind) {
+function summarySourceLabel(kind) {
   const key = String(kind || 'image').toLowerCase();
   return SOURCE_KIND_LABELS[key]
     ? t(SOURCE_KIND_LABELS[key])
@@ -46,7 +46,7 @@ export function summarySourceLabel(kind) {
 }
 
 /** View band id ('street', 'city'…) as the HUD names it. */
-export function summaryViewBandLabel(band) {
+function summaryViewBandLabel(band) {
   switch (band) {
     case 'street':
       return t('STREET', { context: 'view band' });
@@ -221,7 +221,7 @@ export function createPresentation({
       calibration: {
         ...parts.calibration.normalizeCalibration(camera.calibration),
       },
-      // Save-gated persistence (design §3e): true while the live pose carries
+      // Save-gated persistence: true while the live pose carries
       // edits that have not been SAVEd (or RESET). Drives the CAL · EDITED chip.
       calDirty: !!record.calDirty,
       // Deterministic QA seam: counts commit-grade anchor resolutions (E/N drag
@@ -243,7 +243,7 @@ export function createPresentation({
       intrinsics: camera.intrinsics ? { ...camera.intrinsics } : null,
       extrinsics: camera.extrinsics ? { ...camera.extrinsics } : null,
       anchor: camera.anchor ? { ...camera.anchor } : null,
-      // Panel-only trust signal (design §3b, amended by LOCKED §9.2/§9.3): no
+      // Panel-only trust signal: no
       // in-world rendering reads this, no score-based quality math backs it.
       calBadge: parts.calibration.deriveCalBadge(camera),
       poseSource: camera.poseSource || null,
@@ -266,7 +266,7 @@ export function createPresentation({
     const activeId = active?.camera.id || null;
     const payload = {
       enabled: layerState._enabled,
-      // Compat boolean + the full tri-state (viewshed design §3b).
+      // Compat boolean + the full tri-state.
       showCoverage: layerState._coverageMode !== 'off',
       coverageMode: layerState._coverageMode,
       showProjection: layerState._showProjection,

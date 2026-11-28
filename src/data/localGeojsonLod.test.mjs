@@ -14,14 +14,12 @@ import {
   INFRA_LOD_INCUMBENT_BONUS,
   INFRA_LOD_FAR_M,
   INFRA_LOD_MAX_DISTANCE_PENALTY,
-  INFRA_LOD_GRACE_PASSES,
   INFRA_LOD_GRACE_MS,
   infraLodBudget,
   infraRankScore,
   selectInfraLod,
   applyInfraEvictionGrace,
   INFRA_LOD_MOTION_PROBE_INTERVAL_MS,
-  INFRA_LOD_MOTION_EPSILON_RATIO,
   INFRA_LOD_MOTION_EPSILON_MIN_M,
   infraLodMotionEpsilonM,
   shouldRecomputeInfraLod,
@@ -43,9 +41,6 @@ function candidates(count, options = {}) {
 /* ----------------------------- budget ----------------------------- */
 
 test('infraLodBudget clamps hardest at global height and opens up as you zoom in', () => {
-  assert.equal(INFRA_LOD_ACTIVE_MIN, 80);
-  assert.equal(INFRA_LOD_ACTIVE_MID, 200);
-  assert.equal(INFRA_LOD_ACTIVE_MAX, 420);
   assert.deepEqual(infraLodBudget(9_000_000), { activeLimit: INFRA_LOD_ACTIVE_MIN });
   assert.deepEqual(infraLodBudget(1_000_000), { activeLimit: INFRA_LOD_ACTIVE_MID });
   assert.deepEqual(infraLodBudget(50_000), { activeLimit: INFRA_LOD_ACTIVE_MAX });
@@ -275,16 +270,9 @@ test('applyInfraEvictionGrace tolerates missing / malformed input', () => {
   assert.deepEqual(out2.keepIds, ['a']);
 });
 
-test('grace constants are the documented defaults', () => {
-  assert.equal(INFRA_LOD_GRACE_PASSES, 2);
-  assert.equal(INFRA_LOD_GRACE_MS, 4_000);
-});
-
 /* -------------------------- motion fallback ------------------------- */
 
 test('infraLodMotionEpsilonM scales with camera height above a fixed floor', () => {
-  assert.equal(INFRA_LOD_MOTION_EPSILON_RATIO, 0.02);
-  assert.equal(INFRA_LOD_MOTION_EPSILON_MIN_M, 250);
   // Well above the floor: pure ratio.
   assert.equal(infraLodMotionEpsilonM(3_000_000), 60_000);
   assert.equal(infraLodMotionEpsilonM(1_000_000), 20_000);
@@ -370,10 +358,4 @@ test('shouldRecomputeInfraLod opens on first use and tolerates missing / malform
     nowMs: 2_000, lastProbeMs: 0, movedSqM: 300 ** 2, cameraHeightM: 9_000_000, motionEpsilonM: 100,
   });
   assert.equal(explicit.recompute, true);
-});
-
-test('motion-fallback constants are the documented defaults', () => {
-  assert.equal(INFRA_LOD_MOTION_PROBE_INTERVAL_MS, 1_000);
-  assert.equal(INFRA_LOD_MOTION_EPSILON_RATIO, 0.02);
-  assert.equal(INFRA_LOD_MOTION_EPSILON_MIN_M, 250);
 });

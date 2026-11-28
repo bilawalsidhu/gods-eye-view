@@ -41,6 +41,14 @@ export const RATE_LIMITED_MESSAGE = msg(
   'Coverage requests are being rate-limited — they resume on their own',
 );
 
+/** Sequence-tile zoom by camera height above ground (m), see zoomForHeight; Mapillary stops at z14. */
+export const COVERAGE_ZOOMS = Object.freeze([
+  [1_800, 14],
+  [5_000, 13],
+  [12_000, 12],
+  [60_000, 11],
+]);
+
 /** Coverage tuning (see LineCoverageTuning in lineCoverage.js). */
 export const COVERAGE_TUNING = Object.freeze({
   maxTiles: 9,

@@ -668,12 +668,12 @@ test('a move carries its pick-buffer position, sensor-corrected as a click is', 
     height: 200,
   });
   const stage = { enabled: true, uniforms: { intensity: 1, pixelation: 4 } };
-  registerStyleStages(h.viewer.scene, { surveillance: stage });
+  registerStyleStages(h.viewer, { surveillance: stage });
   const seen = [];
   h.input.onPointer('move', (event) => seen.push(event));
   h.handler.fire(TYPES.MOUSE_MOVE, { endPosition: { x: 300, y: 50 } });
   const expected = sensorPickPosition(
-    h.viewer.scene,
+    h.viewer,
     { x: 300, y: 50 },
     h.viewer.scene.canvas,
   );

@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { satelliteVisualsVisible } from './satellites.js';
+import { createControls } from '../layers/satellites/controls.js';
+
+const { satelliteVisualsVisible } = createControls({
+  state: {},
+  services: { layerState: {} },
+  parts: {},
+});
 
 test('restoring Satellite presentation preferences cannot show a disabled layer', () => {
   assert.equal(satelliteVisualsVisible(false, true), false);

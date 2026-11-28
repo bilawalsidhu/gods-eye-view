@@ -61,12 +61,6 @@ function loadCountries(read = () => JSON.parse(readFileSync(PACK, 'utf8'))) {
   return countries;
 }
 
-/** Test seam: read another pack (or the bundled one again). */
-export function resetCountries(read) {
-  countries = null;
-  if (read) loadCountries(read);
-}
-
 const geometries = (entry) => entry.parts.map((part) => geometryOf(part));
 
 let disputed = null;
@@ -92,7 +86,7 @@ function loadDisputed() {
 }
 
 /** The disputed area at a point, or null. */
-export function disputedAt(lat, lon) {
+function disputedAt(lat, lon) {
   return (
     loadDisputed().find((area) =>
       area.rings.some((ring) => pointInRing(ring, lat, lon)),

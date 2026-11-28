@@ -134,6 +134,7 @@ export function denseContinentalRendering({ onOperations } = {}) {
   };
   parts.rendering = createRendering({ state, services, parts });
   parts.photos = { get: () => null, setAmbient() {} };
+  parts.controls = { notify() {} };
   parts.selection = createSelection({ state, services, parts });
   parts.rendering.init();
   return {

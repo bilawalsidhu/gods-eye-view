@@ -14,7 +14,7 @@ import {
   loadFleetModelSet,
 } from '../../data/fleetModels.js';
 import { aircraftLayerPartState } from '../../data/modelPartDrivers.js';
-import { KNOT_MPS } from '../../data/units.js';
+import { FOOT_M, KNOT_MPS } from '../../data/units.js';
 import {
   FLEET_DR_INTERVAL_MS,
   MODEL_ADD_M,
@@ -189,11 +189,11 @@ export function createLocalAdsbModels({
       onGround: marker.onGround === true,
       heightAboveGroundM: null,
       altitudeM:
-        finite(record.altitudeFt) === null ? null : record.altitudeFt * 0.3048,
+        finite(record.altitudeFt) === null ? null : record.altitudeFt * FOOT_M,
       verticalRateMps:
         finite(record.verticalRateFpm) === null
           ? null
-          : (record.verticalRateFpm * 0.3048) / 60,
+          : (record.verticalRateFpm * FOOT_M) / 60,
       speedMps,
     });
   }

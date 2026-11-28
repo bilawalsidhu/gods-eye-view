@@ -1,9 +1,6 @@
 import { classifyAircraft } from '../../data/aircraftClass.js';
 import { stickyText } from '../../data/aircraftMeta.js';
-import {
-  ENRICH_DISPATCH_GAP_MS,
-  ENRICH_MAX_INFLIGHT,
-} from '../flights/policy.js';
+import { createEnrichmentQueue } from '../flights/enrichmentQueue.js';
 
 const ICAO = /^[0-9a-f]{6}$/i;
 /** Airline-style callsigns only (LLL + digit); GA tails do not resolve. */
@@ -30,10 +27,9 @@ export function localAdsbClass(record, meta = null) {
 }
 
 /**
- * adsbdb enrichment for Local ADS-B through the same cached proxy and the same
- * rules as the public Flights layer: each key is asked for at most once per
- * session, at most four requests are in flight and dispatches are dripped
- * 200 ms apart. Only the selected aircraft (type + route) and aircraft that
+ * Local ADS-B uses the Flights enrichment queue and cached proxy. A temporary
+ * failure can be retried after the cool-down.
+ * Only the selected aircraft (type + route) and aircraft that
  * are about to render as 3D models (type) are ever looked up — never one
  * request per contact per tick.
  * @param {object} options
@@ -45,15 +41,15 @@ export function localAdsbClass(record, meta = null) {
 export function createLocalAdsbEnrichment({
   source,
   onChange,
-  now = Date.now,
+  now = () => Date.now(),
 }) {
   const meta = new Map();
-  const seen = new Set();
-  const queue = [];
-  let active = 0;
-  let lastDispatchAt = -Infinity;
-  let dripTimer = null;
   let lifetime = new AbortController();
+  const queue = createEnrichmentQueue({
+    source: () => source,
+    signal: () => lifetime.signal,
+    now,
+  });
 
   function entry(icao) {
     let value = meta.get(icao);
@@ -66,46 +62,16 @@ export function createLocalAdsbEnrichment({
   }
 
   function enqueue(key, query, apply, priority) {
-    if (typeof source?.getEnrichment !== 'function' || seen.has(key)) return;
-    seen.add(key);
-    const job = { query, apply };
-    if (priority) queue.unshift(job);
-    else queue.push(job);
-    drain();
-  }
-
-  function drain() {
-    const signal = lifetime.signal;
-    while (!signal.aborted && active < ENRICH_MAX_INFLIGHT && queue.length) {
-      const wait = ENRICH_DISPATCH_GAP_MS - (now() - lastDispatchAt);
-      if (wait > 0) {
-        if (!dripTimer)
-          dripTimer = setTimeout(() => {
-            dripTimer = null;
-            drain();
-          }, wait);
-        return;
-      }
-      lastDispatchAt = now();
-      const job = queue.shift();
-      active += 1;
-      Promise.resolve()
-        .then(() => source.getEnrichment(job.query, { signal }))
-        .then((data) => {
-          if (!signal.aborted && data?.found) {
-            job.apply(data);
-            onChange?.();
-          }
-        })
-        .catch(() => {
-          /* enrichment never surfaces errors */
-        })
-        .finally(() => {
-          if (signal.aborted) return;
-          active -= 1;
-          drain();
-        });
-    }
+    if (typeof source?.getEnrichment !== 'function') return;
+    queue.enqueue(
+      key,
+      query,
+      (data) => {
+        apply(data);
+        onChange?.();
+      },
+      priority,
+    );
   }
 
   return {
@@ -158,10 +124,7 @@ export function createLocalAdsbEnrichment({
     destroy() {
       lifetime.abort();
       lifetime = new AbortController();
-      clearTimeout(dripTimer);
-      dripTimer = null;
-      queue.length = 0;
-      active = 0;
+      queue.reset();
     },
   };
 }

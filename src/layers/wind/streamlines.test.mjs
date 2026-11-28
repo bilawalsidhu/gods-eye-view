@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import {
   bakeWindStreamlines,
   groupWindPaths,
-  WIND_CELL_DEGREES,
   WIND_PATH_LIMIT,
   WIND_PATH_STEPS,
 } from './streamlines.js';
@@ -81,7 +80,6 @@ test('regional grouping preserves every baked path and ordering within each cell
   const paths = bakeWindStreamlines(field());
   const before = structuredClone(paths);
   const groups = groupWindPaths(paths);
-  assert.equal(WIND_CELL_DEGREES, 30);
   assert.equal(groups.length, 72);
   assert.deepEqual(paths, before, 'grouping leaves the bake untouched');
   const grouped = groups.flatMap((cell) => cell.paths);

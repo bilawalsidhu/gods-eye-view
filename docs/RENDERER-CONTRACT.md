@@ -511,8 +511,8 @@ any other as a primitive a segment with a material of its own, recoloured
 and shown in place; an arrow's head on its last segment, a pattern keeping
 its image; the check `draw.lines.segmentStyles`), and image fills on clamped ellipses, cut finely so a
 round image (the launch pad zone's rim) runs round. A clamped colour fill
-whose geometry alone changes (an annotation's target ring, resized as the
-camera climbs) is drawn alone where it now is, in the same frame. A hidden
+whose geometry alone changes is drawn alone where it now is, in the same
+frame. A hidden
 line that cannot settle into a static batch leaves its polyline collection
 until it shows again, since the collection draws every line it holds.
 
@@ -577,7 +577,7 @@ The rules that hold everywhere:
   unless a tool holds them off.
 
 `src/render/contract/index.js` lists every member of every port in `PORTS`,
-along with `CAPABILITIES`, `FRAME_STEPS` and `QUALITY_KEYS`.
+along with `CAPABILITIES` and `QUALITY_KEYS`.
 `checkRendererShape(renderer)` names each required member that is missing,
 and each capability member present without its capability.
 `contract.test.mjs` type-checks the contract under strict TypeScript, and
@@ -612,9 +612,8 @@ fill.
 A renderer is more than a drawing surface: it is a whole globe engine. The
 application keeps the data (providers, records, layers and their
 behaviour). The renderer owns everything from a source spec or a draw set
-down to the pixels. The ports follow the API's shape; `ROLES` in
-`src/render/contract/index.js` names what the engine behind them does, and
-puts every member of `PORTS` in exactly one role. It changes no member.
+down to the pixels. The ports follow the API's shape; the roles below name
+what the engine behind them does; they change no member.
 
 | Role      | What it does                                                                                                | Members                                                                                |
 | --------- | ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
@@ -626,9 +625,7 @@ puts every member of `PORTS` in exactly one role. It changes no member.
 | `host`    | Canvas and life cycle, the frame loop and scene time, quality, capture, settling                            | `renderer`, `frame`, `quality`                                                         |
 
 An entry is a port or a `port.member` prefix; the most specific one wins, so
-`roleOf('globe', 'sky.set')` is `'look'` while `roleOf('globe', 'setBase')`
-is `'surface'`. `contract.test.mjs` fails when a member has no role, when
-two roles claim the same entry, or when an entry names no member.
+`globe.sky.set` is `look` while `globe.setBase` is `surface`.
 
 ## Moving code onto the contract
 

@@ -827,7 +827,6 @@
   "LIFTOFF · {mission}": "DESPEGUE · {mission}",
   "ASCENT REPLAY · {mission}": "REPETICIÓN DEL ASCENSO · {mission}",
   "ASCENT ESTIMATE · {mission}": "ESTIMACIÓN DEL ASCENSO · {mission}",
-  "STAGE RE-ENTRY / RECOVERY · {mission}": "REENTRADA / RECUPERACIÓN DE ETAPA · {mission}",
   "ORBIT REPLAY · {mission}": "REPETICIÓN EN ÓRBITA · {mission}",
   "PAUSED · {title}": "EN PAUSA · {title}",
   "T minus {seconds}": "T menos {seconds}",
@@ -955,8 +954,6 @@
   "This browser is blocking storage, so that could not be saved.": "Este navegador bloquea el almacenamiento, así que no se pudo guardar.",
   "Live earthquakes and active fires, from USGS and NASA": "Terremotos en vivo e incendios activos, de USGS y NASA",
   "ENVIRONMENTAL": "MEDIO AMBIENTE",
-  "EARTH WATCH": "VIGILANCIA TERRESTRE",
-  "ACTIVE EVENTS": "EVENTOS ACTIVOS",
   "POWER UP · {count} KEYS WAITING": {
     "one": "ENCENDER · {count} CLAVE EN ESPERA",
     "many": "ENCENDER · {count} DE CLAVES EN ESPERA",
@@ -1238,11 +1235,6 @@
   "CONSEQUENCE": "SECUELAS",
   "DOWNSTREAM CONSEQUENCE": "SECUELAS AGUAS ABAJO",
   "EVIDENCE": "EVIDENCIA",
-  "{count} GEOLOCATED SOURCE-MAP PLACEMENTS": {
-    "one": "{count} UBICACIÓN GEOLOCALIZADA EN EL MAPA DE FUENTES",
-    "many": "{count} DE UBICACIONES GEOLOCALIZADAS EN EL MAPA DE FUENTES",
-    "other": "{count} UBICACIONES GEOLOCALIZADAS EN EL MAPA DE FUENTES"
-  },
   "NO PREVIEW": "SIN VISTA PREVIA",
   "SOURCE LINK": "ENLACE DE LA FUENTE",
   "{publisher} / OPEN": "{publisher} / ABRIR",
@@ -2395,7 +2387,6 @@
   "Weather HTTP {status}": "Clima: HTTP {status}",
   "Weather image HTTP {status}": "Imagen del clima: HTTP {status}",
   "Weather prefetch unavailable": "Precarga del clima no disponible",
-  "Infrared decode failed": "Falló la decodificación del infrarrojo",
   "rate limited": "límite de peticiones superado",
   "routing service is rate limited": "el servicio de rutas superó el límite de peticiones",
   "route leg too long": "tramo de la ruta demasiado largo",

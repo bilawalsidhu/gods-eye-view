@@ -25,13 +25,6 @@ const browser = await puppeteer.launch({
 });
 try {
   const page = await browser.newPage();
-  await page.setRequestInterception(true);
-  page.on('request', (request) => {
-    const host = new URL(request.url()).hostname;
-    if (host.endsWith('halfpixel.ai') || host.includes('worldfx'))
-      request.abort();
-    else request.continue();
-  });
   page.on('pageerror', (e) => console.log('PAGEERR', String(e).slice(0, 300)));
   await page.setViewport({ width: 1000, height: 700 });
   await page.evaluateOnNewDocument(() =>

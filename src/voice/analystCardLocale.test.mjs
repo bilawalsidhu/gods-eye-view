@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { setLocale } from '../i18n/index.js';
+import { presentResult } from './resultDisplay.js';
 import { attachVoiceResult as withSpeech } from './speech.js';
 import {
   initialVoiceCardState,
@@ -94,7 +95,9 @@ test('a station-discovery caveat shows in the UI language, as on the layer card'
     const { view } = cardFor('analyst_query', discovering);
     assert.doesNotMatch(JSON.stringify(view.result.notes), /loading stations/);
     assert.ok(
-      view.result.notes.some((note) => note.startsWith('OpenAQ: загрузка станций')),
+      view.result.notes.some((note) =>
+        note.startsWith('OpenAQ: загрузка станций'),
+      ),
       JSON.stringify(view.result.notes),
     );
   } finally {
@@ -117,4 +120,15 @@ test('en: the card keeps its English text and names layers', () => {
   ]);
   assert.ok(capped.notes.includes('counted 1,000 of 2,345 loaded records'));
   assert.ok(capped.notes.includes('the flights layer loads by viewport'));
+});
+
+test('ar: the analyst card title keeps the bidi isolates around its values', () => {
+  setLocale('ar');
+  try {
+    const { title } = presentResult('analyst_query', radius).display;
+    assert.match(title, /\u20681,234\u2069/);
+    assert.match(title, /\u2069 \u2068[^\u2068\u2069]+\u2069/);
+  } finally {
+    setLocale('en');
+  }
 });

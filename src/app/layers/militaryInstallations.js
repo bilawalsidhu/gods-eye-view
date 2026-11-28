@@ -4,6 +4,7 @@ import { createInstallationsLayer } from '../../layers/installations/index.js';
 import * as render from '../../renderGovernor.js';
 import * as context from '../../data/contextStore.js';
 import * as picking from '../../data/pickRegistry.js';
+import { subscribeMapStack } from '../mapStackEvents.js';
 
 /** Construct one layer using the application scene owners and a supplied source. */
 export function createApplicationInstallations({ surface, source }) {
@@ -18,19 +19,7 @@ export function createApplicationInstallations({ surface, source }) {
       ground,
       anchors,
       picking,
-      maps: {
-        subscribeMapStack(callback) {
-          globalThis.window?.addEventListener?.(
-            'gev:map-stack-changed',
-            callback,
-          );
-          return () =>
-            globalThis.window?.removeEventListener?.(
-              'gev:map-stack-changed',
-              callback,
-            );
-        },
-      },
+      maps: { subscribeMapStack },
     },
   });
 }

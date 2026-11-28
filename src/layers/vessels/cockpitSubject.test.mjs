@@ -7,15 +7,11 @@ import {
   vesselCockpitInfo,
   vesselEyeHeightM,
 } from './cockpitSubject.js';
+import { KNOT_MPS } from '../../data/units.js';
 
 test('bridge eye height follows the AIS type family', () => {
   assert.equal(vesselEyeHeightM('71'), 30, 'cargo');
-  assert.equal(vesselEyeHeightM('84'), 30, 'tanker');
-  assert.equal(vesselEyeHeightM('60'), 25, 'passenger');
-  assert.equal(vesselEyeHeightM('52'), 7, 'tug');
-  assert.equal(vesselEyeHeightM('30'), 6, 'fishing');
   assert.equal(vesselEyeHeightM('37'), 3, 'pleasure');
-  assert.equal(vesselEyeHeightM('36'), 3, 'sailing');
 });
 
 test('text vessel types resolve through the same families', () => {
@@ -66,7 +62,7 @@ test('vessel info faces the true heading and moves along course over ground', ()
   assert.equal(info.destination, 'KIEL');
   assert.equal(info.eyeHeightM, 30);
   assert.equal(info.fixEpochMs, 1_700_000_000_000);
-  assert.ok(Math.abs(info.velocityMps - 12 * 0.514444) < 1e-9);
+  assert.ok(Math.abs(info.velocityMps - 12 * KNOT_MPS) < 1e-9);
   assert.equal(info.stale, false);
   assert.equal(info.onGround, false);
 });

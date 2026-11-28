@@ -9,9 +9,7 @@ import {
   buildWildlifeSelectedLabel,
   wildlifeAccent,
   WILDLIFE_OVERLAY_SOURCE_OPTIONS,
-  WILDLIFE_LABEL_SOURCE_ID,
   WILDLIFE_LABEL_SOURCE_OPTIONS,
-  WILDLIFE_SELECTED_SOURCE_OPTIONS,
 } from './cards.js';
 import { CCTV_THUMBNAIL_STYLE } from '../../overlays/worldOverlayTokens.js';
 import {
@@ -218,9 +216,6 @@ test('thumbnail entries use every shared thumbnail token and wildlife altitude c
   assert.deepEqual(JSON.parse(JSON.stringify(entry)), entry);
   assert.equal(entry.interactive, false);
   assert.equal(Object.isFrozen(WILDLIFE_OVERLAY_SOURCE_OPTIONS), true);
-  assert.equal(WILDLIFE_OVERLAY_SOURCE_OPTIONS.cohortLimit, 24);
-  assert.equal(WILDLIFE_SELECTED_SOURCE_OPTIONS.cohortLimit, 1);
-  assert.equal(WILDLIFE_SELECTED_SOURCE_OPTIONS.collisionCapacity, 1);
 });
 
 test('ambient cards retain only the credited creator and leave names for host truncation', () => {
@@ -379,8 +374,6 @@ test('detail labels show only common names, with no age, grade, accuracy or phot
     'selected',
   ])
     assert.equal(Object.hasOwn(label, field), false, field);
-  assert.equal(WILDLIFE_LABEL_SOURCE_ID, 'wildlife-sightings-labels');
-  assert.equal(WILDLIFE_LABEL_LIMIT, 150);
   assert.equal(Object.isFrozen(WILDLIFE_LABEL_SOURCE_OPTIONS), true);
   assert.equal(WILDLIFE_LABEL_SOURCE_OPTIONS.cohortLimit, WILDLIFE_LABEL_LIMIT);
   assert.equal(
@@ -479,6 +472,9 @@ function ambientFixture(rows, screens) {
         occluder: () => null,
         requestRender() {},
         setPhotoCardVisibility: (ids) => painted.push([...ids]),
+        hasPhotoCard: () => false,
+        beginBatch() {},
+        endBatch() {},
       },
       photos: { get: () => null, setAmbient: (rows) => photos.push(rows) },
     },

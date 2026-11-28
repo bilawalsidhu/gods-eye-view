@@ -1035,7 +1035,7 @@ function installSceneRuntime(project = PROJECT_FIXTURE, { storage } = {}) {
 /**
  * Data manager double recording every reconcile call the director makes.
  *
- * Models the real abort contract (src/data/manager.js): an aborted transition
+ * Models the real abort contract (src/data/lifecycle.js): an aborted transition
  * is rolled back through the module's own disable() and answers false, so an
  * abort leaves NO half-applied layer — which is the whole point of passing the
  * signal rather than only checking a boolean afterwards.
@@ -1617,8 +1617,7 @@ test('a newer LOAD aborts the previous LOAD transition rather than disowning it'
 test('applyVisualState gates the map-stack switch on both sides of its await', () => {
   // The other half of the contract, and the half these doubles cannot see.
   // ui.js cannot be imported here (its mgrs dependency is CJS), so this pins
-  // the structure the way the repo pins other cross-module shape
-  // (cockpitMarkup.test.mjs), while qa-shots/scenes-audit.mjs proves the
+  // the structure, while qa-shots/scenes-audit.mjs proves the
   // BEHAVIOUR against the real StyleManager in a browser.
   //
   // Gating only the post-await uniform commit is not enough: the stack switch
@@ -2024,7 +2023,7 @@ test('camera refusal starts no authored frame or playback clock', async () => {
   } finally { restore(); }
 });
 
-test('an unreadable saved project does not overwrite its recovery checkpoint (#971)', async () => {
+test('an unreadable saved project does not overwrite its recovery checkpoint', async () => {
   const unreadable = '{"version":99,"scenes":[]}';
   const warn = console.warn;
   console.warn = () => {};
@@ -2038,7 +2037,7 @@ test('an unreadable saved project does not overwrite its recovery checkpoint (#9
   } finally { console.warn = warn; await director.destroy(); restore(); }
 });
 
-test('a capture, update or import that cannot be saved keeps the "Scene not saved" status (#971)', async () => {
+test('a capture, update or import that cannot be saved keeps the "Scene not saved" status', async () => {
   const warn = console.warn;
   console.warn = () => {};
   const { director, storage, restore } = makeDirector();
@@ -2063,7 +2062,7 @@ test('a capture, update or import that cannot be saved keeps the "Scene not save
   } finally { console.warn = warn; await director.destroy(); restore(); }
 });
 
-test('startScene resolves its result, resumes after a shot without a scene id, and counts distinct scenes (#971)', async () => {
+test('startScene resolves its result, resumes after a shot without a scene id, and counts distinct scenes', async () => {
   const { director, restore } = makeDirector();
   try {
     const options = { single: true, preview: false };
@@ -2229,7 +2228,7 @@ test('a run resumed inside a hold plays its layers on from the seek’s state an
   } finally { await director.destroy(); restore(); }
 });
 
-test('a caught run failure resolves as run-failed, not success (#971)', async () => {
+test('a caught run failure resolves as run-failed, not success', async () => {
   const { director, styleManager, restore } = makeDirector();
   const warn = console.warn;
   console.warn = () => {};

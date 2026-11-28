@@ -1,11 +1,19 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { applyVesselFocusDeemphasis } from './aisLiveVessels.js';
+import aisLiveVesselsLayer from './aisLiveVessels.js';
 import { applyCctvFocusDeemphasis } from './cctv.js';
-import { applySatellitePointFocusDeemphasis } from './satellites.js';
+import * as focus from './focusDeemphasis.js';
 import { DEFAULT_FOCUS_DEEMPHASIS_PARAMS } from './focusDeemphasis.js';
+import { createRendering } from '../layers/satellites/rendering.js';
 import { createIconBook } from '../render/motion/iconBook.js';
-import { createVesselIconBook } from '../layers/vessels/iconBook.js';
+
+const { applyVesselFocusDeemphasis } =
+  aisLiveVesselsLayer.testing.parts.rendering;
+const { applySatellitePointFocusDeemphasis } = createRendering({
+  state: {},
+  services: { focus },
+  parts: {},
+});
 
 const params = { ...DEFAULT_FOCUS_DEEMPHASIS_PARAMS, paddingPx: 0 };
 const target = {
@@ -64,7 +72,7 @@ function assertResumeGate(name, makePass) {
 }
 
 assertResumeGate('vessel', () => {
-  const icons = createVesselIconBook();
+  const icons = createIconBook();
   icons.put({ id: '353136000', size: [32, 32], meta: { id: '353136000' } });
   const record = {
     iconId: '353136000',

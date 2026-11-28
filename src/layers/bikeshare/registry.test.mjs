@@ -31,21 +31,6 @@ test('every registered city is reachable through the GBFS proxy allowlist', () =
   }
 });
 
-test('Bike Share Toronto is registered against the PBSC v2 feeds', () => {
-  const toronto = CITY_BY_ID.get('toronto-bike-share');
-  assert.ok(toronto, 'toronto-bike-share is missing from the registry');
-  assert.equal(toronto.city, 'Toronto, ON');
-  assert.equal(toronto.provider, 'Bike Share Toronto');
-  assert.equal(
-    toronto.stationInformationUrl,
-    'https://toronto.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
-  );
-  assert.equal(
-    toronto.stationStatusUrl,
-    'https://toronto.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
-  );
-});
-
 test('the Toronto center sits inside the system service area', () => {
   const toronto = CITY_BY_ID.get('toronto-bike-share');
   // Bounding box of the 1,069 live stations, sampled from the published

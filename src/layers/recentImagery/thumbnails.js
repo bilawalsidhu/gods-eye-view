@@ -9,7 +9,7 @@
  * first). Eviction revokes the image only; what the probe proved is kept.
  */
 import { boxKey, thumbnailOrder } from './model.js';
-import { createRecentImagerySource, dataPresent } from './source.js';
+import { dataPresent } from './source.js';
 
 const EMPTY = Object.freeze({
   status: 'unknown',
@@ -31,11 +31,10 @@ function keepProvenHalves(previous, next, opposite) {
 }
 
 /**
- * @param {{ fetchImpl?: typeof fetch, maxInFlight?: number, maxDecoded?: number, createObjectUrl?: (blob: Blob) => string, revokeObjectUrl?: (url: string) => void, size?: number }} [options]
+ * @param {{ requestThumbnail: (candidate: object, box: object, options?: { size?: number, signal?: AbortSignal }) => Promise<Response>, maxInFlight?: number, maxDecoded?: number, createObjectUrl?: (blob: Blob) => string, revokeObjectUrl?: (url: string) => void, size?: number }} options
  */
 export function createThumbnailLoader({
-  fetchImpl = globalThis.fetch?.bind(globalThis),
-  requestThumbnail = createRecentImagerySource({ fetchImpl }).getThumbnail,
+  requestThumbnail,
   maxInFlight = 3,
   maxDecoded = 16,
   createObjectUrl = (blob) => URL.createObjectURL(blob),

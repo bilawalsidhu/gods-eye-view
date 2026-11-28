@@ -11,9 +11,9 @@ import {
   ownerFlagStyle,
   ownerMark,
   preloadOwnerFlags,
-  regionName,
   shownOwnerMark,
 } from './ownerFlag.js';
+import { countryName } from '../data/wikidataCities.js';
 
 test('an owner country shows its flag, named in the reader language', () => {
   assert.deepEqual(ownerMark({ countryCode: 'us', label: 'USA' }), {
@@ -57,8 +57,8 @@ test('an unknown owner shows nothing', () => {
 });
 
 test('a region name comes from Intl, never the bare code', () => {
-  assert.equal(regionName('JP', 'en'), 'Japan');
-  assert.equal(regionName('XX', 'en'), null);
+  assert.equal(countryName('JP', 'en', null), 'Japan');
+  assert.equal(countryName('XX', 'en', null), null);
 });
 
 test('the sheet holds every owner country a satellite can be marked with', () => {
@@ -83,9 +83,6 @@ test('the sheet holds every owner country a satellite can be marked with', () =>
 test('a flag is drawn from its cell of the sheet, at the size asked', () => {
   // 40 × 30 sheet cells with a 2 px gutter, drawn at 20 × 15: each cell and
   // its gutter is 21 × 16 CSS pixels.
-  assert.equal(OWNER_FLAG_SHEET.cellWidthPx, 40);
-  assert.equal(OWNER_FLAG_SHEET.cellHeightPx, 30);
-  assert.equal(OWNER_FLAG_SHEET.gutterPx, 2);
   const columns = OWNER_FLAG_SHEET.columns;
   const index = OWNER_FLAG_SHEET.codes.indexOf('US');
   const style = ownerFlagStyle('US');

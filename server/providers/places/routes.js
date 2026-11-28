@@ -142,11 +142,7 @@ export function _routeInflightCountForTest() {
 
 /** Release a response body we are not going to read. */
 async function cancelBody(response) {
-  try {
-    await response.body?.cancel();
-  } catch {
-    /* already closed */
-  }
+  await response.body?.cancel().catch(() => {});
 }
 
 /**

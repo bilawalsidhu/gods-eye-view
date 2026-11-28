@@ -87,9 +87,9 @@ export function createQuebecCctvOverlay(viewer) {
 
   const controller = new AbortController();
   const { signal } = controller;
-  // What the view renders. The owner writes it where it used to write the
-  // elements, then paints; the view never binds the media sources, the
-  // panel's dragged position or the marker's per-frame visibility and place.
+  // What the view renders. The owner writes it, then paints. The view never binds the
+  // media sources, the panel's dragged position or the marker's per-frame visibility and
+  // place.
   const view = {
     panelHidden: true,
     title: '',

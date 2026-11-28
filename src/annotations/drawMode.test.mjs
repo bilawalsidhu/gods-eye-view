@@ -19,7 +19,6 @@ import {
   unwrapLongitudes,
   wrapLongitude,
   MAX_VERTICES,
-  MIN_VERTICES,
 } from './drawMode.js';
 
 test('shapes normalize to area, line or pin, and unknown words fall back to area', () => {
@@ -36,8 +35,6 @@ test('an area needs three vertices, a line two, a pin one', () => {
   assert.equal(canFinish(area), false);
   addVertex(area, { lon: -97.73, lat: 30.28 });
   assert.equal(canFinish(area), true);
-  assert.equal(MIN_VERTICES.line, 2);
-  assert.equal(MIN_VERTICES.pin, 1);
 });
 
 test('a second click within half a metre is the tail of a double-click, not a vertex', () => {

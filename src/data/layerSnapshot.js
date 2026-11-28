@@ -35,17 +35,6 @@ export const LAYER_FEED_STATES = Object.freeze([
   'unavailable',
 ]);
 
-/** Chip labels for enabled layers. Disabled layers read OFF, not a feed-state. */
-export const LAYER_FEED_STATE_LABELS = Object.freeze({
-  nominal: 'ON',
-  loading: 'LOADING',
-  degraded: 'DEGRADED',
-  stale: 'STALE',
-  partial: 'PARTIAL',
-  fallback: 'FALLBACK',
-  unavailable: 'UNAVAILABLE',
-});
-
 /** Snapshot feed-state including a disabled layer. */
 export const SNAPSHOT_FEED_STATES = Object.freeze([
   ...LAYER_FEED_STATES,
@@ -67,8 +56,6 @@ export const FEED_STATE_SEVERITY = Object.freeze({
   nominal: 6,
   off: 7,
 });
-
-export { layerFeedState } from './feedState.js';
 
 function snapshotError(stats) {
   const err = stats?.error || stats?.lastError || stats?.managerRefreshError;
@@ -259,26 +246,6 @@ export function feedProvenanceEnvelope(
     overall,
     layers,
     note: feedProvenanceNote(layers, overall),
-  };
-}
-
-/**
- * Compact voice-tool layer row: identity + the fields a model must read.
- * @param {object} layer Raw `getAll()` row or snapshot.
- * @param {{ now?: number }} [options]
- * @returns {object}
- */
-export function viewStateLayerRow(layer, options) {
-  const snap = layerSnapshot(layer, options);
-  return {
-    id: snap.id,
-    name: snap.name,
-    enabled: snap.enabled,
-    count: snap.count,
-    error: snap.error,
-    feedState: snap.feedState,
-    source: snap.source,
-    lastUpdate: snap.lastUpdate,
   };
 }
 

@@ -17,23 +17,17 @@ import { markBaseTileset } from '../../render/baseTilesets.js';
 import { drawOf } from '../../render/rendererOf.js';
 import {
   PRODUCTS,
+  SLOT_IDS,
   boxKey,
-  gibsTemplate,
+  clampUnit,
   lonSpanDeg,
   nonCrossingBoxes,
 } from './model.js';
 
-const SLOT_IDS = ['a', 'b'];
-const SPLITS = new Set(['left', 'right', 'none']);
 const NO_HOST = Object.freeze({ collection: null, kind: 'none', globe: null });
 
 /** Render reason for a settled tile request. */
 export const TILE_RENDER_REASON = 'recent-imagery-tiles';
-
-function clampAlpha(value) {
-  const alpha = Number(value);
-  return Number.isFinite(alpha) ? Math.max(0, Math.min(1, alpha)) : 1;
-}
 
 /** One comparable key for a slot's draped parts. */
 const partsKey = (parts) => parts.map(boxKey).sort().join(';');
@@ -91,11 +85,11 @@ function admitTileRequests(admission, requestRender) {
 /**
  * Create the renderer. The host it is bound to (`rebind`) carries the
  * viewer's globe port.
- * @param {{ tileTemplate?: Function, credit?: string, maxTileRequests?: number, requestRender?: (reason: string) => void }} [options]
+ * @param {{ tileTemplate: (product: string, day: string) => string, credit: string, maxTileRequests?: number, requestRender?: (reason: string) => void }} options
  */
 export function createRecentImageryRenderer({
-  tileTemplate = gibsTemplate,
-  credit = 'NASA GIBS',
+  tileTemplate,
+  credit,
   maxTileRequests = 6,
   requestRender = () => {},
 } = {}) {
@@ -137,7 +131,7 @@ export function createRecentImageryRenderer({
   function applyLook(record) {
     for (const layer of record.layers) {
       layer.alpha = record.alpha;
-      layer.split = SPLITS.has(record.split) ? record.split : 'none';
+      layer.split = record.split;
     }
   }
 
@@ -184,7 +178,7 @@ export function createRecentImageryRenderer({
         return false;
       }
       const current = owned[slotId];
-      const look = { alpha: clampAlpha(alpha), split: splitDirection };
+      const look = { alpha: clampUnit(alpha), split: splitDirection };
       const parts = drapedParts(candidate, box, { availableBoxes, emptyBoxes });
       if (
         current &&
@@ -246,7 +240,7 @@ export function createRecentImageryRenderer({
      */
     setAlpha(slotId, alpha) {
       const record = owned[slotId];
-      const next = clampAlpha(alpha);
+      const next = clampUnit(alpha);
       if (!record || record.alpha === next) return;
       record.alpha = next;
       applyLook(record);

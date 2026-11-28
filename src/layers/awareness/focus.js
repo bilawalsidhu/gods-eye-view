@@ -2,7 +2,7 @@ import { VESSEL_FOCUS_RADIUS_M } from './policy.js';
 import { cameraOf, findCamera } from '../../render/rendererOf.js';
 import { clone, distance } from '../../geo/index.js';
 
-export function createFocus({ state: layerState, services, parts, source }) {
+export function createFocus({ state: layerState, services, parts }) {
   const flightsLayer = services.flights;
   const militaryFlightsLayer = services.military;
   const { announceNavigationAuthority } = services.navigation;
@@ -15,13 +15,13 @@ export function createFocus({ state: layerState, services, parts, source }) {
     if (!layerId || !id) return false;
     if (layerId === 'flights') {
       return (
-        flightsLayer.refocusTrackedById?.(id, { origin }) ||
+        flightsLayer.refocusTrackedById(id, { origin }) ||
         flightsLayer.trackById(id, { origin })
       );
     }
     if (layerId === 'military') {
       return (
-        militaryFlightsLayer.refocusTrackedById?.(id, { origin }) ||
+        militaryFlightsLayer.refocusTrackedById(id, { origin }) ||
         militaryFlightsLayer.trackById(id, { origin })
       );
     }
@@ -185,12 +185,9 @@ export function createFocus({ state: layerState, services, parts, source }) {
     return true;
   }
   return {
-    focusNearbyTarget,
-    selectKnownContextTarget,
     requestFocus,
     focusSubject,
     focusCurrentSubject,
-    closestToCurrentView,
     focusAttentionTarget,
   };
 }

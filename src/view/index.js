@@ -12,7 +12,14 @@ import {
   encodeLayerStateParams,
 } from '../data/layerState.js';
 import { encodeIdSwitches } from '../data/idSwitches.js';
-import { RETIRED_STYLES } from '../visualStylePolicy.js';
+import { wrapLongitude } from '../geo/vector.js';
+
+/**
+ * Styles the app no longer offers, by the name share links used: a view,
+ * link, scene or shot that names one opens on Normal instead of keeping
+ * whatever style was already showing.
+ */
+export const RETIRED_STYLES = Object.freeze(['snow']);
 
 /** Visual styles by internal name, with the name share links use. */
 export const STYLE_URL_NAMES = Object.freeze({
@@ -120,7 +127,7 @@ export function lookAtPoint(camera) {
   return {
     lat: clamp(camera.lat + dLat, -90, 90),
     // Near a pole one step ahead can be several turns of the parallel.
-    lon: ((((lon + 180) % 360) + 360) % 360) - 180,
+    lon: wrapLongitude(lon),
   };
 }
 
@@ -155,7 +162,7 @@ export async function groundedLookAt(camera, terrain, signal) {
 }
 
 /** Annotation kinds the app draws, as in its annotate_map action. */
-export const VIEW_ANNOTATION_TYPES = Object.freeze([
+const VIEW_ANNOTATION_TYPES = Object.freeze([
   'pin',
   'highlight',
   'area',

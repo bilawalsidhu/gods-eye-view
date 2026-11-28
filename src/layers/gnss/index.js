@@ -22,7 +22,7 @@ export { createAdsbGnssSource } from './source.js';
  * The draw set the cells are drawn in starts with this; each layer has its
  * own (`gnss-integrity:1`, …), so several can share a renderer.
  */
-export const GNSS_SET_PREFIX = 'gnss-integrity';
+const GNSS_SET_PREFIX = 'gnss-integrity';
 let instances = 0;
 
 /** Low stays visible over land so coverage reads apart from no data. */

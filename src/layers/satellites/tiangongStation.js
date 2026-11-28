@@ -1,6 +1,5 @@
 import { msg } from '../../i18n/index.js';
-import { issCommandFastOrbit } from './issCommand.js';
-import { ISS_ARM_LABELS, ISS_SUN_POSES } from './issStation.js';
+import { armGroup, sunGroup } from './issStation.js';
 import { TIANGONG_NORAD } from './policy.js';
 import { trackedStation } from './stationModels.js';
 import {
@@ -27,26 +26,6 @@ const LAB_WING_LABELS = [
  */
 export function tiangongStationDescription({ state: layerState, parts }) {
   const model = () => parts.tiangongModel ?? null;
-  const armGroup = (id, label, joints) => ({
-    id,
-    label,
-    kind: 'sliders',
-    resume: msg('Resume sway'),
-    sliders: joints.map((joint, i) => ({
-      id: joint.node,
-      label: ISS_ARM_LABELS[i],
-      min: -120,
-      max: 120,
-      apply: (a, value) =>
-        a.setJoint(
-          joint.node,
-          joint.pivot,
-          joint.axis,
-          (value * Math.PI) / 180,
-        ),
-    })),
-    resumeApply: (a) => a.resumeArm(id),
-  });
   // Every wing has a joint of its own, so each can be set apart from the
   // others; a wing not touched keeps following the Sun.
   const wingSlider = (joint, label) => ({
@@ -89,7 +68,7 @@ export function tiangongStationDescription({ state: layerState, parts }) {
     position: () =>
       model()?._visualPosition?.() ??
       layerState._trackedFrameCartesian ??
-      parts.rendering?._pointPosition?.(TIANGONG_NORAD) ??
+      parts.rendering._pointPosition(TIANGONG_NORAD) ??
       null,
     zoomLabel: msg('Zoom to Tiangong'),
     notes: {
@@ -98,39 +77,15 @@ export function tiangongStationDescription({ state: layerState, parts }) {
       ),
     },
     groups: [
-      {
-        id: 'sun',
-        label: msg('Sun position'),
-        kind: 'choices',
-        choices: [
-          {
-            id: 'follow',
-            label: msg('Follow the Sun'),
-            isDefault: true,
-            apply: (a) => a.setOverride(null),
-          },
-          ...ISS_SUN_POSES.map(({ id, label, sun, sunlit }) => ({
-            id,
-            label,
-            apply: (a) => {
-              const fixed = { sun, sunlit };
-              a.setOverride(() => fixed);
-            },
-          })),
-          {
-            id: 'orbit',
-            label: msg('Fast orbit (40 s)'),
-            apply: (a) => {
-              const start = Date.now();
-              a.setOverride((nowMs) => issCommandFastOrbit(nowMs - start));
-            },
-          },
-        ],
-      },
+      sunGroup(),
       tianheWings,
       labWings,
-      armGroup('cmm', msg('Tianhe arm (degrees)'), TIANGONG_ARMS.cmm),
-      armGroup('emm', msg('Wentian arm (degrees)'), TIANGONG_ARMS.emm),
+      armGroup('cmm', msg('Tianhe arm (degrees)'), TIANGONG_ARMS.cmm, (a) =>
+        a.resumeArm('cmm'),
+      ),
+      armGroup('emm', msg('Wentian arm (degrees)'), TIANGONG_ARMS.emm, (a) =>
+        a.resumeArm('emm'),
+      ),
     ],
     automatic: (a) => {
       a.setOverride(null);

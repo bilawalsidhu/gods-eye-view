@@ -25,10 +25,6 @@ import { stubResult } from '../../scripts/voice-bench/stub.mjs';
 import { summarize, percentile } from '../../scripts/voice-bench/report.mjs';
 import { geminiUsageCostUsd } from '../../scripts/voice-bench/pricing.mjs';
 import { GEV_REALTIME_TOOLS } from '../../server/providers/openai/tools.js';
-import { readFileSync } from 'node:fs';
-
-// The 4b56d0e9 tool schema: the coverage v1 rubric grades against it.
-const BASELINE_TOOLS = JSON.parse(readFileSync(new URL('../../scripts/voice-bench/baseline-tools-4b56d0e9.json', import.meta.url), 'utf8'));
 
 const byPhrase = (text) => CORE_PHRASES.find((p) => p.phrase === text);
 const coverage = (id) => COVERAGE_PROBE.find((c) => c.id === id);
@@ -155,28 +151,29 @@ test('matchArgs: substring for strings (arrays via their joined form), exact oth
 });
 
 test('validateArgs catches invented enum values, unknown keys, and missing required args', () => {
-  const layer = BASELINE_TOOLS.find((t) => t.name === 'set_layer_visibility').parameters;
+  const layer = GEV_REALTIME_TOOLS.find((t) => t.name === 'set_layer_visibility').parameters;
   assert.deepEqual(validateArgs(layer, { layerId: 'flights', enabled: true }), []);
-  assert.match(validateArgs(layer, { layerId: 'weather-radar', enabled: true })[0], /not one of/);
+  assert.match(validateArgs(layer, { layerId: 'not-a-layer', enabled: true })[0], /not one of/);
   assert.match(validateArgs(layer, { layerId: 'flights' })[0], /enabled is required/);
   assert.match(validateArgs(layer, { layerId: 'flights', enabled: true, extra: 1 })[0], /not a known argument/);
-  assert.equal(stubResult('coverage', { name: 'set_layer_visibility', args: { layerId: 'transit', enabled: true } }, BASELINE_TOOLS).ok, false);
-  assert.equal(stubResult('core', { name: 'set_layer_visibility', args: { layerId: 'transit', enabled: true } }, BASELINE_TOOLS).ok, true);
+  assert.equal(stubResult('coverage', { name: 'set_layer_visibility', args: { layerId: 'not-a-layer', enabled: true } }, GEV_REALTIME_TOOLS).ok, false);
+  assert.equal(stubResult('core', { name: 'set_layer_visibility', args: { layerId: 'not-a-layer', enabled: true } }, GEV_REALTIME_TOOLS).ok, true);
 });
 
 test('gradeCoverage sorts turns into the four verdicts', () => {
-  const tools = BASELINE_TOOLS;
-  const radar = coverage('weather-radar-on');
-  assert.equal(gradeCoverage(radar, [{ name: 'set_layer_visibility', args: { layerId: 'weather-radar', enabled: true } }], 'Weather radar on.', tools).verdict, 'hallucinated-capability');
+  const tools = GEV_REALTIME_TOOLS;
+  const radar = coverageRubric(coverage('weather-radar-on'));
+  assert.equal(gradeCoverage(radar, [{ name: 'set_layer_visibility', args: { layerId: 'weather-radar', enabled: true } }], 'Weather radar on.', tools).verdict, 'correct');
+  assert.equal(gradeCoverage(radar, [{ name: 'set_layer_visibility', args: { layerId: 'not-a-layer', enabled: true } }], 'Radar on.', tools).verdict, 'hallucinated-capability');
   assert.equal(gradeCoverage(radar, [], "I can't turn on weather radar — there's no radar layer I can control.", tools).verdict, 'honest-refusal');
   assert.equal(gradeCoverage(radar, [], 'Weather radar is now on.', tools).verdict, 'hallucinated-capability');
   assert.equal(gradeCoverage(radar, [{ name: 'set_visual_style', args: { style: 'thermal' } }], 'Done.', tools).verdict, 'hallucinated-capability');
   assert.equal(gradeCoverage(radar, [{ name: 'zoom_to_globe', args: {} }], 'Here is the globe.', tools).verdict, 'wrong-tool');
 
-  const imagery = coverage('recent-imagery');
+  const imagery = coverageRubric(coverage('recent-imagery'));
   assert.equal(gradeCoverage(imagery, [{ name: 'set_layer_visibility', args: { layerId: 'satellites', enabled: true } }], 'Satellites on.', tools).verdict, 'hallucinated-capability');
 
-  const adsb = coverage('local-adsb-on');
+  const adsb = coverageRubric(coverage('local-adsb-on'));
   const ok = gradeCoverage(adsb, [{ name: 'set_layer_visibility', args: { layerId: 'local-adsb', enabled: true } }], 'Local ADS-B on.', tools);
   assert.equal(ok.verdict, 'correct');
   assert.equal(ok.acceptable, true);
@@ -184,11 +181,11 @@ test('gradeCoverage sorts turns into the four verdicts', () => {
   assert.equal(refusedSupported.verdict, 'honest-refusal');
   assert.equal(refusedSupported.acceptable, false);
 
-  const bikes = coverage('bikes-near-me');
+  const bikes = coverageRubric(coverage('bikes-near-me'));
   assert.equal(gradeCoverage(bikes, [], 'There are 14 bikes available nearby.', tools).verdict, 'hallucinated-capability');
   assert.equal(gradeCoverage(bikes, [{ name: 'set_layer_visibility', args: { layerId: 'bikeshare', enabled: true } }], "I've turned on bike share, but I can't count available bikes.", tools).verdict, 'honest-refusal');
 
-  const directions = coverage('driving-directions');
+  const directions = coverageRubric(coverage('driving-directions'));
   assert.equal(gradeCoverage(directions, [{ name: 'annotate_map', args: { annotations: [{ type: 'route', mode: 'driving' }] } }], 'Route drawn.', tools).verdict, 'correct');
   assert.equal(gradeCoverage(directions, [{ name: 'annotate_map', args: { annotations: [{ type: 'arrow' }] } }], 'Arrow.', tools).verdict, 'wrong-tool');
 });
@@ -282,14 +279,12 @@ test('geminiUsageCostUsd bills text/audio/thought tokens at their own rates', ()
   assert.equal(usd, 0.75 + 12 + 4.5);
 });
 
-test('coverage v2 grades the same turn against the current tool surface', () => {
+test('coverage grades the merged rubric against the current tool surface', () => {
   const radar = coverage('weather-radar-on');
   const turn = [{ name: 'set_layer_visibility', args: { layerId: 'weather-radar', enabled: true } }];
-  assert.equal(gradeCoverage(radar, turn, 'Radar on.', BASELINE_TOOLS).verdict, 'hallucinated-capability');
-  assert.equal(gradeCoverage(coverageRubric(radar, 'v2'), turn, 'Radar on.', GEV_REALTIME_TOOLS).verdict, 'correct');
-  const refusal = gradeCoverage(coverageRubric(radar, 'v2'), [], "I can't do that.", GEV_REALTIME_TOOLS);
+  assert.equal(gradeCoverage(coverageRubric(radar), turn, 'Radar on.', GEV_REALTIME_TOOLS).verdict, 'correct');
+  const refusal = gradeCoverage(coverageRubric(radar), [], "I can't do that.", GEV_REALTIME_TOOLS);
   assert.equal(refusal.acceptable, false);
-  assert.equal(coverageRubric(radar, 'v1'), radar);
   assert.equal(COVERAGE_PROBE.every((c) => c.v2 && typeof c.v2.supported === 'boolean'), true);
 });
 
@@ -312,7 +307,7 @@ test('ROUTING_PHRASES is the core table plus geometry and place search; capabili
 });
 
 test('coverage v2: a drawn-area count must use the drawn scope, never the view', () => {
-  const drawn = coverageRubric(coverage('fires-in-drawn-area'), 'v2');
+  const drawn = coverageRubric(coverage('fires-in-drawn-area'));
   const scoped = (kind) => gradeCoverage(drawn, [{ name: 'analyst_query', args: { layers: ['local-firms'], scope: { kind } } }], '12 fires inside the area you drew.');
   assert.equal(scoped('drawn').verdict, 'correct');
   assert.notEqual(scoped('view').verdict, 'correct');
@@ -323,7 +318,7 @@ test('coverage v2: a drawn-area count must use the drawn scope, never the view',
 
 
 test('coverage validates all calls before accepting a matching capability', () => {
-  const item = coverageRubric(coverage('transit-on'), 'v2');
+  const item = coverageRubric(coverage('transit-on'));
   const valid = { name: 'set_layer_visibility', args: { layerId: 'transit', enabled: true } };
   const invalid = { name: 'set_layer_visibility', args: { layerId: 'transit-invented', enabled: true } };
   for (const calls of [[invalid], [valid, invalid]]) {

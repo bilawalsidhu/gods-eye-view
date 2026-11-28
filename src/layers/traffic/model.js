@@ -402,7 +402,6 @@ export function createModel({ state: layerState, services, parts, source }) {
   }
   return {
     parseRoads,
-    estimateRoadLengthDeg,
     computeDotCount,
     allocateRoadDotBudgets,
     trafficFeedPresentation,

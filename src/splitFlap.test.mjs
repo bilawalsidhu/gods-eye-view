@@ -8,7 +8,6 @@ import {
   FLAP_STAGGER_MS,
   FLAP_MAX_TOTAL_MS,
   FLAP_TURN_RATIO,
-  SPLIT_FLAP_ENABLED,
 } from './splitFlap.js';
 
 const settledText = (plan) => plan.cells.map((cell) => cell.to).join('');
@@ -168,11 +167,6 @@ test('no cell is ever scheduled to start after the cascade has ended', () => {
       `cell ${cell.index} lands after the reported duration`,
     );
   }
-});
-
-test('the feature ships enabled behind a single flippable constant', () => {
-  assert.equal(typeof SPLIT_FLAP_ENABLED, 'boolean');
-  assert.equal(SPLIT_FLAP_ENABLED, true);
 });
 
 // ── Interrupted cascades: only what was visible may flap away ──────────────

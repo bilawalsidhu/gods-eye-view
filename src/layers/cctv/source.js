@@ -28,7 +28,9 @@ function frameUrlFor(
     city: camera.city,
     heading: String(Math.round(camera.headingDeg)),
     fov: String(Math.round(camera.fovDeg)),
-    pitch: String(Math.round(camera.pitchDeg || -10)),
+    pitch: String(
+      Math.round(Number.isFinite(camera.pitchDeg) ? camera.pitchDeg : -10),
+    ),
     ts: String(tick),
   });
   if (snapshotOnly) params.set('snapshotOnly', '1');

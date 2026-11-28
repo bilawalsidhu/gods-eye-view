@@ -41,6 +41,56 @@ export const WORLD_OVERLAY_STYLE = Object.freeze({
   leaderWidth: 1.35,
 });
 
+/** Host options for a source that shows one selected, still card. */
+export const SELECTED_CARD_SOURCE_OPTIONS = Object.freeze({
+  cohortLimit: 1,
+  collisionCapacity: 1,
+  moving: false,
+});
+
+/** A clicked item's card, drawn above its marker and over every other card. */
+export function selectedCard({
+  id,
+  title,
+  details,
+  accent,
+  position,
+  interactive = false,
+}) {
+  return {
+    id,
+    selected: true,
+    interactive,
+    title,
+    details,
+    accent,
+    priority: Number.MAX_SAFE_INTEGER,
+    gapPx: 15,
+    verticalOnly: true,
+    placement: 'above',
+    stateless: true,
+    horizonCull: true,
+    position,
+  };
+}
+
+/**
+ * Where a card hangs off its marker: the gap and the leader's start follow the
+ * marker size.
+ */
+export function cardClearance(
+  markerPx,
+  { minGapPx = 12, verticalOnly = true } = {},
+) {
+  const gapPx = Math.max(minGapPx, markerPx + 8);
+  return {
+    gapPx,
+    leaderOffsetPx: Math.max(2, gapPx - 6),
+    verticalOnly,
+    viewportMargin: 4,
+  };
+}
+
 /** CCTV's field-tested thumbnail-card overrides on top of shared card chrome. */
 export const CCTV_THUMBNAIL_STYLE = Object.freeze({
   padding: 4,
@@ -72,30 +122,12 @@ export const DETECTION_STYLE = Object.freeze({
 export const CARD_PLATE_ALPHA = 0.82;
 
 /**
- * Ambient detection callouts carry a LIGHTER member of the card's backing
- * family: enough plate to hold small mono text against sunlit imagery, not so
- * much that a field of them reads as a wall of boxes. `calloutPlate` sits at
- * ~58% of `CARD_PLATE_ALPHA`; `calloutPlateSpace` is the owner-requested
- * "slightly higher opacity so the text pops" for space-tier (satellite)
- * contacts, which sit over the high-albedo lit Earth disc more often than
- * aircraft do.
- *
- * These are DARK plates painted with NORMAL blending, which makes them
- * self-adapting: over night terrain or space a dark plate on a dark scene is
- * nearly invisible, while over bright ground it does the full darkening job.
- * That is the same mechanism the tracked card uses, and the reason it survives
- * every style — see `PLATE_ALPHA_BAND` in the tests.
- */
-export const DETECTION_PLATE_BAND = Object.freeze({ min: 0.5, max: 0.62 });
-
-/**
  * What survives of a callout plate when SKY, not ground, is behind the label.
  *
  * The plate exists to hold small mono text against sunlit imagery. Against the
  * horizon it has no job to do — there is nothing bright and busy to separate
  * the text from — and at full strength it reads as a row of dark boxes pasted
- * on an empty sky, which is the one place the pre-plate bare-text look was
- * already better (owner field call, 2026-08-21).
+ * on an empty sky, where bare text reads better.
  *
  * So the plate is SCALED here rather than replaced: every theme keeps its own
  * hue and its own relative weight, and the sky case lands at a whisper that is

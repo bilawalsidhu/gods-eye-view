@@ -34,7 +34,7 @@ test('a successful response yields normalized zone rows', async () => {
       });
     },
   });
-  const rows = await source.getSnapshot();
+  const { rows } = await source.getSnapshot();
   assert.equal(rows.length, 1);
   assert.equal(rows[0].stableId, '310');
   assert.equal(requested, '/api/drone-airspace');
@@ -104,16 +104,15 @@ test('a malformed successful response is never accepted as an empty snapshot', a
   }
 });
 
-test('the snapshot detail carries the proxy staleness and fetch time', async () => {
+test('the snapshot carries the proxy staleness and fetch time', async () => {
   const fetchedAt = Date.UTC(2026, 10, 3, 12);
   const rows = normalizeDroneAirspaceSnapshot(validPayload);
   const source = createDroneAirspaceSource({
     fetchImpl: async () => Response.json({ rows, stale: true, fetchedAt }),
   });
-  assert.deepEqual(await source.getSnapshotDetail(), {
+  assert.deepEqual(await source.getSnapshot(), {
     rows,
     stale: true,
     fetchedAt,
   });
-  assert.deepEqual(await source.getSnapshot(), rows);
 });

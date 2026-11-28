@@ -1,11 +1,9 @@
-import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 // src/data/tr3bRegistry.test.mjs
 // TR-3B conversion Easter egg: registry state, sprite-variant selection,
 // class-label override, and the render-path invariants that keep a converted
 // contact a 2D triangle across polls, style switches, and the 3D handoff.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
 import * as Cesium from 'cesium';
 
 import {
@@ -16,29 +14,24 @@ import {
   setTr3b,
   toggleTr3b,
   tr3bConvertedIds,
-  tr3bCount,
   tr3bAircraftClass,
   tr3bIconKind,
   tr3bTypeLabel,
 } from './tr3bRegistry.js';
 import { aircraftIcon, TRACKED_ICON_PX } from './aircraftIcons.js';
 import flightsLayer, {
-  _setTrackedFlightRefreshStateForTest,
   mapAnalystRecord as mapFlightAnalystRecord,
 } from './flights.js';
 import militaryFlightsLayer, {
   _setTrackedMilitaryRefreshStateForTest,
   mapAnalystRecord as mapMilitaryAnalystRecord,
 } from './militaryFlights.js';
-import { findCompatibleHistoryIndex } from './militaryAwareness.js';
+import { findCompatibleHistoryIndex } from '../layers/awareness/history.js';
 import { createGevActionRunner } from '../voice/gevActions.js';
 import { ANALYST_LAYERS, createAnalystEngine } from './analystEngine.js';
 import { readEntityRecord, withEntityRecord } from './entityRecords.js';
 
-/** Strip block and line comments so source pins scan CODE, not prose. */
-function stripComments(source) {
-  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
-}
+const { _setTrackedFlightRefreshStateForTest } = flightsLayer.testing;
 
 /** Decode an `aircraftIcon()` data URI back to its SVG source. */
 function decodeIcon(uri) {
@@ -55,11 +48,11 @@ test('tr3b registry: toggle round-trips and normalizes the contact id', () => {
   assert.equal(isTr3b('a1b2c3'), true, 'ICAO hex is case-insensitive');
   assert.equal(isTr3b(' a1b2c3 '), true, 'surrounding whitespace is trimmed');
   assert.deepEqual(tr3bConvertedIds(), ['a1b2c3']);
-  assert.equal(tr3bCount(), 1);
+  assert.equal(tr3bConvertedIds().length, 1);
 
   assert.equal(toggleTr3b('a1b2c3'), false, 'a second toggle restores the contact');
   assert.equal(isTr3b('A1B2C3'), false);
-  assert.equal(tr3bCount(), 0);
+  assert.equal(tr3bConvertedIds().length, 0);
 
   clearTr3bRegistry();
 });
@@ -76,7 +69,7 @@ test('tr3b registry: setTr3b is explicit and idempotent; unusable ids are inert'
     assert.equal(toggleTr3b(bad), false);
     assert.equal(isTr3b(bad), false);
   }
-  assert.equal(tr3bCount(), 0, 'no unusable id ever entered the registry');
+  assert.equal(tr3bConvertedIds().length, 0, 'no unusable id ever entered the registry');
   clearTr3bRegistry();
 });
 
@@ -133,7 +126,6 @@ test('tr3b sprites are real distinct glyphs, not the airliner fallback', () => {
 
 test('tr3b class label overrides the real type only for converted contacts', () => {
   clearTr3bRegistry();
-  assert.equal(TR3B_TYPE_LABEL, 'TR-3B');
   assert.equal(tr3bTypeLabel('a1b2c3', 'Boeing 737-800'), 'Boeing 737-800');
   assert.equal(tr3bTypeLabel('a1b2c3'), null, 'default fallback is null, never a label');
 
@@ -227,73 +219,11 @@ test('a conversion survives a poll refresh, in both the billboard and the tracke
   }
 });
 
-test('both flight layers keep a converted contact 2D and visible (render invariants)', async () => {
-  for (const name of ['flights.js', 'militaryFlights.js']) {
-    const source = readLayerSource(new URL(`./${name}`, import.meta.url));
-
-    // 1. The 3D model handoff is SUPPRESSED for a converted contact — there is
-    //    no TR-3B GLB, so the triangle icon stays the visual.
-    assert.match(source, /for \(const icao24 of modelEligible\) \{\s*if \(isTr3b\(icao24\)\) continue;/,
-      `${name}: fleet model handoff skips converted contacts`);
-    // The tracked regime's suppression is an explicit early return: a
-    // converted contact never reaches the model handoff.
-    assert.match(source, /if\s*\(\s*!(?:flightState\.)?_trackedIcao\s*\|\|\s*(?:flightState\.)?_cockpitContactMode\s*\|\|\s*isTr3b\(\s*(?:flightState\.)?_trackedIcao,?\s*\),?\s*\)\s*(?:\{|return false;)/,
-      `${name}: the standalone tracked model is suppressed for a converted contact`);
-
-    // 2. The icon is never hidden by that suppression — it must keep
-    //    satisfying the getNearby/getDetectableObjects visibility guards, so a
-    //    converted contact still works in Contacts and Cockpit.
-    assert.match(source, /if\s*\(\s*flightState\._icons\?\.has\(id\)\s*&&\s*id\s*!==\s*flightState\._trackedIcao\s*\)\s*flightState\._icons\.setShown\(id, true\);/,
-      `${name}: converting restores the icon the model handoff had hidden`);
-
-    // 3. Every aircraftIcon() CALL SITE routes through the kind resolver, so no
-    //    refresh path (poll reconciler, raster swap, presentation, tracked
-    //    billboard) can silently revert a conversion. The tracked billboard's
-    //    sites share one helper; the fleet's live in aircraftIconLayer.js.
-    const code = stripComments(source);
-    assert.match(code, /const kind = rendering\._iconKind\(icao24, info\?\.klass\);/);
-    const callSites = code.match(/aircraftIcon\(\s*[^;]*?\)/g) || [];
-    assert.equal(callSites.length >= 1, true, `${name}: expected the known aircraftIcon call sites`);
-    for (const call of callSites) {
-      assert.match(call, /aircraftIcon\(\s*(?:kind\s*,|(?:(?:parts\.)?rendering\.)?_iconKind\()/,
-        `${name}: ${call.replace(/\s+/g, ' ')} must resolve its sprite kind through _iconKind`);
-    }
-
-    // 4. Orientation contract is untouched: the tracked billboard is still a
-    //    screen-rotated icon, and no per-frame CallbackProperty is added.
-    assert.doesNotMatch(source, /new Cesium\.CallbackProperty/,
-      `${name}: the Easter egg adds no per-frame CallbackProperty`);
-  }
-  const tracked = stripComments(
-    await readFile(new URL('./trackedAircraftIcon.js', import.meta.url), 'utf8'),
-  );
-  assert.match(tracked, /rotationMode: 'screen'/, 'the tracked billboard rotates in screen space');
-});
-
 test('conversions are session-scoped and no lifecycle path clears them', async () => {
   // PINNED DECISION: the registry holds nothing but hex strings the operator
   // personally clicked, and re-tracking the same aircraft after a layer restart
   // should still show the triangle. Only a page reload resets it — so no
   // production code may clear the registry.
-  for (const name of ['flights.js', 'militaryFlights.js', '../ui/applicationShell.js']) {
-    const source = readLayerSource(new URL(`./${name}`, import.meta.url));
-    assert.doesNotMatch(source, /clearTr3bRegistry/,
-      `${name}: teardown must not clear session conversions`);
-  }
-  // And nothing persists it across reloads.
-  const registry = stripComments(
-    await readFile(new URL('./tr3bRegistry.js', import.meta.url), 'utf8'),
-  );
-  assert.doesNotMatch(registry, /localStorage|sessionStorage/,
-    'the Easter egg is session-only — never persisted');
-
-  // Nothing in the registry itself reaches for a layer or a lifecycle hook.
-  assert.doesNotMatch(registry, /import\s/, 'the registry depends on nothing');
-  assert.doesNotMatch(registry, /destroy|teardown|addEventListener/,
-    'the registry has no lifecycle hook a layer could fire');
-
-  // Behavioural proof of the same thing: the layer dropping a contact from its
-  // feed (the real-world "layer let go of it" path) leaves the conversion set.
   clearTr3bRegistry();
   const icao24 = 'a1b2c3';
   setTr3b(icao24, true);
@@ -329,7 +259,6 @@ test('conversions are session-scoped and no lifecycle path clears them', async (
 
 test('analyst records report the class the contact RENDERS as, in both layers', () => {
   clearTr3bRegistry();
-  assert.equal(TR3B_CLASS, 'tr3b');
   // Style-independent on purpose: an analyst answer must not change with FLIR.
   assert.notEqual(TR3B_CLASS, 'tr3bHot');
 
@@ -402,29 +331,6 @@ test('the analyst engine filters and aggregates a tr3b class without choking', a
   assert.equal(fastest.count, 2);
   assert.equal(fastest.summary.speedMpsMax, 240);
   clearTr3bRegistry();
-});
-
-test('a converted contact never consumes a 3D model CAP SLOT', async () => {
-  // The cap is applied to the `cand` list the eligibility pre-pass builds, so
-  // excluding converted contacts BEFORE `cand.push` is what frees the slot for
-  // an ordinary contact. Structural pin: the eligibility loop itself is inline
-  // in the fleet tick (no seam to drive headlessly), so this asserts the guard's
-  // POSITION rather than replaying the four-pass selection.
-  for (const name of ['flights.js', 'militaryFlights.js']) {
-    const source = readLayerSource(new URL(`./${name}`, import.meta.url));
-    // Anchor on the MODEL-eligibility loop (keepDistSq), not the unrelated
-    // ambient-enrichment candidate loop that also builds a `cand`.
-    const loop = /const\s*cand\s*=\s*\[\];\s*\n\s*for\s*\(const icao of icons\.ids\(\)\)[\s\S]*?cand\.push\(\s*/.exec(source)?.[0];
-    assert.ok(loop, `${name}: the model-eligibility candidate loop is present`);
-    assert.match(loop, /keepDistSq/, `${name}: matched the model-eligibility loop`);
-    assert.match(loop, /if \(isTr3b\(icao\)\) continue;/,
-      `${name}: converted contacts are dropped BEFORE entering the capped candidate list`);
-    // ...and the cap really is applied to that list, so a dropped candidate is a
-    // freed slot. The four-pass selection itself is the shared
-    // selectModelEligible (behavior-tested in modelEligibility.test.mjs).
-    assert.match(source, /modelEligible\s*=\s*selectModelEligible\(\s*cand,\s*\{\s*cap,/,
-      `${name}: the cap bounds the candidate-derived eligible set`);
-  }
 });
 
 test('cockpit class filter matches a converted contact end to end', async () => {

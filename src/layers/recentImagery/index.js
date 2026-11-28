@@ -34,17 +34,15 @@ import {
   rankLatest,
   utcDay,
   validateBox,
-  viewTooLargeMessage,
+  sizeRefusal,
+  SLOT_IDS,
+  clampUnit,
 } from './model.js';
 import { msg, t } from '../../i18n/index.js';
-import { fromDegrees, toLonLatH } from '../../geo/ellipsoid.js';
+import { fromDegrees } from '../../geo/ellipsoid.js';
 import { READOUT_WORDS, displayDay, displayMetres } from './display.js';
-import {
-  canvasOf,
-  findCamera,
-  findGlobe,
-  findQuery,
-} from '../../render/rendererOf.js';
+import { canvasOf, findCamera, findGlobe } from '../../render/rendererOf.js';
+import { groundAtViewCentre } from '../../render/viewCentre.js';
 
 /**
  * Quiet time after the last arrow key before the focused day previews, so a
@@ -66,14 +64,9 @@ const ESRI_KEPT = msg('Imagery stays on Esri · CLEAR to use Google 3D');
 /** ZOOM IN's flight time, in seconds. */
 const ZOOM_FIT_SECONDS = 1.2;
 const DEFAULT_SPLIT = 0.5;
-const SLOT_IDS = ['a', 'b'];
 const BOX_EDGES = ['west', 'south', 'east', 'north'];
 const OTHER_SLOT = { a: 'b', b: 'a' };
 
-const clampUnit = (value, fallback) => {
-  const number = Number(value);
-  return Number.isFinite(number) ? Math.max(0, Math.min(1, number)) : fallback;
-};
 const boxSignature = (box) =>
   box ? BOX_EDGES.map((edge) => Number(box[edge]).toFixed(6)).join(',') : '';
 const sourceOf = (product) => PRODUCTS[product]?.source || null;
@@ -85,14 +78,8 @@ const sourceOf = (product) => PRODUCTS[product]?.source || null;
  * @returns {{ lon: number, lat: number } | null}
  */
 function viewCentre(viewer) {
-  const query = findQuery(viewer);
-  const canvas = canvasOf(viewer);
-  const width = Number(canvas?.clientWidth);
-  const height = Number(canvas?.clientHeight);
-  if (!query || !(width > 0) || !(height > 0)) return null;
-  const hit = query.pickEllipsoid(width / 2, height / 2);
-  const ground = hit ? toLonLatH(hit) : null;
-  return ground ? { lon: ground.lon, lat: ground.lat } : null;
+  const ground = groundAtViewCentre(viewer);
+  return ground && { lon: ground.lon, lat: ground.lat };
 }
 const modeFrom = (value) =>
   MODES.includes(value)
@@ -103,7 +90,7 @@ const modeFrom = (value) =>
 
 /**
  * Create the layer.
- * @param {{ catalog?: { searchHls: Function }, renderer: object, thumbnails: object, host?: Function, globeOf?: Function, now?: () => Date, days?: number, setTimeoutImpl?: Function, clearTimeoutImpl?: Function }} options
+ * @param {{ catalog?: { searchHls: Function }, renderer: object, thumbnails: object, host?: Function, globeOf?: Function, now?: () => Date, setTimeoutImpl?: Function, clearTimeoutImpl?: Function }} options
  */
 export function createRecentImageryLayer({
   catalog = { searchHls },
@@ -112,7 +99,6 @@ export function createRecentImageryLayer({
   host = resolveImageryHost,
   globeOf = findGlobe,
   now = () => new Date(),
-  days = CATALOG_DAYS,
   setTimeoutImpl = (fn, ms) => globalThis.setTimeout(fn, ms),
   clearTimeoutImpl = (id) => globalThis.clearTimeout(id),
 } = {}) {
@@ -471,7 +457,7 @@ export function createRecentImageryLayer({
       _comparisonReady = true;
       return;
     }
-    const fromPhotoreal = _mapStackController.getActiveId?.() === 'photoreal';
+    const fromPhotoreal = _mapStackController.getActiveId() === 'photoreal';
     let lease;
     try {
       lease = _mapStackController.acquireImageryComparison({
@@ -485,7 +471,7 @@ export function createRecentImageryLayer({
     _lease = lease;
     _leaseFromPhotoreal = fromPhotoreal;
     // Read after the lease issued its switch, so that switch is known as ours.
-    _leaseGeneration = _mapStackController.getSwitchGeneration?.() ?? null;
+    _leaseGeneration = _mapStackController.getSwitchGeneration() ?? null;
     Promise.resolve(lease.ready)
       .catch(() => null)
       .then((result) => {
@@ -517,14 +503,14 @@ export function createRecentImageryLayer({
     const controller = _mapStackController;
     if (!_enabled || _destroyed || _releasing) return false;
     if (!_lease && !_droppedByFallback) return false;
-    if (controller?.getActiveId?.() !== 'photoreal') return false;
+    if (controller?.getActiveId() !== 'photoreal') return false;
     const shown = plan();
     if (!shown.a && !shown.b) return false;
-    const generation = controller.getSwitchGeneration?.() ?? null;
+    const generation = controller.getSwitchGeneration() ?? null;
     if (generation === _leaseGeneration || generation === _keptGeneration)
       return false;
     _keptGeneration = generation;
-    const automatic = controller.getSwitchOrigin?.() === 'automatic';
+    const automatic = controller.getSwitchOrigin() === 'automatic';
     const previous = _lease;
     forgetLease();
     try {
@@ -673,7 +659,7 @@ export function createRecentImageryLayer({
     try {
       const result = await catalog.searchHls({
         box: _box,
-        days,
+        days: CATALOG_DAYS,
         now: now(),
         signal: abort.signal,
       });
@@ -916,7 +902,7 @@ export function createRecentImageryLayer({
           drapable(candidateFor(_followKey)) &&
           applyPreview(_followKey);
         const shown = plan();
-        const owned = renderer.getOwned?.() || {};
+        const owned = renderer.getOwned();
         const drapesChanged = SLOT_IDS.some(
           (slotId) => (owned[slotId]?.key || null) !== shown[slotId],
         );
@@ -1056,7 +1042,7 @@ export function createRecentImageryLayer({
       if (validateBox(box).reason === 'too-large') {
         const { width, height } = boxSideKm(box);
         return refuseBox(
-          viewTooLargeMessage(Math.max(width, height)),
+          sizeRefusal('View', Math.max(width, height)),
           viewCentre(viewer) || boxCentre(box),
         );
       }
@@ -1413,7 +1399,7 @@ export function createRecentImageryLayer({
           _comparisonReady &&
           _leaseFromPhotoreal &&
           _leaseStackId !== null &&
-          _mapStackController?.getActiveId?.() === _leaseStackId,
+          _mapStackController?.getActiveId() === _leaseStackId,
         notes: notes(),
         auto: _auto,
         toolActive: _toolActive,

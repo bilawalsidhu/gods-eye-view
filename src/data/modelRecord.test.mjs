@@ -3,10 +3,8 @@ import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import {
   createModelRecord,
-  headingFrame,
   modelIsRendering,
   placeModel,
-  showModel,
 } from './modelRecord.js';
 
 test('a placed model has the frame the Cesium renderer poses it in', () => {
@@ -24,11 +22,9 @@ test('a placed model has the frame the Cesium renderer poses it in', () => {
         undefined,
         new Cesium.Matrix4(),
       );
-      const frame = headingFrame(
-        { x: at.x, y: at.y, z: at.z },
-        heading,
-        new Float64Array(16),
-      );
+      const record = createModelRecord({ specKey: 'a@1', bellyM: 0 });
+      placeModel(record, { x: at.x, y: at.y, z: at.z }, heading);
+      const frame = record.matrix;
       for (let i = 0; i < 16; i++)
         assert.ok(
           Math.abs(frame[i] - expected[i]) < (i >= 12 ? 1e-6 : 1e-12),
@@ -41,7 +37,7 @@ test('a record renders only once ready and shown', () => {
   const record = createModelRecord({ specKey: 'a@1', bellyM: 2 });
   assert.equal(record.ready, false);
   assert.equal(modelIsRendering(record), false);
-  showModel(record, true);
+  record.show = true;
   assert.equal(modelIsRendering(record), false);
   record.ready = true;
   assert.equal(modelIsRendering(record), true);

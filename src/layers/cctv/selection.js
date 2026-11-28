@@ -121,8 +121,7 @@ export function createSelection({
     const previousActiveRecord = getActiveRecord();
     // Re-selecting the already-active camera is a no-op: re-running the
     // activation path re-probes and rewrites the plane entity's geometry, and
-    // that async primitive rebuild visibly flashes the monitor plane (owner
-    // field test 2026-07-04 — every click ON the plane picks its own camera).
+    // that async primitive rebuild visibly flashes the monitor plane.
     // `activationDone` distinguishes a real activation from the enable()-time
     // default `_activeCameraId` assignment, which never ran this path.
     if (
@@ -175,7 +174,7 @@ export function createSelection({
       layerState._geoQueue.splice(queueIdx, 1);
       layerState._geoQueue.unshift(record);
     }
-    // §9.1: one obstruction probe per activation, cast before the geometry
+    // One obstruction probe per activation, cast before the geometry
     // pass; its range clamp lands a microtask later, before the next frame,
     // rewriting the geometry and asking again for the footprint ground. A
     // FIRST-EVER activation (no real ground sample yet) probes from the
@@ -190,9 +189,9 @@ export function createSelection({
     parts.geometry.ensureActiveCoverageEntities(record);
     parts.projection.ensureProjectionRuntime(record);
     parts.frames.refreshProjectionImage(record, true);
-    // FIX B9b: an explicit user (re)select re-arms one real ground sample for the
+    // An explicit user (re)select re-arms one real ground sample for the
     // newly-active camera, then freezes. Idle neighbors keep their resolved state.
-    // FIX B9c: if tiles are ready this real pass applies + re-resolves
+    // If tiles are ready this real pass applies + re-resolves
     // immediately; if tiles are still streaming, updateRecordGeometry's fallback
     // guard recomputes purely from the cached real ground (the pose + the probe
     // clamp above still land — no scene queries) and the record stays unresolved

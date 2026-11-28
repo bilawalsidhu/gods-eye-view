@@ -219,7 +219,7 @@ export function createCatalog({ state: layerState, services, parts, source }) {
         ...layerState._params.classes,
         starlink: false,
       };
-    parts.controls._applyClassVisibility?.();
+    parts.controls._applyClassVisibility();
     layerState._denseStatus = 'failed';
     layerState._denseError = reason;
     parts.controls._notifyRowControls();

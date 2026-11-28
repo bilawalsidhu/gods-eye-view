@@ -9,10 +9,8 @@ export const DEPENDENCIES = [
 
 export const AWARENESS_REFRESH_MS = 750;
 
-/** @constant {number} Refresh cadence while the camera pose is CHANGING.
- *  Owner playtest 2026-08-18: the Contacts direction arrows and card readouts
- *  "feel sluggish when you look around" — at the parked 750 ms cadence the
- *  arrows lag the view by up to three quarters of a second. */
+/** @constant {number} Refresh cadence while the camera moves, so direction arrows and
+ *  card readouts keep up with the view (the parked cadence lags up to 750 ms). */
 
 export const AWARENESS_MOTION_REFRESH_MS = 175;
 

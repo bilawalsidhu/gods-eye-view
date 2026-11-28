@@ -29,3 +29,17 @@ export function publishDisplayGroup(
   id: string,
   group: { rows: DisplayGroupRow[] } | null,
 ): void;
+
+/** A choice over the map, added under Map Source. */
+export type MapLayerRow = {
+  label: string;
+  value: string;
+  options: { value: string; label: string }[];
+  onChange(value: string): void;
+};
+
+/**
+ * Show the map layer `id` under Map Source as `row` describes it, in place
+ * where it is shown already; null takes it away.
+ */
+export function publishMapLayer(id: string, row: MapLayerRow | null): void;

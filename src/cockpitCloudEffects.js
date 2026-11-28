@@ -6,6 +6,7 @@ import {
   deriveWeatherEffectProfile,
   weatherAltitudeFactors,
 } from './weatherEffectsMath.js';
+import { prefersReducedMotion } from './reducedMotion.js';
 
 const WEATHER_REFRESH_MS = 5 * 60_000;
 const CLOUD_FRAME_MS = 1000 / 12;
@@ -166,23 +167,6 @@ export function cockpitCloudRenderSize(width, height) {
   };
 }
 
-/** Resolve the persisted cockpit-weather preference; missing values default off. */
-export function cockpitWeatherEnabledFromStoredValue(value) {
-  return value === '1';
-}
-
-/**
- * Whether the cloud pass runs for a Cockpit subject's layer. Not in orbit:
- * the pass fades out above 24 km (weatherAltitudeFactors), so a satellite
- * would pay for it and see nothing. The saved preference is left as it is
- * for the next aircraft or bridge; cloud cover from orbit is the Weather
- * layer's.
- * @param {string|null|undefined} layerId
- */
-export function cockpitCloudsShowFor(layerId) {
-  return layerId !== 'satellites';
-}
-
 /**
  * Weather-backed volumetric cloud pass that exists only while cockpit mode is
  * active. It owns no Cesium fog/post-process stages and cannot affect map mode.
@@ -214,9 +198,7 @@ class CockpitCloudEffectsController {
     this.pending = null;
     this.abort = null;
     this.destroyed = false;
-    this.reducedMotion = window.matchMedia(
-      '(prefers-reduced-motion: reduce)',
-    ).matches;
+    this.reducedMotion = prefersReducedMotion();
     this.enabled = this.readEnabledPreference();
 
     this.onResize = () => this.resize();
@@ -225,7 +207,8 @@ class CockpitCloudEffectsController {
       const active =
         event?.detail?.active ??
         document.body.classList.contains('cockpit-mode');
-      this.orbit = active && !cockpitCloudsShowFor(event?.detail?.layerId);
+      // No cloud pass in orbit: it fades out above 24 km (weatherAltitudeFactors).
+      this.orbit = active && event?.detail?.layerId === 'satellites';
       if (active && this.enabled) this.start();
       else this.stop();
     };
@@ -243,9 +226,7 @@ class CockpitCloudEffectsController {
 
   readEnabledPreference() {
     try {
-      return cockpitWeatherEnabledFromStoredValue(
-        localStorage.getItem(WEATHER_ENABLED_STORAGE_KEY),
-      );
+      return localStorage.getItem(WEATHER_ENABLED_STORAGE_KEY) === '1';
     } catch {
       return false;
     }

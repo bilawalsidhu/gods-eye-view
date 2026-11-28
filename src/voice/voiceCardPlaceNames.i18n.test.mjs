@@ -3,17 +3,8 @@
 // says stays English.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { setLocale } from '../i18n/index.js';
+import { inLocale } from '../testSupport/inLocale.mjs';
 import { SPEECH_BUILDERS } from './speech.js';
-
-function inLocale(locale, run) {
-  setLocale(locale);
-  try {
-    return run();
-  } finally {
-    setLocale('en');
-  }
-}
 
 const FLY = { ok: true, arrived: true, label: 'Tokyo' };
 const NEAREST = {

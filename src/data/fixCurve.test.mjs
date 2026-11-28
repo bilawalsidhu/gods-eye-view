@@ -5,11 +5,20 @@ import {
   CURVE_RUN_ON_S,
   curvePieceAt,
   curvePoints,
-  curvePositionAt,
   fixCurve,
   straightSegment,
 } from './fixCurve.js';
-import { motionPosition } from '../render/motion/iconMotion.js';
+import { motionCourse, motionPosition } from '../render/motion/iconMotion.js';
+
+/** Where the curve puts the aircraft at `tMs`, and its course. */
+function curvePositionAt(curve, tMs) {
+  const piece = curvePieceAt(curve, tMs);
+  const t = Math.min(tMs, piece.t1);
+  return {
+    position: motionPosition(piece.segment, null, t),
+    courseDeg: motionCourse(piece.segment, undefined, t),
+  };
+}
 
 // Between two reports an aircraft is drawn along a curve through both that
 // leaves each along its reported track, made of contract `arc` segments.

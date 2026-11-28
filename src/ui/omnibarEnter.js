@@ -58,7 +58,7 @@ export function isPlaceWord(text) {
 }
 
 /** Layers whose switching on starts sound. */
-export const SOUND_LAYERS = new Set(['radio']);
+const SOUND_LAYERS = new Set(['radio']);
 /** Camera moves that only their exact label asks for (b). */
 const NAMED_ONLY = new Set(['share', 'reset', 'zoom_to_globe']);
 

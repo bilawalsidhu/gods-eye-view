@@ -27,7 +27,7 @@ import {
   writtenAsName,
 } from './omnibarIntent.js';
 
-export const GUIDE_LABELS = {
+const GUIDE_LABELS = {
   styles: msg('Visual styles'),
   hud: msg('HUD'),
   north: msg('North up'),
@@ -168,7 +168,7 @@ const SHOWN_THROUGH = new Map([['rocket-launches', ['satellites']]]);
 const EXCEPT =
   /^(?:turn off|switch off|disable|hide|remove|clear)\s+(?:everything|all(?: the)?(?: other)?(?: layers?)?|every layer)\s+(?:except(?: for)?|but(?: for)?|other than|apart from|besides|save for)\s+(.+)$/;
 // Layers people reach for first, so "turn on" offers these before the rest.
-export const POPULAR_LAYERS = [
+const POPULAR_LAYERS = [
   'flights',
   'ais-live-vessels',
   'satellites',
@@ -269,7 +269,7 @@ function editDistance(a, b) {
  * name, a score and whether it names the whole layer (`exact`).
  * @param {Array<{id: string, name: string, enabled?: boolean, showInTogglePanel?: boolean}>} layers
  */
-export function createLayerIndex(layers = []) {
+function createLayerIndex(layers = []) {
   const index = layers
     .filter((layer) => layer.showInTogglePanel !== false)
     .map((layer) => {
@@ -450,7 +450,7 @@ const CAMERA_LABELS = {
 // type a command's name or one of its words to find it among the results.
 const cmd = (id, label, words, icon, step) =>
   Object.freeze({ id, label, words, icon, step });
-export const COMMANDS = Object.freeze([
+const COMMANDS = Object.freeze([
   cmd(
     'clear',
     msg('Clear all layers'),
@@ -667,7 +667,7 @@ const withoutPrefix = (label) => label.replace(/^[^:]+:\s*/, '');
  * north up"). One of its search words alone ("music", "link", "heat") only
  * finds it.
  */
-export function exactCommand(text) {
+function exactCommand(text) {
   return labelledCommand(readLine(text));
 }
 
@@ -706,7 +706,7 @@ export function readLine(text) {
 }
 
 /** Commands matching words typed in order from their starts, best first. */
-export function matchCommands(text) {
+function matchCommands(text) {
   const words = String(text || '')
     .toLowerCase()
     .split(/\s+/)
@@ -801,7 +801,7 @@ export function drawAsked(text) {
  * Decimal degrees ("30.27, -97.74"), degrees-minutes-seconds ("30°16'N
  * 97°44'W") or an MGRS grid ("14R PU 2090 4906"), or null.
  */
-export function coordinateTarget(text) {
+function coordinateTarget(text) {
   const point = parseCoordinateQuery(text);
   if (!point) return null;
   const grid = /^\d{1,2}[C-HJ-NP-X][A-HJ-NP-Z]{2}(\d{2}){1,5}$/i.test(

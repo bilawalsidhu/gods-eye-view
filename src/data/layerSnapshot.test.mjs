@@ -3,20 +3,18 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   FEED_STATE_SEVERITY,
-  LAYER_FEED_STATE_LABELS,
   LAYER_FEED_STATES,
   SNAPSHOT_FEED_STATES,
   feedProvenanceEnvelope,
   feedProvenanceNote,
-  layerFeedState,
   layerSnapshot,
   layerSnapshots,
   provenanceTag,
   snapshotAgeLabel,
   snapshotAgeSec,
-  viewStateLayerRow,
   worstFeedState,
 } from './layerSnapshot.js';
+import { layerFeedState } from './feedState.js';
 
 const NOW = 1_700_000_000_000;
 
@@ -103,7 +101,6 @@ test('chip labels and severity cover every feed-state the envelope can emit', ()
   );
   assert.deepEqual([...SNAPSHOT_FEED_STATES], [...LAYER_FEED_STATES, 'off']);
   for (const state of LAYER_FEED_STATES) {
-    assert.equal(typeof LAYER_FEED_STATE_LABELS[state], 'string');
     assert.equal(typeof FEED_STATE_SEVERITY[state], 'number');
   }
   assert.equal(
@@ -132,7 +129,6 @@ test('partial is a feed-state of its own: above nominal, below every fault', () 
   assert.equal(overall([nominal, partial]), 'partial');
   assert.equal(overall([partial, stale]), 'stale');
   assert.equal(overall([stale, partial]), 'stale');
-  assert.equal(LAYER_FEED_STATE_LABELS.partial, 'PARTIAL');
   const note = feedProvenanceEnvelope([partial], { now: NOW }).note;
   assert.match(note, /coverage is incomplete/);
   assert.doesNotMatch(note, /do not describe this as live/);
@@ -252,33 +248,6 @@ test('fallback provenance names the fallback source instead of calling it live',
   );
   assert.equal(snap.feedState, 'fallback');
   assert.match(feedProvenanceNote([snap], 'fallback'), /adsb\.lol fallback/);
-});
-
-test('view-state rows keep the existing identity fields and add feedState', () => {
-  const row = viewStateLayerRow(
-    {
-      id: 'flights',
-      name: 'Live Flights',
-      enabled: true,
-      stats: {
-        count: 9,
-        lastUpdate: 42,
-        error: null,
-        source: 'OpenSky Network',
-      },
-    },
-    { now: NOW },
-  );
-  assert.deepEqual(row, {
-    id: 'flights',
-    name: 'Live Flights',
-    enabled: true,
-    count: 9,
-    error: null,
-    feedState: 'nominal',
-    source: 'OpenSky Network',
-    lastUpdate: 42,
-  });
 });
 
 test('empty roster envelope does not pretend to be nominal', () => {

@@ -620,7 +620,7 @@ export function contextIconSlots(context) {
 }
 
 /** Rows a line of the extras texture holds. */
-export const ICON_EXTRA_ROWS = 256;
+const ICON_EXTRA_ROWS = 256;
 
 const SEGMENT_BYTES = SEGMENT_STRIDE * 4;
 const STYLE_BYTES = STYLE_STRIDE * 4;

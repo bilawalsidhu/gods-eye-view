@@ -3,7 +3,7 @@ import { createWeatherClock } from '../layers/weather/clock.js';
 import { worldClock } from '../time/worldClock.js';
 import { NEWS_LAYER_ID } from '../layers/news/model.js';
 import { createWeatherLayer } from '../layers/weather/index.js';
-import { createApplicationCyclones } from './layers/cyclones.js';
+import { createCyclonesLayer } from '../layers/cyclones/index.js';
 import { createWindLayer } from '../layers/wind/index.js';
 import { createLayerCatalog } from './catalog.js';
 import { layerPlacement } from '../data/placementProvider.js';
@@ -18,7 +18,7 @@ import { createApplicationTraffic } from './layers/traffic.js';
 import { createApplicationBikeshare } from './layers/bikeshare.js';
 import { createApplicationDirections } from './layers/directions.js';
 import { createApplicationRecentImagery } from './layers/recentImagery.js';
-import { createApplicationOsmPlaces } from './layers/osmPlaces.js';
+import { createOsmPlacesLayer } from '../layers/osmPlaces/index.js';
 import { createApplicationTransit } from './layers/transit.js';
 import { createApplicationRail } from './layers/rail.js';
 import { createApplicationInstallations } from './layers/militaryInstallations.js';
@@ -31,11 +31,13 @@ import { createApplicationFirms } from './layers/firms.js';
 import { createApplicationEarthquakes } from './layers/earthquakes.js';
 import { createApplicationAirQuality } from './layers/airQuality.js';
 import { createApplicationFirePerimeters } from './layers/perimeters.js';
-import { createApplicationGnssIntegrity } from './layers/gnss.js';
+import { createGnssIntegrityLayer } from '../layers/gnss/index.js';
 import { createApplicationGhostMaps } from './layers/ghostMaps.js';
 import { createApplicationShipwrecks } from './layers/shipwrecks.js';
 import { createApplicationDroneAirspace } from './layers/droneAirspace.js';
-import { createApplicationNews } from './layers/news.js';
+import { createNewsLayer } from '../layers/news/index.js';
+import * as context from '../data/contextStore.js';
+import { overlayHost } from './layers/overlayHost.js';
 import { createApplicationWildlifeSightings } from './layers/wildlifeSightings.js';
 import { createApplicationCables } from './layers/submarineCables.js';
 import { createOsmOverlayLayers } from '../data/osmOverlays.js';
@@ -49,7 +51,7 @@ import { createBhoteKoshiLocatorLayer } from '../data/bhoteKoshiLocator.js';
  * Hardware-local layers are registered like any other but never enter share
  * links or stored layer state: another browser cannot have this receiver.
  */
-export const LOCAL_ONLY_LAYER_METADATA = Object.freeze([
+const LOCAL_ONLY_LAYER_METADATA = Object.freeze([
   Object.freeze({ id: 'local-adsb', disposition: 'local-only' }),
   // Voice search results belong to this session, like a receiver to this machine.
   Object.freeze({ id: 'osm-places', disposition: 'local-only' }),
@@ -74,7 +76,6 @@ export function createApplicationCatalog({
   surface,
   sources,
   signal,
-  metadata = APPLICATION_LAYER_METADATA,
   vesselOptions,
   newsOptions,
   perimeterOptions,
@@ -155,7 +156,8 @@ export function createApplicationCatalog({
           ...perimeterOptions,
           source: sources['fire-perimeters'],
         }),
-        createApplicationGnssIntegrity({
+        createGnssIntegrityLayer({
+          worldNow: worldClock.timeFor('gnss-integrity'),
           source: sources['gnss-integrity'],
           windowMs: sources['gnss-integrity'].windowMs,
         }),
@@ -166,7 +168,8 @@ export function createApplicationCatalog({
         }),
         // Ages, the window and the counts read the world clock: a host that
         // follows it for the layer shows the news at the time on the timeline.
-        createApplicationNews({
+        createNewsLayer({
+          overlayHost,
           now: worldClock.timeFor(NEWS_LAYER_ID),
           ...newsOptions,
           source: sources.news,
@@ -196,7 +199,7 @@ export function createApplicationCatalog({
         createApplicationBikeshare({ source: sources.bikeshare }),
         createApplicationDirections({ source: sources.directions }),
         createApplicationRecentImagery({ source: sources['recent-imagery'] }),
-        createApplicationOsmPlaces(),
+        createOsmPlacesLayer({ overlayHost }),
         vessels,
         installations,
         createApplicationAwareness({
@@ -221,7 +224,10 @@ export function createApplicationCatalog({
           id: 'weather-lightning',
           clock: weatherClock,
         }),
-        createApplicationCyclones({ feed: sources.cyclones }),
+        createCyclonesLayer({
+          context: typeof window !== 'undefined' ? context : null,
+          feed: sources.cyclones,
+        }),
         ...createOsmOverlayLayers(),
         ...createInfrastructureLayers(localGeoJsonServices),
         createApplicationCables({ source: sources.cables }),
@@ -241,7 +247,7 @@ export function createApplicationCatalog({
           feed: sources.firms,
         }),
       ],
-      metadata,
+      APPLICATION_LAYER_METADATA,
     );
     return Object.freeze({
       ...catalog,

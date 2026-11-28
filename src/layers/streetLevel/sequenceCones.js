@@ -1,6 +1,7 @@
 import { imageConeGlyph } from './glyphs.js';
 import { passesImageryFilter } from './filter.js';
-import { createHorizonCull, metresBetween } from './view.js';
+import { createHorizonCull } from '../../render/horizonCull.js';
+import { approxDistanceM } from '../../data/approxDistance.js';
 import { msg } from '../../i18n/index.js';
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { drawOf } from '../../render/rendererOf.js';
@@ -34,7 +35,7 @@ export function thinImages(images, spacingM = IMAGE_CONE_MIN_SPACING_M) {
   const kept = [];
   let last = null;
   for (const image of images) {
-    if (!last || metresBetween(last, image) >= spacingM) {
+    if (!last || approxDistanceM(last, image) >= spacingM) {
       kept.push(image);
       last = image;
     }
@@ -225,7 +226,7 @@ export function createSequenceCones({
     requestRender();
   }
 
-  function destroy(viewer) {
+  function destroy() {
     state.sequence.abort?.abort();
     horizon.stop();
     cones = [];

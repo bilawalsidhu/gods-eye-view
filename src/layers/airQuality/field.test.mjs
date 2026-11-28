@@ -27,6 +27,7 @@ import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 import { WEATHER_IMAGERY_Z } from '../weather/imageryOrder.js';
 import { WEATHER_SHELL_HEIGHTS } from '../weather/shellPlacement.js';
 import { onAqiPeriods } from '../../testSupport/airQualityViewer.mjs';
+import { layerSnapshot } from '../../data/layerSnapshot.js';
 
 const HOUR = 3600_000;
 const SCALE = Object.freeze({
@@ -699,6 +700,8 @@ function fieldHarness({
   definitions = [NATIONAL],
   frames = null,
   registerCredit,
+  getSnapshot = async (request) =>
+    request?.mode === 'aqi' ? onAqiPeriods(capeTown()) : capeTown(),
 } = {}) {
   const viewer = { canvas: { clientWidth: 800, clientHeight: 600 } };
   const imagery = [];
@@ -758,11 +761,7 @@ function fieldHarness({
     ...renderer,
   });
   const layer = createAirQualityLayer({
-    source: {
-      definitions,
-      getSnapshot: async (request) =>
-        request?.mode === 'aqi' ? onAqiPeriods(capeTown()) : capeTown(),
-    },
+    source: { definitions, getSnapshot },
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
     fieldSource,
     clock,
@@ -1923,4 +1922,198 @@ test('clipping both pole rows never creates a zero-height texture', () => {
     paintField(manifest, { global: gridsOf(global, 10) }, 'pm25', PM25),
     [],
   );
+});
+
+// ── recovery and outages ───────────────────────────────────────────────────
+
+const SMALL_MANIFEST = {
+  scale: SCALE,
+  global: { width: 2, height: 2, lon0: 0, lat0: 1, step: 1, steps: [0, 3, 6] },
+};
+
+test('a configured field that fails its first manifest is asked again', async (t) => {
+  const calls = [];
+  const fieldSource = createLocalAirQualityFieldSource({
+    fetchImpl: async (url) => {
+      if (url.includes('manifest')) {
+        calls.push(url);
+        if (calls.length === 1)
+          return new Response('bad gateway', { status: 502 });
+        return new Response(
+          JSON.stringify({
+            ...SMALL_MANIFEST,
+            run: new Date(Date.now() - HOUR).toISOString(),
+          }),
+        );
+      }
+      return new Response(new Uint8Array(8));
+    },
+  });
+  const h = fieldHarness({ fieldSource });
+  t.after(() => h.layer.destroy());
+  await h.layer.update();
+  await settleLonger();
+  const realNow = Date.now;
+  Date.now = () => realNow() + 20 * 60_000;
+  try {
+    await h.layer.update();
+    await settleLonger();
+    h.layer.disable();
+    h.layer.enable();
+    await h.layer.update();
+    await settleLonger();
+  } finally {
+    Date.now = realNow;
+  }
+  assert.ok(
+    calls.length > 1,
+    'the field is never asked for again after one 502',
+  );
+});
+
+test('a 404 after the field was read is retried, not taken as no field', async (t) => {
+  const calls = [];
+  const fieldSource = createLocalAirQualityFieldSource({
+    fetchImpl: async (url) => {
+      if (url.includes('manifest')) {
+        calls.push(url);
+        if (calls.length === 2) return new Response('missing', { status: 404 });
+        return new Response(
+          JSON.stringify({
+            ...SMALL_MANIFEST,
+            run: new Date(Date.now() - HOUR).toISOString(),
+          }),
+        );
+      }
+      return new Response(new Uint8Array(8));
+    },
+  });
+  const h = fieldHarness({ fieldSource });
+  t.after(() => h.layer.destroy());
+  await h.layer.update();
+  await settleLonger();
+  const realNow = Date.now;
+  try {
+    Date.now = () => realNow() + 11 * 60_000; // the manifest refresh: 404
+    await h.layer.update();
+    await settleLonger();
+    Date.now = () => realNow() + 30 * 60_000; // well past any retry
+    await h.layer.update();
+    await settleLonger();
+  } finally {
+    Date.now = realNow;
+  }
+  assert.ok(calls.length > 2, 'never asked again after the 404');
+});
+
+test('a usable forecast keeps the layer on when its station network fails', async (t) => {
+  const host = hostField({ run: Date.now() - HOUR, steps: [0, 24] });
+  const h = fieldHarness({
+    fieldSource: host.source,
+    getSnapshot: async () => {
+      throw new Error('HTTP 503');
+    },
+  });
+  t.after(() => h.layer.destroy());
+  // The lifecycle manager disables a layer whose first update resolves false.
+  assert.equal(await h.layer.update(), true);
+});
+
+test('a forecast on the map keeps the shared snapshot available while station keys are missing', async (t) => {
+  const host = hostField({ run: Date.now() - HOUR, steps: [0, 24] });
+  const h = fieldHarness({
+    fieldSource: host.source,
+    definitions: [
+      { ...NATIONAL, id: 'openaq', network: 'OpenAQ', requiresKeyId: 'openaq' },
+    ],
+    getSnapshot: async () => {
+      throw Object.assign(new Error('no key'), { code: 'no_key' });
+    },
+  });
+  t.after(() => h.layer.destroy());
+  await h.layer.update();
+  await settleLonger();
+  await h.layer.update();
+  await settleLonger();
+  const stats = h.layer.getStats();
+  assert.equal(stats.keyRequired, true);
+  const snapshot = layerSnapshot({
+    id: 'air-quality',
+    enabled: true,
+    stats,
+    requiresKeyId: h.layer.requiresKeyId,
+  });
+  assert.notEqual(snapshot.feedState, 'unavailable');
+  assert.match(snapshot.error, /OPENAQ_API_KEY/);
+});
+
+test('a run whose first step is ahead of now reaches the timeline', async (t) => {
+  const host = hostField({ run: Date.now(), steps: [6, 9] });
+  const h = fieldHarness({ fieldSource: host.source });
+  t.after(() => h.layer.destroy());
+  await h.layer.update();
+  await settleLonger();
+  const { start, end } = h.clock.coverage();
+  assert.deepEqual(
+    { start, end },
+    {
+      start: host.run + 6 * HOUR,
+      end: host.run + 9 * HOUR,
+    },
+  );
+});
+
+test('live stations are hidden at a cursor ten hours from now', async (t) => {
+  const host = hostField({ run: Date.now() - HOUR, steps: [0, 24] });
+  const h = fieldHarness({ fieldSource: host.source });
+  t.after(() => h.layer.destroy());
+  await h.layer.update();
+  await settleLonger();
+  assert.equal(h.points().show, true);
+  // Wall time is run + 1 h; run + 11 h rounds to the same step 0.
+  h.clock.seek(host.run + 11 * HOUR);
+  await settleLonger();
+  assert.equal(h.points().show, false);
+  assert.equal(h.layer.getRowControls().summary.status, '');
+});
+
+test('a malformed row from one provider does not stop another being drawn', async (t) => {
+  const OTHER = { ...NATIONAL, id: 'other', network: 'Other', direct: false };
+  const h = fieldHarness({
+    definitions: [NATIONAL, OTHER],
+    getSnapshot: async ({ provider }) =>
+      provider === 'national'
+        ? [
+            {
+              id: 'bad',
+              provider: 'national',
+              stationId: 'bad',
+              name: 'Bad',
+              lat: -33,
+              lon: 18,
+              values: { pm25: 10 },
+              valueTimes: null,
+              observedMs: Date.now(),
+            },
+          ]
+        : [
+            {
+              id: 'other:x:pm25',
+              provider: 'other',
+              stationId: 'x',
+              name: 'X',
+              lat: -34.5,
+              lon: 19.5,
+              parameter: 'PM2.5',
+              units: 'µg/m³',
+              value: 10,
+              kind: 'observation',
+              observedMs: Date.now(),
+            },
+          ],
+  });
+  t.after(() => h.layer.destroy());
+  await h.layer.update();
+  await settleLonger();
+  assert.ok(h.layer.getStats().count >= 1, 'the healthy provider is not drawn');
 });

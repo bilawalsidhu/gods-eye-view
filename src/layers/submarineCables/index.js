@@ -10,7 +10,7 @@ export function createSubmarineCableLayer({
   overlayHost,
   picking = null,
   inputFor = defaultInputFor,
-  mapStackEventTarget = null,
+  subscribeMapStack = null,
   sweepClock = defaultSweepClock,
 }) {
   if (!source?.fetch || !source.label)
@@ -25,7 +25,7 @@ export function createSubmarineCableLayer({
     source,
     inputFor,
     picking,
-    mapStackEventTarget,
+    subscribeMapStack,
   };
   parts.rendering = createRendering(context);
   parts.ingestion = createIngestion(context);
@@ -51,5 +51,4 @@ export {
   CABLE_STEM_TIP_EPSILON_M,
   CABLE_SWEEP_MOTION_PROBE_INTERVAL_MS,
   CABLE_SWEEP_MOTION_EPSILON_M,
-  CABLE_LABEL_DEPTH_DECISION,
 } from './policy.js';

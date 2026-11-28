@@ -5,7 +5,7 @@ const MU_KM3_S2 = 398600.8;
 
 /** Floats in one orbit sample: its time, then position, velocity,
  * acceleration and jerk. */
-export const ORBIT_SAMPLE_LENGTH = 13;
+const ORBIT_SAMPLE_LENGTH = 13;
 
 /**
  * One SGP4 state of a satellite for dead reckoning: its inertial (TEME)

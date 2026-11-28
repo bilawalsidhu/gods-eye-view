@@ -425,6 +425,11 @@ test('aircraft draw as models only within 3 km of the camera, in either mode', (
     f.tick();
     assert.equal(f.shown.get('inside'), false, `${mode}: a model at 2.9 km`);
     assert.equal(f.fleet().items.get('inside').show, true);
+    assert.equal(
+      f.fleet().items.get('inside').environmentMap,
+      false,
+      `${mode}: no dynamic environment map`,
+    );
     assert.equal(f.shown.get('outside'), true, `${mode}: an icon at 3.1 km`);
     assert.equal(f.fleet().items.has('outside'), false);
   }
@@ -467,6 +472,32 @@ test('a camera high above the ground still models an aircraft within 3 km of it'
     POLICY.MODEL_ALT_CEIL_M,
     POLICY.MODEL_HIGHEST_CONTACT_M + POLICY.MODEL_KEEP_M,
   );
+});
+
+test('with 3D off every contact stays an icon; on again, it is modelled', () => {
+  const f = fleetFixture(new Map([['a1', north(1_000)]]));
+  // With no model drawn, the layer paces the loop by its icons' speed.
+  Object.assign(f.state._icons, { shown: () => true, expires: () => null });
+  f.state._models3dEnabled = false;
+  f.tick();
+  f.tick();
+  assert.equal(f.fleet().items.has('a1'), false);
+  f.state._models3dEnabled = true;
+  f.tick();
+  assert.equal(f.fleet().items.has('a1'), true);
+});
+
+test('Cockpit only ever lowers the model cap', () => {
+  const f = fleetFixture(new Map([['a1', north(1_000)]]));
+  const caps = [];
+  for (const mode of ['proximity', 'all']) {
+    f.state._models3dMode = mode;
+    for (const cockpit of [false, true]) {
+      f.state._cockpitContactMode = cockpit;
+      caps.push(f.models._modelCap());
+    }
+  }
+  assert.deepEqual(caps, [40, 40, POLICY.MODEL_MAX_ALL, 60]);
 });
 
 test('models are drawn at their true size, with no minimum pixel size', () => {

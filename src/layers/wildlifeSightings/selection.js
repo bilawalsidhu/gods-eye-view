@@ -47,15 +47,15 @@ export function createSelection({ state, services, parts }) {
   const labelScreens = new Map();
   const ambientSourceOptions = {
     ...WILDLIFE_OVERLAY_SOURCE_OPTIONS,
-    onVisibilityChange: (ids) => parts.rendering.setPhotoCardVisibility?.(ids),
+    onVisibilityChange: (ids) => parts.rendering.setPhotoCardVisibility(ids),
   };
 
   function renderBatch(fn) {
-    parts.rendering.beginBatch?.();
+    parts.rendering.beginBatch();
     try {
       return fn();
     } finally {
-      parts.rendering.endBatch?.();
+      parts.rendering.endBatch();
     }
   }
 
@@ -120,7 +120,7 @@ export function createSelection({ state, services, parts }) {
     const row = selectionRow();
     // The selected sighting's painted thumbnail already shows its name.
     const label =
-      row && !parts.rendering.hasPhotoCard?.(row.stableId)
+      row && !parts.rendering.hasPhotoCard(row.stableId)
         ? buildWildlifeSelectedLabel(row)
         : null;
     overlay.setEntries(
@@ -154,7 +154,7 @@ export function createSelection({ state, services, parts }) {
     // Painted photos win regardless of score. Queued or rejected images do not
     // suppress neighbors. Selection wins over ambient names using the same cache.
     for (const row of state.ambientRows)
-      if (parts.rendering.hasPhotoCard?.(row.stableId)) remember(row);
+      if (parts.rendering.hasPhotoCard(row.stableId)) remember(row);
     const selected = selectionRow();
     if (
       selected &&
@@ -166,7 +166,7 @@ export function createSelection({ state, services, parts }) {
     for (const row of state.labelRows || []) {
       if (
         row.stableId === state.selectedId ||
-        parts.rendering.hasPhotoCard?.(row.stableId)
+        parts.rendering.hasPhotoCard(row.stableId)
       )
         continue;
       const screen = labelScreens.get(row.stableId);

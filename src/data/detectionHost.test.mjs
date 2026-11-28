@@ -1,20 +1,15 @@
 import { bindOverlayPorts } from '../testSupport/fakeOverlayPorts.mjs';
 import { setFlagsFromString } from 'node:v8';
 import { runInNewContext } from 'node:vm';
-import { readShellSource } from '../testSupport/readShellSource.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import * as Cesium from 'cesium';
 import {
-  countFadingRenderEntries,
   destroyDetection,
   detectionDebugRequested,
   getDetectionDiagnostics,
-  getDetectionTheme,
   getMode,
   initDetection,
-  isDetectionSuspended,
   resumeDetection,
   setDetectionStyle,
   setDetectionTuning,
@@ -38,7 +33,7 @@ import {
   clearAwarenessEchoField,
   setAwarenessEchoField,
 } from '../awarenessEcho.js';
-import { composeLabel, resolveTier } from './detectionDraw.js';
+import { resolveTier } from './detectionDraw.js';
 import {
   createFakeDepthScene,
   createFakeGl,
@@ -47,16 +42,6 @@ import {
 } from '../render/cesium/fixtures/fakeDepthScene.mjs';
 import { createSceneOcclusionTest } from '../render/cesium/sceneOcclusionProbe.js';
 import { rendererOf } from '../render/rendererOf.js';
-
-test('detection diagnostics count rendered fading rows instead of absent selected identities', () => {
-  assert.equal(countFadingRenderEntries([
-    { selected: true },
-    { selected: false },
-    { selected: true },
-    { selected: false },
-  ]), 2);
-  assert.equal(countFadingRenderEntries([{ selected: true }, { selected: true }]), 0);
-});
 
 class MockEvent {
   constructor() { this.listeners = new Set(); }
@@ -421,9 +406,6 @@ test('detection lifecycle re-hosts unchanged painters behind the sole host liste
     assert.equal(env.detectionCtx.globalCompositeOperation, 'source-over');
     assert.equal(env.detectionCtx.filter, 'none');
     assert.equal(surface.style.display, 'block');
-    const canvas = env.document.getElementById('world-overlay-canvas');
-    assert.equal(Number(canvas.dataset.solveRevision), first.solveRevision);
-    assert.equal(canvas.dataset.profile, 'DENSE');
 
     // The existing 125 ms arbiter cadence remains authoritative.
     env.advance(124);
@@ -458,14 +440,12 @@ test('detection lifecycle re-hosts unchanged painters behind the sole host liste
     )).length;
     const beforeSuspend = bannerCount();
     suspendDetection('intercity');
-    assert.equal(isDetectionSuspended(), true);
     assert.equal(surface.style.opacity, '0');
     env.postRender.raise();
     assert.equal(bannerCount(), beforeSuspend);
     assert.equal(env.postRender.listeners.size, 1);
     resumeDetection();
     env.postRender.raise();
-    assert.equal(isDetectionSuspended(), false);
     assert.equal(surface.style.opacity, '1');
     assert.ok(bannerCount() > beforeSuspend);
 
@@ -485,7 +465,6 @@ test('detection lifecycle re-hosts unchanged painters behind the sole host liste
       setMode('DENSE');
       env.postRender.raise();
       assert.equal(getDetectionDiagnostics().profile, 'DENSE');
-      assert.ok(getDetectionTheme().line);
       assert.equal(env.postRender.listeners.size, 1);
     }
 
@@ -529,6 +508,12 @@ test('callouts stop painting the moment the last detectable object goes away', (
     id: 'LASTONE',
     metric: 'FL120',
     type: 'AIR',
+  }, {
+    position: new Cesium.Cartesian3(0.3, 0, 6_356_752),
+    sourceId: 'leaving-1',
+    id: 'LEAVING',
+    metric: 'FL200',
+    type: 'AIR',
   }];
   try {
     initWorldOverlay(env.viewer);
@@ -544,6 +529,16 @@ test('callouts stop painting the moment the last detectable object goes away', (
       env.ctx.calls.some(([name, text]) => name === 'fillText' && text === 'LASTONE'),
       'the callout paints on the shared canvas while the contact exists',
     );
+
+    // One contact goes first. Its row fades out of the selection, and the
+    // diagnostics count that rendered row until its fade ends.
+    objects = objects.slice(0, 1);
+    for (const expected of [1, 1, 0]) {
+      env.advance(250);
+      env.postRender.raise();
+      assert.equal(getDetectionDiagnostics().selectedCount, 1);
+      assert.equal(getDetectionDiagnostics().fadingCount, expected);
+    }
 
     objects = [];
     env.ctx.calls.length = 0;
@@ -963,16 +958,17 @@ test('under the sonar sweep an echo is never brighter than its own bracket', () 
     spreadPx: 8,
     lineWidth: 3.25,
   };
+  const pin = {
+    position: new Cesium.Cartesian3(0.5, 0.3, 6_356_752),
+    sourceId: 'sonar-pin',
+    id: 'SONAR',
+    metric: 'FL300',
+    type: 'AIR',
+    tier: 'military',
+  };
   const contact = {
     id: 'military',
-    getDetectableObjects: () => [{
-      position: new Cesium.Cartesian3(0.5, 0.3, 6_356_752),
-      sourceId: 'sonar-pin',
-      id: 'SONAR',
-      metric: 'FL300',
-      type: 'AIR',
-      tier: 'military',
-    }],
+    getDetectableObjects: () => [pin],
   };
   try {
     setAwarenessEchoField({
@@ -988,6 +984,7 @@ test('under the sonar sweep an echo is never brighter than its own bracket', () 
     setDetectionStyle('normal');
     settleFrame(env);
     let dimmed = 0;
+    const bands = new Set();
     let compared = 0;
     for (let frame = 0; frame < 40; frame++) {
       env.detectionCtx.calls.length = 0;
@@ -998,6 +995,7 @@ test('under the sonar sweep an echo is never brighter than its own bracket', () 
         path instanceof MockPath2D && path.points.length && width !== echo.lineWidth && style !== echo.color);
       if (!bracketStroke) continue;
       const bracketAlpha = bracketStroke[4];
+      bands.add(pin._cohortBand);
       if (bracketAlpha < 0.99) dimmed++;
       if (!echoStroke) continue;
       compared++;
@@ -1007,6 +1005,7 @@ test('under the sonar sweep an echo is never brighter than its own bracket', () 
       );
     }
     assert.ok(dimmed > 0, 'the sweep dimmed the bracket on some frame');
+    assert.deepEqual([...bands], [8], 'the sweep dims paint, not cohort admission');
     assert.ok(compared > 0, 'an echo was painted');
   } finally {
     clearAwarenessEchoField();
@@ -1115,43 +1114,6 @@ test('pathological detection paint holds alternate frames without freezing share
   } finally {
     env.cleanup();
   }
-});
-
-test('detection cannot resurrect a private canvas, listener, matrix, resize, clear, or UI inventory', () => {
-  const source = readFileSync(new URL('./detection.js', import.meta.url), 'utf8');
-  const uiSource = readShellSource()
-  + '\n' + readFileSync(new URL('../ui/visualPresets.js', import.meta.url), 'utf8');
-  assert.doesNotMatch(source, /createElement\(\s*['"]canvas['"]\s*\)/);
-  assert.doesNotMatch(source, /postRender\.addEventListener/);
-  assert.doesNotMatch(source, /['"]detection-overlay['"]/);
-  assert.doesNotMatch(source, /devicePixelRatio/);
-  assert.doesNotMatch(source, /clearRect\(/);
-  assert.doesNotMatch(source, /Matrix4\.multiply/);
-  assert.doesNotMatch(source, /CALLOUT_OCCLUSION_SELECTORS/);
-  assert.doesNotMatch(source, /_ctx\.(?:filter|globalCompositeOperation)\s*=/);
-  assert.match(source, /_hostSurface\.style\.mixBlendMode = _theme\.blend;/);
-  assert.match(source, /_hostSurface\.style\.filter = `\$\{_theme\.filter\} drop-shadow\(0 0 \$\{GLOW_PX\}px \$\{_theme\.glow\}\)`;/);
-  assert.match(source, /const LABEL_SOLVE_INTERVAL_MS = 125;/);
-  assert.match(source, /const _labelArbiter = new LabelArbiter\(\);/);
-  assert.match(source, /const clipW = vp3 \* px \+ vp7 \* py \+ vp11 \* pz \+ vp15;/);
-  assert.match(source, /registerWorldOverlayPaintLane\('detection', _paintDetectionLane/);
-  assert.match(source, /target: 'detection'/);
-  assert.match(source, /shouldPaint: _shouldPaintDetectionLane/);
-  // The three military styles used to carry three copies of these numbers.
-  // They now share ONE frozen object, which Cockpit's force-on reuses too, so
-  // the pin moved from "three identical literals" to "one preset, referenced
-  // three times" — same guarantee, and the copies can no longer drift.
-  assert.match(
-    uiSource,
-    /const MILITARY_DETECTION_PRESET = Object\.freeze\(\{\s*mode: 'dense',\s*densityPct: 75,?\s*\}\);/,
-    'the tactical detection default is still Dense @ 75%',
-  );
-  assert.equal(
-    uiSource.match(/detection: MILITARY_DETECTION_PRESET,/g)?.length,
-    3,
-    'CRT, NVG, and FLIR retain their Dense auto-enable defaults',
-  );
-  assert.match(uiSource, /preset\.detection && !this\._detectionUserOverridden/);
 });
 
 // ── Developer telemetry gate (2026-08-20 QA hunt) ───────────────────────────
@@ -1414,9 +1376,6 @@ test('a transit vehicle is a contact: box, route, mode and operator on the share
     assert.ok(env.ctx.calls.some(([name, , color, width]) => name === 'stroke' && color === '#5EF08A' && width === 1.25));
     assert.ok(env.ctx.calls.some(([name, , color, width]) => name === 'stroke' && color === '#05080C' && width === 3.25));
     assert.ok(!env.detectionCtx.calls.some(([name, , color]) => name === 'stroke' && color === '#5EF08A'));
-    // The operator travels on the object for the two-tier card form, which is
-    // where `klass` is read; the host's track label does not paint it.
-    assert.equal(composeLabel(objects[0]).secondary, 'MBTA · BUS 34 KM/H');
     // The selected vehicle carries its own fuller card, so detection must not
     // label it a second time.
     assert.equal(

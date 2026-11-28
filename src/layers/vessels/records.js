@@ -26,7 +26,6 @@ export function normalizeVessel(row) {
     id,
     mmsi,
     reference: row.reference ?? id,
-    imo: String(row.imo || ''),
     type: String(row.type || ''),
     destination: String(row.destination || ''),
     // Hull length and beam (metres), null when unreported.
@@ -37,7 +36,6 @@ export function normalizeVessel(row) {
     heading: finiteNumber(row.heading),
     // A virtual aid to navigation: a mark with nothing physical there.
     virtual: row.virtual === true,
-    lastPositionUtc: String(row.last_position_UTC || ''),
     lastPositionEpoch: finiteNumber(row.last_position_epoch),
     // Its own track around the time, from a snapshot at a time (see
     // src/time/timelineFixes.js); null when the row carries none.
@@ -63,7 +61,8 @@ function positiveNumber(value) {
   return number !== null && number > 0 ? number : null;
 }
 
-function finiteNumber(value) {
+/** A finite number, or null: null, undefined and '' are absent, not 0. */
+export function finiteNumber(value) {
   if (value === null || value === undefined || value === '') return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
@@ -180,7 +179,6 @@ export class VesselRecords {
         record.lat = next.lat;
         record.lon = next.lon;
         record.name = next.name;
-        record.imo = next.imo;
         record.type = next.type;
         record.destination = next.destination;
         record.length = next.length;
@@ -189,7 +187,6 @@ export class VesselRecords {
         record.course = next.course;
         record.heading = next.heading;
         record.virtual = next.virtual;
-        record.lastPositionUtc = next.lastPositionUtc;
         record.lastPositionEpoch = next.lastPositionEpoch;
         record.missedRefreshes = 0;
 

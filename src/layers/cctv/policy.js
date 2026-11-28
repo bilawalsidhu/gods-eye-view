@@ -125,26 +125,18 @@ export const VIEW_GEOMETRY_RETRY_MS = 1500;
 
 export const PLACEHOLDER_REPAINT_MS = 750;
 
-// v1 key is retired dead data (owner decision #3, §9.3 — WIPE CLEAN, no
-// legacy import): kept here only as a documented constant so nothing ever
-// re-reads it by accident. Exported for the unit suite's "v1 is ignored"
-// assertion; there is NO read path for this key anywhere in the module.
-
-export const CCTV_CALIBRATION_STORAGE_KEY_V1 =
-  'godsEyeView.cctv.calibration.v1';
-
 /** v2 store key. Entries: { values: <7-field calibration offsets>, source: 'manual', savedAt: <epoch ms> }. */
 
 export const CCTV_CALIBRATION_STORAGE_KEY_V2 =
   'godsEyeView.cctv.calibration.v2';
 
-// H5: throttle for double-buffered canvas texture swaps (<=1Hz; each swap is a
+// Throttle for double-buffered canvas texture swaps (<=1Hz; each swap is a
 // full 1080p texture re-upload because Cesium re-uploads only on a NEW image
 // object reference).
 
 export const PROJECTION_TEXTURE_SWAP_MS = 1000;
 
-// V2 frustum geometry (design §2a/§6): the far-cap center + corners never sink
+// The far-cap center + corners never sink
 // below groundAlt + this clearance, so a fabricated pitch (-24°) cannot bury
 // the monitor plane in the 3D tiles. Exported for the unit suite.
 
@@ -170,11 +162,11 @@ export const CCTV_FOCUS_RESULT = Object.freeze({
   COCKPIT_ACTIVE: 'cockpit-active',
 });
 
-// §9.1 activation obstruction probe: clamp the plane's effective range to just
+// Activation obstruction probe: clamp the plane's effective range to just
 // short of the first pickFromRay hit along the frustum axis, with a floor so a
 // point-blank obstruction never collapses the frustum to zero. The floor is
-// the old H6 monitor's 8-15 m distance band: small enough that a pitched-down
-// camera whose axis meets the street ~25 m out still clamps SHORT of the hit
+// small enough that a pitched-down camera whose axis meets the street ~25 m
+// out still clamps SHORT of the hit
 // (a larger floor would push the plane back through the obstruction).
 
 export const PROBE_CLEARANCE_M = 4;
@@ -505,7 +497,7 @@ export const ACTIVE_COVERAGE_EDGE = hexColor('#8dff87', 0.58);
 
 export const ACTIVE_COVERAGE_CENTER = hexColor('#d7ff8d', 0.82);
 
-// H6: dimmer depth-fail materials let the active frustum wireframe read
+// Dimmer depth-fail materials let the active frustum wireframe read
 // through buildings while in monitor fallback mode.
 
 export const ACTIVE_COVERAGE_EDGE_DEPTHFAIL = hexColor('#8dff87', 0.18);
@@ -521,17 +513,17 @@ export const PLANE_OUTLINE_COLOR = hexColor('#6be8ff', 0.55);
 
 export const CCTV_AMBIENT_CARD_DRAIN_CAP = 16;
 
-// Global static-frame pacing (owner finding 3): the pacer ticks at the burst
+// Global static-frame pacing: the pacer ticks at the burst
 // spacing (250 ms) but cardFetchPolicy gates launches — cold fill (selected
 // cards still missing their FIRST frame) allows up to 4 in-flight fetches at
-// 250 ms spacing; steady state keeps the salvaged Part C gate of at most one
+// 250 ms spacing; steady state keeps a gate of at most one
 // request per second with an in-flight fetch blocking the tick, so slow
 // responses only lower the rate.
 
 export const CARD_FETCH_TICK_MS = CCTV_CARD_FETCH_BURST_SPACING_MS;
 
 // In-view margin so cards whose anchors sit just beyond an edge don't churn
-// while the operator makes minor camera adjustments (Part C recordIsInView).
+// while the operator makes minor camera adjustments.
 
 export const CARD_VIEW_MARGIN = 0.06;
 
@@ -554,7 +546,7 @@ export const CCTV_PROJECTION_OVERLAY_SOURCE_OPTIONS = Object.freeze({
   moving: false,
 });
 
-// Hover-summoned card (owner round 2, item B): pointing at a cardless camera
+// Hover-summoned card: pointing at a cardless camera
 // icon shows its card immediately as a PINNED entry (budget-exempt, top
 // draw-pass declutter priority).
 /** Min spacing between hover scene.pick calls (event-driven, user gesture). */

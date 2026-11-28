@@ -1,5 +1,5 @@
 import { createEarthquakesLayer } from '../../layers/earthquakes/index.js';
-import { overlayHost } from './overlayHost.js';
+import { openExternal, overlayHost } from './overlayHost.js';
 import { inputFor } from '../../input/dispatcher.js';
 import * as picking from '../../data/pickRegistry.js';
 import * as context from '../../data/contextStore.js';
@@ -37,7 +37,7 @@ export function createApplicationEarthquakes(options) {
     picking,
     context,
     pointer: { isPointerFree },
-    openExternal: (url) => window.open(url, '_blank', 'noopener,noreferrer'),
+    openExternal,
     focus: { requestWorldFocus },
     ripples: createEarthquakeRipples(),
     // The loaded ground (terrain or tiles) the clamped disc is draped on.

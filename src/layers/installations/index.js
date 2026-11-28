@@ -30,16 +30,8 @@ export function createInstallationsLayer({ services, source, overlayHost }) {
     {},
     parts.controls.methods,
     parts.lifecycle.methods,
-    parts.ingestion?.methods,
-    {
-      approximateSurfaceDistanceM: parts.model.approximateSurfaceDistanceM,
-      classifyGoogleMilitaryPlace: parts.model.classifyGoogleMilitaryPlace,
-      installationSourceLabel: parts.model.installationSourceLabel,
-      installationSurfaceHeightM: parts.rendering.installationSurfaceHeightM,
-      installationWithinViewport: parts.model.installationWithinViewport,
-      installationResponseSaturated: parts.model.installationResponseSaturated,
-      installationRetryDelayMs: parts.viewport.installationRetryDelayMs,
-    },
+    parts.ingestion.methods,
+    { installationSurfaceHeightM: parts.rendering.installationSurfaceHeightM },
   );
 }
 export { createInstallationSource } from './source.js';

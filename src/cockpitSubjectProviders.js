@@ -12,6 +12,7 @@
  *
  * Pure: no Cesium, no DOM.
  */
+import { clamp } from './geo/vector.js';
 
 /** The kinds the Cockpit rides itself; no provider may take one. */
 export const COCKPIT_BUILT_IN_KINDS = Object.freeze([
@@ -21,7 +22,7 @@ export const COCKPIT_BUILT_IN_KINDS = Object.freeze([
 ]);
 
 /** The tones a provider's HUD texts may take. */
-export const COCKPIT_SUBJECT_TONES = Object.freeze([
+const COCKPIT_SUBJECT_TONES = Object.freeze([
   'normal',
   'muted',
   'live',
@@ -35,13 +36,13 @@ export const COCKPIT_SUBJECT_TONES = Object.freeze([
  * ground, above anything ridden near it; outside, the frame stands on the
  * floor.
  */
-export const COCKPIT_SUBJECT_MIN_HEIGHT_M = -1_000;
-export const COCKPIT_SUBJECT_MAX_HEIGHT_M = 50_000;
+const COCKPIT_SUBJECT_MIN_HEIGHT_M = -1_000;
+const COCKPIT_SUBJECT_MAX_HEIGHT_M = 50_000;
 
 /** The most readouts, sources and signals a HUD view shows. */
 export const COCKPIT_SUBJECT_MAX_READOUTS = 4;
-export const COCKPIT_SUBJECT_MAX_SOURCES = 4;
-export const COCKPIT_SUBJECT_MAX_SIGNALS = 4;
+const COCKPIT_SUBJECT_MAX_SOURCES = 4;
+const COCKPIT_SUBJECT_MAX_SIGNALS = 4;
 /** The most ticks a progress line takes. */
 export const COCKPIT_SUBJECT_MAX_TICKS = 512;
 
@@ -62,7 +63,6 @@ const TONES = new Set(COCKPIT_SUBJECT_TONES);
 const isObject = (value) =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
 const finite = (value) => typeof value === 'number' && Number.isFinite(value);
-const clamp = (value, low, high) => Math.min(high, Math.max(low, value));
 
 /**
  * `value` as display text: trimmed, at most `max` characters (the last one

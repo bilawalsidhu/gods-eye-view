@@ -86,12 +86,11 @@ only the main file. Exports, runtimes and new groups belong in the main file.
 
 ## Compatibility entries and owners
 
-| Retained entry                                      | Owner and current reason                                                                                           |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `src/data/manager.js`                               | Lifecycle/panel compatibility and existing tests; normal assembly constructs lifecycle and presentation separately |
-| `src/data/<layer>.js`                               | Legacy default instances; new assembly calls layer factories with supplied sources                                 |
-| `src/app/sources.js`, `src/services/application.js` | Existing default/override API; current application construction supplies its own instances                         |
-| `server/providers/local.js`                         | Existing Node composition barrel and provider helper re-exports                                                    |
+| Retained entry                                      | Owner and current reason                                                                   |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `src/data/<layer>.js`                               | Legacy default instances; new assembly calls layer factories with supplied sources         |
+| `src/app/sources.js`, `src/services/application.js` | Existing default/override API; current application construction supplies its own instances |
+| `server/providers/local.js`                         | Existing Node composition entry                                                            |
 
 The one exact standalone-import exception is `server/providers/local.js` to
 `server/standalone/key-setup.js`. It does not authorize new compatibility
@@ -125,10 +124,9 @@ use build-only dependency exceptions.
 
 `server/standalone/vite.config.js` loads the root environment and passes selected
 browser keys, host/port and the ordered local provider plugins to this helper.
-`server/providers/local.js` composes provider factories and re-exports existing
-helpers for compatibility. Provider Settings lives in `server/standalone/key-setup.js`
-and writes to the same root `.env` or Pinokio store as before. `vite.config.js`
-preserves the default configuration and named provider exports for tools/tests.
+`server/providers/local.js` composes provider factories. Provider Settings lives
+in `server/standalone/key-setup.js` and writes to the same root `.env` or
+Pinokio store as before. `vite.config.js` re-exports the default configuration.
 
 ## Aircraft and vessel providers
 
@@ -325,8 +323,6 @@ within the resulting scroll range. The left pass notifies its caller after
 alignment so the right pass can follow. Neither pass installs listeners, timers
 or observers; construction/import does no work. Scheduling, preference writes,
 share restoration and movement of controls between containers remain caller-owned.
-Existing imports of `resolveHudRailLayout` from `cockpitMath.js` remain
-compatible through a re-export.
 
 ### Adding a right-rail readout panel
 
@@ -343,9 +339,9 @@ the user's later collapse choice, including body remounts. Mark the body
 `max-height` and puts the scroll offset back afterwards. Panel bodies only
 scroll on an open-card change, with one write, never on a refresh.
 
-Compose `createRailCards({ container, document, onParams, onOpen })`. Rails
-have no time controls of their own; the world timeline moves time. Cards
-reconcile `{ id, title, badge, open, compact,
+Mount `RailCards` (`src/ui/rail/RailCards.vue`) with `cards`, `onParams` and
+`onOpen`. Rails have no time controls of their own; the world timeline moves
+time. Cards reconcile `{ id, title, badge, open, compact,
 compactStatus, blocks }` in place. Their full-width native button headers expose
 `aria-expanded` and `aria-controls`; articles expose `data-open`. The feature
 adapter owns accordion state. Generic cards do not select data or enable layers.

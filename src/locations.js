@@ -2,7 +2,11 @@ import { rangeForBoundingSphere } from './data/cameraFraming.js';
 import { isUnavailableCapability } from './sources/capability.js';
 import { createOverpassFeatureSource } from './sources/overpassFeatures.js';
 import { applicationServices } from './services/application.js';
-import { greatCircleKm } from './geoDistance.js';
+import {
+  greatCircleKm,
+  greatCircleMeters,
+  pointInRing,
+} from './geoDistance.js';
 import {
   viewportBias,
   placesNearViewRecovery,
@@ -67,16 +71,6 @@ export function flyToGlobeView(viewer, options = {}) {
   );
   return { latitude, longitude, heightM };
 }
-
-/**
- * Flat list of locations for backward compatibility.
- */
-export const LOCATIONS = Object.entries(CITY_POIS).map(([id, city]) => ({
-  id,
-  name: city.name,
-  lat: city.pois[0].lat,
-  lon: city.pois[0].lon,
-}));
 
 /**
  * Fly the camera to a landmark using lookAt-based targeting.
@@ -366,10 +360,9 @@ export async function searchAndFlyTo(viewer, query, options = {}) {
     !options.forceClose &&
     (shouldFrameGeocodeViewport(navigationMode) || explicitOverview)
   ) {
-    // Natural regions (mountain ranges, deserts, seas) geocode as area-overview with
-    // enormous viewports — fitting the whole box flies the camera to space (owner field
-    // test 2026-07-23, "Rocky Mountains"). Frame a capped oblique swath over the center
-    // instead. Countries/states (region-overview) intentionally keep whole-place framing.
+    // Natural regions geocode as area-overview with enormous viewports. Fitting the whole
+    // box flies the camera to space, so frame a capped oblique swath over the center.
+    // Countries and states keep whole-place framing.
     const swath =
       navigationMode === 'area-overview' ? regionFramingPlan(viewport) : null;
     if (swath?.mode === 'swath') {
@@ -580,7 +573,7 @@ const KM_PER_DEGREE = 111.32;
  * @returns {null | {latSpanDeg:number, lonSpanDeg:number, latSpanKm:number,
  *   lonSpanKm:number, spanKm:number, centerLat:number, centerLng:number}}
  */
-export function viewportMetrics(viewport) {
+function viewportMetrics(viewport) {
   const southwest = viewport?.southwest;
   const northeast = viewport?.northeast;
   if (
@@ -630,14 +623,12 @@ export const PLACE_VIEWPORT_MAX_SPAN_KM = 300;
  * Fraction of a viewport's diagonal that its own geocoded location may sit away
  * from the box centre before the box is judged NOT to be centred on the place.
  *
- * The 2026-08-20 QA hunt defect: "Tokyo" flew the camera ~977 km from Tokyo, out
- * over the open Pacific at 2,885 km altitude. Tokyo geocodes as
- * `administrative_area_level_1` (the prefecture), and Tokyo Metropolis owns the
- * Izu and Ogasawara chains ~1,000 km out to sea, so its bounding box is mostly
- * ocean and its centroid is nowhere near the city.
+ * A prefecture-level geocode can have a box that is mostly ocean. Tokyo Metropolis
+ * includes the Izu and Ogasawara chains ~1,000 km out, putting the centroid far from the
+ * city.
  *
  * Neither span nor offset alone separates that from a legitimately huge region;
- * the ratio does. Measured against the live Geocoding API (2026-08-20):
+ * the ratio does. Measured against the live Geocoding API:
  *
  *   gated    Tokyo      2,462 km box, anchor  977 km off  → ratio 0.397
  *            Hawaii     2,642 km box, anchor 1,204 km off → ratio 0.456
@@ -718,7 +709,7 @@ export function placeFramingViewport(
 }
 
 /**
- * Natural-region framing heuristic (owner field test 2026-07-23). Pure — exported
+ * Natural-region framing heuristic. Pure — exported
  * for unit tests. Given geocode {southwest,northeast} bounds, decide whether to
  * frame the full viewport or a capped oblique swath over the feature's center,
  * looking along the feature's long axis.
@@ -913,11 +904,9 @@ function selectBuildingBounds(elements, targetLat, targetLon, query) {
     if (!bounds || bounds.width < 2 || bounds.depth < 2) continue;
     const names = element.names;
     const center = element.center || averageCoordinate(coordinates);
-    const distanceM = approximateDistanceM(
-      targetLat,
-      targetLon,
-      center.lat,
-      center.lon,
+    const distanceM = greatCircleMeters(
+      { lat: targetLat, lon: targetLon },
+      center,
     );
     const nameWords = normalizedWords(
       [names.primary, names.english, names.official, names.alternate]
@@ -925,7 +914,11 @@ function selectBuildingBounds(elements, targetLat, targetLon, query) {
         .join(' '),
     );
     const nameScore = wordOverlap(queryWords, nameWords);
-    const containsTarget = pointInPolygon(targetLon, targetLat, coordinates);
+    const containsTarget = pointInRing(
+      coordinates.map(({ lat, lon }) => [lon, lat]),
+      targetLat,
+      targetLon,
+    );
     const height =
       element.heightM ??
       Math.max(12, Math.min(80, Math.max(bounds.width, bounds.depth) * 0.8));
@@ -955,8 +948,14 @@ function coordinateBounds(coordinates, latitude) {
   const west = Math.min(...longitudes);
   const east = Math.max(...longitudes);
   return {
-    width: approximateDistanceM(latitude, west, latitude, east),
-    depth: approximateDistanceM(south, west, north, west),
+    width: greatCircleMeters(
+      { lat: latitude, lon: west },
+      { lat: latitude, lon: east },
+    ),
+    depth: greatCircleMeters(
+      { lat: south, lon: west },
+      { lat: north, lon: west },
+    ),
   };
 }
 
@@ -992,34 +991,6 @@ function wordOverlap(left, right) {
     if (right.has(word)) matches++;
   }
   return matches;
-}
-
-function pointInPolygon(lon, lat, coordinates) {
-  let inside = false;
-  for (
-    let index = 0, previous = coordinates.length - 1;
-    index < coordinates.length;
-    previous = index++
-  ) {
-    const a = coordinates[index];
-    const b = coordinates[previous];
-    const intersects =
-      a.lat > lat !== b.lat > lat &&
-      lon <
-        ((b.lon - a.lon) * (lat - a.lat)) / (b.lat - a.lat || Number.EPSILON) +
-          a.lon;
-    if (intersects) inside = !inside;
-  }
-  return inside;
-}
-
-function approximateDistanceM(latA, lonA, latB, lonB) {
-  const latitudeScale = 111320;
-  const longitudeScale = latitudeScale * Math.cos(toRadians((latA + latB) / 2));
-  return Math.hypot(
-    (latB - latA) * latitudeScale,
-    (lonB - lonA) * longitudeScale,
-  );
 }
 
 function finitePositive(value) {

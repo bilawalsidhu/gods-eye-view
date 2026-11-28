@@ -96,7 +96,7 @@ export function createLifecycle({
       parts.tracking._installClickHandler(viewer);
 
       // React to Military-layer toggles IMMEDIATELY (suppress/restore sweep)
-      // instead of waiting out the 30 s poll (M2).
+      // instead of waiting out the 30 s poll.
       if (!flightState._milActiveChangeUnsub) {
         flightState._milActiveChangeUnsub = onMilitaryLayerActiveChange(
           parts.tracking._onMilitaryActiveChange,
@@ -156,7 +156,7 @@ export function createLifecycle({
           flightState._lastFleetTickMs = 0;
         });
       }
-      flightState.timeline?.start();
+      flightState.timeline.start();
     },
 
     /**
@@ -165,8 +165,8 @@ export function createLifecycle({
      * @param {object} viewer
      */
     disable(viewer) {
-      flightState.timeline?.stop();
-      parts.controller._abortActiveUpdates();
+      flightState.timeline.stop();
+      parts.ingestion.abortAll();
       parts.tracking._cancelPendingTrackingRestore();
       if (flightState._icons) flightState._icons.show = false;
       parts.rendering._stopPace();
@@ -204,12 +204,11 @@ export function createLifecycle({
      * @param {object} viewer
      */
     destroy(viewer) {
-      flightState.timeline?.stop();
+      flightState.timeline.stop();
       flightState.lifetime.abort();
-      flightState._enrichActive = 0;
-      flightState._enrichLastDispatchMs = 0;
-      parts.controller._abortActiveUpdates();
-      parts.rendering._stopPace(); // direct-destroy path (perf wave 2 fix)
+      flightState._enrich.reset();
+      parts.ingestion.abortAll();
+      parts.rendering._stopPace(); // direct-destroy path
       parts.tracking._clearTracking();
       parts.tracking._destroyTrail();
       parts.tracking._cancelPendingTrackingRestore();
@@ -262,13 +261,6 @@ export function createLifecycle({
       flightState._displayCourse.clear();
       flightState._groundSnap.clear();
       flightState._displayFloorState.clear();
-      flightState._enrichQueue.length = 0;
-      flightState._enrichSeen.clear();
-      flightState._enrichRetryAfter.clear();
-      if (flightState._enrichDripTimer) {
-        clearTimeout(flightState._enrichDripTimer);
-        flightState._enrichDripTimer = null;
-      }
       flightState.records.missingPolls.clear();
       flightState._focusEvidenceIds.clear();
       flightState.feed._count = 0;

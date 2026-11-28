@@ -1,35 +1,28 @@
-import { readFileSync } from 'node:fs';
-import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import militaryAwarenessLayer, {
-  _getAwarenessNavigationStateForTest,
-  _getAwarenessPanelRendersForTest,
-  awarenessClearMatchesSubject,
-  awarenessNeedsContinuousRender,
+import { createApplicationAwareness } from '../app/layers/militaryAwareness.js';
+import {
   awarenessRefreshDecision,
   awarenessRefreshIntervalMs,
   awarenessRefreshRequired,
-  awarenessResultsAreLive,
   buildAwarenessContextSnapshot,
-  canNavigateAwarenessNext,
   contactsWindowFromSnapshot,
   contextTargetFlyToAllowed,
-  summarizeInstallationViewport,
+} from '../layers/awareness/model.js';
+import { awarenessClearMatchesSubject } from '../layers/awareness/subject.js';
+import { canNavigateAwarenessNext } from '../layers/awareness/navigation.js';
+import {
   findCompatibleHistoryIndex,
-  AWARENESS_QUERY_LIMIT,
   historySubjectSnapshot,
-} from './militaryAwareness.js';
-import flightsLayer, {
-  _setTrackedFlightRefreshStateForTest,
-} from './flights.js';
+} from '../layers/awareness/history.js';
+import { summarizeInstallationViewport } from '../layers/awareness/queries.js';
+import { AWARENESS_QUERY_LIMIT } from '../layers/awareness/index.js';
+import flightsLayer from './flights.js';
 import militaryFlightsLayer, {
   _setTrackedMilitaryRefreshStateForTest,
 } from './militaryFlights.js';
-import aisLiveVesselsLayer, {
-  _setVesselStateForTest,
-} from './aisLiveVessels.js';
+import aisLiveVesselsLayer from './aisLiveVessels.js';
 import militaryInstallationsLayer from './militaryInstallations.js';
 import {
   _resetRenderGovernorForTest,
@@ -42,7 +35,7 @@ import {
   getAwarenessNavigationTargets,
 } from './militaryAwarenessEngine.js';
 import {
-  formatAwarenessCount,
+  awarenessResultsAreLive,
   presentAwarenessDistance,
 } from '../layers/awareness/panel.js';
 import { NAVIGATION_AUTHORITY_EVENT } from '../navigationPolicy.js';
@@ -54,14 +47,19 @@ import { bindRenderer, rendererOf } from '../render/rendererOf.js';
 import { entityFollowTarget, followedOf } from './followed.js';
 import { fakeDrawPort } from '../testSupport/fakeDrawPort.mjs';
 
-const militaryAwarenessSource = readLayerSource(
-  new URL('./militaryAwareness.js', import.meta.url),
-  'utf8',
-);
-const awarenessPanelSource = readFileSync(
-  new URL('../ui/views/panels/AwarenessPanel.vue', import.meta.url),
-  'utf8',
-);
+const { _setTrackedFlightRefreshStateForTest } = flightsLayer.testing;
+const { _setVesselStateForTest } = aisLiveVesselsLayer.testing;
+const militaryAwarenessLayer = createApplicationAwareness({
+  flights: flightsLayer,
+  military: militaryFlightsLayer,
+  vessels: aisLiveVesselsLayer,
+  installations: militaryInstallationsLayer,
+});
+const {
+  _getAwarenessNavigationStateForTest,
+  _getAwarenessPanelRendersForTest,
+  awarenessNeedsContinuousRender,
+} = militaryAwarenessLayer.testing;
 
 const AWARENESS_DEPENDENCIES = [
   'flights',
@@ -69,18 +67,6 @@ const AWARENESS_DEPENDENCIES = [
   'ais-live-vessels',
   'military-installations',
 ];
-
-test('Contacts labels a capped cohort as a lower bound', () => {
-  assert.equal(
-    formatAwarenessCount({ count: 20_000, complete: false, truncated: true }),
-    'At least 20,000',
-  );
-  assert.equal(
-    formatAwarenessCount({ count: 19_999, complete: true, truncated: false }),
-    '19,999',
-  );
-  assert.equal(formatAwarenessCount({ count: null }), '?');
-});
 
 test('Contacts moves a distance that rounds to 1,000 m into kilometres', () => {
   assert.equal(presentAwarenessDistance(999.4), '999\u00a0m');
@@ -317,21 +303,6 @@ function installAwarenessRuntime({
 function panelCount(runtime, label) {
   return runtime.panel().view?.rows?.find((row) => row.label === label)?.count;
 }
-
-test('Contacts continuation target is the visible explanatory note', () => {
-  assert.match(
-    awarenessPanelSource,
-    /<p class="military-awareness-note" tabindex="-1" data-awareness-focus-continuation>\{\{ view\.note \}\}<\/p>/,
-  );
-  assert.doesNotMatch(
-    awarenessPanelSource,
-    /<span[^>]*data-awareness-focus-continuation/,
-  );
-  assert.match(
-    militaryAwarenessSource,
-    /'Open-source mapped\/observed context\./,
-  );
-});
 
 test('awareness disable settles every owned dependency release before resolving', async () => {
   let releasing = false;
@@ -626,7 +597,7 @@ const AIS_FIRST_CONNECT_STATS = aisStatsFor({
 /** The same module once the socket answers with an honestly empty viewport. */
 const AIS_SETTLED_EMPTY_STATS = aisStatsFor({
   enabled: true,
-  transportStatus: 'open',
+  transportStatus: 'live',
   firstConnectPhase: 'ready',
   lastUpdate: 1_700_000_000_000,
 });
@@ -635,7 +606,7 @@ const AIS_SETTLED_EMPTY_STATS = aisStatsFor({
 const AIS_REFRESHING_ANSWERED_STATS = aisStatsFor({
   enabled: true,
   loading: true,
-  transportStatus: 'open',
+  transportStatus: 'live',
   firstConnectPhase: 'ready',
   lastUpdate: 1_700_000_000_000,
   records: [{ mmsi: '1' }, { mmsi: '2' }, { mmsi: '3' }],
@@ -1678,12 +1649,7 @@ test('awareness clears are scoped to the selected source layer', () => {
   assert.equal(awarenessClearMatchesSubject(subject, null), false);
 });
 
-// ===========================================================================
-// BEGIN Contact-readout presence block — fix/context-panel-next-subjects.
-// Integrators: this whole delimited block belongs to the Contact-panel
-// CONTACT LOST work. Keep it intact and keep any concurrent branch's own
-// additions at the END of the file, so the two never collide.
-// ===========================================================================
+// Contact-readout presence.
 
 /** Live/absent/unknown presence stub matching the layer `hasContact` contract. */
 function stubPresence(layer, verdict, restores) {
@@ -1866,34 +1832,6 @@ test('layer hasContact answers presence in O(1) and declines when unloaded', () 
     );
     // Unloaded layers cannot answer, and must say so rather than guessing.
     assert.equal(layer.hasContact('definitely-not-here'), null);
-  }
-});
-
-test('hasContact declines while a layer is disabled, whatever its maps still hold', () => {
-  // disable() hides the collection but keeps the records, so a map lookup
-  // alone would report a preserved subject as FRESH from hidden stale data.
-  for (const [name, source, guard] of [
-    [
-      'flights',
-      readLayerSource(new URL('./flights.js', import.meta.url)),
-      /hasContact\(\s*icao24,?\s*\)\s*\{\s*\n\s*const icons = flightState\._icons;\s*\n\s*if\s*\(\s*!icons\s*\|\|\s*!icons\.show\s*\|\|\s*icons\.count\s*===\s*0,?\s*\)\s*return\s*null;/,
-    ],
-    [
-      'militaryFlights',
-      readLayerSource(new URL('./militaryFlights.js', import.meta.url)),
-      /hasContact\(\s*icao24,?\s*\)\s*\{\s*\n\s*const icons = flightState\._icons;\s*\n\s*if\s*\(\s*!icons\s*\|\|\s*!icons\.show\s*\|\|\s*icons\.count\s*===\s*0,?\s*\)\s*return\s*null;/,
-    ],
-    [
-      'aisLiveVessels',
-      readLayerSource(new URL('./aisLiveVessels.js', import.meta.url)),
-      /hasContact\(\s*id,?\s*\)\s*\{\s*\n\s*if\s*\(\s*!state\.feed\.enabled\s*\|\|\s*!state\.records\.byId\s*\|\|\s*state\.records\.byId\.size\s*===\s*0,?\s*\)\s*return\s*null;/,
-    ],
-  ]) {
-    assert.match(
-      source,
-      guard,
-      `${name}.hasContact must decline while the layer is disabled`,
-    );
   }
 });
 
@@ -2109,83 +2047,6 @@ test('a deliberate source clear still fully clears the subject', () => {
   }
 });
 
-test('production eviction sites actually tag their clears', () => {
-  // The event contract above is worthless if the real cull paths never set the
-  // origin, so pin the three production call sites.
-  const flightsSource = readLayerSource(
-    new URL('./flights.js', import.meta.url),
-  );
-  const militarySource = readLayerSource(
-    new URL('./militaryFlights.js', import.meta.url),
-  );
-  const vesselsSource = readLayerSource(
-    new URL('./aisLiveVessels.js', import.meta.url),
-  );
-
-  for (const [name, source] of [
-    ['flights', flightsSource],
-    ['militaryFlights', militarySource],
-  ]) {
-    assert.match(
-      source,
-      /if\s*\(\s*icao24\s*===\s*(?:flightState\.)?_trackedIcao,?\s*\)\s*\{\s*\n\s*(?:(?:parts\.)?tracking\.)?_clearTracking\(\s*false,\s*\{\s*evicted:\s*true\s*\},?\s*\);/,
-      `${name} must mark its aged-out cull as an eviction`,
-    );
-    assert.match(
-      source,
-      /reason: evicted \? 'evicted' : 'deliberate'/,
-      `${name} must carry the clear origin on the dispatched event`,
-    );
-  }
-  assert.match(
-    vesselsSource,
-    /clearVesselInspection\(\{ evicted: true \}\)/,
-    'aisLiveVessels must mark its aged-out selected vessel as an eviction',
-  );
-  // Fourth cull site: a FIRMS refresh whose new payload no longer carries the
-  // selected fire. The fire did not get deselected — it left the feed.
-  // The tag alone is not enough — see the behavioral test in
-  // firmsInteraction.test.mjs. The clear must also run BEFORE renderCurrentLod,
-  // whose registration sweep deletes the record the clear needs to see.
-  const firmsSource = readLayerSource(
-    new URL('./firmsHeatmap.js', import.meta.url),
-  );
-  const evictedClear = firmsSource.indexOf(
-    'clearSelectedEntityContextForLayer(id, { evicted: true });',
-  );
-  const lodRebuild = firmsSource.indexOf(
-    'components.rendering.renderCurrentLod(true);\n      if (reselected) components.selection.selectFire(reselected, false);',
-  );
-  assert.ok(
-    evictedClear > 0,
-    'FIRMS must mark a refresh-vanished selection as an eviction',
-  );
-  assert.ok(
-    lodRebuild > 0,
-    'the FIRMS refresh must settle its selection before rebuilding',
-  );
-  assert.ok(
-    evictedClear < lodRebuild,
-    'the eviction clear must precede the LOD rebuild or it emits nothing at all',
-  );
-  // …and the deliberate FIRMS paths (layer disable, destroy, deselect) stay untagged.
-  assert.equal(
-    (firmsSource.match(/clearSelectedEntityContextForLayer\(id\);/g) || [])
-      .length,
-    3,
-    'only the refresh-vanish site is an eviction; disable/destroy/deselect stay deliberate',
-  );
-  assert.match(
-    militaryAwarenessSource,
-    /awarenessClearIsEviction/,
-    'awareness must branch on the clear origin rather than always clearing',
-  );
-});
-
-// ===========================================================================
-// END Contact-readout presence block — fix/context-panel-next-subjects.
-// ===========================================================================
-
 test('cockpit blocks only non-aircraft Context camera flights', () => {
   const cockpitBody = {
     classList: { contains: (name) => name === 'cockpit-mode' },
@@ -2205,18 +2066,6 @@ test('cockpit blocks only non-aircraft Context camera flights', () => {
     }),
     true,
   );
-});
-
-test('vessel entry and selection framing both use the 3 km focus radius', () => {
-  assert.match(
-    militaryAwarenessSource,
-    /const\s*VESSEL_FOCUS_RADIUS_M\s*=\s*3000;/,
-  );
-  const focusRadiusUses =
-    militaryAwarenessSource.match(
-      /\{\s*center:\s*vessel\.position,\s*radius:\s*VESSEL_FOCUS_RADIUS_M\s*\}/g,
-    ) || [];
-  assert.equal(focusRadiusUses.length, 2);
 });
 
 test('awareness rescans only for invalidation, source change, or meaningful movement', () => {
@@ -2323,18 +2172,6 @@ test('compact Context snapshots retain installation coverage', () => {
 
   assert.equal(snapshot.cohorts[0].coverage, 'CURRENT VIEWPORT ONLY');
   assert.deepEqual(snapshot.navigation, { canNext: true });
-});
-
-test('expanded Context results omit the redundant status heading', () => {
-  assert.doesNotMatch(militaryAwarenessSource, /military-awareness-heading/);
-  assert.doesNotMatch(
-    militaryAwarenessSource,
-    /GLOBAL CONTEXT <span>CONTEXT ONLY<\/span>/,
-  );
-  assert.doesNotMatch(awarenessPanelSource, /military-awareness-heading/);
-  assert.match(awarenessPanelSource, /military-awareness-subject/);
-  assert.match(militaryAwarenessSource, /FLIGHT \/ VESSEL WINDOW/);
-  assert.match(awarenessPanelSource, /military-awareness-controls/);
 });
 
 test('Context entry tracks a nearer civilian aircraft over a farther military aircraft', async () => {

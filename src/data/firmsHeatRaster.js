@@ -7,7 +7,7 @@
  */
 
 /** Below this normalized heat nothing is painted: empty land stays empty. */
-export const HEAT_FLOOR = 0.03;
+const HEAT_FLOOR = 0.03;
 
 /**
  * The FRP marker ramp as a continuous glow, from a red edge through orange

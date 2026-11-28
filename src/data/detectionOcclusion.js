@@ -28,12 +28,12 @@
 /** Never less than this: covers a dot drawn a little above or into its road. */
 export const SURFACE_OCCLUSION_MIN_MARGIN_M = 3;
 /** The most the margin grows with range: 2% of it. */
-export const SURFACE_OCCLUSION_MARGIN_FRACTION = 0.02;
+const SURFACE_OCCLUSION_MARGIN_FRACTION = 0.02;
 /**
  * How far above a contact a drawn surface on its line of sight must stand to
  * count as in front of it, when the camera looks down on the contact.
  */
-export const SURFACE_OCCLUSION_RISE_M = 2;
+const SURFACE_OCCLUSION_RISE_M = 2;
 
 /**
  * How much nearer than the contact the drawn surface must be before it counts
@@ -64,27 +64,6 @@ export function surfaceOcclusionMargin(contactDistance, sinElevation = 0) {
   const rise = Number(sinElevation);
   if (rise > 0) margin = Math.min(margin, SURFACE_OCCLUSION_RISE_M / rise);
   return Math.max(SURFACE_OCCLUSION_MIN_MARGIN_M, margin);
-}
-
-/**
- * Whether a drawn surface hides a contact.
- * @param {number} contactDistance Camera-to-contact distance in metres.
- * @param {number|undefined} surfaceDistance Camera-to-drawn-surface distance
- *   along the contact's ray; undefined or non-finite when nothing was drawn.
- * @param {number} [sinElevation] See `surfaceOcclusionMargin`.
- * @returns {boolean}
- */
-export function surfaceHidesContact(
-  contactDistance,
-  surfaceDistance,
-  sinElevation = 0,
-) {
-  if (!Number.isFinite(contactDistance) || !Number.isFinite(surfaceDistance))
-    return false;
-  return (
-    surfaceDistance <
-    contactDistance - surfaceOcclusionMargin(contactDistance, sinElevation)
-  );
 }
 
 /**

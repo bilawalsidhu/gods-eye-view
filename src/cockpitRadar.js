@@ -23,7 +23,7 @@ export const DEFAULT_RADAR_RANGE_NM = 3;
 export const RADAR_MAX_CONTACTS = 60;
 
 /** Range rings divide the range into this many equal steps. */
-export const RADAR_RING_COUNT = 4;
+const RADAR_RING_COUNT = 4;
 
 /**
  * Normalize a range to one of the radar's steps.

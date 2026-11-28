@@ -1,5 +1,7 @@
-import { negativePiToPi, toDegrees, toRadians } from '../../geo/vector.js';
+import { rectangleCenter } from '../../geo/rectangle.js';
+import { toDegrees, toRadians } from '../../geo/vector.js';
 import { findCamera } from '../../render/rendererOf.js';
+import { greatCircleKm } from '../../geoDistance.js';
 import { GBFS_CITY_REGISTRY } from './registry.js';
 import {
   ACTIVATION_EXIT_ALTITUDE_M,
@@ -22,27 +24,18 @@ export function createViewport({ state: layerState, services, parts, source }) {
     return Number.isFinite(height) ? height : Infinity;
   }
 
-  /**
-   * Determine the lat/lon the camera is currently looking at.
-   * Prefers the center of the view rectangle; falls back to the camera's
-   * own position when the rectangle is unavailable.
-   * @param {object} viewer - The viewer the layer draws on.
-   * @returns {{ lat: number, lon: number }|null} Center coordinates in degrees, or null.
-   */
-
+  /** Where the camera looks: its view rectangle's middle, else under the eye. */
   function getCameraCenterLatLon(viewer) {
     const camera = findCamera(viewer);
-    // Try view rectangle center first (more accurate for tilted views)
     const rect = camera?.viewRectangle();
     if (rect) {
-      // Across the antimeridian the east edge is west of the west one.
-      let east = toRadians(rect.east);
-      const west = toRadians(rect.west);
-      if (east < west) east += 2 * Math.PI;
-      return {
-        lat: (rect.south + rect.north) * 0.5,
-        lon: toDegrees(negativePiToPi((west + east) * 0.5)),
-      };
+      const center = rectangleCenter({
+        west: toRadians(rect.west),
+        south: toRadians(rect.south),
+        east: toRadians(rect.east),
+        north: toRadians(rect.north),
+      });
+      return { lat: toDegrees(center.lat), lon: toDegrees(center.lon) };
     }
 
     // Fallback: use the camera's own position
@@ -90,12 +83,10 @@ export function createViewport({ state: layerState, services, parts, source }) {
     if (!center) return active;
 
     for (const city of GBFS_CITY_REGISTRY) {
-      const distance = parts.model.haversineKm(
-        center.lat,
-        center.lon,
-        city.centerLat,
-        city.centerLon,
-      );
+      const distance = greatCircleKm(center, {
+        lat: city.centerLat,
+        lon: city.centerLon,
+      });
       const radius = Math.max(CITY_RANGE_BASE_KM, city.loadRadiusKm);
       if (distance <= radius) active.add(city.id);
     }
@@ -157,10 +148,7 @@ export function createViewport({ state: layerState, services, parts, source }) {
     if (!layerState._enabled || !layerState._activeCityIds.has(cityId)) return;
 
     try {
-      const stationMap = await parts.ingestion.loadCityStationInfo(
-        cityId,
-        generation,
-      );
+      const stationMap = await parts.ingestion.loadCityStationInfo(cityId);
       // Bail if context changed during fetch
       if (
         !layerState._enabled ||
@@ -177,10 +165,7 @@ export function createViewport({ state: layerState, services, parts, source }) {
         parts.rendering.applyStatusToPoints(cityId, cachedStatus);
       }
 
-      const statusMap = await parts.ingestion.loadCityStationStatus(
-        cityId,
-        generation,
-      );
+      const statusMap = await parts.ingestion.loadCityStationStatus(cityId);
       if (
         !layerState._enabled ||
         !layerState._activeCityIds.has(cityId) ||
@@ -293,8 +278,6 @@ export function createViewport({ state: layerState, services, parts, source }) {
     scheduleProximityCheck();
   }
   return {
-    getCameraAltitude,
-    getCameraCenterLatLon,
     shouldActivateAtAltitude,
     computeInRangeCities,
     deactivateCity,

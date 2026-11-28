@@ -1,12 +1,5 @@
-import {
-  WILDLIFE_MAX_VIEW_DEGREES,
-  WILDLIFE_RETRY_MIN_MS,
-  WILDLIFE_RETRY_MAX_MS,
-} from './policy.js';
-
-export { snapWildlifeBox } from './bounds.js';
-
-const cleanDegree = (value) => Math.round(value * 1e8) / 1e8;
+import { WILDLIFE_RETRY_MIN_MS, WILDLIFE_RETRY_MAX_MS } from './policy.js';
+import { cleanDegree, WILDLIFE_MAX_VIEW_DEGREES } from './bounds.js';
 
 function validBox(box) {
   return (

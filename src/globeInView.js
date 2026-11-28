@@ -128,7 +128,7 @@ export function lookedPose(pose, look, angle) {
  * horizontal at the eye (negative looking down).
  * @param {import('./render/contract/camera').CameraPose} pose
  */
-export function posePitch(pose) {
+function posePitch(pose) {
   return Math.asin(
     clamp(dot(pose.direction, geodeticSurfaceNormal(pose.position)), -1, 1),
   );

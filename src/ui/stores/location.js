@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { markRaw, shallowRef } from 'vue';
+import { presented } from './presented.js';
 
 /**
  * The preset places' controls as the Omnibar and the scene chrome render
@@ -9,20 +9,10 @@ import { markRaw, shallowRef } from 'vue';
  */
 export const useLocationStore = defineStore('gev-location', () => {
   /** The presented controls; null until they first render. */
-  const view = shallowRef(null);
-
-  /** @param {?object} next A fresh presentation; every publish re-renders. */
-  function publish(next) {
-    view.value = next && markRaw(next);
-  }
+  const [view, publish] = presented();
 
   /** The controls whose `chooseCity(id)` and `choosePoi(index)` the Omnibar's chips call. */
-  const controls = shallowRef(null);
-
-  /** @param {?object} next The location controls, or null to disconnect. */
-  function connect(next) {
-    controls.value = next && markRaw(next);
-  }
+  const [controls, connect] = presented();
 
   return { view, publish, controls, connect };
 });

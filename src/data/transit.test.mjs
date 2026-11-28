@@ -7,7 +7,6 @@ import transitLayer, {
   TRANSIT_SELECTED_OVERLAY_SOURCE_OPTIONS,
   buildTransitSelectionCopy,
   createTransitSelectedOverlayEntry,
-  interpolatedVehiclePosition,
   isStaleVehicleFix,
   transitVehicleKey,
 } from './transit.js';
@@ -100,16 +99,6 @@ test('every transit mode has a colour and the selected card uses it as accent', 
   );
 });
 
-test('position queries read the published display sample', () => {
-  const entry = { track: {}, sample: { lat: 1, lon: 2, phase: 'playing' } };
-  assert.deepEqual(interpolatedVehiclePosition(entry), {
-    lat: 1,
-    lon: 2,
-    settled: false,
-  });
-  entry.sample.phase = 'held';
-  assert.equal(interpolatedVehiclePosition(entry).settled, true);
-});
 test('fixes older than ten minutes are stale; feeds without timestamps are trusted', () => {
   const now = 1_700_000_000_000;
   assert.equal(isStaleVehicleFix({ timestamp: now / 1000 - 30 }, now), false);

@@ -4,7 +4,6 @@ import { createRendering } from './rendering.js';
 import { createIcons } from './icons.js';
 import { createMotion } from './motion.js';
 import { createTracking } from './tracking.js';
-import { createController } from './controller.js';
 import { createIngestion } from './ingestion.js';
 import { createLifecycle } from './lifecycle.js';
 import { createTesting } from './testing.js';
@@ -29,7 +28,6 @@ export function createMilitaryFlightLayer({
   parts.icons = createIcons(context);
   parts.motion = createMotion(context);
   parts.tracking = createTracking(context);
-  parts.controller = createController(context);
   parts.lifecycle = createLifecycle(context);
   parts.testing = createTesting(context);
   parts.queries = createQueries(context);

@@ -14,7 +14,7 @@ export function createInteraction({ state, parts, inputFor, picking }) {
       // top is another layer's, painted over the cable: its click (and its
       // selection, if it makes one, puts the name card away).
       if (picking?.clickCard?.(event)) return;
-      const record = resolvePickRecord(event.drawHit);
+      const record = parts.rendering.pickInfo(event.drawHit);
       // A click on anything else puts the name card away.
       if (!record?.reference) {
         parts.rendering.select(null);
@@ -43,17 +43,5 @@ export function createInteraction({ state, parts, inputFor, picking }) {
     );
   }
 
-  /**
-   * What a click's draw hit names: a cable, landing point or reference of
-   * this layer's current items, as `{ label, kind, featureId, reference }`,
-   * or null.
-   */
-  function resolvePickRecord(hit) {
-    return parts.rendering.pickInfo(hit);
-  }
-
-  return {
-    beginInteraction,
-    resolvePickRecord,
-  };
+  return { beginInteraction };
 }

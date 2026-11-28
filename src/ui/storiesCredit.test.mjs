@@ -12,10 +12,6 @@ const css = readFileSync(
   new URL('./styles/stories.css', import.meta.url),
   'utf8',
 ).replace(/\/\*[\s\S]*?\*\//g, '');
-const view = readFileSync(
-  new URL('./views/StoriesView.vue', import.meta.url),
-  'utf8',
-);
 
 /**
  * Every declaration block in stories.css whose selector names the credit
@@ -120,9 +116,6 @@ test('the measured place keeps the credit inside the map and on screen', () => {
   );
   // No map (Stories closing): GEV's own placement applies.
   assert.equal(creditPlacement({ map: null, width: 800, height: 700 }), null);
-  // Closing Stories hands the credit back to GEV.
-  assert.match(view, /root\.removeProperty\('--gs-credit-bottom'\)/);
-  assert.match(view, /root\.removeProperty\('--gs-credit-left'\)/);
 });
 
 test('the corner controls are the readout and elements marked data-stories-corner', () => {

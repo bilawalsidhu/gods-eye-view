@@ -7,11 +7,11 @@ import {
   aircraftMotionRegime,
   createMotionRegime,
   fixEpochMs,
-  fixPosition,
-  copyPosition,
   historyFix,
-  julianAt,
 } from './aircraftMotionRegime.js';
+import { fromDegrees } from '../geo/ellipsoid.js';
+import { julianFromEpochMs } from '../geo/julian.js';
+import { clone } from '../geo/vector.js';
 import { aircraftEmergency } from './aircraftEmergency.js';
 // Source-to-voice provenance, status retention/clearing, contact-time contracts,
 // and civil/military billboard, Cockpit and model tint regressions.
@@ -484,6 +484,13 @@ test('GERMAN: an existing untracked military icon repaints each poll without los
     _groundSnap: { forget() {} },
     _cockpitContactMode: false,
     _cockpitNearContacts: new Set(),
+    // No delay, and none learned from the snapshot's reports.
+    _displayDelay: {
+      currentMs: 0,
+      step: () => 0,
+      noteReport() {},
+      settle() {},
+    },
   });
   const records = new MilitaryFlightRecords({
     geoidHeight: () => 0,
@@ -506,10 +513,10 @@ test('GERMAN: an existing untracked military icon repaints each poll without los
           { speed: 'speedMps', track: 'track' },
           createMotionRegime(),
         ),
-      _displayTimeAt: julianAt,
+      _displayTimeAt: julianFromEpochMs,
       _fixEpochMs: fixEpochMs,
-      _fixPosition: fixPosition,
-      _copyPosition: copyPosition,
+      _fixPosition: fromDegrees,
+      _copyPosition: clone,
       _historyFix: historyFix,
       _refloorStaleGroundedContacts() {},
       _sampleMeshFloor() {},

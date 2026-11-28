@@ -6,35 +6,13 @@ import test from 'node:test';
 import { createCesiumDraw } from './draw.js';
 import { iconAtlas } from '../../data/iconAtlas.js';
 import { AIRCRAFT_VIEWS } from '../../data/aircraftViews.js';
-
-function fakeScene() {
-  const added = [];
-  return {
-    added,
-    renders: 0,
-    camera: { positionWC: new Cesium.Cartesian3(2e7, 0, 0) },
-    frameState: { time: Cesium.JulianDate.now() },
-    primitives: {
-      add: (p) => (added.push(p), p),
-      remove: (p) => {
-        const i = added.indexOf(p);
-        if (i >= 0) added.splice(i, 1);
-        return i >= 0;
-      },
-      length: 0,
-    },
-    requestRender() {
-      this.renders += 1;
-    },
-    isDestroyed: () => false,
-  };
-}
+import { fakeDrawScene } from '../../testSupport/fakeDrawScene.mjs';
 
 const AT = Cesium.Cartesian3.fromDegrees(4.1, 51.95, 2);
 
 test('a view row waits on its loading sheet even once its fallback is ready', () => {
   const part = createCesiumDraw({
-    scene: fakeScene(),
+    scene: fakeDrawScene(),
     report: (e) => assert.fail(e),
   });
   const draw = part.port;

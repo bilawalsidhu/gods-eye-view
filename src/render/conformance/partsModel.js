@@ -75,7 +75,7 @@ function cube(mesh, centre, half, part, toMesh) {
  * ahead of the body at its foot (`arm`), hinged about the vertical through
  * the body's centre, turning up to 45° to the left.
  */
-export const PARTS_MODEL_TABLE = Object.freeze([
+const PARTS_MODEL_TABLE = Object.freeze([
   { name: 'body', kind: 'body' },
   { name: 'pod', kind: 'spin', pivot: [0, 15, 0], axis: [0, 1, 0] },
   {

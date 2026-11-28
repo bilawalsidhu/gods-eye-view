@@ -136,7 +136,6 @@ export function createQueries({ state: layerState, services, parts, source }) {
     });
   }
   return {
-    radioAngularDistance,
     rankRadioStationsForViewport,
     rankRadioStationsForRequest,
     selectedStation,

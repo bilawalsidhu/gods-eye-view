@@ -4,8 +4,8 @@
  */
 import { AIR_QUALITY_UNRATED_COLOR } from './model.js';
 import { concentrationFactor, layerUnits } from './units.js';
-import { AQI_CEILINGS, AQI_POLLUTANTS } from './usAqi.js';
-const msg = (text) => text;
+import { AQI_CEILINGS, AQI_POLLUTANTS, HOURLY_MIN_COVERAGE } from './usAqi.js';
+import { msg } from '../../i18n/marker.js';
 export const EEA_HOURLY_LIMITS = Object.freeze({
   'PM2.5': [5, 15, 50, 90, 140],
   PM10: [15, 45, 120, 195, 270],
@@ -76,13 +76,10 @@ export function hourlyBandIndex(parameter, value) {
 }
 
 /** One fault ceiling per pollutant in every view. */
-export function hourlyCeiling(parameter) {
+function hourlyCeiling(parameter) {
   const ceiling = AQI_CEILINGS[AQI_POLLUTANTS[parameter]];
   return Number.isFinite(ceiling) ? ceiling : Infinity;
 }
-
-/** Minimum hourly data coverage (45 minutes). */
-export const HOURLY_MIN_COVERAGE = 75;
 
 /** Unknown, flagged, incomplete and incompatible readings never turn green. */
 export function interpretHourly(reading) {

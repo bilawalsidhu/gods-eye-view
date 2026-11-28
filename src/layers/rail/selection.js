@@ -1,6 +1,6 @@
 import {
   RAIL_SELECTED_OVERLAY_SOURCE_ID,
-  RAIL_SELECTED_OVERLAY_SOURCE_OPTIONS,
+  SELECTED_VEHICLE_OVERLAY_SOURCE_OPTIONS,
   SELECTED_CARD_REFRESH_MS,
   buildRailSelectionCopy,
   createRailSelectedOverlayEntry,
@@ -50,7 +50,7 @@ export function createSelection({ state, services, parts }) {
       state._overlayHost.setEntries(
         RAIL_SELECTED_OVERLAY_SOURCE_ID,
         [],
-        RAIL_SELECTED_OVERLAY_SOURCE_OPTIONS,
+        SELECTED_VEHICLE_OVERLAY_SOURCE_OPTIONS,
       );
       return;
     }
@@ -81,7 +81,7 @@ export function createSelection({ state, services, parts }) {
     state._overlayHost.setEntries(
       RAIL_SELECTED_OVERLAY_SOURCE_ID,
       card ? [card] : [],
-      RAIL_SELECTED_OVERLAY_SOURCE_OPTIONS,
+      SELECTED_VEHICLE_OVERLAY_SOURCE_OPTIONS,
     );
   }
 
@@ -145,7 +145,7 @@ export function createSelection({ state, services, parts }) {
     state._overlayHost.setEntries(
       RAIL_SELECTED_OVERLAY_SOURCE_ID,
       [],
-      RAIL_SELECTED_OVERLAY_SOURCE_OPTIONS,
+      SELECTED_VEHICLE_OVERLAY_SOURCE_OPTIONS,
     );
     governorRequestRender('rail-deselect');
   }

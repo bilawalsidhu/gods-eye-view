@@ -4,6 +4,28 @@ const KNOT_TO_MPS = 0.514444;
 const FOOT_TO_M = 0.3048;
 const FPM_TO_MPS = 0.00508;
 
+// ADS-B emitter category → OpenSky integer category
+const EMITTER_CATEGORY_TO_OPENSKY = Object.freeze({
+  A1: 2,
+  A2: 3,
+  A3: 4,
+  A4: 5,
+  A5: 6,
+  A6: 7,
+  A7: 8,
+  B1: 9,
+  B2: 10,
+  B3: 11,
+  B4: 12,
+  B6: 14,
+  B7: 15,
+  C1: 16,
+  C2: 17,
+  C3: 18,
+  C4: 19,
+  C5: 20,
+});
+
 function finiteNumber(value) {
   if (value === null || value === undefined || value === '') return null;
   const number = Number(value);
@@ -14,22 +36,7 @@ function emitterCategory(value) {
   const category = String(value || '')
     .trim()
     .toUpperCase();
-  const categories = {
-    A1: 2,
-    A2: 3,
-    A3: 4,
-    A4: 5,
-    A5: 6,
-    A6: 7,
-    A7: 8,
-    B1: 9,
-    B2: 10,
-    B3: 11,
-    B4: 12,
-    B6: 14,
-    B7: 15,
-  };
-  return categories[category] || 0;
+  return EMITTER_CATEGORY_TO_OPENSKY[category] || 0;
 }
 
 /**

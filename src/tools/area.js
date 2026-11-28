@@ -5,8 +5,8 @@
  */
 
 import { ToolError } from './catalog.js';
+import { EARTH_RADIUS_KM } from '../geoDistance.js';
 
-const EARTH_RADIUS_KM = 6371.0088;
 const MAX_RADIUS_KM = 2000;
 
 /** JSON Schema for the `area` argument. */

@@ -2,10 +2,11 @@ import { defaultSurface } from './surfaceServices.js';
 import { createApplicationCctv } from '../app/layers/cctv.js';
 import { createSourceSlot } from '../sources/sourceSlot.js';
 import { createCctvSource } from '../layers/cctv/source.js';
+import { CCTV_SOURCE_METHODS } from '../layers/cctv/sourcePolicy.js';
 
 const sourceSlot = createSourceSlot(
   createCctvSource(),
-  ['getCatalog', 'getHealth', 'getFrameUrl', 'getMediaUrl'],
+  CCTV_SOURCE_METHODS,
   'Cctv source',
 );
 export const configureCctvSource = sourceSlot.configure;
@@ -73,7 +74,6 @@ export const openingCameraId = layer.openingCameraId;
 export const reopenNearestCamera = layer.reopenNearestCamera;
 export const cctvCycleIndex = layer.cctvCycleIndex;
 export {
-  CCTV_CALIBRATION_STORAGE_KEY_V1,
   CCTV_CALIBRATION_STORAGE_KEY_V2,
   FRUSTUM_GROUND_CLEARANCE_M,
   CCTV_FOCUS_RESULT,

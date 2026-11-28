@@ -1,10 +1,9 @@
 /**
  * Adapter from /api/firms proxy records (src/data/firmsCsv.js shape) to the
  * internal fire-record shape rendered by firmsHeatmap.js. Pure — no Cesium,
- * so the mapping is unit-testable. The normalization helpers previously
- * lived module-private in firmsHeatmap.js and moved here with the live-data
- * swap (2026-07-16).
+ * so the mapping is unit-testable.
  */
+import { acquisitionMsUtc } from './firmsCsv.js';
 
 /**
  * Map proxy fire records into internal fire records. Records with missing,
@@ -76,49 +75,13 @@ export function normalizeConfidence(value) {
  * @returns {number} Epoch milliseconds, or 0 when unparseable.
  */
 export function parseAcquisitionMs(date, time, cache = new Map()) {
-  if (typeof date !== 'string' || date.length < 10) return 0;
   const key = `${date}:${time ?? ''}`;
-  const cached = cache.get(key);
-  if (cached !== undefined) return cached;
-
-  // Same calendar as the CSV gate. Date.UTC would otherwise roll 30 February
-  // into March, and the fire's age would describe a detection that never happened.
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    cache.set(key, 0);
-    return 0;
+  let ms = cache.get(key);
+  if (ms === undefined) {
+    ms = acquisitionMsUtc(date, time) || 0;
+    cache.set(key, ms);
   }
-  const timeText = String(time ?? '').trim();
-  if (!/^\d{1,4}$/.test(timeText)) {
-    cache.set(key, 0);
-    return 0;
-  }
-  const hhmm = timeText.padStart(4, '0');
-  const year = Number(date.slice(0, 4));
-  const month = Number(date.slice(5, 7));
-  const day = Number(date.slice(8, 10));
-  const hours = Number(hhmm.slice(0, 2));
-  const minutes = Number(hhmm.slice(2, 4));
-  if (
-    month < 1 ||
-    month > 12 ||
-    day < 1 ||
-    day > 31 ||
-    hours > 23 ||
-    minutes > 59
-  ) {
-    cache.set(key, 0);
-    return 0;
-  }
-  const ms = Date.UTC(year, month - 1, day, hours, minutes);
-  const parsed = new Date(ms);
-  const result =
-    parsed.getUTCFullYear() === year &&
-    parsed.getUTCMonth() === month - 1 &&
-    parsed.getUTCDate() === day
-      ? ms
-      : 0;
-  cache.set(key, result);
-  return result;
+  return ms;
 }
 
 /**

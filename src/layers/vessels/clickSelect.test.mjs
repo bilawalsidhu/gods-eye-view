@@ -63,7 +63,6 @@ function vesselsLayer(t) {
       has: (id) => [vessel.id, other.id, catalogued.id].includes(id),
     },
     selectedRecord: null,
-    interactionKeyTarget: new EventTarget(),
   };
   const focusRequests = [];
   const selection = createSelection({
@@ -80,12 +79,6 @@ function vesselsLayer(t) {
       context: part(),
     },
     parts: {
-      queries: {
-        reduceVesselSelection: ({ selectedId, pickedId }) =>
-          pickedId
-            ? { action: pickedId === selectedId ? 'none' : 'select' }
-            : { action: selectedId ? 'deselect' : 'none' },
-      },
       rendering: part({
         iconPosition: (record) => fromDegrees(record.lon, record.lat, 0),
         // Where the layer draws it now (its placement): read by the follow.
@@ -99,7 +92,7 @@ function vesselsLayer(t) {
     },
     layer: { source: 'AIS' },
   });
-  selection.installInteraction(viewer);
+  selection.bindVesselInteraction(viewer, new EventTarget());
   t.after(() => {
     selection.removeVesselInteraction();
     input.destroy();

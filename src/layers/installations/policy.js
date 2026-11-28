@@ -17,8 +17,6 @@ export const COLOR_BY_CLASS = {
   places_candidate: '#c58cff',
 };
 
-export const EARTH_MEAN_RADIUS_M = 6371008.8;
-
 export const DISTANCE_PREFILTER_MARGIN_M = 5000;
 
 /** A Contacts subject must move this far before its installation window moves. */

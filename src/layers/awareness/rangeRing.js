@@ -336,20 +336,6 @@ export function paintAwarenessBand(image, band, memo = {}) {
   const [r, g, b] = rgb.map((c) =>
     Math.min(255, Math.max(0, Math.round(c * 255))),
   );
-  // Whole pixels at a time where the bytes line up: each table entry as
-  // the four bytes it writes, in the platform's byte order.
-  if (data.byteOffset % 4 === 0 && data.length === bin.length * 4) {
-    if (memo.pixels?.length !== table.length)
-      memo.pixels = new Uint32Array(table.length);
-    const pixels = memo.pixels;
-    for (let i = 0; i < table.length; i++)
-      pixels[i] = LITTLE_ENDIAN
-        ? (r | (g << 8) | (b << 16) | (table[i] << 24)) >>> 0
-        : ((r << 24) | (g << 16) | (b << 8) | table[i]) >>> 0;
-    const words = new Uint32Array(data.buffer, data.byteOffset, bin.length);
-    for (let p = 0; p < bin.length; p++) words[p] = pixels[bin[p]];
-    return;
-  }
   for (let p = 0, k = 0; p < bin.length; p++, k += 4) {
     data[k] = r;
     data[k + 1] = g;
@@ -357,9 +343,6 @@ export function paintAwarenessBand(image, band, memo = {}) {
     data[k + 3] = table[bin[p]];
   }
 }
-
-/** Whether this platform stores the low byte of a word first. */
-const LITTLE_ENDIAN = new Uint8Array(new Uint32Array([1]).buffer)[0] === 1;
 
 /** `p` in metres east and north of `origin`, in `origin`'s surface frame. */
 function eastNorth(origin, p) {
@@ -785,15 +768,9 @@ export function createRangeRing({
     const onMotionChange = () => {
       if (layerState.subject) redraw(layerState.subject);
     };
-    // Safari before 14 has only the older addListener / removeListener.
-    if (motionQuery?.addEventListener)
-      motionQuery.addEventListener('change', onMotionChange);
-    else motionQuery?.addListener?.(onMotionChange);
-    next.removeMotionListener = () => {
-      if (motionQuery?.removeEventListener)
-        motionQuery.removeEventListener('change', onMotionChange);
-      else motionQuery?.removeListener?.(onMotionChange);
-    };
+    motionQuery?.addEventListener('change', onMotionChange);
+    next.removeMotionListener = () =>
+      motionQuery?.removeEventListener('change', onMotionChange);
 
     layerState.visual = next;
     governorRequestRender('awareness-visual');

@@ -5,12 +5,11 @@
  */
 import { normalizeVesselType } from '../../data/vesselTypes.js';
 import { displayVesselType } from '../../data/vesselLabels.js';
+import { KNOT_MPS } from '../../data/units.js';
+import { finiteNumber } from './records.js';
 
 /** The layer id a vessel subject carries through Cockpit events and state. */
 export const VESSEL_COCKPIT_LAYER_ID = 'ais-live-vessels';
-
-/** Knots to metres per second, as the AIS source uses. */
-const KNOTS_TO_MPS = 0.514444;
 
 /**
  * Bridge eye height above the waterline by normalized AIS type family. AIS
@@ -83,12 +82,6 @@ export function vesselEyeHeightM(type) {
   return matched ? matched.heightM : null;
 }
 
-function finiteOrNull(value) {
-  if (value === null || value === undefined || value === '') return null;
-  const number = Number(value);
-  return Number.isFinite(number) ? number : null;
-}
-
 /**
  * Normalize a selected vessel record into Cockpit subject info.
  *
@@ -103,11 +96,11 @@ export function vesselCockpitInfo(record) {
   const latitude = Number(record.lat);
   const longitude = Number(record.lon);
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
-  const heading = finiteOrNull(record.heading);
-  const course = finiteOrNull(record.course);
-  const speedKt = finiteOrNull(record.speed);
-  const epochSec = finiteOrNull(record.lastPositionEpoch);
-  const feedEpochSec = finiteOrNull(record.fixFeedEpoch);
+  const heading = finiteNumber(record.heading);
+  const course = finiteNumber(record.course);
+  const speedKt = finiteNumber(record.speed);
+  const epochSec = finiteNumber(record.lastPositionEpoch);
+  const feedEpochSec = finiteNumber(record.fixFeedEpoch);
   return {
     kind: 'vessel',
     layerId: VESSEL_COCKPIT_LAYER_ID,
@@ -122,7 +115,7 @@ export function vesselCockpitInfo(record) {
     heading,
     course,
     speedKt,
-    velocityMps: speedKt === null ? null : Math.max(0, speedKt) * KNOTS_TO_MPS,
+    velocityMps: speedKt === null ? null : Math.max(0, speedKt) * KNOT_MPS,
     track: heading ?? course,
     // What `track` is: the true heading, or course over ground standing in
     // for a ship that reports none. The HUD says which.
@@ -133,7 +126,7 @@ export function vesselCockpitInfo(record) {
     // When this client first received the fix (its own clock) and the
     // newest fix in that refresh (the feed's clock): the fix's age without
     // clock skew, still ageing while the feed re-serves it.
-    receivedAtMs: finiteOrNull(record.fixReceivedAtMs),
+    receivedAtMs: finiteNumber(record.fixReceivedAtMs),
     feedEpochMs: feedEpochSec === null ? null : feedEpochSec * 1000,
     eyeHeightM: vesselEyeHeightM(record.type),
     stale: (record.missedRefreshes || 0) > 0,

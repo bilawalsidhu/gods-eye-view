@@ -146,7 +146,12 @@ export function createIngestion({
     }
   }
 
-  return { methods };
+  function abortAll() {
+    for (const controller of feed._activeUpdateControllers) controller.abort();
+    feed._activeUpdateControllers.clear();
+  }
+
+  return { methods, abortAll };
 }
 
 /** Construct a fresh source lifetime and its refresh status. */

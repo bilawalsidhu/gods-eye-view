@@ -1,13 +1,7 @@
 import { findQuery } from '../../render/rendererOf.js';
 import { FOCUS_EVIDENCE_DEV } from './policy.js';
 
-export function createEvidence({
-  vesselState,
-  services,
-  parts: components,
-  layer,
-  options,
-}) {
+export function createEvidence({ vesselState, parts: components }) {
   const { state } = vesselState;
 
   /** Replace live AIS rows through the production reconciliation path (DEV only). */

@@ -1,5 +1,5 @@
 import { msg } from '../../i18n/marker.js';
-import { normalizeLongitude, sampleWind } from './model.js';
+import { gridCell, interpolateCell, sampleWind } from './model.js';
 
 // Imported by src/tools: the catalog-free marker, not src/i18n/index.js. The
 // texts stay English data and the wind layer and layer panel show them
@@ -108,21 +108,7 @@ export function sampleScalar(
     !scalar.values
   )
     return null;
-  const { nx, ny, lo1, la1, dx, dy } = grid;
-  const x = ((normalizeLongitude(lon - lo1) + 360) % 360) / dx;
-  const y = clamp((la1 - lat) / dy, 0, ny - 1);
-  const x0 = Math.floor(x);
-  const y0 = Math.floor(y);
-  const tx = x - x0;
-  const ty = y - y0;
-  const col = (n) => ((n % nx) + nx) % nx;
-  const y1 = Math.min(y0 + 1, ny - 1);
-  const a = scalar.values[y0 * nx + col(x0)];
-  const b = scalar.values[y0 * nx + col(x0 + 1)];
-  const c = scalar.values[y1 * nx + col(x0)];
-  const d = scalar.values[y1 * nx + col(x0 + 1)];
-  const value =
-    (a * (1 - tx) + b * tx) * (1 - ty) + (c * (1 - tx) + d * tx) * ty;
+  const value = interpolateCell(scalar.values, gridCell(grid, lon, lat));
   return Number.isFinite(value) ? value : null;
 }
 

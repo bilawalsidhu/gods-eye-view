@@ -255,7 +255,7 @@ async function main() {
       // Silence the live feeds: the injected field is the only population.
       if (url.pathname === '/api/vessels') {
         return void request.respond(stubJson({
-          rows: [], source: 'QA', status: 'open', error: null, refreshing: false,
+          rows: [], source: 'QA', status: 'live', error: null, refreshing: false,
           newestPositionAt: null, lastMessageAt: null,
         }));
       }

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createIngestion, createVesselFeed } from './ingestion.js';
+import { KNOT_MPS } from '../../data/units.js';
 function setup(source) {
   const feed = createVesselFeed();
   feed.enabled = true;
@@ -89,9 +90,8 @@ test('vessel ingestion converts source units once and retains warm records on a 
   });
   await probe.methods.update();
   const record = probe.applied[0][0];
-  assert.equal(record.speed, 5.14444 / 0.514444);
+  assert.equal(record.speed, 5.14444 / KNOT_MPS);
   assert.equal(record.last_position_epoch, 1700000000);
-  assert.equal(record.last_position_UTC, new Date(1700000000000).toISOString());
   assert.equal(probe.feed.lastUpdate, null);
   assert.equal(probe.feed.stale, true);
   assert.equal(probe.feed.count, 1);

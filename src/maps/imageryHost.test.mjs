@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { NO_IMAGERY_HOST, resolveImageryHost } from './imageryHost.js';
+import {
+  imageryHostStatus,
+  NO_IMAGERY_HOST,
+  resolveImageryHost,
+} from './imageryHost.js';
 import { bindRenderer } from '../render/rendererOf.js';
 import { createStubRenderer } from '../render/stub/index.js';
 import { globeMapEngine } from './globeEngine.js';
@@ -58,4 +62,10 @@ test('no globe and no tileset means nowhere to drape', () => {
     { collection: null, kind: 'none' },
   );
   assert.match(NO_IMAGERY_HOST, /globe map/);
+});
+
+test('only a missing host suspends weather; 3D Tiles has no height gate', () => {
+  assert.equal(imageryHostStatus({ kind: 'tileset' }), null);
+  assert.equal(imageryHostStatus({ kind: 'globe' }), null);
+  assert.equal(imageryHostStatus({ kind: 'none' }), NO_IMAGERY_HOST);
 });

@@ -4,7 +4,7 @@
  * port `models` set, held in the layer's maps under the contact's id, so the
  * layer reads what it pushed (and what the set told it) back from itself.
  *
- * Write `show` and the placement with {@link showModel} and
+ * Write `show` directly and the placement with
  * {@link placeModel}; the set's `ready` event sets `ready`, and its
  * `loadFailed` event `failedAt`. The placement is
  * kept as the column-major frame the model is posed in, the same frame a
@@ -74,15 +74,6 @@ export function createModelRecord({
 }
 
 /**
- * Show or hide a model and record it.
- * @param {ModelRecord} record
- * @param {boolean} show
- */
-export function showModel(record, show) {
-  record.show = show;
-}
-
-/**
  * Place a model at `position` turned by `heading` (radians clockwise from
  * north about the local up, as `orientation.heading`), and record its frame.
  * @param {ModelRecord} record
@@ -107,7 +98,7 @@ export function placeModel(record, position, heading) {
  * @param {Float64Array|number[]} out
  * @returns {Float64Array|number[]} `out`.
  */
-export function headingFrame(origin, heading, out) {
+function headingFrame(origin, heading, out) {
   const enu = eastNorthUp(origin);
   const c = Math.cos(heading);
   const s = Math.sin(heading);

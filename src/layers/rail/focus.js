@@ -1,5 +1,5 @@
 /** The selected train's kind in the shared world-focus framing. */
-export const RAIL_FOCUS_KIND = 'train';
+const RAIL_FOCUS_KIND = 'train';
 
 /**
  * The selected train's camera.

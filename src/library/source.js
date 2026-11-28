@@ -125,14 +125,6 @@ function storeJson(storage, key, value) {
 
 export const LIBRARY_API_BASE = '/api/library';
 
-/** Reason codes the server or this module can report for an entry. */
-export const LIBRARY_UNAVAILABLE_REASONS = Object.freeze([
-  'operator-disabled',
-  'operator-opt-in',
-  'key-missing',
-  'server-unavailable',
-]);
-
 /**
  * Availability when no library server answers: browser-direct entries work,
  * proxied entries and anything the operator must switch on do not.

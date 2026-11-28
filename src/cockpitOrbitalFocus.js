@@ -13,6 +13,8 @@ import {
   ORBITAL_LOOK_LIMIT_DEG,
   easeLook,
 } from './cockpitLook.js';
+import { WGS84 } from './geo/ellipsoid.js';
+import { dot, finiteVector, toDegrees } from './geo/vector.js';
 
 /**
  * How long a focus takes to swing the view onto its target, or back to
@@ -24,27 +26,8 @@ export const ORBITAL_FOCUS_EASE_TAU_MS = 250;
 /** How often the orbital Live Signals rows are rebuilt, ms. */
 export const ORBITAL_REACH_REFRESH_MS = 1000;
 
-/** WGS84 semi-axes squared, m²: the surface normal for the horizon test. */
-const WGS84_A2 = 6378137 ** 2;
-const WGS84_B2 = 6356752.314245179 ** 2;
-
 /** Slack on the reach limit so a target held exactly at 45° stays. */
 const REACH_EPSILON_DEG = 1e-6;
-
-const toDegrees = (rad) => (rad * 180) / Math.PI;
-
-function dot(a, b) {
-  return a.x * b.x + a.y * b.y + a.z * b.z;
-}
-
-function finiteVector(v) {
-  return (
-    Boolean(v) &&
-    Number.isFinite(v.x) &&
-    Number.isFinite(v.y) &&
-    Number.isFinite(v.z)
-  );
-}
 
 /**
  * The look that centres `target` in the picture, in the nadir frame's tilt
@@ -75,9 +58,9 @@ export function focusLook(nadir, satellite, target) {
   // The target's own zenith, the WGS84 surface normal there: the satellite
   // is above its horizon when the line from the target to it points up.
   const normal = {
-    x: target.x / WGS84_A2,
-    y: target.y / WGS84_A2,
-    z: target.z / WGS84_B2,
+    x: target.x / WGS84.radiiSquared.x,
+    y: target.y / WGS84.radiiSquared.y,
+    z: target.z / WGS84.radiiSquared.z,
   };
   const visible =
     Math.hypot(normal.x, normal.y, normal.z) > 0 && -dot(line, normal) > 0;

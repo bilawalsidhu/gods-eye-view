@@ -240,14 +240,7 @@ export function createTesting({
   /** Forget every enrichment lookup and the dispatch clock, so a test that
    *  moved `Date.now` leaves no future-dated drip or cool-down behind. */
   function _resetEnrichmentForTest() {
-    flightState._enrichQueue.length = 0;
-    flightState._enrichSeen.clear();
-    flightState._enrichRetryAfter.clear();
-    flightState._enrichLastDispatchMs = 0;
-    if (flightState._enrichDripTimer) {
-      clearTimeout(flightState._enrichDripTimer);
-      flightState._enrichDripTimer = null;
-    }
+    flightState._enrich.reset();
   }
 
   /** Exercise the exact fleet admission and return the admitted model's record. */

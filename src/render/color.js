@@ -3,6 +3,11 @@
  * keep in their palettes, and from hue, saturation and lightness.
  */
 
+/** A renderer colour with its alpha replaced. */
+export function withAlpha(color, alpha) {
+  return [color[0], color[1], color[2], alpha];
+}
+
 /** A `#rrggbb` colour at `alpha`, as a renderer colour. */
 export function hexColor(hex, alpha = 1) {
   const n = Number.parseInt(hex.slice(1), 16);

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as Cesium from 'cesium';
-import { createFirmsHeatmapLayer } from '../../data/firmsHeatmap.js';
+import { createFirmsHeatmapLayer } from '../../testSupport/firmsLayer.mjs';
 import { fakeInput } from '../../input/testDoubles.mjs';
 import { bindRenderer } from '../../render/rendererOf.js';
 import { bindFakeCesiumScene } from '../../testSupport/fakeCesiumScene.mjs';
@@ -163,7 +163,7 @@ test('far out, one heatmap is draped through the globe port and the markers unde
   try {
     h.layer.init(h.viewer);
     await h.layer.enable(h.viewer);
-    assert.equal(h.cells().items.size, 0, 'no heat rectangles any more');
+    assert.equal(h.cells(), undefined, 'no heat rectangles any more');
     const [heat] = h.globe.imagery.list();
     assert.equal(h.globe.imagery.list().length, 1);
     assert.equal(heat.spec.kind, 'single-image');

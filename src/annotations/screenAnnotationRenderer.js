@@ -25,7 +25,7 @@ function outlineUnavailableLabel(label) {
 }
 
 /**
- * Screen-space annotation renderer (Direction B — the "whiteboard" aesthetic).
+ * Screen-space annotation renderer.
  *
  * Same world-anchored data model as the world-space renderer, but drawn as an
  * SVG overlay that is RE-PROJECTED every frame from the world coordinates via
@@ -110,7 +110,7 @@ export function createScreenAnnotationRenderer(
   // tiles under the point load, then settled (stable, no per-frame jitter).
   const heightCache = new Map();
   const HEIGHT_CACHE_SOFT = 600; // target size; over this we evict keys not used this frame
-  const HEIGHT_CACHE_HARD = 8000; // absolute ceiling (one big ring + others) — never exceeded
+  const HEIGHT_CACHE_HARD = 8000; // absolute ceiling — never exceeded
   // Accepted surface-height range; samples outside it are treated as misses.
   const MIN_SURFACE_HEIGHT = -430;
   const MAX_SURFACE_HEIGHT = 9000;
@@ -126,9 +126,8 @@ export function createScreenAnnotationRenderer(
   let projGen = 0; // bumped each projection frame; entries used this frame are "hot"
   function trimHeightCache() {
     if (heightCache.size <= HEIGHT_CACHE_SOFT) return;
-    // Evict COLD keys first (not touched this frame), so a single large area/route
-    // — the screen renderer can project a ring up to ~4000 points — cannot churn its
-    // OWN active heights out of cache and force a clampToHeight every frame.
+    // Evict COLD keys first (not touched this frame), so the marks in view cannot
+    // churn their OWN active heights out of cache and force a clampToHeight every frame.
     for (const [k, v] of heightCache) {
       if (heightCache.size <= HEIGHT_CACHE_SOFT) break;
       if (v.gen !== projGen) heightCache.delete(k);
@@ -219,26 +218,7 @@ export function createScreenAnnotationRenderer(
     const group = { opacity: '0', display: '', entered: false };
     const parts = {};
 
-    if (anno.type === 'area' && anno.ring && anno.ring.length >= 3) {
-      // Synthesized (buffered/approximate) areas render DASHED + fainter, with no
-      // "draw-on" gesture, so they never masquerade as an authoritative boundary.
-      parts.poly = svgPart('path', {
-        class: anno.synthesized ? 'gev-anno-area' : 'gev-anno-area gev-draw',
-        fill: c,
-        'fill-rule': 'evenodd',
-        stroke: c,
-        'fill-opacity': anno.synthesized ? '0.08' : '0.14',
-        'stroke-width': '2.5',
-        ...(anno.synthesized ? { 'stroke-dasharray': '9 7' } : {}),
-        filter: 'url(#gev-sketch)',
-      });
-      parts.label = makeCallout(
-        anno.outlineUnavailable
-          ? outlineUnavailableLabel(anno.label)
-          : anno.label,
-        c,
-      );
-    } else if (anno.type === 'arrow' && anno.to) {
+    if (anno.type === 'arrow' && anno.to) {
       parts.path = svgPart('path', {
         class: 'gev-anno-arrow gev-draw',
         fill: 'none',
@@ -248,36 +228,6 @@ export function createScreenAnnotationRenderer(
         filter: 'url(#gev-sketch)',
       });
       ensureArrowMarker(arrowMarkers, anno.color || 'primary', c);
-      parts.label = makeCallout(
-        anno.outlineUnavailable
-          ? outlineUnavailableLabel(anno.label)
-          : anno.label,
-        c,
-      );
-    } else if (
-      anno.type === 'route' &&
-      Array.isArray(anno.path) &&
-      anno.path.length >= 2
-    ) {
-      // Multi-waypoint path: a drawn-on polyline with a dot at each waypoint.
-      parts.poly = svgPart('polyline', {
-        class: 'gev-anno-arrow gev-draw',
-        fill: 'none',
-        stroke: c,
-        'stroke-width': '3',
-        'marker-end': `url(#gev-arrow-${anno.color || 'primary'})`,
-        filter: 'url(#gev-sketch)',
-      });
-      ensureArrowMarker(arrowMarkers, anno.color || 'primary', c);
-      parts.dots = anno.path.map(() =>
-        svgPart('circle', {
-          class: 'gev-anno-dot',
-          fill: c,
-          stroke: '#06121c',
-          'stroke-width': '2',
-          r: '4',
-        }),
-      );
       parts.label = makeCallout(
         anno.outlineUnavailable
           ? outlineUnavailableLabel(anno.label)
@@ -483,7 +433,7 @@ export function createScreenAnnotationRenderer(
   // Tracked-entity z-order: the tracked aircraft is a Cesium billboard in the
   // CANVAS, which sits BELOW this SVG overlay (z-90, HTML over canvas). So a screen mark
   // could hide it. After layout, any mark whose ACTUAL projected bounding box (rings,
-  // leader, polygon, route line, callout card — not just the anchor) INTERSECTS the
+  // leader, arrow, callout card — not just the anchor) INTERSECTS the
   // tracked subject's screen FOOTPRINT is faded. The complete card footprint comes
   // from the host's ACTUAL painted rectangle after final layout; the billboard extent
   // is unioned for aircraft/satellites that also own a native tracked graphic.
@@ -597,50 +547,7 @@ export function createScreenAnnotationRenderer(
             : 1),
       );
 
-      if (anno.type === 'area' && parts.poly) {
-        const paths = [];
-        let cx = 0;
-        let cy = 0;
-        let n = 0;
-        const polygons = anno.polygons?.length ? anno.polygons : [[anno.ring]];
-        for (const polygon of polygons) {
-          const projectedRings = polygon.map((ring) =>
-            ring.map(([lon, lat]) =>
-              project(lon, lat, polygon.length > 1, true),
-            ),
-          );
-          // Keep the historical visible-outer projection, but never fill over
-          // an unprojectable hole or hide another independently visible part.
-          const outer = projectedRings[0].filter(Boolean);
-          const holes = projectedRings.slice(1);
-          if (
-            outer.length < 3 ||
-            (holes.length && projectedRings[0].some((p) => !p)) ||
-            holes.some((ring) => ring.length < 3 || ring.some((p) => !p))
-          )
-            continue;
-          for (const projected of [outer, ...holes]) {
-            paths.push(
-              `M ${projected.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' L ')} Z`,
-            );
-          }
-          if (!n) {
-            for (const p of outer) {
-              cx += p.x;
-              cy += p.y;
-              n++;
-            }
-          }
-        }
-        if (paths.length) {
-          parts.poly.set.d = paths.join(' ');
-          group.display = '';
-          if (parts.label)
-            positionCallout(parts.label, cx / n, cy / n - 6, true);
-        } else {
-          group.display = 'none';
-        }
-      } else if (anno.type === 'arrow' && parts.path) {
+      if (anno.type === 'arrow' && parts.path) {
         const a = project(anno.anchor.lon, anno.anchor.lat, false, true);
         const b = project(anno.to.lon, anno.to.lat, false, true);
         if (a && b) {
@@ -663,38 +570,6 @@ export function createScreenAnnotationRenderer(
               my + (ctrlY - my) * 0.5 - 8,
               true,
             );
-        } else {
-          group.display = 'none';
-        }
-      } else if (anno.type === 'route' && parts.poly) {
-        const projected = anno.path.map((pt) =>
-          project(pt.lon, pt.lat, false, true),
-        );
-        const pts = [];
-        for (const p of projected) {
-          if (p) pts.push(`${p.x.toFixed(1)},${p.y.toFixed(1)}`);
-        }
-        if (pts.length >= 2) {
-          parts.poly.set.points = pts.join(' ');
-          // dots at each resolvable waypoint; hide the rest
-          parts.dots.forEach((dot, i) => {
-            const p = projected[i];
-            if (p) {
-              dot.set.cx = p.x.toFixed(1);
-              dot.set.cy = p.y.toFixed(1);
-              dot.display = '';
-            } else {
-              dot.display = 'none';
-            }
-          });
-          group.display = '';
-          // label at the middle waypoint
-          const mid =
-            projected.filter(Boolean)[
-              Math.floor(projected.filter(Boolean).length / 2)
-            ];
-          if (parts.label && mid)
-            positionCallout(parts.label, mid.x, mid.y - 12, true);
         } else {
           group.display = 'none';
         }
@@ -983,9 +858,7 @@ function partViews(parts) {
       attrs: { ...part.attrs, ...part.set },
       display: part.display,
     });
-  if (parts.poly) element('poly', parts.poly);
   if (parts.path) element('path', parts.path);
-  parts.dots?.forEach((dot, index) => element(`dot-${index}`, dot));
   if (parts.ringOuter) element('ring-outer', parts.ringOuter);
   if (parts.ringInner) element('ring-inner', parts.ringInner);
   if (parts.dot) element('dot', parts.dot);

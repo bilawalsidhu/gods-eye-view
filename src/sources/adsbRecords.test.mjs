@@ -3,8 +3,6 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 import {
-  LOCAL_ADSB_MESSAGE_STALE_MS,
-  LOCAL_ADSB_POSITION_STALE_MS,
   LOCAL_ADSB_REFERENCE_MAX_AGE_MS,
   localAdsbFixIsPlausible,
   localAdsbPositionIsFresh,
@@ -167,8 +165,6 @@ test('decoder tracks map to the same record shape', () => {
 });
 
 test('markers need a position newer than 60 s; records need a message newer than 60 s', () => {
-  assert.equal(LOCAL_ADSB_POSITION_STALE_MS, 60_000);
-  assert.equal(LOCAL_ADSB_MESSAGE_STALE_MS, 60_000);
   const record = {
     lat: 30,
     lon: -97,

@@ -5,7 +5,6 @@ import {
   composeCatalog,
   coreTools,
   defineTool,
-  ToolError,
 } from '../index.js';
 import { firePerimeterSnapshot } from '../../layers/perimeters/records.js';
 
@@ -588,43 +587,6 @@ test('the situation brief combines available sections and marks failures', async
   assert.equal(result.data.sections.aircraft, undefined);
 });
 
-test('the HUD caption summarizes the brief through the summary service', async () => {
-  const sent = [];
-  const summary = {
-    async summarize(context) {
-      sent.push(context);
-      return {
-        ok: true,
-        status: 200,
-        data: { summary: 'Overcast skies over Austin', error: null },
-      };
-    },
-  };
-  const result = await catalogWith({ weather, summary, places }).call(
-    'get_hud_caption',
-    { area: { place: 'Austin' } },
-  );
-  assert.equal(result.summary, 'Overcast skies over Austin');
-  assert.equal(sent[0].location, 'Austin, Texas');
-  assert.deepEqual(sent[0].placeLabels, ['Austin, Texas']);
-  assert.deepEqual(sent[0].enabledLayerLabels, ['Weather']);
-  assert.equal(sent[0].feedProvenance.overall, 'nominal');
-  assert.match(sent[0].observations[0], /^Weather at /);
-  const failing = {
-    summarize: async () => ({
-      ok: false,
-      status: 502,
-      data: { summary: null },
-    }),
-  };
-  await assert.rejects(
-    catalogWith({ weather, summary: failing, places }).call('get_hud_caption', {
-      area: { place: 'Austin' },
-    }),
-    (error) => error instanceof ToolError && error.code === 'unavailable',
-  );
-});
-
 test('military awareness gathers contacts around a point and marks failures', async () => {
   const contact = (id, latitude, longitude) => ({
     id,
@@ -749,47 +711,6 @@ test('composites reach their sections through the catalog', async () => {
   ]);
 });
 
-test('the HUD caption context carries each section feed state', async () => {
-  const sent = [];
-  const summary = {
-    async summarize(context) {
-      sent.push(context);
-      return {
-        ok: true,
-        status: 200,
-        data: { summary: 'Austin aircraft STALE' },
-      };
-    },
-  };
-  const aircraft = {
-    getSnapshot: async () => ({
-      records: [],
-      complete: true,
-      source: 'Test feed',
-      freshness: 'stale',
-    }),
-  };
-  const cyclones = {
-    getSnapshot: async () => {
-      throw new Error('upstream down');
-    },
-  };
-  await catalogWith({ weather, summary, places, aircraft, cyclones }).call(
-    'get_hud_caption',
-    { area: { place: 'Austin' } },
-  );
-  assert.deepEqual(
-    sent[0].enabledLayers.map((layer) => [layer.id, layer.feedState]),
-    [
-      ['weather', 'nominal'],
-      ['aircraft', 'stale'],
-      ['cyclones', 'unavailable'],
-    ],
-  );
-  assert.equal(sent[0].feedProvenance.overall, 'unavailable');
-  assert.match(sent[0].feedProvenance.note, /Aircraft is STALE/);
-});
-
 test('brief sections use a named place at its own point', async () => {
   const tokyo = {
     resolve: async () => ({
@@ -843,14 +764,7 @@ test('a fire perimeter enclosing the whole area is found', async () => {
   );
 });
 
-test('stale weather and partial fire data reach answers and the HUD caption', async () => {
-  const sent = [];
-  const summary = {
-    async summarize(context) {
-      sent.push(context);
-      return { ok: true, status: 200, data: { summary: 'Austin STALE' } };
-    },
-  };
+test('stale weather and partial fire data reach answers', async () => {
   const staleWeather = {
     getConditions: async () => ({ status: 'stale', weather: conditions }),
   };
@@ -865,12 +779,7 @@ test('stale weather and partial fire data reach answers and the HUD caption', as
       fires: [],
     }),
   };
-  const catalog = catalogWith({
-    weather: staleWeather,
-    summary,
-    places,
-    fires,
-  });
+  const catalog = catalogWith({ weather: staleWeather, places, fires });
   const weatherResult = await catalog.call('get_weather', {
     location: { place: 'Austin' },
   });
@@ -881,14 +790,6 @@ test('stale weather and partial fire data reach answers and the HUD caption', as
   });
   assert.deepEqual(fireResult.data.missing_sources, ['VIIRS_SNPP_NRT']);
   assert.match(fireResult.summary, /\(no data from VIIRS_SNPP_NRT\)\.$/);
-  await catalog.call('get_hud_caption', { area: { place: 'Austin' } });
-  assert.deepEqual(
-    sent[0].enabledLayers.map((layer) => [layer.id, layer.feedState]),
-    [
-      ['weather', 'stale'],
-      ['fires', 'degraded'],
-    ],
-  );
 });
 
 test('installation names wait for the name pack, briefly', async (t) => {

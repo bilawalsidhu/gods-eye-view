@@ -366,26 +366,25 @@ async function main() {
             throttleSkipCount: diagnostics.throttleSkipCount,
           });
         }
-        const dataset = document.querySelector('#world-overlay-canvas')?.dataset;
-        const revision = Number(dataset?.solveRevision || 0);
-        if (dataset && revision > 0 && revision !== window.__LABEL_QA.lastRevision) {
+        const revision = Number(diagnostics?.solveRevision || 0);
+        if (diagnostics && revision > 0 && revision !== window.__LABEL_QA.lastRevision) {
           window.__LABEL_QA.lastRevision = revision;
           window.__LABEL_QA.solve.push({
             t: performance.now(),
             revision,
-            solveMs: Number(dataset.solveMs),
-            frameTotalMs: Number(dataset.frameTotalMs),
-            paintMs: Number(dataset.paintMs),
-            throttleSkipCount: Number(dataset.throttleSkipCount),
-            placementBuildCount: Number(dataset.placementBuildCount),
-            observationCount: Number(dataset.observationCount),
-            selectedCount: Number(dataset.selectedCount),
-            fadingCount: Number(dataset.fadingCount),
+            solveMs: diagnostics.solveMs,
+            frameTotalMs: diagnostics.frameTotalMs,
+            paintMs: diagnostics.paintMs,
+            throttleSkipCount: diagnostics.throttleSkipCount,
+            placementBuildCount: diagnostics.placementBuildCount,
+            observationCount: diagnostics.observationCount,
+            selectedCount: diagnostics.selectedCount,
+            fadingCount: diagnostics.fadingCount,
             cameraHeight: viewer.camera.positionCartographic.height,
-            demandByLayer: JSON.parse(dataset.demandByLayer || '{}'),
-            cohortByLayer: JSON.parse(dataset.cohortByLayer || '{}'),
-            entitlementByLayer: JSON.parse(dataset.entitlementByLayer || '{}'),
-            labeledKeys: JSON.parse(dataset.labeledKeys || '[]'),
+            demandByLayer: diagnostics.demandByLayer || {},
+            cohortByLayer: diagnostics.cohortByLayer || {},
+            entitlementByLayer: diagnostics.entitlementByLayer || {},
+            labeledKeys: diagnostics.labeledKeys || [],
           });
         }
         requestAnimationFrame(sample);
@@ -407,7 +406,7 @@ async function main() {
     await waitForSettledSyntheticField(page);
     await page.evaluate(() => {
       const viewer = window.__godsEyeView.viewer;
-      const revision = Number(document.querySelector('#world-overlay-canvas')?.dataset?.solveRevision || 0);
+      const revision = Number(window.__godsEyeView.styleManager.getDetectionDiagnostics()?.solveRevision || 0);
       window.__LABEL_QA.solve = [];
       window.__LABEL_QA.frames = [];
       window.__LABEL_QA.lastRevision = revision;
@@ -447,7 +446,7 @@ async function main() {
     );
     await page.evaluate(() => {
       const viewer = window.__godsEyeView.viewer;
-      const revision = Number(document.querySelector('#world-overlay-canvas')?.dataset?.solveRevision || 0);
+      const revision = Number(window.__godsEyeView.styleManager.getDetectionDiagnostics()?.solveRevision || 0);
       window.__LABEL_QA.solve = [];
       window.__LABEL_QA.frames = [];
       window.__LABEL_QA.lastRevision = revision;

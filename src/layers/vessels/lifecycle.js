@@ -8,7 +8,6 @@ export function createLifecycle({
   services,
   parts: components,
   layer,
-  options,
 }) {
   const { state } = vesselState;
   const { releaseContinuousRender } = services.render;
@@ -124,7 +123,6 @@ export function createLifecycle({
     state.keyTarget = null;
     state.keydownHandler = null;
     state.trackedEntityRemover = null;
-    state.interactionKeyTarget = null;
     state.preRenderRemover = null;
     components.rendering.cancelTrailingVisibilityPass();
     state.lastVisibilityUpdate = 0;
@@ -139,7 +137,6 @@ export function createLifecycle({
     state.trailTimes = [];
     state.trailBodyCount = -1;
     state.trailId = null;
-    state.trailBackfillToken = 0;
   }
   const methods = {
     /** Configure the source before initialization; an active layer keeps its owner. */
@@ -191,7 +188,7 @@ export function createLifecycle({
             /* grid failed to load — anchors stay at ellipsoid 0 */
           });
       }
-      // Pick-ownership (H2): a vessel icon's pick id is its row id, the record's id.
+      // Pick ownership: a vessel icon's pick id is its row id, the record's id.
       registerPickOwner('ais-live-vessels', (pickedId) =>
         state.records.byId.has(pickedId),
       );
@@ -233,7 +230,7 @@ export function createLifecycle({
       removeViewListener();
       const activeViewer = viewer || state.viewer;
       invalidateAisSession();
-      releaseContinuousRender('ais-vessels'); // direct-destroy path (perf wave 2 fix)
+      releaseContinuousRender('ais-vessels'); // direct-destroy path
       components.rendering.cancelTrailingVisibilityPass();
       components.rendering.cancelPlacementFrame();
       if (state.feed.abort) state.feed.abort.abort();

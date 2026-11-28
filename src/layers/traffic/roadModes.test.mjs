@@ -5,7 +5,6 @@ import {
   flowSegmentsToRoads,
   resolveRoadMode,
   defaultRoadSource,
-  selectTrafficRoads,
   trafficSourceLabel,
 } from './roadModes.js';
 import { createFlowTileSource } from './flowSource.js';
@@ -50,39 +49,46 @@ test('road modes have key-aware defaults, explicit overrides and keyless fallbac
     assert.equal(resolveRoadMode(mode, false), 'osm');
   }
 });
-test('Hybrid keeps TomTom and the unmatched OSM side street, with simulated fill', () => {
-  const roads = selectTrafficRoads([main, side], [flow], 'hybrid');
+test('Hybrid keeps TomTom and the unmatched OSM side street, with simulated fill', async () => {
+  const roads = await requestedRoads([main, side], [flow], 'hybrid');
   assert.equal(roads.length, 2);
   assert.equal(roads[0].directFlow, true);
   assert.equal(roads[0].flow.level, 0.3);
   assert.equal(roads[1].simulatedOnly, true);
   assert.deepEqual(roads[1].coordinates, side.coordinates);
-  assert.equal(selectTrafficRoads([main, side], [flow], 'tomtom').length, 1);
-  assert.deepEqual(selectTrafficRoads([main, side], [flow], 'osm'), [
+  assert.equal(
+    (await requestedRoads([main, side], [flow], 'tomtom')).length,
+    1,
+  );
+  assert.deepEqual(await requestedRoads([main, side], [flow], 'osm'), [
     main,
     side,
   ]);
 });
-test('opposite-direction carriageways and the reverse half of two-way roads survive', () => {
+test('opposite-direction carriageways and the reverse half of two-way roads survive', async () => {
   for (const reverse of [
     { ...main, oneway: -1 },
     { ...main, coordinates: [...coordinates].reverse() },
   ]) {
-    assert.equal(selectTrafficRoads([reverse], [flow], 'hybrid').length, 2);
+    assert.equal((await requestedRoads([reverse], [flow], 'hybrid')).length, 2);
   }
-  const twoWay = selectTrafficRoads([{ ...main, oneway: 0 }], [flow], 'hybrid');
+  const twoWay = await requestedRoads(
+    [{ ...main, oneway: 0 }],
+    [flow],
+    'hybrid',
+  );
   assert.equal(twoWay.length, 2);
   assert.equal(twoWay[1].oneway, -1);
   assert.equal(twoWay[1].densityWeight, 0.5);
 });
-test('uncertain flow values still dedupe OSM; every TomTom road and closure survives', () => {
+test('uncertain flow values still dedupe OSM; every TomTom road and closure survives', async () => {
   const closed = { ...flow, trafficLevel: 0, closure: true };
-  const roads = selectTrafficRoads([main], [flow, closed], 'hybrid');
+  const roads = await requestedRoads([main], [flow, closed], 'hybrid');
   assert.equal(roads.length, 2);
   assert.ok(roads.every((road) => road.directFlow));
   assert.equal(roads[1].flow.closure, true);
 });
-test('a partly covered OSM road keeps only its uncovered stretch', () => {
+test('a partly covered OSM road keeps only its uncovered stretch', async () => {
   // 0.004° of longitude at 30.267° N is about 385 m; TomTom covers the west half.
   const long = {
     coordinates: [
@@ -92,7 +98,7 @@ test('a partly covered OSM road keeps only its uncovered stretch', () => {
     type: 'primary',
     oneway: 1,
   };
-  const roads = selectTrafficRoads([long], [flow], 'hybrid');
+  const roads = await requestedRoads([long], [flow], 'hybrid');
   assert.equal(roads.length, 2);
   const [piece] = roads.slice(1);
   assert.equal(piece.simulatedOnly, true);
@@ -101,7 +107,7 @@ test('a partly covered OSM road keeps only its uncovered stretch', () => {
   assert.ok(piece.coordinates[0][0] < -97.741);
   assert.deepEqual(piece.coordinates.at(-1), [-97.74, 30.267]);
 });
-test('an uncovered sliver shorter than 40 m is dropped with its duplicate', () => {
+test('an uncovered sliver shorter than 40 m is dropped with its duplicate', async () => {
   // About 67 m past the TomTom end: the last ~32 m is beyond the 35 m radius.
   const sliver = {
     coordinates: [
@@ -111,13 +117,17 @@ test('an uncovered sliver shorter than 40 m is dropped with its duplicate', () =
     type: 'primary',
     oneway: 1,
   };
-  assert.equal(selectTrafficRoads([sliver], [flow], 'hybrid').length, 1);
+  assert.equal((await requestedRoads([sliver], [flow], 'hybrid')).length, 1);
 });
-test('a full-coverage TomTom line is two-way and covers both OSM directions', () => {
+test('a full-coverage TomTom line is two-way and covers both OSM directions', async () => {
   const both = { ...flow, coverage: 'full' };
   assert.equal(flowSegmentsToRoads([both])[0].oneway, 0);
   assert.equal(flowSegmentsToRoads([flow])[0].oneway, 1);
-  const roads = selectTrafficRoads([{ ...main, oneway: 0 }], [both], 'hybrid');
+  const roads = await requestedRoads(
+    [{ ...main, oneway: 0 }],
+    [both],
+    'hybrid',
+  );
   assert.equal(roads.length, 1);
   assert.equal(roads[0].directFlow, true);
 });
@@ -248,13 +258,13 @@ test('TomTom sides clipped by their tile and the view pair only with other lines
     [1, 1, 0.5, 0.5],
   );
 });
-test('bearing and distance reject nearby crossing and separate OSM roads', () => {
+test('bearing and distance reject nearby crossing and separate OSM roads', async () => {
   const parallel = {
     ...main,
     coordinates: coordinates.map(([lon, lat]) => [lon, lat + 0.001]),
   };
   assert.equal(
-    selectTrafficRoads([side, parallel], [flow], 'hybrid').length,
+    (await requestedRoads([side, parallel], [flow], 'hybrid')).length,
     3,
   );
 });
@@ -272,6 +282,24 @@ function sourceFixture() {
     },
   });
   return { source, requests: () => requests };
+}
+/** The roads `requestRoads` answers for these OSM roads, flow and mode. */
+async function requestedRoads(osmRoads, segments, roadMode) {
+  const source = createTrafficSource({
+    mapTiles: {
+      async fetchBounds(_bounds, { onTile }) {
+        const tile = { roads: osmRoads };
+        onTile?.(tile);
+        return { tiles: [tile], partial: false };
+      },
+      clear() {},
+    },
+  });
+  const response = await source.requestRoads(box, {
+    roadMode,
+    flowSnapshot: Promise.resolve({ hasKey: true, segments }),
+  });
+  return (await response.json()).roads;
 }
 test('TomTom-only skips OSM requests; keyless selection requests OSM and labels fallback', async () => {
   for (const hasKey of [true, false]) {
@@ -664,7 +692,7 @@ test('a flow snapshot that misses the pass deadline cannot hold roads', async ()
   await assert.rejects(request('tomtom', true), /TomTom flow timed out/);
 });
 
-test('frontage roads beside a TomTom motorway survive; same-class duplicates do not', () => {
+test('frontage roads beside a TomTom motorway survive; same-class duplicates do not', async () => {
   const offset = (road, metres, extra = {}) => ({
     ...road,
     ...extra,
@@ -675,7 +703,7 @@ test('frontage roads beside a TomTom motorway survive; same-class duplicates do 
   });
   const motorwayLine = { ...flow, roadType: 'Motorway' };
   const osmMotorway = { ...main, type: 'motorway' };
-  const roads = selectTrafficRoads(
+  const roads = await requestedRoads(
     [
       offset(osmMotorway, 4), // the same motorway: dropped
       offset(main, 25, { type: 'residential' }), // frontage, north side
@@ -692,34 +720,40 @@ test('frontage roads beside a TomTom motorway survive; same-class duplicates do 
   );
   // A ramp beside the mainline compares as an ordinary road.
   assert.equal(
-    selectTrafficRoads(
-      [offset(osmMotorway, 25, { ramp: true })],
-      [motorwayLine],
-      'hybrid',
+    (
+      await requestedRoads(
+        [offset(osmMotorway, 25, { ramp: true })],
+        [motorwayLine],
+        'hybrid',
+      )
     ).length,
     2,
   );
   // Across a class mismatch a true duplicate (within 15 m) is still dropped.
   assert.equal(
-    selectTrafficRoads(
-      [offset(main, 6, { type: 'residential' })],
-      [motorwayLine],
-      'hybrid',
+    (
+      await requestedRoads(
+        [offset(main, 6, { type: 'residential' })],
+        [motorwayLine],
+        'hybrid',
+      )
     ).length,
     1,
   );
   // Same class, uncertain 25 m overlap: the OpenStreetMap copy goes.
   assert.equal(
-    selectTrafficRoads(
-      [offset(main, 25, { type: 'residential' })],
-      [{ ...flow, roadType: 'Local road' }],
-      'hybrid',
+    (
+      await requestedRoads(
+        [offset(main, 25, { type: 'residential' })],
+        [{ ...flow, roadType: 'Local road' }],
+        'hybrid',
+      )
     ).length,
     1,
   );
 });
 
-test('private, parking, walking and unknown flow never animate or suppress a public OSM road', () => {
+test('private, parking, walking and unknown flow never animate or suppress a public OSM road', async () => {
   for (const roadType of [
     'Non public road',
     'Parking road',
@@ -729,7 +763,7 @@ test('private, parking, walking and unknown flow never animate or suppress a pub
   ]) {
     const rejected = { ...flow, roadType };
     assert.deepEqual(flowSegmentsToRoads([rejected]), []);
-    const roads = selectTrafficRoads([main], [rejected], 'hybrid');
+    const roads = await requestedRoads([main], [rejected], 'hybrid');
     assert.equal(roads.length, 1);
     assert.equal(roads[0].simulatedOnly, true);
     assert.deepEqual(roads[0].coordinates, main.coordinates);

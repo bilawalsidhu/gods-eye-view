@@ -2,7 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, onUpdated, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { getLocale, t, tn } from '../../../i18n/index.js';
-import { EXCLUSIVE_SURFACE_CLASSES } from '../../../exclusiveSurfaces.js';
+import { exclusiveSurfaceActive } from '../../../exclusiveSurfaces.js';
 import { createOmnibar, drawAsked, escapeRegExp, readLine, VILLAGES } from '../../omnibarRows.js';
 import { lookupMatches } from '../../entityLookup.js';
 import { FEATURE_GUIDES, layerGuide, layerSettingsGuide, startGuide } from '../../omnibarGuide.js';
@@ -87,9 +87,7 @@ const assistantOpen = computed(() => voice.view?.root?.chatOpen || voice.view?.v
 watch(feedback, (message) => {
   if (message && results.value) results.value.scrollTop = 0;
 }, { flush: 'post' });
-function screenIsOwned() {
-  return EXCLUSIVE_SURFACE_CLASSES.some((name) => document.body.classList.contains(name));
-}
+const screenIsOwned = () => exclusiveSurfaceActive();
 const query = ref('');
 const focused = ref(false);
 // The row Enter picks. Until the arrow keys choose one it is the default

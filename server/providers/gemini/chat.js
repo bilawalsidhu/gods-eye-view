@@ -14,7 +14,7 @@ const keys = (value, allowed) =>
   Object.keys(value).every((key) => allowed.includes(key));
 
 // Only text and function exchanges may cross this route, never media or config.
-export function validChatContents(contents, names) {
+function validChatContents(contents, names) {
   return (
     Array.isArray(contents) &&
     contents.length > 0 &&

@@ -9,8 +9,8 @@ import { canvasOf, findFrame, rendererOf } from '../render/rendererOf.js';
 function readViewerCameraKey() {
   return cameraPoseKey(globalThis.window?.__godsEyeView?.viewer);
 }
-// Viewport-screenshot size guards (M13). The old code clamped WIDTH only, so a
-// tall portrait window produced an oversized capture whose dc.send could throw.
+// A viewport capture clamped by width alone can still be oversized in a tall portrait
+// window, and dc.send can throw.
 // Cap total pixels (clamps both dimensions) and drop the image entirely if the
 // encoded data URL is still too big for the data channel.
 const VIEWPORT_MAX_PIXELS = 1200 * 900;
@@ -23,7 +23,7 @@ export async function captureViewportImage() {
   const source = canvasOf(viewer);
   if (!source || !source.width || !source.height) return null;
   // Clamp BOTH dimensions by a total-pixel budget so tall portrait windows are
-  // downscaled too (the old width-only clamp let them through — M13).
+  // downscaled too (a width-only clamp would let them through).
   const { width } = computeDownscale(
     source.width,
     source.height,
@@ -31,8 +31,7 @@ export async function captureViewportImage() {
   );
   // No fresh frame (hidden, or the bounded render wait timed out) → no
   // capture. The caller labels this image "Current"; a stale preserved
-  // frame would feed the model old entities as current context. (perf
-  // wave 2 fix)
+  // frame would feed the model old entities as current context.
   const pixels = await readFreshFrame(viewer, renderFreshCesiumFrame, {
     scale: width / (source.clientWidth || source.width),
   });
@@ -48,7 +47,7 @@ export async function captureViewportImage() {
     const dataUrl = canvas.toDataURL('image/jpeg', 0.74);
     // Even after the pixel clamp, a busy frame can encode large. If the payload
     // would still overflow the data channel, skip the image rather than let the
-    // send throw and strand the turn (M13). The caller falls through without it.
+    // send throw and strand the turn. The caller falls through without it.
     if (estimateDataUrlBytes(dataUrl) > VIEWPORT_MAX_ENCODED_BYTES) {
       console.warn('[GEV Voice] Skipped oversized viewport capture', {
         bytes: estimateDataUrlBytes(dataUrl),
@@ -285,7 +284,7 @@ export async function renderFreshPointerFrame(viewer, onFrame) {
 
 // Scale (w, h) down so w*h <= maxPixels while preserving aspect ratio. Never
 // upscales. Both dimensions shrink together, so portrait and landscape are
-// treated equally (M13). Pure + deterministic → unit-tested (exported below).
+// treated equally. Pure + deterministic → unit-tested (exported below).
 export function computeDownscale(width, height, maxPixels) {
   const w = Math.max(1, Math.floor(width) || 0);
   const h = Math.max(1, Math.floor(height) || 0);
@@ -320,7 +319,7 @@ export function estimateDataUrlBytes(dataUrl) {
  * @returns {Promise<boolean>} true only when a fresh frame was presented —
  *   false while hidden (render loop suspended; a capture would be stale) or
  *   when the bounded wait timed out. Callers must not label a non-fresh
- *   canvas as current. (perf wave 2)
+ *   canvas as current.
  */
 export async function renderFreshCesiumFrame(viewer, onFrame) {
   const frame = findFrame(viewer);
@@ -620,11 +619,9 @@ export class RealtimeViewport {
         ],
       },
     };
-    // Only claim lastViewportItemId once the send actually succeeds. If the image
-    // is still too large for the data channel, sendRealtimeEvent returns false
-    // (it no longer throws — M13); we then leave lastViewportItemId pointing at
-    // the item we just deleted as null and fall through so the caller still
-    // issues queueResponseCreate WITHOUT the image, instead of stranding the turn.
+    // Only claim lastViewportItemId after a successful send. If the image is still too
+    // large, leave it null and let the caller issue queueResponseCreate without the
+    // image.
     const sent = this.sendRealtimeEvent(contextEvent, label);
     // Report before the bookkeeping below, so a later throw cannot turn a
     // real send into a logged "error".

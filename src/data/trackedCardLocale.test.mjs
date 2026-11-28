@@ -2,13 +2,15 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as Cesium from 'cesium';
 import { twoline2satrec } from 'satellite.js';
-import {
+import satellitesLayer from './satellites.js';
+import { setLocale } from '../i18n/index.js';
+import { readEntityRecord, withEntityRecord } from './entityRecords.js';
+
+const {
   _runSatellitePreRenderForTest,
   _setTrackedSatelliteRefreshStateForTest,
   _trackedFrameCartesianForTest,
-} from './satellites.js';
-import { setLocale } from '../i18n/index.js';
-import { readEntityRecord, withEntityRecord } from './entityRecords.js';
+} = satellitesLayer.testing;
 
 const L1 =
   '1 25544U 98067A   08264.51782528 -.00002182  00000-0 -11606-4 0  2927';

@@ -1,19 +1,6 @@
 import { mapillaryImageUrl } from './policy.js';
 
 /**
- * @typedef {object} StreetPose
- * @property {string} imageId
- * @property {{lon: number, lat: number}} position
- * @property {number|null} bearing
- * @property {number|null} altitude
- * @property {boolean} isPano
- * @property {number|null} capturedAt   Epoch milliseconds.
- * @property {string|null} creator
- * @property {string|null} sequenceId
- * @property {string} externalUrl      Deep link to the image on mapillary.com.
- */
-
-/**
  * The source's Graph endpoint as an absolute URL ending in `/`, as MapillaryJS
  * resolves its lookup paths against it; '' when the source has none.
  */

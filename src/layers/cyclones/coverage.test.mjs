@@ -44,7 +44,7 @@ function harness(feed) {
     getFocusSphere: () => ({ radius: 500000 }),
     clear() {},
     destroy() {},
-    getDiagnostics: () => ({ entities: 0, timerActive: false }),
+    getDiagnostics: () => ({ items: 0 }),
   };
   const layer = createCyclonesLayer({
     feed,

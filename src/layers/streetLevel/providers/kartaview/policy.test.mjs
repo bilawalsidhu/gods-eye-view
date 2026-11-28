@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   assignCourses,
-  bearingBetween,
   cameraBearing,
   kartaViewPhotoUrl,
   kartaViewTimeMs,
@@ -12,6 +11,7 @@ import {
   resizedImageUrl,
   tileFilterQuery,
 } from './policy.js';
+import { initialBearingDeg } from '../../../../geoDistance.js';
 
 /** A photo record as /2.0/photo returns it (trimmed to what is read). */
 function record(overrides = {}) {
@@ -282,10 +282,7 @@ test('the camera looks along the drive: each photo’s course points to the next
     90,
     'the drive beats the compass',
   );
-  assert.ok(
-    Math.abs(bearingBetween({ lon: 0, lat: 0 }, { lon: 0, lat: -1 }) - 180) <
-      1e-9,
-  );
+  assert.ok(Math.abs(initialBearingDeg(0, 0, -1, 0) - 180) < 1e-9);
 });
 
 test('the imagery filter becomes KartaView’s tile query and photo-search params', () => {

@@ -5,11 +5,7 @@ import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import {
   CAPABILITIES,
-  CONTRACT_VERSION,
-  FRAME_STEPS,
   PORTS,
-  ROLES,
-  roleOf,
   QUALITY_KEYS,
   checkPortShape,
   checkRendererShape,
@@ -134,49 +130,11 @@ test('PORTS lists every member of every port, required exactly when the type req
   }
 });
 
-test('every member of every port has one role, and each role names real members', () => {
-  const ids = ROLES.map((r) => r.id);
-  assert.equal(new Set(ids).size, ids.length);
-  // No entry is claimed by two roles, so the most specific entry is never a tie.
-  const entries = ROLES.flatMap((r) => r.members);
-  assert.equal(new Set(entries).size, entries.length, 'an entry in two roles');
-  for (const [port, members] of Object.entries(PORTS))
-    for (const member of Object.keys(members))
-      assert.ok(
-        ids.includes(roleOf(port, member)),
-        `${port}.${member} has no role`,
-      );
-  // An entry is a port, or a member (or a prefix of dotted members) of one.
-  for (const role of ROLES)
-    for (const entry of role.members) {
-      const [port, ...rest] = entry.split('.');
-      const member = rest.join('.');
-      assert.ok(PORTS[port], `${role.id}: ${entry} names no port`);
-      if (member)
-        assert.ok(
-          Object.keys(PORTS[port]).some(
-            (m) => m === member || m.startsWith(`${member}.`),
-          ),
-          `${role.id}: ${entry} names no member`,
-        );
-    }
-  // The most specific entry wins.
-  assert.equal(roleOf('globe', 'setBase'), 'surface');
-  assert.equal(roleOf('globe', 'sky.set'), 'look');
-  assert.equal(roleOf('globe', 'setSurfaceShading'), 'look');
-  assert.equal(roleOf('nowhere', 'x'), undefined);
-  assert.equal(roleOf('globe', 'bogus'), undefined);
-  assert.equal(roleOf('globe'), 'surface');
-  assert.equal(roleOf('imageryLayer', 'lit'), 'look');
-});
-
-test('the capability and frame-step lists are the types’ own', () => {
+test('the capability list is the type’s own', () => {
   assert.deepEqual([...CAPABILITIES].sort(), unionLiterals('Capability'));
-  assert.deepEqual([...FRAME_STEPS].sort(), unionLiterals('FrameStep'));
   for (const port of Object.values(PORTS))
     for (const capability of Object.values(port))
       if (capability !== null) assert.ok(CAPABILITIES.includes(capability));
-  assert.equal(CONTRACT_VERSION, '0');
   const settings = checker.getTypeAtLocation(declared('QualitySettings').name);
   assert.deepEqual(
     [...QUALITY_KEYS].sort(),

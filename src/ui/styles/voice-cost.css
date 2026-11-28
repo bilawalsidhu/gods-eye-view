@@ -81,12 +81,6 @@
   max-height: 0.8rem;
 }
 
-/* The dock collapses the kicker/readout when a tray is open — the cost
-   cluster follows the same rule so the row never overflows. */
-#command-dock.tray-open .gev-voice-cost {
-  display: none;
-}
-
 .gev-voice-tier-btn[hidden],
 .gev-voice-cost-value[hidden] {
   display: none;

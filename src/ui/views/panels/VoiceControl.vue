@@ -2,6 +2,7 @@
 import { storeToRefs } from 'pinia';
 import { formatNumber, t } from '../../../i18n/index.js';
 import { vClassToggle } from '../../rail/classToggle.js';
+import { vOwnedValue } from '../../rail/ownedValue.js';
 import { useVoiceStore } from '../../stores/voice.js';
 import { ASSISTANT_NAME } from '../../../voice/control.js';
 import VoiceCard from './VoiceCard.vue';
@@ -24,17 +25,6 @@ const emit = (name, ...args) => controls.value?.emit(name, ...args);
 // The Voice Preview box's note, as one object, so the panel's other renders
 // do not render the box again.
 const previewBoxAttrs = { 'aria-describedby': 'gev-voice-preview-note' };
-// The minutes field holds a draft until it changes: write it only when its
-// owner does, not on every render (the waveform renders each frame).
-const vOwnedValue = {
-  mounted(el, { value }) {
-    el.value = value.text;
-  },
-  updated(el, { value, oldValue }) {
-    if (value.revision !== oldValue?.revision && el.value !== value.text)
-      el.value = value.text;
-  },
-};
 // "5 minutes" in the UI language, with the count's plural form ("15 دقيقة").
 const minutesLabel = (count) =>
   formatNumber(count, { style: 'unit', unit: 'minute', unitDisplay: 'long' });
