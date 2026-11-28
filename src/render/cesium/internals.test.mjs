@@ -247,7 +247,7 @@ test('private Cesium fields are reached only through internals.js', () => {
   const sources = walk(path.join(ROOT, 'src'), (name) =>
     /\.(js|vue)$/.test(name),
   )
-    .map((file) => path.relative(ROOT, file))
+    .map((file) => path.relative(ROOT, file).split(path.sep).join('/'))
     .filter((file) => file !== INTERNALS)
     .map((file) => [
       file,
