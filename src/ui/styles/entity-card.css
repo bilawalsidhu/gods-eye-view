@@ -164,7 +164,8 @@
   grid-column: 1 / -1;
 }
 
-.entity-card__fact--wide dd {
+/* Above `.entity-card__fact dd`, whichever stylesheet loads last. */
+.entity-card__fact.entity-card__fact--wide dd {
   overflow-wrap: anywhere;
   white-space: normal;
 }
