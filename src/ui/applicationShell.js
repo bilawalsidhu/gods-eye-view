@@ -390,10 +390,6 @@ export class StyleManager extends ShellFacade {
     this._windowResizeHandler = null;
     this._disposed = false;
 
-    this._mapStackChangeHandler = null;
-
-    this._cockpitDisplayModeHandler = null;
-
     this._locationNavigation = new LocationNavigation({
       viewer,
       placeSearch,
@@ -963,17 +959,6 @@ export class StyleManager extends ShellFacade {
   async _setMapStack(stackId, { syncShare = true } = {}) {
     if (!this.mapStackController) return;
     return this._mapSourceControls.select(stackId, { syncShare });
-  }
-
-  /**
-   * Syncs the map stack chip row and status chip with controller state. The
-   * lit chip always follows `state.activeId`, never the click — a rejected or
-   * superseded switch therefore leaves the genuinely active stack lit.
-   * @param {object} state - Map stack controller state.
-   * @returns {void}
-   */
-  _renderMapStackState(state) {
-    this._mapSourceControls?.render(state);
   }
 
   _setDetectionAllocation(...args) {
