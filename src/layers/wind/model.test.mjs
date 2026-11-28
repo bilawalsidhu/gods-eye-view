@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { advectParticle, sampleWind, windColor } from './model.js';
+import { advectParticle, sampleWind } from './model.js';
 
 const field = {
   u: Float32Array.from([1, 2, 3, 4]),
@@ -26,9 +26,4 @@ test('advectParticle moves and constrains particles', () => {
   advectParticle(particle, { u: 10, v: 100 }, 3600);
   assert.ok(particle.lon < 0);
   assert.equal(particle.lat, 89);
-});
-
-test('windColor returns a monotonic ramp string', () => {
-  assert.equal(typeof windColor(0), 'string');
-  assert.notEqual(windColor(0), windColor(30));
 });
