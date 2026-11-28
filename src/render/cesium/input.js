@@ -95,13 +95,6 @@ function pointerTypeOf(dom, otherwise = 'mouse') {
 const inputs = new WeakMap();
 
 /**
- * The input port made for a scene, while it lives.
- * @param {object} scene
- * @returns {ReturnType<typeof createCesiumInput> | null}
- */
-export const cesiumInputOf = (scene) => inputs.get(scene) ?? null;
-
-/**
  * One per scene: a second would find the stock actions already taken.
  * @param {object} widget A Cesium `CesiumWidget` or `Viewer`.
  * @param {object} options
