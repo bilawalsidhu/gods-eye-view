@@ -13,7 +13,8 @@ export const FLEET_HEADING_OFFSET_DEG = 180;
  * `headingDeg` (clockwise from north) turned by FLEET_HEADING_OFFSET_DEG. In
  * the draw contract's heading-pitch-roll frame the turned model's x is then
  * its port side and its y its stern: pitch raises the port side, roll the
- * stern. Level (0, 0) without a finite slope.
+ * stern. The roll is taken after the pitch, as the frame composes them, so
+ * the deck lies on the slope exactly. Level (0, 0) without a finite slope.
  * @param {number} headingDeg
  * @param {{east: number, north: number}|null|undefined} slope
  * @returns {{pitch: number, roll: number}}
@@ -24,7 +25,8 @@ export function fleetModelTilt(headingDeg, slope) {
   const c = (headingDeg || 0) * (Math.PI / 180);
   const port = -slope.east * Math.cos(c) + slope.north * Math.sin(c);
   const stern = -(slope.east * Math.sin(c) + slope.north * Math.cos(c));
-  return { pitch: Math.atan(port), roll: Math.atan(stern) };
+  const pitch = Math.atan(port);
+  return { pitch, roll: Math.atan(stern * Math.cos(pitch)) };
 }
 
 /**

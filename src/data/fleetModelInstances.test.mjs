@@ -516,6 +516,8 @@ test("a tilt lays a vessel's deck on the sea surface's slope as the draw contrac
       { east: 0.1, north: 0 },
       { east: 0, north: 0.1 },
       { east: -0.07, north: 0.05 },
+      { east: 0.5, north: 0.5 },
+      { east: -1, north: 0.8 },
     ]) {
       const tilt = fleetModelTilt(heading, slope);
       // As the Cesium draw port turns a model (drawModels.js matrixOf).
@@ -542,7 +544,7 @@ test("a tilt lays a vessel's deck on the sea surface's slope as the draw contrac
       );
       const degrees = Cesium.Cartesian3.angleBetween(deckUp, surfaceUp) / RAD;
       assert.ok(
-        degrees < 0.3,
+        degrees < 1e-6,
         `heading ${heading}, ${JSON.stringify(slope)}: ${degrees}°`,
       );
     }
