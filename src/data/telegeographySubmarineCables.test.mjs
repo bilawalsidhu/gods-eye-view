@@ -743,10 +743,15 @@ test('cables, landing pins and references draw as their entities did', async () 
 
   const [line] = env.set('lines').items.values();
   assert.equal(line.mode, 'draped');
-  assert.equal(line.widthPx, 2.5);
+  // A pipe: the cable's colour between darker edges, wide enough to click.
+  assert.equal(line.widthPx, 8);
   assert.deepEqual(line.style, {
     kind: 'solid',
     color: [0x39 / 255, 0xd5 / 255, 1, 0.92],
+    outline: {
+      color: [(0x39 / 255) * 0.35, (0xd5 / 255) * 0.35, 0.35, 0.95],
+      widthPx: 3,
+    },
   });
   assert.equal(line.clampTo, undefined, 'cable lines follow the stack');
   // Along the rhumb line, as GeoJSON lines were, in steps under 10 km.
@@ -1289,7 +1294,7 @@ test('multipart cables keep their own styling, picking and culling on every segm
       (hex & 255) / 255,
       0.92,
     ]);
-    assert.equal(line.widthPx, 2.5);
+    assert.equal(line.widthPx, 8);
   }
   assert.deepEqual(picksOf(env, 'lines'), [
     { lon: -40, lat: 35 },

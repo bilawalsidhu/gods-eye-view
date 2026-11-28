@@ -134,6 +134,11 @@ const subtitle = computed(() => {
 // The details grid leaves out what the header already says.
 // The Context search narrows them to the ones whose name or value holds its
 // text, and looks through every fact, the headline ones included.
+// A value longer than half the card fits takes the card's full width, on
+// as many lines as it needs, so none is cut short.
+const HALF_WIDTH_CHARS = 18;
+const wideFact = (fact) => String(factValue(fact) ?? '').length > HALF_WIDTH_CHARS;
+
 const gridFacts = computed(() =>
   contextNeedle.value
     ? (card.value?.facts || []).filter((fact) => matchesContextSearch(factLabel(fact), factValue(fact), fact.value))
@@ -454,7 +459,7 @@ watch(
       <section v-if="gridFacts.length" class="entity-card__section">
         <h4>{{ contextNeedle ? t('Matching details') : t('Details') }}</h4>
         <dl class="entity-card__facts">
-          <div v-for="fact in gridFacts" :key="fact.field" class="entity-card__fact">
+          <div v-for="fact in gridFacts" :key="fact.field" class="entity-card__fact" :class="{ 'entity-card__fact--wide': wideFact(fact) }">
             <dt>{{ factLabel(fact) }}</dt>
             <dd>{{ factValue(fact) }}</dd>
           </div>
