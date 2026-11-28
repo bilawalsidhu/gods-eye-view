@@ -4,7 +4,7 @@ import {
   googlePlacesContextProxy,
   validateGeocodeAddress,
   geocodeBounds,
-} from '../../vite.config.js';
+} from '../../server/providers/places.js';
 
 const UPSTREAM = 'https://geocode.test/json';
 

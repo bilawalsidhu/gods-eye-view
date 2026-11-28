@@ -90,7 +90,7 @@ only the main file. Exports, runtimes and new groups belong in the main file.
 | --------------------------------------------------- | ------------------------------------------------------------------------------------------ |
 | `src/data/<layer>.js`                               | Legacy default instances; new assembly calls layer factories with supplied sources         |
 | `src/app/sources.js`, `src/services/application.js` | Existing default/override API; current application construction supplies its own instances |
-| `server/providers/local.js`                         | Existing Node composition barrel and provider helper re-exports                            |
+| `server/providers/local.js`                         | Existing Node composition entry                                                            |
 
 The one exact standalone-import exception is `server/providers/local.js` to
 `server/standalone/key-setup.js`. It does not authorize new compatibility
@@ -124,10 +124,9 @@ use build-only dependency exceptions.
 
 `server/standalone/vite.config.js` loads the root environment and passes selected
 browser keys, host/port and the ordered local provider plugins to this helper.
-`server/providers/local.js` composes provider factories and re-exports existing
-helpers for compatibility. Provider Settings lives in `server/standalone/key-setup.js`
-and writes to the same root `.env` or Pinokio store as before. `vite.config.js`
-preserves the default configuration and named provider exports for tools/tests.
+`server/providers/local.js` composes provider factories. Provider Settings lives
+in `server/standalone/key-setup.js` and writes to the same root `.env` or
+Pinokio store as before. `vite.config.js` re-exports the default configuration.
 
 ## Aircraft and vessel providers
 

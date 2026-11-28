@@ -4521,7 +4521,7 @@ tools use the same parser.
 
 `vite.config.js` delegates to `server/standalone/vite.config.js`, which loads
 this checkout's environment and constructs the local providers in order.
-`server/providers/local.js` is the composition and compatibility entry;
+`server/providers/local.js` is the composition entry;
 provider families own their middleware and process state in focused modules.
 
 `gods-eye-view/build/vite` is a Node-only export for explicit browser build
@@ -4723,7 +4723,7 @@ enrichment and track backfill. Vessel routes and websocket/watchdog setup live
 in `server/providers/vessels/ais-live.js`; AIS records and recent tracks live
 in `ais-store.js`. Common response caps, request coalescing and query parsing
 have their own modules. `server/providers/local.js` composes these with the
-remaining providers and keeps the named compatibility exports.
+remaining providers.
 
 The tracked flight also gets a photo. The browser asks Planespotters for it
 directly (`src/sources/live/standalone.js`, read by

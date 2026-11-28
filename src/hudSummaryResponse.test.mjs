@@ -20,7 +20,7 @@ import {
   provenanceTag,
 } from './data/layerSnapshot.js';
 import { parseHudSummaryReply } from '../server/providers/openai/hud-summary.js';
-import { openAiRealtimeProxy } from '../vite.config.js';
+import { openAiRealtimeProxy } from '../server/providers/openai.js';
 
 const UNCONFIGURED_PAYLOAD = {
   configured: false,
