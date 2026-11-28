@@ -6,9 +6,11 @@ import { fileURLToPath } from 'node:url';
 import {
   ALLOCATION_TEST_FILES,
   UNIT_TEST_ROOTS,
+  WINDOWS_COMMAND_LINE_BUDGET,
   allocationTestArgs,
   assertCalibratedAllocationRuntime,
   buildUnitTestPlan,
+  chunkTestFiles,
   discoverUnitTestFiles,
   isCalibratedAllocationRuntime,
 } from '../scripts/run-unit-tests.mjs';
@@ -85,6 +87,34 @@ test('the runner discovers every test file in the repository', () => {
       `${file} should be at the repository root or under one of ${UNIT_TEST_ROOTS.join(', ')}`,
     );
   }
+});
+
+test('without a budget the whole suite stays one run, in order', () => {
+  const files = ['a.test.mjs', 'src/b.test.mjs', 'server/c.test.mjs'];
+  assert.deepEqual(chunkTestFiles(files), [files]);
+  assert.deepEqual(chunkTestFiles([]), []);
+});
+
+test('a budget splits the suite into runs that fit, losing and reordering nothing', () => {
+  // The real suite on Windows: every discovered file against the real budget.
+  const files = discoverUnitTestFiles(repositoryRoot);
+  const fixedLength = 200;
+  const chunks = chunkTestFiles(files, { budget: WINDOWS_COMMAND_LINE_BUDGET, fixedLength });
+  assert.ok(chunks.length > 1, 'the suite is long enough to need more than one run');
+  for (const chunk of chunks) {
+    assert.ok(chunk.length > 0);
+    const length = fixedLength + chunk.reduce((sum, file) => sum + file.length + 3, 0);
+    assert.ok(length <= WINDOWS_COMMAND_LINE_BUDGET, `a run of ${length} characters is over budget`);
+  }
+  assert.deepEqual(chunks.flat(), files);
+});
+
+test('a file longer than the budget still gets a run of its own', () => {
+  const long = `src/${'x'.repeat(60)}.test.mjs`;
+  assert.deepEqual(
+    chunkTestFiles(['a.test.mjs', long, 'b.test.mjs'], { budget: 40 }),
+    [['a.test.mjs'], [long], ['b.test.mjs']],
+  );
 });
 
 test('allocation runtime calibration covers both supported Node majors', () => {
