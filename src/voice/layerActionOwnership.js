@@ -22,13 +22,10 @@ export function watchExplicitLayerOff(dataManager, layerId, { onOff } = {}) {
   };
   const stopRequest =
     dataManager?.subscribeVisibilityRequests?.(observe) || (() => {});
-  // Lightweight managers sometimes expose only the settled change stream.
-  const stopSettled = dataManager?.subscribe?.(observe) || (() => {});
   return {
     requested: () => requested,
     stop() {
       stopRequest();
-      stopSettled();
     },
   };
 }
