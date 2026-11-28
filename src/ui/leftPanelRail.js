@@ -7,6 +7,7 @@ import {
 import { measurePanelNaturalHeight } from './panelMeasurement.js';
 import { bandBesideMidpointObstacles } from './panelRailGeometry.js';
 import { settleSideAccordion } from './panelAccordion.js';
+import { MOBILE_SHELL_MEDIA_QUERY } from './panelRailGeometry.js';
 
 /**
  * Whether the desktop Omnibar dock is laid out, by the condition
@@ -74,7 +75,7 @@ export function layoutLeftPanelRail({
 
   // The existing narrow-screen composition has its own full-width stack.
   // Keep this desktop lane engine from fighting those dedicated rules.
-  const isMobile = windowRef.matchMedia('(max-width: 720px)').matches;
+  const isMobile = windowRef.matchMedia(MOBILE_SHELL_MEDIA_QUERY).matches;
   if (isMobile) {
     stack.classList.remove('layout-focus');
     stack.classList.remove('layout-tail');

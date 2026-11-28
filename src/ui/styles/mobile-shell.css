@@ -1,4 +1,4 @@
-/* ── Phone shell (≤720px, body.mobile-shell; src/ui/mobileShell.js) ─────────
+/* ── Phone shell (body.mobile-shell; gate in src/ui/panelRailGeometry.js) ────
  * The globe is full screen. A bottom tab bar opens one sheet; the sheet shows
  * the panels of that tab from the rails or dock, everything else stays hidden.
  */
@@ -6,6 +6,8 @@
   --mobile-tab-height: 58px;
   --mobile-bottom-inset: env(safe-area-inset-bottom, 0px);
   --mobile-top-inset: env(safe-area-inset-top, 0px);
+  --mobile-left-inset: env(safe-area-inset-left, 0px);
+  --mobile-right-inset: env(safe-area-inset-right, 0px);
   --mobile-tab-space: calc(
     var(--mobile-tab-height) + var(--mobile-bottom-inset)
   );
@@ -23,6 +25,23 @@
 #mobile-tab-bar,
 #mobile-sheet-backdrop {
   display: none;
+}
+
+/* A landscape phone puts its notch on one side: logical insets follow the
+   reading direction, so start and end chrome clear it in RTL too. */
+body.mobile-shell {
+  --mobile-inline-start-inset: var(--mobile-left-inset);
+  --mobile-inline-end-inset: var(--mobile-right-inset);
+  /* Computed here, not only on :root, so a landscape --mobile-tab-height on
+     the shell reaches it. */
+  --mobile-tab-space: calc(
+    var(--mobile-tab-height) + var(--mobile-bottom-inset)
+  );
+}
+
+body.mobile-shell:dir(rtl) {
+  --mobile-inline-start-inset: var(--mobile-right-inset);
+  --mobile-inline-end-inset: var(--mobile-left-inset);
 }
 
 body.mobile-shell #mobile-tab-bar {
@@ -92,7 +111,7 @@ body.mobile-shell[data-mobile-sheet] #mobile-sheet-backdrop:not([hidden]) {
 /* ── Top bar: logo at the start, globe actions at the end ──────────────── */
 body.mobile-shell #title-bar {
   top: calc(var(--mobile-top-inset) + 10px);
-  inset-inline-start: 14px;
+  inset-inline-start: calc(var(--mobile-inline-start-inset) + 14px);
 }
 
 body.mobile-shell #title-bar .title-logo {
@@ -107,7 +126,14 @@ body.mobile-shell #title-bar .subtitle {
 body.mobile-shell #top-center-actions {
   top: calc(var(--mobile-top-inset) + 10px);
   inset-inline-start: auto;
-  inset-inline-end: 12px;
+  inset-inline-end: calc(var(--mobile-inline-end-inset) + 12px);
+}
+
+/* Narrow phones already drop the live style readout (responsive.css); a
+   phone held sideways is wider than that query, and the readout would sit
+   under the globe actions. */
+body.mobile-shell #style-indicator {
+  display: none;
 }
 
 /* ── HUD: one compact readout under the top bar ────────────────────────── */
@@ -120,7 +146,7 @@ body.mobile-shell #intel-hud .hud-bottom-bar {
 body.mobile-shell #intel-hud .hud-bottom-left {
   top: calc(var(--mobile-top-inset) + 62px);
   bottom: auto;
-  left: 16px;
+  left: calc(var(--mobile-left-inset) + 16px);
   font-size: 9px;
   opacity: 0.8;
 }
@@ -129,6 +155,13 @@ body.mobile-shell #intel-hud .hud-bottom-left {
 body.mobile-shell #left-panel-stack,
 body.mobile-shell #right-context-rail {
   display: none;
+}
+
+/* A sheet scrolls in both directions it may need: a glow that bleeds past
+   the panel (as it does on the desktop rails) would widen it sideways. */
+body.mobile-shell #left-panel-stack .panel-glow,
+body.mobile-shell #right-context-rail .panel-glow {
+  inset: 0;
 }
 
 body.mobile-shell[data-mobile-sheet='layers'] #left-panel-stack,
@@ -151,7 +184,8 @@ body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack {
   width: auto;
   max-width: none;
   max-height: var(--mobile-sheet-max-height);
-  padding: 14px 10px 10px;
+  padding: 14px calc(var(--mobile-right-inset) + 10px) 10px
+    calc(var(--mobile-left-inset) + 10px);
   overflow-y: auto;
   overscroll-behavior: contain;
   pointer-events: auto;
@@ -212,8 +246,14 @@ body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack > #pp-toggles {
 
 /* The sheet scrolls: News keeps its height instead of shrinking under the
    panel below it, as the rail makes it do on a desktop. */
-body.mobile-shell #right-context-rail > #news-panel:not(.collapsed) {
+body.mobile-shell #right-context-rail > #news-panel:not(.collapsed),
+/* Data Layers too: shrunk to the room left by the collapsed panels under it
+   (about 100px in landscape), its list ran on beneath them. */
+body.mobile-shell[data-mobile-sheet='layers']
+  #left-panel-stack
+  > #data-panel:not(.collapsed) {
   flex-shrink: 0;
+  max-height: none;
 }
 
 /* ── Dock: [mic] [Omnibar] [chat] above the World Timeline ─────────────
@@ -283,6 +323,33 @@ body.mobile-shell:not(.cockpit-mode):not(.scene-playback-mode):not(
   }
 }
 
+/* ── Landscape: a phone held sideways (the gate's short arm) ─────────────
+   Only sizing changes with height; eligibility stays in panelRailGeometry.js.
+   A shorter tab bar and capped sheets leave some globe above an open sheet,
+   and the dock keeps a desktop-like width in the middle instead of spanning
+   ~850px of screen. */
+@media (max-height: 520px) and (orientation: landscape) {
+  body.mobile-shell {
+    --mobile-tab-height: 48px;
+    --mobile-sheet-max-height: min(
+      62dvh,
+      calc(100dvh - var(--mobile-top-inset) - var(--mobile-tab-space) - 70px)
+    );
+  }
+
+  body.mobile-shell:not(.cockpit-mode):not(.scene-playback-mode):not(
+      .ui-clean-view
+    ):not(.recording-mode):where(.has-omnibar.dock-has-voice *) {
+    --omnibar-dock-width: min(
+      calc(
+        100vw - 24px - env(safe-area-inset-left, 0px) -
+          env(safe-area-inset-right, 0px)
+      ),
+      560px
+    );
+  }
+}
+
 /* ── Credits and corner chips clear the tab bar ────────────────────────── */
 /* While the tab bar shows, the credit line sits above the dock. The desktop
    placements (including the Minimal HUD's :has() variant) outrank any phone
@@ -293,13 +360,15 @@ body.mobile-shell:not(.recording-mode):not(.cockpit-mode):not(.ui-clean-view)
   bottom: calc(
     var(--mobile-tab-space) + 74px + var(--world-timeline-lift, 0px)
   ) !important;
-  left: 10px;
+  left: calc(var(--mobile-left-inset) + 10px);
   /* With the base rule's nowrap the credits run off the right edge, and a
      max-width alone wrapped them into a narrow column: the line needs wrapping
      and a real width. The width applies before the 0.8 scale, keeping the
      scaled line 10px from the right edge, so every credit and "Data
      attribution" stay on screen. Like the offset above, it must win. */
-  width: calc((100vw - 20px) / 0.8) !important;
+  width: calc(
+    (100vw - var(--mobile-left-inset) - var(--mobile-right-inset) - 20px) / 0.8
+  ) !important;
   max-width: none !important;
   white-space: normal;
   transform-origin: left bottom;
@@ -312,8 +381,10 @@ body.mobile-shell:not(.recording-mode):not(.cockpit-mode):not(.ui-clean-view)
   bottom: calc(
     var(--mobile-tab-space) + 74px + var(--world-timeline-lift, 0px)
   ) !important;
-  left: 10px;
-  width: calc((100vw - 20px) / 0.8) !important;
+  left: calc(var(--mobile-left-inset) + 10px);
+  width: calc(
+    (100vw - var(--mobile-left-inset) - var(--mobile-right-inset) - 20px) / 0.8
+  ) !important;
   max-width: none !important;
   white-space: normal;
   transform-origin: left bottom;
@@ -339,7 +410,7 @@ body.mobile-shell[data-mobile-sheet]:not(.recording-mode):not(
 
 /* The view switcher clears the tab bar and the dock, opposite the credit. */
 body.mobile-shell:not(.cockpit-mode) #view-switcher {
-  right: 12px;
+  right: calc(var(--mobile-right-inset) + 12px);
   bottom: calc(
     var(--mobile-tab-space) + 74px + var(--world-timeline-lift, 0px)
   );
@@ -347,7 +418,7 @@ body.mobile-shell:not(.cockpit-mode) #view-switcher {
 
 body.mobile-shell #corner-actions {
   top: calc(var(--mobile-top-inset) + 60px);
-  inset-inline-end: 12px;
+  inset-inline-end: calc(var(--mobile-inline-end-inset) + 12px);
   bottom: auto;
 }
 
@@ -355,6 +426,15 @@ body.mobile-shell #corner-actions {
    results take that, so the corner buttons the dock would cover step aside. */
 body.mobile-shell.mobile-keyboard-open #corner-actions {
   visibility: hidden;
+}
+
+/* A sheet on a phone held sideways rises to the corner buttons' height, and
+   they would sit on top of it: they step aside while it is open. */
+@media (max-height: 520px) and (orientation: landscape) {
+  body.mobile-shell[data-mobile-sheet] #corner-actions,
+  body.mobile-shell[data-mobile-sheet] #gev-stories .gs-entry {
+    visibility: hidden;
+  }
 }
 
 /* Full-screen modes hide the phone chrome like the desktop chrome. Scene
