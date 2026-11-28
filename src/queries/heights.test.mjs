@@ -300,7 +300,7 @@ test('height queries go through the service', () => {
       });
   const offenders = walk('src').filter((file) => {
     const posix = file.split(path.sep).join('/');
-    if (file === SERVICE || CONTRACT.test(posix) || KNOWN.has(posix))
+    if (posix === SERVICE || CONTRACT.test(posix) || KNOWN.has(posix))
       return false;
     return direct.test(codeOf(file));
   });
