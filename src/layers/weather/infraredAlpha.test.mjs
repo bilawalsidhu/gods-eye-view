@@ -45,7 +45,7 @@ test('filter strength interpolates between the full infrared image and the cloud
   assert.deepEqual([...applyInfraredAlpha(pixels.slice(), 0)], [...pixels]);
   assert.deepEqual(
     applyInfraredAlpha(pixels.slice(), 100),
-    applyInfraredAlpha(pixels.slice(), 'filtered'),
+    applyInfraredAlpha(pixels.slice()),
   );
   assert.deepEqual(
     [...applyInfraredAlpha(pixels.slice(), 50)],
@@ -57,7 +57,7 @@ test('full infrared preserves every channel including partial and zero alpha', (
   const pixels = new Uint8ClampedArray([
     12, 50, 194, 80, 0, 0, 0, 255, 255, 200, 0, 0,
   ]);
-  assert.deepEqual(applyInfraredAlpha(pixels.slice(), 'full'), pixels);
+  assert.deepEqual(applyInfraredAlpha(pixels.slice(), 0), pixels);
 });
 
 test('the lookup table gives the per-pixel curve byte for byte, in place', () => {
@@ -97,7 +97,6 @@ test('the lookup table gives the per-pixel curve byte for byte, in place', () =>
     [101, 1],
     [Infinity, 1],
     [-Infinity, 1],
-    ['filtered', 1],
     [Number.NaN, 1],
     [null, 1],
     [undefined, 1],
@@ -107,7 +106,7 @@ test('the lookup table gives the per-pixel curve byte for byte, in place', () =>
     assert.equal(applyInfraredAlpha(pixels, strength), pixels);
     assert.deepEqual(pixels, perPixel(source, amount), `strength ${strength}`);
   }
-  for (const strength of [0, -5, 'full']) {
+  for (const strength of [0, -5]) {
     const pixels = source.slice();
     assert.deepEqual(applyInfraredAlpha(pixels, strength), source);
   }

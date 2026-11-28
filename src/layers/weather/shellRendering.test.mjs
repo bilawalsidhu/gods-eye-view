@@ -490,12 +490,12 @@ test('an infrared mode change restages the same time with its own cached canvas'
   const filtered = h.material().uniforms.image;
   assert.equal(await show(h, times[0]), true, 'same frame is a no-op');
   assert.equal(h.fetches.length, 1);
-  assert.equal(await show(h, times[0], { infrared: 'full' }), true);
+  assert.equal(await show(h, times[0], { infrared: 0 }), true);
   const full = h.material().uniforms.image;
   assert.notEqual(full, filtered);
   assert.deepEqual([...full.pixels], [194, 0, 0, 200]);
-  assert.equal(h.shell.getDiagnostics().infrared, 'full');
-  assert.equal(await show(h, times[0], { infrared: 'filtered' }), true);
+  assert.equal(h.shell.getDiagnostics().infrared, 0);
+  assert.equal(await show(h, times[0], { infrared: 100 }), true);
   assert.equal(h.material().uniforms.image, filtered, 'cache hit');
   assert.equal(h.fetches.length, 2);
   h.shell.clear();

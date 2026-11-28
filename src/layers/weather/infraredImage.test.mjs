@@ -32,7 +32,7 @@ function canvas() {
 
 test('decoded pixels are processed once on a same-sized canvas', () => {
   const image = { width: 1, height: 1 };
-  const output = processInfraredImage(image, 'filtered', canvas);
+  const output = processInfraredImage(image, 100, canvas);
   assert.equal(output.width, 1);
   assert.equal(output.height, 1);
   assert.equal(output.image, image);
@@ -46,10 +46,6 @@ test('decoded pixels are processed once on a same-sized canvas', () => {
     [...processInfraredImage(image, 0, canvas).pixels],
     [194, 0, 0, 200],
   );
-  assert.deepEqual(
-    [...processInfraredImage(image, 'full', canvas).pixels],
-    [194, 0, 0, 200],
-  );
 });
 
 test('mosaic fetch is capped at 4 MiB, forwards cancellation, and releases decoded images', async () => {
@@ -60,7 +56,7 @@ test('mosaic fetch is capped at 4 MiB, forwards cancellation, and releases decod
     fetched = false;
   const options = {
     signal: controller.signal,
-    mode: 'filtered',
+    mode: 100,
     createCanvas: canvas,
     now: () => clock,
     onFetched: () => {
@@ -163,7 +159,7 @@ test('a frame source supplies the image: nothing is fetched or decoded and the p
     fetched = false;
   const result = await acquireInfraredMosaic('2026-09-15T20:00:00.000Z', {
     signal: controller.signal,
-    mode: 'filtered',
+    mode: 100,
     createCanvas: canvas,
     now: () => clock,
     onFetched: () => {
@@ -244,7 +240,7 @@ test('a supplied frame of the wrong size is refused and still released', async (
   await assert.rejects(
     acquireInfraredMosaic('t', {
       signal: new AbortController().signal,
-      mode: 'filtered',
+      mode: 100,
       createCanvas: canvas,
       frameSource: { getImage: async () => wrong },
     }),
@@ -254,7 +250,7 @@ test('a supplied frame of the wrong size is refused and still released', async (
   await assert.rejects(
     acquireInfraredMosaic('t', {
       signal: new AbortController().signal,
-      mode: 'filtered',
+      mode: 100,
       createCanvas: canvas,
       frameSource: { getImage: async () => undefined },
     }),
@@ -268,7 +264,7 @@ test('cancellation reaches the frame source, and a frame that arrives after it i
   let seen;
   const pending = acquireInfraredMosaic('t', {
     signal: controller.signal,
-    mode: 'filtered',
+    mode: 100,
     createCanvas: () => assert.fail('a cancelled frame is not drawn'),
     frameSource: {
       getImage: async ({ signal }) => {

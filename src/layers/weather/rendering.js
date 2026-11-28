@@ -295,7 +295,7 @@ function createGlobeRendering({
     rehome,
     cancelPrefetch,
     updateSnapshot,
-    async prefetch(snapshot, time, { infrared = 'filtered' } = {}) {
+    async prefetch(snapshot, time, { infrared = 100 } = {}) {
       try {
         if (
           frameHidden ||
@@ -337,7 +337,7 @@ function createGlobeRendering({
     async setFrame(
       snapshot,
       time,
-      { signal, infrared = 'filtered', creditSnapshot } = {},
+      { signal, infrared = 100, creditSnapshot } = {},
     ) {
       signal?.throwIfAborted();
       cancelPrefetch();
@@ -637,7 +637,7 @@ function createGlobeRendering({
         imageryCount:
           Number(!!current) + Number(!!incoming?.layer) + retiring.size,
         mosaic: (incoming || current)?.mosaic,
-        infrared: (incoming || current)?.infrared ?? 'filtered',
+        infrared: (incoming || current)?.infrared ?? 100,
         loading: !!incoming,
         time: frameHidden ? null : (current?.time ?? null),
         hidden: frameHidden,
@@ -787,7 +787,7 @@ export function createWeatherRendering({
         shown = {
           snapshot,
           time,
-          infrared: options.infrared ?? 'filtered',
+          infrared: options.infrared ?? 100,
           ...(latest ? { latest } : {}),
         };
       }
@@ -828,7 +828,7 @@ export function createWeatherRendering({
                 host: 'shell',
                 cache: { mosaics: 0, bytes: 0, prefetching: false },
                 imageryCount: 0,
-                infrared: 'filtered',
+                infrared: 100,
                 loading: false,
                 time: null,
                 hidden,

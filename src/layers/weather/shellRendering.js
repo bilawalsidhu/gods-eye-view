@@ -574,7 +574,7 @@ export function createWeatherShell({
       return changed;
     },
     cancelPrefetch,
-    async prefetch(snapshot, time, { infrared: mode = 'filtered' } = {}) {
+    async prefetch(snapshot, time, { infrared: mode = 100 } = {}) {
       try {
         if (
           hidden ||
@@ -600,11 +600,7 @@ export function createWeatherShell({
         return false;
       }
     },
-    async setFrame(
-      snapshot,
-      time,
-      { signal, infrared: mode = 'filtered' } = {},
-    ) {
+    async setFrame(snapshot, time, { signal, infrared: mode = 100 } = {}) {
       signal?.throwIfAborted();
       cancelPrefetch();
       const bounds = boundsKey(snapshot.bounds);
@@ -743,7 +739,7 @@ export function createWeatherShell({
         },
         imageryCount: Number(fieldBounds !== null) + Number(!!incoming?.staged),
         mosaic: (incoming || current)?.mosaic,
-        infrared: (incoming || current)?.infrared ?? 'filtered',
+        infrared: (incoming || current)?.infrared ?? 100,
         loading: !!incoming,
         time: hidden ? null : (current?.time ?? null),
         hidden,

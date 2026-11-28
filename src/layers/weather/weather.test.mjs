@@ -610,7 +610,7 @@ function layerHarness({
       hidden = value;
       if (value) active?.finish(false);
     },
-    setFrame(value, selected, { signal, infrared = 'filtered' } = {}) {
+    setFrame(value, selected, { signal, infrared = 100 } = {}) {
       if (active) active.finish(false);
       const task = deferred();
       const abort = () => stage.finish(false);
@@ -1274,7 +1274,7 @@ test('host switches tear one renderer down and restage the retained frame on the
   const clouds = { ...snapshot, product: 'clouds' };
   host = { collection: h.viewer.imageryLayers, kind: 'globe' };
   h.rendering.setAlpha(0.4);
-  const first = h.rendering.setFrame(clouds, times[1], { infrared: 'full' });
+  const first = h.rendering.setFrame(clouds, times[1], { infrared: 0 });
   await flush();
   h.settle();
   assert.equal(await first, true);
@@ -1299,7 +1299,7 @@ test('host switches tear one renderer down and restage the retained frame on the
   assert.equal(diagnostics.height, 5_500);
   assert.equal(diagnostics.loading, false);
   assert.equal(diagnostics.time, times[1]);
-  assert.equal(diagnostics.infrared, 'full');
+  assert.equal(diagnostics.infrared, 0);
   assert.equal(shell.appearance.material.uniforms.alpha, 0.4);
   host = { collection: h.viewer.imageryLayers, kind: 'globe' };
   assert.equal(h.rendering.rehome(), true);
@@ -1315,7 +1315,7 @@ test('host switches tear one renderer down and restage the retained frame on the
   assert.equal(diagnostics.host, 'globe');
   assert.equal(diagnostics.loading, false);
   assert.equal(diagnostics.time, times[1]);
-  assert.equal(diagnostics.infrared, 'full');
+  assert.equal(diagnostics.infrared, 0);
   assert.equal(h.layers[0].alpha, 0.4);
   assert.equal(h.layers[0].spec.tileSize, 256);
   h.rendering.clear();
@@ -1784,7 +1784,7 @@ for (const kind of ['globe']) {
     const previous = h.layers[0];
     assert.equal(await h.rendering.setFrame(clouds, times[0]), true);
     assert.equal(h.providers.length, 1);
-    const full = h.rendering.setFrame(clouds, times[0], { infrared: 'full' });
+    const full = h.rendering.setFrame(clouds, times[0], { infrared: 0 });
     await flush();
     const tile = await h.providers[1].requestImage(0, 0, 0);
     assert.deepEqual([...tile.source.pixels], [194, 100, 0, 200]);
@@ -1794,7 +1794,7 @@ for (const kind of ['globe']) {
     assert.equal(h.layers.length, 2);
     assert.equal(h.layers[1].alpha, 0.7);
     assert.equal(previous.removed, false);
-    assert.equal(h.rendering.getDiagnostics().infrared, 'full');
+    assert.equal(h.rendering.getDiagnostics().infrared, 0);
     h.postRender.emit();
     assert.equal(h.layers.length, 1);
     assert.equal(previous.removed, true);
@@ -2307,7 +2307,7 @@ test('observed descriptors keep configuration only and label satellite clouds by
 });
 
 const globalSnapshot = { ...snapshot, product: 'clouds' };
-async function showMosaic(h, time, infrared = 'filtered') {
+async function showMosaic(h, time, infrared = 100) {
   const pending = h.rendering.setFrame(globalSnapshot, time, { infrared });
   await flush();
   h.settle();
@@ -2339,7 +2339,7 @@ test('mosaic cache skips fetch and decode, separates modes, evicts LRU at 6 and 
     cached: true,
     decodeMs: 0,
   });
-  await showMosaic(h, times[0], 'full');
+  await showMosaic(h, times[0], 0);
   assert.equal(fetches, 3);
   assert.equal(h.rendering.getDiagnostics().mosaic.cached, false);
   await showMosaic(h, times[0]);
