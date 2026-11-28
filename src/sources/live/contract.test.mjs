@@ -4,13 +4,13 @@ import {
   createFlightSource,
   createMilitarySource,
   createVesselSource,
-  normalizeReadsbAircraft,
-  normalizeVesselObservation,
   openSkySnapshot,
   readsbSnapshot,
   readSnapshotTimeline,
   vesselSnapshot,
 } from './index.js';
+import { normalizeReadsbAircraft } from './aircraft.js';
+import { normalizeVesselObservation } from './vessels.js';
 
 const now = 1800000000000;
 const aircraft = [
