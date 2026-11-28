@@ -82,6 +82,40 @@ export const UNIT_TEST_NODE_FLAGS = Object.freeze([
   '--import=./src/testSupport/loadCatalogs.mjs',
 ]);
 
+/**
+ * The longest command line, in characters, one test process is handed on
+ * Windows. CreateProcess refuses anything over 32,767 characters, and the full
+ * suite's paths run well past that, so `spawnSync` fails with ENAMETOOLONG
+ * before any test starts. Other platforms allow far longer argument lists and
+ * keep one process for the whole suite.
+ */
+export const WINDOWS_COMMAND_LINE_BUDGET = 30_000;
+
+/**
+ * Split test files into runs whose command line fits `budget`, keeping their
+ * order. `fixedLength` is what every run spends before its first file (the
+ * executable and flags). A file that alone exceeds the budget still gets a run
+ * of its own rather than being dropped.
+ */
+export function chunkTestFiles(files, { budget = Infinity, fixedLength = 0 } = {}) {
+  const chunks = [];
+  let current = [];
+  let length = fixedLength;
+  for (const file of files) {
+    // A separating space, plus quotes in case the path needs them.
+    const cost = file.length + 3;
+    if (current.length && length + cost > budget) {
+      chunks.push(current);
+      current = [];
+      length = fixedLength;
+    }
+    current.push(file);
+    length += cost;
+  }
+  if (current.length) chunks.push(current);
+  return chunks;
+}
+
 function runTests(args) {
   const result = spawnSync(process.execPath, [...UNIT_TEST_NODE_FLAGS, ...args], {
     cwd: process.cwd(),
@@ -94,7 +128,14 @@ function runTests(args) {
 
 export function runUnitTests() {
   const plan = buildUnitTestPlan(discoverUnitTestFiles());
-  const parallelStatus = runTests(['--test', ...plan.parallel]);
+  const budget = process.platform === 'win32' ? WINDOWS_COMMAND_LINE_BUDGET : Infinity;
+  const fixedLength = [process.execPath, ...UNIT_TEST_NODE_FLAGS, '--test'].join(' ').length;
+  // Every run goes ahead even after a failure, so one pass reports all of them.
+  let parallelStatus = 0;
+  for (const files of chunkTestFiles(plan.parallel, { budget, fixedLength })) {
+    const status = runTests(['--test', ...files]);
+    if (status !== 0 && parallelStatus === 0) parallelStatus = status;
+  }
   if (parallelStatus !== 0) return parallelStatus;
 
   // The GC-bracketed budgets are calibrated on every supported Node major.
