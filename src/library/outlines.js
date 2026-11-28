@@ -14,8 +14,6 @@ const COUNTRIES_PACK_URL = new URL(
   '../data/local_data/natural_earth/countries.json',
   import.meta.url,
 );
-/** Outline modes a manifest may ask for. */
-export const OUTLINE_MODES = Object.freeze(['coverage', 'countries', 'bbox']);
 
 let pending = null;
 
