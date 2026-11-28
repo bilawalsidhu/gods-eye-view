@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  HACKRF_ONE_USB_FILTERS,
   SDR_DEVICE_STORAGE_KEY,
   createRememberingWebUsb,
   createSdrDeviceMemory,
@@ -34,6 +35,34 @@ const genericDongle = {
   serialNumber: '00000001',
 };
 const unrelated = { vendorId: 0x1234, productId: 0x5678, productName: 'Other' };
+
+test('HackRF One selection filters the picker and reuses the authorized receiver', async () => {
+  const hackrf = { vendorId: 0x1d50, productId: 0x6089 };
+  const authorized = [genericDongle, { vendorId: 0x1d50, productId: 0x604b }];
+  let pickerCalls = 0;
+  const usb = createRememberingWebUsb({
+    getDevices: async () => authorized,
+    async requestDevice({ filters }) {
+      assert.deepEqual(filters, [hackrf]);
+      pickerCalls++;
+      authorized.push(hackrf);
+      return hackrf;
+    },
+  });
+  assert.equal(
+    await usb.requestDevice({ filters: HACKRF_ONE_USB_FILTERS }),
+    hackrf,
+  );
+  assert.equal(
+    await usb.requestDevice({ filters: HACKRF_ONE_USB_FILTERS }),
+    hackrf,
+  );
+  assert.equal(pickerCalls, 1);
+  assert.equal(
+    selectAuthorizedSdrDevice([hackrf], { filters: RTL_FILTERS }),
+    null,
+  );
+});
 
 function memoryStorage() {
   const values = new Map();

@@ -3,7 +3,7 @@ import { formatNumber, msg, t, tn } from '../i18n/index.js';
 import { formatQuantity } from './unitLabels.js';
 
 /**
- * Pure presentation of the Local RTL-SDR card in the Radio panel. Receives the
+ * Pure presentation of the Local SDR card in the Radio panel. Receives the
  * receiver session snapshot and returns what each control should show.
  */
 
@@ -102,9 +102,12 @@ function statusText(state) {
     );
     return `${state.message}${device} · ${iqStatus} · ${decoded}`;
   }
-  const detail = state.seeking
-    ? state.seekMessage
-    : state.seekMessage || state.message;
+  const detail =
+    state.status === 'error'
+      ? state.message
+      : state.seeking
+        ? state.seekMessage
+        : state.seekMessage || state.message;
   if (state.connected && fmActive) {
     const workerStatus =
       state.workerBlocks > 0
@@ -148,6 +151,8 @@ export function localSdrCardView(state) {
         : t('CONNECT'),
     connectDisabled: transitional || !state.webUsbSupported,
     connectPressed: Boolean(state.connected),
+    receiverKind: state.receiverKind || 'rtl',
+    receiverDisabled: transitional || state.connected || !state.webUsbSupported,
     fmActive,
     adsbActive,
     modeDisabled: transitional,
@@ -162,6 +167,7 @@ export function localSdrCardView(state) {
     changeDeviceDisabled: transitional || !state.webUsbSupported,
     gainValue: formatGain(state.gain),
     gainDisabled: transitional,
+    hackrfGain: state.hackrfGain,
     statsHidden: !(adsbActive && state.connected),
     stats: {
       rate: Number.isFinite(state.messagesPerSecond)

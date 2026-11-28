@@ -1087,6 +1087,7 @@
   "src/sdr/controller.test.mjs",
   "src/sdr/decoderDiagnostics.test.mjs",
   "src/sdr/gain.test.mjs",
+  "src/sdr/hackrfOne.test.mjs",
   "src/sdr/readPipeline.diag.test.mjs",
   "src/sdr/sdrAudioWorklet.test.mjs",
   "src/sdr/spectrum.test.mjs",

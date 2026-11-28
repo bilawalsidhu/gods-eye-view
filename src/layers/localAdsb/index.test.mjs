@@ -700,6 +700,10 @@ test('adsbdb type, operator and route reach the card for the selected aircraft o
     readEntityRecord(entity)?.labelModel.details.at(-1),
     'Heard by your receiver · 1090 MHz · browser SDR',
   );
+  assert.equal(
+    calls.registered.findLast(({ id }) => id === 'local-adsb:a0b702')?.source,
+    'Your SDR receiver',
+  );
   layer.selectAircraft('a0b702');
   await layer.update();
   assert.equal(queries.length, 2, 'each key is asked for once');
@@ -1074,7 +1078,7 @@ test('row status reflects decoder feeds and the browser SDR together', () => {
 
   // No feeds configured: the WebUSB statuses are unchanged.
   assert.deepEqual(status(idle, null), {
-    source: 'RTL-SDR · WebUSB',
+    source: 'Browser SDR · WebUSB',
     status: 'idle',
     statusMessage: 'connect a receiver in Radio',
   });

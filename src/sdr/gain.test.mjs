@@ -2,12 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  HACKRF_GAIN_DEFAULTS,
   R820T_GAIN_STEPS_DB,
   SDR_GAIN_DEFAULTS,
   SDR_GAIN_STORAGE_KEY,
   normalizeSdrGain,
+  readHackrfGainSettings,
   readSdrGainSettings,
   tunerGainValue,
+  writeHackrfGainSettings,
   writeSdrGainSettings,
 } from './gain.js';
 
@@ -64,6 +67,19 @@ test('per-mode gain persists in storage and survives unavailable storage', () =>
   assert.deepEqual(readSdrGainSettings(throwing), SDR_GAIN_DEFAULTS);
   assert.equal(writeSdrGainSettings(throwing, SDR_GAIN_DEFAULTS), false);
   assert.deepEqual(readSdrGainSettings(null), SDR_GAIN_DEFAULTS);
+});
+
+test('HackRF gain settings are read and saved under their own key', () => {
+  const hackrfKey = 'gev:sdr:hackrf:gain:v1';
+  const storage = memoryStorage({
+    [hackrfKey]: '{"lna":"0","vga":21,"amp":false}',
+  });
+  const gain = readHackrfGainSettings(storage);
+  assert.deepEqual(gain, { lna: 0, vga: 16, amp: false });
+  assert.ok(Object.isFrozen(gain));
+  assert.deepEqual(readHackrfGainSettings(null), HACKRF_GAIN_DEFAULTS);
+  writeHackrfGainSettings(storage, { lna: 24, vga: 0, amp: true });
+  assert.equal(storage.values.get(hackrfKey), '{"lna":24,"vga":0,"amp":true}');
 });
 
 test('a stored ADS-B gain wins over the 28.0 dB default', () => {

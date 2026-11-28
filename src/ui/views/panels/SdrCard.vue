@@ -2,7 +2,7 @@
 import { storeToRefs } from 'pinia';
 import { ref } from 'vue';
 import { t } from '../../../i18n/index.js';
-import { R820T_GAIN_STEPS_DB } from '../../../sdr/gain.js';
+import { HACKRF_GAIN_STEPS_DB, R820T_GAIN_STEPS_DB } from '../../../sdr/gain.js';
 import { localSdrGainOptionLabel } from '../../localSdrPresentation.js';
 import { vClassToggle } from '../../rail/classToggle.js';
 import { vFieldValue } from '../../rail/fieldValue.js';
@@ -11,7 +11,7 @@ import { useRadioStore } from '../../stores/radio.js';
 import UiButton from '../../kit/UiButton.vue';
 import UiSelect from '../../kit/UiSelect.js';
 
-// The local RTL-SDR card in the Radio panel. LocalSdrControls presents it and
+// The local SDR card in the Radio panel. LocalSdrControls presents it and
 // publishes it; until it does, the card shows its initial markup. Its
 // controls call LocalSdrControls through the store. The numeric gain
 // options read in the page language; their values stay numeric.
@@ -24,28 +24,50 @@ const tune = () => act('tuneSdr', frequency.value.value);
 </script>
 
 <template>
-<div id="sdr-radio-card" class="sdr-radio-card" role="group" :aria-label="t('Local RTL-SDR receiver')">
+<div id="sdr-radio-card" class="sdr-radio-card" role="group" :aria-label="t('Local SDR receiver')">
   <div class="sdr-radio-heading">
-    <strong>{{ t('LOCAL RTL-SDR') }}</strong>
+    <strong>{{ t('LOCAL SDR') }}</strong>
     <span id="sdr-connection-state" v-class-toggle="{ active: sdr?.connectionActive }">{{ sdr ? sdr.connectionLabel : 'NO USB' }}</span>
   </div>
   <p>{{ t('Chrome/Edge · WebUSB · one local tuner shared by FM and the Local ADS-B layer.') }}</p>
+  <div class="sdr-gain-row">
+    <label for="sdr-receiver-select">{{ t('Receiver') }}</label>
+    <UiSelect class="gev-field" id="sdr-receiver-select" hold :model-value="sdr?.receiverKind ?? 'rtl'" @update:model-value="act('selectSdrReceiver', $event)" :disabled="sdr?.receiverDisabled ?? true">
+      <option value="rtl" translate="no">RTL-SDR</option>
+      <option value="hackrf" translate="no">HackRF One</option>
+    </UiSelect>
+  </div>
   <div class="sdr-radio-actions">
     <UiButton id="sdr-connect-btn" @click="act('toggleSdrConnection')" class="panel-layer-toggle" :pressed="sdr?.connectPressed ?? false" pressed-class="active" :disabled="sdr?.connectDisabled">{{ sdr ? sdr.connectLabel : t('CONNECT') }}</UiButton>
     <UiButton id="sdr-locate-btn" @click="act('locateSdr')" v-class-toggle="{ active: sdr?.locateActive }" :title="t('Use your location for faster ADS-B position decoding')" :disabled="sdr?.locateDisabled">{{ sdr ? sdr.locateLabel : t('LOCATE') }}</UiButton>
-    <UiButton id="sdr-change-device-btn" @click="act('changeSdrDevice')" :title="t('Choose a different RTL-SDR or receiver channel')" :disabled="sdr?.changeDeviceDisabled">{{ t('CHANGE DEVICE') }}</UiButton>
+    <UiButton id="sdr-change-device-btn" @click="act('changeSdrDevice')" :title="t('Choose a different SDR or receiver channel')" :disabled="sdr?.changeDeviceDisabled">{{ t('CHANGE DEVICE') }}</UiButton>
   </div>
-  <div class="sdr-mode-row" role="group" :aria-label="t('RTL-SDR receiver mode')">
+  <div class="sdr-mode-row" role="group" :aria-label="t('SDR receiver mode')">
     <UiButton id="sdr-mode-fm-btn" @click="act('setSdrMode', 'fm')" :pressed="sdr ? sdr.fmActive : true" pressed-class="active" :disabled="sdr?.modeDisabled" translate="no">FM</UiButton>
     <UiButton id="sdr-mode-adsb-btn" @click="act('setSdrMode', 'adsb')" :pressed="sdr?.adsbActive ?? false" pressed-class="active" :disabled="sdr?.modeDisabled" translate="no">ADS-B · 1090</UiButton>
   </div>
-  <div class="sdr-gain-row">
+  <div v-if="sdr?.receiverKind !== 'hackrf'" class="sdr-gain-row">
     <label for="sdr-gain-select">{{ t('GAIN') }}</label>
     <UiSelect class="gev-field" id="sdr-gain-select" hold :model-value="sdr ? sdr.gain : 'auto'" @update:model-value="act('setSdrGain', $event)" :aria-label="t('RTL-SDR tuner gain for the current mode')" :disabled="sdr?.gainDisabled">
       <option value="auto">{{ t('AUTO') }}</option>
       <option v-for="gain in GAINS" :key="gain" :value="gain" translate="no">{{ localSdrGainOptionLabel(gain) }}</option>
     </UiSelect>
   </div>
+  <template v-else>
+    <div v-for="(steps, stage) in HACKRF_GAIN_STEPS_DB" :key="stage" class="sdr-gain-row">
+      <label :for="'sdr-hackrf-' + stage" translate="no">{{ stage.toUpperCase() }}</label>
+      <UiSelect class="gev-field" :id="'sdr-hackrf-' + stage" hold :model-value="sdr.hackrfGain?.[stage]" @update:model-value="act('setHackrfGain', stage, $event)" :disabled="sdr.gainDisabled">
+        <option v-for="gain in steps" :key="gain" :value="gain" translate="no">{{ localSdrGainOptionLabel(gain) }}</option>
+      </UiSelect>
+    </div>
+    <div class="sdr-gain-row">
+      <label for="sdr-hackrf-amp" translate="no">AMP</label>
+      <UiSelect class="gev-field" id="sdr-hackrf-amp" hold :model-value="sdr.hackrfGain?.amp ? 'on' : 'off'" @update:model-value="act('setHackrfGain', 'amp', $event === 'on')" :disabled="sdr.gainDisabled">
+        <option value="off">{{ t('OFF') }}</option>
+        <option value="on">{{ t('ON') }}</option>
+      </UiSelect>
+    </div>
+  </template>
   <div id="sdr-adsb-stats" class="sdr-adsb-stats" role="status" aria-live="off" :hidden="sdr ? sdr.statsHidden : true">
     <span><output id="sdr-stat-rate">{{ sdr ? sdr.stats.rate : '--' }}</output> <span>{{ t('MSG/S') }}</span></span>
     <span><output id="sdr-stat-heard">{{ sdr ? sdr.stats.heard : '0' }}</output> <span>{{ t('HEARD') }}</span></span>
@@ -66,7 +88,7 @@ const tune = () => act('tuneSdr', frequency.value.value);
     <UiSlider id="sdr-volume" hold @update:model-value="act('setSdrVolume', $event)" min="0" max="100" :aria-label="t('Local SDR volume')" :disabled="sdr?.volumeDisabled" :model-value="sdr ? sdr.volume : 80" />
     <output id="sdr-volume-value" class="gev-slider-value" for="sdr-volume">{{ sdr ? sdr.volumeText : '80%' }}</output>
   </label>
-  <div id="sdr-status" class="radio-playback-state" :class="{ error: sdr?.statusError }" role="status" aria-live="polite">{{ sdr ? sdr.statusText : t('Connect an RTL-SDR to begin.') }}</div>
+  <div id="sdr-status" class="radio-playback-state" :class="{ error: sdr?.statusError }" role="status" aria-live="polite">{{ sdr ? sdr.statusText : t('Connect an SDR receiver to begin.') }}</div>
   <div id="sdr-feed-status" class="sdr-feed-status" role="status" aria-live="off" :hidden="sdr ? sdr.feedLine === null : true">{{ sdr?.feedLine ?? '' }}</div>
 </div>
 </template>

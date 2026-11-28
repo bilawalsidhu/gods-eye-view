@@ -127,6 +127,25 @@ test('preserves a Mode S frame split across consecutive USB blocks', () => {
   assert.deepEqual(decoder.extract(iq.slice(300).buffer, 2_000_000), []);
 });
 
+test('a DC-offset HackRF block decodes once its IQ mean is removed', () => {
+  const bytes = fromHex('8D4840D6202CC371C32CE0576098');
+  const iq = new Uint8Array(32_768 * 2);
+  for (let sample = 0; sample < 32_768; sample += 1) {
+    iq[sample * 2] = 112;
+    iq[sample * 2 + 1] = 128;
+  }
+  // Pulses sit only 16 above an offset floor the fixed 127.5 centre misreads.
+  iq.set(
+    new Uint8Array(synthesizeIq(bytes, { floor: 112, high: 128 })),
+    1_000 * 2,
+  );
+  assert.deepEqual(extractAdsbMessages(iq.buffer, 2_000_000), []);
+  assert.deepEqual(
+    extractAdsbMessages(iq.buffer, 2_000_000, { removeDc: true }),
+    [bytes],
+  );
+});
+
 test('rejects corrupt frames and unsupported sample rates', () => {
   const bytes = fromHex('8D4840D6202CC371C32CE0576098');
   bytes[5] ^= 0x01;

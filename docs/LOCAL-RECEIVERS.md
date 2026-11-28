@@ -5,7 +5,7 @@ inputs, and it can use both at once.
 
 | Input        | What it is                                                                                                                          | Bands                |
 | ------------ | ----------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
-| Browser SDR  | A USB RTL-SDR opened by the browser through WebUSB (Radio panel, Local RTL-SDR card). Decoding runs in the page.                   | 1090 MHz             |
+| Browser SDR  | An RTL-SDR or HackRF One opened through WebUSB (Radio panel, Local SDR card). Decoding runs in the page.                             | 1090 MHz             |
 | Decoder feed | The `aircraft.json` served by a decoder you run: dump1090-fa, readsb or tar1090 (1090 MHz), or dump978-fa + skyaware978 (978 MHz). | 1090 MHz, 978 MHz UAT |
 
 Aircraft from both inputs are merged by ICAO address. The newest position
@@ -20,8 +20,10 @@ of the public one; both markers are drawn on purpose.
 
 ## Which to use
 
-- **One plain RTL-SDR dongle, desktop Chrome or Edge:** use the browser SDR.
-  Nothing else to install.
+- **An RTL-SDR or HackRF One, desktop Chrome or Edge:** use the browser SDR.
+  Open **Radio → Local SDR**, choose the receiver and **ADS-B · 1090**, then
+  press **CONNECT**. Nothing else to install. On HackRF One, **LNA**, **VGA**
+  and **AMP** can be changed during reception.
 - **A dual-band board, a Raspberry Pi feeder, or a dongle already used by a
   decoder:** use a decoder feed. A USB dongle can be opened by only one program
   at a time, so a dongle that dump1090 or dump978 owns cannot also be opened by
@@ -50,7 +52,7 @@ An entry that breaks a rule is logged when the server starts, shown as
 The server reads every feed about once a second while the Local ADS-B layer is
 on. A feed is `live`, `stale` (its own `now` is more than 10 s old, usually a
 stopped decoder), `unreachable` or `invalid`. The Layers panel row and the
-Local RTL-SDR card show these states.
+Local SDR card show these states.
 
 ## Example: dump1090-fa and dump978-fa on macOS or Linux
 

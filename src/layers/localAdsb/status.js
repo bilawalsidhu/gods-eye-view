@@ -106,7 +106,8 @@ export function localAdsbStatus({ receiver, feedState, heard }) {
   const source = usbActive ? COMBINED_SOURCE : FEED_SOURCE;
   const live = feedState.feeds.filter((feed) => feed.status === 'live');
   const problems = [describeFeedProblems(feedState.feeds)].filter(Boolean);
-  if (usbActive && receiver.status === 'error') problems.push(msg('USB error'));
+  if (receiver.mode === 'adsb' && receiver.status === 'error')
+    problems.push(msg('USB error'));
   const rate =
     usbActive &&
     receiver.status !== 'error' &&

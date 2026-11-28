@@ -9,7 +9,7 @@ import { useRadioStore } from './stores/radio.js';
 import { applicationPinia } from './vueRuntime.js';
 
 /**
- * Local RTL-SDR card in the Radio panel.
+ * Local SDR card in the Radio panel.
  *
  * Answers the card's controls and owns its receiver/radio subscriptions; the
  * Radio view renders the card from what this publishes (`gev-radio` store)
@@ -21,7 +21,7 @@ export class LocalSdrControls {
   /**
    * @param {object} options
    * @param {Document} options.document Document containing the card.
-   * @param {object} options.receiver Local RTL-SDR session.
+   * @param {object} options.receiver Local SDR session.
    * @param {object} [options.feeds] Decoder-feed session (getState,
    *   subscribe, probe); the card shows one read-only line when the server
    *   has feeds configured.
@@ -85,6 +85,8 @@ export class LocalSdrControls {
   /** What the card's controls ask for, by the names the view acts with. */
   _actions() {
     return {
+      selectSdrReceiver: (receiverKind) =>
+        this.receiver.selectReceiver(receiverKind),
       toggleSdrConnection: async () => {
         const before = this.receiver.getState();
         if (before.connected) {
@@ -114,6 +116,9 @@ export class LocalSdrControls {
       },
       setSdrGain: (value) => {
         void this.receiver.setGain(value);
+      },
+      setHackrfGain: (stage, value) => {
+        void this.receiver.setHackrfGain(stage, value);
       },
       tuneSdr: (value) => {
         const mhz = Number(value);
@@ -186,7 +191,7 @@ export class LocalSdrControls {
       feedLine,
     });
     // Only structural changes move the rail; per-block text updates do not.
-    const layoutKey = `${view.statsHidden}|${view.connectionActive}|${feedLine === null}`;
+    const layoutKey = `${view.receiverKind}|${view.statsHidden}|${view.connectionActive}|${feedLine === null}`;
     if (layoutKey !== this._layoutKey) {
       this._layoutKey = layoutKey;
       this.actions.scheduleLayout?.();

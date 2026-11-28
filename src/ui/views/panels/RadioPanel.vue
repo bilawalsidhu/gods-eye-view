@@ -14,7 +14,7 @@ import UiSelect from '../../kit/UiSelect.js';
 // The Radio panel inside Context. RadioControls presents the directory row,
 // station card, transport, volume and playback line and publishes them;
 // until it does, the panel shows its initial markup. RadioTuner renders the
-// directory tuner and SdrCard the local RTL-SDR card. Its controls call
+// directory tuner and SdrCard the Local SDR card. Its controls call
 // RadioControls through the store.
 const store = useRadioStore();
 const { act } = store;

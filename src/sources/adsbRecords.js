@@ -3,7 +3,7 @@
  *
  * Every local receiver path produces the same plain record, so the Local ADS-B
  * renderer does not care whether the frames were demodulated in this browser
- * from a WebUSB RTL-SDR or decoded by a dump1090/readsb/dump978 process whose
+ * from a WebUSB RTL-SDR or HackRF One or decoded by a dump1090/readsb/dump978 process whose
  * `aircraft.json` the server reads as a decoder feed:
  *
  * {

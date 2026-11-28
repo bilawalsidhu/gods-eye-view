@@ -1,5 +1,5 @@
 /**
- * WebUSB receiver selection for the local RTL-SDR.
+ * WebUSB receiver selection for local SDRs.
  *
  * Dual-channel boards such as the Nooelec FlyCatcher enumerate as two USB
  * devices (an ADS-B 1090 MHz channel and a UAT 978 MHz channel) that can share
@@ -9,13 +9,34 @@
  */
 
 export const SDR_DEVICE_STORAGE_KEY = 'gev:sdr:device:v1';
+export const HACKRF_DEVICE_STORAGE_KEY = 'gev:sdr:hackrf:device:v1';
 /** RTL2832U vendor/product pairs requested by the WebUSB RTL-SDR provider. */
 export const RTL_SDR_USB_FILTERS = Object.freeze([
   Object.freeze({ vendorId: 0x0bda, productId: 0x2832 }),
   Object.freeze({ vendorId: 0x0bda, productId: 0x2838 }),
 ]);
+/** HackRF One vendor/product pair requested through WebUSB. */
+export const HACKRF_ONE_USB_FILTERS = Object.freeze([
+  Object.freeze({ vendorId: 0x1d50, productId: 0x6089 }),
+]);
 const ADSB_PRODUCT_PATTERN = /ads.?b|1090/i;
 const NON_FM_PRODUCT_PATTERN = /ads.?b|1090|uat|978/i;
+
+/**
+ * Reject once `ms` elapses, otherwise resolve or reject with the operation.
+ * The USB operation keeps running; only closing the device aborts it.
+ */
+export function withUsbDeadline(promise, ms, message) {
+  let timer = null;
+  const deadline = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      const error = new Error(message);
+      error.name = 'TimeoutError';
+      reject(error);
+    }, ms);
+  });
+  return Promise.race([promise, deadline]).finally(() => clearTimeout(timer));
+}
 
 function text(value) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
@@ -118,14 +139,13 @@ export function selectAuthorizedSdrDevice(
 /**
  * Per-mode remembered receiver identities in browser storage.
  * @param {Storage|null} storage Browser storage or a test double.
+ * @param {string} [key] Storage key for the receiver family.
  * @returns {{get(mode:string):object|null, set(mode:string, device:object):void}}
  */
-export function createSdrDeviceMemory(storage) {
+export function createSdrDeviceMemory(storage, key = SDR_DEVICE_STORAGE_KEY) {
   const read = () => {
     try {
-      const value = JSON.parse(
-        storage?.getItem?.(SDR_DEVICE_STORAGE_KEY) || 'null',
-      );
+      const value = JSON.parse(storage?.getItem?.(key) || 'null');
       return value && typeof value === 'object' ? value : {};
     } catch {
       return {};
@@ -140,7 +160,7 @@ export function createSdrDeviceMemory(storage) {
       if (!identity) return;
       try {
         storage?.setItem?.(
-          SDR_DEVICE_STORAGE_KEY,
+          key,
           JSON.stringify({ ...read(), [mode]: identity }),
         );
       } catch {
@@ -151,7 +171,7 @@ export function createSdrDeviceMemory(storage) {
 }
 
 /**
- * Wrap `navigator.usb` so the RTL-SDR provider reuses an authorized receiver
+ * Wrap `navigator.usb` so a receiver provider reuses an authorized device
  * for the current mode before asking WebUSB to show its picker.
  * @param {USB} webUsb Browser WebUSB object.
  * @param {object} [options]
@@ -160,6 +180,7 @@ export function createSdrDeviceMemory(storage) {
  * @param {() => boolean} [options.consumeForcePicker] Returns true once when
  *   the user asked to choose a different device.
  * @param {(device:object) => void} [options.onSelected] Selected device hook.
+ * @param {(error:unknown) => unknown} [options.mapPickerError] Map errors from the native picker.
  * @returns {USB} Proxy exposing the same WebUSB surface.
  */
 export function createRememberingWebUsb(
@@ -169,6 +190,7 @@ export function createRememberingWebUsb(
     memory = null,
     consumeForcePicker = () => false,
     onSelected = () => {},
+    mapPickerError = (error) => error,
   } = {},
 ) {
   if (!webUsb?.getDevices || !webUsb?.requestDevice) return webUsb;
@@ -189,7 +211,11 @@ export function createRememberingWebUsb(
           if (!device) {
             // Only an explicit picker choice is remembered; automatic
             // selection is re-derived from the preference on every connect.
-            device = await target.requestDevice(options);
+            try {
+              device = await target.requestDevice(options);
+            } catch (error) {
+              throw mapPickerError(error);
+            }
             if (device) memory?.set(mode, device);
           }
           if (device) onSelected(device);

@@ -61,3 +61,39 @@ test('directional FM seek passes over the skipped channel to the next station', 
   assert.equal(seek(98_725_000), 99_100_000);
   assert.equal(seek(98_724_999), 98_800_000);
 });
+
+function biasedIq(stationOffset, sampleRate) {
+  const iq = new Uint8Array(2_048 * 2);
+  for (let index = 0; index < iq.length / 2; index += 1) {
+    const time = index / sampleRate;
+    // A modulated station still has energy in its sidebands when its carrier
+    // coincides with the DC spike. Include the offset on both I and Q.
+    const phase =
+      2 * Math.PI * (stationOffset ?? 0) * time +
+      2 * Math.sin(2 * Math.PI * 12_000 * time);
+    const amplitude = stationOffset === null ? 0 : 65;
+    iq[2 * index] = Math.round(139 + amplitude * Math.cos(phase));
+    iq[2 * index + 1] = Math.round(119 + amplitude * Math.sin(phase));
+  }
+  return iq.buffer;
+}
+
+test('FM seek removes DC-only peaks and keeps a modulated station at or away from the centre', () => {
+  const sampleRate = 2_048_000;
+  const origin = 98_500_000;
+  for (const direction of [1, -1]) {
+    const center = origin + direction * 1_200_000;
+    const seek = (bins) =>
+      findDirectionalFmPeak(bins, center, sampleRate, direction, origin);
+    const empty = biasedIq(null, sampleRate);
+    assert.equal(seek(analyzeSpectrum(empty))?.frequency, center);
+    assert.equal(seek(analyzeSpectrum(empty, { removeDc: true })), null);
+
+    for (const offset of [0, direction * 300_000]) {
+      const bins = analyzeSpectrum(biasedIq(offset, sampleRate), {
+        removeDc: true,
+      });
+      assert.equal(seek(bins)?.frequency, center + offset);
+    }
+  }
+});

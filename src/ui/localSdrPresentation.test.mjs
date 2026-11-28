@@ -14,7 +14,7 @@ const idle = Object.freeze({
   webUsbSupported: true,
   connected: false,
   status: 'idle',
-  message: 'Connect an RTL-SDR to begin.',
+  message: 'Connect an SDR receiver to begin.',
   mode: 'fm',
   frequencyHz: 98_500_000,
   volume: 0.8,
@@ -36,7 +36,7 @@ const idle = Object.freeze({
 
 test('an idle card invites a connection and hides receiver stats', () => {
   const view = localSdrCardView(idle);
-  assert.equal(view.statusText, 'Connect an RTL-SDR to begin.');
+  assert.equal(view.statusText, 'Connect an SDR receiver to begin.');
   assert.equal(view.connectLabel, 'CONNECT');
   assert.equal(view.connectDisabled, false);
   assert.equal(view.connectionLabel, 'IDLE');

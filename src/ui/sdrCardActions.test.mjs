@@ -1,10 +1,10 @@
-// src/ui/sdrCardActions.test.mjs — the local RTL-SDR card's controls call
+// src/ui/sdrCardActions.test.mjs — the Local SDR card's controls call
 // LocalSdrControls through the radio store, and its gain options read in the
 // page language with numeric values.
 import '../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createApp } from 'vue';
+import { createApp, nextTick } from 'vue';
 import { createPinia } from 'pinia';
 import { localSdrGainOptionLabel } from './localSdrPresentation.js';
 import { useRadioStore } from './stores/radio.js';
@@ -94,4 +94,49 @@ test('gain options keep numeric values and read as decibels', (t) => {
   assert.match(options[2].textContent, /^0\.9\sdB$/u);
   assert.equal(options[2].getAttribute('translate'), 'no');
   assert.equal(options.at(-1).value, '49.6');
+});
+
+test('selecting HackRF exposes its three gain stages', async (t) => {
+  const calls = mount(t);
+  const store = useRadioStore();
+  store.publishSdr({ receiverKind: 'rtl', receiverDisabled: false, stats: {} });
+  await nextTick();
+  const receiver = $('sdr-receiver-select');
+  receiver.value = 'hackrf';
+  fire(receiver, 'change');
+  assert.deepEqual(calls, [['selectSdrReceiver', 'hackrf']]);
+  store.publishSdr({
+    ...store.sdr,
+    receiverKind: 'hackrf',
+    receiverDisabled: true,
+    hackrfGain: { lna: 16, vga: 16, amp: false },
+  });
+  await nextTick();
+  assert.equal(receiver.value, 'hackrf');
+  assert.equal(receiver.disabled, true);
+  assert.equal($('sdr-gain-select'), null);
+  assert.deepEqual(
+    Array.from($('sdr-hackrf-lna').options, (option) => Number(option.value)),
+    [0, 8, 16, 24, 32, 40],
+  );
+  assert.deepEqual(
+    Array.from($('sdr-hackrf-vga').options, (option) => Number(option.value)),
+    Array.from({ length: 32 }, (_, step) => step * 2),
+  );
+  for (const [stage, value] of [
+    ['lna', '24'],
+    ['vga', '30'],
+    ['amp', 'on'],
+    ['amp', 'off'],
+  ]) {
+    const control = $('sdr-hackrf-' + stage);
+    control.value = value;
+    fire(control, 'change');
+  }
+  assert.deepEqual(calls.slice(1), [
+    ['setHackrfGain', 'lna', '24'],
+    ['setHackrfGain', 'vga', '30'],
+    ['setHackrfGain', 'amp', true],
+    ['setHackrfGain', 'amp', false],
+  ]);
 });

@@ -1259,7 +1259,7 @@ html:not([lang='en']) .data-row-list-text {
 .data-toggle-slider-tick:first-child {
   transform: none;
 }
-/* ── Local RTL-SDR card (FM + Local ADS-B receiver) ── */
+/* ── Local SDR card (FM + Local ADS-B receiver) ── */
 .sdr-radio-card {
   display: grid;
   gap: 7px;

@@ -1,3 +1,5 @@
+const MAX_SPECTRUM_BINS = 2_048;
+
 function nextPowerOfTwo(value) {
   return 2 ** Math.floor(Math.log2(Math.max(2, value)));
 }
@@ -39,17 +41,41 @@ function fft(real, imag) {
   }
 }
 
-/** Create an FFT-shifted dB power spectrum from interleaved unsigned 8-bit IQ. */
-export function analyzeSpectrum(buffer, maxBins = 2_048) {
+/**
+ * Create an FFT-shifted dB power spectrum from interleaved unsigned 8-bit IQ.
+ * @param {ArrayBuffer} buffer Interleaved I and Q samples.
+ * @param {{removeDc?: boolean}} [options]
+ * @returns {Float32Array} FFT bins in dB.
+ */
+export function analyzeSpectrum(buffer, { removeDc = false } = {}) {
   const iq = new Uint8Array(buffer);
-  const length = Math.min(nextPowerOfTwo(Math.floor(iq.length / 2)), maxBins);
+  const length = Math.min(
+    nextPowerOfTwo(Math.floor(iq.length / 2)),
+    MAX_SPECTRUM_BINS,
+  );
   const real = new Float32Array(length);
   const imag = new Float32Array(length);
   const sampleOffset = Math.max(0, Math.floor((iq.length / 2 - length) / 2));
+  let centerI = 127.5;
+  let centerQ = 127.5;
+  if (removeDc) {
+    // Remove the DC of this FFT window before applying the taper, which would
+    // otherwise spread the centre spike into neighbouring bins.
+    let sumI = 0;
+    let sumQ = 0;
+    for (let index = 0; index < length; index += 1) {
+      const sample = (sampleOffset + index) * 2;
+      sumI += iq[sample];
+      sumQ += iq[sample + 1];
+    }
+    centerI = sumI / length;
+    centerQ = sumQ / length;
+  }
   for (let index = 0; index < length; index += 1) {
     const window = 0.5 - 0.5 * Math.cos((2 * Math.PI * index) / (length - 1));
-    real[index] = ((iq[(sampleOffset + index) * 2] - 127.5) / 128) * window;
-    imag[index] = ((iq[(sampleOffset + index) * 2 + 1] - 127.5) / 128) * window;
+    const sample = (sampleOffset + index) * 2;
+    real[index] = ((iq[sample] - centerI) / 128) * window;
+    imag[index] = ((iq[sample + 1] - centerQ) / 128) * window;
   }
   fft(real, imag);
   const bins = new Float32Array(length);

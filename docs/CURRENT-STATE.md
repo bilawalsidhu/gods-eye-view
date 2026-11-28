@@ -9819,21 +9819,35 @@ and warm refreshes beyond seven days, and retry/backoff recovery both with and
 without configured countries. `node scripts/qa-radio.mjs --url http://localhost:4173` covers the existing
 750-station browser presentation and playback contract.
 
-## Local RTL-SDR and Local ADS-B
+## Local SDR and Local ADS-B
 
-The Radio panel holds a Local RTL-SDR card below internet radio. One browser
-WebUSB session (`src/sdr/controller.js`) drives a USB RTL-SDR in desktop Chrome
-or Edge on localhost or HTTPS; nothing opens until CONNECT. Demodulation and
-Mode S decoding run in a worker; FM audio plays through an audio worklet.
+The Radio panel holds a Local SDR card below internet radio. Its receiver
+selector offers RTL-SDR and HackRF One. One browser WebUSB session
+(`src/sdr/controller.js`) opens the selected receiver when the user presses
+CONNECT in desktop Chrome or Edge on localhost or HTTPS. The HackRF One
+receive adapter (`src/sdr/hackrfOne.js`) converts signed IQ bytes to the
+unsigned IQ format used by the shared worker. Demodulation and Mode S decoding
+run in that worker. FM audio plays through an audio worklet.
 Local FM and internet radio are one listening surface: starting local FM stops
 internet-radio playback, and starting internet radio stops local FM. ADS-B
 reception does not interrupt internet radio.
 
+- **Receiver.** Each page load starts with RTL-SDR selected. The selector is
+  locked while connecting, receiving or switching modes. On HackRF One, a
+  failed FM retune, mode switch or gain change reports the error and closes
+  the receiver. A HackRF USB control request that stalls times out after five
+  seconds. Each HackRF configuration first turns reception and antenna power
+  off, and closing turns AMP off. On RTL-SDR the same three failures report
+  the error and keep the receiver open.
 - **FM seek.** Seeking wraps across 87.5–108 MHz, covers both band edges and
   skips the starting station. Spectra carry a decoder epoch, so a retune or mode
-  change rejects earlier output. A failed scan retune stops seeking. This
-  integrates Aditya's (@Rohilalala) contribution in #1174; it does not change
-  the peak-selection algorithm or guarantee that a final station retune succeeds.
+  change rejects earlier output. HackRF One seek subtracts the IQ mean before
+  the FFT to suppress the centre spike. HackRF One ADS-B subtracts each
+  block's IQ mean before measuring pulse power. During FM reception, HackRF retunes
+  write only the frequency, then discard buffered IQ before resetting the
+  decoder. Manual tuning and failed scan retunes stop seeking. A station is
+  reported as found after its final retune succeeds. FM seek integrates
+  Aditya's (@Rohilalala) contribution in #1174.
 - **Streaming and playback.** Four ordered USB reads keep input available while
   the page handles other work; control changes drain those reads before touching
   the receiver. The worker must finish loading before reads start. Decoder work
@@ -9850,9 +9864,13 @@ reception does not interrupt internet radio.
   selecting FM disables it.
   Enabling the layer switches the receiver to ADS-B; disabling it leaves the
   receiver mode unchanged.
-- **Gain.** AUTO (tuner AGC) or a manual R820T step from 0.0 to 49.6 dB,
+- **RTL-SDR gain.** AUTO (tuner AGC) or a manual R820T step from 0.0 to 49.6 dB,
   stored per mode in `gev:sdr:gain:v1`. Defaults: ADS-B 28.0 dB, FM AUTO.
   Changes apply to the open receiver without reconnecting.
+- **HackRF One gain.** LNA from 0 to 40 dB in 8 dB steps, VGA from 0 to 62 dB
+  in 2 dB steps, and AMP on or off. The defaults are 16 dB LNA, 16 dB VGA and
+  AMP off. Changes apply during reception. FM and ADS-B share the settings,
+  which the browser saves in `gev:sdr:hackrf:gain:v1`.
 - **Receiver stats (ADS-B).** CRC-valid messages per second, aircraft heard,
   aircraft with a fresh position and the IQ level.
 - **Error text.** A receiver error sets two fields (`errorState()` in
@@ -9861,11 +9879,15 @@ reception does not interrupt internet radio.
   `error` (`localAdsbStatus()`, falling back to `message` when a receiver sets
   none); the Layers panel translates it where it shows it.
 - **Devices.** An already-authorized receiver opens without the WebUSB
-  picker. ADS-B prefers a device whose product name matches ADS-B or 1090 (the
-  1090 MHz channel of a dual-channel board); FM avoids ADS-B/UAT channels.
+  picker. For RTL-SDR, ADS-B prefers a device whose product name matches ADS-B
+  or 1090 (the 1090 MHz channel of a dual-channel board). FM avoids ADS-B/UAT
+  channels. With a receiver open, a mode switch moves to a different
+  authorized receiver of the same kind when selection prefers or remembers one
+  for the new mode.
   A device chosen in the picker is remembered per mode by vendor, product,
-  product name and serial in `gev:sdr:device:v1`. CHANGE DEVICE reopens the
-  picker. LOCATE uses browser location for receiver-relative CPR decoding.
+  product name and serial. RTL-SDR uses `gev:sdr:device:v1` and HackRF One uses
+  `gev:sdr:hackrf:device:v1`. CHANGE DEVICE reopens the picker for the selected
+  receiver type. LOCATE uses browser location for receiver-relative CPR decoding.
 
 The Local ADS-B layer (`local-adsb`, `src/layers/localAdsb/`) is off by default
 and registered as local-only: it never enters share links or stored layer
@@ -9956,7 +9978,7 @@ addresses and upstream error text stay on the server. Unconfigured, it returns
 
 The browser session (`src/layers/localAdsb/feeds.js`) polls the route every
 second only while the layer is enabled and only while the route reports
-`configured`; the Local RTL-SDR card makes one probe request at startup to show
+`configured`; the Local SDR card makes one probe request at startup to show
 its read-only "Decoder feeds: 1090 live · 978 live" line. Feed records are
 rebased to the browser clock and kept up to 60 s after their last message.
 `mergeLocalAdsbRecords` merges both inputs by ICAO, keeping the newest position

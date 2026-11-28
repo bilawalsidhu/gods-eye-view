@@ -1,13 +1,19 @@
 import { RTL2832U_Provider } from '@jtarrio/webrtlsdr/rtlsdr.js';
 import { findDirectionalFmPeak } from './spectrum.js';
+import { openHackrfOne } from './hackrfOne.js';
 import {
   SDR_GAIN_DEFAULTS,
+  normalizeHackrfGain,
   normalizeSdrGain,
+  readHackrfGainSettings,
   readSdrGainSettings,
   tunerGainValue,
+  writeHackrfGainSettings,
   writeSdrGainSettings,
 } from './gain.js';
 import {
+  HACKRF_DEVICE_STORAGE_KEY,
+  HACKRF_ONE_USB_FILTERS,
   RTL_SDR_USB_FILTERS,
   createRememberingWebUsb,
   createSdrDeviceMemory,
@@ -15,6 +21,7 @@ import {
   sdrDeviceIdentity,
   sdrDeviceLabel,
   selectAuthorizedSdrDevice,
+  withUsbDeadline,
 } from './usbDevices.js';
 import { summarizeLocalAdsb } from '../sources/adsbRecords.js';
 import {
@@ -42,8 +49,8 @@ const READ_SAMPLE_COUNT = 32_768;
 // short of the configured rate; queued reads keep a transfer pending meanwhile.
 const READ_PIPELINE_DEPTH = 4;
 const RATE_WINDOW_MS = 1_000;
-// A bulk read that has not completed in this long is treated as a stalled
-// USB transfer: the session is torn down instead of waiting forever.
+// Bulk reads, HackRF control requests and the buffer reset after an FM retune
+// share one USB stall deadline.
 const SDR_READ_STALL_MS = 5_000;
 // Decoder admission. Every block sent to the worker is numbered and must be
 // acknowledged; past these bounds the receiver stops with an overload error
@@ -121,7 +128,7 @@ function unwrapUsb(usbDevice) {
   return (usbDevice && GUARDED_USB_DEVICES.get(usbDevice)) || usbDevice;
 }
 
-/** The WebUSB `USBDevice` under an opened RTL2832U, when reachable. */
+/** The raw WebUSB `USBDevice` underneath the receiver, when reachable. */
 function rawUsbDevice(device, provider) {
   return unwrapUsb(device?.com?.device || provider?.device || null);
 }
@@ -137,7 +144,7 @@ async function forceCloseUsb(usbDevice) {
 }
 
 function closedUsbError() {
-  return Promise.reject(new Error('RTL-SDR session was closed'));
+  return Promise.reject(new Error('SDR session was closed'));
 }
 
 /**
@@ -161,8 +168,8 @@ function guardUsbDevice(usbDevice, isFenced) {
 
 /**
  * Wrap a WebUSB entry point for one acquisition: every `USBDevice` it hands
- * out is reported to `onDevice` and handed on guarded by `isFenced`. The
- * RTL-SDR provider opens and initializes the device inside `get()`, so this
+ * out is reported to `onDevice` and handed on guarded by `isFenced`. Each
+ * receiver provider opens and initializes its device inside `get()`, so this
  * is the only way to reach a device whose initialization failed before
  * `get()` returned it, and the only way to stop a selection that resolves
  * after the acquisition was abandoned from initializing that device.
@@ -177,8 +184,7 @@ function captureRequestedUsb(webUsb, { onDevice, isFenced }) {
           if (!usbDevice) return usbDevice;
           // A late selection belongs to no session: the device it names may
           // already be open for a newer one.
-          if (isFenced())
-            throw new Error('RTL-SDR device selection was abandoned');
+          if (isFenced()) throw new Error('SDR device selection was abandoned');
           onDevice(usbDevice);
           return guardUsbDevice(usbDevice, isFenced);
         };
@@ -202,12 +208,13 @@ const CLOSED_USB_DEVICE = new Proxy(
 );
 
 /**
- * Detach an abandoned RTL2832U from its WebUSB device. WebUSB hands a later
+ * Detach an abandoned receiver from its WebUSB device. WebUSB hands a later
  * session the SAME `USBDevice` object, so a graceful close (or any other
  * transfer) of the old session that resumes after we gave up on it would
  * otherwise act on the new session's open device.
  */
 function fenceDevice(device) {
+  device?.fenceUsb?.();
   const com = device?.com;
   if (com && typeof com === 'object' && 'device' in com) {
     try {
@@ -265,19 +272,6 @@ function usbGateIdle(gate) {
   return new Promise((resolve) => gate.idle.push(resolve));
 }
 
-/** Resolve with the operation's outcome, or reject once `ms` elapses. */
-function withDeadline(promise, ms, message) {
-  let timer = null;
-  const deadline = new Promise((_, reject) => {
-    timer = setTimeout(() => {
-      const error = new Error(message);
-      error.name = 'TimeoutError';
-      reject(error);
-    }, ms);
-  });
-  return Promise.race([promise, deadline]).finally(() => clearTimeout(timer));
-}
-
 function publicAircraft(aircraft) {
   return Array.isArray(aircraft) ? aircraft.map((entry) => ({ ...entry })) : [];
 }
@@ -289,23 +283,83 @@ function clampFmFrequency(value) {
   );
 }
 
-/** A failed connection in English; errorState() shows it translated. */
-function describeConnectionError(error) {
+function idleReceiverMessage(webUsbSupported) {
+  return webUsbSupported
+    ? t('Connect an SDR receiver to begin.')
+    : t('WebUSB is unavailable in this browser');
+}
+
+const RECEIVER_MESSAGES = {
+  rtl: {
+    waiting: msg('Waiting for an RTL-SDR device…'),
+    noDevice: msg('No RTL-SDR device selected'),
+    accessFailed: msg(
+      'RTL-SDR access failed; close other SDR apps and check USB permissions',
+    ),
+    connectionFailed: msg('RTL-SDR connection failed'),
+    gainFailed: msg('RTL-SDR gain change failed'),
+    streamStopped: msg('RTL-SDR sample stream stopped'),
+    disconnected: msg('RTL-SDR disconnected'),
+  },
+  hackrf: {
+    waiting: msg('Waiting for a HackRF One…'),
+    noDevice: msg('No HackRF One device selected'),
+    accessFailed: msg(
+      'HackRF One access failed; close other SDR apps and check USB permissions',
+    ),
+    connectionFailed: msg('HackRF One connection failed'),
+    gainFailed: msg('HackRF One gain change failed'),
+    streamStopped: msg('HackRF One sample stream stopped'),
+    disconnected: msg('HackRF One disconnected'),
+  },
+};
+const AUDIO_SUSPENDED_ON_CONNECT = msg(
+  'Browser audio is suspended; press Connect again to resume it',
+);
+const AUDIO_SUSPENDED_ON_MODE_SWITCH = msg(
+  'Browser audio is suspended; select FM again to resume it',
+);
+
+class UsbPickerCancelled extends Error {}
+
+/**
+ * English text for a failed receiver operation; errorState() shows it
+ * translated. An unrecognized RTL-SDR error keeps its own text; on HackRF
+ * One it becomes `fallback`, or the connection failure.
+ */
+function describeConnectionError(error, receiverKind, fallback) {
+  const receiver = RECEIVER_MESSAGES[receiverKind];
   const message = String(error?.message || error || '').trim();
-  if (/No device was selected|NotFoundError/i.test(message))
-    return msg('No RTL-SDR device selected');
+  if (receiverKind === 'hackrf') {
+    if (error instanceof UsbPickerCancelled) return receiver.noDevice;
+    if (
+      error?.name === 'NotFoundError' ||
+      /\bdevice (?:was |is )?disconnected\b/i.test(message)
+    )
+      return receiver.disconnected;
+  } else if (
+    error?.name === 'NotFoundError' ||
+    /No device was selected|NotFoundError/i.test(message)
+  ) {
+    // The RTL provider can wrap the picker error in its own RadioError.
+    return receiver.noDevice;
+  }
+  if (
+    message === AUDIO_SUSPENDED_ON_CONNECT ||
+    message === AUDIO_SUSPENDED_ON_MODE_SWITCH
+  )
+    return message;
   if (
     /does not support the WebUSB|usb/i.test(message) &&
     /support/i.test(message)
   ) {
     return msg('WebUSB requires desktop Chrome or Edge on localhost/HTTPS');
   }
-  if (/access|permission|claim|busy/i.test(message)) {
-    return msg(
-      'RTL-SDR access failed; close other SDR apps and check USB permissions',
-    );
-  }
-  return message || msg('RTL-SDR connection failed');
+  if (/access|permission|claim|busy/i.test(message))
+    return receiver.accessFailed;
+  return (
+    (receiverKind === 'rtl' && message) || fallback || receiver.connectionFailed
+  );
 }
 
 /** State fields `_setState` keeps as functions to word again (see _reword). */
@@ -334,7 +388,7 @@ function streamingMessage(mode) {
 }
 
 /**
- * Browser-local RTL-SDR session shared by the FM controls and the Local ADS-B
+ * Browser-local SDR session shared by the FM controls and the Local ADS-B
  * layer. `state.aircraft` holds source-agnostic records from
  * `src/sources/adsbRecords.js`.
  */
@@ -345,7 +399,8 @@ export class SdrController {
    *   Builds the RTL-SDR provider around the selecting WebUSB wrapper.
    * @param {Storage|null} [options.storage] Gain and device preferences.
    * @param {USB|null} [options.webUsb] WebUSB entry point.
-   * @param {number} [options.readStallMs] Deadline for one bulk sample read.
+   * @param {number} [options.readStallMs] Deadline for a bulk read, a HackRF
+   *   control request or the buffer reset after an FM retune.
    * @param {number} [options.closeTimeoutMs] Deadline for a graceful close.
    */
   constructor({
@@ -362,8 +417,14 @@ export class SdrController {
     this._storage = storage;
     this._gainByMode = readSdrGainSettings(storage);
     this._deviceMemory = createSdrDeviceMemory(storage);
+    this._hackrfDeviceMemory = createSdrDeviceMemory(
+      storage,
+      HACKRF_DEVICE_STORAGE_KEY,
+    );
     this.state = {
       webUsbSupported,
+      receiverKind: 'rtl',
+      hackrfGain: readHackrfGainSettings(storage),
       connected: false,
       status: webUsbSupported ? 'idle' : 'unsupported',
       message: '',
@@ -392,9 +453,7 @@ export class SdrController {
       audioLevelDbfs: null,
     };
     this._wording = {
-      message: webUsbSupported
-        ? () => t('Connect an RTL-SDR to begin.')
-        : () => t('WebUSB is unavailable in this browser'),
+      message: () => idleReceiverMessage(webUsbSupported),
       seekMessage: null,
     };
     this.state.message = this._wording.message();
@@ -461,31 +520,63 @@ export class SdrController {
     // Every provider opens its device through the selecting WebUSB wrapper.
     const createProvider =
       providerFactory || ((webusb) => new RTL2832U_Provider({ webusb }));
-    this._providerFactory = ({
-      onUsbDevice = () => {},
-      isFenced = () => false,
-    } = {}) =>
-      createProvider(
-        captureRequestedUsb(
-          createRememberingWebUsb(this._webUsb, {
-            getMode: () => this.state.mode,
-            memory: this._deviceMemory,
-            consumeForcePicker: () => {
-              const force = this._forcePicker;
-              this._forcePicker = false;
-              return force;
-            },
-            onSelected: (device) => {
-              if (!isFenced()) this._deviceIdentity = sdrDeviceIdentity(device);
-            },
-          }),
-          { onDevice: onUsbDevice, isFenced },
-        ),
+    this._providerFactory = ({ receiverKind, onUsbDevice, isFenced }) => {
+      const hackrf = receiverKind === 'hackrf';
+      const webusb = captureRequestedUsb(
+        createRememberingWebUsb(this._webUsb, {
+          getMode: () => this.state.mode,
+          memory: hackrf ? this._hackrfDeviceMemory : this._deviceMemory,
+          consumeForcePicker: () => {
+            const force = this._forcePicker;
+            this._forcePicker = false;
+            return force;
+          },
+          onSelected: (device) => {
+            if (!isFenced()) this._deviceIdentity = sdrDeviceIdentity(device);
+          },
+          mapPickerError: (error) =>
+            hackrf && error?.name === 'NotFoundError'
+              ? new UsbPickerCancelled(error.message, { cause: error })
+              : error,
+        }),
+        { onDevice: onUsbDevice, isFenced },
       );
+      if (!hackrf) return createProvider(webusb);
+      const controlTimeoutMs = this._readStallMs;
+      return {
+        device: null,
+        async get() {
+          this.device = await webusb.requestDevice({
+            filters: HACKRF_ONE_USB_FILTERS,
+          });
+          return openHackrfOne(this.device, { controlTimeoutMs });
+        },
+      };
+    };
     this._sampleWindowStartedAt = 0;
     this._sampleWindowSamples = 0;
     this._messageWindowStartedAt = 0;
     this._messageWindowCount = 0;
+  }
+
+  selectReceiver(receiverKind) {
+    if (
+      this._destroyed ||
+      this._device ||
+      this.state.connected ||
+      this.state.status === 'connecting' ||
+      (receiverKind !== 'rtl' && receiverKind !== 'hackrf') ||
+      receiverKind === this.state.receiverKind
+    )
+      return;
+    this._setState({
+      receiverKind,
+      deviceLabel: null,
+      status: this.state.webUsbSupported ? 'idle' : 'unsupported',
+      errorText: null,
+      seekMessage: null,
+      message: () => idleReceiverMessage(this.state.webUsbSupported),
+    });
   }
 
   getState() {
@@ -893,6 +984,7 @@ export class SdrController {
       mode: this.state.mode,
       sampleRate: this.state.sampleRate,
       location: this.state.receiverLocation,
+      removeDc: this.state.receiverKind === 'hackrf',
     });
   }
 
@@ -1091,26 +1183,36 @@ export class SdrController {
     const device = this._device;
     if (!this._owns(token, device)) return false;
     const owned = await this._queueUsb(async () => {
-      const steps = [
-        () => device.setSampleRate(sampleRate),
-        () => device.setFrequencyCorrection(preset.ppm),
-        () => device.setCenterFrequency(tunedFrequency),
-        () => device.setGain(tunerGainValue(gain)),
-        () => setRtlAgc(device, preset.rtlAgc),
-        () => device.resetBuffer(),
-      ];
-      const results = [];
-      for (const step of steps) {
+      let actualRate = sampleRate;
+      let actualFrequency = tunedFrequency;
+      if (this.state.receiverKind === 'hackrf') {
         if (!this._owns(token, device)) return false;
-        results.push(await step());
+        await device.configure({
+          sampleRate,
+          frequencyHz: tunedFrequency,
+          gain: this.state.hackrfGain,
+        });
+      } else {
+        const steps = [
+          () => device.setSampleRate(sampleRate),
+          () => device.setFrequencyCorrection(preset.ppm),
+          () => device.setCenterFrequency(tunedFrequency),
+          () => device.setGain(tunerGainValue(gain)),
+          () => setRtlAgc(device, preset.rtlAgc),
+          () => device.resetBuffer(),
+        ];
+        const results = [];
+        for (const step of steps) {
+          if (!this._owns(token, device)) return false;
+          results.push(await step());
+        }
+        if (Number.isFinite(results[0])) actualRate = results[0];
+        if (Number.isFinite(results[2])) actualFrequency = results[2];
       }
       if (!this._owns(token, device)) return false;
-      const [actualRate, , actualFrequency] = results;
       this._setState({
-        sampleRate: Number.isFinite(actualRate) ? actualRate : sampleRate,
-        frequencyHz: Number.isFinite(actualFrequency)
-          ? actualFrequency
-          : tunedFrequency,
+        sampleRate: actualRate,
+        frequencyHz: actualFrequency,
         gain,
       });
       return true;
@@ -1133,11 +1235,12 @@ export class SdrController {
       return false;
     }
     if (this._device) return this.setMode(mode);
+    const receiverKind = this.state.receiverKind;
     const token = ++this._sessionToken;
     const superseded = () => this._destroyed || token !== this._sessionToken;
     this._setState({
       status: 'connecting',
-      message: () => t('Waiting for an RTL-SDR device…'),
+      message: () => t(RECEIVER_MESSAGES[receiverKind].waiting),
       errorText: null,
     });
     let acquisition = null;
@@ -1148,9 +1251,7 @@ export class SdrController {
       // has only been constructed can still be suspended after the chooser
       // consumes the click activation.
       if (nextMode === 'fm' && !(await this._ensureAudio())) {
-        throw new Error(
-          msg('Browser audio is suspended; press Connect again to resume it'),
-        );
+        throw new Error(AUDIO_SUSPENDED_ON_CONNECT);
       }
       if (superseded()) return false;
       // An old session's device may still be closing, or an older connect may
@@ -1158,7 +1259,7 @@ export class SdrController {
       // would let that close act on this session.
       await this._awaitUsbOwnership(superseded);
       if (superseded()) return false;
-      acquisition = this._beginAcquisition();
+      acquisition = this._beginAcquisition(receiverKind);
       const device = await acquisition.provider.get();
       acquisition.device = device || null;
       // stop() or destroy() ran while the picker/open was pending: the late
@@ -1217,7 +1318,7 @@ export class SdrController {
       if (superseded()) return false;
       this._setState({
         connected: false,
-        ...errorState(describeConnectionError(error)),
+        ...errorState(describeConnectionError(error, receiverKind)),
       });
       return false;
     }
@@ -1228,13 +1329,13 @@ export class SdrController {
    * it is handed, so a device opened by a `get()` that later fails can still
    * be closed.
    */
-  _beginAcquisition() {
+  _beginAcquisition(receiverKind) {
     let settle = null;
     const acquisition = {
       sequence: ++this._acquisitionSequence,
       usbDevices: new Set(),
       provider: null,
-      // The RTL2832U its get() returned, once it has.
+      // The receiver its get() returned, once it has.
       device: null,
       ended: false,
       // Superseded: from here on its provider cannot reach the hardware.
@@ -1247,6 +1348,7 @@ export class SdrController {
       settle,
     };
     acquisition.provider = this._providerFactory({
+      receiverKind,
       onUsbDevice: (usbDevice) => {
         acquisition.usbDevices.add(usbDevice);
       },
@@ -1305,10 +1407,10 @@ export class SdrController {
   async _forceCloseUsbDevices(usbDevices) {
     await Promise.all(
       [...usbDevices].map((usbDevice) =>
-        withDeadline(
+        withUsbDeadline(
           forceCloseUsb(usbDevice),
           this._closeTimeoutMs,
-          'RTL-SDR USB close timed out',
+          'SDR USB close timed out',
         ).catch((error) => {
           console.warn('[SDR] USB close did not settle:', error);
         }),
@@ -1318,7 +1420,7 @@ export class SdrController {
 
   /**
    * Close everything an acquisition that will not become a session opened:
-   * the RTL2832U it returned (a superseded connect), or only the raw WebUSB
+   * the receiver it returned (a superseded connect), or only the raw WebUSB
    * device a failed `get()` left open. A raw device that another session
    * has reopened meanwhile is left alone. Bounded; never throws.
    */
@@ -1342,7 +1444,7 @@ export class SdrController {
             mayForceClose: (usbDevice) => !claimedElsewhere(usbDevice),
           });
       }
-      // Without an RTL2832U (a failed get()), every raw device is closed
+      // Without a receiver (a failed get()), every raw device is closed
       // directly; with one, its own raw device was handled above.
       const remaining = [...usbDevices].filter(
         (usbDevice) =>
@@ -1394,10 +1496,10 @@ export class SdrController {
       if (!older.length) return;
       this._abandonAcquisitions();
       try {
-        await withDeadline(
+        await withUsbDeadline(
           Promise.all(older.map((acquisition) => acquisition.settled)),
           this._closeTimeoutMs * 3,
-          'RTL-SDR acquisition did not settle',
+          'SDR acquisition did not settle',
         );
       } catch {
         for (const acquisition of older) {
@@ -1412,7 +1514,7 @@ export class SdrController {
   /**
    * Cut an acquisition that a newer connect stopped waiting for off the
    * hardware: its provider's WebUSB calls already reject (it was abandoned),
-   * and an RTL2832U it returned is detached from the shared `USBDevice`, so
+   * and a receiver it returned is detached from the shared `USBDevice`, so
    * a graceful close still running for it cannot close the newer session's
    * device. Its cleanup still closes the device unless someone else owns it.
    */
@@ -1457,10 +1559,10 @@ export class SdrController {
       const graceful = queued
         ? this._queueUsb(() => device.close())
         : Promise.resolve().then(() => device?.close());
-      await withDeadline(
+      await withUsbDeadline(
         graceful,
         this._closeTimeoutMs,
-        'RTL-SDR close timed out',
+        'SDR close timed out',
       );
       return;
     } catch (error) {
@@ -1471,10 +1573,10 @@ export class SdrController {
     if (!mayForceClose(usbDevice)) return;
     try {
       // Closing the raw USB device aborts any pending transfer.
-      await withDeadline(
+      await withUsbDeadline(
         forceCloseUsb(usbDevice),
         this._closeTimeoutMs,
-        'RTL-SDR USB close timed out',
+        'SDR USB close timed out',
       );
     } catch (error) {
       console.warn('[SDR] USB close did not settle:', error);
@@ -1548,10 +1650,10 @@ export class SdrController {
         // the deadline the session is torn down (stop() closes the raw USB
         // device, which aborts the transfer).
         while (gate.waiting === 0 && inflight.length < READ_PIPELINE_DEPTH) {
-          const read = withDeadline(
+          const read = withUsbDeadline(
             device.readSamples(READ_SAMPLE_COUNT),
             this._readStallMs,
-            'RTL-SDR sample read stalled',
+            'SDR sample read stalled',
           );
           read.catch(() => {});
           chain = chain.then(() => read).then(deliver);
@@ -1568,10 +1670,16 @@ export class SdrController {
       } catch (error) {
         if (generation !== this._readGeneration) break;
         console.warn('[SDR] Sample read failed:', error);
-        this._setState({
-          connected: false,
-          ...errorState(msg('RTL-SDR sample stream stopped')),
-        });
+        const kind = this.state.receiverKind;
+        const message =
+          kind === 'hackrf' && error?.name !== 'TimeoutError'
+            ? describeConnectionError(
+                error,
+                kind,
+                RECEIVER_MESSAGES.hackrf.streamStopped,
+              )
+            : RECEIVER_MESSAGES[kind].streamStopped;
+        this._setState({ connected: false, ...errorState(message) });
         await this.stop({ preserveMessage: true });
         break;
       }
@@ -1616,8 +1724,11 @@ export class SdrController {
     });
     try {
       if (nextMode === 'fm' && !(await this._ensureAudio())) {
+        // A failed switch closes HackRF One, so only Connect resumes it.
         throw new Error(
-          msg('Browser audio is suspended; select FM again to resume it'),
+          this.state.receiverKind === 'hackrf'
+            ? AUDIO_SUSPENDED_ON_CONNECT
+            : AUDIO_SUSPENDED_ON_MODE_SWITCH,
         );
       }
       // A stall teardown, stop() or reconnect during the switch supersedes
@@ -1641,19 +1752,42 @@ export class SdrController {
       return true;
     } catch (error) {
       if (!this._owns(token, device)) return false;
-      console.warn('[SDR] Mode switch failed:', error);
-      this._setState(errorState(describeConnectionError(error)));
-      return false;
+      return this._failOperation(error, 'Mode switch');
     }
   }
 
-  /** The authorized receiver selection would open for a mode, if any. */
+  /**
+   * Report a failed receiver operation. HackRF One also closes: after a failed
+   * USB request its state is unknown.
+   * @param {unknown} error
+   * @param {string} label What failed, for the console.
+   * @param {string} [fallback] English text for an unrecognized HackRF One error.
+   * @returns {Promise<false>}
+   */
+  async _failOperation(error, label, fallback) {
+    console.warn(`[SDR] ${label} failed:`, error);
+    const receiverKind = this.state.receiverKind;
+    this._setState(
+      errorState(describeConnectionError(error, receiverKind, fallback)),
+    );
+    if (receiverKind === 'hackrf') await this.stop({ preserveMessage: true });
+    return false;
+  }
+
+  /**
+   * The authorized receiver of the selected kind that selection would open
+   * for a mode, if any.
+   */
   async _preferredDevice(mode) {
+    const hackrf = this.state.receiverKind === 'hackrf';
     try {
       return selectAuthorizedSdrDevice(await this._webUsb?.getDevices?.(), {
-        filters: RTL_SDR_USB_FILTERS,
+        filters: hackrf ? HACKRF_ONE_USB_FILTERS : RTL_SDR_USB_FILTERS,
         mode,
-        remembered: this._deviceMemory.get(mode),
+        remembered: (hackrf
+          ? this._hackrfDeviceMemory
+          : this._deviceMemory
+        ).get(mode),
       });
     } catch {
       return null;
@@ -1665,9 +1799,12 @@ export class SdrController {
    * @param {'auto'|number|string} value `'auto'` or a gain in dB.
    * @param {object} [options]
    * @param {'fm'|'adsb'} [options.mode] Mode to configure; defaults to current.
-   * @returns {Promise<'auto'|number|null>} Applied setting, or null if invalid.
+   * @returns {Promise<'auto'|number|null>} Applied setting; null when the
+   *   value is invalid, the gain write fails, or HackRF One is selected (it
+   *   uses setHackrfGain()).
    */
   async setGain(value, { mode = this.state.mode } = {}) {
+    if (this.state.receiverKind === 'hackrf') return null;
     const targetMode = normalizeMode(mode);
     const setting = normalizeSdrGain(value);
     if (setting === null) return null;
@@ -1683,7 +1820,7 @@ export class SdrController {
       if (targetMode === 'adsb') this._setState(this._resetAdsbCounters());
     } catch (error) {
       console.warn('[SDR] Gain change failed:', error);
-      this._setState(errorState(msg('RTL-SDR gain change failed')));
+      this._setState(errorState(RECEIVER_MESSAGES.rtl.gainFailed));
       return null;
     }
     return setting;
@@ -1699,8 +1836,54 @@ export class SdrController {
     return this._gainByMode[target] ?? SDR_GAIN_DEFAULTS[target];
   }
 
+  async setHackrfGain(stage, value) {
+    const setting = normalizeHackrfGain(stage, value);
+    if (
+      setting === null ||
+      this._destroyed ||
+      this.state.receiverKind !== 'hackrf' ||
+      this.state.status === 'connecting' ||
+      this.state.status === 'tuning'
+    )
+      return false;
+
+    const save = () => {
+      const hackrfGain = Object.freeze({
+        ...this.state.hackrfGain,
+        [stage]: setting,
+      });
+      writeHackrfGainSettings(this._storage, hackrfGain);
+      this._setState({ hackrfGain });
+      return true;
+    };
+    const device = this._device;
+    if (!device) return save();
+
+    const token = this._sessionToken;
+    try {
+      return await this._queueUsb(async () => {
+        if (!this._owns(token, device)) return false;
+        if (this.state.hackrfGain[stage] === setting) return true;
+        await device.setRxGain(stage, setting);
+        return this._owns(token, device) && save();
+      });
+    } catch (error) {
+      if (!this._owns(token, device)) return false;
+      return this._failOperation(
+        error,
+        'HackRF One gain change',
+        RECEIVER_MESSAGES.hackrf.gainFailed,
+      );
+    }
+  }
+
   async tuneFm(frequencyHz, { quiet = false } = {}) {
     const frequency = clampFmFrequency(frequencyHz);
+    if (!Number.isFinite(frequency)) return false;
+    if (!quiet) {
+      this.cancelSeek();
+      if (this.state.seekMessage) this._setState({ seekMessage: null });
+    }
     this._fmFrequencyHz = frequency;
     if (!this._device) {
       this._setState({
@@ -1711,19 +1894,31 @@ export class SdrController {
       });
       return true;
     }
-    if (this.state.mode !== 'fm') await this.setMode('fm');
+    if (this.state.mode !== 'fm' && !(await this.setMode('fm'))) return false;
+    const token = this._sessionToken;
+    const device = this._device;
+    if (!this._owns(token, device)) return false;
     // Spectra are dropped from here until the worker takes this tag, so a
     // retune that fails part-way never has them read at the wrong frequency.
     const tune = ++this._fmTune;
     try {
       let actualFrequency = frequency;
       await this._queueUsb(async () => {
-        const tuned = await this._device.setCenterFrequency(frequency);
+        if (!this._owns(token, device)) return;
+        const tuned = await device.setCenterFrequency(frequency);
         if (Number.isFinite(tuned)) actualFrequency = tuned;
-        await this._device.resetBuffer();
+        if (!this._owns(token, device)) return;
+        await withUsbDeadline(
+          device.resetBuffer(),
+          this._readStallMs,
+          'SDR buffer reset stalled',
+        );
+        if (!this._owns(token, device)) return;
+        // Reset the decoder before the USB queue releases the next reads.
+        this._worker?.postMessage({ type: 'reset', tune });
+        this._audioNode?.port.postMessage({ type: 'clear' });
       });
-      this._worker?.postMessage({ type: 'reset', tune });
-      this._audioNode?.port.postMessage({ type: 'clear' });
+      if (!this._owns(token, device)) return false;
       this._setState({
         frequencyHz: actualFrequency,
         status: 'streaming',
@@ -1738,8 +1933,8 @@ export class SdrController {
       });
       return true;
     } catch (error) {
-      this._setState(errorState(describeConnectionError(error)));
-      return false;
+      if (!this._owns(token, device)) return false;
+      return this._failOperation(error, 'FM retune');
     }
   }
 
@@ -1763,6 +1958,16 @@ export class SdrController {
     const seekDirection = direction < 0 ? -1 : 1;
     const origin = this.state.frequencyHz;
     const token = ++this._seekToken;
+    const tuneWhileSeeking = async (frequency) => {
+      const tuned = await this.tuneFm(frequency, { quiet: true });
+      if (token !== this._seekToken) return false;
+      if (!tuned)
+        this._setState({
+          seeking: false,
+          seekMessage: () => t('Seek stopped'),
+        });
+      return tuned;
+    };
     this._setState({
       seeking: true,
       seekMessage: () =>
@@ -1780,15 +1985,7 @@ export class SdrController {
           FM_SEEK_LAP_START_HZ +
           positiveModulo(rawCenter - FM_SEEK_LAP_START_HZ, FM_SEEK_LAP_HZ);
         const center = clampFmFrequency(position);
-        // tuneFm reports the failure; no spectrum is valid for this frame.
-        if (!(await this.tuneFm(center, { quiet: true }))) {
-          if (token === this._seekToken)
-            this._setState({
-              seeking: false,
-              seekMessage: () => t('Seek stopped'),
-            });
-          return null;
-        }
+        if (!(await tuneWhileSeeking(center))) return null;
         const sequence = this._spectrumSequence;
         this._setState({
           seekMessage: () =>
@@ -1810,7 +2007,7 @@ export class SdrController {
           { skipFrequency: origin },
         );
         if (!peak) continue;
-        await this.tuneFm(peak.frequency, { quiet: true });
+        if (!(await tuneWhileSeeking(peak.frequency))) return null;
         this._setState({
           seeking: false,
           seekMessage: () =>
@@ -1825,8 +2022,7 @@ export class SdrController {
         });
         return peak;
       }
-      if (token === this._seekToken) {
-        await this.tuneFm(origin, { quiet: true });
+      if (token === this._seekToken && (await tuneWhileSeeking(origin))) {
         this._setState({
           seeking: false,
           seekMessage: () => t('No FM signal found'),
@@ -1937,10 +2133,14 @@ export class SdrController {
       ...(preserveMessage
         ? {}
         : {
-            message: message || (() => t('RTL-SDR disconnected')),
+            message:
+              message ||
+              (() =>
+                t(RECEIVER_MESSAGES[this.state.receiverKind].disconnected)),
             errorText: null,
           }),
       snr: null,
+      seekMessage: null,
       samplesPerSecond: 0,
       workerBlocks: 0,
       iqLevelDbfs: null,

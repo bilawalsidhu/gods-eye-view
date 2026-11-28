@@ -7,8 +7,13 @@ import {
   SdrController,
 } from './controller.js';
 import { RTL2832U_Provider } from '@jtarrio/webrtlsdr/rtlsdr.js';
-import { RTL_SDR_USB_FILTERS } from './usbDevices.js';
+import {
+  HACKRF_DEVICE_STORAGE_KEY,
+  HACKRF_ONE_USB_FILTERS,
+  RTL_SDR_USB_FILTERS,
+} from './usbDevices.js';
 import { SDR_GAIN_STORAGE_KEY } from './gain.js';
+import { getLocale, setLocale, t as translate } from '../i18n/index.js';
 
 function replaceGlobal(name, value) {
   const prior = Object.getOwnPropertyDescriptor(globalThis, name);
@@ -1217,6 +1222,77 @@ test('FM seek stops when a retune fails instead of reading the old frame', async
   assert.equal(tuned.length, 1, 'no frame is tuned after the failure');
 });
 
+test('FM seek preserves the error when tuning the found station or restoring the origin fails', async () => {
+  const origin = 98_500_000;
+  const station = 98_800_000;
+  for (const [stations, target, failOn] of [
+    [[station], station, 1],
+    [[], origin, 2],
+  ]) {
+    const { peak, state } = await seekFrom(
+      origin,
+      1,
+      stations,
+      (controller) => {
+        const device = controller._device;
+        const setCenterFrequency = device.setCenterFrequency;
+        let attempts = 0;
+        device.setCenterFrequency = async (frequency) => {
+          if (frequency === target && ++attempts === failOn)
+            throw new Error('transfer error');
+          return setCenterFrequency(frequency);
+        };
+      },
+    );
+    assert.equal(peak, null);
+    assert.equal(state.seeking, false);
+    assert.equal(state.seekMessage, 'Seek stopped');
+    assert.equal(state.status, 'error');
+    assert.equal(state.message, 'transfer error');
+  }
+});
+
+test('cancelling an FM seek during the final tune suppresses its result', async () => {
+  const origin = 98_500_000;
+  const station = 98_800_000;
+  const { peak, state } = await seekFrom(origin, 1, [station], (controller) => {
+    const device = controller._device;
+    const setCenterFrequency = device.setCenterFrequency;
+    device.setCenterFrequency = async (frequency) => {
+      if (frequency === station) controller.cancelSeek();
+      return setCenterFrequency(frequency);
+    };
+  });
+  assert.equal(peak, null);
+  assert.equal(state.seeking, false);
+  assert.equal(state.seekMessage, 'Seek stopped');
+  assert.doesNotMatch(state.message, /FM signal found/);
+});
+
+test('a manual FM tune cancels an active seek and keeps the requested frequency', async (t) => {
+  const { controller, events } = fmSeekController([98_800_000]);
+  t.after(() => controller.destroy());
+  await controller.tuneFm(98_500_000);
+  const scanning = gate();
+  const unsubscribe = controller.subscribe(({ seeking, seekMessage }) => {
+    if (seeking && seekMessage.startsWith('Scanning')) scanning.open();
+  });
+  t.after(unsubscribe);
+
+  const seek = controller.seekFm(1);
+  await within(scanning.promise);
+  assert.equal(await controller.tuneFm(Number.NaN), false);
+  assert.equal(controller.getState().seeking, true);
+  assert.equal(await controller.tuneFm(106_100_000), true);
+  assert.equal(await within(seek), null);
+  const state = controller.getState();
+  assert.equal(state.frequencyHz, 106_100_000);
+  assert.equal(state.seeking, false);
+  assert.equal(state.seekMessage, null);
+  assert.match(state.message, /Tuned to 106\.1 MHz FM/);
+  assert.equal(events.at(-1), 'device:tune:106100000');
+});
+
 test('a retune that fails part-way drops spectra until a retune succeeds', async () => {
   const resets = [];
   const controller = new SdrController({
@@ -1286,4 +1362,538 @@ test("a rebuilt decoder worker's spectra are accepted before its first reset", a
     data: { type: 'fm', bins: new Float32Array(512), tune: 0 },
   });
   assert.equal(controller._spectrumSequence, before + 1);
+});
+
+test('HackRF applies saved and live gain settings through the controller', async (t) => {
+  const frequencyWrites = [];
+  const modes = [];
+  const gainWrites = [];
+  const configurations = [];
+  const received = gate();
+  const postMessage = FakeWorker.prototype.postMessage;
+  t.mock.method(FakeWorker.prototype, 'postMessage', function (message) {
+    postMessage.call(this, message);
+    if (message.type === 'configure') configurations.push(message);
+    if (message.type === 'samples') received.open(message.buffer);
+  });
+  const onTransfer = (direction, setup, data) => {
+    if (direction === 'out' && setup.request === 1) modes.push(setup.value);
+    if (direction === 'out' && setup.request === 16)
+      frequencyWrites.push(data.getUint32(0, true));
+    if (direction === 'out' && setup.request === 17)
+      gainWrites.push(['amp', setup.value]);
+    if (direction === 'in' && setup.request === 19)
+      gainWrites.push(['lna', setup.index]);
+    if (direction === 'in' && setup.request === 20)
+      gainWrites.push(['vga', setup.index]);
+  };
+  const storage = memoryStorage();
+  const session = hackrfFailureSession(
+    t,
+    {
+      getDevices: async () => [],
+      requestDevice: async ({ filters }) => {
+        assert.deepEqual(filters, HACKRF_ONE_USB_FILTERS);
+        return session.device;
+      },
+    },
+    { storage, onTransfer },
+  );
+  const { controller } = session;
+  assert.equal(
+    controller.getState().message,
+    'Connect an SDR receiver to begin.',
+  );
+  assert.equal(await controller.setHackrfGain('lna', '24'), true);
+  assert.equal(await controller.setHackrfGain('amp', true), true);
+  assert.equal(await controller.setHackrfGain('lna', '25'), false);
+  assert.equal(await within(controller.connect('adsb')), true);
+  const state = controller.getState();
+  assert.equal(state.deviceLabel, 'HackRF One');
+  assert.equal(state.sampleRate, 2_000_000);
+  assert.deepEqual(frequencyWrites, [1090]);
+  assert.deepEqual(modes, [0, 1]);
+  assert.equal(configurations[0].removeDc, true);
+  assert.equal(new Uint8Array(await within(received.promise))[0], 128);
+  assert.deepEqual(gainWrites, [
+    ['amp', 1],
+    ['lna', 24],
+    ['vga', 16],
+  ]);
+
+  await within(
+    Promise.all([
+      controller.setHackrfGain('vga', '30'),
+      controller.setHackrfGain('amp', false),
+    ]),
+  );
+  assert.deepEqual(gainWrites.slice(3), [
+    ['vga', 30],
+    ['amp', 0],
+  ]);
+  assert.deepEqual(modes, [0, 1], 'live gain changes keep RX running');
+  assert.deepEqual(controller.getState().hackrfGain, {
+    lna: 24,
+    vga: 30,
+    amp: false,
+  });
+  const reopened = new SdrController({ storage, webUsb: null });
+  assert.deepEqual(
+    reopened.getState().hackrfGain,
+    controller.getState().hackrfGain,
+  );
+  await reopened.destroy();
+  assert.equal(storage.getItem(SDR_GAIN_STORAGE_KEY), null);
+
+  controller.selectReceiver('rtl');
+  assert.equal(controller.getState().receiverKind, 'hackrf');
+  await within(controller.stop());
+  assert.deepEqual(modes, [0, 1, 0]);
+  assert.equal(session.closes(), 1);
+  assert.equal(session.device.opened, false);
+  controller.selectReceiver('rtl');
+  assert.equal(controller.getState().receiverKind, 'rtl');
+});
+
+/**
+ * A mock HackRF One USBDevice. `onTransfer(direction, setup, data)` sees
+ * each control request ('out'/'in'), bulk read ('read', `{ endpoint,
+ * length }`) and close ('close'); `result(direction, request, success)`
+ * gives the result to use (reads pass 'discard' for the retune drain).
+ */
+function hackrfUsbDevice({
+  serialNumber,
+  onTransfer = () => {},
+  result = (_direction, _request, success) => success,
+} = {}) {
+  return {
+    vendorId: 0x1d50,
+    productId: 0x6089,
+    productName: 'HackRF One',
+    serialNumber,
+    configuration: { configurationValue: 1 },
+    opened: false,
+    async open() {
+      this.opened = true;
+    },
+    async claimInterface() {},
+    async controlTransferOut(setup, data) {
+      onTransfer('out', setup, data);
+      return result('out', setup.request, {
+        status: 'ok',
+        bytesWritten: data?.byteLength ?? 0,
+      });
+    },
+    async controlTransferIn(setup) {
+      onTransfer('in', setup);
+      return result('in', setup.request, {
+        status: 'ok',
+        data: new DataView(Uint8Array.of(1).buffer),
+      });
+    },
+    async transferIn(endpoint, length) {
+      onTransfer('read', { endpoint, length });
+      await pause(2);
+      return result('read', length === 128 * 1024 ? 'discard' : endpoint, {
+        status: 'ok',
+        data: new DataView(new ArrayBuffer(length)),
+      });
+    },
+    async close() {
+      this.opened = false;
+      onTransfer('close');
+    },
+  };
+}
+
+/** A real HackRF adapter over mock USB. A failed transfer is injected once. */
+function hackrfFailureSession(
+  t,
+  webUsbOverrides = {},
+  { storage = memoryStorage(), onTransfer = () => {}, ...options } = {},
+) {
+  let failNext = null;
+  let reads = 0;
+  let closes = 0;
+  const transfer = (direction, request, success) => {
+    if (failNext?.direction !== direction || failNext.request !== request)
+      return success;
+    const { result } = failNext;
+    failNext = null;
+    if (result instanceof Error) throw result;
+    return result;
+  };
+  const device = hackrfUsbDevice({
+    result: transfer,
+    onTransfer(direction, ...args) {
+      if (direction === 'read') reads += 1;
+      if (direction === 'close') closes += 1;
+      onTransfer(direction, ...args);
+    },
+  });
+  t.after(replaceGlobal('Worker', FakeWorker));
+  const controller = new SdrController({
+    ...options,
+    storage,
+    webUsb: {
+      getDevices: async () => [device],
+      requestDevice: async () => device,
+      ...webUsbOverrides,
+    },
+  });
+  t.after(() => controller.destroy());
+  controller.selectReceiver('hackrf');
+  // This fixture exercises USB, not the browser's user-activation path.
+  controller._ensureAudio = async () => true;
+  return {
+    controller,
+    device,
+    fail(direction, request, result) {
+      failNext = { direction, request, result };
+    },
+    reads: () => reads,
+    closes: () => closes,
+  };
+}
+
+test(
+  'HackRF FM retune writes only frequency and drains stale IQ before resetting the worker',
+  { timeout: 3_000 },
+  async (t) => {
+    const { controller, device } = hackrfFailureSession(t);
+    const events = [];
+    const postMessage = FakeWorker.prototype.postMessage;
+    const firstBlock = gate();
+    const firstFreshBlock = gate();
+    const drainStarted = gate();
+    const releaseDrain = gate();
+    t.after(releaseDrain.open);
+    let retuned = false;
+
+    t.mock.method(FakeWorker.prototype, 'postMessage', function (message) {
+      postMessage.call(this, message);
+      if (message.type === 'reset') events.push(['reset']);
+      if (message.type !== 'samples') return;
+      const value = new Uint8Array(message.buffer)[0];
+      events.push(['samples', value]);
+      firstBlock.open();
+      if (value === 130) firstFreshBlock.open();
+    });
+    const write = device.controlTransferOut.bind(device);
+    t.mock.method(device, 'controlTransferOut', async (setup, data) => {
+      events.push(['out', setup.request]);
+      if (setup.request === 16 && data.getUint32(0, true) === 99) {
+        assert.equal(data.getUint32(4, true), 500_000);
+        retuned = true;
+      }
+      return write(setup, data);
+    });
+    const readGain = device.controlTransferIn.bind(device);
+    t.mock.method(device, 'controlTransferIn', (setup) => {
+      events.push(['in', setup.request]);
+      return readGain(setup);
+    });
+    t.mock.method(device, 'transferIn', async (endpoint, length) => {
+      assert.equal(endpoint, 1);
+      const discarding = length === 128 * 1024;
+      const data = new Uint8Array(length);
+      data[0] = discarding ? 1 : retuned ? 2 : 0;
+      if (discarding) {
+        events.push(['discard']);
+        drainStarted.open();
+        await releaseDrain.promise;
+      } else {
+        await pause(2);
+      }
+      return { status: 'ok', data: new DataView(data.buffer) };
+    });
+
+    assert.equal(await controller.connect('fm'), true);
+    await firstBlock.promise;
+    const previousFrequency = controller.getState().frequencyHz;
+    events.length = 0;
+    const tuning = controller.tuneFm(99_500_000);
+    await drainStarted.promise;
+    const frequencyDuringDrain = controller.getState().frequencyHz;
+    const eventsDuringDrain = events.slice();
+    releaseDrain.open();
+
+    assert.equal(await tuning, true);
+    await firstFreshBlock.promise;
+    const frequencyWrite = events.findIndex(([type]) => type === 'out');
+    assert.equal(frequencyDuringDrain, previousFrequency);
+    assert.deepEqual(eventsDuringDrain.slice(frequencyWrite), [
+      ['out', 16],
+      ['discard'],
+    ]);
+    assert.deepEqual(events.slice(frequencyWrite, frequencyWrite + 4), [
+      ['out', 16],
+      ['discard'],
+      ['reset'],
+      ['samples', 130],
+    ]);
+    assert.deepEqual(
+      events.filter(([type]) => type === 'in' || type === 'out'),
+      [['out', 16]],
+    );
+    assert.equal(controller.getState().frequencyHz, 99_500_000);
+    assert.equal(controller.getState().sampleRate, 2_048_000);
+  },
+);
+
+test('a cancelled HackRF picker has its own message and locks receiver selection while pending', async (t) => {
+  const picker = gate();
+  const started = gate();
+  const { controller, closes } = hackrfFailureSession(t, {
+    getDevices: async () => [],
+    requestDevice: async () => {
+      started.open();
+      await picker.promise;
+      throw new DOMException('No device selected.', 'NotFoundError');
+    },
+  });
+  const connecting = controller.connect('adsb');
+  await within(started.promise);
+  controller.selectReceiver('rtl');
+  assert.equal(controller.getState().receiverKind, 'hackrf');
+  assert.equal(controller.getState().status, 'connecting');
+  picker.open();
+  assert.equal(await within(connecting), false);
+  assert.equal(controller.getState().message, 'No HackRF One device selected');
+  assert.equal(controller.getState().connected, false);
+  assert.equal(closes(), 0);
+});
+
+test('a WebUSB enumeration failure is not reported as a cancelled HackRF picker', async (t) => {
+  const { controller } = hackrfFailureSession(t, {
+    getDevices: async () => {
+      throw new DOMException('Enumeration failed.', 'NotFoundError');
+    },
+    requestDevice: async () => assert.fail('unexpected picker'),
+  });
+  assert.equal(await within(controller.connect('adsb')), false);
+  assert.equal(controller.getState().status, 'error');
+  assert.notEqual(
+    controller.getState().errorText,
+    'No HackRF One device selected',
+  );
+});
+
+test('a HackRF unplug during initial configuration reports a disconnect and permits reopening', async (t) => {
+  const { controller, device, fail, closes, reads } = hackrfFailureSession(t);
+  fail(
+    'out',
+    6,
+    new DOMException('The device was disconnected.', 'NotFoundError'),
+  );
+  assert.equal(await within(controller.connect('adsb')), false);
+  const state = controller.getState();
+  assert.equal(state.status, 'error');
+  assert.equal(state.errorText, 'HackRF One disconnected');
+  assert.equal(state.connected, false);
+  assert.equal(device.opened, false);
+  assert.equal(closes(), 1);
+  assert.equal(reads(), 0);
+  assert.equal(await within(controller.connect('adsb')), true);
+});
+
+test('a HackRF switch to FM on suspended audio closes the receiver and asks for Connect', async (t) => {
+  const { controller, device } = hackrfFailureSession(t);
+  assert.equal(await within(controller.connect('adsb')), true);
+  controller._ensureAudio = async () => false;
+  assert.equal(await within(controller.setMode('fm')), false);
+  let state = controller.getState();
+  assert.equal(
+    state.errorText,
+    'Browser audio is suspended; press Connect again to resume it',
+  );
+  assert.equal(state.connected, false);
+  assert.equal(device.opened, false);
+
+  // CONNECT reconnects in the mode the card shows.
+  controller._ensureAudio = async () => true;
+  assert.equal(
+    await within(controller.connect(controller.getState().mode)),
+    true,
+  );
+  state = controller.getState();
+  assert.equal(state.mode, 'fm');
+  assert.equal(state.status, 'streaming');
+  assert.equal(device.opened, true);
+});
+
+test('a mode switch moves an open HackRF to the one remembered for the new mode', async (t) => {
+  const log = [];
+  const logFrequency = (serial) => (direction, setup, data) => {
+    if (direction === 'out' && setup.request === 16)
+      log.push(`${serial}:freq:${data.getUint32(0, true)}`);
+  };
+  const a = hackrfUsbDevice({
+    serialNumber: 'A',
+    onTransfer: logFrequency('A'),
+  });
+  const b = hackrfUsbDevice({
+    serialNumber: 'B',
+    onTransfer: logFrequency('B'),
+  });
+  const identity = (serialNumber) => ({
+    vendorId: 0x1d50,
+    productId: 0x6089,
+    productName: 'HackRF One',
+    serialNumber,
+  });
+  const storage = memoryStorage({
+    [HACKRF_DEVICE_STORAGE_KEY]: JSON.stringify({
+      fm: identity('A'),
+      adsb: identity('B'),
+    }),
+  });
+  const { controller } = hackrfFailureSession(
+    t,
+    {
+      getDevices: async () => [a, b],
+      requestDevice: async () => assert.fail('unexpected picker'),
+    },
+    { storage },
+  );
+  assert.equal(await within(controller.connect('fm')), true);
+  assert.equal(a.opened, true);
+  log.length = 0;
+
+  assert.equal(await within(controller.setMode('adsb')), true);
+  assert.equal(a.opened, false);
+  assert.equal(b.opened, true);
+  assert.deepEqual(log, ['B:freq:1090']);
+  assert.equal(controller.getState().mode, 'adsb');
+  assert.equal(controller.getState().status, 'streaming');
+
+  assert.equal(await within(controller.setMode('fm')), true);
+  assert.equal(a.opened, true);
+  assert.equal(b.opened, false);
+});
+
+test('a stalled HackRF control transfer times out without resuming in a reopened session', async (t) => {
+  const { controller, device, fail, closes } = hackrfFailureSession(
+    t,
+    {},
+    { readStallMs: 40 },
+  );
+  const write = t.mock.method(device, 'controlTransferOut');
+  const transfer = gate();
+  fail('out', 6, transfer.promise);
+
+  assert.equal(await within(controller.connect('adsb')), false);
+  assert.equal(controller.getState().errorText, 'HackRF One connection failed');
+  assert.equal(device.opened, false);
+  assert.equal(closes(), 1);
+  assert.equal(await within(controller.connect('adsb')), true);
+  const writesAfterReopen = write.mock.callCount();
+  transfer.open({ status: 'ok', bytesWritten: 8 });
+  await pause(0);
+  assert.equal(write.mock.callCount(), writesAfterReopen);
+  assert.equal(controller.getState().status, 'streaming');
+});
+
+test('HackRF USB failures during reception report the issue, close and allow reopening', async (t) => {
+  const scenarios = [
+    {
+      name: 'unplug during mode switch',
+      initialMode: 'adsb',
+      change: (controller) => controller.setMode('fm'),
+      transfer: [
+        'out',
+        6,
+        new DOMException('The device was disconnected.', 'NotFoundError'),
+      ],
+      message: 'HackRF One disconnected',
+    },
+    {
+      name: 'bad configuration response during mode switch',
+      initialMode: 'adsb',
+      change: (controller) => controller.setMode('fm'),
+      transfer: ['out', 6, { status: 'stall', bytesWritten: 0 }],
+      message: 'HackRF One connection failed',
+    },
+    {
+      name: 'failed FM retune',
+      initialMode: 'fm',
+      change: (controller) => controller.tuneFm(101_100_000),
+      transfer: ['out', 16, { status: 'stall', bytesWritten: 0 }],
+      message: 'HackRF One connection failed',
+    },
+    {
+      name: 'short IQ transfer while discarding pre-retune samples',
+      initialMode: 'fm',
+      change: (controller) => controller.tuneFm(101_100_000),
+      transfer: [
+        'read',
+        'discard',
+        { status: 'ok', data: new DataView(new ArrayBuffer(8)) },
+      ],
+      message: 'HackRF One connection failed',
+    },
+    {
+      name: 'failed gain change',
+      initialMode: 'adsb',
+      change: (controller) => controller.setHackrfGain('lna', '24'),
+      transfer: [
+        'in',
+        19,
+        { status: 'ok', data: new DataView(Uint8Array.of(0).buffer) },
+      ],
+      message: 'HackRF One gain change failed',
+    },
+  ];
+  for (const { name, initialMode, change, transfer, message } of scenarios) {
+    await t.test(name, async (t) => {
+      const { controller, device, fail, reads, closes } =
+        hackrfFailureSession(t);
+      assert.equal(await within(controller.connect(initialMode)), true);
+      await pause(12);
+      assert.ok(reads() > 0);
+      fail(...transfer);
+      assert.equal(await within(change(controller)), false);
+      const state = controller.getState();
+      assert.equal(state.status, 'error');
+      assert.equal(state.errorText, message);
+      assert.equal(state.connected, false);
+      assert.equal(state.hackrfGain.lna, 16);
+      assert.equal(device.opened, false);
+      assert.equal(closes(), 1);
+      const readsAtClose = reads();
+      await pause(10);
+      assert.equal(
+        reads(),
+        readsAtClose,
+        'no USB reads after the failure closed the session',
+      );
+      assert.equal(await within(controller.connect(initialMode)), true);
+    });
+  }
+});
+
+test('an invalid HackRF IQ transfer shows a localized message and logs the USB detail', async (t) => {
+  const { controller, fail, closes } = hackrfFailureSession(t);
+  const locale = getLocale();
+  t.after(() => setLocale(locale));
+  setLocale('fr');
+  const warnings = t.mock.method(console, 'warn', () => {});
+  const stopped = new Promise((resolve) => {
+    controller.subscribe((state) => {
+      if (state.status === 'error' && closes() === 1) resolve(state);
+    });
+  });
+  fail('read', 1, { status: 'stall' });
+  assert.equal(await within(controller.connect('adsb')), true);
+  const state = await within(stopped);
+  assert.equal(state.errorText, 'HackRF One sample stream stopped');
+  assert.equal(state.message, translate('HackRF One sample stream stopped'));
+  assert.notEqual(state.message, state.errorText);
+  assert.ok(
+    warnings.mock.calls.some(
+      ({ arguments: args }) =>
+        args[1]?.message === 'HackRF One IQ transfer failed',
+    ),
+  );
+  assert.equal(await within(controller.connect('adsb')), true);
 });

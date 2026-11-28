@@ -1,5 +1,6 @@
 /**
- * Tuner gain settings for the local RTL-SDR, remembered per receiver mode.
+ * Local SDR gain settings. RTL-SDR remembers tuner gain per mode. HackRF One
+ * shares its LNA, VGA and AMP settings across FM and ADS-B.
  *
  * `'auto'` hands gain to the tuner's AGC. Manual values are the R820T gain
  * steps librtlsdr and dump1090 expose, in dB. Receivers with an onboard LNA
@@ -26,6 +27,67 @@ export const SDR_GAIN_DEFAULTS = Object.freeze({
 
 export const SDR_GAIN_STORAGE_KEY = 'gev:sdr:gain:v1';
 
+const HACKRF_GAIN_STORAGE_KEY = 'gev:sdr:hackrf:gain:v1';
+
+export const HACKRF_GAIN_DEFAULTS = Object.freeze({
+  lna: 16,
+  vga: 16,
+  amp: false,
+});
+
+export const HACKRF_GAIN_STEPS_DB = Object.freeze({
+  lna: Object.freeze([0, 8, 16, 24, 32, 40]),
+  vga: Object.freeze(Array.from({ length: 32 }, (_, step) => step * 2)),
+});
+
+/** Accept only hardware-supported settings. Select inputs provide strings. */
+export function normalizeHackrfGain(stage, value) {
+  if (stage === 'amp') return typeof value === 'boolean' ? value : null;
+  if (!Object.hasOwn(HACKRF_GAIN_STEPS_DB, stage)) return null;
+  const gain =
+    typeof value === 'string' && value.trim() ? Number(value) : value;
+  return HACKRF_GAIN_STEPS_DB[stage].includes(gain) ? gain : null;
+}
+
+function readSettings(storage, key, defaults, normalize) {
+  let stored = null;
+  try {
+    stored = JSON.parse(storage?.getItem?.(key) || 'null');
+  } catch {
+    /* Ignore unavailable storage or invalid JSON. */
+  }
+  return Object.fromEntries(
+    Object.entries(defaults).map(([name, fallback]) => [
+      name,
+      normalize(name, stored?.[name]) ?? fallback,
+    ]),
+  );
+}
+
+function writeSettings(storage, key, value) {
+  try {
+    storage?.setItem?.(key, JSON.stringify(value));
+    return Boolean(storage?.setItem);
+  } catch {
+    return false;
+  }
+}
+
+export function readHackrfGainSettings(storage) {
+  return Object.freeze(
+    readSettings(
+      storage,
+      HACKRF_GAIN_STORAGE_KEY,
+      HACKRF_GAIN_DEFAULTS,
+      normalizeHackrfGain,
+    ),
+  );
+}
+
+export function writeHackrfGainSettings(storage, settings) {
+  writeSettings(storage, HACKRF_GAIN_STORAGE_KEY, settings);
+}
+
 /**
  * Normalize a requested gain to `'auto'` or the nearest listed R820T step.
  * @param {*} value `'auto'`, a dB number or a numeric string.
@@ -51,17 +113,11 @@ export function normalizeSdrGain(value) {
  * @returns {{fm:'auto'|number, adsb:'auto'|number}}
  */
 export function readSdrGainSettings(storage) {
-  let stored = null;
-  try {
-    stored = JSON.parse(storage?.getItem?.(SDR_GAIN_STORAGE_KEY) || 'null');
-  } catch {
-    stored = null;
-  }
-  return Object.fromEntries(
-    Object.entries(SDR_GAIN_DEFAULTS).map(([mode, fallback]) => [
-      mode,
-      normalizeSdrGain(stored?.[mode]) ?? fallback,
-    ]),
+  return readSettings(
+    storage,
+    SDR_GAIN_STORAGE_KEY,
+    SDR_GAIN_DEFAULTS,
+    (_, value) => normalizeSdrGain(value),
   );
 }
 
@@ -72,15 +128,10 @@ export function readSdrGainSettings(storage) {
  * @returns {boolean} Whether the write succeeded.
  */
 export function writeSdrGainSettings(storage, settings) {
-  try {
-    storage?.setItem?.(
-      SDR_GAIN_STORAGE_KEY,
-      JSON.stringify({ fm: settings.fm, adsb: settings.adsb }),
-    );
-    return Boolean(storage?.setItem);
-  } catch {
-    return false;
-  }
+  return writeSettings(storage, SDR_GAIN_STORAGE_KEY, {
+    fm: settings.fm,
+    adsb: settings.adsb,
+  });
 }
 
 /**

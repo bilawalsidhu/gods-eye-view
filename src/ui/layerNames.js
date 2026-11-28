@@ -125,6 +125,7 @@ const SOURCE_LABEL_KEYS = new Map(
     msg('Flights'),
     msg('Military aircraft'),
     msg('Vessels'),
+    msg('Browser SDR · WebUSB'),
     msg('CCTV + Street View fallback'),
     msg('OpenStreetMap + optional Google Maps Places'),
     msg('GFS / ECMWF IFS · FORECAST'),
