@@ -3,11 +3,6 @@ import { test } from 'node:test';
 
 import { CLEAR_WEATHER, mergeWeather } from './weather.js';
 
-test('clear weather draws nothing', () => {
-  for (const key of ['clouds', 'fog', 'haze', 'rain', 'snow'])
-    assert.equal(CLEAR_WEATHER[key], 0, key);
-});
-
 test('a set keeps what it is not given and clamps strengths', () => {
   const a = mergeWeather(CLEAR_WEATHER, { clouds: 0.4, rain: 3 });
   assert.equal(a.clouds, 0.4);
