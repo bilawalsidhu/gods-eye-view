@@ -1,6 +1,5 @@
 import { recordWorkSlice } from '../sources/phaseTiming.js';
 import { ringCentroid } from '../sources/featureGeometry.js';
-import { showOsmCredit, hideOsmCredit } from '../data/dataCredits.js';
 import { fromDegrees } from '../geo/ellipsoid.js';
 import { drawOf, frameOf } from '../render/rendererOf.js';
 import { heightsOf } from '../queries/heights.js';
@@ -66,7 +65,6 @@ export function createWorldAnnotationRenderer(viewer) {
   const draw = drawOf(viewer);
   const instance = `${MODULE_TOKEN}${(rendererSeq += 1)}`;
   let markSeq = 0;
-  const osmAnnotations = new Set();
   // Every mark with sets on the globe, so sync() can take a hidden one out.
   const drawn = new Set();
   const pendingGround = new Map();
@@ -348,23 +346,6 @@ export function createWorldAnnotationRenderer(viewer) {
         throw new Error('Building install cancelled');
       }
     }
-    if (anno.type === 'route' && items.lines.length) {
-      osmAnnotations.add(anno);
-      showOsmCredit(viewer, anno);
-    }
-    if (
-      (items.shapes.length || items.lines.length) &&
-      anno.ring?.length >= 3 &&
-      !anno.synthesized &&
-      (anno.outlineCredit === 'tiles' || anno.outlineCredit === 'osm') &&
-      current()
-    ) {
-      // The actual world proxy owns both geometry and credit, including rollback.
-      osmAnnotations.add(anno);
-      showOsmCredit(viewer, anno, {
-        openMapTiles: anno.outlineCredit === 'tiles',
-      });
-    }
   }
 
   function disposeSet(anno, kind) {
@@ -384,8 +365,6 @@ export function createWorldAnnotationRenderer(viewer) {
 
   function remove(anno) {
     pendingGround.get(anno)?.finish('cancelled');
-    hideOsmCredit(viewer, anno);
-    osmAnnotations.delete(anno);
     drawn.delete(anno);
     clearSets(anno);
     if (anno) {
@@ -419,8 +398,6 @@ export function createWorldAnnotationRenderer(viewer) {
   function destroy() {
     destroyed = true;
     for (const task of [...pendingGround.values()]) task.finish('cancelled');
-    for (const anno of osmAnnotations) hideOsmCredit(viewer, anno);
-    osmAnnotations.clear();
     for (const anno of drawn) {
       clearSets(anno);
       anno._draw = null;

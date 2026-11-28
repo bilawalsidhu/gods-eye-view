@@ -39,12 +39,12 @@ function marked(text) {
   };
 }
 
-test('the page starts in ?lang=, else the stored choice, with lang and dir set', () => {
+test('the page starts in ?lang=, else the stored choice, with lang and dir set', async () => {
   const doc = page();
   const storage = memoryStorage();
   storage.setItem(LOCALE_STORAGE_KEY, 'de');
   assert.equal(
-    startPageLocale(doc, {
+    await startPageLocale(doc, {
       location: { search: '?lang=ar' },
       storage,
       languages: ['ru'],
@@ -54,15 +54,19 @@ test('the page starts in ?lang=, else the stored choice, with lang and dir set',
   assert.equal(getLocale(), 'ar');
   assert.deepEqual(doc.documentElement, { lang: 'ar', dir: 'rtl' });
   assert.equal(
-    startPageLocale(doc, { location: { search: '' }, storage, languages: [] }),
+    await startPageLocale(doc, {
+      location: { search: '' },
+      storage,
+      languages: [],
+    }),
     'de',
   );
   assert.deepEqual(doc.documentElement, { lang: 'de', dir: 'ltr' });
 });
 
-test("the page's data-i18n markup is in its language from the start", () => {
+test("the page's data-i18n markup is in its language from the start", async () => {
   const close = marked('Close');
-  startPageLocale(page([close]), {
+  await startPageLocale(page([close]), {
     location: { search: '?lang=de' },
     storage: memoryStorage(),
     languages: [],
@@ -70,7 +74,7 @@ test("the page's data-i18n markup is in its language from the start", () => {
   assert.equal(close.textContent, 'Schließen');
 });
 
-test('a switch is stored, drops ?lang, and the followed page takes it', () => {
+test('a switch is stored, drops ?lang, and the followed page takes it', async () => {
   const doc = page();
   const stop = followPageLocale(doc);
   const storage = memoryStorage();
@@ -80,27 +84,27 @@ test('a switch is stored, drops ?lang, and the followed page takes it', () => {
     history: { replaceState: (_s, _t, url) => replaced.push(url) },
     storage,
   };
-  assert.equal(switchLocale('he', options), 'switched');
+  assert.equal(await switchLocale('he', options), 'switched');
   assert.equal(getLocale(), 'he');
   assert.equal(storage.data.get(LOCALE_STORAGE_KEY), 'he');
   assert.deepEqual(replaced, ['https://example.test/#view']);
   assert.deepEqual(doc.documentElement, { lang: 'he', dir: 'rtl' });
   stop();
-  switchLocale('ja', options);
+  await switchLocale('ja', options);
   assert.deepEqual(doc.documentElement, { lang: 'he', dir: 'rtl' });
 });
 
-test('choosing the active language, or one that falls back to it, changes nothing', () => {
+test('choosing the active language, or one that falls back to it, changes nothing', async () => {
   const storage = memoryStorage();
   const options = {
     location: { href: 'https://example.test/' },
     history: { replaceState() {} },
     storage,
   };
-  assert.equal(switchLocale('en', options), 'unchanged');
-  assert.equal(switchLocale('xx', options), 'unchanged');
+  assert.equal(await switchLocale('en', options), 'unchanged');
+  assert.equal(await switchLocale('xx', options), 'unchanged');
   assert.equal(storage.data.size, 0);
-  assert.equal(switchLocale('pt-BR', options), 'switched');
+  assert.equal(await switchLocale('pt-BR', options), 'switched');
   assert.equal(getLocale(), 'pt');
-  assert.equal(switchLocale('pt', options), 'unchanged');
+  assert.equal(await switchLocale('pt', options), 'unchanged');
 });

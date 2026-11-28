@@ -1694,6 +1694,8 @@ export function createStubRenderer(options = {}) {
       remove() {
         const i = imageryLayers.indexOf(layer);
         if (i >= 0) imageryLayers.splice(i, 1);
+        creditOff?.();
+        creditOff = null;
         sceneFrameLayers.delete(layer);
         frameFlushes.delete(layer);
         requestRender('imagery');
@@ -1773,6 +1775,8 @@ export function createStubRenderer(options = {}) {
         requestRender('imagery');
       };
     }
+    // The layer's credit is owed while the layer is on (the credits port).
+    let creditOff = spec.credit ? credits.addStatic(spec.credit) : null;
     if (index === undefined) imageryLayers.push(layer);
     else imageryLayers.splice(index, 0, layer);
     log('globe', 'imagery.add', [spec, index]);

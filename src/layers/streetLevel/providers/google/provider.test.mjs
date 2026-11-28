@@ -72,6 +72,7 @@ test('the provider registers beside Mapillary, off by default, gated on the brow
   assert.equal(def.groundClick, true);
   assert.equal(def.colors.coverage, PROVIDER_COLORS.google);
   assert.match(def.credit.html, /Street View imagery © .*Google/);
+  assert.equal(def.credit.onMap, true, "Google's credit is on the map");
   const mapillary = createMapillaryProvider({
     source: {
       getStatus() {},

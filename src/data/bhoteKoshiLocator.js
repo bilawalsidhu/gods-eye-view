@@ -15,8 +15,6 @@ import { lengthFraction } from '../geo/polyline.js';
 import {
   BHOTE_KOSHI_LOCATOR_CREDIT,
   registerDynamicCredit,
-  showOsmCredit,
-  hideOsmCredit,
 } from './dataCredits.js';
 import { BHOTE_KOSHI_FLOOD_PATH } from './bhoteKoshiFloodPath.js';
 import { INCIDENT_OVERVIEW_PLACES } from './bhoteKoshiIncidentPlaces.js';
@@ -1142,7 +1140,6 @@ export function createBhoteKoshiLocatorLayer({
     _drawing = true;
     renderPresentation();
     registerDynamicCredit(viewer, BHOTE_KOSHI_LOCATOR_CREDIT);
-    showOsmCredit(viewer, BHOTE_KOSHI_LOCATOR_LAYER_ID);
     installCalloutClick(viewer);
     requestRender('bhote-koshi-locator-callout');
 
@@ -1203,7 +1200,6 @@ export function createBhoteKoshiLocatorLayer({
   }
 
   async function disable() {
-    hideOsmCredit(_viewer, BHOTE_KOSHI_LOCATOR_LAYER_ID);
     _removeClick?.();
     _removeClick = null;
     _enabled = false;

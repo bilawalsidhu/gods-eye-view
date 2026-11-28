@@ -266,23 +266,6 @@ export function createRendering({
     return selected ? [...rendered, selected] : rendered;
   }
 
-  /** Show the OSM credit while any record is from OpenStreetMap, else hide it. */
-  function syncOsmCredit() {
-    if (
-      layerState.records?.some((r) =>
-        r.sources?.some((s) => s.name === 'OpenStreetMap'),
-      )
-    )
-      services.credits?.showOsmCredit?.(layerState.viewer, LAYER_ID, {
-        openMapTiles: layerState.records.some((r) =>
-          r.sources?.some(
-            (s) => s.name === 'OpenStreetMap' && s.id?.startsWith('tile:'),
-          ),
-        ),
-      });
-    else services.credits?.hideOsmCredit?.(layerState.viewer, LAYER_ID);
-  }
-
   function renderRecords({ claimSelection = false } = {}) {
     // Context navigation can select another layer without a canvas click.
     // A delayed floor/data repaint must not steal that newer selection back.
@@ -310,7 +293,6 @@ export function createRendering({
     // Post-moveEnd debounced fetches commit after the camera settles; the
     // rebuilt markers need one frame in idle mode.
     governorRequestRender('installations-render');
-    syncOsmCredit();
     const records = renderableRecords();
     const keys = new Map(
       records.map((record) => [record.id, renderKey(record)]),
@@ -477,7 +459,6 @@ export function createRendering({
     clearRendered,
     renderableRecords,
     renderRecords,
-    syncOsmCredit,
     warmInstallationFloors,
   };
 }

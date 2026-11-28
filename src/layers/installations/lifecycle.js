@@ -32,7 +32,6 @@ export function createLifecycle({
         parts.rendering.syncSelectionFill,
       );
       // Cached markers and geometry become visible before the next fetch.
-      parts.rendering.syncOsmCredit();
       parts.namedMarkers?.enable();
       parts.namedMarkers?.sync(layerState.records || []);
       registerPickOwner(LAYER_ID, (id) => layerState.recordById.has(id));
@@ -43,7 +42,6 @@ export function createLifecycle({
 
     disable() {
       layerState.enabled = false;
-      services.credits?.hideOsmCredit?.(layerState.viewer, LAYER_ID);
       parts.namedMarkers?.hide();
       layerState.contextAnchor = null;
       layerState.contextPosition = null;

@@ -350,7 +350,6 @@ export function createAnimation({
   /** Remove all point primitives and reset dot/road arrays and counters. */
 
   function clearDots() {
-    services.credits?.hideOsmCredit?.(layerState._viewer, 'traffic');
     parts.retention.clear();
     if (layerState._dots.length) layerState._motion.rebuilds++;
     layerState._dotSet?.clear();

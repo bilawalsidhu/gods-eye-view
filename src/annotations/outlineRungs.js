@@ -289,11 +289,10 @@ export function createOutlineRungs({
       if (!fp) return null;
       const patch = finish(fp, asScope);
       if (patch?.ring) {
-        patch.outlineCredit = provider === 'openfreemap' ? 'tiles' : 'osm';
         // Which source answered, so a stored area names it (OpenFreeMap or
         // Nominatim) instead of defaulting to the Overpass rungs.
         patch.outlineSource = provider;
-        ctx.credit?.(patch.outlineCredit);
+        ctx.credit?.(provider === 'openfreemap' ? 'tiles' : 'osm');
         // One line per answered outline, like the resolver's own trace.
         console.log(
           `[Outline] "${ctx.target || ''}": scope=${asScope} → ${provider}` +

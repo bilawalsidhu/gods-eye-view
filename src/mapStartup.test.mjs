@@ -62,7 +62,6 @@ async function standaloneStartup(Cesium, credentials, fetchImpl) {
     document: {
       getElementById: () => ({ querySelector: () => ({}) }),
     },
-    startPageLocale: () => 'en',
     followPageLocale: () => () => {},
     mountApplicationViews() {},
     applyDocumentTranslations() {},

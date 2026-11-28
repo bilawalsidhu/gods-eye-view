@@ -130,14 +130,15 @@ test('opening focuses the list on the current language; keys move and choose', a
   assert.equal(document.activeElement === button, true);
 });
 
-test('choosing the active language closes without a choice; Escape and outside presses close', async (t) => {
+test('choosing the active language closes and leaves it to the shell; Escape and outside presses close', async (t) => {
   const { $, chosen, key, outside, settle } = fixture(t);
   const button = $('.locale-picker-button');
   button.click();
   await settle();
   $('[data-locale="en"]').click();
   await settle();
-  assert.deepEqual(chosen, []);
+  // The shell keeps it, or, while another language loads, goes back to it.
+  assert.deepEqual(chosen, ['en']);
   assert.equal($('#locale-picker-popup').hidden, true);
 
   button.click();

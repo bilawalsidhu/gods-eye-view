@@ -1445,21 +1445,20 @@ test('only an explicit navigation request permits resolving distant annotation t
 });
 
 
-test('recaption inherits outline credit from borrowed geometry rather than its new anchor', async (t) => {
+test('recaption keeps borrowed geometry rather than its new anchor', async (t) => {
   installAnimationFrameStubs(t);
   const { renderer } = fakeRenderer();
   let first = true;
   const ring = [[-99,31],[-98.99,31],[-98.99,31.01],[-99,31]];
   const engine = createAnnotationEngine({ viewer: {}, renderer,
     resolveTarget: async () => {
-      if (first) { first = false; return { ...FIXED_POINT, ring, footprintKind: 'area', outlineCredit: 'tiles' }; }
+      if (first) { first = false; return { ...FIXED_POINT, ring, footprintKind: 'area' }; }
       return { ...FIXED_POINT, source: 'osm-local', resolveOutline: async () => null };
     },
   });
   await engine.annotate([{ type: 'area', target: 'Library', label: 'Old' }]);
   await engine.annotate([{ type: 'area', target: 'Library', label: 'New' }]);
   await flushMicrotasks();
-  assert.equal(engine.list()[0].outlineCredit, 'tiles');
   assert.equal(engine.list()[0].ring, ring);
   engine.clear();
 });

@@ -143,13 +143,23 @@
 
 .entity-card__facts {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-auto-flow: row dense;
   gap: 0.4rem 0.75rem;
   margin: 0 0 0.55rem;
 }
 
 .entity-card__fact {
   min-width: 0;
+}
+
+.entity-card__fact--wide {
+  grid-column: 1 / -1;
+}
+
+.entity-card__fact--wide dd {
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .entity-card__fact dt {

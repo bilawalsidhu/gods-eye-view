@@ -4,8 +4,6 @@ import { getEventListeners } from 'node:events';
 import * as Cesium from 'cesium';
 import { bindFakeCesiumCamera } from '../../testSupport/fakeCameraPort.mjs';
 import { createStreetLevelLayer } from './index.js';
-import { MAPILLARY_CREDIT_HTML } from './providers/mapillary/policy.js';
-import { creditFromMarkup } from '../../render/creditMarkup.js';
 import { createMapillaryProvider } from './providers/mapillary/index.js';
 import { createKartaViewProvider } from './providers/kartaview/index.js';
 import {
@@ -71,20 +69,18 @@ function deferred() {
 const posingViewer = () =>
   fakePhotoViewer({ pose: { position: { lon: -121.49, lat: 38.58 } } });
 
-test('the CC BY-SA credit shows while Mapillary is on and goes with it', async (t) => {
+test("Mapillary's credit is in the Data attribution list while it is on, never on the map", async (t) => {
   const { layer, viewer } = await startLayer(t);
-  const shown = () =>
-    viewer.credits.map((credit) => creditFromMarkup(credit.html).text);
-  const mapillary = creditFromMarkup(MAPILLARY_CREDIT_HTML).text;
-  assert.deepEqual(shown(), [mapillary], 'shown on enable');
-  assert.ok(viewer.credits[0].showOnScreen, 'on the map');
-  assert.match(shown()[0], /CC BY-SA 4\.0/);
+  const listed = () => viewer.credits.filter((credit) => !credit.showOnScreen);
+  assert.equal(viewer.credits.length, 1, 'credited while on');
+  assert.equal(listed().length, 1, 'in the list, not on the map');
+  assert.match(listed()[0].html, /CC BY-SA 4\.0/);
   layer.setParams({ mapillary: false });
-  assert.deepEqual(shown(), [], 'hidden with the switch');
+  assert.deepEqual(viewer.credits, [], 'goes with the switch');
   layer.setParams({ mapillary: true });
-  assert.deepEqual(shown(), [mapillary]);
+  assert.equal(listed().length, 1);
   layer.disable();
-  assert.deepEqual(shown(), [], 'the credit goes with the layer');
+  assert.deepEqual(viewer.credits, [], 'goes with the layer');
 });
 
 test('coverage asks for no tiles before the key status is known, and none without a key', async (t) => {
@@ -356,7 +352,9 @@ function fakeViewer() {
       },
     },
     creditDisplay: {
-      addStaticCredit: (credit) => credits.push(credit),
+      // The renderer's own CesiumJS credit aside.
+      addStaticCredit: (credit) =>
+        credit.html.includes('CesiumJS') || credits.push(credit),
       removeStaticCredit: (credit) => {
         // Cesium ignores a credit it does not hold.
         const at = credits.indexOf(credit);
@@ -612,7 +610,6 @@ test('switching a provider on while the layer is off activates nothing (M01)', a
   layer.setParams({ mapillary: true });
   await new Promise((resolve) => setTimeout(resolve, 40)); // past whenIdle
   assert.equal(provider.calls.activate, 0, 'no coverage drawn');
-  assert.deepEqual(viewer.credits, [], 'no credit shown');
   assert.deepEqual(prewarmed, [], 'no viewer stood up');
   assert.equal(layer.getUIState().providers[0].on, true, 'the switch is kept');
   // Enabling the layer is what activates it, once.
@@ -662,6 +659,19 @@ async function withStreetView(
   layer.attachViewerHost(fakeHost());
   return { layer, viewer, stack, fake, loader, mapillaryLookups };
 }
+
+test("Street View's Google credit is on the map while it is lit, and goes with it", async (t) => {
+  const { layer, viewer } = await withStreetView(t);
+  const onMap = () => viewer.credits.filter((credit) => credit.showOnScreen);
+  assert.deepEqual(onMap(), [], 'Mapillary lit: nothing on the map');
+  layer.setProviderEnabled('google', true);
+  await settle();
+  assert.equal(onMap().length, 1);
+  assert.match(onMap()[0].html, /Google/);
+  layer.setProviderEnabled('google', false);
+  await settle();
+  assert.deepEqual(onMap(), []);
+});
 
 test('Street View starts off, and the layer row names the key of the providers that are on', async (t) => {
   const { layer } = await withStreetView(t);

@@ -1,7 +1,12 @@
 import { isFollowing } from '../../data/followed.js';
 import { createUnavailableRetry } from '../../data/unavailableRetry.js';
 import { isUnavailableCapability } from '../../sources/capability.js';
-import { cameraOf, drawOf, findFrame } from '../../render/rendererOf.js';
+import {
+  cameraOf,
+  drawOf,
+  findCredits,
+  findFrame,
+} from '../../render/rendererOf.js';
 import {
   LAYER_ID,
   REQUEST_DEBOUNCE_MS,
@@ -31,7 +36,9 @@ let instances = 0;
  * model only selects a vendored datasheet line (modelSpecs.js), never shown
  * as text.
  * Source label and attribution { name, description, text, href } identify the
- * actual provider; href must be HTTPS. Provider payload parsing stays in source.
+ * actual provider; href must be HTTPS. `text` and `href` are its credit, in
+ * the "Data attribution" list while the layer is on. Provider payload parsing
+ * stays in source.
  * Context services remove obsolete records with
  * removeEntityContextsForLayer(layerId, { retainIds: Set<string> }), preserving
  * retained selection without dispatching a new selection event.
@@ -47,9 +54,7 @@ export function createAlprCamerasLayer({ source, services } = {}) {
     viewer: null,
     /** The camera markers, drawn as one icon set. */
     markers: createAlprMarkerSet(),
-    credit: null,
-    creditTimer: null,
-    creditPresented: false,
+    /** The source's credit while the layer is on: its Off. */
     creditOff: null,
     enabled: false,
     records: [],
@@ -87,7 +92,6 @@ export function createAlprCamerasLayer({ source, services } = {}) {
     destroyOverlay,
     viewportBox,
     clearRendered,
-    hideOnMapCredit,
     renderRecords,
     focusNearest,
     clearSelection,
@@ -285,7 +289,6 @@ export function createAlprCamerasLayer({ source, services } = {}) {
           show: state.enabled,
         }),
       );
-      state.credit = alprCredit(source.attribution);
       state.moveEndRemove = cameraOf(viewer).on('moveEnd', scheduleLoad);
       state.postRenderRemove =
         findFrame(viewer)?.on('postRender', () => updateSelectedAnchor()) ??
@@ -296,14 +299,17 @@ export function createAlprCamerasLayer({ source, services } = {}) {
     enable() {
       if (state.enabled) return;
       state.enabled = true;
-      state.creditPresented = false;
+      const credit = alprCredit(source.attribution);
+      if (credit)
+        state.creditOff = findCredits(state.viewer)?.addStatic(credit) ?? null;
       registerPickOwner(LAYER_ID, (id) => state.recordById.has(id));
       state.markers.icons.show = true;
       // DataLayerManager calls update() right after enable(); it owns the first fetch.
     },
     disable() {
       state.enabled = false;
-      hideOnMapCredit();
+      state.creditOff?.();
+      state.creditOff = null;
       unregisterPickOwner(LAYER_ID);
       clearUnavailableRetry();
       clearTimeout(state.debounceTimer);
@@ -321,6 +327,8 @@ export function createAlprCamerasLayer({ source, services } = {}) {
       return loadCameras();
     },
     destroy(viewer = state.viewer) {
+      state.creditOff?.();
+      state.creditOff = null;
       source.destroy?.();
       this.disable();
       destroyOverlay();
@@ -332,8 +340,6 @@ export function createAlprCamerasLayer({ source, services } = {}) {
       state.clickSubscription = null;
       clearRendered();
       state.markers.dispose();
-      state.credit = null;
-      state.creditPresented = false;
       state.records = [];
       state.recordById = new Map();
       state.lastQueryBox = null;

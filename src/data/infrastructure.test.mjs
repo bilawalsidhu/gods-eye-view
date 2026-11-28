@@ -10,12 +10,9 @@ import { parseGeojsonLines } from '../sources/infrastructureData.js';
 
 function services() {
   const records = new Map();
-  const credited = [];
   let selection;
   return {
     records,
-    credited,
-    showOsmCredit: (viewer) => credited.push(viewer),
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
     registerEntityContext(entity, metadata) {
       records.set(metadata.id, { entity, ...metadata });
@@ -145,7 +142,6 @@ test('Acaray and Yacyretá each get a stem, a selection context and an analyst r
     {
       id: 'local-dams',
       name: 'Dams',
-      osmDerived: true,
       color: '#0088ff',
       url: '/dams.geojsonl',
     },
@@ -200,7 +196,6 @@ test('two viewers use their supplied contexts and dispose independently', async 
       {
         id: 'local-dams',
         name: 'Dams',
-        osmDerived: true,
         color: '#0088ff',
         url: '/dams.geojsonl',
       },
@@ -228,10 +223,6 @@ test('two viewers use their supplied contexts and dispose independently', async 
   );
   await Promise.all(instances.map(({ layer, viewer }) => layer.enable(viewer)));
   assert.equal(hosts[0].records.size, 1);
-  assert.deepEqual(
-    hosts.map((host) => host.credited),
-    instances.map(({ viewer }) => [viewer]),
-  );
   assert.equal(hosts[1].records.size, 1);
   instances[0].click();
   assert.ok(hosts[0].selection());

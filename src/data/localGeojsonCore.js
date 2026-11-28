@@ -658,7 +658,6 @@ export function createLocalGeoJsonLayer(
     color,
     icon = '📍',
     source = 'Local JSONL',
-    osmDerived = false,
     labels = true,
     labelMax = DEFAULT_LABEL_MAX,
     labelGridPx = DEFAULT_LABEL_GRID_PX,
@@ -676,8 +675,6 @@ export function createLocalGeoJsonLayer(
     removeEntityContextsForLayer,
     getSelectedEntityContext = null,
     governorRequestRender,
-    showOsmCredit,
-    hideOsmCredit,
   },
 ) {
   const setPrefix = `${id}:${++layerInstances}`;
@@ -828,7 +825,6 @@ export function createLocalGeoJsonLayer(
   };
 
   const disableLayer = (viewer) => {
-    hideOsmCredit?.(viewer, id);
     _enabled = false;
     clearGroundRetryRender();
     _activeLodIds = new Set();
@@ -1392,7 +1388,6 @@ export function createLocalGeoJsonLayer(
       }
 
       if (_destroyed) return;
-      if (_enabled && _count > 0 && osmDerived) showOsmCredit?.(viewer, id);
       // 3. Add an incredibly fast pre-render occluder to hide points behind the globe
       if (_enabled && !_preRenderRemover) {
         // With no renderer to run frames (a viewer with no renderer, before it has

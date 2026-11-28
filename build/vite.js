@@ -5,6 +5,7 @@ import { VUE_PLUGIN_OPTIONS } from './vueOptions.js';
 import { DEFAULT_ALLOWED_HOSTS, hostCheckPlugin } from './allowedHosts.js';
 import { embedFramingPlugin } from './embed-framing.js';
 import { panelBuildPlugin } from './panel.js';
+import { localeChunksPlugin } from './localeChunks.js';
 
 /**
  * The repository root (this file lives at `<root>/build/vite.js`), as a
@@ -191,6 +192,8 @@ export function createBrowserViteConfig({
       ...plugins,
       embedFramingPlugin(),
       panelBuildPlugin(),
+      // Only the startup language's catalog loads with the page.
+      localeChunksPlugin(),
     ],
     ...(publicDir === undefined ? {} : { publicDir }),
     // A production build must not clean the dependency cache a running dev
