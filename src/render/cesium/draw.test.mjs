@@ -8,7 +8,6 @@ import {
   LONG_SETTLE_MS,
   MOVING_SHAPES,
   OVERLAY_GRANULARITY,
-  overlayInView,
   revealUniform,
   SETTLE_MS,
   unboundDrawPart,
@@ -6065,6 +6064,55 @@ test('an overlay shape draws its fill on the ellipsoid over everything, and its 
     assert.equal(scene.added.length, 0);
   }));
 
+const OVERLAY_HEIGHT_K = 100_000; // OVERLAY_HORIZON's switch height in draw.js
+
+/** `OVERLAY_HORIZON`'s test (draw.js), for checks: whether an overlay's point
+ *  `position` (world metres) is drawn from `eye`. With `float32`, each step
+ *  is rounded to float32 as in the shader, from what the shader is given:
+ *  the point less the eye, the eye, and the eye's height (at least 1 m). */
+function overlayInView(position, eye, { float32 = false } = {}) {
+  const f = float32 ? Math.fround : (x) => x;
+  const vec = (c) => [f(c.x), f(c.y), f(c.z)];
+  const mul = (x, y) => x.map((c, i) => f(c * y[i]));
+  const dot = (x, y) => f(f(f(x[0] * y[0]) + f(x[1] * y[1])) + f(x[2] * y[2]));
+  const ellipsoid = Cesium.Ellipsoid.WGS84;
+  const inverse = vec(ellipsoid.oneOverRadii);
+  const e = vec(eye);
+  const h = f(Math.max(ellipsoid.cartesianToCartographic(eye).height, 1));
+  const scaled = mul(e, inverse);
+  const v = mul(
+    vec(Cesium.Cartesian3.subtract(position, eye, new Cesium.Cartesian3())),
+    inverse,
+  );
+  const k =
+    h <= OVERLAY_HEIGHT_K
+      ? heightK(e, h, inverse, f)
+      : f(dot(scaled, scaled) - 1);
+  const ka = f(k + dot(scaled, v));
+  return f(1 + ka) >= 0 && dot(v, v) <= f(k + f(ka * ka));
+}
+
+/** `OVERLAY_HORIZON`'s `k` near the surface, from the eye's height `h`. */
+function heightK(e, h, inverse, f) {
+  const mul = (x, y) => x.map((c, i) => f(c * y[i]));
+  const dot = (x, y) => f(f(f(x[0] * y[0]) + f(x[1] * y[1])) + f(x[2] * y[2]));
+  const over = mul(mul(e, inverse), inverse);
+  const length = f(Math.sqrt(dot(over, over)));
+  const normal = over.map((c) => f(c / length));
+  const foot = mul(
+    mul(
+      e.map((c, i) => f(c - f(h * normal[i]))),
+      inverse,
+    ),
+    inverse,
+  );
+  const normalScaled = mul(normal, inverse);
+  return f(
+    f(f(2 * h) * f(Math.sqrt(dot(foot, foot)))) +
+      f(f(h * h) * dot(normalScaled, normalScaled)),
+  );
+}
+
 test('an overlay line crossing the horizon keeps its near part and drops its far part', () =>
   withImageClasses(() => {
     const scene = fakeScene();
@@ -6103,6 +6151,8 @@ test('an overlay line crossing the horizon keeps its near part and drops its far
         look.fragmentShaderSource,
         /overlayPastHorizon\(v_overlayRte\)\) discard/,
       );
+      // The model below switches its `k` at the shader's own height.
+      assert.match(look.fragmentShaderSource, /if \(h <= 100000\.0\)/);
       // Each corner hands on its segment's end as Cesium draws it: cut at
       // the near plane, turned back from the eye's frame.
       assert.match(

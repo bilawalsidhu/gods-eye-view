@@ -156,53 +156,6 @@ bool overlayPastHorizon(vec3 rte)
 }
 `;
 
-/** `OVERLAY_HORIZON`'s test, for checks: whether an overlay's point
- *  `position` (world metres) is drawn from `eye`. With `float32`, each step
- *  is rounded to float32 as in the shader, from what the shader is given:
- *  the point less the eye, the eye, and the eye's height (at least 1 m). */
-export function overlayInView(position, eye, { float32 = false } = {}) {
-  const f = float32 ? Math.fround : (x) => x;
-  const vec = (c) => [f(c.x), f(c.y), f(c.z)];
-  const mul = (x, y) => x.map((c, i) => f(c * y[i]));
-  const dot = (x, y) => f(f(f(x[0] * y[0]) + f(x[1] * y[1])) + f(x[2] * y[2]));
-  const ellipsoid = Cesium.Ellipsoid.WGS84;
-  const inverse = vec(ellipsoid.oneOverRadii);
-  const e = vec(eye);
-  const h = f(Math.max(ellipsoid.cartesianToCartographic(eye).height, 1));
-  const scaled = mul(e, inverse);
-  const v = mul(
-    vec(Cesium.Cartesian3.subtract(position, eye, new Cesium.Cartesian3())),
-    inverse,
-  );
-  const k =
-    h <= OVERLAY_HEIGHT_K
-      ? heightK(e, h, inverse, f)
-      : f(dot(scaled, scaled) - 1);
-  const ka = f(k + dot(scaled, v));
-  return f(1 + ka) >= 0 && dot(v, v) <= f(k + f(ka * ka));
-}
-
-/** `OVERLAY_HORIZON`'s `k` near the surface, from the eye's height `h`. */
-function heightK(e, h, inverse, f) {
-  const mul = (x, y) => x.map((c, i) => f(c * y[i]));
-  const dot = (x, y) => f(f(f(x[0] * y[0]) + f(x[1] * y[1])) + f(x[2] * y[2]));
-  const over = mul(mul(e, inverse), inverse);
-  const length = f(Math.sqrt(dot(over, over)));
-  const normal = over.map((c) => f(c / length));
-  const foot = mul(
-    mul(
-      e.map((c, i) => f(c - f(h * normal[i]))),
-      inverse,
-    ),
-    inverse,
-  );
-  const normalScaled = mul(normal, inverse);
-  return f(
-    f(f(2 * h) * f(Math.sqrt(dot(foot, foot)))) +
-      f(f(h * h) * dot(normalScaled, normalScaled)),
-  );
-}
-
 /**
  * Fills clamped as an overlay (`clampTo: 'overlay'`): on the ellipsoid, drawn
  * over the tiles and terrain with no depth test, so neither hides them, and
