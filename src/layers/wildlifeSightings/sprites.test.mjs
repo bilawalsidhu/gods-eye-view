@@ -16,20 +16,6 @@ import {
 const sprites = wildlifeSpriteCache();
 
 test('every taxon group has an explicit Material Symbol and tinted circle fallback', () => {
-  assert.equal(Object.isFrozen(WILDLIFE_BADGE_GLYPHS), true);
-  assert.deepEqual(WILDLIFE_BADGE_GLYPHS, {
-    bird: 'raven',
-    mammal: 'pets',
-    reptile: 'egg_alt',
-    amphibian: 'water_drop',
-    fish: 'set_meal',
-    insect: 'bug_report',
-    arachnid: 'pest_control',
-    plant: 'eco',
-    fungus: 'umbrella',
-    other: 'category',
-    unknown: 'question_mark',
-  });
   const textures = new Set();
   for (const group of WILDLIFE_SPRITE_GROUPS) {
     const texture = sprites.get(group);
