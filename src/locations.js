@@ -73,16 +73,6 @@ export function flyToGlobeView(viewer, options = {}) {
 }
 
 /**
- * Flat list of locations for backward compatibility.
- */
-export const LOCATIONS = Object.entries(CITY_POIS).map(([id, city]) => ({
-  id,
-  name: city.name,
-  lat: city.pois[0].lat,
-  lon: city.pois[0].lon,
-}));
-
-/**
  * Fly the camera to a landmark using lookAt-based targeting.
  * Guarantees the target is centered in viewport via flyToBoundingSphere + lookAt.
  *
