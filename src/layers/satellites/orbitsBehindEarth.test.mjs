@@ -105,7 +105,7 @@ test('satellite orbits are hidden by the Earth behind it, not drawn over it', ()
   withImageClasses(() => {
     const { scene, state, rendering } = ringsOverCesium();
     try {
-      rendering._showOrbitPath(ISS_NORAD, [1, 0.27, 0.27, 1]);
+      rendering._showOrbitPath(ISS_NORAD, TRACKED_ORBIT_COLOR);
       rendering._showOrbitPath(20580, TRACKED_ORBIT_COLOR);
       const all = scene.added.flatMap((host) => primitivesIn(host));
       // Nothing draws where the Earth is in front of a ring.
@@ -116,8 +116,7 @@ test('satellite orbits are hidden by the Earth behind it, not drawn over it', ()
         0,
         'no ring has a colour behind the surface',
       );
-      // Both rings are plain depth-tested polylines, in their own colours
-      // and widths.
+      // Both rings are plain depth-tested polylines, the ISS's as any other.
       const polylines = all.filter(
         (p) => p instanceof Cesium.PolylineCollection,
       );
@@ -128,14 +127,14 @@ test('satellite orbits are hidden by the Earth behind it, not drawn over it', ()
       const iss = byId.get(String(ISS_NORAD));
       const other = byId.get('20580');
       assert.ok(iss && other, 'both rings are drawn');
-      assert.equal(iss.width, 2.5, 'the ISS ring is wider');
+      assert.equal(iss.width, 2, 'the ISS ring is as wide as any');
       assert.equal(other.width, 2);
       assert.ok(
         Cesium.Color.equals(
           iss.material.uniforms.color,
-          new Cesium.Color(1, 0.27, 0.27, 0.6),
+          new Cesium.Color(1, 1, 0, 0.6),
         ),
-        'the ISS ring keeps its red',
+        'the ISS ring has no colour of its own',
       );
       assert.ok(
         Cesium.Color.equals(

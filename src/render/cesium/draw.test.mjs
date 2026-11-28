@@ -2766,7 +2766,7 @@ test('the satellites layer draws its dots as one point collection and its rings 
   assert.ok(polylines, 'the ring is a polyline, hidden behind the Earth');
   const ringLine = polylines.get(0);
   assert.equal(ringLine.id.id, '25544');
-  assert.equal(ringLine.width, 2.5);
+  assert.equal(ringLine.width, 2);
   // In the rings' set, which takes no part in picks: ring clicks fall
   // through to the satellites (`query.pick` drills past it).
   assert.match(ringLine.id.set, /^satellites:\d+:rings$/);

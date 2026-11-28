@@ -467,7 +467,7 @@ test('a subject that is not tracked holds nothing', async (t) => {
   f.nextFrame();
   assert.equal(dotShown(f), true);
   assert.equal(f.ring(GPS).show, true);
-  assert.equal(f.ring(ISS_NORAD).show, true);
+  assert.equal(f.ring(ISS_NORAD), undefined, 'an untracked ISS has no ring');
 });
 
 test('untracking a held subject gives its marks back', async (t) => {
@@ -478,7 +478,7 @@ test('untracking a held subject gives its marks back', async (t) => {
   assert.equal(f.ring(ISS_NORAD).show, false);
   f.methods.stopTracking();
   assert.equal(f.methods.getCockpitSubject(), null);
-  assert.equal(f.ring(ISS_NORAD).show, true);
+  assert.equal(f.ring(ISS_NORAD), undefined, 'untracked, its ring is gone');
   assert.equal(f.state._points.get(COMPANION).show, true);
   assert.equal(f.state._points.get(ISS_NORAD).show, true);
 });
@@ -502,7 +502,7 @@ test('a catalog refresh while held keeps the subject and its companions hidden',
   assert.equal(f.state._points.get(COMPANION).show, true, 'given back');
 });
 
-test('untracking a held ISS leaves its ring hidden while Stations is off', async (t) => {
+test('untracking a held ISS leaves no ring, whatever Stations is', async (t) => {
   const f = await fixture(t);
   f.track(ISS_NORAD);
   f.nextFrame();
@@ -510,9 +510,22 @@ test('untracking a held ISS leaves its ring hidden while Stations is off', async
   f.methods.setParams({ classes: 'itpd' });
   f.nextFrame();
   f.methods.stopTracking();
-  assert.equal(f.ring(ISS_NORAD).show, false);
+  assert.equal(f.ring(ISS_NORAD), undefined);
   f.methods.setParams({ classes: 'sitpd' });
-  assert.equal(f.ring(ISS_NORAD).show, true);
+  assert.equal(f.ring(ISS_NORAD), undefined);
+});
+
+test('a click with Orbits off builds the ring hidden; Orbits on shows it', async (t) => {
+  const f = await fixture(t);
+  f.methods.setParams({ showOrbits: false });
+  f.track(ISS_NORAD);
+  f.nextFrame();
+  assert.equal(f.ring(ISS_NORAD).show, false, 'the ISS');
+  f.track(GPS);
+  f.nextFrame();
+  assert.equal(f.ring(GPS).show, false, 'any satellite');
+  f.methods.setParams({ showOrbits: true });
+  assert.equal(f.ring(GPS).show, true);
 });
 
 test('tracking without a Cockpit subject keeps its marks', async (t) => {
@@ -539,7 +552,9 @@ test('a Cockpit subject dims every other orbit ring and restores it exactly', as
   const f = await fixture(t);
   f.track(GPS);
   f.nextFrame();
-  assert.ok(f.ring(ISS_NORAD), 'the ISS ring is drawn beside the tracked one');
+  // Only the tracked satellite has a ring; build another to see it dimmed.
+  f.parts.rendering._showOrbitPath(ISS_NORAD, TRACKED_ORBIT_COLOR);
+  assert.ok(f.ring(ISS_NORAD), 'another ring is drawn beside the tracked one');
   const issBuilt = ringColors(f, ISS_NORAD);
   const gpsBuilt = ringColors(f, GPS);
 
@@ -732,23 +747,18 @@ test('the station offers its mount only while the Cockpit rides it', async (t) =
   assert.equal(f.methods.getCockpitMount(), null, 'released');
 });
 
-test('a satellite docked to the ISS draws no ring of its own: the ISS’s shows', async (t) => {
+test('a satellite docked to the ISS draws its own ring, as every tracked satellite does', async (t) => {
   const f = await fixture(t);
+  assert.equal(f.ring(ISS_NORAD), undefined, 'no ring before a click');
   f.track(COMPANION);
   f.nextFrame();
-  assert.equal(f.state._trackedDockedToIss, true);
-  assert.equal(f.ring(COMPANION), undefined, 'no second ring');
-  assert.equal(f.ring(ISS_NORAD).show, true);
-  // The ISS's ring stands for it even with the stations class hidden.
-  f.methods.setParams({ classes: { stations: false } });
-  assert.equal(f.ring(ISS_NORAD).show, true);
-  // Another satellite keeps its own ring; the ISS's goes with its class.
+  assert.equal(f.state._trackedDockedToStation, ISS_NORAD);
+  assert.equal(f.ring(COMPANION).show, true);
+  assert.equal(f.ring(ISS_NORAD), undefined, 'the ISS draws none for it');
   f.track(GPS);
   f.nextFrame();
-  assert.equal(f.state._trackedDockedToIss, false);
-  assert.ok(f.ring(GPS));
+  assert.equal(f.ring(COMPANION), undefined, 'the last one goes');
   assert.equal(f.ring(GPS).show, true);
-  assert.equal(f.ring(ISS_NORAD).show, false);
 });
 
 test('destroying the layer empties the result array detection last read', async (t) => {

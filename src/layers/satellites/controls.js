@@ -54,7 +54,7 @@ export function createControls({ state: layerState, services, parts, source }) {
   /**
    * Show or hide every point by its class. The tracked satellite's point
    * stays hidden (its entity draws the dot), as do points a Cockpit hold hid.
-   * The ISS's ring and label go with its class.
+   * The ISS's label goes with its class.
    */
   function _applyClassVisibility() {
     for (const noradId of layerState._points.keys()) {
@@ -62,31 +62,8 @@ export function createControls({ state: layerState, services, parts, source }) {
       if (layerState._cockpitHiddenPoints?.has(noradId)) continue;
       parts.rendering._setPointShown(noradId, _classVisible(noradId));
     }
-    _syncIssOrbit();
     parts.labels?._syncIssOverlay?.();
     layerState._detectionObjects.clear();
-  }
-
-  /**
-   * Whether the ISS's ring shows: orbits on, the layer drawing, and its
-   * class on or the ISS tracked (a tracked satellite keeps its ring), also
-   * as an object docked to it, which draws no ring of its own.
-   */
-  function _issOrbitVisible() {
-    return (
-      satelliteVisualsVisible(
-        layerState._enabled,
-        layerState._params.showOrbits,
-      ) &&
-      (_classVisible(ISS_NORAD) ||
-        layerState._trackedNorad === ISS_NORAD ||
-        Boolean(layerState._trackedDockedToIss))
-    );
-  }
-
-  /** Show or hide the ISS's ring by _issOrbitVisible, if it is built. */
-  function _syncIssOrbit() {
-    parts.rendering._setOrbitPathShown(ISS_NORAD, _issOrbitVisible());
   }
 
   /**
@@ -687,12 +664,10 @@ export function createControls({ state: layerState, services, parts, source }) {
         for (const noradId of layerState._orbitPaths.keys())
           parts.rendering._setOrbitPathShown(
             noradId,
-            noradId === ISS_NORAD
-              ? _issOrbitVisible()
-              : satelliteVisualsVisible(
-                  layerState._enabled,
-                  layerState._params.showOrbits,
-                ),
+            satelliteVisualsVisible(
+              layerState._enabled,
+              layerState._params.showOrbits,
+            ),
           );
         parts.labels._syncIssOverlay();
       }
@@ -832,8 +807,6 @@ export function createControls({ state: layerState, services, parts, source }) {
     _classTally,
     _classVisible,
     _applyClassVisibility,
-    _issOrbitVisible,
-    _syncIssOrbit,
     satelliteVisualsVisible,
     satelliteCatalogModeChanged,
     methods,

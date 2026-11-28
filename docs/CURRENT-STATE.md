@@ -2256,10 +2256,8 @@ does for the ISS (drawn from a later sample it stood a frame of orbital
 motion, over 100 m, off the camera's centre); its tracked dot and orbit ring
 leave the near range to the model, its card keeps clear of the model, and the
 command panel and the live video show as they do for the ISS. Such an entry
-draws no orbit ring of its own (its elements would put a second line beside
-the ISS's through the same station): when tracking judges it docked (both
-orbits at one instant within 5 km) the ISS's ring shows for it, even with the
-Stations class hidden.
+draws its own orbit ring while tracked, as every satellite does; tracking
+judges it docked when both orbits are within 5 km at one instant.
 In the Cockpit, a station entry is ridden from the station itself instead of
 the straight-down picture: the camera sits at a point on the model
 (`issMounts.js`), with the model drawn, and looks out, away from the station.
@@ -2417,7 +2415,7 @@ docked entries). `policy.js` lists both stations (`STATIONS`) and
 `stationModels.js` says which station a tracked entry belongs to, so the card,
 the detection marks, the LIVE keys, the Cockpit's mounts and the STATION
 section work per station rather than for the ISS alone (tracking records
-`_trackedDockedToStation`; the ISS's ring keeps its own rules). The model
+`_trackedDockedToStation`). The model
 (`public/models/tiangong.glb`, 382 KB, 26 k triangles) is the project's own,
 built from primitives with procedural textures, in meters and in the ISS
 file's frame, so it takes the ISS's flight-axes mapping: the station is
@@ -3059,7 +3057,7 @@ are cleared and picked again. The Cockpit cloud pass is off in orbit
 (it fades out above 24 km); cloud cover from orbit is the Weather layer's,
 and the saved cloud preference stands for the next aircraft or bridge. The layer hides the satellite's dot, docked
 companions, its own orbit ring and its detection bracket, and draws every
-other orbit ring (the ISS ring included) at 30% of its alpha; other
+other orbit ring at 30% of its alpha; other
 satellites' points and labels stay. Scene clicks and the layer's Escape are
 ignored by the satellites layer while it is ridden (a click on a mapped
 site focuses it; see below). The optical zoom steps 1×, 2×, 4× and 8× for

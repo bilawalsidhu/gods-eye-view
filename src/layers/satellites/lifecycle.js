@@ -107,17 +107,14 @@ export function createLifecycle({
           layerState._params.showPoints,
         ),
       );
-      // Orbit rings + persistent ISS host label — show them; the ISS's ring
-      // follows its class (and its tracking).
+      // Orbit rings + persistent ISS host label — show them.
       for (const noradId of layerState._orbitPaths.keys())
         parts.rendering._setOrbitPathShown(
           noradId,
-          noradId === ISS_NORAD
-            ? parts.controls._issOrbitVisible()
-            : parts.controls.satelliteVisualsVisible(
-                layerState._enabled,
-                layerState._params.showOrbits,
-              ),
+          parts.controls.satelliteVisualsVisible(
+            layerState._enabled,
+            layerState._params.showOrbits,
+          ),
         );
       parts.labels._syncIssOverlay();
       // Re-attach input handlers and preRender propagation

@@ -29,14 +29,15 @@ test("Tiangong is CSS (TIANHE) by NORAD number, drawn at the file's meters", () 
   assert.equal(typeof spec.createArticulation().update, 'function');
 });
 
-test("the ISS spec keeps the ISS's own rules", () => {
+test("the ISS spec keeps the ISS's own rules; its ring has none", () => {
   const spec = issModelSpec({ parts: {} });
   assert.equal(spec.norad, ISS_NORAD);
   assert.equal(spec.key, 'iss');
   assert.equal(spec.hideInCockpit, false);
   assert.equal(typeof spec.cockpitMount, 'function');
   assert.equal(typeof spec.createTelemetry, 'function');
-  assert.equal(typeof spec.syncOrbit, 'function');
+  // Its ring is drawn only while tracked, as for every satellite.
+  assert.equal(spec.syncOrbit, null);
 });
 
 test("the station's modules are CSS (…) entries; ships are vehicles", () => {
