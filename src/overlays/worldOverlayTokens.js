@@ -122,23 +122,6 @@ export const DETECTION_STYLE = Object.freeze({
 export const CARD_PLATE_ALPHA = 0.82;
 
 /**
- * Ambient detection callouts carry a LIGHTER member of the card's backing
- * family: enough plate to hold small mono text against sunlit imagery, not so
- * much that a field of them reads as a wall of boxes. `calloutPlate` sits at
- * ~58% of `CARD_PLATE_ALPHA`; `calloutPlateSpace` is the owner-requested
- * "slightly higher opacity so the text pops" for space-tier (satellite)
- * contacts, which sit over the high-albedo lit Earth disc more often than
- * aircraft do.
- *
- * These are DARK plates painted with NORMAL blending, which makes them
- * self-adapting: over night terrain or space a dark plate on a dark scene is
- * nearly invisible, while over bright ground it does the full darkening job.
- * That is the same mechanism the tracked card uses, and the reason it survives
- * every style — see `PLATE_ALPHA_BAND` in the tests.
- */
-export const DETECTION_PLATE_BAND = Object.freeze({ min: 0.5, max: 0.62 });
-
-/**
  * What survives of a callout plate when SKY, not ground, is behind the label.
  *
  * The plate exists to hold small mono text against sunlit imagery. Against the

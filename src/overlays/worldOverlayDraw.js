@@ -112,11 +112,6 @@ export function measureWorldOverlayText(ctx, text, font) {
   return width;
 }
 
-/** @returns {number} Current cache size, exposed for focused diagnostics/tests. */
-export function getWorldOverlayTextMeasureCacheSize() {
-  return _textMeasureCacheSize;
-}
-
 /**
  * Append a rounded rectangle to the current Canvas2D path.
  * @param {CanvasRenderingContext2D|Path2D} path

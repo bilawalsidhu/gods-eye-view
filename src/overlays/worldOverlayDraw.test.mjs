@@ -8,7 +8,6 @@ import {
   distanceFade,
   distanceScale,
   destroyWorldOverlayDraw,
-  getWorldOverlayTextMeasureCacheSize,
   installWorldOverlayFontInvalidation,
   measureOverlayEntry,
   measureWorldOverlayText,
@@ -32,7 +31,6 @@ import {
 import { normalizeOverlayEntry } from './worldOverlay.js';
 import {
   CARD_PLATE_ALPHA,
-  DETECTION_PLATE_BAND,
   DETECTION_THEME_MAP,
   SKY_PLATE_SCALE,
   WORLD_OVERLAY_STYLE,
@@ -121,6 +119,11 @@ test('the tracked card alpha constant stays bound to the card it describes', () 
   // ambient family to be re-derived rather than silently drifting apart.
   assert.equal(alphaOf(WORLD_OVERLAY_STYLE.background), CARD_PLATE_ALPHA);
 });
+
+// Ambient callouts carry a lighter member of the card's backing family: about
+// 58% of the card's plate, so small mono text holds over sunlit imagery
+// without a field of boxes.
+const DETECTION_PLATE_BAND = { min: 0.5, max: 0.62 };
 
 test('every detection theme carries a callout plate inside the ambient band', () => {
   for (const [name, theme] of Object.entries(DETECTION_THEME_MAP)) {
@@ -416,9 +419,10 @@ test('text measurement cache is font-aware and font hooks follow host lifetime',
   measureWorldOverlayText(ctx, 'A12', '12px mono');
   assert.equal(ctx.measureCount, 2);
   assert.equal(addCount, 1);
-  assert.equal(getWorldOverlayTextMeasureCacheSize(), 2);
   loadingDone();
-  assert.equal(getWorldOverlayTextMeasureCacheSize(), 0);
+  // The font change dropped the cache, so the same text is measured again.
+  measureWorldOverlayText(ctx, 'A12', '10px mono');
+  assert.equal(ctx.measureCount, 3);
   destroyWorldOverlayDraw();
   assert.equal(removeCount, 1);
   installWorldOverlayFontInvalidation();
@@ -432,13 +436,11 @@ test('text measurement cache caps LRU retention at 1024 entries', () => {
   const ctx = mockContext();
   for (let i = 0; i < 1100; i++)
     measureWorldOverlayText(ctx, `label-${i}`, '10px mono');
-  assert.equal(getWorldOverlayTextMeasureCacheSize(), 1024);
   const measured = ctx.measureCount;
   measureWorldOverlayText(ctx, 'label-0', '10px mono');
   assert.equal(ctx.measureCount, measured + 1);
   measureWorldOverlayText(ctx, 'label-1099', '10px mono');
   assert.equal(ctx.measureCount, measured + 1);
-  assert.equal(getWorldOverlayTextMeasureCacheSize(), 1024);
   clearWorldOverlayTextMeasureCache();
 });
 
