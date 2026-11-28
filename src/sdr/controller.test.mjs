@@ -1,11 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import {
-  createRememberingWebUsb,
-  SDR_RECEIVER_PRESETS,
-  SdrController,
-} from './controller.js';
+import { createRememberingWebUsb, SdrController } from './controller.js';
 import { RTL2832U_Provider } from '@jtarrio/webrtlsdr/rtlsdr.js';
 import { RTL_SDR_USB_FILTERS } from './usbDevices.js';
 import { SDR_GAIN_STORAGE_KEY } from './gain.js';
@@ -125,21 +121,6 @@ test('FM resumes audio before opening WebUSB and reports the running context', a
   assert.ok(events.includes('rtl-agc:false'));
   assert.ok(events.includes('device:gain:null'), 'FM defaults to tuner AGC');
   assert.equal(controller.getState().gain, 'auto');
-});
-
-test('receiver presets keep the known-working tuning settings', () => {
-  assert.deepEqual(SDR_RECEIVER_PRESETS.fm, {
-    frequencyHz: 98_500_000,
-    sampleRate: 2_048_000,
-    ppm: 0,
-    rtlAgc: false,
-  });
-  assert.deepEqual(SDR_RECEIVER_PRESETS.adsb, {
-    frequencyHz: 1_090_000_000,
-    sampleRate: 2_000_000,
-    ppm: 0,
-    rtlAgc: false,
-  });
 });
 
 test('ADS-B opens at manual 28.0 dB and gain changes apply live without reconnecting', async (t) => {

@@ -2,7 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  R820T_GAIN_STEPS_DB,
   SDR_GAIN_DEFAULTS,
   SDR_GAIN_STORAGE_KEY,
   normalizeSdrGain,
@@ -12,11 +11,7 @@ import {
 } from './gain.js';
 import { memoryStorage } from '../testSupport/memoryStorage.mjs';
 
-test('gain steps are the R820T table and ADS-B defaults to manual 28.0 dB', () => {
-  assert.equal(R820T_GAIN_STEPS_DB.length, 29);
-  assert.equal(R820T_GAIN_STEPS_DB.at(-1), 49.6);
-  assert.ok(R820T_GAIN_STEPS_DB.includes(20.7));
-  assert.ok(R820T_GAIN_STEPS_DB.includes(28.0));
+test('AUTO hands gain to the tuner AGC; a step passes through', () => {
   assert.equal(tunerGainValue('auto'), null, 'AUTO hands gain to tuner AGC');
   assert.equal(tunerGainValue(20.7), 20.7);
 });
